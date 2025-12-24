@@ -89,6 +89,34 @@ export default function SettingsPage() {
         return () => subscription.unsubscribe();
     }, [supabase]);
 
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [authError, setAuthError] = useState<string | null>(null);
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setAuthError(null);
+        setIsSyncing(true);
+
+        const { error } = isSignUp 
+            ? await supabase.auth.signUp({ 
+                email, 
+                password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                }
+            })
+            : await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            setAuthError(error.message);
+        } else if (isSignUp) {
+            setAuthError('Check your email for the confirmation link!');
+        }
+        setIsSyncing(false);
+    };
+
     // Auto-sync on session load
     useEffect(() => {
         if (user) {
@@ -301,35 +329,33 @@ export default function SettingsPage() {
                     </div>
                     <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
                          {user 
-                             ? `Signed in as ${user.email}. Your data will be synced to your private app folder.`
-                             : "Sign in with Google to sync your progress across devices automatically."}
+                             ? `Signed in as ${user.email}. Your data is synced automatically.`
+                             : "Sign in to sync your progress across devices."}
                      </p>
                      
-                     {user && (
-                        <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
-                                <span style={{ 
-                                    color: isSyncing ? 'var(--accent)' : (syncResult?.status === 'error' ? '#ef4444' : '#10b981'),
-                                    fontWeight: 600
-                                }}>
-                                    {isSyncing ? 'Syncing...' : (syncResult?.message || 'Ready')}
-                                </span>
-                            </div>
-                            {settings.lastSyncedAt && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Synced:</span>
-                                    <span style={{ color: 'var(--foreground-secondary)' }}>
-                                        {new Date(settings.lastSyncedAt).toLocaleString()}
+                     {user ? (
+                        <>
+                            <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                    <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
+                                    <span style={{ 
+                                        color: isSyncing ? 'var(--accent)' : (syncResult?.status === 'error' ? '#ef4444' : '#10b981'),
+                                        fontWeight: 600
+                                     }}>
+                                        {isSyncing ? 'Syncing...' : (syncResult?.message || 'Ready')}
                                     </span>
                                 </div>
-                            )}
-                        </div>
-                     )}
+                                {settings.lastSyncedAt && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ color: 'var(--foreground-secondary)' }}>Last Synced:</span>
+                                        <span style={{ color: 'var(--foreground-secondary)' }}>
+                                            {new Date(settings.lastSyncedAt).toLocaleString()}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
 
-                     <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                         {user ? (
-                            <>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                 <button 
                                     className="btn btn-primary"
                                     onClick={() => handleSync()}
@@ -345,17 +371,44 @@ export default function SettingsPage() {
                                 >
                                     Sign Out
                                 </button>
-                            </>
-                         ) : (
-                             <button 
-                                 className="btn btn-primary"
-                                 onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/settings' } })}
-                                 style={{ width: '100%', padding: '0.85rem' }}
-                             >
-                                 Sign In with Google
-                             </button>
-                         )}
-                     </div>
+                            </div>
+                        </>
+                     ) : (
+                        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <input
+                                type="email"
+                                placeholder="Email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}
+                            />
+                            <input
+                                type="password"
+                                placeholder="Password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}
+                            />
+                            {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
+                            <button 
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={isSyncing}
+                                style={{ width: '100%', padding: '0.85rem' }}
+                            >
+                                {isSyncing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => setIsSignUp(!isSignUp)}
+                                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                            </button>
+                        </form>
+                     )}
                 </div>
 
                 <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
