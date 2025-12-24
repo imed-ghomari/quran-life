@@ -1,4 +1,4 @@
-import { BackupData, exportBackup, importBackup } from './storage';
+import { BackupData, exportBackup, importBackup, saveSettings } from './storage';
 import { fetchSupabaseBackup, uploadSupabaseBackup } from './supabaseSync';
 
 export interface SyncResult {
