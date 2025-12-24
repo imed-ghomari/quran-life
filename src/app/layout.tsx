@@ -9,6 +9,10 @@ export const metadata: Metadata = {
     description: 'Complete your learned Quran portions in manageable daily readings',
     viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
     manifest: '/manifest.json',
+    icons: {
+        icon: '/favicon.svg',
+        apple: '/icon.svg',
+    },
     themeColor: [
         { media: '(prefers-color-scheme: light)', color: '#ffffff' },
         { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
