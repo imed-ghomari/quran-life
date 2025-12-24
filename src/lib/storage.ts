@@ -69,6 +69,10 @@ function saveToCacheAndStore(key: string, value: any) {
     storageCache[key] = value;
     if (typeof window !== 'undefined' && customStore) {
         set(key, value, customStore).catch(err => console.error(`Failed to persist ${key}:`, err));
+        // Also update localStorage for immediate sync awareness across tabs
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+        } catch (e) {}
     }
 }
 
@@ -551,6 +555,8 @@ export function getListeningCompletedToday(): boolean {
 export function markListeningComplete(): void {
     const today = new Date().toISOString().split('T')[0];
     saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, today);
+    // Force a cycle update if needed
+    getCycleStart();
 }
 
 // ========================================
@@ -921,4 +927,10 @@ export function importBackup(data: BackupData): void {
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);
+
+    // After importing, we need to force reload the page to refresh the cache
+    // since storageCache is a module-level variable that doesn't update automatically
+    if (typeof window !== 'undefined') {
+        window.location.reload();
+    }
 }

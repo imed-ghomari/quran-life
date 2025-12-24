@@ -42,7 +42,8 @@ export async function syncWithCloud(): Promise<SyncResult> {
     // Even if no data changed, update the sync timestamp locally
     const settings = { ...(localData.settings || {}) } as any;
     settings.lastSyncedAt = new Date().toISOString();
-    importBackup({ ...localData, settings });
+    // We don't want to reload the page if nothing changed, so we just save the setting
+    saveSettings(settings);
 
     return { status: 'no_change', message: 'Already in sync' };
   } catch (error: any) {
