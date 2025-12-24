@@ -108,7 +108,10 @@ export default function TodayPage() {
     // Settings sync
     useEffect(() => {
         const handleStorage = (e: StorageEvent) => {
-            if (e.key?.includes('quran-app')) setSettingsVersion(v => v + 1);
+            if (e.key?.includes('quran-app')) {
+                // Force immediate refresh of settings version
+                setSettingsVersion(v => v + 1);
+            }
         };
         window.addEventListener('storage', handleStorage);
         const interval = setInterval(() => setSettingsVersion(v => v + 1), 2500);

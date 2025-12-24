@@ -87,16 +87,20 @@ const storageChannel = typeof window !== 'undefined' ? new BroadcastChannel('qur
 
 if (storageChannel) {
     storageChannel.onmessage = (event) => {
-        const { key, value } = event.data;
-        if (STORAGE_KEYS_VALUES.includes(key)) {
-            storageCache[key] = value;
-            // Dispatch a storage event manually so the page.tsx useEffect catches it
-            window.dispatchEvent(new StorageEvent('storage', {
-                key: key,
-                newValue: JSON.stringify(value),
-            }));
-        }
-    };
+            const { key, value } = event.data;
+            if (STORAGE_KEYS_VALUES.includes(key)) {
+                storageCache[key] = value;
+                // PERSIST TO IndexedDB immediately so reload doesn't lose it
+                if (customStore) {
+                    set(key, value, customStore).catch(err => console.error(`Sync persistence failed for ${key}:`, err));
+                }
+                // Dispatch a storage event manually so the page.tsx useEffect catches it
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: key,
+                    newValue: JSON.stringify(value),
+                }));
+            }
+        };
 }
 
 const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
@@ -136,6 +140,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export function getSettings(): AppSettings {
+    const cached = storageCache[STORAGE_KEYS.SETTINGS];
+    if (cached) return cached;
     return getFromCache(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
 }
 
