@@ -927,10 +927,4 @@ export function importBackup(data: BackupData): void {
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);
-
-    // After importing, we need to force reload the page to refresh the cache
-    // since storageCache is a module-level variable that doesn't update automatically
-    if (typeof window !== 'undefined') {
-        window.location.reload();
-    }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
@@ -117,10 +117,12 @@ export default function SettingsPage() {
         setIsSyncing(false);
     };
 
-    // Auto-sync on session load
+    // Auto-sync on session load - only if we haven't synced in this component instance
+    const hasAutoSynced = useRef(false);
     useEffect(() => {
-        if (user) {
+        if (user && !hasAutoSynced.current) {
             handleSync();
+            hasAutoSynced.current = true;
         }
     }, [user]);
 
