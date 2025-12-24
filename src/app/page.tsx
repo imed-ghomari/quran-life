@@ -514,9 +514,24 @@ export default function TodayPage() {
                                                 </button>
                                             ) : (
                                                 <div className="review-buttons" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                                                    <button className="review-btn postpone" style={{ padding: '0.65rem', background: 'var(--background-secondary)', border: '1px solid var(--border)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
-                                                    <button className="review-btn not-remembered" style={{ padding: '0.65rem' }} onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={18} /> Forgot</button>
-                                                    <button className="review-btn remembered" style={{ padding: '0.65rem' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right"><Check size={18} /> Remembered</button>
+                                                    <button className="review-btn postpone" style={{ padding: '0.65rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={handlePostpone} title="Shortcut: Arrow Left">
+                                                        <span style={{ fontSize: '0.85rem' }}>Not sure</span>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Today</span>
+                                                    </button>
+                                                    <button className="review-btn not-remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)} title="Shortcut: Arrow Down">
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>Next: 1d</span>
+                                                    </button>
+                                                    <button className="review-btn remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right">
+                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
+                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                             Next: {(() => {
+                                                                 const next = sm2(5, dueNodes[currentReviewIndex].scheduler);
+                                                                 const days = Math.round((new Date(next.dueDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+                                                                 return days <= 1 ? '1d' : `${days}d`;
+                                                             })()}
+                                                         </span>
+                                                     </button>
                                                 </div>
                                             )}
                                         </div>

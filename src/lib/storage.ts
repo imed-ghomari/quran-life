@@ -65,17 +65,6 @@ function getFromCache<T>(key: string, defaultValue: T): T {
     return cached !== undefined ? cached : defaultValue;
 }
 
-function saveToCacheAndStore(key: string, value: any) {
-    storageCache[key] = value;
-    if (typeof window !== 'undefined' && customStore) {
-        set(key, value, customStore).catch(err => console.error(`Failed to persist ${key}:`, err));
-        // Also update localStorage for immediate sync awareness across tabs
-        try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (e) {}
-    }
-}
-
 const STORAGE_KEYS = {
     SETTINGS: 'quran-app-settings',
     MEMORY_NODES: 'quran-app-memory-nodes',
@@ -89,6 +78,43 @@ const STORAGE_KEYS = {
     MUTASHABIHAT_DECISIONS: 'quran-app-mutashabihat-decisions',
     CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
 };
+
+// ========================================
+// Cross-tab Synchronization
+// ========================================
+
+const storageChannel = typeof window !== 'undefined' ? new BroadcastChannel('quran_app_storage_sync') : null;
+
+if (storageChannel) {
+    storageChannel.onmessage = (event) => {
+        const { key, value } = event.data;
+        if (STORAGE_KEYS_VALUES.includes(key)) {
+            storageCache[key] = value;
+            // Dispatch a storage event manually so the page.tsx useEffect catches it
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: key,
+                newValue: JSON.stringify(value),
+            }));
+        }
+    };
+}
+
+const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
+
+function saveToCacheAndStore(key: string, value: any) {
+    storageCache[key] = value;
+    if (typeof window !== 'undefined' && customStore) {
+        set(key, value, customStore).catch(err => console.error(`Failed to persist ${key}:`, err));
+        
+        // Notify other tabs via BroadcastChannel
+        storageChannel?.postMessage({ key, value });
+        
+        // Also update localStorage for fallback sync awareness across tabs
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+        } catch (e) {}
+    }
+}
 
 // ========================================
 // Settings
