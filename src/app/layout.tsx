@@ -9,6 +9,10 @@ export const metadata: Metadata = {
     description: 'Complete your learned Quran portions in manageable daily readings',
     viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
     manifest: '/manifest.json',
+    themeColor: [
+        { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+        { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+    ],
     appleWebApp: {
         capable: true,
         statusBarStyle: 'default',
@@ -26,10 +30,6 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="ar" dir="ltr">
-            <head>
-                <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
-                <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: dark)" />
-            </head>
             <body>
                 <Providers>
                     <div className="app-shell">
