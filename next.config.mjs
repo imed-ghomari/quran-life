@@ -9,7 +9,7 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // Removed output: 'standalone' for better Vercel compatibility
 };
 
 export default withPWA(nextConfig);

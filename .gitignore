@@ -1,1 +1,7 @@
 node_modules
+.next
+.env.local
+.env.production
+.env
+*.log
+
