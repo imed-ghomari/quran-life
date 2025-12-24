@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { createClient } from '@/utils/supabase/client';
+import { User } from '@supabase/supabase-js';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { SURAHS, getSurahsByPart, getSurah, parseQuranJson } from '@/lib/quranData';
 import {
@@ -68,21 +69,36 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 }
 
 export default function SettingsPage() {
-    const { data: session } = useSession();
+    const supabase = createClient();
+    const [user, setUser] = useState<User | null>(null);
     const [settings, setSettings] = useState<AppSettings>(getSettings());
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+        };
+        getUser();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+        });
+
+        return () => subscription.unsubscribe();
+    }, [supabase]);
+
     // Auto-sync on session load
     useEffect(() => {
-        if (session?.accessToken) {
-            handleSync(session.accessToken as string);
+        if (user) {
+            handleSync();
         }
-    }, [session?.accessToken]);
+    }, [user]);
 
-    const handleSync = async (token: string) => {
+    const handleSync = async () => {
         setIsSyncing(true);
-        const result = await syncWithCloud(token);
+        const result = await syncWithCloud();
         setSyncResult(result);
         setIsSyncing(false);
         if (result.status === 'success') {
@@ -284,12 +300,12 @@ export default function SettingsPage() {
                         <span>Cloud Sync</span>
                     </div>
                     <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                         {session 
-                             ? `Signed in as ${session.user?.email}. Your data will be synced to your private app folder.`
+                         {user 
+                             ? `Signed in as ${user.email}. Your data will be synced to your private app folder.`
                              : "Sign in with Google to sync your progress across devices automatically."}
                      </p>
                      
-                     {session && (
+                     {user && (
                         <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                 <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
@@ -312,11 +328,11 @@ export default function SettingsPage() {
                      )}
 
                      <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                         {session ? (
+                         {user ? (
                             <>
                                 <button 
                                     className="btn btn-primary"
-                                    onClick={() => handleSync(session.accessToken as string)}
+                                    onClick={() => handleSync()}
                                     disabled={isSyncing}
                                     style={{ width: '100%', padding: '0.85rem' }}
                                 >
@@ -324,7 +340,7 @@ export default function SettingsPage() {
                                 </button>
                                 <button 
                                     className="btn btn-secondary"
-                                    onClick={() => signOut()}
+                                    onClick={() => supabase.auth.signOut()}
                                     style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)' }}
                                 >
                                     Sign Out
@@ -333,7 +349,7 @@ export default function SettingsPage() {
                          ) : (
                              <button 
                                  className="btn btn-primary"
-                                 onClick={() => signIn('google')}
+                                 onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/settings' } })}
                                  style={{ width: '100%', padding: '0.85rem' }}
                              >
                                  Sign In with Google

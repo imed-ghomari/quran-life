@@ -1,6 +1,5 @@
-
 import { BackupData, exportBackup, importBackup } from './storage';
-import { fetchBackupFile, uploadBackupFile } from './googleDrive';
+import { fetchSupabaseBackup, uploadSupabaseBackup } from './supabaseSync';
 
 export interface SyncResult {
   status: 'success' | 'no_change' | 'error';
@@ -9,19 +8,19 @@ export interface SyncResult {
 
 /**
  * Orchestrates the sync process:
- * 1. Pull remote data from Google Drive
+ * 1. Pull remote data from Supabase
  * 2. Merge with local data
- * 3. Push merged data back to Google Drive (if changed)
+ * 3. Push merged data back to Supabase (if changed)
  */
-export async function syncWithCloud(accessToken: string): Promise<SyncResult> {
+export async function syncWithCloud(): Promise<SyncResult> {
   try {
     const localData = exportBackup();
-    const { data: remoteData, fileId } = await fetchBackupFile(accessToken);
+    const { data: remoteData } = await fetchSupabaseBackup();
 
     if (!remoteData) {
       // No remote data, push local data as the first backup
-      await uploadBackupFile(accessToken, localData, null);
-      return { status: 'success', message: 'Initial backup created on Google Drive' };
+      await uploadSupabaseBackup(localData);
+      return { status: 'success', message: 'Initial backup created on Supabase' };
     }
 
     // Merge logic
@@ -36,7 +35,7 @@ export async function syncWithCloud(accessToken: string): Promise<SyncResult> {
       
       importBackup(mergedData);
       // Update remote storage
-      await uploadBackupFile(accessToken, mergedData, fileId);
+      await uploadSupabaseBackup(mergedData);
       return { status: 'success', message: 'Sync complete: data merged' };
     }
 
