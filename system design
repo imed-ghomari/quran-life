@@ -1,0 +1,100 @@
+# Qur'an Memorization System - Design Document
+
+## 1. Governing Objective
+**Maximize sequential Qur'anic verse recall with minimal cognitive friction.**
+
+---
+
+## 2. Application Structure
+
+| Tab | Purpose |
+|-----|---------|
+| **Today** | Unified daily view: Reviews + Daily Portion |
+| **Statistics** | Progress + error analysis (maturity levels, mindmap readiness, skipped) |
+| **Todo** | Mindmap work queue (surah/part), fix mindmaps, similar-verse decisions |
+| **Settings** | Configuration (schedule, active part, learned/skip, maturity, similarity registry) |
+
+---
+
+## 3. Desktop & Mobile Layout
+- **Mobile**: Single column, bottom navigation.
+- **Desktop**:
+  - **Sidebar Navigation** (implied or left-aligned).
+  - **Today**: Dual-pane. Reviews (Left) | Daily Portion (Right).
+  - **Settings/Stats**: Grid layout (2-3 columns).
+
+---
+
+## 4. Today Tab
+
+### Section 1: Reviews Due
+- **Context**: Show pre-context verses.
+- **Target**: Hidden target verses.
+- **Interaction**:
+  - **Progressive Reveal**: Unhides text chunk-by-chunk. **State must persist** until manual navigation.
+  - **Grading**: "Remembered" / "Not Remembered" at end.
+
+### Section 2: Daily Portion (formerly Listening)
+- **Rename**: "Daily Portion".
+- **Modes**: Audio (Player) / Read (Text).
+- **Read Mode**:
+  - Shows full text of the day's portion.
+  - **Surah Transitions**: Clearly marks new Surah headers (Basmalah) when crossing boundaries.
+- **Cycle**: Rotates through active part.
+
+---
+
+## 5. Settings Tab
+
+### 5.1 Maturity Adjustment (NEW)
+- Allow users to manually set the strength of a Surah/Part.
+- **Levels**:
+  - **Reset** (0 days)
+  - **Medium** (~14 days ± spread)
+  - **Strong** (~30 days ± spread)
+  - **Mastered** (~90 days ± spread)
+- **Logic**: Bulk updates `scheduler` state for all associated MemoryNodes. Use random fuzz factor to avoid "review avalanches".
+
+---
+
+## 6. Similarity registry: store mutashabihat decisions and editable notes.
+
+---
+
+## 6. Logic Updates
+
+### Review Reveal Fix
+- Ensure `revealedChunks` state doesn't reset automatically.
+- Buttons: "Reveal Chunk", "Next Verse".
+
+### Surah Transitions
+- In `ReadMode` loop, detect `if (curr.surahId !== prev.surahId) renderSurahHeader()`.
+
+### Layout
+- Mobile: bottom nav. Desktop: nav docked right (`.bottom-nav` column).
+- Use CSS Media Queries (`@media (min-width: 1024px)`) to switch from flex-col to grid.
+
+### Mutashabihat & Suspension
+- On 3 failed recalls for an anchor, suspend related mindmap reviews; surface in Todo > Fix Mindmaps. Clear suspension after confirming new mindmap.
+- Mutashabihat-aware context: expand preview until a non-similar verse is found.
+- Similarity decisions logged in Todo and editable in Settings; decisions hide items from Todo.
+
+### Skip Surahs
+- Skipped surahs removed from reviews, today portion, and mindmap queues; artifacts pruned on toggle.
+
+---
+
+## 7. Data Model
+
+```typescript
+// No schema changes needed, just logic updates.
+MemoryNode {
+  // ... existing fields
+  scheduler: {
+    interval: number; // Updated by Maturity settings
+    repetition: number;
+    efactor: number;
+    dueDate: string; // Recalculated based on new interval
+  }
+}
+```
