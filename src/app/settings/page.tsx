@@ -1019,7 +1019,7 @@ export default function SettingsPage() {
 
                                                                             <div className="mut-matches" style={{ marginTop: '1.5rem' }}>
                                                                                 {(() => {
-                                                                                    const matches = entry.matches.filter((m: any) => m !== abs);
+                                                                                    const matches = entry.matches.filter((m: any) => m !== representativeAbs);
                                                                                     const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
                                                                                     const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
                                                                                     const hasMore = matches.length > 4;
@@ -1078,7 +1078,7 @@ export default function SettingsPage() {
                                                         </React.Fragment>
                                                     );
                                                 });
-                                            })}
+                                            })()}
                                         </React.Fragment>
                                     );
                                 })}
