@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { SURAHS, parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
 import { Verse, getAudioPath, PART_NAMES } from '@/lib/types';
 import {
@@ -18,7 +18,11 @@ import {
     HelpCircle,
     Brain,
     Timer,
-    Info
+    Info,
+    ZoomIn,
+    ZoomOut,
+    Maximize2,
+    Move
 } from 'lucide-react';
 import HelpSection from '@/components/HelpSection';
 import {
@@ -71,6 +75,7 @@ export default function TodayPage() {
     const [settingsVersion, setSettingsVersion] = useState(0);
     const [readOnlyMode, setReadOnlyMode] = useState(false);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
+    const [zoomImage, setZoomImage] = useState<string | null>(null);
 
     // Toast & Undo
     interface ToastItem {
@@ -550,7 +555,17 @@ export default function TodayPage() {
                                                 </div>
                                             ) : (
                                                 <div>
-                                                    {reviewContent.mindmap?.imageUrl && <img src={reviewContent.mindmap.imageUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />}
+                                                    {reviewContent.mindmap?.imageUrl && (
+                                                        <div 
+                                                            style={{ position: 'relative', cursor: 'zoom-in' }} 
+                                                            onClick={() => setZoomImage(reviewContent.mindmap!.imageUrl)}
+                                                        >
+                                                            <img src={reviewContent.mindmap.imageUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
+                                                            <div style={{ position: 'absolute', bottom: 16, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                <Maximize2 size={12} /> Tap to Zoom
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                                                         <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
                                                         <button className="review-btn not-remembered" onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={20} /> Forgot</button>
@@ -729,6 +744,161 @@ export default function TodayPage() {
                     }
                 ]}
             />
+
+            {/* Zoom Modal */}
+            {zoomImage && (
+                <ImageZoomModal 
+                    src={zoomImage} 
+                    onClose={() => setZoomImage(null)} 
+                />
+            )}
+        </div>
+    );
+}
+
+function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) {
+    const [zoom, setZoom] = useState(1);
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const handleZoomIn = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setZoom(prev => Math.min(prev + 0.5, 4));
+    };
+
+    const handleZoomOut = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setZoom(prev => {
+            const next = Math.max(prev - 0.5, 1);
+            if (next === 1) setPosition({ x: 0, y: 0 });
+            return next;
+        });
+    };
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (zoom === 1) return;
+        setIsDragging(true);
+        setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isDragging) return;
+        setPosition({
+            x: e.clientX - dragStart.x,
+            y: e.clientY - dragStart.y
+        });
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (zoom === 1) return;
+        setIsDragging(true);
+        const touch = e.touches[0];
+        setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y });
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        setPosition({
+            x: touch.clientX - dragStart.x,
+            y: touch.clientY - dragStart.y
+        });
+    };
+
+    return (
+        <div 
+            className="zoom-modal-overlay"
+            style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0,0,0,0.9)',
+                zIndex: 2000,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                touchAction: 'none'
+            }}
+            onClick={onClose}
+        >
+            <div 
+                style={{
+                    position: 'absolute',
+                    top: 20,
+                    right: 20,
+                    display: 'flex',
+                    gap: 12,
+                    zIndex: 2001
+                }}
+            >
+                <button 
+                    onClick={handleZoomIn}
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: 10, borderRadius: '50%', cursor: 'pointer' }}
+                >
+                    <ZoomIn size={24} />
+                </button>
+                <button 
+                    onClick={handleZoomOut}
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: 10, borderRadius: '50%', cursor: 'pointer' }}
+                >
+                    <ZoomOut size={24} />
+                </button>
+                <button 
+                    onClick={onClose}
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: 10, borderRadius: '50%', cursor: 'pointer' }}
+                >
+                    <X size={24} />
+                </button>
+            </div>
+
+            <div 
+                ref={containerRef}
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleMouseUp}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <img 
+                    src={src} 
+                    style={{
+                        maxWidth: '95%',
+                        maxHeight: '90%',
+                        objectFit: 'contain',
+                        transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                        transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+                        userSelect: 'none',
+                    } as any}
+                    draggable={false}
+                />
+            </div>
+
+            {zoom > 1 && (
+                <div style={{ position: 'absolute', bottom: 40, color: 'white', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: 20 }}>
+                    <Move size={16} /> Drag to move around
+                </div>
+            )}
         </div>
     );
 }

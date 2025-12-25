@@ -1,6 +1,6 @@
 {
-  "name": "Quran Daily Reader",
-  "short_name": "Quran Reader",
+  "name": "Quran Life",
+  "short_name": "Quran Life",
   "description": "Complete your learned Quran portions in manageable daily readings",
   "start_url": "/",
   "display": "standalone",
