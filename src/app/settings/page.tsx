@@ -366,42 +366,6 @@ export default function SettingsPage() {
                                 Total active nodes in memory: <strong>{memoryNodes.length}</strong>. These nodes represent the chunks of Quran you are currently reviewing.
                             </p>
                             
-                            <style jsx>{`
-                                .debug-table {
-                                    width: 100%;
-                                    border-collapse: collapse;
-                                    font-size: 0.85rem;
-                                    color: var(--foreground);
-                                }
-                                .debug-table th, .debug-table td {
-                                    padding: 0.75rem;
-                                    text-align: left;
-                                    border-bottom: 1px solid var(--border);
-                                }
-                                .debug-table th {
-                                    font-weight: 600;
-                                    color: var(--foreground-secondary);
-                                    background: var(--background);
-                                }
-                                .group-header {
-                                    background: var(--verse-bg) !important;
-                                    cursor: pointer;
-                                    user-select: none;
-                                }
-                                .subgroup-header {
-                                    background: var(--background) !important;
-                                    cursor: pointer;
-                                    padding-left: 2rem !important;
-                                }
-                                .node-row td {
-                                    padding-left: 3rem !important;
-                                }
-                                .status-overdue {
-                                    color: #ef4444;
-                                    font-weight: 600;
-                                }
-                            `}</style>
-
                             <table className="debug-table">
                                 <thead>
                                     <tr>
