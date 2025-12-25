@@ -487,7 +487,7 @@ export default function TodayPage() {
 
             <div className="today-grid">
                 {/* Reviews Col */}
-                <div className="card">
+                <div className="card" style={{ marginBottom: '1.5rem' }}>
                     <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, reviewExpanded: !s.reviewExpanded }))}>
                         <div className="section-title"><CheckCircle size={20} /><span>Reviews</span>{(dueNodes.length - currentReviewIndex) > 0 && <span className="status-badge learned">{dueNodes.length - currentReviewIndex}</span>}</div>
                         <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
@@ -622,7 +622,7 @@ export default function TodayPage() {
                 </div>
 
                 {/* Daily Portion Col */}
-                <div className="card">
+                <div className="card" style={{ marginBottom: '1.5rem' }}>
                     <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, dailyExpanded: !s.dailyExpanded }))}>
                         <div className="section-title"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete && <span className="status-badge learned">✓</span>}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

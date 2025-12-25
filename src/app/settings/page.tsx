@@ -370,9 +370,6 @@ export default function SettingsPage() {
             <div className="settings-grid">
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
-                    background: 'var(--background-secondary)', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, cloudSync: !s.cloudSync }))}
@@ -485,9 +482,6 @@ export default function SettingsPage() {
 
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
-                    background: 'var(--background-secondary)', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, backupRestore: !s.backupRestore }))}
@@ -528,9 +522,6 @@ export default function SettingsPage() {
 
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
-                    background: 'var(--background-secondary)', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, schedule: !s.schedule }))}
@@ -587,9 +578,6 @@ export default function SettingsPage() {
 
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
-                    background: 'var(--background-secondary)', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, activePart: !s.activePart }))}
@@ -631,7 +619,6 @@ export default function SettingsPage() {
                                     onClick={() => handleActivePart(p.id as QuranPart)}
                                     style={{
                                         padding: '1.25rem 0.75rem',
-                                        borderRadius: '16px',
                                         border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
                                         background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
                                         transition: 'all 0.2s',
@@ -657,9 +644,6 @@ export default function SettingsPage() {
             <div style={{ marginTop: '1.5rem' }}>
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
-                    background: 'var(--background-secondary)', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, surahStatus: !s.surahStatus }))}
@@ -769,9 +753,6 @@ export default function SettingsPage() {
             <div style={{ marginTop: '1.5rem' }}>
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
-                    background: 'var(--background-secondary)', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setShowDebugNodes(!showDebugNodes)}
@@ -1035,9 +1016,6 @@ export default function SettingsPage() {
 
             <div className="card modern-card" style={{ 
                 marginTop: '1.5rem', 
-                background: 'var(--background-secondary)', 
-                border: '1px solid var(--border)', 
-                borderRadius: '16px', 
                 padding: 'clamp(1rem, 4vw, 1.5rem)' 
             }}>
                 <div className="section-title mut-header" 

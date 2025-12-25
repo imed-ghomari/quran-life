@@ -109,7 +109,7 @@ export default function StatisticsPage() {
                 })}
             </div>
 
-            <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(14, 165, 233, 0.03)', border: '1px solid var(--accent)', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.08)' }}>
+            <div className="card stat-card-highlight">
                 <div className="section-title" style={{ color: 'var(--accent)' }}><Gauge size={18} /> <span>Maturity Distribution</span></div>
                 <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
                     Visual division of verses across all maturity levels.

@@ -116,6 +116,50 @@ h3 {
   box-shadow: var(--card-shadow);
 }
 
+@media (max-width: 768px) {
+  .card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    box-shadow: none;
+    padding: 1.25rem 0.75rem;
+    background: var(--background-secondary);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem !important;
+  }
+
+  .stat-card-highlight {
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    margin-left: -0.75rem !important;
+    margin-right: -0.75rem !important;
+    box-shadow: none !important;
+    background: rgba(14, 165, 233, 0.05) !important;
+    border-top: 1px solid var(--accent) !important;
+    border-bottom: 1px solid var(--accent) !important;
+  }
+
+  .part-option {
+    border-radius: 12px !important;
+    padding: 0.85rem 0.5rem !important;
+  }
+
+  .modern-card {
+    padding: 1.25rem 0.75rem !important;
+  }
+}
+
+.stat-card-highlight {
+  background: rgba(14, 165, 233, 0.03);
+  border: 1px solid var(--accent);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.08);
+  margin-top: 1.5rem;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;

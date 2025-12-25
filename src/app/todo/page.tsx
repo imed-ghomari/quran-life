@@ -414,7 +414,7 @@ export default function TodoPage() {
         <div className="content-wrapper" style={{ maxWidth: '1000px', padding: '1rem' }}>
             <h1>Todo</h1>
 
-            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+            <div className="card modern-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                     <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
                         <thead>
@@ -488,7 +488,7 @@ export default function TodoPage() {
                 </div>
             </div>
 
-            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+            <div className="card modern-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                     <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
                         <thead>
@@ -578,7 +578,7 @@ export default function TodoPage() {
                 </div>
             </div>
 
-            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+            <div className="card modern-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                     <table className="debug-table" style={{ minWidth: '800px', width: '100%' }}>
                         <thead>
@@ -731,7 +731,7 @@ export default function TodoPage() {
                 </div>
             </div>
 
-            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+            <div className="card modern-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                     <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
                         <thead>
