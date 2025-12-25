@@ -17,6 +17,7 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 
 ## Tabs
 - **Today**: Reviews (SM-2) + Daily Portion (audio/read). Speed control, chunked reveal, mutashabihat-aware context, read-only toggle.
+  - **Sequential Daily Portion**: Portions follow natural Quranic order (surah-by-surah) with Bismillah transitions.
 - **Statistics**: Progress focus — learned counts, active part progress, maturity buckets, mindmap completion, skipped count, due reviews.
 - **Todo**: Work queue:
   - Surah mindmaps (incomplete first), add anchors, upload image, mark complete.
@@ -24,9 +25,13 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - Fix mindmaps (anchors suspended after 3 failed recalls; confirm new mindmap to unsuspend).
   - Similarity checks (decide if error was due to mutashabihat; update mindmap/note or hide).
   - Empty sections auto-collapse.
-- **Settings**: Completion schedule, active part, learned/s skipped surahs, surah maturity adjustment, mutashabihat decisions registry (editable notes).
+- **Settings**: Completion schedule, active part, learned/skipped surahs, surah maturity adjustment, mutashabihat decisions registry (editable notes).
+  - **Cloud Sync**: Supabase integration with timestamp-based conflict resolution (Latest Wins).
 
 ## Key behaviors
+- **Sync Conflict Resolution**: Uses `updatedAt` timestamps on settings and a global `LAST_MODIFIED` tracker to ensure cross-tab and cross-device consistency.
+- **Mobile Optimization**: Responsive design with bottom navigation, optimized modal sizes, and top-right toast notifications to avoid interaction overlaps.
+- **Sequential Transitions**: Automatic Bismillah display/audio when transitioning between surahs in the Daily Portion.
 - Skipped surahs are removed from Today (audio/read) and due reviews; mindmap artifacts pruned.
 - Mindmap reviews appear when a mindmap is marked complete.
 - Mutashabihat-aware context expands preview until a non-similar verse is reached.

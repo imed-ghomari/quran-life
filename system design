@@ -37,9 +37,15 @@
 ### Section 2: Daily Portion (formerly Listening)
 - **Rename**: "Daily Portion".
 - **Modes**: Audio (Player) / Read (Text).
+- **Sequential Reading**: 
+  - Shows verses in natural Quranic order (Surah by Surah).
+  - Fixed issue where portions showed mixed surahs simultaneously.
 - **Read Mode**:
   - Shows full text of the day's portion.
   - **Surah Transitions**: Clearly marks new Surah headers (Basmalah) when crossing boundaries.
+- **Audio Mode**:
+  - Automatically plays the next verse.
+  - **Bismillah Transition**: Plays/Displays Bismillah when starting a new Surah.
 - **Cycle**: Rotates through active part.
 
 ---
@@ -57,11 +63,22 @@
 
 ---
 
-## 6. Similarity registry: store mutashabihat decisions and editable notes.
+## 6. Cloud Sync & Persistence (NEW)
+- **Engine**: Supabase Auth + Database.
+- **Strategy**: "Latest Wins" based on timestamps.
+- **Conflict Resolution**:
+  - `AppSettings` includes `updatedAt` ISO string.
+  - Global `LAST_MODIFIED` timestamp in IndexedDB/LocalStorage tracks any local change.
+  - `mergeBackups` compares `updatedAt` for settings instead of simple union to allow deletions (e.g. marking a surah as "new").
+- **Auto-Sync**: Triggers on tab focus/visibility change to keep multiple devices in sync.
 
 ---
 
-## 6. Logic Updates
+## 7. Similarity registry: store mutashabihat decisions and editable notes.
+
+---
+
+## 8. Logic Updates
 
 ### Review Reveal Fix
 - Ensure `revealedChunks` state doesn't reset automatically.
@@ -70,8 +87,12 @@
 ### Surah Transitions
 - In `ReadMode` loop, detect `if (curr.surahId !== prev.surahId) renderSurahHeader()`.
 
-### Layout
+### Layout & Mobile Optimization
 - Mobile: bottom nav. Desktop: nav docked right (`.bottom-nav` column).
+- **Mobile UI Fixes**:
+  - Modals (Add Mutashabih, Zoom) are smaller and have bottom margin to avoid "Reveal Chunk" overlap.
+  - Toast notifications positioned at top-right on mobile.
+  - Zoom controls scaled for touch friendliness.
 - Use CSS Media Queries (`@media (min-width: 1024px)`) to switch from flex-col to grid.
 
 ### Mutashabihat & Suspension
@@ -84,7 +105,7 @@
 
 ---
 
-## 7. Data Model
+## 9. Data Model
 
 ```typescript
 // No schema changes needed, just logic updates.
@@ -96,5 +117,11 @@ MemoryNode {
     efactor: number;
     dueDate: string; // Recalculated based on new interval
   }
+}
+
+AppSettings {
+  // ... existing fields
+  updatedAt: string; // ISO date for sync conflict resolution
+  lastSyncedAt: string;
 }
 ```
