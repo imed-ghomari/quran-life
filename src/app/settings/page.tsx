@@ -340,18 +340,18 @@ export default function SettingsPage() {
     }, [mutashabihatSurahs, selectedMutSurah]);
 
     return (
-        <div className="content-wrapper">
-            <h1>Settings</h1>
+        <div className="content-wrapper" style={{ padding: '0.5rem' }}>
+            <h1 style={{ marginBottom: '0.75rem', fontSize: '1.25rem' }}>Settings</h1>
 
-            <div className="settings-grid">
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                            <Database size={18} />
+            <div className="settings-grid" style={{ gap: '0.75rem' }}>
+                <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        <div style={{ background: 'var(--accent)', color: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                            <Database size={16} />
                         </div>
                         <span>Cloud Sync</span>
                     </div>
-                    <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                    <p style={{ marginBottom: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
                          {user 
                              ? `Signed in as ${user.email}. Your data is synced automatically.`
                              : "Sign in to sync your progress across devices."}
@@ -359,8 +359,8 @@ export default function SettingsPage() {
                      
                      {user ? (
                         <>
-                            <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--background)', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <div style={{ marginBottom: '0.75rem', padding: '0.5rem', borderRadius: '8px', background: 'var(--background)', border: '1px solid var(--border)', fontSize: '0.8rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
                                     <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
                                     <span style={{ 
                                         color: isSyncing ? 'var(--accent)' : (syncResult?.status === 'error' ? '#ef4444' : '#10b981'),
@@ -379,33 +379,33 @@ export default function SettingsPage() {
                                 )}
                             </div>
 
-                            <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'row' }}>
                                 <button 
                                     className="btn btn-primary"
                                     onClick={() => handleSync()}
                                     disabled={isSyncing}
-                                    style={{ width: '100%', padding: '0.85rem' }}
+                                    style={{ flex: 1, padding: '0.6rem', fontSize: '0.85rem', borderRadius: '8px' }}
                                 >
                                     {isSyncing ? 'Syncing...' : 'Sync Now'}
                                 </button>
                                 <button 
                                     className="btn btn-secondary"
                                     onClick={() => supabase.auth.signOut()}
-                                    style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)' }}
+                                    style={{ flex: 1, padding: '0.6rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px' }}
                                 >
                                     Sign Out
                                 </button>
                             </div>
                         </>
                      ) : (
-                        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <input
                                 type="email"
                                 placeholder="Email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}
+                                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '0.85rem' }}
                             />
                             <input
                                 type="password"
@@ -413,21 +413,21 @@ export default function SettingsPage() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}
+                                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '0.85rem' }}
                             />
-                            {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
+                            {authError && <p style={{ color: '#ef4444', fontSize: '0.8rem' }}>{authError}</p>}
                             <button 
                                 type="submit"
                                 className="btn btn-primary"
                                 disabled={isSyncing}
-                                style={{ width: '100%', padding: '0.85rem' }}
+                                style={{ width: '100%', padding: '0.6rem', fontSize: '0.85rem', borderRadius: '8px' }}
                             >
                                 {isSyncing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
                             </button>
                             <button 
                                 type="button"
                                 onClick={() => setIsSignUp(!isSignUp)}
-                                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }}
+                                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.8rem', cursor: 'pointer' }}
                             >
                                 {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
                             </button>
@@ -435,51 +435,51 @@ export default function SettingsPage() {
                      )}
                 </div>
 
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                            <Download size={18} />
+                <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                        <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                                <Download size={16} />
+                            </div>
+                            <span>Backup & Restore</span>
                         </div>
-                        <span>Backup & Restore</span>
+                        <p style={{ marginBottom: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>Secure your progress or transfer to another device.</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                            <button className="btn btn-secondary" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0.6rem', fontSize: '0.85rem', borderRadius: '8px' }}>
+                                <Download size={16} /> Export
+                            </button>
+                            <label className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.6rem', fontSize: '0.85rem', cursor: 'pointer', borderRadius: '8px' }}>
+                                <Upload size={16} /> Import
+                                <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                            </label>
+                        </div>
                     </div>
-                    <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Secure your progress or transfer to another device.</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                        <button className="btn btn-secondary" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.85rem' }}>
-                            <Download size={18} /> Export
-                        </button>
-                        <label className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.85rem', cursor: 'pointer' }}>
-                            <Upload size={18} /> Import
-                            <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-                        </label>
-                    </div>
-                </div>
 
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                            <Clock size={18} />
+                <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        <div style={{ background: 'var(--accent)', color: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                            <Clock size={16} />
                         </div>
                         <span>Completion Schedule</span>
                     </div>
-                    <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>How many days to complete the active part.</p>
+                    <p style={{ marginBottom: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>How many days to complete the active part.</p>
                     <input
                         type="number"
                         min={5}
                         max={180}
                         value={settings.completionDays}
                         onChange={e => handleCompletionDays(parseInt(e.target.value || '0', 10))}
-                        style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '0.85rem' }}
                     />
                 </div>
 
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                            <PauseCircle size={18} />
+                <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        <div style={{ background: 'var(--accent)', color: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                            <PauseCircle size={16} />
                         </div>
                         <span>Active Part</span>
                     </div>
-                    <div className="part-selector" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+                    <div className="part-selector" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                         {[
                             { id: 1, name: "As-Sab'ut-Tiwal" },
                             { id: 2, name: "Al-Mi'un" },
@@ -491,8 +491,8 @@ export default function SettingsPage() {
                                 className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
                                 onClick={() => handleActivePart(p.id as QuranPart)}
                                 style={{
-                                    padding: '1.25rem 0.75rem',
-                                    borderRadius: '16px',
+                                    padding: '0.75rem 0.5rem',
+                                    borderRadius: '12px',
                                     border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
                                     background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
                                     transition: 'all 0.2s',
@@ -500,41 +500,41 @@ export default function SettingsPage() {
                                     flexDirection: 'column',
                                     alignItems: 'center',
                                     textAlign: 'center',
-                                    gap: '0.25rem'
+                                    gap: '0.15rem'
                                 }}
                             >
-                                <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>{p.id}</div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
+                                <div className="part-number" style={{ fontSize: '1.1rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>{p.id}</div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
                             </button>
                         ))}
                     </div>
                 </div>
             </div>
 
-            <div style={{ marginTop: '1.5rem' }}>
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                            <Check size={18} />
+            <div style={{ marginTop: '0.75rem' }}>
+                <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        <div style={{ background: 'var(--accent)', color: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                            <Check size={16} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <span>Surah Status</span>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button className="bulk-btn learned" onClick={() => handleBulkStatus('learned')} title="Mark all as Learned">All Learned</button>
-                                <button className="bulk-btn new" onClick={() => handleBulkStatus('new')} title="Mark all as New">All New</button>
-                                <button className="bulk-btn skipped" onClick={() => handleBulkStatus('skipped')} title="Mark all as Skipped">All Skipped</button>
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                <button className="bulk-btn learned" onClick={() => handleBulkStatus('learned')} title="Mark all as Learned" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>All Learned</button>
+                                <button className="bulk-btn new" onClick={() => handleBulkStatus('new')} title="Mark all as New" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>All New</button>
+                                <button className="bulk-btn skipped" onClick={() => handleBulkStatus('skipped')} title="Mark all as Skipped" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>All Skipped</button>
                             </div>
                         </div>
                     </div>
-                    <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                    <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.8rem' }}>
                         Manage learned and skipped surahs for the active part. <br />
-                        <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>Tap a surah to cycle between: <b>Not Learned (Red)</b> → <b>Learned (Green)</b> → <b>Skipped (Grey)</b></span>
+                        <span style={{ opacity: 0.8, fontSize: '0.75rem' }}>Tap a surah to cycle between: <b>Not Learned</b> → <b>Learned</b> → <b>Skipped</b></span>
                     </p>
                     <div className="surah-pills-container" style={{
                         display: 'flex',
                         flexWrap: 'wrap',
-                        gap: '0.6rem',
+                        gap: '0.4rem',
                         marginTop: '0.5rem'
                     }}>
                         {activePartSurahs.map(s => {
@@ -560,12 +560,12 @@ export default function SettingsPage() {
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
-                                        padding: '0.5rem 0.8rem',
-                                        borderRadius: '24px',
+                                        padding: '0.35rem 0.6rem',
+                                        borderRadius: '16px',
                                         border: `1px solid ${statusColor}`,
                                         background: `${statusColor}15`, // Translucent background
                                         color: statusColor,
-                                        fontSize: '0.85rem',
+                                        fontSize: '0.8rem',
                                         fontWeight: 500,
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
@@ -574,22 +574,22 @@ export default function SettingsPage() {
                                     title={`${s.name} - Tap to cycle status`}
                                 >
                                     <span style={{
-                                        width: '20px',
-                                        height: '20px',
+                                        width: '18px',
+                                        height: '18px',
                                         borderRadius: '50%',
                                         background: statusColor,
                                         color: 'white',
-                                        fontSize: '0.7rem',
+                                        fontSize: '0.65rem',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        marginRight: '0.5rem',
+                                        marginRight: '0.4rem',
                                         flexShrink: 0
                                     }}>
                                         {s.id}
                                     </span>
-                                    <span style={{ marginRight: '0.4rem' }}>{s.arabicName}</span>
-                                    <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{s.name}</span>
+                                    <span style={{ marginRight: '0.3rem' }}>{s.arabicName}</span>
+                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>{s.name}</span>
                                 </button>
                             );
                         })}
@@ -597,45 +597,45 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            <div style={{ marginTop: '1.5rem' }}>
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+            <div style={{ marginTop: '0.75rem' }}>
+                <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '12px' }}>
                     <div className="section-title" 
                          onClick={() => setShowDebugNodes(!showDebugNodes)}
-                         style={{ color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                                <Activity size={18} />
+                         style={{ color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showDebugNodes ? '0.75rem' : '0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                                <Activity size={16} />
                             </div>
-                            <span>Knowledge Tracking</span>
+                            <span style={{ fontSize: '0.95rem' }}>Knowledge Tracking</span>
                         </div>
-                        <ChevronDown size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        <ChevronDown size={18} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     
                     {showDebugNodes && (
-                        <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
-                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                        <div style={{ marginTop: '0.5rem', overflowX: 'auto' }}>
+                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>
                                 This section shows your active memory nodes and their review schedules.
                             </p>
                             
-                            <table className="debug-table">
+                            <table className="debug-table" style={{ fontSize: '0.75rem' }}>
                                 <thead>
                                     <tr>
-                                        <th>Target / Range</th>
-                                        <th>Maturity</th>
-                                        <th>Interval</th>
-                                        <th>Ease</th>
-                                        <th>Reps</th>
-                                        <th>Next Review</th>
+                                        <th style={{ padding: '0.5rem' }}>Target / Range</th>
+                                        <th style={{ padding: '0.5rem' }}>Maturity</th>
+                                        <th style={{ padding: '0.5rem' }}>Interval</th>
+                                        <th style={{ padding: '0.5rem' }}>Ease</th>
+                                        <th style={{ padding: '0.5rem' }}>Reps</th>
+                                        <th style={{ padding: '0.5rem' }}>Next Review</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {/* MINDMAPS GROUP */}
-                                    <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
-                                        <td colSpan={6} style={{ fontWeight: 700 }}>
+                                    <tr className="group-header" onClick={() => toggleGroup('mindmaps')} style={{ background: 'var(--background)', cursor: 'pointer' }}>
+                                        <td colSpan={6} style={{ fontWeight: 700, padding: '0.5rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
-                                                    <Map size={16} /> Mindmaps
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                                    <Map size={14} /> Mindmaps
                                                 </div>
                                             </div>
                                         </td>
@@ -643,17 +643,18 @@ export default function SettingsPage() {
                                     {expandedGroups['mindmaps'] && (
                                         <>
                                             {/* Part Mindmaps Subgroup */}
-                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
-                                                <td colSpan={6} style={{ fontWeight: 600 }}>
+                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')} style={{ background: 'var(--background-secondary)', cursor: 'pointer' }}>
+                                                <td colSpan={6} style={{ fontWeight: 600, padding: '0.4rem 0.5rem', fontSize: '0.75rem' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                            <ChevronDown size={12} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
                                                             Part Mindmaps
                                                         </div>
                                                         <button 
                                                             className="bulk-btn reset-mut" 
                                                             onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('part_mindmap'); }}
                                                             title="Reset all part mindmaps maturity"
+                                                            style={{ padding: '2px 6px', fontSize: '0.7rem' }}
                                                         >
                                                             Reset Group
                                                         </button>
@@ -667,8 +668,8 @@ export default function SettingsPage() {
                                                         .sort((a, b) => (a.partId || 0) - (b.partId || 0))
                                                         .map(node => (
                                                             <tr key={node.id} className="node-row">
-                                                                <td>Part {node.partId}</td>
-                                                                <td>
+                                                                <td style={{ padding: '0.4rem 0.5rem' }}>Part {node.partId}</td>
+                                                                <td style={{ padding: '0.4rem 0.5rem' }}>
                                                                     <select 
                                                                         value={getMaturityLevel(node.scheduler.interval)}
                                                                         onChange={(e) => {
@@ -676,6 +677,7 @@ export default function SettingsPage() {
                                                                             setMemoryNodes(getMemoryNodes());
                                                                         }}
                                                                         className="maturity-select"
+                                                                        style={{ padding: '2px 4px', fontSize: '0.75rem' }}
                                                                     >
                                                                         <option value="reset">Reset</option>
                                                                         <option value="medium">Medium</option>
@@ -683,29 +685,30 @@ export default function SettingsPage() {
                                                                         <option value="mastered">Mastered</option>
                                                                     </select>
                                                                 </td>
-                                                                <td>{node.scheduler.interval}d</td>
-                                                                <td>{node.scheduler.easeFactor}</td>
-                                                                <td>{node.scheduler.repetition}</td>
-                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                                <td style={{ padding: '0.4rem 0.5rem' }}>{node.scheduler.interval}d</td>
+                                                                <td style={{ padding: '0.4rem 0.5rem' }}>{node.scheduler.easeFactor}</td>
+                                                                <td style={{ padding: '0.4rem 0.5rem' }}>{node.scheduler.repetition}</td>
+                                                                <td style={{ padding: '0.4rem 0.5rem' }} className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
                                                             </tr>
                                                         ))
                                                 ) : (
-                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
+                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, padding: '0.4rem 0.5rem' }}>No part mindmaps</td></tr>
                                                 )
                                             )}
 
                                             {/* Surah Mindmaps Subgroup */}
-                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
-                                                <td colSpan={6} style={{ fontWeight: 600 }}>
+                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')} style={{ background: 'var(--background-secondary)', cursor: 'pointer' }}>
+                                                <td colSpan={6} style={{ fontWeight: 600, padding: '0.4rem 0.5rem', fontSize: '0.75rem' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                            <ChevronDown size={12} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
                                                             Surah Mindmaps
                                                         </div>
                                                         <button 
                                                             className="bulk-btn reset-mut" 
                                                             onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('mindmap'); }}
                                                             title="Reset all surah mindmaps maturity"
+                                                            style={{ padding: '2px 6px', fontSize: '0.7rem' }}
                                                         >
                                                             Reset Group
                                                         </button>
