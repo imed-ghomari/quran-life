@@ -14,6 +14,7 @@ import {
     isSurahSkipped,
     getSurahLearnedStatus,
     setSurahMaturity,
+    setGroupMaturity,
     resetAllMaturity,
     getMaturityLevel,
     setNodeMaturity,
@@ -152,8 +153,6 @@ export default function SettingsPage() {
         }
     };
     const [version, setVersion] = useState(0);
-    const [selectedSurah, setSelectedSurah] = useState<number>(1);
-    const [selectedLevel, setSelectedLevel] = useState<MaturityLevel>('medium');
     const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>(getMutashabihatDecisions());
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
     const [expandedMutItems, setExpandedMutItems] = useState<Record<string, boolean>>({});
@@ -161,12 +160,19 @@ export default function SettingsPage() {
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
-    const [showDebugNodes, setShowDebugNodes] = useState(false);
+    const [showDebugNodes, setShowDebugNodes] = useState(true);
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
     const toggleGroup = (groupId: string) => {
         setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+    };
+
+    const handleGroupMaturityReset = (type: 'verse' | 'mindmap' | 'part_mindmap') => {
+        const typeLabel = type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
+        if (!window.confirm(`Are you sure you want to reset the maturity of ${typeLabel}?`)) return;
+        setGroupMaturity(type, 'reset');
+        setVersion(v => v + 1);
     };
 
     useEffect(() => {
@@ -235,17 +241,6 @@ export default function SettingsPage() {
             // State: Skipped -> Set to Not Learned
             toggleSurahSkipped(surahId); // Unskip
         }
-        setVersion(v => v + 1);
-    };
-
-    const handleMaturityApply = () => {
-        setSurahMaturity(selectedSurah, selectedLevel);
-        setVersion(v => v + 1);
-    };
-
-    const handleResetAllMaturity = () => {
-        if (!window.confirm("Are you sure you want to reset the maturity/review strength of ALL surahs in the entire app? This will set all surahs back to the 'Reset' level.")) return;
-        resetAllMaturity();
         setVersion(v => v + 1);
     };
 
@@ -349,203 +344,6 @@ export default function SettingsPage() {
             <h1>Settings</h1>
 
             <div className="settings-grid">
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', gridColumn: '1 / -1' }}>
-                    <div className="section-title" 
-                         onClick={() => setShowDebugNodes(!showDebugNodes)}
-                         style={{ color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                                <Activity size={18} />
-                            </div>
-                            <span>Memory Nodes Transparency</span>
-                        </div>
-                        <ChevronDown size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                    </div>
-                    
-                    {showDebugNodes && (
-                        <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
-                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                                Total active nodes in memory: <strong>{memoryNodes.length}</strong>. These nodes represent the chunks of Quran you are currently reviewing.
-                            </p>
-                            
-                            <table className="debug-table">
-                                <thead>
-                                    <tr>
-                                        <th>Target / Range</th>
-                                        <th>Maturity</th>
-                                        <th>Interval</th>
-                                        <th>Ease</th>
-                                        <th>Reps</th>
-                                        <th>Next Review</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {/* MINDMAPS GROUP */}
-                                    <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
-                                        <td colSpan={6} style={{ fontWeight: 700 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
-                                                <Map size={16} /> Mindmaps
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {expandedGroups['mindmaps'] && (
-                                        <>
-                                            {/* Part Mindmaps Subgroup */}
-                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
-                                                <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
-                                                        Part Mindmaps
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {expandedGroups['mindmaps-part'] && (
-                                                memoryNodes.filter(n => n.type === 'part_mindmap').length > 0 ? (
-                                                    memoryNodes
-                                                        .filter(n => n.type === 'part_mindmap')
-                                                        .sort((a, b) => (a.partId || 0) - (b.partId || 0))
-                                                        .map(node => (
-                                                            <tr key={node.id} className="node-row">
-                                                                <td>Part {node.partId}</td>
-                                                                <td>
-                                                                    <select 
-                                                                        value={getMaturityLevel(node.scheduler.interval)}
-                                                                        onChange={(e) => {
-                                                                            setNodeMaturity(node.id, e.target.value as any);
-                                                                            setMemoryNodes(getMemoryNodes());
-                                                                        }}
-                                                                        className="maturity-select"
-                                                                    >
-                                                                        <option value="reset">Reset</option>
-                                                                        <option value="medium">Medium</option>
-                                                                        <option value="strong">Strong</option>
-                                                                        <option value="mastered">Mastered</option>
-                                                                    </select>
-                                                                </td>
-                                                                <td>{node.scheduler.interval}d</td>
-                                                                <td>{node.scheduler.easeFactor}</td>
-                                                                <td>{node.scheduler.repetition}</td>
-                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
-                                                            </tr>
-                                                        ))
-                                                ) : (
-                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
-                                                )
-                                            )}
-
-                                            {/* Surah Mindmaps Subgroup */}
-                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
-                                                <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
-                                                        Surah Mindmaps
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {expandedGroups['mindmaps-surah'] && (
-                                                memoryNodes.filter(n => n.type === 'mindmap').length > 0 ? (
-                                                    memoryNodes
-                                                        .filter(n => n.type === 'mindmap')
-                                                        .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
-                                                        .map(node => (
-                                                            <tr key={node.id} className="node-row">
-                                                                <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
-                                                                <td>
-                                                                    <select 
-                                                                        value={getMaturityLevel(node.scheduler.interval)}
-                                                                        onChange={(e) => {
-                                                                            setNodeMaturity(node.id, e.target.value as any);
-                                                                            setMemoryNodes(getMemoryNodes());
-                                                                        }}
-                                                                        className="maturity-select"
-                                                                    >
-                                                                        <option value="reset">Reset</option>
-                                                                        <option value="medium">Medium</option>
-                                                                        <option value="strong">Strong</option>
-                                                                        <option value="mastered">Mastered</option>
-                                                                    </select>
-                                                                </td>
-                                                                <td>{node.scheduler.interval}d</td>
-                                                                <td>{node.scheduler.easeFactor}</td>
-                                                                <td>{node.scheduler.repetition}</td>
-                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
-                                                            </tr>
-                                                        ))
-                                                ) : (
-                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
-                                                )
-                                            )}
-                                        </>
-                                    )}
-
-                                    {/* VERSES GROUP */}
-                                    <tr className="group-header" onClick={() => toggleGroup('verses')}>
-                                        <td colSpan={6} style={{ fontWeight: 700 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
-                                                <Book size={16} /> Verses
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {expandedGroups['verses'] && (
-                                        <>
-                                            {/* Group by Surah */}
-                                            {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId))).sort((a, b) => (a || 0) - (b || 0)).map(surahId => {
-                                                const surah = getSurah(surahId!);
-                                                const surahKey = `verse-surah-${surahId}`;
-                                                const surahNodes = memoryNodes
-                                                    .filter(n => n.type === 'verse' && n.surahId === surahId)
-                                                    .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
-                                                
-                                                return (
-                                                    <React.Fragment key={surahId}>
-                                                        <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
-                                                            <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
-                                                                    {surah?.id}. {surah?.name} ({surahNodes.length})
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                        {expandedGroups[surahKey] && surahNodes.map(node => (
-                                                            <tr key={node.id} className="node-row">
-                                                                <td>Ayat {node.startVerse}-{node.endVerse}</td>
-                                                                <td>
-                                                                    <select 
-                                                                        value={getMaturityLevel(node.scheduler.interval)}
-                                                                        onChange={(e) => {
-                                                                            setNodeMaturity(node.id, e.target.value as any);
-                                                                            setMemoryNodes(getMemoryNodes());
-                                                                        }}
-                                                                        className="maturity-select"
-                                                                    >
-                                                                        <option value="reset">Reset</option>
-                                                                        <option value="medium">Medium</option>
-                                                                        <option value="strong">Strong</option>
-                                                                        <option value="mastered">Mastered</option>
-                                                                    </select>
-                                                                </td>
-                                                                <td>{node.scheduler.interval}d</td>
-                                                                <td>{node.scheduler.easeFactor}</td>
-                                                                <td>{node.scheduler.repetition}</td>
-                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </React.Fragment>
-                                                );
-                                            })}
-                                            {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
-                                                <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes</td></tr>
-                                            )}
-                                        </>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-
                 <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                     <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
                         <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
@@ -712,54 +510,6 @@ export default function SettingsPage() {
                         ))}
                     </div>
                 </div>
-                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                            <RotateCcw size={18} />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <span>Surah Maturity</span>
-                            <button className="bulk-btn reset-mut" onClick={handleResetAllMaturity} title="Reset All Surahs">Reset All</button>
-                        </div>
-                    </div>
-                    <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                        Quickly adjust review strength for a specific surah.
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 6, display: 'block', color: 'var(--foreground-secondary)' }}>Select Surah</label>
-                            <select value={selectedSurah} onChange={e => setSelectedSurah(parseInt(e.target.value, 10))} style={{ width: '100%', padding: '0.85rem', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--foreground)', fontWeight: 600 }}>
-                                {SURAHS.map(s => (
-                                    <option key={s.id} value={s.id} style={{ background: 'var(--background)', color: 'var(--foreground)' }}>{s.id} — {s.arabicName}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 6, display: 'block', color: 'var(--foreground-secondary)' }}>Target Level</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                                {(['reset', 'medium', 'strong', 'mastered'] as MaturityLevel[]).map(level => (
-                                    <button
-                                        key={level}
-                                        className={`btn ${selectedLevel === level ? 'btn-primary' : 'btn-secondary'}`}
-                                        onClick={() => setSelectedLevel(level)}
-                                        style={{ 
-                                            fontSize: '0.75rem', 
-                                            padding: '0.65rem',
-                                            borderRadius: '8px',
-                                            textTransform: 'capitalize'
-                                        }}
-                                    >
-                                        {level}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '0.5rem' }}>
-                            <button className="btn btn-success btn-full" onClick={handleMaturityApply} style={{ padding: '0.85rem' }}>Apply</button>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div style={{ marginTop: '1.5rem' }}>
@@ -844,6 +594,234 @@ export default function SettingsPage() {
                             );
                         })}
                     </div>
+                </div>
+            </div>
+
+            <div style={{ marginTop: '1.5rem' }}>
+                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                    <div className="section-title" 
+                         onClick={() => setShowDebugNodes(!showDebugNodes)}
+                         style={{ color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                <Activity size={18} />
+                            </div>
+                            <span>Knowledge Tracking</span>
+                        </div>
+                        <ChevronDown size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                    </div>
+                    
+                    {showDebugNodes && (
+                        <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
+                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                                This section shows your active memory nodes and their review schedules.
+                            </p>
+                            
+                            <table className="debug-table">
+                                <thead>
+                                    <tr>
+                                        <th>Target / Range</th>
+                                        <th>Maturity</th>
+                                        <th>Interval</th>
+                                        <th>Ease</th>
+                                        <th>Reps</th>
+                                        <th>Next Review</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {/* MINDMAPS GROUP */}
+                                    <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
+                                        <td colSpan={6} style={{ fontWeight: 700 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                                    <Map size={16} /> Mindmaps
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {expandedGroups['mindmaps'] && (
+                                        <>
+                                            {/* Part Mindmaps Subgroup */}
+                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
+                                                <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
+                                                            Part Mindmaps
+                                                        </div>
+                                                        <button 
+                                                            className="bulk-btn reset-mut" 
+                                                            onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('part_mindmap'); }}
+                                                            title="Reset all part mindmaps maturity"
+                                                        >
+                                                            Reset Group
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {expandedGroups['mindmaps-part'] && (
+                                                memoryNodes.filter(n => n.type === 'part_mindmap').length > 0 ? (
+                                                    memoryNodes
+                                                        .filter(n => n.type === 'part_mindmap')
+                                                        .sort((a, b) => (a.partId || 0) - (b.partId || 0))
+                                                        .map(node => (
+                                                            <tr key={node.id} className="node-row">
+                                                                <td>Part {node.partId}</td>
+                                                                <td>
+                                                                    <select 
+                                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                                        onChange={(e) => {
+                                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                                            setMemoryNodes(getMemoryNodes());
+                                                                        }}
+                                                                        className="maturity-select"
+                                                                    >
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>{node.scheduler.interval}d</td>
+                                                                <td>{node.scheduler.easeFactor}</td>
+                                                                <td>{node.scheduler.repetition}</td>
+                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                            </tr>
+                                                        ))
+                                                ) : (
+                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
+                                                )
+                                            )}
+
+                                            {/* Surah Mindmaps Subgroup */}
+                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
+                                                <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
+                                                            Surah Mindmaps
+                                                        </div>
+                                                        <button 
+                                                            className="bulk-btn reset-mut" 
+                                                            onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('mindmap'); }}
+                                                            title="Reset all surah mindmaps maturity"
+                                                        >
+                                                            Reset Group
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {expandedGroups['mindmaps-surah'] && (
+                                                memoryNodes.filter(n => n.type === 'mindmap').length > 0 ? (
+                                                    memoryNodes
+                                                        .filter(n => n.type === 'mindmap')
+                                                        .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
+                                                        .map(node => (
+                                                            <tr key={node.id} className="node-row">
+                                                                <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
+                                                                <td>
+                                                                    <select 
+                                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                                        onChange={(e) => {
+                                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                                            setMemoryNodes(getMemoryNodes());
+                                                                        }}
+                                                                        className="maturity-select"
+                                                                    >
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>{node.scheduler.interval}d</td>
+                                                                <td>{node.scheduler.easeFactor}</td>
+                                                                <td>{node.scheduler.repetition}</td>
+                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                            </tr>
+                                                        ))
+                                                ) : (
+                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
+                                                )
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* VERSES GROUP */}
+                                    <tr className="group-header" onClick={() => toggleGroup('verses')}>
+                                        <td colSpan={6} style={{ fontWeight: 700 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
+                                                    <Book size={16} /> Verses
+                                                </div>
+                                                <button 
+                                                    className="bulk-btn reset-mut" 
+                                                    onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('verse'); }}
+                                                    title="Reset all verses maturity"
+                                                >
+                                                    Reset Group
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {expandedGroups['verses'] && (
+                                        <>
+                                            {/* Group by Surah */}
+                                            {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId))).sort((a, b) => (a || 0) - (b || 0)).map(surahId => {
+                                                const surah = getSurah(surahId!);
+                                                const surahKey = `verse-surah-${surahId}`;
+                                                const surahNodes = memoryNodes
+                                                    .filter(n => n.type === 'verse' && n.surahId === surahId)
+                                                    .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
+                                                
+                                                return (
+                                                    <React.Fragment key={surahId}>
+                                                        <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
+                                                            <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                    <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
+                                                                    {surah?.id}. {surah?.name} ({surahNodes.length})
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        {expandedGroups[surahKey] && surahNodes.map(node => (
+                                                            <tr key={node.id} className="node-row">
+                                                                <td>Ayat {node.startVerse}-{node.endVerse}</td>
+                                                                <td>
+                                                                    <select 
+                                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                                        onChange={(e) => {
+                                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                                            setMemoryNodes(getMemoryNodes());
+                                                                        }}
+                                                                        className="maturity-select"
+                                                                    >
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>{node.scheduler.interval}d</td>
+                                                                <td>{node.scheduler.easeFactor}</td>
+                                                                <td>{node.scheduler.repetition}</td>
+                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                            {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
+                                                <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes</td></tr>
+                                            )}
+                                        </>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
 

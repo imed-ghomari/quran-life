@@ -750,7 +750,7 @@ export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
         }
 
         let interval = 1;
-        let efactor = 2.5;
+        let easeFactor = 2.5;
 
         switch (level) {
             case 'reset':
@@ -781,8 +781,58 @@ export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
             scheduler: {
                 ...node.scheduler,
                 interval,
-                easeFactor: efactor, // Corrected property name from 'efactor' to 'easeFactor'
-                dueDate: dueDate.toISOString(),
+                easeFactor,
+                dueDate: dueDate.toISOString().split('T')[0],
+            }
+        };
+    });
+
+    saveMemoryNodes(updatedNodes);
+}
+
+export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap', level: MaturityLevel): void {
+    const nodes = getMemoryNodes();
+    const now = new Date();
+
+    const updatedNodes = nodes.map(node => {
+        if (node.type !== type) {
+            return node;
+        }
+
+        let interval = 1;
+        let easeFactor = 2.5;
+
+        switch (level) {
+            case 'reset':
+                interval = 1;
+                break;
+            case 'medium':
+                interval = 14;
+                break;
+            case 'strong':
+                interval = 30;
+                break;
+            case 'mastered':
+                interval = 90;
+                break;
+        }
+
+        // Add jitter: +/- 20%
+        if (level !== 'reset') {
+            const jitter = interval * 0.2;
+            interval = Math.round(interval + (Math.random() * jitter * 2 - jitter));
+        }
+
+        const dueDate = new Date(now);
+        dueDate.setDate(dueDate.getDate() + interval);
+
+        return {
+            ...node,
+            scheduler: {
+                ...node.scheduler,
+                interval,
+                easeFactor,
+                dueDate: dueDate.toISOString().split('T')[0],
             }
         };
     });
