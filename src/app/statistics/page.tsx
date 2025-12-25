@@ -9,10 +9,8 @@ import {
     getPartMindMaps,
     getMemoryNodes,
     getDueNodes,
-    isSurahSkipped,
 } from '@/lib/storage';
-import { QuranPart } from '@/lib/types';
-import { BarChart3, CheckCircle, Gauge, Layers, Timer, SkipForward, HelpCircle, Brain, Activity } from 'lucide-react';
+import { BarChart3, CheckCircle, Gauge, Layers, Timer, SkipForward, Activity } from 'lucide-react';
 import HelpSection from '@/components/HelpSection';
 
 type MaturityBucket = 'reset' | 'medium' | 'strong' | 'mastered';
@@ -37,7 +35,7 @@ export default function StatisticsPage() {
     const mindmaps = getMindMaps();
     const partMindmaps = getPartMindMaps();
     const memoryNodes = getMemoryNodes();
-    const dueNodes = getDueNodes();
+    const dueNodes = getDueNodes(settings.activePart);
 
     useEffect(() => {
         const interval = setInterval(() => setVersion(v => v + 1), 1500);
@@ -68,13 +66,13 @@ export default function StatisticsPage() {
     const overdue = dueNodes.length;
     const totalNodes = memoryNodes.length;
 
-    const activePartSurahs = SURAHS.filter(s => s.part === settings.activePart);
+    const activePartSurahs = SURAHS.filter(s => settings.activePart === 5 || s.part === settings.activePart);
     const activePartLearned = activePartSurahs.reduce((acc, s) => acc + getSurahLearnedStatus(s.id).learned, 0);
     const activePartTotal = activePartSurahs.reduce((acc, s) => acc + s.verseCount, 0);
 
     const progressCards = [
         { icon: <CheckCircle size={22} />, label: 'Learned verses', value: `${totalLearned}/${totalVerses}`, sub: `${learnedPercent}% of Quran` },
-        { icon: <Gauge size={22} />, label: 'Active Part Progress', value: `${activePartLearned}/${activePartTotal}`, sub: `Part ${settings.activePart}` },
+        { icon: <Gauge size={22} />, label: settings.activePart === 5 ? 'Global Progress' : 'Active Part Progress', value: `${activePartLearned}/${activePartTotal}`, sub: settings.activePart === 5 ? 'All Quran' : `Part ${settings.activePart}` },
         { icon: <Timer size={22} />, label: 'Due Reviews', value: `${overdue}`, sub: `${totalNodes} total scheduled` },
         { icon: <Layers size={22} />, label: 'Surah Mindmaps', value: `${completedMindmaps}/${totalMindmaps}`, sub: 'Completed mindmaps' },
         { icon: <BarChart3 size={22} />, label: 'Part Mindmaps', value: `${completedPartMaps}/${totalPartMaps}`, sub: 'Complete overview per part' },

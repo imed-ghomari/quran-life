@@ -1,5 +1,8 @@
 # Quran Learning App
 
+> ⚠️ **Warning: Under Development**
+> This application is currently in an active state of development. Features may change, data might be reset, and you may encounter bugs. Please use with caution and ensure you have backups of any important data.
+
 Unified web app for daily Qur'an review, listening/reading, progress tracking, and mindmap-driven memorization.
 
 ## Quick start

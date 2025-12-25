@@ -62,37 +62,22 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
   const merged: BackupData = { ...local };
   let hasChanges = false;
 
-  // 1. Settings (Learned Verses & Skipped Surahs)
+  // 1. Settings (Latest updatedAt wins)
   if (remote.settings) {
-    // Merge learnedVerses (Union)
-    const localLearned = local.settings?.learnedVerses || {};
-    const remoteLearned = remote.settings?.learnedVerses || {};
-    const allSurahIds = Array.from(new Set([...Object.keys(localLearned), ...Object.keys(remoteLearned)]));
-    
-    const mergedLearned: Record<string, number[]> = {};
-    for (const id of allSurahIds) {
-      const combined = new Set([...(localLearned[id] || []), ...(remoteLearned[id] || [])]);
-      mergedLearned[id] = Array.from(combined).sort((a, b) => a - b);
-      if (JSON.stringify(mergedLearned[id]) !== JSON.stringify(localLearned[id])) {
-        hasChanges = true;
-      }
-    }
-    
-    // Merge skippedSurahs (Union)
-    const localSkipped = new Set(local.settings?.skippedSurahs || []);
-    const remoteSkipped = remote.settings?.skippedSurahs || [];
-    remoteSkipped.forEach(id => {
-      if (!localSkipped.has(id)) {
-        localSkipped.add(id);
-        hasChanges = true;
-      }
-    });
+    const localUpdated = local.settings?.updatedAt ? new Date(local.settings.updatedAt).getTime() : 0;
+    const remoteUpdated = remote.settings?.updatedAt ? new Date(remote.settings.updatedAt).getTime() : 0;
 
-    merged.settings = {
-      ...local.settings!,
-      learnedVerses: mergedLearned,
-      skippedSurahs: Array.from(localSkipped).sort((a, b) => a - b),
-    };
+    // If remote is newer, adopt it completely
+    if (remoteUpdated > localUpdated) {
+      merged.settings = { ...remote.settings };
+      hasChanges = true;
+    } 
+    // If local is newer or equal, we keep local settings (which are already in 'merged')
+    // but we might want to flag hasChanges if they are different from remote 
+    // so we can push the local changes to cloud.
+    else if (JSON.stringify(local.settings) !== JSON.stringify(remote.settings)) {
+      hasChanges = true;
+    }
   }
 
   // 2. Memory Nodes (Latest SM-2 state wins per node ID)

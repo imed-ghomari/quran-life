@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SURAHS, getSurah, getSurahsByPart, parseQuranJson } from '@/lib/quranData';
 import {
     getMindMaps,
@@ -173,6 +173,24 @@ export default function TodoPage() {
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
     const [expandedMutItems, setExpandedMutItems] = useState<Record<string, boolean>>({});
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+        'part-mindmaps': true,
+        'fix-mindmaps': true,
+        'similarity-checks': true,
+        'surah-mindmaps': true
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            setExpandedGroups({
+                'part-mindmaps': false,
+                'fix-mindmaps': false,
+                'similarity-checks': false,
+                'surah-mindmaps': false
+            });
+        }
+    }, []);
+
     const settings = getSettings();
 
     useEffect(() => {
@@ -188,12 +206,16 @@ export default function TodoPage() {
             .catch(() => setVerses([]));
     }, []);
 
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+    };
+
     const toggleSurahExpand = (id: number) => setExpandedSurahs(prev => ({ ...prev, [id]: !prev[id] }));
 
     const activePart = settings.activePart;
 
     const surahTasks = useMemo(() => {
-        const eligible = SURAHS.filter(s => s.part === activePart && !isSurahSkipped(s.id));
+        const eligible = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !isSurahSkipped(s.id));
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
             .sort((a, b) => {
@@ -250,10 +272,10 @@ export default function TodoPage() {
         })).filter(g => g.surah);
     }, [similarityItems]);
 
-    const shouldCollapseSurahSection = false; // always show active part section
-    const shouldCollapsePartSection = false; // always show all part cards
-    const shouldCollapseFixSection = false; // show even if empty
-    const shouldCollapseSimilarity = false; // show even if empty
+    const isFixEmpty = suspendedAnchors.length === 0;
+    const isSimilarityEmpty = groupedSimilarity.length === 0;
+    const isIncompleteSurahsEmpty = incompleteSurahMaps.length === 0;
+    const isAllDone = isFixEmpty && isSimilarityEmpty && isIncompleteSurahsEmpty;
 
     const handleSurahImageUpdate = (surahId: number, file: File | null) => {
         if (!file) return;
@@ -392,342 +414,464 @@ export default function TodoPage() {
         <div className="content-wrapper" style={{ maxWidth: '1000px', padding: '1rem' }}>
             <h1>Todo</h1>
 
-            <div className="card">
-                <div className="section-title"><Map size={18} /> <span>Part Mindmaps</span></div>
-                <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>Overall mindmaps for each of the 4 Quran parts.</p>
-                <div className="part-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                    {partTasks.map(({ part, mindmap }) => {
-                        const isIncomplete = !mindmap || !mindmap.imageUrl || !mindmap.isComplete;
-                        const isActive = part === activePart;
-                        return (
-                            <div key={part} className={`surah-item modern-card ${isActive ? 'active-part' : ''}`} style={{
-                                background: 'var(--background-secondary)',
-                                borderColor: isActive ? 'var(--accent)' : 'var(--border)',
-                                padding: '1rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '0.75rem',
-                                boxShadow: isActive ? '0 4px 12px rgba(14, 165, 233, 0.1)' : 'none'
-                            }}>
-                                <div className="surah-info">
-                                    <div className="surah-number" style={{ background: isActive ? 'var(--accent)' : 'var(--foreground-secondary)' }}>P{part}</div>
-                                    <div className="surah-names">
-                                        <span className="surah-english" style={{ fontWeight: 700 }}>Part {part}</span>
-                                        <span className="surah-english" style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>{getSurahsByPart(part).length} surahs</span>
+            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                    <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                        <thead>
+                            <tr>
+                                <th>Target / Range</th>
+                                <th>Content</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="group-header" onClick={() => toggleGroup('part-mindmaps')}>
+                                <td colSpan={4} style={{ fontWeight: 700 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <ChevronDown size={16} style={{ transform: expandedGroups['part-mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                            <Map size={16} /> Part Mindmaps
+                                        </div>
                                     </div>
-                                    {isActive && <span className="status-badge learned" style={{ fontSize: '0.65rem', marginLeft: 'auto' }}>Active</span>}
-                                </div>
-                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <label className="upload-tile" style={{ justifyContent: 'center' }}>
-                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePartMindmapUpdate(part, e.target.files?.[0] || null)} />
-                                        <span style={{ fontSize: '0.85rem' }}><ImageIcon size={16} /> {mindmap?.imageUrl ? 'Replace' : 'Upload'}</span>
-                                    </label>
-                                    <button
-                                        className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
-                                        disabled={!mindmap?.imageUrl}
-                                        onClick={() => handlePartComplete(part)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    >
-                                        <Check size={16} /> Mark complete
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
+                                </td>
+                            </tr>
+                            {expandedGroups['part-mindmaps'] && (
+                                partTasks.map(({ part, mindmap }) => {
+                                    const isActive = part === activePart;
+                                    const isComplete = mindmap?.isComplete && mindmap?.imageUrl;
+                                    return (
+                                        <tr key={part} className="node-row">
+                                            <td style={{ fontWeight: 600 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div className="surah-number" style={{ background: isActive ? 'var(--accent)' : 'var(--foreground-secondary)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>P{part}</div>
+                                                    <span>Part {part}</span>
+                                                    {isActive && <span className="status-badge learned" style={{ fontSize: '0.65rem' }}>Active</span>}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                                                    {getSurahsByPart(part).length} surahs
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {isComplete ? (
+                                                    <span className="status-badge learned" style={{ fontSize: '0.75rem' }}>Complete</span>
+                                                ) : (
+                                                    <span className="status-badge partial" style={{ fontSize: '0.75rem' }}>Incomplete</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <label className="upload-tile" style={{ padding: '0.35rem 0.6rem', height: 'auto', margin: 0, justifyContent: 'center', minWidth: '90px' }}>
+                                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePartMindmapUpdate(part, e.target.files?.[0] || null)} />
+                                                        <span style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <ImageIcon size={14} /> {mindmap?.imageUrl ? 'Replace' : 'Upload'}
+                                                        </span>
+                                                    </label>
+                                                    <button
+                                                        className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
+                                                        disabled={!mindmap?.imageUrl}
+                                                        onClick={() => handlePartComplete(part)}
+                                                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '110px' }}
+                                                    >
+                                                        <Check size={14} /> {mindmap?.isComplete ? 'Completed' : 'Complete'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <div className="card">
-                <div className="section-title"><AlertTriangle size={18} /> <span>Fix Mindmaps</span></div>
-                <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>Anchors that failed 3 times are suspended. Upload updated mindmaps to fix.</p>
-                {suspendedAnchors.length === 0 ? (
-                    <div className="empty-state" style={{ background: 'var(--success-bg)', borderRadius: '12px', padding: '2rem' }}>
-                        <Check size={32} color="var(--success)" style={{ marginBottom: '0.5rem' }} />
-                        <p style={{ color: 'var(--success)', fontWeight: 600 }}>No suspended anchors! Great job.</p>
-                    </div>
-                ) : (
-                    <div className="modern-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
-                        {suspendedAnchors.map(issue => {
-                            const key = `${issue.surahId}-${issue.anchorId}`;
-                            const surah = getSurah(issue.surahId);
-                            return (
-                                <div key={key} className="surah-item modern-card" style={{ borderColor: 'var(--danger)', background: 'rgba(239, 68, 68, 0.02)', padding: '1rem', marginBottom: '0' }}>
-                                    <div className="surah-info" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-                                        <div className="surah-number" style={{ background: 'var(--danger)' }}>{issue.surahId}</div>
-                                        <div className="surah-names">
-                                            <span className="surah-arabic">{surah?.arabicName}</span>
-                                            <span className="surah-english">{surah?.name} — {issue.label}</span>
+            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                    <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                        <thead>
+                            <tr>
+                                <th>Target / Range</th>
+                                <th>Issue</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="group-header" onClick={() => toggleGroup('fix-mindmaps')}>
+                                <td colSpan={4} style={{ fontWeight: 700 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <ChevronDown size={16} style={{ transform: expandedGroups['fix-mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                            <AlertTriangle size={16} /> Fix Mindmaps
                                         </div>
-                                        <span className="status-badge not-remembered" style={{ marginLeft: 'auto', background: 'var(--danger)', color: 'white' }}>Suspended</span>
                                     </div>
-                                    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                        <label className="upload-tile" style={{ justifyContent: 'center' }}>
-                                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                    const url = reader.result as string;
-                                                    setFixDrafts(prev => ({ ...prev, [key]: url }));
-                                                };
-                                                reader.readAsDataURL(file);
-                                            }} />
-                                            <span style={{ fontSize: '0.85rem' }}><ImageIcon size={16} /> {fixDrafts[key] ? 'Replace update' : 'Upload fix'}</span>
-                                        </label>
-                                        <button className="btn btn-primary" style={{ fontSize: '0.85rem' }} onClick={() => handleFixConfirm(issue.surahId, issue.anchorId)} disabled={!fixDrafts[key]}>
-                                            <Check size={16} /> Confirm Fix
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                                </td>
+                            </tr>
+                            {expandedGroups['fix-mindmaps'] && (
+                                suspendedAnchors.length === 0 ? (
+                                    <tr className="node-row">
+                                        <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--success)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Check size={24} />
+                                                <span style={{ fontWeight: 600 }}>No suspended anchors! Great job.</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    suspendedAnchors.map(issue => {
+                                        const key = `${issue.surahId}-${issue.anchorId}`;
+                                        const surah = getSurah(issue.surahId);
+                                        return (
+                                            <tr key={key} className="node-row">
+                                                <td style={{ fontWeight: 600 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                        <div className="surah-number" style={{ background: 'var(--danger)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>{issue.surahId}</div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <span className="surah-arabic" style={{ fontSize: '1rem' }}>{surah?.arabicName}</span>
+                                                            <span className="surah-english" style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)' }}>{surah?.name}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span style={{ fontSize: '0.85rem' }}>{issue.label}</span>
+                                                </td>
+                                                <td>
+                                                    <span className="status-badge not-remembered" style={{ background: 'var(--danger)', color: 'white', fontSize: '0.75rem' }}>Suspended</span>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <label className="upload-tile" style={{ padding: '0.35rem 0.6rem', height: 'auto', margin: 0, justifyContent: 'center', minWidth: '90px' }}>
+                                                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                const reader = new FileReader();
+                                                                reader.onloadend = () => {
+                                                                    const url = reader.result as string;
+                                                                    setFixDrafts(prev => ({ ...prev, [key]: url }));
+                                                                };
+                                                                reader.readAsDataURL(file);
+                                                            }} />
+                                                            <span style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <ImageIcon size={14} /> {fixDrafts[key] ? 'Replace' : 'Upload Fix'}
+                                                            </span>
+                                                        </label>
+                                                        <button 
+                                                            className="btn btn-primary" 
+                                                            style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '100px' }} 
+                                                            onClick={() => handleFixConfirm(issue.surahId, issue.anchorId)} 
+                                                            disabled={!fixDrafts[key]}
+                                                        >
+                                                            <Check size={14} /> Confirm Fix
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <div className="card">
-                <div className="section-title"><ShieldAlert size={18} /> <span>Similar Verses Checks</span></div>
-                <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>Review errors that might be due to similar verses (Mutashabihat). Confirmed items will disappear.</p>
-                {groupedSimilarity.length === 0 ? (
-                    <div className="empty-state" style={{ background: 'var(--success-bg)', borderRadius: '12px', padding: '2rem' }}>
-                        <Check size={32} color="var(--success)" style={{ marginBottom: '0.5rem' }} />
-                        <p style={{ color: 'var(--success)', fontWeight: 600 }}>No similarity checks needed.</p>
-                    </div>
-                ) : (
-                    <div className="mutashabihat-fold">
-                        {groupedSimilarity.map(({ surah, items, count }) => {
-                            const isOpen = expandedSurahs[surah!.id] ?? false;
-                            return (
-                                <div key={surah!.id} className="mut-fold-item">
-                                    <button
-                                        className={`mut-fold-header ${isOpen ? 'open' : ''}`}
-                                        onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah!.id]: !isOpen }))}
-                                    >
-                                        <div className="surah-number">{surah!.id}</div>
-                                        <div className="surah-names">
-                                            <span className="surah-arabic">{surah!.arabicName}</span>
-                                            <span className="surah-english">{surah!.name}</span>
+            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                    <table className="debug-table" style={{ minWidth: '800px', width: '100%' }}>
+                        <thead>
+                            <tr>
+                                <th>Target / Range</th>
+                                <th style={{ width: '40%' }}>Similar Verses</th>
+                                <th>Decision</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="group-header" onClick={() => toggleGroup('similarity-checks')}>
+                                <td colSpan={4} style={{ fontWeight: 700 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <ChevronDown size={16} style={{ transform: expandedGroups['similarity-checks'] ? 'rotate(180deg)' : 'none' }} />
+                                            <ShieldAlert size={16} /> Similar Verses Checks
                                         </div>
-                                        <span className="status-badge partial">{count}</span>
-                                        <span className="mut-chevron">{isOpen ? '▴' : '▾'}</span>
-                                    </button>
-                                    {isOpen && (
-                                        <div className="mut-fold-body">
-                                            {items.map(({ err, muts }) => {
-                                                const abs = err.absoluteAyah!;
-                                                const ref = absoluteToSurahAyah(abs);
-                                                const surahMeta = getSurah(ref.surahId);
-                                                const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                    </div>
+                                </td>
+                            </tr>
+                            {expandedGroups['similarity-checks'] && (
+                                groupedSimilarity.length === 0 ? (
+                                    <tr className="node-row">
+                                        <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--success)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Check size={24} />
+                                                <span style={{ fontWeight: 600 }}>No similarity checks needed.</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    groupedSimilarity.map(({ surah, items, count }) => {
+                                        const isSurahOpen = expandedSurahs[surah!.id] ?? false;
+                                        return (
+                                            <React.Fragment key={surah!.id}>
+                                                <tr className="subgroup-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah!.id]: !isSurahOpen }))}>
+                                                    <td colSpan={4} style={{ fontWeight: 600 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <ChevronDown size={14} style={{ transform: isSurahOpen ? 'rotate(180deg)' : 'none' }} />
+                                                            <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.75rem' }}>{surah!.id}</div>
+                                                            <span>{surah!.arabicName} — {surah!.name}</span>
+                                                            <span className="status-badge partial" style={{ fontSize: '0.65rem' }}>{count} items</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {isSurahOpen && items.map(({ err, muts }) => {
+                                                    const abs = err.absoluteAyah!;
+                                                    const ref = absoluteToSurahAyah(abs);
+                                                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
 
-                                                return (
-                                                    <div key={abs} className="mut-verse-group">
-                                                        {muts.map((entry: any) => {
-                                                            const decisionKey = `${abs}-${entry.phraseId}`;
-                                                            const existing = decisions[decisionKey] || { status: 'pending', note: '' };
-                                                            const isConfirmed = !!existing.confirmedAt;
+                                                    return muts.map((entry: any) => {
+                                                        const decisionKey = `${abs}-${entry.phraseId}`;
+                                                        const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                        const isConfirmed = !!existing.confirmedAt;
+                                                        const isExpanded = expandedMutItems[decisionKey] || false;
+                                                        const matches = entry.matches.filter((m: any) => m !== abs);
+                                                        const visibleMatches = isExpanded ? matches : matches.slice(0, 2);
 
-                                                            return (
-                                                                <div key={decisionKey} className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`}>
-                                                                    <div className="mut-text">
-                                                                        <div className="mut-text-label">
-                                                                            Surah {surahMeta?.name} - {ref.ayahId} {entry.phraseId.startsWith('custom-') ? '' : `(Phrase #${entry.phraseId})`}
-                                                                        </div>
-                                                                        <div className="mut-context">
-                                                                            {baseVerse && (
-                                                                                <p className="arabic-text mut-core">
-                                                                                    <span className="mut-ayah-tag">{ref.ayahId}</span>
-                                                                                    <HighlightedVerse
-                                                                                        text={baseVerse.text}
-                                                                                        range={entry.meta.sourceAbs === abs ? entry.meta.sourceRange : entry.meta.matches.find((m: any) => m.absolute === abs)?.wordRange}
-                                                                                    />
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
+                                                        return (
+                                                            <tr key={decisionKey} className={`node-row ${isConfirmed ? 'confirmed' : ''}`}>
+                                                                <td style={{ verticalAlign: 'top' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)' }}>Ayah {ref.ayahId}</span>
+                                                                        {baseVerse && (
+                                                                            <p className="arabic-text" style={{ fontSize: '1rem', textAlign: 'right', margin: 0 }}>
+                                                                                <HighlightedVerse
+                                                                                    text={baseVerse.text}
+                                                                                    range={entry.meta.sourceAbs === abs ? entry.meta.sourceRange : entry.meta.matches.find((m: any) => m.absolute === abs)?.wordRange}
+                                                                                />
+                                                                            </p>
+                                                                        )}
                                                                     </div>
-
-                                                                    <div className="mut-matches">
-                                                                        {(() => {
-                                                                            const matches = entry.matches.filter((m: any) => m !== abs);
-                                                                            const isExpanded = expandedMutItems[decisionKey] || false;
-                                                                            const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
-                                                                            const hasMore = matches.length > 4;
+                                                                </td>
+                                                                <td style={{ verticalAlign: 'top' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                                        {visibleMatches.map((matchAbs: number, idx: number) => {
+                                                                            const mref = absoluteToSurahAyah(matchAbs);
+                                                                            const msurah = getSurah(mref.surahId);
+                                                                            const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                                            const matchRange = entry.meta.matches.find((m: any) => m.absolute === matchAbs)?.wordRange;
 
                                                                             return (
-                                                                                <>
-                                                                                    {visibleMatches.map((matchAbs: number, idx: number) => {
-                                                                                        const mref = absoluteToSurahAyah(matchAbs);
-                                                                                        const msurah = getSurah(mref.surahId);
-                                                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
-                                                                                        const matchRange = entry.meta.matches.find((m: any) => m.absolute === matchAbs)?.wordRange;
-
-                                                                                        return (
-                                                                                            <div key={`${decisionKey}-match-${idx}`} className="mut-text match-item">
-                                                                                                <div className="mut-text-label">
-                                                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
-                                                                                                </div>
-                                                                                                <div className="mut-context">
-                                                                                                    {mVerse && (
-                                                                                                        <p className="arabic-text mut-core">
-                                                                                                            <span className="mut-ayah-tag">{mref.ayahId}</span>
-                                                                                                            <HighlightedVerse text={mVerse.text} range={matchRange} />
-                                                                                                        </p>
-                                                                                                    )}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
-                                                                                    {hasMore && (
-                                                                                        <button
-                                                                                            className="btn-show-more"
-                                                                                            onClick={() => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isExpanded }))}
-                                                                                            style={{
-                                                                                                width: '100%',
-                                                                                                padding: '8px',
-                                                                                                marginTop: '8px',
-                                                                                                fontSize: '0.8rem',
-                                                                                                color: 'var(--accent)',
-                                                                                                background: 'none',
-                                                                                                border: '1px dashed var(--accent)',
-                                                                                                borderRadius: '8px',
-                                                                                                cursor: 'pointer'
-                                                                                            }}
-                                                                                        >
-                                                                                            {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
-                                                                                        </button>
+                                                                                <div key={idx} style={{ padding: '0.5rem', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                                                                                    <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>
+                                                                                        {msurah?.name} - {mref.ayahId}
+                                                                                    </div>
+                                                                                    {mVerse && (
+                                                                                        <p className="arabic-text" style={{ fontSize: '0.9rem', textAlign: 'right', margin: 0 }}>
+                                                                                            <HighlightedVerse text={mVerse.text} range={matchRange} />
+                                                                                        </p>
                                                                                     )}
-                                                                                </>
+                                                                                </div>
                                                                             );
-                                                                        })()}
-                                                                    </div>
-
-                                                                    <div className="mut-actions-v2">
-                                                                        <div className="action-row">
-                                                                            <select
-                                                                                value={existing.status}
-                                                                                onChange={e => handleSimilarityDecision(abs, e.target.value as any, entry.phraseId, e.target.value === 'ignored')}
-                                                                                className={existing.status !== 'pending' ? 'active' : ''}
-                                                                            >
-                                                                                {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                                                            </select>
-
+                                                                        })}
+                                                                        {matches.length > 2 && (
                                                                             <button
-                                                                                className={`btn-confirm ${isConfirmed ? 'confirmed' : ''}`}
-                                                                                onClick={() => handleSimilarityDecision(abs, existing.status, entry.phraseId, true)}
+                                                                                className="btn-show-more"
+                                                                                onClick={() => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isExpanded }))}
+                                                                                style={{ fontSize: '0.7rem', padding: '4px', border: '1px dashed var(--accent)', color: 'var(--accent)', background: 'none', borderRadius: '4px' }}
                                                                             >
-                                                                                {isConfirmed ? <Check size={16} /> : 'Confirm Fix'}
+                                                                                {isExpanded ? 'Show Less' : `+${matches.length - 2} more`}
                                                                             </button>
-                                                                        </div>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                                        <select
+                                                                            value={existing.status}
+                                                                            onChange={e => handleSimilarityDecision(abs, e.target.value as any, entry.phraseId, e.target.value === 'ignored')}
+                                                                            className="maturity-select"
+                                                                            style={{ width: '100%' }}
+                                                                        >
+                                                                            {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                                        </select>
                                                                         <input
                                                                             type="text"
-                                                                            placeholder="Add distinction note..."
+                                                                            placeholder="Note..."
                                                                             value={existing.note || ''}
                                                                             onChange={e => {
                                                                                 const key = `${abs}-${entry.phraseId}`;
                                                                                 setMutashabihatDecision(key as any, { ...existing, note: e.target.value });
                                                                                 setSettingsVersion(v => v + 1);
                                                                             }}
+                                                                            style={{ fontSize: '0.75rem', padding: '0.35rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--background)' }}
                                                                         />
                                                                     </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                                                                </td>
+                                                                <td>
+                                                                    <button
+                                                                        className={`btn ${isConfirmed ? 'btn-success' : 'btn-primary'}`}
+                                                                        onClick={() => handleSimilarityDecision(abs, existing.status, entry.phraseId, true)}
+                                                                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', width: '100%' }}
+                                                                    >
+                                                                        {isConfirmed ? <Check size={14} /> : 'Resolved'}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    });
+                                                })}
+                                            </React.Fragment>
+                                        );
+                                    })
+                                )
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <div className="card">
-                <div className="section-title"><MapPinned size={18} /> <span>Surah Mindmaps • Part {activePart}</span></div>
-                <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem' }}>Only surahs from the active part are listed.</p>
-                {surahTasks.length === 0 ? (
-                    <div className="empty-state"><p>No surahs in this part (or all are skipped).</p></div>
-                ) : (
-                    <div className="modern-list" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '0.75rem' }}>
-                        {surahTasks.map(({ surah, mindmap }) => {
-                            const isIncomplete = !mindmap || !mindmap.imageUrl || !mindmap.isComplete;
-                            return (
-                                <div key={surah.id} className="surah-item modern-card" style={{
-                                    background: isIncomplete ? 'rgba(245, 158, 11, 0.02)' : 'var(--background-secondary)',
-                                    borderColor: isIncomplete ? 'var(--warning)' : 'var(--border)',
-                                    marginBottom: '0',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'stretch',
-                                    gap: expandedSurahs[surah.id] ? '1.5rem' : '0',
-                                    padding: '1rem 1.25rem',
-                                    width: '100%',
-                                    maxWidth: '100%',
-                                    cursor: 'pointer'
-                                }} onClick={() => toggleSurahExpand(surah.id)}>
-                                    <div className="surah-info" style={{ borderBottom: expandedSurahs[surah.id] ? '1px solid var(--border)' : 'none', paddingBottom: expandedSurahs[surah.id] ? '1rem' : '0', transition: 'all 0.2s' }}>
-                                        <div className="surah-number" style={{ background: isIncomplete ? 'var(--warning)' : 'var(--accent)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>{surah.id}</div>
-                                        <div className="surah-names">
-                                            <span className="surah-arabic" style={{ fontSize: '1.25rem' }}>{surah.arabicName}</span>
-                                            <span className="surah-english" style={{ fontSize: '0.9rem' }}>{surah.name}</span>
-                                        </div>
-                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            {isIncomplete ? <span className="status-badge partial" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>Needs Attention</span> : <span className="status-badge learned" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>Ready</span>}
-                                            <ChevronDown size={18} style={{ transform: expandedSurahs[surah.id] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--foreground-secondary)' }} />
+            <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                    <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                        <thead>
+                            <tr>
+                                <th>Target / Range</th>
+                                <th>Segments</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="group-header" onClick={() => toggleGroup('surah-mindmaps')}>
+                                <td colSpan={4} style={{ fontWeight: 700 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <ChevronDown size={16} style={{ transform: expandedGroups['surah-mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                            <MapPinned size={16} /> Surah Mindmaps • {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
                                         </div>
                                     </div>
-                                    {expandedSurahs[surah.id] && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, width: '100%' }} onClick={e => e.stopPropagation()}>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                                <label className="upload-tile" style={{ height: 'auto', padding: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-                                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSurahImageUpdate(surah.id, e.target.files?.[0] || null)} />
-                                                    <span style={{ fontSize: '0.85rem' }}><ImageIcon size={18} /> {mindmap?.imageUrl ? 'Replace image' : 'Upload mindmap'}</span>
-                                                </label>
-                                                <button
-                                                    className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
-                                                    disabled={!mindmap?.imageUrl}
-                                                    onClick={() => handleMarkComplete(surah.id)}
-                                                    style={{ fontSize: '0.85rem', padding: '0.75rem' }}
+                                </td>
+                            </tr>
+                            {expandedGroups['surah-mindmaps'] && (
+                                surahTasks.length === 0 ? (
+                                    <tr className="node-row">
+                                        <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--foreground-secondary)' }}>
+                                            No surahs in this part (or all are skipped).
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    surahTasks.map(({ surah, mindmap }) => {
+                                        const isIncomplete = !mindmap || !mindmap.imageUrl || !mindmap.isComplete;
+                                        const isExpanded = expandedSurahs[surah.id] ?? false;
+                                        return (
+                                            <React.Fragment key={surah.id}>
+                                                <tr 
+                                                    className={`node-row ${isExpanded ? 'active' : ''}`} 
+                                                    onClick={() => toggleSurahExpand(surah.id)}
+                                                    style={{ cursor: 'pointer', background: isIncomplete ? 'rgba(245, 158, 11, 0.02)' : 'transparent' }}
                                                 >
-                                                    <Check size={18} /> {mindmap?.isComplete ? 'Completed' : 'Mark complete'}
-                                                </button>
-                                            </div>
-                                            <div style={{ background: 'var(--background)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', width: '100%' }}>
-                                                <AnchorBuilder
-                                                    surahId={surah.id}
-                                                    verseCount={surah.verseCount}
-                                                    builderState={getBuilderState(surah.id)}
-                                                    onAddPointer={() => handleAddPointer(surah.id, surah.verseCount)}
-                                                    onMovePointer={(idx, value) => handleMovePointer(surah.id, idx, value, surah.verseCount)}
-                                                    onRemovePointer={idx => handleRemovePointer(surah.id, idx)}
-                                                    onLabelChange={(idx, value) => handleLabelChange(surah.id, idx, value)}
-                                                    onSave={() => handleSaveAnchors(surah.id, surah.verseCount)}
-                                                />
-                                            </div>
-                                            {mindmap?.anchors?.length > 0 && (
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                                    {mindmap.anchors.map(a => (
-                                                        <span key={a.id} style={{ fontSize: '0.75rem', background: 'var(--verse-bg)', color: 'var(--accent)', padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid var(--accent-light)', fontWeight: 600 }}>
-                                                            {a.label} ({a.startVerse}-{a.endVerse})
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                                                    <td style={{ fontWeight: 600 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <div className="surah-number" style={{ background: isIncomplete ? 'var(--warning)' : 'var(--accent)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>{surah.id}</div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span className="surah-arabic" style={{ fontSize: '1.1rem' }}>{surah.arabicName}</span>
+                                                                <span className="surah-english" style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)' }}>{surah.name}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                                            {mindmap?.anchors?.length > 0 ? (
+                                                                mindmap.anchors.slice(0, 3).map(a => (
+                                                                    <span key={a.id} style={{ fontSize: '0.65rem', background: 'var(--verse-bg)', color: 'var(--accent)', padding: '0.15rem 0.35rem', borderRadius: '4px', border: '1px solid var(--accent-light)' }}>
+                                                                        {a.label}
+                                                                    </span>
+                                                                ))
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', fontStyle: 'italic' }}>No segments</span>
+                                                            )}
+                                                            {mindmap?.anchors?.length > 3 && <span style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)' }}>+{mindmap.anchors.length - 3}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        {isIncomplete ? (
+                                                            <span className="status-badge partial" style={{ fontSize: '0.75rem' }}>Needs Attention</span>
+                                                        ) : (
+                                                            <span className="status-badge learned" style={{ fontSize: '0.75rem' }}>Ready</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <ChevronDown size={18} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--foreground-secondary)' }} />
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {isExpanded && (
+                                                    <tr className="node-row expanded-content" onClick={e => e.stopPropagation()}>
+                                                        <td colSpan={4} style={{ padding: '1.5rem', background: 'var(--background)' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                                                    <label className="upload-tile" style={{ padding: '0.75rem', display: 'flex', justifyContent: 'center', margin: 0, height: 'auto' }}>
+                                                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSurahImageUpdate(surah.id, e.target.files?.[0] || null)} />
+                                                                        <span style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                            <ImageIcon size={18} /> {mindmap?.imageUrl ? 'Replace Image' : 'Upload Mindmap'}
+                                                                        </span>
+                                                                    </label>
+                                                                    <button
+                                                                        className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
+                                                                        disabled={!mindmap?.imageUrl}
+                                                                        onClick={() => handleMarkComplete(surah.id)}
+                                                                        style={{ fontSize: '0.85rem', padding: '0.75rem' }}
+                                                                    >
+                                                                        <Check size={18} /> {mindmap?.isComplete ? 'Completed' : 'Mark Complete'}
+                                                                    </button>
+                                                                </div>
+
+                                                                <div style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+                                                                    <AnchorBuilder
+                                                                        surahId={surah.id}
+                                                                        verseCount={surah.verseCount}
+                                                                        builderState={getBuilderState(surah.id)}
+                                                                        onAddPointer={() => handleAddPointer(surah.id, surah.verseCount)}
+                                                                        onMovePointer={(idx, value) => handleMovePointer(surah.id, idx, value, surah.verseCount)}
+                                                                        onRemovePointer={idx => handleRemovePointer(surah.id, idx)}
+                                                                        onLabelChange={(idx, value) => handleLabelChange(surah.id, idx, value)}
+                                                                        onSave={() => handleSaveAnchors(surah.id, surah.verseCount)}
+                                                                    />
+                                                                </div>
+
+                                                                {mindmap?.anchors?.length > 0 && (
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '1rem', background: 'var(--background-secondary)', borderRadius: '8px' }}>
+                                                                        {mindmap.anchors.map(a => (
+                                                                            <span key={a.id} style={{ fontSize: '0.75rem', background: 'var(--verse-bg)', color: 'var(--accent)', padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid var(--accent-light)', fontWeight: 600 }}>
+                                                                                {a.label} ({a.startVerse}-{a.endVerse})
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })
+                                )
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            {shouldCollapseSurahSection && shouldCollapsePartSection && shouldCollapseFixSection && shouldCollapseSimilarity && (
-                <div className="card">
-                    <div className="empty-state">
-                        <Check size={32} />
-                        <p>All todos cleared!</p>
+            {isAllDone && (
+                <div className="card modern-card" style={{ padding: '2rem', textAlign: 'center', background: 'var(--success-bg)', border: '1px solid var(--success)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                    <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                        <Check size={48} style={{ color: 'var(--success)' }} />
+                        <div>
+                            <h2 style={{ color: 'var(--success)', marginBottom: '0.25rem' }}>All Clear!</h2>
+                            <p style={{ color: 'var(--foreground-secondary)' }}>You've completed all pending tasks for this part.</p>
+                        </div>
                     </div>
                 </div>
             )}

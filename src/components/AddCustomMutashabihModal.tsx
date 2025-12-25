@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { SURAHS } from '@/lib/quranData';
-import { QuranPart, Surah, Verse } from '@/lib/types';
 import { CustomMutashabih, MutashabihatDecision } from '@/lib/storage';
 import { X } from 'lucide-react';
 
@@ -140,17 +139,36 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                     justify-content: center;
                     z-index: 1000;
                     backdrop-filter: blur(4px);
+                    padding: 1rem;
                 }
                 .modal-content {
                     background: var(--background);
                     border: 1px solid var(--border);
                     border-radius: 16px;
-                    width: 90%;
+                    width: 100%;
                     max-width: 500px;
+                    max-height: 85vh;
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                    margin-bottom: 60px; /* Space for bottom navigation/buttons */
+                }
+                @media (max-width: 480px) {
+                    .modal-content {
+                        max-width: 95%;
+                        margin-bottom: 80px;
+                    }
+                    .modal-body {
+                        padding: 1rem;
+                        gap: 1rem;
+                    }
+                    .modal-header {
+                        padding: 0.75rem 1rem;
+                    }
+                    .modal-footer {
+                        padding: 0.75rem 1rem;
+                    }
                 }
                 .modal-header {
                     padding: 1rem 1.5rem;

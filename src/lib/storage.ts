@@ -3,7 +3,7 @@
 // ========================================
 
 import { SURAHS } from './quranData';
-import { QuranPart, getMaturityThreshold } from './types';
+import { QuranPart } from './types';
 import { get, set, createStore } from 'idb-keyval';
 
 // ========================================
@@ -77,6 +77,7 @@ const STORAGE_KEYS = {
     REVIEW_ERRORS: 'quran-app-review-errors',
     MUTASHABIHAT_DECISIONS: 'quran-app-mutashabihat-decisions',
     CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
+    LAST_MODIFIED: 'quran-app-last-modified',
 };
 
 // ========================================
@@ -107,6 +108,17 @@ const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
 
 function saveToCacheAndStore(key: string, value: any) {
     storageCache[key] = value;
+    
+    // Update last modified timestamp (except for the timestamp itself)
+    if (key !== STORAGE_KEYS.LAST_MODIFIED) {
+        const now = new Date().toISOString();
+        storageCache[STORAGE_KEYS.LAST_MODIFIED] = now;
+        if (typeof window !== 'undefined' && customStore) {
+            set(STORAGE_KEYS.LAST_MODIFIED, now, customStore).catch(() => {});
+            localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, JSON.stringify(now));
+        }
+    }
+
     if (typeof window !== 'undefined' && customStore) {
         set(key, value, customStore).catch(err => console.error(`Failed to persist ${key}:`, err));
         
@@ -130,6 +142,7 @@ export interface AppSettings {
     learnedVerses: { [surahId: string]: number[] };
     skippedSurahs?: number[];
     lastSyncedAt?: string;
+    updatedAt?: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -137,6 +150,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     activePart: 4,
     learnedVerses: {},
     skippedSurahs: [],
+    updatedAt: new Date().toISOString(),
 };
 
 export function getSettings(): AppSettings {
@@ -146,6 +160,7 @@ export function getSettings(): AppSettings {
 }
 
 export function saveSettings(settings: AppSettings): void {
+    settings.updatedAt = new Date().toISOString();
     saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings);
 }
 
@@ -240,7 +255,7 @@ export function getLearnedVersesInPart(part: QuranPart): { surahId: number; ayah
     const settings = getSettings();
     const result: { surahId: number; ayahId: number }[] = [];
 
-    SURAHS.filter(s => s.part === part).forEach(surah => {
+    SURAHS.filter(s => part === 5 || s.part === part).forEach(surah => {
         const verses = settings.learnedVerses[surah.id] || [];
         verses.forEach(ayahId => {
             result.push({ surahId: surah.id, ayahId });
@@ -264,7 +279,7 @@ export interface SM2State {
 
 export interface MemoryNode {
     id: string;
-    type: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap';
+    type: 'verse' | 'mindmap' | 'part_mindmap';
     surahId?: number;
     partId?: QuranPart;
     startVerse?: number;
@@ -280,7 +295,7 @@ export function saveMemoryNodes(nodes: MemoryNode[]): void {
     saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, nodes);
 }
 
-export function getDueNodes(): MemoryNode[] {
+export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
     const today = new Date().toISOString().split('T')[0];
     const settings = getSettings();
     const skips = new Set(settings.skippedSurahs || []);
@@ -289,7 +304,18 @@ export function getDueNodes(): MemoryNode[] {
     return getMemoryNodes()
         .filter(n => n.scheduler.dueDate <= today)
         .filter(n => !n.surahId || !skips.has(n.surahId))
-        .filter(n => !isNodeSuspended(n, suspended));
+        .filter(n => !isNodeSuspended(n, suspended))
+        .filter(n => {
+            if (!filterPart || filterPart === 5) return true;
+            if (n.surahId) {
+                const surah = SURAHS.find(s => s.id === n.surahId);
+                return surah && surah.part === filterPart;
+            }
+            if (n.partId) {
+                return n.partId === filterPart;
+            }
+            return true;
+        });
 }
 
 export function updateMemoryNode(node: MemoryNode): void {
@@ -317,9 +343,15 @@ function createNewScheduler(): SM2State {
 // Sync memory nodes with learned verses - create nodes for learned verses
 export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): void {
     const settings = getSettings();
-    const nodes = forceFullReset ? [] : getMemoryNodes();
+    const currentNodes = getMemoryNodes();
+    const newNodes: MemoryNode[] = [];
+    
+    // 1. Keep non-verse nodes unless forceFullReset
+    if (!forceFullReset) {
+        newNodes.push(...currentNodes.filter(n => n.type !== 'verse'));
+    }
 
-    // Group verses into segments of 5
+    // 2. Group verses into segments of 5
     Object.entries(settings.learnedVerses).forEach(([surahIdStr, verses]) => {
         const surahId = parseInt(surahIdStr);
         if (verses.length === 0) return;
@@ -336,24 +368,16 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
             if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
                 // Create node for this segment if it doesn't exist
                 const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
-                const exists = nodes.some(n => n.id === nodeId);
+                const existing = currentNodes.find(n => n.id === nodeId);
                 
-                if (!exists || forceFullReset) {
-                    const newNode: MemoryNode = {
-                        id: nodeId,
-                        type: 'verse',
-                        surahId,
-                        startVerse: segmentStart,
-                        endVerse: segmentEnd,
-                        scheduler: createNewScheduler(),
-                    };
-
-                    if (forceFullReset) {
-                        nodes.push(newNode);
-                    } else if (!exists) {
-                        nodes.push(newNode);
-                    }
-                }
+                newNodes.push({
+                    id: nodeId,
+                    type: 'verse',
+                    surahId,
+                    startVerse: segmentStart,
+                    endVerse: segmentEnd,
+                    scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
+                });
 
                 if (i < sortedVerses.length) {
                     segmentStart = sortedVerses[i];
@@ -370,7 +394,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         const mindmaps = getMindMaps();
         Object.values(mindmaps).forEach(mm => {
             if (mm.isComplete) {
-                nodes.push({
+                newNodes.push({
                     id: `mindmap-${mm.surahId}`,
                     type: 'mindmap',
                     surahId: mm.surahId,
@@ -383,7 +407,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         const partMindmaps = getPartMindMaps();
         Object.values(partMindmaps).forEach(pmm => {
             if (pmm.isComplete) {
-                nodes.push({
+                newNodes.push({
                     id: `part-mindmap-${pmm.partId}`,
                     type: 'part_mindmap',
                     partId: pmm.partId,
@@ -393,7 +417,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         });
     }
 
-    saveMemoryNodes(nodes);
+    saveMemoryNodes(newNodes);
 }
 
 // SM-2 Algorithm
@@ -599,7 +623,7 @@ export interface ReviewError {
     id: string;
     timestamp: string;
     nodeId: string;
-    nodeType: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap';
+    nodeType: 'verse' | 'mindmap' | 'part_mindmap';
     surahId?: number;
     partId?: QuranPart;
     startVerse?: number;
@@ -790,12 +814,17 @@ export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
     saveMemoryNodes(updatedNodes);
 }
 
-export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap', level: MaturityLevel): void {
+export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap', level: MaturityLevel, surahId?: number): void {
     const nodes = getMemoryNodes();
     const now = new Date();
 
     const updatedNodes = nodes.map(node => {
         if (node.type !== type) {
+            return node;
+        }
+
+        // Filter by surahId if provided
+        if (surahId !== undefined && node.surahId !== surahId) {
             return node;
         }
 
@@ -948,6 +977,9 @@ export function resetMutashabihatDecisions(absoluteAyat: number[]): void {
 export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new' | 'skipped'): void {
     const settings = getSettings();
     const allSurahs = SURAHS;
+    let currentNodes = getMemoryNodes();
+    let currentMaps = getMindMaps();
+    let currentErrors = getReviewErrors();
 
     surahIds.forEach(id => {
         const surah = allSurahs.find(s => s.id === id);
@@ -962,17 +994,29 @@ export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new'
         if (status === 'learned') {
             const verseIds = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
             settings.learnedVerses[surahKey] = verseIds;
-        } else if (status === 'skipped') {
-            settings.skippedSurahs = [...(settings.skippedSurahs || []), id];
-            pruneSurahArtifacts(id);
+        } else if (status === 'skipped' || status === 'new') {
+            if (status === 'skipped') {
+                settings.skippedSurahs = [...(settings.skippedSurahs || []), id];
+            }
+            // Batch pruning logic
+            currentNodes = currentNodes.filter(n => n.surahId !== id);
+            delete currentMaps[id];
+            currentErrors = currentErrors.filter(err => err.surahId !== id);
         }
-        // 'new' status is already handled by the resets above
     });
 
     if (settings.skippedSurahs) {
         settings.skippedSurahs.sort((a, b) => a - b);
     }
+    
+    // Save everything once
     saveSettings(settings);
+    saveMemoryNodes(currentNodes);
+    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, currentMaps);
+    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, currentErrors);
+    
+    // Final sync to create nodes for 'learned' surahs
+    syncMemoryNodesWithLearned();
 }
 
 function pruneSurahArtifacts(surahId: number): void {
@@ -1033,7 +1077,7 @@ export function exportBackup(): BackupData {
         customMutashabihat: getCustomMutashabihat(),
         cycleStart: getCycleStart(),
         listeningComplete: getFromCache(STORAGE_KEYS.LISTENING_COMPLETE, null),
-        exportedAt: new Date().toISOString(),
+        exportedAt: getFromCache(STORAGE_KEYS.LAST_MODIFIED, new Date().toISOString()),
     };
 }
 
@@ -1063,4 +1107,9 @@ export function importBackup(data: BackupData): void {
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);
+    
+    // Finally, update the last modified timestamp to match the imported backup's time
+    if (data.exportedAt) {
+        saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt);
+    }
 }

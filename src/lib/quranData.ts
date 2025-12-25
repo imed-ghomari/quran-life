@@ -135,34 +135,31 @@ export const SURAHS: Surah[] = [
  * Format: { "surah:ayah:word": { text, ... } }
  */
 export function parseQuranJson(data: Record<string, any>): Verse[] {
-    const versesMap: Record<string, string[]> = {};
+    const versesMap: Map<string, string[]> = new Map();
     const verseKeysOrder: string[] = [];
 
-    // Sort keys to ensure words are in correct order (surah:ayah:word)
-    const keys = Object.keys(data).sort((a, b) => {
-        const [s1, ay1, w1] = a.split(':').map(Number);
-        const [s2, ay2, w2] = b.split(':').map(Number);
-        if (s1 !== s2) return s1 - s2;
-        if (ay1 !== ay2) return ay1 - ay2;
-        return w1 - w2;
-    });
-
+    // Keys are already mostly ordered in the JSON, but we iterate once
+    // Optimization: Don't sort all keys if not necessary, or use a more efficient grouping
+    const keys = Object.keys(data);
+    
     for (const key of keys) {
         const item = data[key];
-        const surahId = parseInt(item.surah, 10);
-        const ayahId = parseInt(item.ayah, 10);
+        const surahId = item.surah;
+        const ayahId = item.ayah;
         const verseKey = `${surahId}:${ayahId}`;
 
-        if (!versesMap[verseKey]) {
-            versesMap[verseKey] = [];
+        let verseWords = versesMap.get(verseKey);
+        if (!verseWords) {
+            verseWords = [];
+            versesMap.set(verseKey, verseWords);
             verseKeysOrder.push(verseKey);
         }
 
+        const text = item.text;
         // Check if the word is a verse marker (Arabic digits)
-        // Usually these are at the end of the ayah in this dataset
-        const isMarker = /^[\u0660-\u0669]+$/.test(item.text);
+        const isMarker = text.length <= 3 && /^[\u0660-\u0669]+$/.test(text);
         if (!isMarker) {
-            versesMap[verseKey].push(item.text);
+            verseWords.push(text);
         }
     }
 
@@ -171,8 +168,11 @@ export function parseQuranJson(data: Record<string, any>): Verse[] {
         return {
             surahId,
             ayahId,
-            text: versesMap[verseKey].join(' '),
+            text: versesMap.get(verseKey)!.join(' '),
         };
+    }).sort((a, b) => {
+        if (a.surahId !== b.surahId) return a.surahId - b.surahId;
+        return a.ayahId - b.ayahId;
     });
 }
 
@@ -187,6 +187,7 @@ export function getSurah(surahId: number): Surah | undefined {
  * Get surahs by part
  */
 export function getSurahsByPart(part: QuranPart): Surah[] {
+    if (part === 5) return SURAHS;
     return SURAHS.filter(s => s.part === part);
 }
 

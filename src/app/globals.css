@@ -50,6 +50,7 @@
 
 html,
 body {
+  width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -72,12 +73,16 @@ body {
 .page-container {
   min-height: 100vh;
   padding-bottom: 80px;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .content-wrapper {
   max-width: 900px;
   margin: 0 auto;
   padding: 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Headers */
@@ -839,13 +844,63 @@ input:focus {
 }
 
 /* Responsive */
+@media (max-width: 768px) {
+  .show-mobile {
+    display: inline-block !important;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+  .debug-table th, .debug-table td {
+    padding: 0.6rem 0.4rem;
+    font-size: 0.8rem;
+    word-break: break-word;
+  }
+  
+  .node-row td {
+    padding-left: 1rem !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-mobile {
+    display: none !important;
+  }
+}
+
 @media (max-width: 480px) {
+  .nav-item {
+    padding: 0.4rem 0.25rem;
+    font-size: 0.7rem;
+    gap: 2px;
+  }
+
+  .nav-item span:last-child {
+    font-size: 0.65rem;
+  }
+
   .arabic-text {
     font-size: 1.3rem;
   }
 
   .stats-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .part-selector {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .content-wrapper {
+    padding: 0.5rem;
+  }
+
+  .modern-card {
+    border-radius: 12px !important;
   }
 }
 

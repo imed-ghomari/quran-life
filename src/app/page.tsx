@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { SURAHS, parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
-import { Verse, getAudioPath, PART_NAMES } from '@/lib/types';
+import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { Verse, getAudioPath } from '@/lib/types';
 import {
     CheckCircle,
-    Headphones,
     Play,
     Pause,
     SkipBack,
@@ -15,9 +14,7 @@ import {
     ChevronDown,
     X,
     Check,
-    HelpCircle,
     Brain,
-    Timer,
     Info,
     ZoomIn,
     ZoomOut,
@@ -32,7 +29,6 @@ import {
     sm2,
     getMindMap,
     getPartMindMap,
-    addListeningTime,
     MemoryNode,
     markListeningComplete,
     getListeningCompletedToday,
@@ -73,8 +69,15 @@ export default function TodayPage() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
     const [settingsVersion, setSettingsVersion] = useState(0);
-    const [readOnlyMode, setReadOnlyMode] = useState(false);
+    const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            setViewState({ reviewExpanded: false, dailyExpanded: false });
+        }
+    }, []);
+
     const [zoomImage, setZoomImage] = useState<string | null>(null);
 
     // Toast & Undo
@@ -101,11 +104,26 @@ export default function TodayPage() {
     // Load data
     useEffect(() => {
         async function load() {
+            // Check session storage first
+            const cached = sessionStorage.getItem('quran_verses_cache_v2');
+            if (cached) {
+                setAllVerses(JSON.parse(cached));
+                setIsLoaded(true);
+                return;
+            }
+
             const response = await fetch('/qpc-hafs-word-by-word.json');
             const data = await response.json();
             const verses = parseQuranJson(data);
             setAllVerses(verses);
             setIsLoaded(true);
+            
+            // Background cache for this session
+            try {
+                sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
+            } catch (e) {
+                console.warn('Failed to cache verses in sessionStorage', e);
+            }
         }
         load();
     }, []);
@@ -133,25 +151,26 @@ export default function TodayPage() {
         // Only refresh due nodes list if we aren't in the middle of a review session
         // This prevents "skipping" cards when background sync happens
         if (dueNodes.length === 0 || currentReviewIndex === 0) {
-            setDueNodes(getDueNodes());
+            const settings = getSettings();
+            setDueNodes(getDueNodes(settings.activePart));
         }
         setListeningComplete(getListeningCompletedToday());
     }, [settingsVersion, isLoaded]);
 
     // Calculate today's portion (preserve per-part listening progress)
-    useEffect(() => {
-        if (allVerses.length === 0) return;
+    const portionData = useMemo(() => {
+        if (allVerses.length === 0) return { portion: [], startVerseIndex: 0 };
         const settings = getSettings();
         const surahsInPart = getSurahsByPart(settings.activePart).filter(s => !isSurahSkipped(s.id));
-        if (surahsInPart.length === 0) { setTodaysPortion([]); return; }
+        if (surahsInPart.length === 0) return { portion: [], startVerseIndex: 0 };
 
-        // Flatten verses
-        const allVersesInPart: Verse[] = [];
-        surahsInPart.forEach(surah => {
-            allVersesInPart.push(...allVerses.filter(v => v.surahId === surah.id));
-        });
+        // Flatten verses - optimized filter
+        const activeSurahIds = new Set(surahsInPart.map(s => s.id));
+        const allVersesInPart = allVerses.filter(v => activeSurahIds.has(v.surahId));
 
         const totalVerses = allVersesInPart.length;
+        if (totalVerses === 0) return { portion: [], startVerseIndex: 0 };
+
         const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
         const currentDay = getCurrentDayInCycle();
         const startIdx = (currentDay * versesPerDay) % totalVerses;
@@ -163,14 +182,17 @@ export default function TodayPage() {
         } else {
             portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
         }
-        setTodaysPortion(portion);
 
-        // Restore per-part progress without resetting when switching part
         const saved = getListeningProgress(settings.activePart);
-        if (portion.length > 0) {
-            setCurrentVerseIndex(Math.min(saved.currentVerseIndex, portion.length - 1));
-        }
+        const startVerseIndex = portion.length > 0 ? Math.min(saved.currentVerseIndex, portion.length - 1) : 0;
+
+        return { portion, startVerseIndex };
     }, [allVerses, settingsVersion]);
+
+    useEffect(() => {
+        setTodaysPortion(portionData.portion);
+        setCurrentVerseIndex(portionData.startVerseIndex);
+    }, [portionData]);
 
     // Persist listening progress per part
     useEffect(() => {
@@ -379,7 +401,6 @@ export default function TodayPage() {
     };
 
     const reviewContent = getCurrentReviewContent();
-    const settings = getSettings();
 
     // Reveal Logic
     const getCurrentVerseChunks = () => {
@@ -438,9 +459,18 @@ export default function TodayPage() {
 
     useEffect(() => {
         if (targetBoxRef.current) {
-            const nextBlur = targetBoxRef.current.querySelector('.next-blur');
+            const nextBlur = targetBoxRef.current.querySelector('.next-blur') as HTMLElement;
             if (nextBlur) {
-                nextBlur.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Use manual scrollTo on the container to prevent the whole window from scrolling
+                const container = targetBoxRef.current;
+                const elementTop = nextBlur.offsetTop;
+                const elementHeight = nextBlur.offsetHeight;
+                const containerHeight = container.offsetHeight;
+
+                container.scrollTo({
+                    top: elementTop - (containerHeight / 2) + (elementHeight / 2),
+                    behavior: 'smooth'
+                });
             } else if (showGrading) {
                 // If we finished the verse, scroll to the bottom of the box
                 targetBoxRef.current.scrollTo({ top: targetBoxRef.current.scrollHeight, behavior: 'smooth' });
@@ -487,7 +517,17 @@ export default function TodayPage() {
                                             )}
 
                                             {/* Target as grouped paragraph */}
-                                            <div ref={targetBoxRef} className="target-box" style={{ padding: '0.75rem', background: 'var(--verse-bg)', borderRadius: 10, minHeight: 100, maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                            <div ref={targetBoxRef} className="target-box" style={{ 
+                                                padding: '0.75rem', 
+                                                background: 'var(--verse-bg)', 
+                                                borderRadius: 10, 
+                                                height: '320px', 
+                                                overflowY: 'auto', 
+                                                display: 'flex', 
+                                                flexDirection: 'column', 
+                                                gap: 10,
+                                                position: 'relative'
+                                            }}>
                                                 <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
                                                     {reviewContent.verses?.map((v, idx) => {
                                                         const chunks = verseChunkMap[idx] || [];
@@ -603,7 +643,9 @@ export default function TodayPage() {
                             ) : (
                                 <>
                                     <div className="controls-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>Part {getSettings().activePart}</p>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
+                                            {getSettings().activePart === 5 ? 'All Quran' : `Part ${getSettings().activePart}`}
+                                        </p>
                                     </div>
 
                                     {!readOnlyMode ? (
@@ -621,7 +663,16 @@ export default function TodayPage() {
                                             <div className="verse-item" style={{ marginTop: '1rem' }}>
                                                 {todaysPortion[currentVerseIndex] && (
                                                     <>
-                                                        <div className="verse-ref">{getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}</div>
+                                                        <div className="verse-ref">
+                                                            {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
+                                                        </div>
+                                                        {todaysPortion[currentVerseIndex].ayahId === 1 && 
+                                                         todaysPortion[currentVerseIndex].surahId !== 1 && 
+                                                         todaysPortion[currentVerseIndex].surahId !== 9 && (
+                                                            <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                                                بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                                                            </div>
+                                                        )}
                                                         <div className="arabic-text">{todaysPortion[currentVerseIndex].text}</div>
                                                     </>
                                                 )}
@@ -663,17 +714,18 @@ export default function TodayPage() {
 
             <div className="toast-container" style={{
                 position: 'fixed',
-                bottom: '30px',
-                right: '30px',
+                top: '20px',
+                right: '20px',
                 zIndex: 1000,
                 display: 'flex',
-                flexDirection: 'column-reverse',
+                flexDirection: 'column',
                 gap: '10px',
-                pointerEvents: 'none'
+                pointerEvents: 'none',
+                maxWidth: 'calc(100vw - 40px)'
             }}>
                 {toasts.map((t) => (
                     <div key={t.id} className={`review-toast ${t.type}`} style={{
-                        padding: '0.75rem 1.25rem',
+                        padding: '0.65rem 1rem',
                         borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
@@ -684,7 +736,8 @@ export default function TodayPage() {
                             t.type === 'postpone' ? 'var(--bg-secondary)' : 'var(--danger)',
                         border: '1px solid var(--border)',
                         color: t.type === 'postpone' ? 'var(--text-primary)' : 'white',
-                        minWidth: '200px',
+                        minWidth: '180px',
+                        fontSize: '0.85rem',
                         pointerEvents: 'auto'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -833,30 +886,30 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             <div 
                 style={{
                     position: 'absolute',
-                    top: 20,
-                    right: 20,
+                    top: typeof window !== 'undefined' && window.innerWidth < 768 ? 15 : 20,
+                    right: typeof window !== 'undefined' && window.innerWidth < 768 ? 15 : 20,
                     display: 'flex',
-                    gap: 12,
+                    gap: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 12,
                     zIndex: 2001
                 }}
             >
                 <button 
                     onClick={handleZoomIn}
-                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: 10, borderRadius: '50%', cursor: 'pointer' }}
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 10, borderRadius: '50%', cursor: 'pointer' }}
                 >
-                    <ZoomIn size={24} />
+                    <ZoomIn size={typeof window !== 'undefined' && window.innerWidth < 768 ? 20 : 24} />
                 </button>
                 <button 
                     onClick={handleZoomOut}
-                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: 10, borderRadius: '50%', cursor: 'pointer' }}
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 10, borderRadius: '50%', cursor: 'pointer' }}
                 >
-                    <ZoomOut size={24} />
+                    <ZoomOut size={typeof window !== 'undefined' && window.innerWidth < 768 ? 20 : 24} />
                 </button>
                 <button 
                     onClick={onClose}
-                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: 10, borderRadius: '50%', cursor: 'pointer' }}
+                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 10, borderRadius: '50%', cursor: 'pointer' }}
                 >
-                    <X size={24} />
+                    <X size={typeof window !== 'undefined' && window.innerWidth < 768 ? 20 : 24} />
                 </button>
             </div>
 
@@ -895,8 +948,23 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             </div>
 
             {zoom > 1 && (
-                <div style={{ position: 'absolute', bottom: 40, color: 'white', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: 20 }}>
-                    <Move size={16} /> Drag to move around
+                <div 
+                    className="zoom-helper"
+                    style={{ 
+                        position: 'absolute', 
+                        bottom: typeof window !== 'undefined' && window.innerWidth < 768 ? 100 : 40, 
+                        color: 'white', 
+                        fontSize: '0.8rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 8, 
+                        background: 'rgba(0,0,0,0.6)', 
+                        padding: '6px 14px', 
+                        borderRadius: 20,
+                        zIndex: 2002
+                    }}
+                >
+                    <Move size={14} /> Drag to move around
                 </div>
             )}
         </div>

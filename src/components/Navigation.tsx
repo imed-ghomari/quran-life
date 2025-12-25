@@ -34,19 +34,27 @@ export default function Navigation() {
             const errors = getReviewErrors().filter(e => e.absoluteAyah);
             const suspended = getSuspendedAnchors();
 
-            const surahsInPart = SURAHS.filter(s => s.part === activePart && !isSurahSkipped(s.id));
+            const surahsInPart = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !isSurahSkipped(s.id));
 
             const incompleteSurahMaps = surahsInPart.filter(s => {
                 const mm = mindmaps[s.id];
                 return !mm || !mm.imageUrl || !mm.isComplete;
             }).length;
 
-            const partMap = partMindmaps[activePart];
-            const incompletePartMap = partMap && partMap.imageUrl && partMap.isComplete ? 0 : 1;
+            let incompletePartMaps = 0;
+            if (activePart === 5) {
+                incompletePartMaps = [1, 2, 3, 4].filter(p => {
+                    const map = partMindmaps[p];
+                    return !map || !map.imageUrl || !map.isComplete;
+                }).length;
+            } else {
+                const partMap = partMindmaps[activePart];
+                incompletePartMaps = partMap && partMap.imageUrl && partMap.isComplete ? 0 : 1;
+            }
 
             const suspendedInPart = suspended.filter(issue => {
                 const surahMeta = SURAHS.find(s => s.id === issue.surahId);
-                return surahMeta?.part === activePart;
+                return activePart === 5 || surahMeta?.part === activePart;
             }).length;
 
             const similarityChecks = errors.filter(err => {
@@ -56,13 +64,13 @@ export default function Navigation() {
                 if (decisions[abs]) return false;
                 const ref = absoluteToSurahAyah(abs);
                 const surahMeta = SURAHS.find(s => s.id === ref.surahId);
-                return surahMeta?.part === activePart;
+                return activePart === 5 || surahMeta?.part === activePart;
             }).length;
 
-            const due = getDueNodes().length;
+            const due = getDueNodes(activePart).length;
             const listeningComplete = getListeningCompletedToday();
 
-            setPendingCount(incompleteSurahMaps + incompletePartMap + suspendedInPart + similarityChecks);
+            setPendingCount(incompleteSurahMaps + incompletePartMaps + suspendedInPart + similarityChecks);
             setTodayReviews(due);
             setIsPortionComplete(listeningComplete);
         };

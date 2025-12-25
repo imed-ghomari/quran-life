@@ -3,13 +3,14 @@
 // ========================================
 
 // Traditional Qur'anic Part Classifications
-export type QuranPart = 1 | 2 | 3 | 4;
+export type QuranPart = 1 | 2 | 3 | 4 | 5; // 5 = All Quran
 
 export const PART_NAMES: Record<QuranPart, { arabic: string; english: string; surahs: [number, number] }> = {
     1: { arabic: "السبع الطوال", english: "As-Sab'ut-Tiwal (The Seven Long Ones)", surahs: [1, 9] },
     2: { arabic: "المئون", english: "Al-Mi'un (The Hundreds)", surahs: [10, 32] },
     3: { arabic: "المثاني", english: "Al-Mathani (The Oft-Repeated)", surahs: [33, 49] },
     4: { arabic: "المفصل", english: "Al-Mufassal (The Clearly Divided)", surahs: [50, 114] },
+    5: { arabic: "القرآن الكريم", english: "All Quran", surahs: [1, 114] },
 };
 
 // Surah metadata
