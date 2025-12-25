@@ -867,6 +867,7 @@ export default function SettingsPage() {
                         <table className="debug-table" style={{ minWidth: '800px' }}>
                             <thead>
                                 <tr>
+                                    <th style={{ width: '50px' }}></th>
                                     <th>Verse / Phrase</th>
                                     <th>Status</th>
                                     <th>Note</th>
@@ -880,7 +881,7 @@ export default function SettingsPage() {
                                     return (
                                         <React.Fragment key={surah.id}>
                                             <tr className="subgroup-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
-                                                <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                <td colSpan={6} style={{ fontWeight: 600 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                             <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />
@@ -890,17 +891,41 @@ export default function SettingsPage() {
                                                     </div>
                                                 </td>
                                             </tr>
-                                            {isOpen && getAllMutashabihatRefs().filter(abs => {
-                                                const ref = absoluteToSurahAyah(abs);
-                                                return ref.surahId === surah.id;
-                                            }).map(abs => {
-                                                const muts: any[] = getMutashabihatForAbsolute(abs);
-                                                const ref = absoluteToSurahAyah(abs);
-                                                const surahMeta = getSurah(ref.surahId);
-                                                const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                            {isOpen && (() => {
+                                                const surahMutsMap: Record<string, { 
+                                                    phraseId: string, 
+                                                    ayahIds: number[], 
+                                                    entry: any,
+                                                    absRefs: number[] 
+                                                }> = {};
 
-                                                return muts.map((entry: any) => {
-                                                    const decisionKey = `${abs}-${entry.phraseId}`;
+                                                getAllMutashabihatRefs().filter(abs => {
+                                                    const ref = absoluteToSurahAyah(abs);
+                                                    return ref.surahId === surah.id;
+                                                }).forEach(abs => {
+                                                    const muts = getMutashabihatForAbsolute(abs);
+                                                    const ref = absoluteToSurahAyah(abs);
+                                                    muts.forEach(m => {
+                                                        if (!surahMutsMap[m.phraseId]) {
+                                                            surahMutsMap[m.phraseId] = { 
+                                                                phraseId: m.phraseId, 
+                                                                ayahIds: [], 
+                                                                entry: m,
+                                                                absRefs: []
+                                                            };
+                                                        }
+                                                        if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
+                                                            surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
+                                                            surahMutsMap[m.phraseId].absRefs.push(abs);
+                                                        }
+                                                    });
+                                                });
+
+                                                return Object.values(surahMutsMap).map(group => {
+                                                    const entry = group.entry;
+                                                    // Use the first abs that has a decision, or the first one in the list
+                                                    const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
+                                                    const decisionKey = `${representativeAbs}-${group.phraseId}`;
                                                     const existing = decisions[decisionKey] || { status: 'pending', note: '' };
                                                     const isConfirmed = !!existing.confirmedAt;
                                                     const isDetailExpanded = expandedMutItems[decisionKey] || false;
@@ -908,16 +933,27 @@ export default function SettingsPage() {
                                                     return (
                                                         <React.Fragment key={decisionKey}>
                                                             <tr className="node-row">
-                                                                <td style={{ paddingLeft: '3rem' }}>
-                                                                    <div style={{ fontWeight: 500 }}>Ayah {ref.ayahId}</div>
+                                                                <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
+                                                                    <button
+                                                                        className="bulk-btn"
+                                                                        onClick={() => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }))}
+                                                                        style={{ padding: '4px', background: isDetailExpanded ? 'var(--accent)' : 'transparent', color: isDetailExpanded ? 'white' : 'inherit' }}
+                                                                    >
+                                                                        <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                                    </button>
+                                                                </td>
+                                                                <td>
+                                                                    <div style={{ fontWeight: 500 }}>
+                                                                        {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a,b)=>a-b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                    </div>
                                                                     <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                                                        {entry.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${entry.phraseId}`}
+                                                                        {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
                                                                     </div>
                                                                 </td>
                                                                 <td>
                                                                     <select
                                                                         value={existing.status}
-                                                                        onChange={e => handleDecisionUpdate(abs, { ...existing, status: e.target.value as any }, entry.phraseId)}
+                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, group.phraseId)}
                                                                         className="maturity-select"
                                                                         style={{ 
                                                                             borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
@@ -932,51 +968,52 @@ export default function SettingsPage() {
                                                                         type="text"
                                                                         placeholder="Add note..."
                                                                         value={existing.note || ''}
-                                                                        onChange={e => handleDecisionUpdate(abs, { ...existing, note: e.target.value }, entry.phraseId)}
+                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
                                                                         className="maturity-select"
                                                                         style={{ width: '100%', minWidth: '150px' }}
                                                                     />
                                                                 </td>
                                                                 <td>{entry.matches.length - 1} matches</td>
                                                                 <td>
-                                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                                        <button
-                                                                            className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                                                            onClick={() => handleDecisionUpdate(abs, {
-                                                                                ...existing,
-                                                                                confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                                            }, entry.phraseId)}
-                                                                            title={isConfirmed ? "Confirmed" : "Mark as confirmed"}
-                                                                        >
-                                                                            {isConfirmed ? <Check size={14} /> : 'Confirm'}
-                                                                        </button>
-                                                                        <button
-                                                                            className="bulk-btn"
-                                                                            onClick={() => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }))}
-                                                                        >
-                                                                            {isDetailExpanded ? <ChevronDown size={14} style={{ transform: 'rotate(180deg)' }} /> : <Eye size={14} />}
-                                                                        </button>
-                                                                    </div>
+                                                                    <button
+                                                                        className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                                                        onClick={() => handleDecisionUpdate(representativeAbs, {
+                                                                            ...existing,
+                                                                            confirmedAt: isConfirmed ? undefined : new Date().toISOString()
+                                                                        }, group.phraseId)}
+                                                                        title={isConfirmed ? "Confirmed" : "Mark as confirmed"}
+                                                                    >
+                                                                        {isConfirmed ? <Check size={14} /> : 'Confirm'}
+                                                                    </button>
                                                                 </td>
                                                             </tr>
                                                             {isDetailExpanded && (
                                                                 <tr>
-                                                                    <td colSpan={5} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px' }}>
+                                                                    <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px' }}>
                                                                         <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
                                                                             <div className="mut-text">
                                                                                 <div className="mut-text-label" style={{ marginBottom: '0.75rem' }}>
-                                                                                    Surah {surahMeta?.name} - {ref.ayahId} {entry.phraseId.startsWith('custom-') ? '' : `(Phrase #${entry.phraseId})`}
+                                                                                    Surah {surah.name} - {group.ayahIds.join(', ')} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
                                                                                 </div>
                                                                                 <div className="mut-context">
-                                                                                    {baseVerse && (
-                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.25rem' }}>
-                                                                                            <span className="mut-ayah-tag">{ref.ayahId}</span>
-                                                                                            <HighlightedVerse
-                                                                                                text={baseVerse.text}
-                                                                                                range={entry.meta.sourceAbs === abs ? entry.meta.sourceRange : entry.meta.matches.find((m: any) => m.absolute === abs)?.wordRange}
-                                                                                            />
-                                                                                        </p>
-                                                                                    )}
+                                                                                    {group.absRefs.map(absRef => {
+                                                                                        const ref = absoluteToSurahAyah(absRef);
+                                                                                        const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                                                                        const mutEntry = getMutashabihatForAbsolute(absRef).find(m => m.phraseId === group.phraseId);
+                                                                                        if (!mutEntry || !baseVerse) return null;
+                                                                                        
+                                                                                        return (
+                                                                                            <div key={absRef} style={{ marginBottom: group.absRefs.length > 1 ? '1rem' : 0 }}>
+                                                                                                <p className="arabic-text mut-core" style={{ fontSize: '1.25rem' }}>
+                                                                                                    <span className="mut-ayah-tag">{ref.ayahId}</span>
+                                                                                                    <HighlightedVerse
+                                                                                                        text={baseVerse.text}
+                                                                                                        range={mutEntry.meta.sourceAbs === absRef ? mutEntry.meta.sourceRange : mutEntry.meta.matches.find((m: any) => m.absolute === absRef)?.wordRange}
+                                                                                                    />
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
                                                                                 </div>
                                                                             </div>
 
