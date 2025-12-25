@@ -161,6 +161,11 @@ export default function SettingsPage() {
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
     const [showDebugNodes, setShowDebugNodes] = useState(false);
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+    };
 
     useEffect(() => {
         setMemoryNodes(getMemoryNodes());
@@ -356,82 +361,167 @@ export default function SettingsPage() {
                     </div>
                     
                     {showDebugNodes && (
-                        <div style={{ marginTop: '1.5rem' }}>
-                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                        <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
+                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                                 Total active nodes in memory: <strong>{memoryNodes.length}</strong>. These nodes represent the chunks of Quran you are currently reviewing.
                             </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                {memoryNodes.sort((a, b) => a.scheduler.dueDate.localeCompare(b.scheduler.dueDate)).map(node => {
-                                    const surah = node.surahId ? getSurah(node.surahId) : null;
-                                    const typeInfo = {
-                                        verse: { icon: Book, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', label: 'Verse Chunk' },
-                                        mindmap: { icon: Map, color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', label: 'Surah Mindmap' },
-                                        part_mindmap: { icon: Brain, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', label: 'Part Mindmap' }
-                                    }[node.type];
-                                    
-                                    const Icon = typeInfo.icon;
+                            
+                            <style jsx>{`
+                                .debug-table {
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                    font-size: 0.85rem;
+                                    color: var(--foreground);
+                                }
+                                .debug-table th, .debug-table td {
+                                    padding: 0.75rem;
+                                    text-align: left;
+                                    border-bottom: 1px solid var(--border);
+                                }
+                                .debug-table th {
+                                    font-weight: 600;
+                                    color: var(--foreground-secondary);
+                                    background: var(--background);
+                                }
+                                .group-header {
+                                    background: var(--verse-bg) !important;
+                                    cursor: pointer;
+                                    user-select: none;
+                                }
+                                .subgroup-header {
+                                    background: var(--background) !important;
+                                    cursor: pointer;
+                                    padding-left: 2rem !important;
+                                }
+                                .node-row td {
+                                    padding-left: 3rem !important;
+                                }
+                                .status-overdue {
+                                    color: #ef4444;
+                                    font-weight: 600;
+                                }
+                            `}</style>
 
-                                    return (
-                                        <div key={node.id} style={{ 
-                                            padding: '1rem', 
-                                            background: 'var(--background)', 
-                                            border: `1px solid ${typeInfo.color}44`, 
-                                            borderRadius: '12px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '0.5rem',
-                                            position: 'relative',
-                                            overflow: 'hidden'
-                                        }}>
-                                            <div style={{ 
-                                                position: 'absolute', 
-                                                top: 0, 
-                                                right: 0, 
-                                                padding: '4px 8px', 
-                                                background: typeInfo.bg, 
-                                                color: typeInfo.color, 
-                                                fontSize: '0.65rem', 
-                                                fontWeight: 700,
-                                                borderBottomLeftRadius: '8px'
-                                            }}>
-                                                {typeInfo.label}
-                                            </div>
-
+                            <table className="debug-table">
+                                <thead>
+                                    <tr>
+                                        <th>Target / Range</th>
+                                        <th>Interval</th>
+                                        <th>Ease</th>
+                                        <th>Reps</th>
+                                        <th>Next Review</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {/* MINDMAPS GROUP */}
+                                    <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
+                                        <td colSpan={5} style={{ fontWeight: 700 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <div style={{ color: typeInfo.color }}>
-                                                    <Icon size={16} />
-                                                </div>
-                                                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                                                    {node.type === 'part_mindmap' ? `Part ${node.partId}` : 
-                                                     node.type === 'mindmap' ? surah?.arabicName : 
-                                                     `${surah?.arabicName} (${node.startVerse}-${node.endVerse})`}
-                                                </span>
+                                                <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                                <Map size={16} /> Mindmaps
                                             </div>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.25rem' }}>
-                                                <div style={{ fontSize: '0.75rem' }}>
-                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Interval</div>
-                                                    <div style={{ fontWeight: 600 }}>{node.scheduler.interval} days</div>
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem' }}>
-                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Ease</div>
-                                                    <div style={{ fontWeight: 600 }}>{node.scheduler.easeFactor}</div>
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem' }}>
-                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Next Review</div>
-                                                    <div style={{ fontWeight: 600, color: node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? '#ef4444' : 'inherit' }}>
-                                                        {node.scheduler.dueDate}
+                                        </td>
+                                    </tr>
+                                    {expandedGroups['mindmaps'] && (
+                                        <>
+                                            {/* Part Mindmaps Subgroup */}
+                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
+                                                <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
+                                                        Part Mindmaps
                                                     </div>
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem' }}>
-                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Repetitions</div>
-                                                    <div style={{ fontWeight: 600 }}>{node.scheduler.repetition}</div>
-                                                </div>
+                                                </td>
+                                            </tr>
+                                            {expandedGroups['mindmaps-part'] && (
+                                                memoryNodes.filter(n => n.type === 'part_mindmap').length > 0 ? (
+                                                    memoryNodes.filter(n => n.type === 'part_mindmap').map(node => (
+                                                        <tr key={node.id} className="node-row">
+                                                            <td>Part {node.partId}</td>
+                                                            <td>{node.scheduler.interval}d</td>
+                                                            <td>{node.scheduler.easeFactor}</td>
+                                                            <td>{node.scheduler.repetition}</td>
+                                                            <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr className="node-row"><td colSpan={5} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
+                                                )
+                                            )}
+
+                                            {/* Surah Mindmaps Subgroup */}
+                                            <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
+                                                <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
+                                                        Surah Mindmaps
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {expandedGroups['mindmaps-surah'] && (
+                                                memoryNodes.filter(n => n.type === 'mindmap').length > 0 ? (
+                                                    memoryNodes.filter(n => n.type === 'mindmap').map(node => (
+                                                        <tr key={node.id} className="node-row">
+                                                            <td>{getSurah(node.surahId!)?.arabicName}</td>
+                                                            <td>{node.scheduler.interval}d</td>
+                                                            <td>{node.scheduler.easeFactor}</td>
+                                                            <td>{node.scheduler.repetition}</td>
+                                                            <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr className="node-row"><td colSpan={5} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
+                                                )
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* VERSES GROUP */}
+                                    <tr className="group-header" onClick={() => toggleGroup('verses')}>
+                                        <td colSpan={5} style={{ fontWeight: 700 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
+                                                <Book size={16} /> Verses
                                             </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                        </td>
+                                    </tr>
+                                    {expandedGroups['verses'] && (
+                                        <>
+                                            {/* Group by Surah */}
+                                            {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId))).sort((a, b) => (a || 0) - (b || 0)).map(surahId => {
+                                                const surah = getSurah(surahId!);
+                                                const surahKey = `verse-surah-${surahId}`;
+                                                const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                
+                                                return (
+                                                    <React.Fragment key={surahId}>
+                                                        <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
+                                                            <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                    <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
+                                                                    {surah?.arabicName} ({surahNodes.length})
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        {expandedGroups[surahKey] && surahNodes.map(node => (
+                                                            <tr key={node.id} className="node-row">
+                                                                <td>Ayat {node.startVerse}-{node.endVerse}</td>
+                                                                <td>{node.scheduler.interval}d</td>
+                                                                <td>{node.scheduler.easeFactor}</td>
+                                                                <td>{node.scheduler.repetition}</td>
+                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                            {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
+                                                <tr className="node-row"><td colSpan={5} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes</td></tr>
+                                            )}
+                                        </>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
