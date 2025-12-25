@@ -686,6 +686,28 @@ input:focus {
   font-weight: 600;
 }
 
+.maturity-select {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.maturity-select:hover {
+  border-color: var(--accent);
+  background: var(--background-secondary);
+}
+
+.maturity-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
 /* Empty state */
 .empty-state {
   text-align: center;

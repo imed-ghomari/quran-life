@@ -686,6 +686,60 @@ export function getCurrentDayInCycle(): number {
 // Maturity Levels
 export type MaturityLevel = 'reset' | 'medium' | 'strong' | 'mastered';
 
+export function getMaturityLevel(interval: number): MaturityLevel {
+    if (interval <= 3) return 'reset';
+    if (interval <= 14) return 'medium';
+    if (interval <= 45) return 'strong';
+    return 'mastered';
+}
+
+export function setNodeMaturity(nodeId: string, level: MaturityLevel): void {
+    const nodes = getMemoryNodes();
+    const index = nodes.findIndex(n => n.id === nodeId);
+    if (index === -1) return;
+
+    const node = nodes[index];
+    const now = new Date();
+    let interval = 1;
+    let easeFactor = 2.5;
+
+    switch (level) {
+        case 'reset':
+            interval = 1;
+            break;
+        case 'medium':
+            interval = 14;
+            break;
+        case 'strong':
+            interval = 30;
+            break;
+        case 'mastered':
+            interval = 90;
+            break;
+    }
+
+    // Add jitter: +/- 20%
+    if (level !== 'reset') {
+        const jitter = interval * 0.2;
+        interval = Math.round(interval + (Math.random() * jitter * 2 - jitter));
+    }
+
+    const dueDate = new Date(now);
+    dueDate.setDate(dueDate.getDate() + interval);
+
+    nodes[index] = {
+        ...node,
+        scheduler: {
+            ...node.scheduler,
+            interval,
+            easeFactor,
+            dueDate: dueDate.toISOString().split('T')[0],
+        }
+    };
+
+    saveMemoryNodes(nodes);
+}
+
 export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
     const nodes = getMemoryNodes();
     const now = new Date();

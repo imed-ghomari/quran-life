@@ -15,6 +15,8 @@ import {
     getSurahLearnedStatus,
     setSurahMaturity,
     resetAllMaturity,
+    getMaturityLevel,
+    setNodeMaturity,
     getMutashabihatDecisions,
     setMutashabihatDecision,
     saveCustomMutashabih,
@@ -370,6 +372,7 @@ export default function SettingsPage() {
                                 <thead>
                                     <tr>
                                         <th>Target / Range</th>
+                                        <th>Maturity</th>
                                         <th>Interval</th>
                                         <th>Ease</th>
                                         <th>Reps</th>
@@ -379,7 +382,7 @@ export default function SettingsPage() {
                                 <tbody>
                                     {/* MINDMAPS GROUP */}
                                     <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
-                                        <td colSpan={5} style={{ fontWeight: 700 }}>
+                                        <td colSpan={6} style={{ fontWeight: 700 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
                                                 <Map size={16} /> Mindmaps
@@ -390,7 +393,7 @@ export default function SettingsPage() {
                                         <>
                                             {/* Part Mindmaps Subgroup */}
                                             <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
-                                                <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                <td colSpan={6} style={{ fontWeight: 600 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                         <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
                                                         Part Mindmaps
@@ -399,23 +402,41 @@ export default function SettingsPage() {
                                             </tr>
                                             {expandedGroups['mindmaps-part'] && (
                                                 memoryNodes.filter(n => n.type === 'part_mindmap').length > 0 ? (
-                                                    memoryNodes.filter(n => n.type === 'part_mindmap').map(node => (
-                                                        <tr key={node.id} className="node-row">
-                                                            <td>Part {node.partId}</td>
-                                                            <td>{node.scheduler.interval}d</td>
-                                                            <td>{node.scheduler.easeFactor}</td>
-                                                            <td>{node.scheduler.repetition}</td>
-                                                            <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
-                                                        </tr>
-                                                    ))
+                                                    memoryNodes
+                                                        .filter(n => n.type === 'part_mindmap')
+                                                        .sort((a, b) => (a.partId || 0) - (b.partId || 0))
+                                                        .map(node => (
+                                                            <tr key={node.id} className="node-row">
+                                                                <td>Part {node.partId}</td>
+                                                                <td>
+                                                                    <select 
+                                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                                        onChange={(e) => {
+                                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                                            setMemoryNodes(getMemoryNodes());
+                                                                        }}
+                                                                        className="maturity-select"
+                                                                    >
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>{node.scheduler.interval}d</td>
+                                                                <td>{node.scheduler.easeFactor}</td>
+                                                                <td>{node.scheduler.repetition}</td>
+                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                            </tr>
+                                                        ))
                                                 ) : (
-                                                    <tr className="node-row"><td colSpan={5} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
+                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
                                                 )
                                             )}
 
                                             {/* Surah Mindmaps Subgroup */}
                                             <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
-                                                <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                <td colSpan={6} style={{ fontWeight: 600 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                         <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
                                                         Surah Mindmaps
@@ -424,17 +445,35 @@ export default function SettingsPage() {
                                             </tr>
                                             {expandedGroups['mindmaps-surah'] && (
                                                 memoryNodes.filter(n => n.type === 'mindmap').length > 0 ? (
-                                                    memoryNodes.filter(n => n.type === 'mindmap').map(node => (
-                                                        <tr key={node.id} className="node-row">
-                                                            <td>{getSurah(node.surahId!)?.arabicName}</td>
-                                                            <td>{node.scheduler.interval}d</td>
-                                                            <td>{node.scheduler.easeFactor}</td>
-                                                            <td>{node.scheduler.repetition}</td>
-                                                            <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
-                                                        </tr>
-                                                    ))
+                                                    memoryNodes
+                                                        .filter(n => n.type === 'mindmap')
+                                                        .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
+                                                        .map(node => (
+                                                            <tr key={node.id} className="node-row">
+                                                                <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
+                                                                <td>
+                                                                    <select 
+                                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                                        onChange={(e) => {
+                                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                                            setMemoryNodes(getMemoryNodes());
+                                                                        }}
+                                                                        className="maturity-select"
+                                                                    >
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>{node.scheduler.interval}d</td>
+                                                                <td>{node.scheduler.easeFactor}</td>
+                                                                <td>{node.scheduler.repetition}</td>
+                                                                <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                            </tr>
+                                                        ))
                                                 ) : (
-                                                    <tr className="node-row"><td colSpan={5} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
+                                                    <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
                                                 )
                                             )}
                                         </>
@@ -442,7 +481,7 @@ export default function SettingsPage() {
 
                                     {/* VERSES GROUP */}
                                     <tr className="group-header" onClick={() => toggleGroup('verses')}>
-                                        <td colSpan={5} style={{ fontWeight: 700 }}>
+                                        <td colSpan={6} style={{ fontWeight: 700 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
                                                 <Book size={16} /> Verses
@@ -455,21 +494,38 @@ export default function SettingsPage() {
                                             {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId))).sort((a, b) => (a || 0) - (b || 0)).map(surahId => {
                                                 const surah = getSurah(surahId!);
                                                 const surahKey = `verse-surah-${surahId}`;
-                                                const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                const surahNodes = memoryNodes
+                                                    .filter(n => n.type === 'verse' && n.surahId === surahId)
+                                                    .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
                                                 
                                                 return (
                                                     <React.Fragment key={surahId}>
                                                         <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
-                                                            <td colSpan={5} style={{ fontWeight: 600 }}>
+                                                            <td colSpan={6} style={{ fontWeight: 600 }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                     <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
-                                                                    {surah?.arabicName} ({surahNodes.length})
+                                                                    {surah?.id}. {surah?.name} ({surahNodes.length})
                                                                 </div>
                                                             </td>
                                                         </tr>
                                                         {expandedGroups[surahKey] && surahNodes.map(node => (
                                                             <tr key={node.id} className="node-row">
                                                                 <td>Ayat {node.startVerse}-{node.endVerse}</td>
+                                                                <td>
+                                                                    <select 
+                                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                                        onChange={(e) => {
+                                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                                            setMemoryNodes(getMemoryNodes());
+                                                                        }}
+                                                                        className="maturity-select"
+                                                                    >
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </td>
                                                                 <td>{node.scheduler.interval}d</td>
                                                                 <td>{node.scheduler.easeFactor}</td>
                                                                 <td>{node.scheduler.repetition}</td>
@@ -480,7 +536,7 @@ export default function SettingsPage() {
                                                 );
                                             })}
                                             {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
-                                                <tr className="node-row"><td colSpan={5} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes</td></tr>
+                                                <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes</td></tr>
                                             )}
                                         </>
                                     )}
