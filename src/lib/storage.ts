@@ -264,7 +264,7 @@ export interface SM2State {
 
 export interface MemoryNode {
     id: string;
-    type: 'verse' | 'mindmap' | 'part_mindmap';
+    type: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap';
     surahId?: number;
     partId?: QuranPart;
     startVerse?: number;
@@ -599,7 +599,7 @@ export interface ReviewError {
     id: string;
     timestamp: string;
     nodeId: string;
-    nodeType: 'verse' | 'mindmap' | 'part_mindmap';
+    nodeType: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap';
     surahId?: number;
     partId?: QuranPart;
     startVerse?: number;
@@ -790,7 +790,7 @@ export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
     saveMemoryNodes(updatedNodes);
 }
 
-export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap', level: MaturityLevel): void {
+export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap', level: MaturityLevel): void {
     const nodes = getMemoryNodes();
     const now = new Date();
 

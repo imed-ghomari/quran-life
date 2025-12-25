@@ -168,8 +168,13 @@ export default function SettingsPage() {
         setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
     };
 
-    const handleGroupMaturityReset = (type: 'verse' | 'mindmap' | 'part_mindmap') => {
-        const typeLabel = type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
+    const handleGroupMaturityReset = (type: 'verse' | 'mindmap' | 'part_mindmap' | 'similar_verse_check' | 'fix_mindmap') => {
+        const typeLabel = 
+            type === 'verse' ? 'all Verses' : 
+            type === 'mindmap' ? 'all Surah Mindmaps' : 
+            type === 'part_mindmap' ? 'all Part Mindmaps' :
+            type === 'similar_verse_check' ? 'all Similar Verse Checks' :
+            'all Fix Mindmap Tasks';
         if (!window.confirm(`Are you sure you want to reset the maturity of ${typeLabel}?`)) return;
         setGroupMaturity(type, 'reset');
         setVersion(v => v + 1);
