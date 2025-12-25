@@ -27,10 +27,24 @@ import {
     resetMutashabihatDecisions,
 } from '@/lib/storage';
 import { QuranPart } from '@/lib/types';
-import { Check, Clock, PauseCircle, RotateCcw, Download, Upload, ShieldCheck, Database, HelpCircle, Settings, Brain, Plus } from 'lucide-react';
+import { Check, Clock, PauseCircle, RotateCcw, Download,
+    Upload,
+    ShieldCheck,
+    Database,
+    HelpCircle,
+    Settings,
+    Brain,
+    Plus,
+    Eye,
+    ChevronDown,
+    Map,
+    Book,
+    Activity
+} from 'lucide-react';
 import HelpSection from '@/components/HelpSection';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
+import { MemoryNode, getMemoryNodes } from '@/lib/storage';
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'pending', label: 'Pending Review' },
@@ -145,6 +159,12 @@ export default function SettingsPage() {
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
+    const [showDebugNodes, setShowDebugNodes] = useState(false);
+    const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
+
+    useEffect(() => {
+        setMemoryNodes(getMemoryNodes());
+    }, [version]);
 
     useEffect(() => {
         setSettings(getSettings());
@@ -322,6 +342,100 @@ export default function SettingsPage() {
             <h1>Settings</h1>
 
             <div className="settings-grid">
+                <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', gridColumn: '1 / -1' }}>
+                    <div className="section-title" 
+                         onClick={() => setShowDebugNodes(!showDebugNodes)}
+                         style={{ color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                <Activity size={18} />
+                            </div>
+                            <span>Memory Nodes Transparency</span>
+                        </div>
+                        <ChevronDown size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                    </div>
+                    
+                    {showDebugNodes && (
+                        <div style={{ marginTop: '1.5rem' }}>
+                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                                Total active nodes in memory: <strong>{memoryNodes.length}</strong>. These nodes represent the chunks of Quran you are currently reviewing.
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                                {memoryNodes.sort((a, b) => a.scheduler.dueDate.localeCompare(b.scheduler.dueDate)).map(node => {
+                                    const surah = node.surahId ? getSurah(node.surahId) : null;
+                                    const typeInfo = {
+                                        verse: { icon: Book, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', label: 'Verse Chunk' },
+                                        mindmap: { icon: Map, color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', label: 'Surah Mindmap' },
+                                        part_mindmap: { icon: Brain, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', label: 'Part Mindmap' }
+                                    }[node.type];
+                                    
+                                    const Icon = typeInfo.icon;
+
+                                    return (
+                                        <div key={node.id} style={{ 
+                                            padding: '1rem', 
+                                            background: 'var(--background)', 
+                                            border: `1px solid ${typeInfo.color}44`, 
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.5rem',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                position: 'absolute', 
+                                                top: 0, 
+                                                right: 0, 
+                                                padding: '4px 8px', 
+                                                background: typeInfo.bg, 
+                                                color: typeInfo.color, 
+                                                fontSize: '0.65rem', 
+                                                fontWeight: 700,
+                                                borderBottomLeftRadius: '8px'
+                                            }}>
+                                                {typeInfo.label}
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <div style={{ color: typeInfo.color }}>
+                                                    <Icon size={16} />
+                                                </div>
+                                                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                                    {node.type === 'part_mindmap' ? `Part ${node.partId}` : 
+                                                     node.type === 'mindmap' ? surah?.arabicName : 
+                                                     `${surah?.arabicName} (${node.startVerse}-${node.endVerse})`}
+                                                </span>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                                <div style={{ fontSize: '0.75rem' }}>
+                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Interval</div>
+                                                    <div style={{ fontWeight: 600 }}>{node.scheduler.interval} days</div>
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem' }}>
+                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Ease</div>
+                                                    <div style={{ fontWeight: 600 }}>{node.scheduler.easeFactor}</div>
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem' }}>
+                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Next Review</div>
+                                                    <div style={{ fontWeight: 600, color: node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? '#ef4444' : 'inherit' }}>
+                                                        {node.scheduler.dueDate}
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem' }}>
+                                                    <div style={{ color: 'var(--foreground-secondary)' }}>Repetitions</div>
+                                                    <div style={{ fontWeight: 600 }}>{node.scheduler.repetition}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className="card modern-card" style={{ padding: '1.5rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                     <div className="section-title" style={{ color: 'var(--accent)', fontWeight: 700, marginBottom: '0.75rem' }}>
                         <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
