@@ -921,73 +921,94 @@ export default function SettingsPage() {
                                                     });
                                                 });
 
-                                                return Object.values(surahMutsMap).map(group => {
-                                                    const entry = group.entry;
-                                                    // Use the first abs that has a decision, or the first one in the list
-                                                    const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
-                                                    const decisionKey = `${representativeAbs}-${group.phraseId}`;
-                                                    const existing = decisions[decisionKey] || { status: 'pending', note: '' };
-                                                    const isConfirmed = !!existing.confirmedAt;
-                                                    const isDetailExpanded = expandedMutItems[decisionKey] || false;
+                                                return Object.values(surahMutsMap)
+                                                    .sort((a, b) => {
+                                                        const aMin = Math.min(...a.ayahIds);
+                                                        const bMin = Math.min(...b.ayahIds);
+                                                        return aMin - bMin;
+                                                    })
+                                                    .map(group => {
+                                                        const entry = group.entry;
+                                                        // Use the first abs that has a decision, or the first one in the list
+                                                        const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
+                                                        const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                        const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                        const isConfirmed = !!existing.confirmedAt;
+                                                        const isDetailExpanded = expandedMutItems[decisionKey] || false;
 
-                                                    return (
-                                                        <React.Fragment key={decisionKey}>
-                                                            <tr className="node-row">
-                                                                <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
-                                                                    <button
-                                                                        className="bulk-btn"
-                                                                        onClick={() => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }))}
-                                                                        style={{ padding: '4px', background: isDetailExpanded ? 'var(--accent)' : 'transparent', color: isDetailExpanded ? 'white' : 'inherit' }}
-                                                                    >
-                                                                        <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                                                    </button>
-                                                                </td>
-                                                                <td>
-                                                                    <div style={{ fontWeight: 500 }}>
-                                                                        {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a,b)=>a-b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
-                                                                    </div>
-                                                                    <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                                                        {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
-                                                                    </div>
-                                                                </td>
-                                                                <td>
-                                                                    <select
-                                                                        value={existing.status}
-                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, group.phraseId)}
-                                                                        className="maturity-select"
-                                                                        style={{ 
-                                                                            borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
-                                                                            color: existing.status !== 'pending' ? 'var(--accent)' : 'inherit'
-                                                                        }}
-                                                                    >
-                                                                        {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                                                    </select>
-                                                                </td>
-                                                                <td>
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Add note..."
-                                                                        value={existing.note || ''}
-                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
-                                                                        className="maturity-select"
-                                                                        style={{ width: '100%', minWidth: '150px' }}
-                                                                    />
-                                                                </td>
-                                                                <td>{entry.matches.length - 1} matches</td>
-                                                                <td>
-                                                                    <button
-                                                                        className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                                                        onClick={() => handleDecisionUpdate(representativeAbs, {
-                                                                            ...existing,
-                                                                            confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                                        }, group.phraseId)}
-                                                                        title={isConfirmed ? "Confirmed" : "Mark as confirmed"}
-                                                                    >
-                                                                        {isConfirmed ? <Check size={14} /> : 'Confirm'}
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                            {isDetailExpanded && (
+                                                        const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
+
+                                                        return (
+                                                            <React.Fragment key={decisionKey}>
+                                                                <tr 
+                                                                    className="node-row" 
+                                                                    onClick={toggleExpand}
+                                                                    style={{ cursor: 'pointer' }}
+                                                                >
+                                                                    <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
+                                                                        <button
+                                                                            className="bulk-btn"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                toggleExpand();
+                                                                            }}
+                                                                            style={{ padding: '4px', background: isDetailExpanded ? 'var(--accent)' : 'transparent', color: isDetailExpanded ? 'white' : 'inherit' }}
+                                                                        >
+                                                                            <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                                        </button>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div style={{ fontWeight: 500 }}>
+                                                                            {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a,b)=>a-b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                                                            {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td>
+                                                                        <select
+                                                                            value={existing.status}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, group.phraseId)}
+                                                                            className="maturity-select"
+                                                                            style={{ 
+                                                                                borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
+                                                                                color: existing.status !== 'pending' ? 'var(--accent)' : 'inherit'
+                                                                            }}
+                                                                        >
+                                                                            {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                                        </select>
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Add note..."
+                                                                            value={existing.note || ''}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
+                                                                            className="maturity-select"
+                                                                            style={{ width: '100%', minWidth: '150px' }}
+                                                                        />
+                                                                    </td>
+                                                                    <td>{entry.matches.length - 1} matches</td>
+                                                                    <td>
+                                                                        <button
+                                                                            className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleDecisionUpdate(representativeAbs, {
+                                                                                    ...existing,
+                                                                                    confirmedAt: isConfirmed ? undefined : new Date().toISOString()
+                                                                                }, group.phraseId);
+                                                                            }}
+                                                                            title={isConfirmed ? "Resolve" : "Not Resolved"}
+                                                                            style={{ minWidth: '100px' }}
+                                                                        >
+                                                                            {isConfirmed ? 'Resolve' : 'Not Resolved'}
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                                {isDetailExpanded && (
                                                                 <tr>
                                                                     <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px' }}>
                                                                         <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
