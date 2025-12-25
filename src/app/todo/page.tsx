@@ -865,7 +865,7 @@ export default function TodoPage() {
             </div>
 
             {isAllDone && (
-                <div className="card modern-card" style={{ padding: '2rem', textAlign: 'center', background: 'var(--success-bg)', border: '1px solid var(--success)', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                <div className="card modern-card" style={{ padding: '2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
                     <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
                         <Check size={48} style={{ color: 'var(--success)' }} />
                         <div>
