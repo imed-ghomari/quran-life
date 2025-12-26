@@ -172,8 +172,12 @@ export default function SettingsPage() {
         title: string;
         surahId: number;
         phraseId: string;
-        group: any;
-        entry: any;
+        group: {
+            phraseId: string;
+            ayahIds: number[];
+            entry: any;
+            absRefs: number[];
+        };
         representativeAbs: number;
     } | null>(null);
 
@@ -708,17 +712,19 @@ export default function SettingsPage() {
                             <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Surah Status</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                <button className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
-                                    <span className="hide-mobile">All Learned</span><span className="show-mobile">Learned</span>
-                                </button>
-                                <button className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
-                                    <span className="hide-mobile">All New</span><span className="show-mobile">New</span>
-                                </button>
-                                <button className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
-                                    <span className="hide-mobile">All Skipped</span><span className="show-mobile">Skipped</span>
-                                </button>
-                            </div>
+                            {sectionsExpanded.surahStatus && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <button className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
+                                        <span className="hide-mobile">All Learned</span><span className="show-mobile">Learned</span>
+                                    </button>
+                                    <button className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
+                                        <span className="hide-mobile">All New</span><span className="show-mobile">New</span>
+                                    </button>
+                                    <button className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
+                                        <span className="hide-mobile">All Skipped</span><span className="show-mobile">Skipped</span>
+                                    </button>
+                                </div>
+                            )}
                             <ChevronDown size={20} style={{ transform: sectionsExpanded.surahStatus ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </div>
                     </div>
@@ -1176,28 +1182,30 @@ export default function SettingsPage() {
                     }}>
                         <span style={{ fontSize: 'clamp(1rem, 4vw, 1.1rem)' }}>Similar Verse Coverage</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                <button 
-                                    className="bulk-btn learned" 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setTargetSurahId(undefined);
-                                        setIsAddModalOpen(true);
-                                    }}
-                                    title="Add Custom Mutashabih"
-                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
-                                >
-                                    <Plus size={14} /> <span className="hide-mobile">Add Custom</span><span className="show-mobile">Add</span>
-                                </button>
-                                <button 
-                                    className="bulk-btn reset-mut" 
-                                    onClick={(e) => { e.stopPropagation(); handleResetMutashabihat(); }}
-                                    title="Reset all mutashabihat decisions for this part"
-                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
-                                >
-                                    <RotateCcw size={14} /> <span className="hide-mobile">Reset Decisions</span><span className="show-mobile">Reset</span>
-                                </button>
-                            </div>
+                            {sectionsExpanded.mutashabihat && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <button 
+                                        className="bulk-btn learned" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setTargetSurahId(undefined);
+                                            setIsAddModalOpen(true);
+                                        }}
+                                        title="Add Custom Mutashabih"
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                    >
+                                        <Plus size={14} /> <span className="hide-mobile">Add Custom</span><span className="show-mobile">Add</span>
+                                    </button>
+                                    <button 
+                                        className="bulk-btn reset-mut" 
+                                        onClick={(e) => { e.stopPropagation(); handleResetMutashabihat(); }}
+                                        title="Reset all mutashabihat decisions for this part"
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                    >
+                                        <RotateCcw size={14} /> <span className="hide-mobile">Reset Decisions</span><span className="show-mobile">Reset</span>
+                                    </button>
+                                </div>
+                            )}
                             <ChevronDown size={20} style={{ transform: sectionsExpanded.mutashabihat ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </div>
                     </div>
@@ -1272,7 +1280,6 @@ export default function SettingsPage() {
                                                                 surahId: surah.id,
                                                                 phraseId: group.phraseId,
                                                                 group,
-                                                                entry: group.entry,
                                                                 representativeAbs
                                                             })}>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1309,11 +1316,11 @@ export default function SettingsPage() {
                                     <thead>
                                         <tr>
                                             <th style={{ width: '50px' }}></th>
-                                            <th>Verse / Phrase</th>
-                                            <th>Status</th>
-                                            <th>Note</th>
+                                            <th>Ayah Number</th>
                                             <th>Matches</th>
+                                            <th>Status</th>
                                             <th>Actions</th>
+                                            <th>Note</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1406,6 +1413,7 @@ export default function SettingsPage() {
                                                                             {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
                                                                         </div>
                                                                     </td>
+                                                                    <td>{entry.matches.length - 1} matches</td>
                                                                     <td>
                                                                         <select
                                                                             value={existing.status}
@@ -1421,18 +1429,6 @@ export default function SettingsPage() {
                                                                         </select>
                                                                     </td>
                                                                     <td>
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Add note..."
-                                                                            value={existing.note || ''}
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                            onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
-                                                                            className="maturity-select"
-                                                                            style={{ width: '100%', minWidth: '150px' }}
-                                                                        />
-                                                                    </td>
-                                                                    <td>{entry.matches.length - 1} matches</td>
-                                                                    <td>
                                                                         <button
                                                                             className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
                                                                             onClick={(e) => {
@@ -1447,6 +1443,17 @@ export default function SettingsPage() {
                                                                          >
                                                                              {isConfirmed ? 'Resolved' : 'Not Resolved'}
                                                                          </button>
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Add note..."
+                                                                            value={existing.note || ''}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
+                                                                            className="maturity-select"
+                                                                            style={{ width: '100%', minWidth: '150px' }}
+                                                                        />
                                                                     </td>
                                                                 </tr>
                                                                 {isDetailExpanded && (
@@ -1557,7 +1564,7 @@ export default function SettingsPage() {
                 const decisionKey = activeMutSlideOver.id;
                 const existing = decisions[decisionKey] || { status: 'pending', note: '' };
                 const isConfirmed = !!existing.confirmedAt;
-                const entry = activeMutSlideOver.entry;
+                const group = activeMutSlideOver.group;
 
                 return (
                     <div className="slide-over-overlay" onClick={() => setActiveMutSlideOver(null)}>
@@ -1622,37 +1629,85 @@ export default function SettingsPage() {
                                     />
                                 </div>
 
-                                <div className="mut-context-block" style={{ margin: 0, border: '1px solid var(--border)' }}>
+                                <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: '1px solid var(--border)', background: 'transparent' }}>
                                     <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--background-secondary)', fontWeight: 600 }}>
-                                        Similar Matches ({entry.matches.length})
+                                        Similarity Context
                                     </div>
                                     <div style={{ padding: '0.5rem' }}>
-                                        {entry.matches.map((m: any, idx: number) => {
-                                            const ref = absoluteToSurahAyah(m.absolute);
-                                            const surah = getSurah(ref.surahId);
-                                            const verseObj = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
-                                            const isSelf = m.absolute === activeMutSlideOver.representativeAbs;
-                                            
+                                        {group.absRefs.map(absRef => {
+                                            const ref = absoluteToSurahAyah(absRef);
+                                            const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                            const mutEntry = getMutashabihatForAbsolute(absRef).find(m => m.phraseId === group.phraseId);
+                                            if (!mutEntry || !baseVerse) return null;
+
+                                            const matches = mutEntry.matches;
+                                            const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
+                                            const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
+                                            const hasMore = matches.length > 4;
+
                                             return (
-                                                <div key={idx} style={{ 
-                                                    padding: '1rem', 
-                                                    borderBottom: idx === entry.matches.length - 1 ? 'none' : '1px solid var(--border)',
-                                                    background: isSelf ? 'var(--accent-light)10' : 'transparent'
-                                                }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.8rem' }}>
-                                                        <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
-                                                            {surah?.name} : {ref.ayahId} {isSelf ? '(This Ayah)' : ''}
-                                                        </span>
-                                                        <span style={{ opacity: 0.6 }}>{m.absolute}</span>
+                                                <div key={absRef} className="mut-text" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
+                                                    <div className="mut-text-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
+                                                        {getSurah(ref.surahId)?.name} - {ref.ayahId} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
                                                     </div>
-                                                    <div className="arabic-text" style={{ fontSize: '1.2rem', textAlign: 'right', lineHeight: '2', direction: 'rtl' }}>
-                                                        <HighlightedVerse text={verseObj?.text || '...'} range={m.range} />
+                                                    <div className="mut-context">
+                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', textAlign: 'right', direction: 'rtl', lineHeight: '2.2', marginBottom: '1.5rem' }}>
+                                                            <span className="mut-ayah-tag">{ref.ayahId}</span>
+                                                            <HighlightedVerse 
+                                                                text={baseVerse.text} 
+                                                                range={(mutEntry.meta as any).sourceAbs === absRef ? (mutEntry.meta as any).sourceRange : (mutEntry.meta as any).matches.find((m: any) => m.absolute === absRef)?.wordRange} 
+                                                            />
+                                                        </p>
+
+                                                        {displayedMatches.filter((matchAbs: number) => matchAbs !== absRef).map((matchAbs: number, idx: number) => {
+                                                            const mref = absoluteToSurahAyah(matchAbs);
+                                                            const msurah = getSurah(mref.surahId);
+                                                            const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                            const matchRange = (mutEntry.meta as any).matches.find((m: any) => m.absolute === matchAbs)?.wordRange;
+
+                                                            return (
+                                                                <div key={idx} className="mut-match-item" style={{ 
+                                                                    marginBottom: '1rem', 
+                                                                    padding: '0.75rem', 
+                                                                    borderRadius: '8px', 
+                                                                    background: 'var(--background)',
+                                                                    border: '1px solid var(--border)'
+                                                                }}>
+                                                                    <div className="mut-match-label" style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                                                                        Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                                    </div>
+                                                                    <div className="mut-context">
+                                                                        {mVerse && (
+                                                                            <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', textAlign: 'right', direction: 'rtl', lineHeight: '2' }}>
+                                                                                <span className="mut-ayah-tag">{mref.ayahId}</span>
+                                                                                <HighlightedVerse text={mVerse.text} range={matchRange} />
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+
+                                                        {hasMore && (
+                                                            <button
+                                                                className="btn-show-more"
+                                                                onClick={() => setExpandedMutItems(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '8px',
+                                                                    marginTop: '8px',
+                                                                    fontSize: '0.8rem',
+                                                                    color: 'var(--accent)',
+                                                                    background: 'none',
+                                                                    border: '1px dashed var(--accent)',
+                                                                    borderRadius: '8px',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                    {m.note && (
-                                                        <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--foreground-secondary)', fontStyle: 'italic', padding: '8px', background: 'var(--background)', borderRadius: '6px' }}>
-                                                            Tip: {m.note}
-                                                        </div>
-                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -1664,41 +1719,52 @@ export default function SettingsPage() {
                 );
             })()}
 
-            <HelpSection
-                cards={[
-                    {
-                        title: "Active Part",
-                        icon: Settings,
-                        description: "Manage your current focus by switching between the 4 main parts based on traditional classifications.",
-                        items: [
-                            "As-Sab'ut-Tiwal (Long Seven): Surah 2 to 9.",
-                            "Al-Mi'un (The Hundreds): Surah 10 to 18.",
-                            "Al-Mathani (The Often-Repeated): Surah 19 to 33.",
-                            "Al-Mufassal (The Brief): Surah 34 to 114."
-                        ]
-                    },
-                    {
-                        title: "Similar Verse Coverage",
-                        icon: Brain,
-                        description: "Manage notes for similar verses to prevent confusion during reviews.",
-                        items: [
-                            "Use the notes section to write down your personal distinctions for mutashabihat verses.",
-                            "The coverage indicator shows how many identified similarity conflicts you have addressed.",
-                            "Once addressed, these verses won't trigger 'similarity warnings' in your Todo tab."
-                        ]
-                    },
-                    {
-                        title: "Status vs. Maturity",
-                        icon: ShieldCheck,
-                        description: "It is important to understand the difference between a Surah's Status and its Maturity.",
-                        items: [
-                            "Surah Status (Learned/Skipped): Manages availability. Setting a surah to 'Learned' adds it to your review cycle; 'Skipped' removes it entirely.",
-                            "Surah Maturity (Reset/Medium/Strong/Mastered): Manages frequency. This represents how well you know the verses. Higher maturity means the verses appear less often in reviews.",
-                            "Relation: Status determines IF you review it; Maturity determines WHEN."
-                        ]
-                    }
-                ]}
-            />
+                <HelpSection
+                    cards={[
+                        {
+                            title: "Active Part",
+                            icon: Settings,
+                            description: "Focus your learning by selecting one of the 4 main Quranic portions. This filters all progress data, including Similar Verses and Surah Status, to only show relevant information for your current goal.",
+                            items: [
+                                "As-Sab'ut-Tiwal (Long Seven): Surah 2 to 9.",
+                                "Al-Mi'un (The Hundreds): Surah 10 to 18.",
+                                "Al-Mathani (The Often-Repeated): Surah 19 to 33.",
+                                "Al-Mufassal (The Brief): Surah 34 to 114."
+                            ]
+                        },
+                        {
+                            title: "Similar Verse Coverage",
+                            icon: Brain,
+                            description: "Track and resolve similar phrases (Mutashabihat) that often cause confusion during memorization.",
+                            items: [
+                                "Resolved: Mark a group as resolved once you've memorized the distinctions.",
+                                "Notes: Add personal hints or mnemonic devices to help you differentiate similar verses.",
+                                "Coverage: The progress bar reflects how many identified similarity groups you have addressed in the active part.",
+                                "Custom: Use the 'Add Custom' button to create your own similarity comparisons between any two verses."
+                            ]
+                        },
+                        {
+                            title: "Status vs. Maturity",
+                            icon: ShieldCheck,
+                            description: "Understanding the difference between availability and review frequency.",
+                            items: [
+                                "Surah Status (Learned/New/Skipped): Determines if a surah is included in your review cycle. 'Skipped' surahs are hidden from all calculations.",
+                                "Maturity Levels: Represents how well you know a verse or mindmap. Higher levels (Strong/Mastered) increase the interval between reviews.",
+                                "Resetting: You can reset maturity for entire groups (e.g., all verses in a surah) using the 'Reset Group' buttons."
+                            ]
+                        },
+                        {
+                            title: "Cloud Sync & Backup",
+                            icon: Database,
+                            description: "Protect your progress and access it from any device.",
+                            items: [
+                                "Cloud Sync: Sign in to automatically sync your settings, notes, and maturity progress to the cloud.",
+                                "Manual Backup: Use the 'Export Backup' feature to download a local copy of your data at any time.",
+                                "Data Privacy: Your data is stored securely and only accessible by you when signed in."
+                            ]
+                        }
+                    ]}
+                />
 
             <style jsx>{`
                 .add-custom-mut-btn {
@@ -1720,6 +1786,9 @@ export default function SettingsPage() {
                 .add-custom-mut-btn:hover {
                     opacity: 1;
                     transform: scale(1.05);
+                }
+                .mut-fold-header, .mobile-group-header, .group-header, .subgroup-header, .nav-item, .surah-pill, .btn-part {
+                    -webkit-tap-highlight-color: transparent;
                 }
                 .mut-fold-header .mut-chevron {
                         margin-left: 0;
