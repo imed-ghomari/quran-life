@@ -38,7 +38,8 @@ import { Check, Clock, PauseCircle, RotateCcw, Download,
     ChevronDown,
     Map,
     Book,
-    Activity
+    Activity,
+    X
 } from 'lucide-react';
 import HelpSection from '@/components/HelpSection';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
@@ -157,6 +158,22 @@ export default function SettingsPage() {
     const [showDebugNodes, setShowDebugNodes] = useState(true);
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+    const [isMobile, setIsMobile] = useState(false);
+    const [activeSlideOverGroup, setActiveSlideOverGroup] = useState<{
+        id: string;
+        title: string;
+        type: 'verse' | 'mindmap' | 'part_mindmap';
+        nodes: MemoryNode[];
+        surahId?: number;
+    } | null>(null);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     const [sectionsExpanded, setSectionsExpanded] = useState({
         cloudSync: true,
         backupRestore: true,
@@ -370,6 +387,9 @@ export default function SettingsPage() {
             <div className="settings-grid">
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
+                    background: 'var(--background-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, cloudSync: !s.cloudSync }))}
@@ -482,6 +502,9 @@ export default function SettingsPage() {
 
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
+                    background: 'var(--background-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, backupRestore: !s.backupRestore }))}
@@ -522,6 +545,9 @@ export default function SettingsPage() {
 
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
+                    background: 'var(--background-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, schedule: !s.schedule }))}
@@ -578,6 +604,9 @@ export default function SettingsPage() {
 
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
+                    background: 'var(--background-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, activePart: !s.activePart }))}
@@ -619,6 +648,7 @@ export default function SettingsPage() {
                                     onClick={() => handleActivePart(p.id as QuranPart)}
                                     style={{
                                         padding: '1.25rem 0.75rem',
+                                        borderRadius: '16px',
                                         border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
                                         background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
                                         transition: 'all 0.2s',
@@ -644,6 +674,9 @@ export default function SettingsPage() {
             <div style={{ marginTop: '1.5rem' }}>
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
+                    background: 'var(--background-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setSectionsExpanded(s => ({ ...s, surahStatus: !s.surahStatus }))}
@@ -753,6 +786,9 @@ export default function SettingsPage() {
             <div style={{ marginTop: '1.5rem' }}>
                 <div className="card modern-card" style={{ 
                     padding: 'clamp(1rem, 4vw, 1.5rem)', 
+                    background: 'var(--background-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '16px' 
                 }}>
                     <div className="section-title" 
                          onClick={() => setShowDebugNodes(!showDebugNodes)}
@@ -781,6 +817,87 @@ export default function SettingsPage() {
                                 This section shows your active memory nodes and their review schedules.
                             </p>
                             
+                            {isMobile ? (
+                                <div className="knowledge-groups-mobile">
+                                    {/* MINDMAPS MOBILE GROUP */}
+                                    <div className="mobile-group-item">
+                                        <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <Map size={20} />
+                                                <span style={{ fontWeight: 600 }}>Mindmaps</span>
+                                            </div>
+                                            <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                        </div>
+                                        {expandedGroups['mindmaps'] && (
+                                            <div className="mobile-subgroup-list">
+                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                    id: 'mindmaps-part',
+                                                    title: 'Part Mindmaps',
+                                                    type: 'part_mindmap',
+                                                    nodes: memoryNodes.filter(n => n.type === 'part_mindmap')
+                                                })}>
+                                                    <span>Part Mindmaps</span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'part_mindmap').length}</span>
+                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                    </div>
+                                                </div>
+                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                    id: 'mindmaps-surah',
+                                                    title: 'Surah Mindmaps',
+                                                    type: 'mindmap',
+                                                    nodes: memoryNodes.filter(n => n.type === 'mindmap')
+                                                })}>
+                                                    <span>Surah Mindmaps</span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'mindmap').length}</span>
+                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* VERSES MOBILE GROUP */}
+                                    <div className="mobile-group-item">
+                                        <div className="mobile-group-header" onClick={() => toggleGroup('verses')}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <Book size={20} />
+                                                <span style={{ fontWeight: 600 }}>Verses</span>
+                                            </div>
+                                            <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                        </div>
+                                        {expandedGroups['verses'] && (
+                                            <div className="mobile-subgroup-list">
+                                                {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
+                                                    .sort((a, b) => (a || 0) - (b || 0))
+                                                    .map(surahId => {
+                                                        const surah = getSurah(surahId!);
+                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                        return (
+                                                            <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                                id: `verse-surah-${surahId}`,
+                                                                title: `${surah?.id}. ${surah?.name}`,
+                                                                type: 'verse',
+                                                                nodes: surahNodes,
+                                                                surahId
+                                                            })}>
+                                                                <span>{surah?.name}</span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span className="status-badge">{surahNodes.length}</span>
+                                                                    <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
+                                                    <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
                             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                                 <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
                                 <thead>
@@ -1009,6 +1126,7 @@ export default function SettingsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        )}
                     </div>
                     )}
                 </div>
@@ -1016,6 +1134,9 @@ export default function SettingsPage() {
 
             <div className="card modern-card" style={{ 
                 marginTop: '1.5rem', 
+                background: 'var(--background-secondary)', 
+                border: '1px solid var(--border)', 
+                borderRadius: '16px', 
                 padding: 'clamp(1rem, 4vw, 1.5rem)' 
             }}>
                 <div className="section-title mut-header" 
@@ -1420,6 +1541,137 @@ export default function SettingsPage() {
                         border-color: var(--accent);
                         background: var(--accent)10;
                     }
+
+                    /* Slide-over styles */
+                    .slide-over-overlay {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0, 0, 0, 0.4);
+                        backdrop-filter: blur(4px);
+                        z-index: 2000;
+                        display: flex;
+                        justify-content: flex-end;
+                        animation: fadeIn 0.3s ease;
+                    }
+
+                    .slide-over-content {
+                        width: 90%;
+                        max-width: 450px;
+                        height: 100%;
+                        background: var(--background);
+                        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+                        display: flex;
+                        flex-direction: column;
+                        animation: slideIn 0.3s ease;
+                    }
+
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+
+                    @keyframes slideIn {
+                        from { transform: translateX(100%); }
+                        to { transform: translateX(0); }
+                    }
+
+                    .slide-over-header {
+                        padding: 1.25rem;
+                        border-bottom: 1px solid var(--border);
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        background: var(--background-secondary);
+                    }
+
+                    .close-btn {
+                        background: none;
+                        border: none;
+                        color: var(--foreground-secondary);
+                        cursor: pointer;
+                        padding: 4px;
+                        display: flex;
+                        border-radius: 50%;
+                        transition: background 0.2s;
+                    }
+
+                    .close-btn:hover {
+                        background: var(--border);
+                    }
+
+                    .slide-over-body {
+                        flex: 1;
+                        overflow-y: auto;
+                        padding: 1.25rem;
+                        -webkit-overflow-scrolling: touch;
+                    }
+
+                    .mobile-node-list {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 1rem;
+                    }
+
+                    .mobile-node-card {
+                        background: var(--background-secondary);
+                        border: 1px solid var(--border);
+                        border-radius: 12px;
+                        padding: 1rem;
+                    }
+
+                    .node-card-main {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 1rem;
+                    }
+
+                    .node-target {
+                        font-weight: 600;
+                        font-size: 0.95rem;
+                    }
+
+                    .node-card-details {
+                        display: grid;
+                        grid-template-columns: repeat(4, 1fr);
+                        gap: 0.5rem;
+                        padding-top: 1rem;
+                        border-top: 1px dashed var(--border);
+                    }
+
+                    .stat-item {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 2px;
+                    }
+
+                    .stat-label {
+                        font-size: 0.65rem;
+                        color: var(--foreground-secondary);
+                        text-transform: uppercase;
+                        letter-spacing: 0.02em;
+                    }
+
+                    .stat-value {
+                        font-size: 0.8rem;
+                        font-weight: 600;
+                    }
+
+                    .status-overdue {
+                        color: var(--danger);
+                    }
+
+                    .status-badge {
+                        font-size: 0.7rem;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        background: var(--accent-light);
+                        color: white;
+                        font-weight: 600;
+                    }
                 `}</style>
 
             <AddCustomMutashabihModal 
@@ -1428,6 +1680,121 @@ export default function SettingsPage() {
                 onSave={handleAddCustomMutashabih}
                 initialSurahId={targetSurahId}
             />
+
+            {/* Mobile Slide-over for Node Management */}
+            {activeSlideOverGroup && (
+                <div className="slide-over-overlay" onClick={() => setActiveSlideOverGroup(null)}>
+                    <div className="slide-over-content" onClick={e => e.stopPropagation()}>
+                        <div className="slide-over-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                    {activeSlideOverGroup.type === 'verse' ? <Book size={18} /> : <Map size={18} />}
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{activeSlideOverGroup.title}</h3>
+                            </div>
+                            <button className="close-btn" onClick={() => setActiveSlideOverGroup(null)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="slide-over-body">
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                                <button 
+                                    className="bulk-btn reset-mut" 
+                                    onClick={() => {
+                                        if (window.confirm(`Are you sure you want to reset all nodes in ${activeSlideOverGroup.title}?`)) {
+                                            if (activeSlideOverGroup.type === 'verse') {
+                                                handleGroupMaturityReset('verse', activeSlideOverGroup.surahId, activeSlideOverGroup.title);
+                                            } else {
+                                                handleGroupMaturityReset(activeSlideOverGroup.type as any);
+                                            }
+                                            // Refresh local nodes
+                                            const updated = getMemoryNodes();
+                                            setMemoryNodes(updated);
+                                            setActiveSlideOverGroup(prev => prev ? {
+                                                ...prev,
+                                                nodes: updated.filter(n => {
+                                                    if (prev.type === 'verse') return n.type === 'verse' && n.surahId === prev.surahId;
+                                                    return n.type === prev.type;
+                                                })
+                                            } : null);
+                                        }
+                                    }}
+                                >
+                                    Reset All
+                                </button>
+                            </div>
+
+                            <div className="mobile-node-list">
+                                {activeSlideOverGroup.nodes.length > 0 ? (
+                                    activeSlideOverGroup.nodes
+                                        .sort((a, b) => {
+                                            if (activeSlideOverGroup.type === 'verse') return (a.startVerse || 0) - (b.startVerse || 0);
+                                            if (activeSlideOverGroup.type === 'mindmap') return (a.surahId || 0) - (b.surahId || 0);
+                                            return (a.partId || 0) - (b.partId || 0);
+                                        })
+                                        .map(node => (
+                                            <div key={node.id} className="mobile-node-card">
+                                                <div className="node-card-main">
+                                                    <div className="node-target">
+                                                        {activeSlideOverGroup.type === 'verse' ? `Ayat ${node.startVerse}-${node.endVerse}` : 
+                                                         activeSlideOverGroup.type === 'mindmap' ? `${node.surahId}. ${getSurah(node.surahId!)?.name}` :
+                                                         `Part ${node.partId}`}
+                                                    </div>
+                                                    <select 
+                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                        onChange={(e) => {
+                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                            const updated = getMemoryNodes();
+                                                            setMemoryNodes(updated);
+                                                            // Update local nodes in slideover
+                                                            setActiveSlideOverGroup(prev => prev ? {
+                                                                ...prev,
+                                                                nodes: updated.filter(n => {
+                                                                    if (prev.type === 'verse') return n.type === 'verse' && n.surahId === prev.surahId;
+                                                                    return n.type === prev.type;
+                                                                })
+                                                            } : null);
+                                                        }}
+                                                        className="maturity-select"
+                                                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                                                    >
+                                                        <option value="reset">Reset</option>
+                                                        <option value="medium">Medium</option>
+                                                        <option value="strong">Strong</option>
+                                                        <option value="mastered">Mastered</option>
+                                                    </select>
+                                                </div>
+                                                <div className="node-card-details">
+                                                    <div className="stat-item">
+                                                        <span className="stat-label">Interval</span>
+                                                        <span className="stat-value">{node.scheduler.interval}d</span>
+                                                    </div>
+                                                    <div className="stat-item">
+                                                        <span className="stat-label">Ease</span>
+                                                        <span className="stat-value">{node.scheduler.easeFactor}</span>
+                                                    </div>
+                                                    <div className="stat-item">
+                                                        <span className="stat-label">Reps</span>
+                                                        <span className="stat-value">{node.scheduler.repetition}</span>
+                                                    </div>
+                                                    <div className="stat-item">
+                                                        <span className="stat-label">Next</span>
+                                                        <span className={`stat-value ${node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
+                                                            {node.scheduler.dueDate}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                ) : (
+                                    <div className="empty-state">No items found</div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
