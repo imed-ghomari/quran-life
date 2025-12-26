@@ -167,6 +167,16 @@ export default function SettingsPage() {
         surahId?: number;
     } | null>(null);
 
+    const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
+        id: string;
+        title: string;
+        surahId: number;
+        phraseId: string;
+        group: any;
+        entry: any;
+        representativeAbs: number;
+    } | null>(null);
+
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
         checkMobile();
@@ -1164,7 +1174,7 @@ export default function SettingsPage() {
                         flex: 1,
                         gap: '0.75rem'
                     }}>
-                        <span style={{ fontSize: 'clamp(1rem, 4vw, 1.1rem)' }}>Mutashabihat Coverage (Active Part)</span>
+                        <span style={{ fontSize: 'clamp(1rem, 4vw, 1.1rem)' }}>Similar Verse Coverage</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 <button 
@@ -1193,11 +1203,107 @@ export default function SettingsPage() {
                     </div>
                 </div>
                 {sectionsExpanded.mutashabihat && (
-                    <>
-                        <p className="mut-subheader" style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
-                            Surahs with mutashabihat in this part. Tap to expand and annotate similar ayat.
+                    <div style={{ marginTop: '1.5rem' }}>
+                        <p className="mut-subheader" style={{ color: 'var(--foreground-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem' }}>
+                            Surahs with similar verses in this part. Tap to expand and annotate similar ayat.
                         </p>
-                        <div style={{ marginTop: '1.5rem' }}>
+
+                        {isMobile ? (
+                            <div className="knowledge-groups-mobile">
+                                {mutashabihatSurahs.map(({ surah, count }) => {
+                                    const isOpen = expandedSurahs[surah.id] ?? false;
+                                    
+                                    // Calculate surah group data
+                                    const surahMutsMap: Record<string, { 
+                                        phraseId: string, 
+                                        ayahIds: number[], 
+                                        entry: any,
+                                        absRefs: number[] 
+                                    }> = {};
+
+                                    getAllMutashabihatRefs().filter(abs => {
+                                        const ref = absoluteToSurahAyah(abs);
+                                        return ref.surahId === surah.id;
+                                    }).forEach(abs => {
+                                        const muts = getMutashabihatForAbsolute(abs);
+                                        const ref = absoluteToSurahAyah(abs);
+                                        muts.forEach(m => {
+                                            if (!surahMutsMap[m.phraseId]) {
+                                                surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [] };
+                                            }
+                                            if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
+                                                surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
+                                                surahMutsMap[m.phraseId].absRefs.push(abs);
+                                            }
+                                        });
+                                    });
+
+                                    const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+
+                                    return (
+                                        <div key={surah.id} className="mobile-group-item">
+                                            <div className="mobile-group-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <span style={{ 
+                                                        width: '24px', height: '24px', borderRadius: '6px', 
+                                                        background: 'var(--accent)', color: 'white', 
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        fontSize: '0.75rem', fontWeight: 700
+                                                    }}>{surah.id}</span>
+                                                    <span style={{ fontWeight: 600 }}>{surah.name}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span className="status-badge" style={{ background: 'var(--accent-light)', color: 'white' }}>{count}</span>
+                                                    <ChevronDown size={20} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                </div>
+                                            </div>
+                                            {isOpen && (
+                                                <div className="mobile-subgroup-list">
+                                                    {groups.map(group => {
+                                                        const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
+                                                        const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                        const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                        const isConfirmed = !!existing.confirmedAt;
+
+                                                        return (
+                                                            <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
+                                                                id: decisionKey,
+                                                                title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
+                                                                surahId: surah.id,
+                                                                phraseId: group.phraseId,
+                                                                group,
+                                                                entry: group.entry,
+                                                                representativeAbs
+                                                            })}>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>
+                                                                        {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a,b)=>a-b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                                                        {group.entry.matches.length - 1} matches
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {isConfirmed && <Check size={16} style={{ color: '#22c55e' }} />}
+                                                                    <span className={`status-badge ${existing.status !== 'pending' ? 'active' : ''}`} style={{ 
+                                                                        fontSize: '0.65rem',
+                                                                        background: existing.status === 'pending' ? 'var(--border)' : 'var(--accent)',
+                                                                        color: 'white'
+                                                                    }}>
+                                                                        {MUT_STATES.find(s => s.value === existing.status)?.label.split(' ')[0]}
+                                                                    </span>
+                                                                    <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
                             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                                 <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
                                     <thead>
@@ -1441,10 +1547,122 @@ export default function SettingsPage() {
                             </tbody>
                         </table>
                     </div>
+                )}
                 </div>
-                </>
             )}
             </div>
+
+            {/* Similar Verses Slide-over Detail View */}
+            {activeMutSlideOver && (() => {
+                const decisionKey = activeMutSlideOver.id;
+                const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                const isConfirmed = !!existing.confirmedAt;
+                const entry = activeMutSlideOver.entry;
+
+                return (
+                    <div className="slide-over-overlay" onClick={() => setActiveMutSlideOver(null)}>
+                        <div className="slide-over-content" onClick={e => e.stopPropagation()}>
+                            <div className="slide-over-header">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                        <Brain size={18} />
+                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: '1rem' }}>{activeMutSlideOver.title}</h3>
+                                </div>
+                                <button className="close-btn" onClick={() => setActiveMutSlideOver(null)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            
+                            <div className="slide-over-body">
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
+                                        <select
+                                            value={existing.status}
+                                            onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, status: e.target.value as any }, activeMutSlideOver.phraseId)}
+                                            className="maturity-select"
+                                            style={{ width: '100%', padding: '8px' }}
+                                        >
+                                            {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                        <button
+                                            className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                            onClick={() => {
+                                                handleDecisionUpdate(activeMutSlideOver.representativeAbs, {
+                                                    ...existing,
+                                                    confirmedAt: isConfirmed ? undefined : new Date().toISOString()
+                                                }, activeMutSlideOver.phraseId);
+                                            }}
+                                            style={{ height: '38px', minWidth: '100px' }}
+                                        >
+                                            {isConfirmed ? 'Resolved' : 'Mark Resolved'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Notes</label>
+                                    <textarea
+                                        placeholder="Add your distinction notes here..."
+                                        value={existing.note || ''}
+                                        onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, note: e.target.value }, activeMutSlideOver.phraseId)}
+                                        style={{ 
+                                            width: '100%', 
+                                            minHeight: '80px', 
+                                            padding: '12px', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--background-secondary)',
+                                            fontSize: '0.9rem',
+                                            resize: 'vertical'
+                                        }}
+                                    />
+                                </div>
+
+                                <div className="mut-context-block" style={{ margin: 0, border: '1px solid var(--border)' }}>
+                                    <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--background-secondary)', fontWeight: 600 }}>
+                                        Similar Matches ({entry.matches.length})
+                                    </div>
+                                    <div style={{ padding: '0.5rem' }}>
+                                        {entry.matches.map((m: any, idx: number) => {
+                                            const ref = absoluteToSurahAyah(m.absolute);
+                                            const surah = getSurah(ref.surahId);
+                                            const verseObj = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                            const isSelf = m.absolute === activeMutSlideOver.representativeAbs;
+                                            
+                                            return (
+                                                <div key={idx} style={{ 
+                                                    padding: '1rem', 
+                                                    borderBottom: idx === entry.matches.length - 1 ? 'none' : '1px solid var(--border)',
+                                                    background: isSelf ? 'var(--accent-light)10' : 'transparent'
+                                                }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.8rem' }}>
+                                                        <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                                                            {surah?.name} : {ref.ayahId} {isSelf ? '(This Ayah)' : ''}
+                                                        </span>
+                                                        <span style={{ opacity: 0.6 }}>{m.absolute}</span>
+                                                    </div>
+                                                    <div className="arabic-text" style={{ fontSize: '1.2rem', textAlign: 'right', lineHeight: '2', direction: 'rtl' }}>
+                                                        <HighlightedVerse text={verseObj?.text || '...'} range={m.range} />
+                                                    </div>
+                                                    {m.note && (
+                                                        <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--foreground-secondary)', fontStyle: 'italic', padding: '8px', background: 'var(--background)', borderRadius: '6px' }}>
+                                                            Tip: {m.note}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             <HelpSection
                 cards={[
@@ -1460,7 +1678,7 @@ export default function SettingsPage() {
                         ]
                     },
                     {
-                        title: "Mutashabihat Coverage",
+                        title: "Similar Verse Coverage",
                         icon: Brain,
                         description: "Manage notes for similar verses to prevent confusion during reviews.",
                         items: [
