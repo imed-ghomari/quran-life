@@ -1,0 +1,142 @@
+87:                    </div>
+89:                </div>
+93:            </div>
+100:                </div>
+110:                </div>
+111:            </div>
+136:                        </div>
+138:                </div>
+155:                        </div>
+157:                </div>
+158:            </div>
+163:        </div>
+489:                        </div>
+496:                            </div>
+498:                        </div>
+499:                    </div>
+501:                </div>
+528:                                            </div>
+538:                                                    </div>
+549:                                                                <div className="surah-number" style={{ background: 'var(--danger)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>{issue.surahId}</div>
+553:                                                                </div>
+554:                                                            </div>
+587:                                                            </div>
+604:                                            </div>
+614:                                                    </div>
+626:                                                                    <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.75rem' }}>{surah!.id}</div>
+629:                                                                </div>
+658:                                                                            </div>
+672:                                                                                            </div>
+678:                                                                                        </div>
+690:                                                                            </div>
+706:                                                                            </div>
+728:                        </div>
+741:                                    </div>
+743:                                </div>
+747:                                            <div className="empty-state" style={{ padding: '1rem', fontSize: '0.85rem' }}>No suspended anchors!</div>
+755:                                                            <div className="node-target" style={{ fontSize: '0.9rem' }}>{surah?.name} - {issue.label}</div>
+757:                                                        </div>
+782:                                                        </div>
+783:                                                    </div>
+787:                                    </div>
+789:                            </div>
+800:                                    </div>
+802:                                </div>
+806:                                            <div className="empty-state" style={{ padding: '1rem', fontSize: '0.85rem' }}>No checks needed.</div>
+816:                                                            <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah!.id}</div>
+818:                                                        </div>
+822:                                                        </div>
+823:                                                    </div>
+840:                                                                            </div>
+858:                                                                            </div>
+859:                                                                        </div>
+863:                                                        </div>
+865:                                                </div>
+868:                                    </div>
+870:                            </div>
+871:                        </div>
+874:            </div>
+892:                        </div>
+899:                            </div>
+901:                        </div>
+902:                    </div>
+904:                </div>
+929:                                            </div>
+940:                                                            <div className="surah-number" style={{ background: isActive ? 'var(--accent)' : 'var(--foreground-secondary)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>P{part}</div>
+942:                                                        </div>
+972:                                                        </div>
+988:                                            </div>
+998:                                                    </div>
+1009:                                                                    <div className="surah-number" style={{ width: '2rem', height: '2rem', fontSize: '0.85rem' }}>{surah.id}</div>
+1013:                                                                    </div>
+1014:                                                                </div>
+1027:                                                                </div>
+1052:                                                                        </div>
+1065:                                                                    </div>
+1076:                        </div>
+1089:                                    </div>
+1091:                                </div>
+1099:                                                        <div className="node-target" style={{ fontSize: '0.9rem' }}>Part {part}</div>
+1103:                                                    </div>
+1119:                                                    </div>
+1120:                                                </div>
+1123:                                    </div>
+1125:                            </div>
+1136:                                    </div>
+1138:                                </div>
+1142:                                            <div className="empty-state" style={{ padding: '1rem', fontSize: '0.85rem' }}>All surah mindmaps ready!</div>
+1154:                                                                <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah.id}</div>
+1156:                                                            </div>
+1158:                                                        </div>
+1171:                                                                        </div>
+1181:                                                                </div>
+1196:                                                            </div>
+1198:                                                    </div>
+1202:                                    </div>
+1204:                            </div>
+1205:                        </div>
+1208:            </div>
+1218:                            </div>
+1219:                        </div>
+1220:                    </div>
+1236:                                    </div>
+1238:                                </div>
+1242:                            </div>
+1248:                                            <div className="empty-state">No suspended anchors!</div>
+1258:                                                            </div>
+1260:                                                        </div>
+1285:                                                        </div>
+1286:                                                    </div>
+1290:                                    </div>
+1296:                                            <div className="empty-state">No similarity checks needed.</div>
+1302:                                                            <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.75rem' }}>{surah!.id}</div>
+1303:                                                            <div className="node-target">{surah?.name}</div>
+1304:                                                        </div>
+1308:                                                        </div>
+1309:                                                    </div>
+1327:                                                                            </div>
+1346:                                                                            </div>
+1347:                                                                        </div>
+1351:                                                        </div>
+1353:                                                </div>
+1356:                                    </div>
+1366:                                                        <div className="node-target">Part {part}</div>
+1370:                                                    </div>
+1386:                                                    </div>
+1387:                                                </div>
+1390:                                    </div>
+1401:                                            if (itemsToShow.length === 0) return <div className="empty-state">No surah mindmaps found.</div>;
+1409:                                                                <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.75rem' }}>{surah.id}</div>
+1410:                                                                <div className="node-target">{surah.name}</div>
+1411:                                                            </div>
+1413:                                                        </div>
+1425:                                                                    </div>
+1432:                                                                        </div>
+1444:                                                                    </div>
+1446:                                                            </div>
+1448:                                                    </div>
+1452:                                    </div>
+1454:                            </div>
+1455:                        </div>
+1456:                    </div>
+1494:        </div >

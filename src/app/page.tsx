@@ -1,5 +1,8 @@
 'use client';
 
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
+
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
 import { Verse, getAudioPath } from '@/lib/types';
@@ -21,7 +24,7 @@ import {
     Maximize2,
     Move
 } from 'lucide-react';
-import HelpSection from '@/components/HelpSection';
+import DocumentationModal from '@/components/DocumentationModal';
 import {
     getSettings,
     getDueNodes,
@@ -113,11 +116,11 @@ export default function TodayPage() {
             }
 
             const response = await fetch('/qpc-hafs-word-by-word.json');
-            const data = await response.json();
+            const data = await response.json() as Record<string, any>;
             const verses = parseQuranJson(data);
             setAllVerses(verses);
             setIsLoaded(true);
-            
+
             // Background cache for this session
             try {
                 sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
@@ -517,14 +520,14 @@ export default function TodayPage() {
                                             )}
 
                                             {/* Target as grouped paragraph */}
-                                            <div ref={targetBoxRef} className="target-box" style={{ 
-                                                padding: '0.75rem', 
-                                                background: 'var(--verse-bg)', 
-                                                borderRadius: 10, 
-                                                height: '320px', 
-                                                overflowY: 'auto', 
-                                                display: 'flex', 
-                                                flexDirection: 'column', 
+                                            <div ref={targetBoxRef} className="target-box" style={{
+                                                padding: '0.75rem',
+                                                background: 'var(--verse-bg)',
+                                                borderRadius: 10,
+                                                height: '320px',
+                                                overflowY: 'auto',
+                                                display: 'flex',
+                                                flexDirection: 'column',
                                                 gap: 10,
                                                 position: 'relative'
                                             }}>
@@ -571,15 +574,15 @@ export default function TodayPage() {
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>Next: 1d</span>
                                                     </button>
                                                     <button className="review-btn remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right">
-                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
-                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                                                             Next: {(() => {
-                                                                 const next = sm2(5, dueNodes[currentReviewIndex].scheduler);
-                                                                 const days = Math.round((new Date(next.dueDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-                                                                 return days <= 1 ? '1d' : `${days}d`;
-                                                             })()}
-                                                         </span>
-                                                     </button>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                            Next: {(() => {
+                                                                const next = sm2(5, dueNodes[currentReviewIndex].scheduler);
+                                                                const days = Math.round((new Date(next.dueDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+                                                                return days <= 1 ? '1d' : `${days}d`;
+                                                            })()}
+                                                        </span>
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
@@ -596,8 +599,8 @@ export default function TodayPage() {
                                             ) : (
                                                 <div>
                                                     {reviewContent.mindmap?.imageUrl && (
-                                                        <div 
-                                                            style={{ position: 'relative', cursor: 'zoom-in' }} 
+                                                        <div
+                                                            style={{ position: 'relative', cursor: 'zoom-in' }}
                                                             onClick={() => setZoomImage(reviewContent.mindmap!.imageUrl)}
                                                         >
                                                             <img src={reviewContent.mindmap.imageUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
@@ -642,7 +645,8 @@ export default function TodayPage() {
                                 <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
                             ) : (
                                 <>
-                                    <div className="controls-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                    <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
+                                        <h1 className="hide-mobile" style={{ marginBottom: '1.5rem' }}>Today's Review</h1>
                                         <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
                                             {getSettings().activePart === 5 ? 'All Quran' : `Part ${getSettings().activePart}`}
                                         </p>
@@ -666,13 +670,13 @@ export default function TodayPage() {
                                                         <div className="verse-ref">
                                                             {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
                                                         </div>
-                                                        {todaysPortion[currentVerseIndex].ayahId === 1 && 
-                                                         todaysPortion[currentVerseIndex].surahId !== 1 && 
-                                                         todaysPortion[currentVerseIndex].surahId !== 9 && (
-                                                            <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
-                                                                بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                                                            </div>
-                                                        )}
+                                                        {todaysPortion[currentVerseIndex].ayahId === 1 &&
+                                                            todaysPortion[currentVerseIndex].surahId !== 1 &&
+                                                            todaysPortion[currentVerseIndex].surahId !== 9 && (
+                                                                <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                                                    بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                                                                </div>
+                                                            )}
                                                         <div className="arabic-text">{todaysPortion[currentVerseIndex].text}</div>
                                                     </>
                                                 )}
@@ -773,7 +777,8 @@ export default function TodayPage() {
                 ))}
             </div>
 
-            <HelpSection
+            <DocumentationModal
+                title="Today's Goals & Instructions"
                 cards={[
                     {
                         title: "The Review System",
@@ -800,9 +805,9 @@ export default function TodayPage() {
 
             {/* Zoom Modal */}
             {zoomImage && (
-                <ImageZoomModal 
-                    src={zoomImage} 
-                    onClose={() => setZoomImage(null)} 
+                <ImageZoomModal
+                    src={zoomImage}
+                    onClose={() => setZoomImage(null)}
                 />
             )}
         </div>
@@ -865,7 +870,7 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
     };
 
     return (
-        <div 
+        <div
             className="zoom-modal-overlay"
             style={{
                 position: 'fixed',
@@ -883,7 +888,7 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             }}
             onClick={onClose}
         >
-            <div 
+            <div
                 style={{
                     position: 'absolute',
                     top: typeof window !== 'undefined' && window.innerWidth < 768 ? 15 : 20,
@@ -893,19 +898,19 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                     zIndex: 2001
                 }}
             >
-                <button 
+                <button
                     onClick={handleZoomIn}
                     style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 10, borderRadius: '50%', cursor: 'pointer' }}
                 >
                     <ZoomIn size={typeof window !== 'undefined' && window.innerWidth < 768 ? 20 : 24} />
                 </button>
-                <button 
+                <button
                     onClick={handleZoomOut}
                     style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 10, borderRadius: '50%', cursor: 'pointer' }}
                 >
                     <ZoomOut size={typeof window !== 'undefined' && window.innerWidth < 768 ? 20 : 24} />
                 </button>
-                <button 
+                <button
                     onClick={onClose}
                     style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 10, borderRadius: '50%', cursor: 'pointer' }}
                 >
@@ -913,7 +918,7 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                 </button>
             </div>
 
-            <div 
+            <div
                 ref={containerRef}
                 style={{
                     width: '100%',
@@ -933,8 +938,8 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                 onTouchEnd={handleMouseUp}
                 onClick={(e) => e.stopPropagation()}
             >
-                <img 
-                    src={src} 
+                <img
+                    src={src}
                     style={{
                         maxWidth: '95%',
                         maxHeight: '90%',
@@ -948,18 +953,18 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             </div>
 
             {zoom > 1 && (
-                <div 
+                <div
                     className="zoom-helper"
-                    style={{ 
-                        position: 'absolute', 
-                        bottom: typeof window !== 'undefined' && window.innerWidth < 768 ? 100 : 40, 
-                        color: 'white', 
-                        fontSize: '0.8rem', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 8, 
-                        background: 'rgba(0,0,0,0.6)', 
-                        padding: '6px 14px', 
+                    style={{
+                        position: 'absolute',
+                        bottom: typeof window !== 'undefined' && window.innerWidth < 768 ? 100 : 40,
+                        color: 'white',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: 'rgba(0,0,0,0.6)',
+                        padding: '6px 14px',
                         borderRadius: 20,
                         zIndex: 2002
                     }}

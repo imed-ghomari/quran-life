@@ -11,7 +11,7 @@ import {
     getDueNodes,
 } from '@/lib/storage';
 import { BarChart3, CheckCircle, Gauge, Layers, Timer, SkipForward, Activity } from 'lucide-react';
-import HelpSection from '@/components/HelpSection';
+import DocumentationModal from '@/components/DocumentationModal';
 
 type MaturityBucket = 'reset' | 'medium' | 'strong' | 'mastered';
 
@@ -80,8 +80,8 @@ export default function StatisticsPage() {
     ];
 
     return (
-        <div className="content-wrapper">
-            <h1>Statistics</h1>
+        <div className="content-wrapper" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem' }}>
+            <h1 className="hide-mobile">Statistics</h1>
             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>
                 Focused on your current progress: learned verses, maturity levels, and mindmap readiness.
             </p>
@@ -193,7 +193,8 @@ export default function StatisticsPage() {
                 </div>
             </div>
 
-            <HelpSection
+            <DocumentationModal
+                title="Understanding Your Stats"
                 cards={[
                     {
                         title: "Maturity Distribution",

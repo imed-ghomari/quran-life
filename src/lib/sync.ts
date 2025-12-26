@@ -32,7 +32,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
         ...(mergedData.settings || {}),
         lastSyncedAt: new Date().toISOString()
       } as any;
-      
+
       importBackup(mergedData);
       // Update remote storage
       await uploadSupabaseBackup(mergedData);
@@ -71,7 +71,7 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     if (remoteUpdated > localUpdated) {
       merged.settings = { ...remote.settings };
       hasChanges = true;
-    } 
+    }
     // If local is newer or equal, we keep local settings (which are already in 'merged')
     // but we might want to flag hasChanges if they are different from remote 
     // so we can push the local changes to cloud.
@@ -140,43 +140,126 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     merged.customMutashabihat = Array.from(customMap.values());
   }
 
-  // Simple "Latest wins" for the rest
+  // 5. Mindmaps (Merge by Surah ID)
   const remoteTime = remote.exportedAt || '';
   const localTime = local.exportedAt || '';
 
+  if (remote.mindmaps) {
+    const localMaps = local.mindmaps || {};
+    const remoteMaps = remote.mindmaps || {};
+    const mergedMaps = { ...localMaps };
+
+    // For now, if a surah exists in both, we prioritize REMOTE if remote is globally newer, 
+    // otherwise we keep LOCAL. Ideally we'd have per-item timestamps.
+    // However, this at least allows disjoint updates (Surah A on phone, Surah B on desktop).
+    Object.entries(remoteMaps).forEach(([id, map]) => {
+      // If we don't have it, or if we define "remote is newer" as the tie-breaker
+      if (!mergedMaps[id] || (remoteTime > localTime && JSON.stringify(mergedMaps[id]) !== JSON.stringify(map))) {
+        mergedMaps[id] = map;
+        hasChanges = true;
+      }
+    });
+
+    // Also check if we have local maps that aren't in remote, 
+    // and if we are pushing (local > remote), we keep them (already in ...localMaps).
+    // If local is OLDER, strictly speaking we might want to respect deletions? 
+    // But for this app, we generally accumulate data. Keeping local additions is safer.
+
+    // If we kept a local map that differs from remote (and wasn't overwritten above), 
+    // that constitutes a change to push back.
+    if (JSON.stringify(merged.mindmaps) !== JSON.stringify(mergedMaps)) {
+      merged.mindmaps = mergedMaps;
+      if (Object.keys(mergedMaps).length > Object.keys(remoteMaps).length) {
+        hasChanges = true;
+      }
+    }
+    // Explicitly set the merged result
+    merged.mindmaps = mergedMaps;
+  }
+
+  // 6. Part Mindmaps (Merge by Part ID)
+  if (remote.partMindmaps) {
+    const localPartMaps = local.partMindmaps || {};
+    const remotePartMaps = remote.partMindmaps || {};
+    const mergedPartMaps = { ...localPartMaps };
+
+    Object.entries(remotePartMaps).forEach(([id, map]) => {
+      if (!mergedPartMaps[id] || (remoteTime > localTime && JSON.stringify(mergedPartMaps[id]) !== JSON.stringify(map))) {
+        mergedPartMaps[id] = map;
+        hasChanges = true;
+      }
+    });
+    merged.partMindmaps = mergedPartMaps;
+  }
+
+  // 7. Listening Stats (Merge by Surah ID)
+  if (remote.listeningStats) {
+    const localStats = local.listeningStats || {};
+    const remoteStats = remote.listeningStats || {};
+    const mergedStats = { ...localStats };
+
+    Object.entries(remoteStats).forEach(([id, stat]) => {
+      const lStat = mergedStats[id];
+      // Here we have specific timestamps inside the object!
+      if (!lStat || (stat.lastListened > lStat.lastListened)) {
+        mergedStats[id] = stat;
+        hasChanges = true;
+      }
+    });
+    merged.listeningStats = mergedStats;
+  }
+
+  // 8. Listening Progress (Merge by Part ID)
+  if (remote.listeningProgress) {
+    const localProg = local.listeningProgress || {};
+    const remoteProg = remote.listeningProgress || {};
+    const mergedProg = { ...localProg };
+
+    Object.entries(remoteProg).forEach(([id, prog]) => {
+      // No timestamp here, so fallback to global time
+      if (!mergedProg[id] || remoteTime > localTime) {
+        mergedProg[id] = prog;
+        hasChanges = true;
+      }
+    });
+    merged.listeningProgress = mergedProg;
+  }
+
+  // 9. Review Errors (Union based on ID)
+  if (remote.reviewErrors) {
+    const localErrs = local.reviewErrors || [];
+    const remoteErrs = remote.reviewErrors || [];
+    const errMap = new Map(localErrs.map(e => [e.id, e]));
+
+    remoteErrs.forEach(re => {
+      if (!errMap.has(re.id)) {
+        errMap.set(re.id, re);
+        hasChanges = true;
+      }
+    });
+    // Keep only last 100 to stick to storage limits logic
+    // Sort by timestamp descending
+    const allErrs = Array.from(errMap.values())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 100);
+
+    merged.reviewErrors = allErrs;
+  }
+
+  // 10. Simple scalars
   if (remoteTime > localTime) {
-    if (JSON.stringify(remote.mindmaps) !== JSON.stringify(local.mindmaps)) {
-        merged.mindmaps = remote.mindmaps;
-        hasChanges = true;
-    }
-    if (JSON.stringify(remote.partMindmaps) !== JSON.stringify(local.partMindmaps)) {
-        merged.partMindmaps = remote.partMindmaps;
-        hasChanges = true;
-    }
-    if (JSON.stringify(remote.listeningStats) !== JSON.stringify(local.listeningStats)) {
-        merged.listeningStats = remote.listeningStats;
-        hasChanges = true;
-    }
-    if (JSON.stringify(remote.listeningProgress) !== JSON.stringify(local.listeningProgress)) {
-        merged.listeningProgress = remote.listeningProgress;
-        hasChanges = true;
-    }
-    if (JSON.stringify(remote.reviewErrors) !== JSON.stringify(local.reviewErrors)) {
-        merged.reviewErrors = remote.reviewErrors;
-        hasChanges = true;
-    }
     if (remote.cycleStart !== local.cycleStart) {
-        merged.cycleStart = remote.cycleStart;
-        hasChanges = true;
+      merged.cycleStart = remote.cycleStart;
+      hasChanges = true;
     }
     if (remote.listeningComplete !== local.listeningComplete) {
-        merged.listeningComplete = remote.listeningComplete;
-        hasChanges = true;
+      merged.listeningComplete = remote.listeningComplete;
+      hasChanges = true;
     }
   }
 
   merged.exportedAt = new Date().toISOString();
-  
+
   // If we had changes from remote, or we are pushing our newer local data
   return { mergedData: merged, hasChanges: hasChanges || localTime > remoteTime };
 }

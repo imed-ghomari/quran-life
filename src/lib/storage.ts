@@ -17,7 +17,7 @@ const customStore = typeof window !== 'undefined' ? createStore('quran-app-db', 
  */
 async function migrateFromLocalStorage() {
     if (typeof window === 'undefined' || !customStore) return;
-    
+
     const migrationFlag = 'quran-app-migrated-to-idb';
     if (localStorage.getItem(migrationFlag)) return;
 
@@ -31,7 +31,7 @@ async function migrateFromLocalStorage() {
             }
         }
     }
-    
+
     localStorage.setItem(migrationFlag, 'true');
     console.log('Successfully migrated data from localStorage to IndexedDB');
 }
@@ -56,7 +56,13 @@ async function loadIntoCache() {
 
 // Start loading cache
 if (typeof window !== 'undefined') {
-    loadIntoCache();
+    loadIntoCache().then(() => {
+        // Dispatch event to notify listeners that initial load is complete
+        window.dispatchEvent(new StorageEvent('storage', {
+            key: 'quran-app-settings', // generic key to trigger updates
+            newValue: JSON.stringify(storageCache[STORAGE_KEYS.SETTINGS])
+        }));
+    });
 }
 
 function getFromCache<T>(key: string, defaultValue: T): T {
@@ -88,47 +94,47 @@ const storageChannel = typeof window !== 'undefined' ? new BroadcastChannel('qur
 
 if (storageChannel) {
     storageChannel.onmessage = (event) => {
-            const { key, value } = event.data;
-            if (STORAGE_KEYS_VALUES.includes(key)) {
-                storageCache[key] = value;
-                // PERSIST TO IndexedDB immediately so reload doesn't lose it
-                if (customStore) {
-                    set(key, value, customStore).catch(err => console.error(`Sync persistence failed for ${key}:`, err));
-                }
-                // Dispatch a storage event manually so the page.tsx useEffect catches it
-                window.dispatchEvent(new StorageEvent('storage', {
-                    key: key,
-                    newValue: JSON.stringify(value),
-                }));
+        const { key, value } = event.data;
+        if (STORAGE_KEYS_VALUES.includes(key)) {
+            storageCache[key] = value;
+            // PERSIST TO IndexedDB immediately so reload doesn't lose it
+            if (customStore) {
+                set(key, value, customStore).catch(err => console.error(`Sync persistence failed for ${key}:`, err));
             }
-        };
+            // Dispatch a storage event manually so the page.tsx useEffect catches it
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: key,
+                newValue: JSON.stringify(value),
+            }));
+        }
+    };
 }
 
 const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
 
 function saveToCacheAndStore(key: string, value: any) {
     storageCache[key] = value;
-    
+
     // Update last modified timestamp (except for the timestamp itself)
     if (key !== STORAGE_KEYS.LAST_MODIFIED) {
         const now = new Date().toISOString();
         storageCache[STORAGE_KEYS.LAST_MODIFIED] = now;
         if (typeof window !== 'undefined' && customStore) {
-            set(STORAGE_KEYS.LAST_MODIFIED, now, customStore).catch(() => {});
+            set(STORAGE_KEYS.LAST_MODIFIED, now, customStore).catch(() => { });
             localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, JSON.stringify(now));
         }
     }
 
     if (typeof window !== 'undefined' && customStore) {
         set(key, value, customStore).catch(err => console.error(`Failed to persist ${key}:`, err));
-        
+
         // Notify other tabs via BroadcastChannel
         storageChannel?.postMessage({ key, value });
-        
+
         // Also update localStorage for fallback sync awareness across tabs
         try {
             localStorage.setItem(key, JSON.stringify(value));
-        } catch (e) {}
+        } catch (e) { }
     }
 }
 
@@ -345,7 +351,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     const settings = getSettings();
     const currentNodes = getMemoryNodes();
     const newNodes: MemoryNode[] = [];
-    
+
     // 1. Keep non-verse nodes unless forceFullReset
     if (!forceFullReset) {
         newNodes.push(...currentNodes.filter(n => n.type !== 'verse'));
@@ -369,7 +375,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                 // Create node for this segment if it doesn't exist
                 const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
                 const existing = currentNodes.find(n => n.id === nodeId);
-                
+
                 newNodes.push({
                     id: nodeId,
                     type: 'verse',
@@ -451,7 +457,7 @@ export function sm2(grade: number, state: SM2State): SM2State {
 export function postponeNode(node: MemoryNode): MemoryNode {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     return {
         ...node,
         scheduler: {
@@ -478,6 +484,7 @@ export interface MindMap {
     imageUrl: string | null;
     anchors: Anchor[];
     isComplete: boolean;
+    tldrawSnapshot?: any;
 }
 
 export function getMindMaps(): { [surahId: string]: MindMap } {
@@ -520,6 +527,7 @@ export interface PartMindMap {
     imageUrl: string | null;
     description: string;
     isComplete: boolean;
+    tldrawSnapshot?: any;
 }
 
 export function getPartMindMaps(): { [partId: string]: PartMindMap } {
@@ -872,7 +880,7 @@ export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap', lev
 export function resetAllMaturity(): void {
     // 1. Clear all memory nodes
     saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, []);
-    
+
     // 2. Clear all review errors
     saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, []);
 
@@ -967,9 +975,9 @@ export function resetMutashabihatDecisions(absoluteAyat: number[]): void {
         const abs = parseInt(key.split('-')[0], 10);
         return absoluteAyat.includes(abs);
     });
-    
+
     if (keysToDelete.length === 0) return;
-    
+
     keysToDelete.forEach(key => delete decisions[key]);
     saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, decisions);
 }
@@ -986,7 +994,7 @@ export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new'
         if (!surah) return;
 
         const surahKey = id.toString();
-        
+
         // Reset state for this surah first
         delete settings.learnedVerses[surahKey];
         settings.skippedSurahs = (settings.skippedSurahs || []).filter(sId => sId !== id);
@@ -1008,13 +1016,13 @@ export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new'
     if (settings.skippedSurahs) {
         settings.skippedSurahs.sort((a, b) => a - b);
     }
-    
+
     // Save everything once
     saveSettings(settings);
     saveMemoryNodes(currentNodes);
     saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, currentMaps);
     saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, currentErrors);
-    
+
     // Final sync to create nodes for 'learned' surahs
     syncMemoryNodesWithLearned();
 }
@@ -1107,7 +1115,7 @@ export function importBackup(data: BackupData): void {
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);
-    
+
     // Finally, update the last modified timestamp to match the imported backup's time
     if (data.exportedAt) {
         saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt);

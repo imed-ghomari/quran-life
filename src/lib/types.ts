@@ -80,8 +80,17 @@ export interface Anchor {
 export interface MindMap {
     surahId: number;
     imageUrl: string | null;  // Uploaded screenshot
-    anchors: Anchor[];
+    anchors: Anchor[]; // Assuming VerseAnchor is a typo and should be Anchor based on existing Anchor interface
     isComplete: boolean;
+    tldrawSnapshot?: any; // JSON snapshot of the whiteboard state
+}
+
+export interface PartMindMap {
+    partId: QuranPart; // 1 | 2 | 3 | 4
+    imageUrl: string | null;
+    description: string;
+    isComplete: boolean;
+    tldrawSnapshot?: any;
 }
 
 // Transition (optional, for continuity issues)
