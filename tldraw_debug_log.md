@@ -82,5 +82,10 @@
 *   **Hypothesis:** The global CSS import in `layout.tsx` is being purged or not applied to the dynamic `MindmapEditor` chunk in production. OR `assetUrls` are still failing invisibly.
 *   **Action:** Re-introduce `import 'tldraw/tldraw.css'` directly into `MindmapEditor.tsx` to force inclusion in the chunk.
 
+### 19. Simplify Loading Architecture (Static Import)
+*   **Hypothesis:** The current setup uses "Double Dynamic" loading (`dynamic()` on wrapper + `import()` inside component). This might be causing Webpack to split chunks incorrectly, resulting in "Core loaded but UI missing".
+*   **Action:** Refactor `MindmapEditor.tsx` to use **static imports** of `tldraw` at the top level, relying on the `ssr: false` wrapper to prevent server-side execution issues.
+*   **Goal:** Ensure the entire `tldraw` bundle is loaded as a single coherent unit in the client bundle.
+
 ## Recommended Immediate Fix
-Import CSS locally. If that fails, the "Missing Toolbar" + "White Screen" on Vercel is strictly an **Assets/CSS** path issue. Consider serving assets from `public/` folder.
+Switch to static imports + `ssr: false`. This is the standard Next.js pattern for client-only libraries.
