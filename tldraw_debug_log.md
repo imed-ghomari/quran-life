@@ -89,3 +89,7 @@
 
 ## Recommended Immediate Fix
 Switch to static imports + `ssr: false`. This is the standard Next.js pattern for client-only libraries.
+
+### 20. Hosting Pivot
+* **Status:** Build fixed locally (Type errors resolved). Vercel deployment retry is possible.
+* **Recommendation:** Switch to **Railway** (Container) to resolve persistent environment-specific blank screen issues. Vercel's serverless bundler is the likely culprit.
