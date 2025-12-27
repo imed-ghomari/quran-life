@@ -77,5 +77,10 @@
     *   Added VISIBLE debug overlay to `MindmapEditor.tsx` ("Debug: Mounted=...").
     *   This will diagnose if the component mounts successfully (and is just invisible) or fails to mount.
 
+### 15. UI Missing / CSS Purging
+*   **Observation:** Debug Overlay shows `Mounted=Yes`, `Dim=1272x641`, `Shapes=0`. But screen is blank (No Toolbar).
+*   **Hypothesis:** The global CSS import in `layout.tsx` is being purged or not applied to the dynamic `MindmapEditor` chunk in production. OR `assetUrls` are still failing invisibly.
+*   **Action:** Re-introduce `import 'tldraw/tldraw.css'` directly into `MindmapEditor.tsx` to force inclusion in the chunk.
+
 ## Recommended Immediate Fix
-Use the **Debug Overlay** info to determine if `onMount` fires. If it does (`Mounted=Yes`), then the issue is strictly CSS/Rendering/Assets. If `Mounted=No`, the component crashed before mounting (props/dependencies).
+Import CSS locally. If that fails, the "Missing Toolbar" + "White Screen" on Vercel is strictly an **Assets/CSS** path issue. Consider serving assets from `public/` folder.

@@ -93,7 +93,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             const dim = container ? `${container.clientWidth}x${container.clientHeight}` : 'N/A';
             const htmlClass = document.documentElement.className;
 
-            setDebugInfo(`Shps: ${shapes} | Snap: ${initialSnapshot ? 'Yes' : 'No'} | Zoom: ${camera.z.toFixed(2)} | Pos: ${camera.x.toFixed(0)},${camera.y.toFixed(0)} | Dim: ${dim} | Theme: ${editor.user.getIsDarkMode() ? 'Dark' : 'Light'} | HTML: ${htmlClass}`);
+            setDebugInfo(`Shps: ${shapes} | Snap: ${initialSnapshot ? 'YES' : 'NO'} | Assets: ${defaultEditorAssetUrls ? 'YES' : 'NO'} | Zoom: ${camera.z.toFixed(2)} | Pos: ${camera.x.toFixed(0)},${camera.y.toFixed(0)} | Dim: ${dim} | Theme: ${editor.user.getIsDarkMode() ? 'Dark' : 'Light'} | HTML: ${htmlClass}`);
         }, 1000);
         return () => clearInterval(interval);
     }, [editor]);
@@ -227,8 +227,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                     {debugInfo || 'Waiting for update...'}
                 </div>
                 <Tldraw
-                    persistenceKey="mindmap-editor-v3-clean"
                     onMount={handleMount}
+                    forceMobile={true}
                     inferDarkMode={true}
                     assetUrls={defaultEditorAssetUrls}
                 />
