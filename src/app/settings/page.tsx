@@ -14,6 +14,7 @@ import {
     isSurahSkipped,
     getSurahLearnedStatus,
     setGroupMaturity,
+    setSurahMaturity,
     getMaturityLevel,
     setNodeMaturity,
     getMutashabihatDecisions,
