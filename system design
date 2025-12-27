@@ -125,3 +125,44 @@ AppSettings {
   lastSyncedAt: string;
 }
 ```
+
+---
+
+## 10. Tldraw Customizations (Preserved Features)
+
+The Mindmap Editor (`src/components/MindmapEditor.tsx`) includes a custom Lasso Select tool. If this tool needs to be temporarily disabled for stability, the following implementation details should be used to restore it:
+
+### Lasso Tool Implementation
+
+To re-enable the Lasso tool:
+1.  **Import Tldraw Dependencies**: Ensure `StateNode`, `atom`, `pointInPolygon`, `polygonsIntersect` are imported from `tldraw` (dynamically in `useEffect`).
+2.  **Define Tool Classes**:
+    *   `IdleState` (transitions to `lassoing` on pointer down).
+    *   `LassoingState` (tracks pointer moves, updates an `atom` with points, and on pointer up selects shapes within the lasso polygon).
+    *   `LassoSelectTool` (parent `StateNode`, id: `'lasso-select'`).
+3.  **Register Tool**: Pass the tool classes to `setLassoTool`.
+4.  **UI Overrides**:
+    *   Use `uiOverrides` prop on `Tldraw` component to add the `lasso-select` tool to the registry.
+    *   Set `icon: 'color'`, `kbd: 'w'`.
+5.  **Custom Toolbar**:
+    *   Create a custom component for `Toolbar`.
+    *   Include `TldrawUiMenuItem` for the lasso tool.
+    *   Include standard tools (`SelectToolbarItem`, `HandToolbarItem`, `DrawToolbarItem`, `HighlightToolbarItem`, `EraserToolbarItem`).
+6.  **Lasso Overlay**:
+    *   Create a component using `useEditor`, `useValue` to render an SVG path of the lasso points on top of the canvas.
+    *   Pass this to the `components.Overlays` prop.
+
+### Code Snippet (Reference)
+
+```typescript
+// Inside loadTldraw useEffect:
+class LassoingState extends StateNode {
+    // ... setup markId, points atom ...
+    override onPointerMove() { this.points.set([...this.points.get(), currentPoint]); }
+    override onPointerUp() { 
+        // Logic to filter shapes inside polygon and editor.setSelectedShapes(shapes)
+    }
+}
+// Render props:
+<Tldraw tools={[LassoSelectTool]} overrides={uiOverrides} components={components} />
+```
