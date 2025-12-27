@@ -9,7 +9,18 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Removed output: 'standalone' for better Vercel compatibility
+  // Transpile tldraw packages to ensure proper production build
+  transpilePackages: ['tldraw', '@tldraw/tldraw', '@tldraw/editor', '@tldraw/tlschema'],
+  // Webpack config to handle tldraw's dynamic imports properly
+  webpack: (config, { isServer }) => {
+    // Tldraw uses some browser-only APIs, skip on server
+    if (isServer) {
+      config.externals.push({
+        canvas: 'commonjs canvas',
+      });
+    }
+    return config;
+  },
 };
 
 export default withPWA(nextConfig);

@@ -886,9 +886,24 @@ export default function SettingsPage() {
                                         </div>
                                         {expandedGroups['verses'] && (
                                             <div className="mobile-subgroup-list">
-                                                {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
-                                                    .sort((a, b) => (a || 0) - (b || 0))
-                                                    .map(surahId => {
+                                                {/* Issue #10: Filter by active part */}
+                                                {(() => {
+                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
+                                                        .filter(surahId => {
+                                                            const surah = getSurah(surahId!);
+                                                            if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
+                                                            if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                            return true;
+                                                        })
+                                                        .sort((a, b) => (a || 0) - (b || 0));
+
+                                                    if (filteredSurahs.length === 0) {
+                                                        return (
+                                                            <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes in Part {settings.activePart}</div>
+                                                        );
+                                                    }
+
+                                                    return filteredSurahs.map(surahId => {
                                                         const surah = getSurah(surahId!);
                                                         const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
                                                         return (
@@ -906,10 +921,8 @@ export default function SettingsPage() {
                                                                 </div>
                                                             </div>
                                                         );
-                                                    })}
-                                                {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
-                                                    <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes</div>
-                                                )}
+                                                    });
+                                                })()}
                                             </div>
                                         )}
                                     </div>
@@ -1081,63 +1094,99 @@ export default function SettingsPage() {
                                             </tr>
                                             {expandedGroups['verses'] && (
                                                 <>
-                                                    {/* Group by Surah */}
-                                                    {Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId))).sort((a, b) => (a || 0) - (b || 0)).map(surahId => {
-                                                        const surah = getSurah(surahId!);
-                                                        const surahKey = `verse-surah-${surahId}`;
-                                                        const surahNodes = memoryNodes
-                                                            .filter(n => n.type === 'verse' && n.surahId === surahId)
-                                                            .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
+                                                    {/* Issue #10: Filter by active part, show only learned surahs */}
+                                                    {(() => {
+                                                        const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
+                                                            .filter(surahId => {
+                                                                const surah = getSurah(surahId!);
+                                                                // Filter by active part (show all if part 5)
+                                                                if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
+                                                                // Only show non-skipped surahs
+                                                                if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                                return true;
+                                                            })
+                                                            .sort((a, b) => (a || 0) - (b || 0));
 
-                                                        return (
-                                                            <React.Fragment key={surahId}>
-                                                                <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
-                                                                    <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                                <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
-                                                                                {surah?.id}. {surah?.name} ({surahNodes.length})
+                                                        if (filteredSurahs.length === 0) {
+                                                            return (
+                                                                <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes in Part {settings.activePart}</td></tr>
+                                                            );
+                                                        }
+
+                                                        return filteredSurahs.map(surahId => {
+                                                            const surah = getSurah(surahId!);
+                                                            const surahKey = `verse-surah-${surahId}`;
+                                                            const surahNodes = memoryNodes
+                                                                .filter(n => n.type === 'verse' && n.surahId === surahId)
+                                                                .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
+
+                                                            return (
+                                                                <React.Fragment key={surahId}>
+                                                                    <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
+                                                                        <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                    <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
+                                                                                    {surah?.id}. {surah?.name} ({surahNodes.length})
+                                                                                </div>
+                                                                                {/* Issue #3: Bulk maturity controls per surah */}
+                                                                                <select
+                                                                                    className="maturity-select"
+                                                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                                    value=""
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    onChange={(e) => {
+                                                                                        const val = e.target.value;
+                                                                                        if (!val) return;
+                                                                                        if (val === 'reset') {
+                                                                                            if (window.confirm(`Reset maturity for all verses in ${surah?.name}?`)) {
+                                                                                                setSurahMaturity(surahId!, 'reset');
+                                                                                                setMemoryNodes(getMemoryNodes());
+                                                                                            }
+                                                                                        } else {
+                                                                                            setSurahMaturity(surahId!, val as any);
+                                                                                            setMemoryNodes(getMemoryNodes());
+                                                                                        }
+                                                                                        e.target.value = '';
+                                                                                    }}
+                                                                                >
+                                                                                    <option value="">Set All...</option>
+                                                                                    <option value="reset">Reset</option>
+                                                                                    <option value="medium">Medium</option>
+                                                                                    <option value="strong">Strong</option>
+                                                                                    <option value="mastered">Mastered</option>
+                                                                                </select>
                                                                             </div>
-                                                                            <button
-                                                                                className="bulk-btn reset-mut"
-                                                                                onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('verse', surahId!, surah?.name); }}
-                                                                                title={`Reset all verses maturity for ${surah?.name}`}
-                                                                            >
-                                                                                Reset Group
-                                                                            </button>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                                {expandedGroups[surahKey] && surahNodes.map(node => (
-                                                                    <tr key={node.id} className="node-row">
-                                                                        <td>Ayat {node.startVerse}-{node.endVerse}</td>
-                                                                        <td>
-                                                                            <select
-                                                                                value={getMaturityLevel(node.scheduler.interval)}
-                                                                                onChange={(e) => {
-                                                                                    setNodeMaturity(node.id, e.target.value as any);
-                                                                                    setMemoryNodes(getMemoryNodes());
-                                                                                }}
-                                                                                className="maturity-select"
-                                                                            >
-                                                                                <option value="reset">Reset</option>
-                                                                                <option value="medium">Medium</option>
-                                                                                <option value="strong">Strong</option>
-                                                                                <option value="mastered">Mastered</option>
-                                                                            </select>
                                                                         </td>
-                                                                        <td>{node.scheduler.interval}d</td>
-                                                                        <td>{node.scheduler.easeFactor}</td>
-                                                                        <td>{node.scheduler.repetition}</td>
-                                                                        <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
                                                                     </tr>
-                                                                ))}
-                                                            </React.Fragment>
-                                                        );
-                                                    })}
-                                                    {memoryNodes.filter(n => n.type === 'verse').length === 0 && (
-                                                        <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes</td></tr>
-                                                    )}
+                                                                    {expandedGroups[surahKey] && surahNodes.map(node => (
+                                                                        <tr key={node.id} className="node-row">
+                                                                            <td>Ayat {node.startVerse}-{node.endVerse}</td>
+                                                                            <td>
+                                                                                <select
+                                                                                    value={getMaturityLevel(node.scheduler.interval)}
+                                                                                    onChange={(e) => {
+                                                                                        setNodeMaturity(node.id, e.target.value as any);
+                                                                                        setMemoryNodes(getMemoryNodes());
+                                                                                    }}
+                                                                                    className="maturity-select"
+                                                                                >
+                                                                                    <option value="reset">Reset</option>
+                                                                                    <option value="medium">Medium</option>
+                                                                                    <option value="strong">Strong</option>
+                                                                                    <option value="mastered">Mastered</option>
+                                                                                </select>
+                                                                            </td>
+                                                                            <td>{node.scheduler.interval}d</td>
+                                                                            <td>{node.scheduler.easeFactor}</td>
+                                                                            <td>{node.scheduler.repetition}</td>
+                                                                            <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </React.Fragment>
+                                                            );
+                                                        });
+                                                    })()}
                                                 </>
                                             )}
                                         </tbody>
@@ -2000,30 +2049,39 @@ export default function SettingsPage() {
 
                         <div className="slide-over-body">
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                                <button
-                                    className="bulk-btn reset-mut"
-                                    onClick={() => {
-                                        if (window.confirm(`Are you sure you want to reset all nodes in ${activeSlideOverGroup.title}?`)) {
-                                            if (activeSlideOverGroup.type === 'verse') {
-                                                handleGroupMaturityReset('verse', activeSlideOverGroup.surahId, activeSlideOverGroup.title);
-                                            } else {
-                                                handleGroupMaturityReset(activeSlideOverGroup.type as any);
-                                            }
-                                            // Refresh local nodes
-                                            const updated = getMemoryNodes();
-                                            setMemoryNodes(updated);
-                                            setActiveSlideOverGroup(prev => prev ? {
-                                                ...prev,
-                                                nodes: updated.filter(n => {
-                                                    if (prev.type === 'verse') return n.type === 'verse' && n.surahId === prev.surahId;
-                                                    return n.type === prev.type;
-                                                })
-                                            } : null);
+                                {/* Set All dropdown matching desktop */}
+                                <select
+                                    className="maturity-select"
+                                    style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.85rem' }}
+                                    value=""
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (!val) return;
+                                        if (val === 'reset' && !window.confirm(`Reset all nodes in ${activeSlideOverGroup.title}?`)) return;
+
+                                        if (activeSlideOverGroup.type === 'verse' && activeSlideOverGroup.surahId) {
+                                            setSurahMaturity(activeSlideOverGroup.surahId, val as any);
+                                        } else {
+                                            setGroupMaturity(activeSlideOverGroup.type as any, val as any);
                                         }
+
+                                        const updated = getMemoryNodes();
+                                        setMemoryNodes(updated);
+                                        setActiveSlideOverGroup(prev => prev ? {
+                                            ...prev,
+                                            nodes: updated.filter(n => {
+                                                if (prev.type === 'verse') return n.type === 'verse' && n.surahId === prev.surahId;
+                                                return n.type === prev.type;
+                                            })
+                                        } : null);
                                     }}
                                 >
-                                    Reset All
-                                </button>
+                                    <option value="">Set All...</option>
+                                    <option value="reset">Reset</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="strong">Strong</option>
+                                    <option value="mastered">Mastered</option>
+                                </select>
                             </div>
 
                             <div className="mobile-node-list">
@@ -2043,9 +2101,11 @@ export default function SettingsPage() {
                                                                 `Part ${node.partId}`}
                                                     </div>
                                                     <select
-                                                        value={getMaturityLevel(node.scheduler.interval)}
+                                                        value=""
                                                         onChange={(e) => {
-                                                            setNodeMaturity(node.id, e.target.value as any);
+                                                            const val = e.target.value;
+                                                            if (!val) return;
+                                                            setNodeMaturity(node.id, val as any);
                                                             const updated = getMemoryNodes();
                                                             setMemoryNodes(updated);
                                                             // Update local nodes in slideover
@@ -2060,6 +2120,7 @@ export default function SettingsPage() {
                                                         className="maturity-select"
                                                         style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
                                                     >
+                                                        <option value="">Set to...</option>
                                                         <option value="reset">Reset</option>
                                                         <option value="medium">Medium</option>
                                                         <option value="strong">Strong</option>

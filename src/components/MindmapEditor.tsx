@@ -3,8 +3,7 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 
-// Import Tldraw CSS globally
-import 'tldraw/tldraw.css';
+// Note: Tldraw CSS is loaded dynamically with the module to avoid SSR issues
 
 // ============================================
 // Lasso Select Tool (from tldraw examples)
@@ -134,12 +133,27 @@ export default function MindmapEditor({ initialSnapshot, onSave, onClose, title 
 
     // Dynamically import Tldraw on client side only
     useEffect(() => {
+        // Load CSS via a link tag to avoid SSR/TS issues with dynamic CSS import
+        if (typeof document !== 'undefined') {
+            const existingLink = document.querySelector('link[data-tldraw-css]');
+            if (!existingLink) {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.setAttribute('data-tldraw-css', 'true');
+                link.href = 'https://unpkg.com/tldraw@2/tldraw.css';
+                document.head.appendChild(link);
+            }
+        }
+
         import('tldraw').then((mod) => {
             // Set default styles for solid stroke, medium size
             mod.DefaultDashStyle.setDefaultValue('solid');
             mod.DefaultSizeStyle.setDefaultValue('m');
 
             setTldrawModule(mod);
+            setIsLoading(false);
+        }).catch((err) => {
+            console.error('Failed to load tldraw:', err);
             setIsLoading(false);
         });
     }, []);

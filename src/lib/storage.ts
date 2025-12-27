@@ -306,11 +306,25 @@ export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
     const settings = getSettings();
     const skips = new Set(settings.skippedSurahs || []);
     const suspended = getSuspendedAnchors();
+    const mindmaps = getMindMaps();
+    const partMindmaps = getPartMindMaps();
 
     return getMemoryNodes()
         .filter(n => n.scheduler.dueDate <= today)
         .filter(n => !n.surahId || !skips.has(n.surahId))
         .filter(n => !isNodeSuspended(n, suspended))
+        // Issue #2: Filter out incomplete or image-less mindmaps
+        .filter(n => {
+            if (n.type === 'mindmap' && n.surahId) {
+                const mm = mindmaps[n.surahId];
+                return mm?.isComplete && mm?.imageUrl;
+            }
+            if (n.type === 'part_mindmap' && n.partId) {
+                const pmm = partMindmaps[n.partId];
+                return pmm?.isComplete && pmm?.imageUrl;
+            }
+            return true;
+        })
         .filter(n => {
             if (!filterPart || filterPart === 5) return true;
             if (n.surahId) {
@@ -926,6 +940,7 @@ export interface MutashabihatDecision {
     status: 'pending' | 'ignored' | 'solved_mindmap' | 'solved_note';
     note?: string;
     confirmedAt?: string;
+    updatedAt?: string;
 }
 
 export interface CustomMutashabih {
@@ -965,7 +980,11 @@ export function getMutashabihatDecisions(): Record<string, MutashabihatDecision>
 export function setMutashabihatDecision(absoluteAyah: number, decision: MutashabihatDecision, phraseId?: string): void {
     const decisions = getMutashabihatDecisions();
     const key = phraseId ? `${absoluteAyah}-${phraseId}` : absoluteAyah.toString();
-    decisions[key] = decision;
+    // Add updatedAt for proper sync merge ordering
+    decisions[key] = {
+        ...decision,
+        updatedAt: new Date().toISOString()
+    };
     saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, decisions);
 }
 

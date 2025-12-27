@@ -19,12 +19,41 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
     const handleOffline = () => setIsOnline(false);
 
+    // Issue #8: Sync on app load if user is authenticated
+    const doInitialSync = async () => {
+      try {
+        const { createClient } = await import('@/utils/supabase/client');
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && navigator.onLine) {
+          const { syncWithCloud } = await import('@/lib/sync');
+          syncWithCloud().catch(console.error);
+        }
+      } catch (e) {
+        console.error('Initial sync failed:', e);
+      }
+    };
+    doInitialSync();
+
+    // Issue #6: Refresh data when app becomes visible (e.g., reopened next day)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        // Dispatch storage event to trigger refresh across components
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'quran-app-visibility-refresh',
+          newValue: Date.now().toString(),
+        }));
+      }
+    };
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 

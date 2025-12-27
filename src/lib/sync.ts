@@ -96,7 +96,7 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     merged.memoryNodes = Array.from(nodeMap.values());
   }
 
-  // 3. Mutashabihat Decisions (Latest confirmedAt wins)
+  // 3. Mutashabihat Decisions (Latest timestamp wins, with updatedAt fallback)
   if (remote.mutashabihatDecisions) {
     const localDecs = local.mutashabihatDecisions || {};
     const remoteDecs = remote.mutashabihatDecisions || {};
@@ -111,14 +111,23 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
         hasChanges = true;
       } else if (!r) {
         mergedDecs[key] = l;
+        // Local has something remote doesn't - we need to push
+        hasChanges = true;
       } else {
-        const lTime = l.confirmedAt || '';
-        const rTime = r.confirmedAt || '';
-        if (rTime > lTime) {
+        // Both exist - use confirmedAt first, then updatedAt, then fallback
+        const lTime = l.confirmedAt || l.updatedAt || '';
+        const rTime = r.confirmedAt || r.updatedAt || '';
+
+        // If times are equal, prefer confirmed over unconfirmed
+        if (rTime > lTime || (rTime === lTime && r.confirmedAt && !l.confirmedAt)) {
           mergedDecs[key] = r;
           hasChanges = true;
         } else {
           mergedDecs[key] = l;
+          // If local differs from remote, flag for push
+          if (lTime > rTime || JSON.stringify(l) !== JSON.stringify(r)) {
+            hasChanges = true;
+          }
         }
       }
     }

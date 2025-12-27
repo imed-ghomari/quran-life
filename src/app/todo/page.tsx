@@ -1087,7 +1087,7 @@ export default function TodoPage() {
                                                             <button
                                                                 className="btn btn-secondary"
                                                                 onClick={() => setActivePartEditor({ partId: part, snapshot: mindmap?.tldrawSnapshot })}
-                                                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '90px', flex: 1 }}
+                                                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '80px', flex: 1 }}
                                                             >
                                                                 <PenTool size={14} style={{ marginRight: '4px' }} />
                                                                 {mindmap?.tldrawSnapshot ? 'Edit' : 'Create'}
@@ -1096,10 +1096,28 @@ export default function TodoPage() {
                                                                 className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
                                                                 disabled={!mindmap?.imageUrl}
                                                                 onClick={() => handlePartComplete(part)}
-                                                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '110px', flex: 1 }}
+                                                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '90px', flex: 1 }}
                                                             >
-                                                                <Check size={14} /> {mindmap?.isComplete ? 'Completed' : 'Complete'}
+                                                                <Check size={14} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
                                                             </button>
+                                                            {/* Issue #5: Delete button for Part Mindmaps */}
+                                                            {mindmap?.imageUrl && (
+                                                                <button
+                                                                    className="btn btn-secondary"
+                                                                    onClick={() => {
+                                                                        if (confirm('Are you sure you want to delete this part mindmap? This cannot be undone.')) {
+                                                                            const updatedMap = { partId: part, imageUrl: null, description: '', isComplete: false, tldrawSnapshot: undefined };
+                                                                            setPartMindmaps(prev => ({ ...prev, [part]: updatedMap }));
+                                                                            savePartMindMap(updatedMap);
+                                                                            syncWithCloud().catch(console.error);
+                                                                        }
+                                                                    }}
+                                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                                                                    title="Delete Mindmap"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1279,6 +1297,23 @@ export default function TodoPage() {
                                                         >
                                                             <Check size={14} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
                                                         </button>
+                                                        {/* Issue #5: Delete button for mobile Part Mindmaps */}
+                                                        {mindmap?.imageUrl && (
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                onClick={() => {
+                                                                    if (confirm('Delete this part mindmap?')) {
+                                                                        const updatedMap = { partId: part, imageUrl: null, description: '', isComplete: false, tldrawSnapshot: undefined };
+                                                                        setPartMindmaps(prev => ({ ...prev, [part]: updatedMap }));
+                                                                        savePartMindMap(updatedMap);
+                                                                        syncWithCloud().catch(console.error);
+                                                                    }
+                                                                }}
+                                                                style={{ padding: '0.4rem', fontSize: '0.75rem', color: 'var(--danger)' }}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );
@@ -1316,6 +1351,10 @@ export default function TodoPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                 <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah.id}</div>
                                                                 <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{surah.name}</span>
+                                                                {/* Issue #7: Show complete/incomplete status badge */}
+                                                                <span className={`status-badge ${mindmap?.isComplete && mindmap?.imageUrl ? 'learned' : 'partial'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
+                                                                    {mindmap?.isComplete && mindmap?.imageUrl ? '✓' : '○'}
+                                                                </span>
                                                             </div>
                                                             <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                                         </div>
@@ -1339,8 +1378,25 @@ export default function TodoPage() {
                                                                         onClick={() => handleMarkComplete(surah.id, mindmap)}
                                                                         style={{ flex: 1, fontSize: '0.75rem', padding: '0.5rem' }}
                                                                     >
-                                                                        <Check size={16} /> Complete
+                                                                        <Check size={16} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
                                                                     </button>
+                                                                    {/* Issue #4: Delete button for mobile Surah Mindmaps */}
+                                                                    {mindmap?.imageUrl && (
+                                                                        <button
+                                                                            className="btn btn-secondary"
+                                                                            onClick={() => {
+                                                                                if (confirm('Delete this mindmap?')) {
+                                                                                    const updatedMap = { ...mindmap, imageUrl: null, tldrawSnapshot: undefined, isComplete: false };
+                                                                                    setMindmaps(prev => ({ ...prev, [surah.id]: updatedMap }));
+                                                                                    saveMindMap(updatedMap);
+                                                                                    syncWithCloud().catch(console.error);
+                                                                                }
+                                                                            }}
+                                                                            style={{ padding: '0.5rem', fontSize: '0.75rem', color: 'var(--danger)' }}
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
 
                                                                 {/* Complex Anchor Builder Trigger */}
