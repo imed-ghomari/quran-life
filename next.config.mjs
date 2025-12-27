@@ -14,6 +14,14 @@ const nextConfig = {
   swcMinify: false, // Disabled to prevent minification bugs with Tldraw
   // Transpile tldraw packages to ensure proper production build
   transpilePackages: ['tldraw', '@tldraw/tldraw', '@tldraw/editor', '@tldraw/tlschema'],
+  webpack: (config) => {
+    config.externals.push({
+      'utf-8-validate': 'commonjs utf-8-validate',
+      'bufferutil': 'commonjs bufferutil',
+      'canvas': 'commonjs canvas',
+    });
+    return config;
+  },
 };
 
 export default withPWA(nextConfig);
