@@ -2,7 +2,7 @@ import withPWAInit from 'next-pwa';
 
 const withPWA = withPWAInit({
   dest: 'public',
-  disable: false, // process.env.NODE_ENV === 'development',
+  disable: true, // Temporarily disabled to debug production caching issues
   register: true,
   skipWaiting: true,
 });
