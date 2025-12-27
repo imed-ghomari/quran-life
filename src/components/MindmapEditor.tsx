@@ -183,6 +183,25 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     const { Tldraw, defaultEditorAssetUrls } = TldrawModule;
 
+    // Debug Effect to track editor state
+    const [debugInfo, setDebugInfo] = useState('');
+    useEffect(() => {
+        if (!editor) return;
+        const interval = setInterval(() => {
+            const shapes = editor.getCurrentPageShapeIds().size;
+            const camera = editor.getCamera();
+            const container = document.querySelector('.tldraw-container');
+            const dim = container ? `${container.clientWidth}x${container.clientHeight}` : 'N/A';
+            const htmlClass = document.documentElement.className;
+
+            setDebugInfo(`Shapes: ${shapes} | Zoom: ${camera.z.toFixed(2)} | Pos: ${camera.x.toFixed(0)},${camera.y.toFixed(0)} | Dim: ${dim} | Theme: ${editor.user.getIsDarkMode() ? 'Dark' : 'Light'} | HTML: ${htmlClass}`);
+
+            // Log once if suspicious
+            if (shapes === 0 && camera.z === 1) console.warn('Suspicious: 0 shapes, default camera');
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [editor]);
+
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
@@ -204,9 +223,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             </div>
 
             {/* Editor */}
-            <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(255,0,0,0.1)', pointerEvents: 'none', padding: 4, fontSize: 10 }}>
-                    Debug: Mounted={editor ? 'Yes' : 'No'} | TldrawModule={TldrawModule ? 'Yes' : 'No'}
+            <div className="tldraw-container" style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(255,0,0,0.8)', color: 'white', pointerEvents: 'none', padding: 8, fontSize: 12, maxWidth: '100%' }}>
+                    Debug: Mounted={editor ? 'Yes' : 'No'} <br />
+                    {debugInfo || 'Waiting for update...'}
                 </div>
                 <Tldraw
                     persistenceKey="mindmap-editor-v3-clean"
