@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import './globals.css';
+import 'tldraw/tldraw.css';
 import Navigation from '@/components/Navigation';
 import { Providers } from '@/components/Providers';
 

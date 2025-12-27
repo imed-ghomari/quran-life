@@ -4,8 +4,8 @@ import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-// Import Tldraw CSS
-import 'tldraw/tldraw.css';
+// Import Tldraw CSS - moved to layout.tsx
+// import 'tldraw/tldraw.css';
 
 interface MindmapEditorProps {
     initialSnapshot?: any;
@@ -172,7 +172,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             </div>
 
             {/* Editor */}
-            <div style={{ flex: 1, position: 'relative' }}>
+            <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
                 <Tldraw
                     onMount={handleMount}
                     forceMobile={true}
