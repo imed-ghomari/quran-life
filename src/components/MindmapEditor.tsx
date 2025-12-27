@@ -29,6 +29,28 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         console.error("Tldraw crashed:", error, errorInfo);
     }
 
+    async handleHardReset() {
+        try {
+            console.log('Clearing storage...');
+            // Clear local storage
+            localStorage.clear();
+
+            // Clear IndexedDB
+            if (window.indexedDB && window.indexedDB.databases) {
+                const dbs = await window.indexedDB.databases();
+                for (const db of dbs) {
+                    if (db.name) {
+                        window.indexedDB.deleteDatabase(db.name);
+                        console.log('Deleted DB:', db.name);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to clear storage:', e);
+        }
+        window.location.reload();
+    }
+
     render() {
         if (this.state.hasError) {
             return (
@@ -36,12 +58,17 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
                     <div>
                         <h3>Editor crashed.</h3>
                         <p>{this.state.error?.message || 'Unknown error'}</p>
-                        <pre style={{ maxWidth: '100%', overflow: 'auto', textAlign: 'left', background: '#f0f0f0', padding: 10, fontSize: '0.8em' }}>
+                        <pre style={{ maxWidth: '100%', overflow: 'auto', textAlign: 'left', background: '#f0f0f0', padding: 10, fontSize: '0.8em', maxHeight: '200px' }}>
                             {this.state.error?.stack}
                         </pre>
-                        <button onClick={() => this.setState({ hasError: false, error: null })} style={{ marginTop: 10, padding: '8px 16px' }}>
-                            Reload
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px', marginTop: 10, justifyContent: 'center' }}>
+                            <button onClick={() => this.setState({ hasError: false, error: null })} style={{ padding: '8px 16px' }}>
+                                Try Reload
+                            </button>
+                            <button onClick={() => this.handleHardReset()} style={{ padding: '8px 16px', background: 'red', color: 'white', border: 'none', borderRadius: '4px' }}>
+                                Hard Reset (Clear Data)
+                            </button>
+                        </div>
                     </div>
                 </div>
             );

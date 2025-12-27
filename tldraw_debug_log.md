@@ -55,5 +55,15 @@
 *   **Result:** **Build Failed** with Terser error (`Unexpected token: punc ({)`).
 *   **Correction:** Reverted `swcMinify: false` (back to SWC). Kept `persistenceKey`.
 
+### 11. Corrupt LocalStorage & Minification
+*   **Action:** Added `persistenceKey="mindmap-editor-v3-clean"`.
+*   **Action:** Tried `swcMinify: false` (broke build, reverted).
+*   **Result:** Still blank screen (implied).
+
+### 12. Hard Reset UI
+*   **Hypothesis:** Corrupt IndexedDB data persists despite key change, or users need a manual way to purge bad state.
+*   **Action:** Added "Hard Reset" button to Error Boundary that clears `localStorage` and `IndexedDB`.
+*   **Goal:** Provide a fallback for users to self-heal the blank screen.
+
 ## Recommended Immediate Fix
-The `persistenceKey` change is the primary fix for the runtime crash. The minification change broke the build, so it was reverted. The Asset URL fix is also active.
+The **Hard Reset** button in the Error Boundary is the most powerful tool for solving data-corruption crashes in production. Ensure the user sees this UI.
