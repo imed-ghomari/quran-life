@@ -128,41 +128,38 @@ AppSettings {
 
 ---
 
-## 10. Tldraw Customizations (Preserved Features)
+### 10. Tldraw Customizations (Preserved Features)
 
-The Mindmap Editor (`src/components/MindmapEditor.tsx`) includes a custom Lasso Select tool. If this tool needs to be temporarily disabled for stability, the following implementation details should be used to restore it:
+The Mindmap Editor (`src/components/MindmapEditor.tsx`) has historically included several customizations that should be preserved or restored if removed.
 
-### Lasso Tool Implementation
+#### Core Functionality
+- **Lasso Tool**: A custom tool for selecting shapes using a freehand lasso polygon. (See implementation details in previous section).
+- **Auto-Save**: The editor automatically saves the snapshot and exports an image (PNG/SVG) when closed.
 
-To re-enable the Lasso tool:
-1.  **Import Tldraw Dependencies**: Ensure `StateNode`, `atom`, `pointInPolygon`, `polygonsIntersect` are imported from `tldraw` (dynamically in `useEffect`).
-2.  **Define Tool Classes**:
-    *   `IdleState` (transitions to `lassoing` on pointer down).
-    *   `LassoingState` (tracks pointer moves, updates an `atom` with points, and on pointer up selects shapes within the lasso polygon).
-    *   `LassoSelectTool` (parent `StateNode`, id: `'lasso-select'`).
-3.  **Register Tool**: Pass the tool classes to `setLassoTool`.
-4.  **UI Overrides**:
-    *   Use `uiOverrides` prop on `Tldraw` component to add the `lasso-select` tool to the registry.
-    *   Set `icon: 'color'`, `kbd: 'w'`.
-5.  **Custom Toolbar**:
-    *   Create a custom component for `Toolbar`.
-    *   Include `TldrawUiMenuItem` for the lasso tool.
-    *   Include standard tools (`SelectToolbarItem`, `HandToolbarItem`, `DrawToolbarItem`, `HighlightToolbarItem`, `EraserToolbarItem`).
-6.  **Lasso Overlay**:
-    *   Create a component using `useEditor`, `useValue` to render an SVG path of the lasso points on top of the canvas.
-    *   Pass this to the `components.Overlays` prop.
+#### Visual & Styling Configuration
+- **Stroke Settings (Freehand feel)**:
+  - **Smoothing**: Adjusted for smoother lines.
+  - **Streamline**: Increased to stabilize input.
+  - **Thinning**: Adjusted for consistent stroke width.
+  - *Implementation note*: These are typically set on the `TLShapeUtil` or global `Box` config if supported, or via `options` in `tldraw` initialization.
+- **Default Styles**:
+  - **Size**: Medium (`m`) by default.
+  - **Dash**: Solid (`solid`) by default.
+  - **Theme**: Automatically follows app theme (`inferDarkMode={true}`).
 
-### Code Snippet (Reference)
+#### UI & Layout
+- **Compact Mode**: `forceMobile={true}` to ensure a condensed interface suitable for all devices.
+- **Menu Visibility**:
+  - **Hidden Menus**: Page Menu, Debug Menu, Debug Panel, Share Menu.
+  - **Visible Menus**: Only the main Hamburger Menu (optional) or just the Toolbar.
+- **Toolbar Customization**:
+  - **Ordering**: Custom order of tools in the specific sequence:
+    1. Lasso Select (Custom)
+    2. Select (Standard)
+    3. Hand (Standard)
+    4. Draw (Standard)
+    5. Highlight (Standard)
+    6. Eraser (Standard)
 
-```typescript
-// Inside loadTldraw useEffect:
-class LassoingState extends StateNode {
-    // ... setup markId, points atom ...
-    override onPointerMove() { this.points.set([...this.points.get(), currentPoint]); }
-    override onPointerUp() { 
-        // Logic to filter shapes inside polygon and editor.setSelectedShapes(shapes)
-    }
-}
-// Render props:
-<Tldraw tools={[LassoSelectTool]} overrides={uiOverrides} components={components} />
-```
+### Lasso Tool Implementation (Reference)
+[... existing Lasso code details ...]

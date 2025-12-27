@@ -35,6 +35,17 @@ export default function RootLayout({
     return (
         <html lang="ar" dir="ltr">
             <body>
+                <Script id="unregister-sw" strategy="beforeInteractive">
+                    {`
+                        if ('serviceWorker' in navigator) {
+                            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                                for(let registration of registrations) {
+                                    registration.unregister();
+                                }
+                            });
+                        }
+                    `}
+                </Script>
                 <Providers>
                     <div className="app-shell">
                         <Navigation />
