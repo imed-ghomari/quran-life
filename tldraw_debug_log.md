@@ -6,60 +6,48 @@
 ## Attempts & Hypotheses
 
 ### 1. CSS Loading Strategy
-*   **Hypothesis:** `tldraw.css` was being purged or not loaded correctly on the client, or causing SSR mismatch.
-*   **Action:**
-    *   Moved from component-level import to dynamic CDN link tag. (Failed)
-    *   Restored component-level import `import 'tldraw/tldraw.css'`. (Failed: works locally, blank in prod)
-    *   Moved import to `src/app/layout.tsx` (Global import) to ensure it's always present. (Status: Applied, but didn't fix blank screen).
+*   **Hypothesis:** `tldraw.css` was being purged or not loaded correctly on the client.
+*   **Action:** Moved import to `src/app/layout.tsx`. (Status: Active).
 
 ### 2. SSR/Hydration Issues
-*   **Hypothesis:** `tldraw` components were trying to render on the server, causing hydration mismatch or crashes due to missing `window`/`canvas`.
-*   **Action:**
-    *   Implemented `MindmapEditor` using `next/dynamic` with `{ ssr: false }`.
-    *   Wrapped all `tldraw` logic (including custom tool definition) inside `useEffect`.
-    *   Used `ErrorBoundary` to catch React render errors. (Status: Applied, but no error UI shown, just blank).
+*   **Hypothesis:** `tldraw` components were trying to render on the server.
+*   **Action:** Using `next/dynamic` with `{ ssr: false }`.
 
 ### 3. Custom Tools (Lasso)
-*   **Hypothesis:** The custom `LassoSelectTool` implementation (using `StateNode` and `atom`) was causing memory leaks or infinite loops in production (minification issues?).
-*   **Action:**
-    *   Temporarily disabled/commented out the Custom Lasso Tool logic.
-    *   Reverted to standard `Tldraw` tools only. (Status: Applied, still blank).
-    *   Documented the custom feature logic in `system design` for future restoration.
+*   **Hypothesis:** Custom `LassoSelectTool` memory leaks.
+*   **Action:** Temporarily disabled custom tools, documented in system design. (Status: Active).
 
-### 4. Build Configuration (`next.config.mjs`)
-*   **Hypothesis:** improper handling of `tldraw` packages or `canvas` dependency in Vercel build.
-*   **Action:**
-    *   Added `transpilePackages: ['tldraw', ...]`
-    *   Added `webpack` config to ignore `canvas` on server. (Later removed to simplify).
-    *   Re-added `transpilePackages`. (Status: Active).
+### 4. Build Configuration
+*   **Hypothesis:** `canvas` dependency issues.
+*   **Action:** Added `transpilePackages`. (Status: Active).
 
 ### 5. Caching & Service Workers
-*   **Hypothesis:** Stale Service Worker cache (from `next-pwa`) was serving broken/old chunks.
-*   **Action:**
-    *   Set `pwa: { disable: true }` in `next.config.mjs`.
-    *   Added script to `layout.tsx` to **force unregister** all service workers on client load. (Status: Active).
+*   **Hypothesis:** Stale Service Worker cache.
+*   **Action:** Unregistered SWs in `layout.tsx`, disabled PWA. (Status: Active).
 
 ### 6. Container Dimensions
-*   **Hypothesis:** The `tldraw` container had 0 height in production due to CSS differences.
-*   **Action:**
-    *   Added explicit `width: 100%; height: 100%; min-height: 0;` to the wrapper `div`. (Status: Active).
-
-## Recommended Next Steps for Future Agent
-
-1.  **Verify `process.env.NODE_ENV` behavior**: Is there code stripping out Tldraw in production?
-2.  **Strict Mode**: Try disabling `reactStrictMode` in `next.config.mjs`. Double-mounting in strict mode can sometimes expose or cause crash-loops in complex libraries like Tldraw.
-3.  **Canvas/Polyfill**: The "few seconds" delay usually implies an async crash. It might be the specific `toImage` or snapshot loading logic running on mount.
-4.  **Tldraw Version**: Consider pinning `tldraw` to a specific stable version (currently `^4.2.1`).
-5.  **Vercel Logs**: If possible, get *runtime* logs from Vercel function (though this is Client Side, so browser console is key. "Blank screen" prevents seeing console if it crashes the renderer completely).
+*   **Hypothesis:** 0 height container.
+*   **Action:** Added explicit dimensions. (Status: Active).
 
 ### 7. React Strict Mode
-*   **Hypothesis:** Double-mounting in Strict Mode causes state machine corruption in Tldraw.
-*   **Action:**
-    *   Set `reactStrictMode: false` in `next.config.mjs`. (Status: Active).
-    *   **Result:** Still blank screen.
-    *   **Observation:** Screenshot shows Header is visible. App is NOT crashing. Tldraw component is rendering "white" (blank). `isLoading` is false. This implies `Tldraw` is mounted but invisible or rendering empty state.
+*   **Hypothesis:** Double-mounting issues.
+*   **Action:** `reactStrictMode: false`. (Status: Active).
 
-### 8. Snapshot Compatibility (Next Candidate)
-*   **Hypothesis:** The `initialSnapshot` passed to the editor might be incompatible (from older version?) or malformed, causing the store to initialize in a broken state without throwing a top-level error (or error is suppressed).
+### 8. Snapshot Compatibility
+*   **Hypothesis:** Corrupt initial data.
+*   **Action:** Disabled snapshot loading via commented code (restored now).
+
+### 9. Missing Assets
+*   **Hypothesis:** Icons/Fonts missing.
+*   **Action:** Hardcoded `defaultEditorAssetUrls`. (Status: Active).
+
+### 10. Corrupt LocalStorage & Minification (Current Focus)
+*   **Hypothesis:** 
+    1.  The Vercel production deployment has "dirty" data in `localStorage` from previous versions. Tldraw crashes when trying to reconcile this.
+    2.  SWC Minification is causing runtime errors in Tldraw's complex logic.
 *   **Action:**
-    *   Will disable snapshot loading temporarily to see if a fresh blank editor renders.
+    *   Add `persistenceKey="mindmap-editor-v3-clean"` to forcing a fresh store.
+    *   Set `swcMinify: false` in `next.config.mjs`.
+
+## Recommended Immediate Fix
+Implement **unique persistenceKey** and **swcMinify: false**.

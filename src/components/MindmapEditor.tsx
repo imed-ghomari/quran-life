@@ -176,6 +176,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             {/* Editor */}
             <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
                 <Tldraw
+                    persistenceKey="mindmap-editor-v3-clean"
                     onMount={handleMount}
                     forceMobile={true}
                     inferDarkMode={true}
