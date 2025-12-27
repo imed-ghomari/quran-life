@@ -82,6 +82,22 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
     const [TldrawModule, setTldrawModule] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Debug Effect to track editor state
+    const [debugInfo, setDebugInfo] = useState('');
+    useEffect(() => {
+        if (!editor) return;
+        const interval = setInterval(() => {
+            const shapes = editor.getCurrentPageShapeIds().size;
+            const camera = editor.getCamera();
+            const container = document.querySelector('.tldraw-container');
+            const dim = container ? `${container.clientWidth}x${container.clientHeight}` : 'N/A';
+            const htmlClass = document.documentElement.className;
+
+            setDebugInfo(`Shapes: ${shapes} | Zoom: ${camera.z.toFixed(2)} | Pos: ${camera.x.toFixed(0)},${camera.y.toFixed(0)} | Dim: ${dim} | Theme: ${editor.user.getIsDarkMode() ? 'Dark' : 'Light'} | HTML: ${htmlClass}`);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [editor]);
+
     // Dynamic import of Tldraw
     useEffect(() => {
         let mounted = true;
@@ -183,24 +199,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     const { Tldraw, defaultEditorAssetUrls } = TldrawModule;
 
-    // Debug Effect to track editor state
-    const [debugInfo, setDebugInfo] = useState('');
-    useEffect(() => {
-        if (!editor) return;
-        const interval = setInterval(() => {
-            const shapes = editor.getCurrentPageShapeIds().size;
-            const camera = editor.getCamera();
-            const container = document.querySelector('.tldraw-container');
-            const dim = container ? `${container.clientWidth}x${container.clientHeight}` : 'N/A';
-            const htmlClass = document.documentElement.className;
-
-            setDebugInfo(`Shapes: ${shapes} | Zoom: ${camera.z.toFixed(2)} | Pos: ${camera.x.toFixed(0)},${camera.y.toFixed(0)} | Dim: ${dim} | Theme: ${editor.user.getIsDarkMode() ? 'Dark' : 'Light'} | HTML: ${htmlClass}`);
-
-            // Log once if suspicious
-            if (shapes === 0 && camera.z === 1) console.warn('Suspicious: 0 shapes, default camera');
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [editor]);
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
