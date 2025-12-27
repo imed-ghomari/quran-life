@@ -15,14 +15,14 @@ interface MindmapEditorProps {
 }
 
 // Simple Error Boundary
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
     constructor(props: any) {
         super(props);
-        this.state = { hasError: false };
+        this.state = { hasError: false, error: null };
     }
 
     static getDerivedStateFromError(error: any) {
-        return { hasError: true };
+        return { hasError: true, error };
     }
 
     componentDidCatch(error: any, errorInfo: any) {
@@ -32,11 +32,14 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     render() {
         if (this.state.hasError) {
             return (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center', color: 'red' }}>
                     <div>
                         <h3>Editor crashed.</h3>
-                        <p>Check console for details.</p>
-                        <button onClick={() => this.setState({ hasError: false })} style={{ marginTop: 10, padding: '8px 16px' }}>
+                        <p>{this.state.error?.message || 'Unknown error'}</p>
+                        <pre style={{ maxWidth: '100%', overflow: 'auto', textAlign: 'left', background: '#f0f0f0', padding: 10, fontSize: '0.8em' }}>
+                            {this.state.error?.stack}
+                        </pre>
+                        <button onClick={() => this.setState({ hasError: false, error: null })} style={{ marginTop: 10, padding: '8px 16px' }}>
                             Reload
                         </button>
                     </div>
