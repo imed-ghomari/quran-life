@@ -49,5 +49,11 @@
     *   Add `persistenceKey="mindmap-editor-v3-clean"` to forcing a fresh store.
     *   Set `swcMinify: false` in `next.config.mjs`.
 
+### 11. Corrupt LocalStorage & Minification
+*   **Action:** Added `persistenceKey="mindmap-editor-v3-clean"`.
+*   **Action:** Tried `swcMinify: false`.
+*   **Result:** **Build Failed** with Terser error (`Unexpected token: punc ({)`).
+*   **Correction:** Reverted `swcMinify: false` (back to SWC). Kept `persistenceKey`.
+
 ## Recommended Immediate Fix
-Implement **unique persistenceKey** and **swcMinify: false**.
+The `persistenceKey` change is the primary fix for the runtime crash. The minification change broke the build, so it was reverted. The Asset URL fix is also active.
