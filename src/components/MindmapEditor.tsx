@@ -88,8 +88,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     const handleMount = useCallback((editorInstance: any) => {
         setEditor(editorInstance);
-        /* 
-        // Temporarily disabled snapshot loading to debug blank screen issue
+
+        // Restore snapshot loading
         if (initialSnapshot && TldrawModule) {
             try {
                 TldrawModule.loadSnapshot(editorInstance.store, initialSnapshot);
@@ -97,7 +97,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 console.warn('Failed to load snapshot', e);
             }
         }
-        */
     }, [initialSnapshot, TldrawModule]);
 
     const handleClose = async () => {
@@ -152,7 +151,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
         );
     }
 
-    const { Tldraw } = TldrawModule;
+    const { Tldraw, defaultEditorAssetUrls } = TldrawModule;
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
@@ -178,9 +177,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
                 <Tldraw
                     onMount={handleMount}
-                // forceMobile={true} 
-                // inferDarkMode={true}
-                // components={components}
+                    forceMobile={true}
+                    inferDarkMode={true}
+                    assetUrls={defaultEditorAssetUrls}
+                    components={components}
                 />
             </div>
         </div>
