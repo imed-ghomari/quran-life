@@ -227,12 +227,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                     Debug: Mounted={editor ? 'Yes' : 'No'} <br />
                     {debugInfo || 'Waiting for update...'}
                 </div>
-                <Tldraw
-                    onMount={handleMount}
-                    forceMobile={true}
-                    inferDarkMode={true}
-                    assetUrls={defaultEditorAssetUrls}
-                />
+                <Tldraw />
             </div>
         </div>
     );
