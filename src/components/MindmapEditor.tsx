@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { X, Save, Share2, Maximize2, Minimize2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 import dynamic from 'next/dynamic';
 import { Tldraw, defaultEditorAssetUrls, DefaultDashStyle, DefaultSizeStyle } from 'tldraw';
 import 'tldraw/tldraw.css';
