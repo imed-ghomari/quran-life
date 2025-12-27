@@ -88,6 +88,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     const handleMount = useCallback((editorInstance: any) => {
         setEditor(editorInstance);
+        /* 
+        // Temporarily disabled snapshot loading to debug blank screen issue
         if (initialSnapshot && TldrawModule) {
             try {
                 TldrawModule.loadSnapshot(editorInstance.store, initialSnapshot);
@@ -95,6 +97,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 console.warn('Failed to load snapshot', e);
             }
         }
+        */
     }, [initialSnapshot, TldrawModule]);
 
     const handleClose = async () => {
@@ -175,12 +178,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
                 <Tldraw
                     onMount={handleMount}
-                    forceMobile={true}
-                    inferDarkMode={true}
-                    // Use standard tools
-                    // tools={LassoTool ? [LassoTool.LassoSelectTool] : []}
-                    // overrides={uiOverrides}
-                    components={components}
+                // forceMobile={true} 
+                // inferDarkMode={true}
+                // components={components}
                 />
             </div>
         </div>

@@ -52,7 +52,14 @@
 4.  **Tldraw Version**: Consider pinning `tldraw` to a specific stable version (currently `^4.2.1`).
 5.  **Vercel Logs**: If possible, get *runtime* logs from Vercel function (though this is Client Side, so browser console is key. "Blank screen" prevents seeing console if it crashes the renderer completely).
 
-## Current Code State
-*   `MindmapEditor.tsx`: Simplified, Standard Tools, `ssr: false`, Error Boundary, commented-out Custom Lasso code.
-*   `layout.tsx`: Unregisters SW, imports `tldraw.css`.
-*   `next.config.mjs`: PWA disabled, Transpilation enabled.
+### 7. React Strict Mode
+*   **Hypothesis:** Double-mounting in Strict Mode causes state machine corruption in Tldraw.
+*   **Action:**
+    *   Set `reactStrictMode: false` in `next.config.mjs`. (Status: Active).
+    *   **Result:** Still blank screen.
+    *   **Observation:** Screenshot shows Header is visible. App is NOT crashing. Tldraw component is rendering "white" (blank). `isLoading` is false. This implies `Tldraw` is mounted but invisible or rendering empty state.
+
+### 8. Snapshot Compatibility (Next Candidate)
+*   **Hypothesis:** The `initialSnapshot` passed to the editor might be incompatible (from older version?) or malformed, causing the store to initialize in a broken state without throwing a top-level error (or error is suppressed).
+*   **Action:**
+    *   Will disable snapshot loading temporarily to see if a fresh blank editor renders.
