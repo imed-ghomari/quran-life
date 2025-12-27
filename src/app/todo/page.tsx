@@ -457,7 +457,7 @@ export default function TodoPage() {
         setSettingsVersion(v => v + 1);
     };
 
-    const handleEditorSave = (snapshot: any, imageBlob?: Blob) => {
+    const handleEditorSave = async (snapshot: any, imageBlob?: Blob) => {
         if (!activeMindmapEditor) return;
 
         const { surahId } = activeMindmapEditor;
@@ -487,7 +487,7 @@ export default function TodoPage() {
         }
     };
 
-    const handlePartEditorSave = (snapshot: any, imageBlob?: Blob) => {
+    const handlePartEditorSave = async (snapshot: any, imageBlob?: Blob) => {
         if (!activePartEditor) return;
 
         const { partId } = activePartEditor;
