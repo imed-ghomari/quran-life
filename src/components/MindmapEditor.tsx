@@ -202,6 +202,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
+            <link rel="stylesheet" href="https://unpkg.com/tldraw/tldraw.css" />
             {/* Header */}
             <div style={{
                 height: '50px',
