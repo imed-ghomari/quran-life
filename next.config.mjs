@@ -12,11 +12,9 @@ const withPWA = withPWAInit({
 const nextConfig = {
   productionBrowserSourceMaps: true, // Enable source maps for debugging
   reactStrictMode: false, // Disabled to prevent double-mount issues with Tldraw
-  swcMinify: false, // Disabled to prevent class name mangling issues with Tldraw
   // Transpile tldraw packages to ensure proper production build
   transpilePackages: ['tldraw', '@tldraw/tldraw', '@tldraw/editor', '@tldraw/tlschema'],
   webpack: (config) => {
-    config.optimization.minimize = false; // Disable minimization to prevent Terser errors
     config.externals.push({
       'utf-8-validate': 'commonjs utf-8-validate',
       'bufferutil': 'commonjs bufferutil',

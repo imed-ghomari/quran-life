@@ -93,3 +93,8 @@ Switch to static imports + `ssr: false`. This is the standard Next.js pattern fo
 ### 20. Hosting Pivot
 * **Status:** Build fixed locally (Type errors resolved). Vercel deployment retry is possible.
 * **Recommendation:** Switch to **Railway** (Container) to resolve persistent environment-specific blank screen issues. Vercel's serverless bundler is the likely culprit.
+
+### 21. Local CSS Strategy
+* **Action:** Downloaded Tldraw CSS to `public/tldraw-local.css` and updated `MindmapEditor` to use it.
+* **Action:** Restored standard SWC minification after fixing the `useAuth` build error.
+* **Hypothesis:** CDN styles were failing to load or were being blocked/mismatched in production.

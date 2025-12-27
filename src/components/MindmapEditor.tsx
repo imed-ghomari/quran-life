@@ -108,15 +108,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
-            {/* Forced CDN CSS for safety */}
-            <link rel="stylesheet" href="https://unpkg.com/tldraw/tldraw.css" />
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .tldraw-container canvas, .tldraw-container div, .tl-context-menu {
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                }
-            ` }} />
+            {/* Local CSS to ensure availability in production */}
+            <link rel="stylesheet" href="/tldraw-local.css" />
 
             {/* Header */}
             <div style={{
