@@ -10,7 +10,8 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Removed custom webpack config to rely on Next.js defaults
+  // Transpile tldraw packages to ensure proper production build
+  transpilePackages: ['tldraw', '@tldraw/tldraw', '@tldraw/editor', '@tldraw/tlschema'],
 };
 
 export default withPWA(nextConfig);

@@ -329,7 +329,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             <div style={{ flex: 1, position: 'relative' }}>
                 <Tldraw
                     onMount={handleMount}
-                    forceMobile={false}
+                    forceMobile={true}
                     inferDarkMode={true}
                     tools={LassoTool ? [LassoTool.LassoSelectTool] : []}
                     overrides={uiOverrides}
