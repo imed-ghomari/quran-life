@@ -5,11 +5,41 @@ import { usePathname } from 'next/navigation';
 import { X, Save, Share2, Maximize2, Minimize2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import dynamic from 'next/dynamic';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-
-// Static import (relying on ssr: false wrapper)
 import { Tldraw, defaultEditorAssetUrls, DefaultDashStyle, DefaultSizeStyle } from 'tldraw';
 import 'tldraw/tldraw.css';
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error: any) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error: any, errorInfo: any) {
+        console.error('ErrorBoundary caught error:', error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ padding: 20, color: 'red', background: 'white', overflow: 'auto', height: '100%' }}>
+                    <h3>Editor Crashed</h3>
+                    <p>{this.state.error?.message}</p>
+                    <button
+                        onClick={() => {
+                            localStorage.clear(); // Clear all for safety or specific key
+                            window.location.reload();
+                        }}
+                        style={{ padding: '8px 16px', background: '#ff4444', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                    >
+                        Hard Reset & Reload
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 interface MindmapEditorProps {
     initialSnapshot?: any;
