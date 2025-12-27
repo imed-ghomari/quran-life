@@ -457,7 +457,7 @@ export default function TodoPage() {
         setSettingsVersion(v => v + 1);
     };
 
-    const handleEditorSave = (snapshot: any, imageBlob: Blob) => {
+    const handleEditorSave = (snapshot: any, imageBlob?: Blob) => {
         if (!activeMindmapEditor) return;
 
         const { surahId } = activeMindmapEditor;
@@ -467,7 +467,7 @@ export default function TodoPage() {
             const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
             saveMindMap({
                 ...existing,
-                imageUrl: imageBlob.size > 0 ? imageUrl : existing.imageUrl,
+                imageUrl: imageBlob && imageBlob.size > 0 ? imageUrl : existing.imageUrl,
                 tldrawSnapshot: snapshot
             });
             setSettingsVersion(v => v + 1);
@@ -475,7 +475,7 @@ export default function TodoPage() {
             syncWithCloud().catch(console.error);
         };
 
-        if (imageBlob.size > 0) {
+        if (imageBlob && imageBlob.size > 0) {
             reader.readAsDataURL(imageBlob);
         } else {
             // Just save snapshot
@@ -487,7 +487,7 @@ export default function TodoPage() {
         }
     };
 
-    const handlePartEditorSave = (snapshot: any, imageBlob: Blob) => {
+    const handlePartEditorSave = (snapshot: any, imageBlob?: Blob) => {
         if (!activePartEditor) return;
 
         const { partId } = activePartEditor;
@@ -497,7 +497,7 @@ export default function TodoPage() {
             const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
             savePartMindMap({
                 ...existing,
-                imageUrl: imageBlob.size > 0 ? imageUrl : existing.imageUrl,
+                imageUrl: imageBlob && imageBlob.size > 0 ? imageUrl : existing.imageUrl,
                 tldrawSnapshot: snapshot
             });
             setSettingsVersion(v => v + 1);
@@ -505,7 +505,7 @@ export default function TodoPage() {
             syncWithCloud().catch(console.error);
         };
 
-        if (imageBlob.size > 0) {
+        if (imageBlob && imageBlob.size > 0) {
             reader.readAsDataURL(imageBlob);
         } else {
             const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
