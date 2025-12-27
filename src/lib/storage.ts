@@ -10,6 +10,25 @@ import { get, set, createStore } from 'idb-keyval';
 // Storage Engine Migration & Helpers
 // ========================================
 
+const STORAGE_KEYS = {
+    SETTINGS: 'quran-app-settings',
+    MEMORY_NODES: 'quran-app-memory-nodes',
+    MINDMAPS: 'quran-app-mindmaps',
+    PART_MINDMAPS: 'quran-app-part-mindmaps',
+    LISTENING_PROGRESS: 'quran-app-listening-progress',
+    LISTENING_STATS: 'quran-app-listening-stats',
+    CYCLE_START: 'quran-app-cycle-start',
+    LISTENING_COMPLETE: 'quran-app-listening-complete',
+    REVIEW_ERRORS: 'quran-app-review-errors',
+    MUTASHABIHAT_DECISIONS: 'quran-app-mutashabihat-decisions',
+    CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
+    LAST_MODIFIED: 'quran-app-last-modified',
+};
+
+const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
+
+
+
 const customStore = typeof window !== 'undefined' ? createStore('quran-app-db', 'quran-app-store') : undefined;
 
 /**
@@ -71,20 +90,7 @@ function getFromCache<T>(key: string, defaultValue: T): T {
     return cached !== undefined ? cached : defaultValue;
 }
 
-const STORAGE_KEYS = {
-    SETTINGS: 'quran-app-settings',
-    MEMORY_NODES: 'quran-app-memory-nodes',
-    MINDMAPS: 'quran-app-mindmaps',
-    PART_MINDMAPS: 'quran-app-part-mindmaps',
-    LISTENING_PROGRESS: 'quran-app-listening-progress',
-    LISTENING_STATS: 'quran-app-listening-stats',
-    CYCLE_START: 'quran-app-cycle-start',
-    LISTENING_COMPLETE: 'quran-app-listening-complete',
-    REVIEW_ERRORS: 'quran-app-review-errors',
-    MUTASHABIHAT_DECISIONS: 'quran-app-mutashabihat-decisions',
-    CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
-    LAST_MODIFIED: 'quran-app-last-modified',
-};
+// (Moved to top)
 
 // ========================================
 // Cross-tab Synchronization
@@ -110,7 +116,7 @@ if (storageChannel) {
     };
 }
 
-const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
+// (Moved to top)
 
 function saveToCacheAndStore(key: string, value: any) {
     storageCache[key] = value;
