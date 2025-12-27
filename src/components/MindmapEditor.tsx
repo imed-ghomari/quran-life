@@ -18,8 +18,42 @@ interface MindmapEditorProps {
     title?: string;
 }
 
-// This is the actual editor component that will be loaded client-side only
-function MindmapEditorInner({ initialSnapshot, onSave, onClose, title }: MindmapEditorProps) {
+// Simple Error Boundary
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError(error: any) {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error: any, errorInfo: any) {
+        console.error("Tldraw crashed:", error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center' }}>
+                    <div>
+                        <h3>Something went wrong with the editor.</h3>
+                        <p>Detailed error logged to console.</p>
+                        <button onClick={() => this.setState({ hasError: false })} style={{ marginTop: 10, padding: '8px 16px' }}>
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
+// Inner component content
+function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
     const [TldrawModule, setTldrawModule] = useState<any>(null);
     const [LassoTool, setLassoTool] = useState<any>(null);
@@ -359,6 +393,7 @@ function MindmapEditorInner({ initialSnapshot, onSave, onClose, title }: Mindmap
             {/* Tldraw Container */}
             <div style={{ flex: 1, position: 'relative' }}>
                 <Tldraw
+                    persistenceKey="mindmap-editor-persistence"
                     onMount={handleMount}
                     forceMobile={true}
                     inferDarkMode={true}
@@ -368,6 +403,15 @@ function MindmapEditorInner({ initialSnapshot, onSave, onClose, title }: Mindmap
                 />
             </div>
         </div>
+    );
+}
+
+// Wrapper to include ErrorBoundary
+function MindmapEditorInner(props: MindmapEditorProps) {
+    return (
+        <ErrorBoundary>
+            <MindmapEditorContent {...props} />
+        </ErrorBoundary>
     );
 }
 

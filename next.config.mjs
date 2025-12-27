@@ -8,19 +8,9 @@ const withPWA = withPWAInit({
 });
 
 /** @type {import('next').NextConfig} */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Transpile tldraw packages to ensure proper production build
-  transpilePackages: ['tldraw', '@tldraw/tldraw', '@tldraw/editor', '@tldraw/tlschema'],
-  // Webpack config to handle tldraw's dynamic imports properly
-  webpack: (config, { isServer }) => {
-    // Tldraw uses some browser-only APIs, skip on server
-    if (isServer) {
-      config.externals.push({
-        canvas: 'commonjs canvas',
-      });
-    }
-    return config;
-  },
+  // Removed custom webpack config to rely on Next.js defaults
 };
 
 export default withPWA(nextConfig);
