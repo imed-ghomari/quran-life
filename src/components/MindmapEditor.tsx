@@ -222,12 +222,16 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
             </div>
 
             {/* Editor */}
-            <div className="tldraw-container" style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
+            <div className="tldraw-container" style={{ position: 'absolute', top: '50px', left: 0, right: 0, bottom: 0, background: '#f8f9fa' }}>
                 <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(255,0,0,0.8)', color: 'white', pointerEvents: 'none', padding: 8, fontSize: 12, maxWidth: '100%' }}>
                     Debug: Mounted={editor ? 'Yes' : 'No'} <br />
                     {debugInfo || 'Waiting for update...'}
                 </div>
-                <Tldraw />
+                <Tldraw
+                    onMount={handleMount}
+                    inferDarkMode={true}
+                    assetUrls={defaultEditorAssetUrls}
+                />
             </div>
         </div>
     );
