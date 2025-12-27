@@ -3,117 +3,8 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 
-// Note: Tldraw CSS is loaded dynamically with the module to avoid SSR issues
-
-// ============================================
-// Lasso Select Tool (from tldraw examples)
-// ============================================
-
-import {
-    atom,
-    pointInPolygon,
-    polygonsIntersect,
-    StateNode,
-    TLPointerEventInfo,
-    TLShape,
-    VecModel,
-} from 'tldraw';
-
-export class LassoSelectTool extends StateNode {
-    static override id = 'lasso-select';
-    static override children() {
-        return [IdleState, LassoingState];
-    }
-    static override initial = 'idle';
-}
-
-class IdleState extends StateNode {
-    static override id = 'idle';
-
-    override onPointerDown(info: TLPointerEventInfo) {
-        const { editor } = this;
-        editor.selectNone();
-        this.parent.transition('lassoing', info);
-    }
-}
-
-export class LassoingState extends StateNode {
-    static override id = 'lassoing';
-
-    info = {} as TLPointerEventInfo;
-    markId = null as null | string;
-    points = atom<VecModel[]>('lasso points', []);
-
-    override onEnter(info: TLPointerEventInfo) {
-        this.points.set([]);
-        this.markId = null;
-        this.info = info;
-        this.startLasso();
-    }
-
-    private startLasso() {
-        this.markId = this.editor.markHistoryStoppingPoint('lasso start');
-    }
-
-    override onPointerMove(): void {
-        this.addPointToLasso();
-    }
-
-    private addPointToLasso() {
-        const { inputs } = this.editor;
-        const { x, y, z } = inputs.currentPagePoint.toFixed();
-        const newPoint = { x, y, z };
-        this.points.set([...this.points.get(), newPoint]);
-    }
-
-    private getShapesInLasso() {
-        const { editor } = this;
-        const shapes = editor.getCurrentPageRenderingShapesSorted();
-        const lassoPoints = this.points.get();
-        const shapesInLasso = shapes.filter((shape) => {
-            return this.doesLassoFullyContainShape(lassoPoints, shape);
-        });
-        return shapesInLasso;
-    }
-
-    private doesLassoFullyContainShape(lassoPoints: VecModel[], shape: TLShape): boolean {
-        const { editor } = this;
-        const geometry = editor.getShapeGeometry(shape);
-        const pageTransform = editor.getShapePageTransform(shape);
-        const shapeVertices = pageTransform.applyToPoints(geometry.vertices);
-
-        const allVerticesInside = shapeVertices.every((vertex) => {
-            return pointInPolygon(vertex, lassoPoints);
-        });
-
-        if (!allVerticesInside) {
-            return false;
-        }
-
-        if (geometry.isClosed) {
-            if (polygonsIntersect(shapeVertices, lassoPoints)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    override onPointerUp(): void {
-        this.complete();
-    }
-
-    override onComplete() {
-        this.complete();
-    }
-
-    complete() {
-        const { editor } = this;
-        const shapesInLasso = this.getShapesInLasso();
-        editor.setSelectedShapes(shapesInLasso);
-        editor.setCurrentTool('select');
-    }
-}
+// Import Tldraw CSS - this is required for proper styling
+import 'tldraw/tldraw.css';
 
 // ============================================
 // MindmapEditor Component
@@ -133,18 +24,6 @@ export default function MindmapEditor({ initialSnapshot, onSave, onClose, title 
 
     // Dynamically import Tldraw on client side only
     useEffect(() => {
-        // Load CSS via a link tag to avoid SSR/TS issues with dynamic CSS import
-        if (typeof document !== 'undefined') {
-            const existingLink = document.querySelector('link[data-tldraw-css]');
-            if (!existingLink) {
-                const link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.setAttribute('data-tldraw-css', 'true');
-                link.href = 'https://unpkg.com/tldraw@2/tldraw.css';
-                document.head.appendChild(link);
-            }
-        }
-
         import('tldraw').then((mod) => {
             // Set default styles for solid stroke, medium size
             mod.DefaultDashStyle.setDefaultValue('solid');
@@ -219,119 +98,21 @@ export default function MindmapEditor({ initialSnapshot, onSave, onClose, title 
         }
     };
 
-    // UI overrides for lasso select tool
-    const uiOverrides = useMemo(() => {
+    // Custom components to hide unnecessary UI elements
+    const components = useMemo(() => {
         if (!TldrawModule) return undefined;
 
-        return {
-            tools(editorInst: any, tools: any) {
-                tools['lasso-select'] = {
-                    id: 'lasso-select',
-                    icon: 'color',
-                    label: 'Lasso Select',
-                    kbd: 'w',
-                    onSelect: () => {
-                        editorInst.setCurrentTool('lasso-select');
-                    },
-                };
-                return tools;
-            },
-        };
-    }, [TldrawModule]);
-
-    // Lasso overlay component
-    const LassoSelectSvgComponent = useMemo(() => {
-        if (!TldrawModule) return null;
-
-        const { useEditor: useTldrawEditor, useValue, getStrokePoints, getSvgPathFromStrokePoints } = TldrawModule;
-
-        return function LassoOverlay() {
-            const editorInst = useTldrawEditor();
-
-            const lassoPoints = useValue(
-                'lasso points',
-                () => {
-                    if (!editorInst.isIn('lasso-select.lassoing')) return [];
-                    const lassoing = editorInst.getStateDescendant('lasso-select.lassoing') as LassoingState;
-                    return lassoing.points.get();
-                },
-                [editorInst]
-            );
-
-            const svgPath = useMemo(() => {
-                const smoothedPoints = getStrokePoints(lassoPoints);
-                const svgPathStr = getSvgPathFromStrokePoints(smoothedPoints, true);
-                return svgPathStr;
-            }, [lassoPoints]);
-
-            return (
-                <>
-                    {lassoPoints.length > 0 && (
-                        <svg className="tl-overlays__item" aria-hidden="true">
-                            <path
-                                d={svgPath}
-                                fill="var(--color-selection-fill)"
-                                opacity={0.5}
-                                stroke="var(--color-selection-stroke)"
-                                strokeWidth="calc(2px / var(--tl-zoom))"
-                            />
-                        </svg>
-                    )}
-                </>
-            );
-        };
-    }, [TldrawModule]);
-
-    // Custom components with lasso first, then other tools
-    const components = useMemo(() => {
-        if (!TldrawModule || !LassoSelectSvgComponent) return undefined;
-
-        const {
-            DefaultToolbar,
-            TldrawUiMenuGroup,
-            TldrawUiMenuItem,
-            TldrawOverlays,
-            SelectToolbarItem,
-            HandToolbarItem,
-            DrawToolbarItem,
-            HighlightToolbarItem,
-            EraserToolbarItem,
-            useTools,
-            useIsToolSelected,
-        } = TldrawModule;
+        const { DefaultToolbar, TldrawOverlays } = TldrawModule;
 
         return {
-            Toolbar: () => {
-                const tools = useTools();
-                const isLassoSelected = useIsToolSelected(tools['lasso-select']);
-                return (
-                    <DefaultToolbar>
-                        <TldrawUiMenuGroup id="mindmap-tools">
-                            {/* Lasso Select first */}
-                            <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
-                            <SelectToolbarItem />
-                            <HandToolbarItem />
-                            <DrawToolbarItem />
-                            <HighlightToolbarItem />
-                            <EraserToolbarItem />
-                        </TldrawUiMenuGroup>
-                    </DefaultToolbar>
-                );
-            },
-            // Keep MainMenu for import functionality (not overridden)
+            // Use default toolbar
+            Toolbar: DefaultToolbar,
             // Hide these
             PageMenu: null,
             DebugMenu: null,
             DebugPanel: null,
-            // Custom overlays for lasso
-            Overlays: () => (
-                <>
-                    <TldrawOverlays />
-                    <LassoSelectSvgComponent />
-                </>
-            ),
         };
-    }, [TldrawModule, LassoSelectSvgComponent]);
+    }, [TldrawModule]);
 
     if (isLoading || !TldrawModule) {
         return (
@@ -405,8 +186,6 @@ export default function MindmapEditor({ initialSnapshot, onSave, onClose, title 
                     onMount={handleMount}
                     forceMobile={true}
                     inferDarkMode={true}
-                    tools={[LassoSelectTool]}
-                    overrides={uiOverrides}
                     components={components}
                 />
             </div>
