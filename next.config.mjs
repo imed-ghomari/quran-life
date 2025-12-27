@@ -16,6 +16,7 @@ const nextConfig = {
   // Transpile tldraw packages to ensure proper production build
   transpilePackages: ['tldraw', '@tldraw/tldraw', '@tldraw/editor', '@tldraw/tlschema'],
   webpack: (config) => {
+    config.optimization.minimize = false; // Disable minimization to prevent Terser errors
     config.externals.push({
       'utf-8-validate': 'commonjs utf-8-validate',
       'bufferutil': 'commonjs bufferutil',
