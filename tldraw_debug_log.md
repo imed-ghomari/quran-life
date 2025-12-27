@@ -65,5 +65,17 @@
 *   **Action:** Added "Hard Reset" button to Error Boundary that clears `localStorage` and `IndexedDB`.
 *   **Goal:** Provide a fallback for users to self-heal the blank screen.
 
+### 13. Circular Dependency / ReferenceError (FIXED)
+*   **Discovery:** Browser console showed `ReferenceError: Cannot access 'o' before initialization` in `storage.ts`.
+*   **Cause:** Variable hoisting of `STORAGE_KEYS` which was used before definition in module scope.
+*   **Action:** Moved `STORAGE_KEYS` definition to top of `storage.ts`. (Status: Active).
+*   **Result:** Error gone, but blank screen persists (or user reported license warning).
+
+### 14. License Warning & Debug Overlay
+*   **Issue:** Console shows "No tldraw license key provided". This is expected for free use but user wants it gone/fixed.
+*   **Action:**
+    *   Added VISIBLE debug overlay to `MindmapEditor.tsx` ("Debug: Mounted=...").
+    *   This will diagnose if the component mounts successfully (and is just invisible) or fails to mount.
+
 ## Recommended Immediate Fix
-The **Hard Reset** button in the Error Boundary is the most powerful tool for solving data-corruption crashes in production. Ensure the user sees this UI.
+Use the **Debug Overlay** info to determine if `onMount` fires. If it does (`Mounted=Yes`), then the issue is strictly CSS/Rendering/Assets. If `Mounted=No`, the component crashed before mounting (props/dependencies).

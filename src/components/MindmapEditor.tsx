@@ -205,6 +205,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
             {/* Editor */}
             <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', minHeight: '0', background: '#f8f9fa' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(255,0,0,0.1)', pointerEvents: 'none', padding: 4, fontSize: 10 }}>
+                    Debug: Mounted={editor ? 'Yes' : 'No'} | TldrawModule={TldrawModule ? 'Yes' : 'No'}
+                </div>
                 <Tldraw
                     persistenceKey="mindmap-editor-v3-clean"
                     onMount={handleMount}
