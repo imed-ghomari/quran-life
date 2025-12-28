@@ -67,7 +67,7 @@ export default function Navigation() {
                 return activePart === 5 || surahMeta?.part === activePart;
             }).length;
 
-            const due = getDueNodes(activePart).length;
+            const due = getDueNodes().length;
             const listeningComplete = getListeningCompletedToday();
 
             setPendingCount(incompleteSurahMaps + incompletePartMaps + suspendedInPart + similarityChecks);

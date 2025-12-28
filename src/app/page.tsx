@@ -171,7 +171,7 @@ export default function TodayPage() {
         // This prevents "skipping" cards when background sync happens
         if (dueNodes.length === 0 || currentReviewIndex === 0) {
             const settings = getSettings();
-            setDueNodes(getDueNodes(settings.activePart));
+            setDueNodes(getDueNodes());
         }
         setListeningComplete(getListeningCompletedToday());
     }, [settingsVersion, isLoaded]);

@@ -337,7 +337,7 @@ export function saveMemoryNodes(nodes: MemoryNode[]): void {
     saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, Array.from(uniqueMap.values()));
 }
 
-export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
+export function getDueNodes(): MemoryNode[] {
     const today = new Date().toISOString().split('T')[0];
     const settings = getSettings();
     const skips = new Set(settings.skippedSurahs || []);
@@ -360,17 +360,6 @@ export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
                 return pmm?.isComplete && pmm?.imageUrl;
             }
             return true;
-        })
-        .filter(n => {
-            if (!filterPart || filterPart === 5) return true;
-            if (n.surahId) {
-                const surah = SURAHS.find(s => s.id === n.surahId);
-                return surah && surah.part === filterPart;
-            }
-            if (n.partId) {
-                return n.partId === filterPart;
-            }
-            return true;
         });
 }
 
@@ -385,13 +374,15 @@ export function updateMemoryNode(node: MemoryNode): void {
     saveMemoryNodes(nodes);
 }
 
-function createNewScheduler(): SM2State {
-    const today = new Date().toISOString().split('T')[0];
+function createNewScheduler(staggerDays: number = 0): SM2State {
+    const today = new Date();
+    today.setDate(today.getDate() + staggerDays);
+    const dueDate = today.toISOString().split('T')[0];
     return {
         interval: 0,
         repetition: 0,
         easeFactor: 2.5,
-        dueDate: today,
+        dueDate: dueDate,
         lastReview: '',
     };
 }
@@ -409,21 +400,49 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     }
 
     const newNodes: MemoryNode[] = [];
+    const mindmaps = getMindMaps();
+    const partMindmaps = getPartMindMaps();
+    const skips = new Set(settings.skippedSurahs || []);
 
-    // 1. Keep non-verse nodes unless forceFullReset
-    if (!forceFullReset) {
-        newNodes.push(...currentNodes.filter(n => n.type !== 'verse'));
-    }
+    // 1. Sync / Preserve Mindmap Nodes
+    Object.values(mindmaps).forEach(mm => {
+        if (mm.isComplete && !skips.has(mm.surahId)) {
+            const nodeId = `mindmap-${mm.surahId}`;
+            const existing = currentNodes.find(n => n.id === nodeId);
+            newNodes.push({
+                id: nodeId,
+                type: 'mindmap',
+                surahId: mm.surahId,
+                scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
+            });
+        }
+    });
 
-    // 2. Group verses into segments of 5
+    // 2. Sync / Preserve Part Mindmap Nodes
+    Object.values(partMindmaps).forEach(pmm => {
+        if (pmm.isComplete) {
+            const nodeId = `part-mindmap-${pmm.partId}`;
+            const existing = currentNodes.find(n => n.id === nodeId);
+            newNodes.push({
+                id: nodeId,
+                type: 'part_mindmap',
+                partId: pmm.partId,
+                scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
+            });
+        }
+    });
+
+    // 3. Group verses into segments of 5 and Sync
     Object.entries(settings.learnedVerses).forEach(([surahIdStr, verses]) => {
         const surahId = parseInt(surahIdStr);
-        if (verses.length === 0) return;
+        if (verses.length === 0 || skips.has(surahId)) return;
 
         // Create segments of 5 verses
         const sortedVerses = [...verses].sort((a, b) => a - b);
         let segmentStart = sortedVerses[0];
         let segmentEnd = segmentStart;
+
+        let newSegmentsForThisSurah = 0;
 
         for (let i = 1; i <= sortedVerses.length; i++) {
             const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
@@ -434,14 +453,21 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                 const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
                 const existing = currentNodes.find(n => n.id === nodeId);
 
+                // Use Staggered Genesis: Spreads new reviews over a 7-day period to avoid avalanches
+                const scheduler = (existing && !forceFullReset)
+                    ? existing.scheduler
+                    : createNewScheduler(Math.floor(newSegmentsForThisSurah / 10)); // ~10 clusters per day
+
                 newNodes.push({
                     id: nodeId,
                     type: 'verse',
                     surahId,
                     startVerse: segmentStart,
                     endVerse: segmentEnd,
-                    scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
+                    scheduler,
                 });
+
+                if (!existing) newSegmentsForThisSurah++;
 
                 if (i < sortedVerses.length) {
                     segmentStart = sortedVerses[i];
@@ -453,34 +479,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         }
     });
 
-    if (forceFullReset) {
-        // Also sync mindmaps
-        const mindmaps = getMindMaps();
-        Object.values(mindmaps).forEach(mm => {
-            if (mm.isComplete) {
-                newNodes.push({
-                    id: `mindmap-${mm.surahId}`,
-                    type: 'mindmap',
-                    surahId: mm.surahId,
-                    scheduler: createNewScheduler(),
-                });
-            }
-        });
-
-        // Also sync part mindmaps
-        const partMindmaps = getPartMindMaps();
-        Object.values(partMindmaps).forEach(pmm => {
-            if (pmm.isComplete) {
-                newNodes.push({
-                    id: `part-mindmap-${pmm.partId}`,
-                    type: 'part_mindmap',
-                    partId: pmm.partId,
-                    scheduler: createNewScheduler(),
-                });
-            }
-        });
-    }
-
+    // Orphan Pruning is implicit because we only push nodes that match current settings/mindmaps.
     saveMemoryNodes(newNodes);
 }
 
