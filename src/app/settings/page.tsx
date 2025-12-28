@@ -952,8 +952,8 @@ export default function SettingsPage() {
                                                         </div>
                                                         <button
                                                             className="bulk-btn reset-mut"
-                                       
-                                                         onClick={(e) => {
+
+                                                            onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 if (window.confirm('Are you sure you want to reset the maturity of ALL Mindmaps (both Surah and Part mindmaps)?')) {
                                                                     setGroupMaturity('mindmap', 'reset');
@@ -1263,8 +1263,8 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-                {sectionsExpanded.mutashabihat && ( 
-                    <div style={{ marginTop: '1.5rem' }}> 
+                {sectionsExpanded.mutashabihat && (
+                    <div style={{ marginTop: '1.5rem' }}>
                         <p className="mut-subheader" style={{ color: 'var(--foreground-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem' }}>
                             Surahs with similar verses in this part. Tap to expand and annotate similar ayat.
                         </p>
