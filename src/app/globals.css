@@ -1645,6 +1645,21 @@ input:focus {
   }
 }
 
+.desktop-footer {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  .desktop-footer {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-top: auto;
+    padding-bottom: 2rem;
+  }
+}
+
 /* Mobile Node List & Cards (Shared) */
 .mobile-node-list {
   display: flex;

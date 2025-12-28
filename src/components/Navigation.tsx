@@ -116,7 +116,7 @@ export default function Navigation() {
                 );
             })}
 
-            <div className="nav-footer hide-mobile" style={{ marginTop: 'auto', paddingBottom: '1rem' }}>
+            <div className="desktop-footer">
                 <a
                     href="https://github.com/imed-ghomari/quran-life"
                     target="_blank"
