@@ -1,43 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CloudOff } from "lucide-react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
+  const syncInProgress = useRef(false);
+
+  const performSync = async () => {
+    if (syncInProgress.current || !navigator.onLine) return;
+    try {
+      syncInProgress.current = true;
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        const { syncWithCloud } = await import('@/lib/sync');
+        await syncWithCloud();
+      }
+    } catch (e) {
+      console.error('Global sync failed:', e);
+    } finally {
+      syncInProgress.current = false;
+    }
+  };
 
   useEffect(() => {
-    // Initial check
+    // Initial online status
     setIsOnline(navigator.onLine);
 
     const handleOnline = () => {
       setIsOnline(true);
-      // Trigger sync when back online
-      import('@/lib/sync').then(({ syncWithCloud }) => {
-        syncWithCloud().catch(console.error);
-      });
+      performSync();
     };
     const handleOffline = () => setIsOnline(false);
 
-    // Issue #8: Sync on app load if user is authenticated
-    const doInitialSync = async () => {
-      try {
-        const { createClient } = await import('@/utils/supabase/client');
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && navigator.onLine) {
-          const { syncWithCloud } = await import('@/lib/sync');
-          syncWithCloud().catch(console.error);
-        }
-      } catch (e) {
-        console.error('Initial sync failed:', e);
-      }
-    };
-    doInitialSync();
+    // Setup Auth Listener for sync (covers app load and sign-in)
+    let authSubscription: any = null;
+    const setupAuth = async () => {
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
 
-    // Issue #6: Refresh data when app becomes visible (e.g., reopened next day)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          if (session?.user) {
+            performSync();
+          }
+        }
+      });
+      authSubscription = subscription;
+    };
+    setupAuth();
+
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
+        performSync();
         // Dispatch storage event to trigger refresh across components
         window.dispatchEvent(new StorageEvent('storage', {
           key: 'quran-app-visibility-refresh',
@@ -51,6 +69,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
+      if (authSubscription) authSubscription.unsubscribe();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       document.removeEventListener("visibilitychange", handleVisibility);
