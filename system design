@@ -96,11 +96,6 @@
 - Use CSS Media Queries (`@media (min-width: 1024px)`) to switch from flex-col to grid.
 
 ### Mutashabihat & Suspension
-<<<<<<< HEAD
-- On 3 failed recalls for an anchor, suspend related mindmap reviews; surface in Todo > Fix Mindmaps. Clear suspension after confirming new mindmap.
-- Mutashabihat-aware context: expand preview until a non-similar verse is found.
-- Similarity decisions logged in Todo and editable in Settings; decisions hide items from Todo.
-=======
 - **Suspension (The "3-Strike" Rule)**: On 3 consecutive failed recalls for an anchor, the corresponding MemoryNode is hidden from the review queue.
 - **Similarity Checks (Proactive Warning)**: Verses with any history of mutashabihat-related failure appear as "Warnings" in Todo. This is independent of suspension and allows for early intervention.
 - **Fix Workflow**:
@@ -110,7 +105,6 @@
     4. **Re-learning Triggered**: The item enters a probation period (see Section 11).
 - **Mutashabihat-aware context**: Expand preview until a non-similar verse is found.
 - **Similarity decisions**: Logged in Todo and manageable in Settings.
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 
 ### Skip Surahs
 - Skipped surahs removed from reviews, today portion, and mindmap queues; artifacts pruned on toggle.
@@ -124,19 +118,12 @@
 MemoryNode {
   // ... existing fields
   scheduler: {
-<<<<<<< HEAD
-    interval: number; // Updated by Maturity settings
-    repetition: number;
-    efactor: number;
-    dueDate: string; // Recalculated based on new interval
-=======
     interval: number; // Current SM-2 interval
     repetition: number;
     easeFactor: number; // SM-2 Difficulty (Min 1.3)
     dueDate: string;
     relearningStep?: number; // 1 (Day 1) or 2 (Day 3)
     preSuspensionInterval?: number; // Used for "Smart Graduation"
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
   }
 }
 
@@ -184,9 +171,6 @@ The Mindmap Editor (`src/components/MindmapEditor.tsx`) has historically include
 
 ### Lasso Tool Implementation (Reference)
 [... existing Lasso code details ...]
-<<<<<<< HEAD
-=======
-
 ---
 
 ## 11. Re-learning Logic (Fixed Items)
@@ -212,4 +196,3 @@ Upon successful graduation from Step 2:
 - **New Interval**: `max(4 days, 20% of preSuspensionInterval)`.
 - This ensures users with long-term mastery don't start from zero while still verifying the new fix.
 - Standard SM-2 resume thereafter.
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874

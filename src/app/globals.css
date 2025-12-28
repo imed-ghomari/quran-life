@@ -1645,10 +1645,10 @@ input:focus {
   }
 }
 
-<<<<<<< HEAD
-=======
-.github-nav-link {
-  display: none !important;
+@media (max-width: 1023px) {
+  .github-nav-link {
+    display: none !important;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -1662,7 +1662,6 @@ input:focus {
   }
 }
 
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 /* Mobile Node List & Cards (Shared) */
 .mobile-node-list {
   display: flex;
