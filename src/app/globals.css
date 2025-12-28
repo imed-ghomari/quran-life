@@ -1645,6 +1645,24 @@ input:focus {
   }
 }
 
+<<<<<<< HEAD
+=======
+.github-nav-link {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  .github-nav-link {
+    display: flex !important;
+    margin-top: auto !important;
+    margin-bottom: 2rem !important;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+>>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 /* Mobile Node List & Cards (Shared) */
 .mobile-node-list {
   display: flex;

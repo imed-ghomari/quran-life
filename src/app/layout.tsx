@@ -11,8 +11,13 @@ export const metadata: Metadata = {
     viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
     manifest: '/manifest.json',
     icons: {
+<<<<<<< HEAD
         icon: '/icon.svg',
         apple: '/icon.svg',
+=======
+        icon: '/icon.png',
+        apple: '/icon.png',
+>>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     },
     themeColor: [
         { media: '(prefers-color-scheme: light)', color: '#ffffff' },

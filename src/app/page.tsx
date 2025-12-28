@@ -22,9 +22,13 @@ import {
     ZoomIn,
     ZoomOut,
     Maximize2,
-    Move
+    Move,
+    PenTool,
+    RotateCcw
 } from 'lucide-react';
 import DocumentationModal from '@/components/DocumentationModal';
+import dynamic from 'next/dynamic';
+import { QuranPart } from '@/lib/types';
 import {
     getSettings,
     getDueNodes,
@@ -32,6 +36,10 @@ import {
     sm2,
     getMindMap,
     getPartMindMap,
+    getMindMaps,
+    getPartMindMaps,
+    saveMindMap,
+    savePartMindMap,
     MemoryNode,
     markListeningComplete,
     getListeningCompletedToday,
@@ -44,6 +52,10 @@ import {
     saveListeningProgress,
     postponeNode,
 } from '@/lib/storage';
+import { syncWithCloud } from '@/lib/sync';
+
+// Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
+const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
 
 type PlaybackSpeed = 0.75 | 1 | 1.25 | 1.5 | 2;
@@ -74,6 +86,10 @@ export default function TodayPage() {
     const [settingsVersion, setSettingsVersion] = useState(0);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
+
+    // Mindmap Editor States
+    const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
+    const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -155,7 +171,7 @@ export default function TodayPage() {
         // This prevents "skipping" cards when background sync happens
         if (dueNodes.length === 0 || currentReviewIndex === 0) {
             const settings = getSettings();
-            setDueNodes(getDueNodes(settings.activePart));
+            setDueNodes(getDueNodes());
         }
         setListeningComplete(getListeningCompletedToday());
     }, [settingsVersion, isLoaded]);
@@ -483,8 +499,96 @@ export default function TodayPage() {
 
     if (!isLoaded) return <div className="content-wrapper"><div className="loading">Loading...</div></div>;
 
+    const handleMindmapIncomplete = (surahId: number) => {
+        if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
+
+        const mm = getMindMap(surahId);
+        const updated = { ...mm, isComplete: false };
+        saveMindMap(updated);
+        setSettingsVersion(v => v + 1);
+        addToast('success', 'Mindmap marked as incomplete', getSurah(surahId)?.name);
+        syncWithCloud().catch(console.error);
+    };
+
+    const handlePartMindmapIncomplete = (partId: QuranPart) => {
+        if (!window.confirm("Are you sure you want to mark this part mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
+
+        const mm = getPartMindMap(partId);
+        const updated = { ...mm, isComplete: false };
+        savePartMindMap(updated);
+        setSettingsVersion(v => v + 1);
+        addToast('success', 'Part mindmap marked as incomplete', `Part ${partId}`);
+        syncWithCloud().catch(console.error);
+    };
+
+    const handleMindmapEditorSave = async (snapshot: any, imageBlob?: Blob) => {
+        if (!activeMindmapEditor) return;
+        const { surahId } = activeMindmapEditor;
+
+        const save = (imageUrl: string | null) => {
+            const existing = getMindMap(surahId);
+            saveMindMap({
+                ...existing,
+                imageUrl: imageUrl || existing.imageUrl,
+                tldrawSnapshot: snapshot
+            });
+            setSettingsVersion(v => v + 1);
+            setActiveMindmapEditor(null);
+            syncWithCloud().catch(console.error);
+        };
+
+        if (imageBlob && imageBlob.size > 0) {
+            const reader = new FileReader();
+            reader.onloadend = () => save(reader.result as string);
+            reader.readAsDataURL(imageBlob);
+        } else {
+            save(null);
+        }
+    };
+
+    const handlePartMindmapEditorSave = async (snapshot: any, imageBlob?: Blob) => {
+        if (!activePartEditor) return;
+        const { partId } = activePartEditor;
+
+        const save = (imageUrl: string | null) => {
+            const existing = getPartMindMap(partId);
+            savePartMindMap({
+                ...existing,
+                imageUrl: imageUrl || existing.imageUrl,
+                tldrawSnapshot: snapshot
+            });
+            setSettingsVersion(v => v + 1);
+            setActivePartEditor(null);
+            syncWithCloud().catch(console.error);
+        };
+
+        if (imageBlob && imageBlob.size > 0) {
+            const reader = new FileReader();
+            reader.onloadend = () => save(reader.result as string);
+            reader.readAsDataURL(imageBlob);
+        } else {
+            save(null);
+        }
+    };
+
     return (
         <div className="content-wrapper">
+            {activeMindmapEditor && (
+                <MindmapEditor
+                    title={`Edit ${getSurah(activeMindmapEditor.surahId)?.name} Mindmap`}
+                    initialSnapshot={activeMindmapEditor.snapshot}
+                    onSave={handleMindmapEditorSave}
+                    onClose={() => setActiveMindmapEditor(null)}
+                />
+            )}
+            {activePartEditor && (
+                <MindmapEditor
+                    title={`Edit Part ${activePartEditor.partId} Mindmap`}
+                    initialSnapshot={activePartEditor.snapshot}
+                    onSave={handlePartMindmapEditorSave}
+                    onClose={() => setActivePartEditor(null)}
+                />
+            )}
             <h1>Today</h1>
             <audio ref={audioRef} onEnded={handleAudioEnded} onPlay={handleAudioPlay} preload="auto" />
 
@@ -609,6 +713,39 @@ export default function TodayPage() {
                                                             </div>
                                                         </div>
                                                     )}
+
+                                                    {/* Quick Actions */}
+                                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (reviewContent.type === 'mindmap') {
+                                                                    setActiveMindmapEditor({ surahId: reviewContent.surah!.id, snapshot: reviewContent.mindmap?.tldrawSnapshot });
+                                                                } else {
+                                                                    setActivePartEditor({ partId: reviewContent.partId as QuranPart, snapshot: reviewContent.mindmap?.tldrawSnapshot });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <PenTool size={14} /> Edit Map
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--danger)' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (reviewContent.type === 'mindmap') {
+                                                                    handleMindmapIncomplete(reviewContent.surah!.id);
+                                                                } else {
+                                                                    handlePartMindmapIncomplete(reviewContent.partId as QuranPart);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={14} /> Mark Incomplete
+                                                        </button>
+                                                    </div>
+
                                                     <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                                                         <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
                                                         <button className="review-btn not-remembered" onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={20} /> Forgot</button>
@@ -646,7 +783,7 @@ export default function TodayPage() {
                             ) : (
                                 <>
                                     <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
-                                        
+                                        <h1 className="hide-mobile" style={{ marginBottom: '1.5rem' }}>Today's Review</h1>
                                         <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
                                             {getSettings().activePart === 5 ? 'All Quran' : `Part ${getSettings().activePart}`}
                                         </p>

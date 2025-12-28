@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { BookOpen, BarChart3, Settings, ListTodo } from 'lucide-react';
+import { BookOpen, BarChart3, Settings, ListTodo, Github } from 'lucide-react';
 import {
     getSettings,
     getMindMaps,
@@ -67,7 +67,7 @@ export default function Navigation() {
                 return activePart === 5 || surahMeta?.part === activePart;
             }).length;
 
-            const due = getDueNodes(activePart).length;
+            const due = getDueNodes().length;
             const listeningComplete = getListeningCompletedToday();
 
             setPendingCount(incompleteSurahMaps + incompletePartMaps + suspendedInPart + similarityChecks);
@@ -115,6 +115,19 @@ export default function Navigation() {
                     </Link>
                 );
             })}
+
+            <a
+                href="https://github.com/imed-ghomari/quran-life"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="nav-item github-nav-link"
+                title="GitHub Repository"
+            >
+                <span className="nav-icon">
+                    <Github size={24} />
+                </span>
+                <span>GitHub</span>
+            </a>
         </nav>
     );
 }
