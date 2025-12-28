@@ -35,11 +35,7 @@ export default function StatisticsPage() {
     const mindmaps = getMindMaps();
     const partMindmaps = getPartMindMaps();
     const memoryNodes = getMemoryNodes();
-<<<<<<< HEAD
-    const dueNodes = getDueNodes(settings.activePart);
-=======
     const dueNodes = getDueNodes();
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 
     useEffect(() => {
         const interval = setInterval(() => setVersion(v => v + 1), 1500);

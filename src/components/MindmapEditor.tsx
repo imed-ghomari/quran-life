@@ -1,14 +1,6 @@
 'use client';
 
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-<<<<<<< HEAD
-import { usePathname } from 'next/navigation';
-import { X, Save, Share2, Maximize2, Minimize2 } from 'lucide-react';
-import dynamic from 'next/dynamic';
-import { Tldraw, defaultEditorAssetUrls, DefaultDashStyle, DefaultSizeStyle } from 'tldraw';
-import 'tldraw/tldraw.css';
-
-=======
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import {
@@ -130,7 +122,6 @@ const LassoOverlay = () => {
 // MindmapEditor Component
 // ============================================
 
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
     constructor(props: any) {
         super(props);
@@ -150,16 +141,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
                     <p>{this.state.error?.message}</p>
                     <button
                         onClick={() => {
-<<<<<<< HEAD
-                            localStorage.clear(); // Clear all for safety or specific key
-=======
                             localStorage.clear();
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
                             window.location.reload();
                         }}
                         style={{ padding: '8px 16px', background: '#ff4444', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                     >
-                        Hard Reset & Reload
+                        Hard Reset &amp; Reload
                     </button>
                 </div>
             );
@@ -178,26 +165,6 @@ interface MindmapEditorProps {
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
 
-<<<<<<< HEAD
-    // Debug Effect
-    const [debugInfo, setDebugInfo] = useState('');
-    useEffect(() => {
-        if (!editor) return;
-        const interval = setInterval(() => {
-            const shapes = editor.getCurrentPageShapeIds().size;
-            const camera = editor.getCamera();
-            const container = document.querySelector('.tldraw-container');
-            const dim = container ? `${container.clientWidth}x${container.clientHeight}` : 'N/A';
-            const htmlClass = document.documentElement.className;
-
-            setDebugInfo(`Shps: ${shapes} | Snap: ${initialSnapshot ? 'YES' : 'NO'} | Assets: ${defaultEditorAssetUrls ? 'YES' : 'NO'} | Zoom: ${camera.z.toFixed(2)} | Dim: ${dim} | HTML: ${htmlClass}`);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [editor, initialSnapshot]);
-
-    // Set Defaults
-=======
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     useEffect(() => {
         try {
             DefaultDashStyle.setDefaultValue('solid');
@@ -208,21 +175,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
     }, []);
 
     const handleMount = useCallback((editorInstance: any) => {
-<<<<<<< HEAD
-        console.log('Tldraw mounted');
-        setEditor(editorInstance);
-
-        // Restore snapshot loading
-        if (initialSnapshot) {
-            try {
-                editorInstance.store.loadSnapshot(initialSnapshot);
-                // Center content if shapes exist
-=======
         setEditor(editorInstance);
         if (initialSnapshot) {
             try {
                 editorInstance.store.loadSnapshot(initialSnapshot);
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
                 if (Object.keys(initialSnapshot.document.store).length > 0) {
                     editorInstance.zoomToFit();
                 }
@@ -244,14 +200,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
         onClose();
     };
 
-<<<<<<< HEAD
-    return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
-            {/* Local CSS to ensure availability in production */}
-            <link rel="stylesheet" href="/tldraw-local.css" />
-
-            {/* Header */}
-=======
     const uiOverrides = useMemo(() => ({
         tools(editorInst: any, tools: any) {
             tools['lasso-select'] = {
@@ -296,7 +244,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
             <div style={{
                 height: '50px',
                 borderBottom: '1px solid #e5e5e5',
@@ -314,19 +261,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 <span style={{ fontSize: '0.8rem', color: '#666' }}>Auto-saves on close</span>
             </div>
 
-<<<<<<< HEAD
-            {/* Editor */}
-            <div className="tldraw-container" style={{ position: 'absolute', top: '50px', left: 0, right: 0, bottom: 0, background: '#f8f9fa' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(255,0,0,0.8)', color: 'white', pointerEvents: 'none', padding: 8, fontSize: 12, maxWidth: '100%' }}>
-                    Debug: Mounted={editor ? 'Yes' : 'No'} <br />
-                    {debugInfo || 'Waiting for update...'}
-                </div>
-                <Tldraw
-                    onMount={handleMount}
-                    inferDarkMode={true}
-                    assetUrls={defaultEditorAssetUrls}
-                // forceMobile={true} // Disabled for now to rule out layout issues
-=======
             <div className="tldraw-container" style={{ position: 'absolute', top: '50px', left: 0, right: 0, bottom: 0, background: '#f8f9fa' }}>
                 <Tldraw
                     onMount={handleMount}
@@ -335,7 +269,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                     tools={[LassoSelectTool]}
                     overrides={uiOverrides}
                     components={components}
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
                 />
             </div>
         </div>
@@ -350,15 +283,7 @@ function MindmapEditorInner(props: MindmapEditorProps) {
     );
 }
 
-<<<<<<< HEAD
-// Export dynamic to prevent SSR of the entire editor
-=======
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 export default dynamic(() => Promise.resolve(MindmapEditorInner), {
     ssr: false,
     loading: () => <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'white' }}>Loading Editor (Dynamic)...</div>
 });
-<<<<<<< HEAD
-=======
-
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874

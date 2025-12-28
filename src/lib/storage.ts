@@ -69,24 +69,16 @@ const storageCache: { [key: string]: any } = {};
 async function loadIntoCache() {
     if (typeof window === 'undefined' || !customStore) return;
     for (const key of Object.values(STORAGE_KEYS)) {
-<<<<<<< HEAD
-        storageCache[key] = await get(key, customStore);
-=======
         const val = await get(key, customStore);
         // ONLY update cache if it hasn't been written to already during startup
         // This prevents overwriting a fast user action with slow DB load
         if (val !== undefined && storageCache[key] === undefined) {
             storageCache[key] = val;
         }
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     }
 }
 
 // Start loading cache
-<<<<<<< HEAD
-if (typeof window !== 'undefined') {
-    loadIntoCache().then(() => {
-=======
 let cacheLoadingPromise: Promise<void> | null = null;
 export async function ensureCacheLoaded() {
     if (typeof window === 'undefined' || !customStore) return;
@@ -98,7 +90,6 @@ export async function ensureCacheLoaded() {
 
 if (typeof window !== 'undefined') {
     ensureCacheLoaded().then(() => {
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
         // Dispatch event to notify listeners that initial load is complete
         window.dispatchEvent(new StorageEvent('storage', {
             key: 'quran-app-settings', // generic key to trigger updates
@@ -185,11 +176,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     activePart: 4,
     learnedVerses: {},
     skippedSurahs: [],
-<<<<<<< HEAD
-    updatedAt: new Date().toISOString(),
-=======
     updatedAt: "1970-01-01T00:00:00.000Z", // Use EPOCH to ensure cloud always wins over uninitialized local
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 };
 
 export function getSettings(): AppSettings {
@@ -281,12 +268,8 @@ export function getSurahLearnedStatus(surahId: number): { learned: number; total
     const surah = SURAHS.find(s => s.id === surahId);
     if (!surah) return { learned: 0, total: 0 };
 
-<<<<<<< HEAD
-    const learned = settings.learnedVerses[surahId]?.length || 0;
-=======
     // Use string key for consistent lookup as JSON keys are always strings
     const learned = settings.learnedVerses[surahId.toString()]?.length || 0;
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     return { learned, total: surah.verseCount };
 }
 
@@ -319,11 +302,8 @@ export interface SM2State {
     easeFactor: number;
     dueDate: string;
     lastReview: string;
-<<<<<<< HEAD
-=======
     relearningStep?: number;
     preSuspensionInterval?: number;
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 }
 
 export interface MemoryNode {
@@ -341,12 +321,6 @@ export function getMemoryNodes(): MemoryNode[] {
 }
 
 export function saveMemoryNodes(nodes: MemoryNode[]): void {
-<<<<<<< HEAD
-    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, nodes);
-}
-
-export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
-=======
     // Deduplicate by ID before saving to prevent high counter issues
     const uniqueMap = new Map();
     nodes.forEach(n => {
@@ -364,7 +338,6 @@ export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
 }
 
 export function getDueNodes(): MemoryNode[] {
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     const today = new Date().toISOString().split('T')[0];
     const settings = getSettings();
     const skips = new Set(settings.skippedSurahs || []);
@@ -387,20 +360,14 @@ export function getDueNodes(): MemoryNode[] {
                 return pmm?.isComplete && pmm?.imageUrl;
             }
             return true;
-<<<<<<< HEAD
         })
+        // Filter verse nodes: only include if surah is fully learned
         .filter(n => {
-            if (!filterPart || filterPart === 5) return true;
-            if (n.surahId) {
-                const surah = SURAHS.find(s => s.id === n.surahId);
-                return surah && surah.part === filterPart;
-            }
-            if (n.partId) {
-                return n.partId === filterPart;
+            if (n.type === 'verse' && n.surahId) {
+                const { learned, total } = getSurahLearnedStatus(n.surahId);
+                return learned === total;
             }
             return true;
-=======
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
         });
 }
 
@@ -415,24 +382,15 @@ export function updateMemoryNode(node: MemoryNode): void {
     saveMemoryNodes(nodes);
 }
 
-<<<<<<< HEAD
-function createNewScheduler(): SM2State {
-    const today = new Date().toISOString().split('T')[0];
-=======
 function createNewScheduler(staggerDays: number = 0): SM2State {
     const today = new Date();
     today.setDate(today.getDate() + staggerDays);
     const dueDate = today.toISOString().split('T')[0];
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     return {
         interval: 0,
         repetition: 0,
         easeFactor: 2.5,
-<<<<<<< HEAD
-        dueDate: today,
-=======
         dueDate: dueDate,
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
         lastReview: '',
     };
 }
@@ -441,19 +399,6 @@ function createNewScheduler(staggerDays: number = 0): SM2State {
 export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): void {
     const settings = getSettings();
     const currentNodes = getMemoryNodes();
-<<<<<<< HEAD
-    const newNodes: MemoryNode[] = [];
-
-    // 1. Keep non-verse nodes unless forceFullReset
-    if (!forceFullReset) {
-        newNodes.push(...currentNodes.filter(n => n.type !== 'verse'));
-    }
-
-    // 2. Group verses into segments of 5
-    Object.entries(settings.learnedVerses).forEach(([surahIdStr, verses]) => {
-        const surahId = parseInt(surahIdStr);
-        if (verses.length === 0) return;
-=======
 
     // Safety check: if storage cache is empty and we aren't forcing a full reset,
     // we should NOT proceed, as we might accidentally wipe all progress.
@@ -499,18 +444,14 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     Object.entries(settings.learnedVerses).forEach(([surahIdStr, verses]) => {
         const surahId = parseInt(surahIdStr);
         if (verses.length === 0 || skips.has(surahId)) return;
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 
         // Create segments of 5 verses
         const sortedVerses = [...verses].sort((a, b) => a - b);
         let segmentStart = sortedVerses[0];
         let segmentEnd = segmentStart;
 
-<<<<<<< HEAD
-=======
         let newSegmentsForThisSurah = 0;
 
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
         for (let i = 1; i <= sortedVerses.length; i++) {
             const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
             const segmentSize = segmentEnd - segmentStart + 1;
@@ -520,31 +461,22 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                 const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
                 const existing = currentNodes.find(n => n.id === nodeId);
 
-<<<<<<< HEAD
-=======
                 // Use Staggered Genesis: Spreads new reviews over a 7-day period to avoid avalanches
                 const scheduler = (existing && !forceFullReset)
                     ? existing.scheduler
                     : createNewScheduler(Math.floor(newSegmentsForThisSurah / 10)); // ~10 clusters per day
 
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
                 newNodes.push({
                     id: nodeId,
                     type: 'verse',
                     surahId,
                     startVerse: segmentStart,
                     endVerse: segmentEnd,
-<<<<<<< HEAD
-                    scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
-                });
-
-=======
                     scheduler,
                 });
 
                 if (!existing) newSegmentsForThisSurah++;
 
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
                 if (i < sortedVerses.length) {
                     segmentStart = sortedVerses[i];
                     segmentEnd = segmentStart;
@@ -555,59 +487,12 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         }
     });
 
-<<<<<<< HEAD
-    if (forceFullReset) {
-        // Also sync mindmaps
-        const mindmaps = getMindMaps();
-        Object.values(mindmaps).forEach(mm => {
-            if (mm.isComplete) {
-                newNodes.push({
-                    id: `mindmap-${mm.surahId}`,
-                    type: 'mindmap',
-                    surahId: mm.surahId,
-                    scheduler: createNewScheduler(),
-                });
-            }
-        });
-
-        // Also sync part mindmaps
-        const partMindmaps = getPartMindMaps();
-        Object.values(partMindmaps).forEach(pmm => {
-            if (pmm.isComplete) {
-                newNodes.push({
-                    id: `part-mindmap-${pmm.partId}`,
-                    type: 'part_mindmap',
-                    partId: pmm.partId,
-                    scheduler: createNewScheduler(),
-                });
-            }
-        });
-    }
-
-=======
     // Orphan Pruning is implicit because we only push nodes that match current settings/mindmaps.
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     saveMemoryNodes(newNodes);
 }
 
 // SM-2 Algorithm
 export function sm2(grade: number, state: SM2State): SM2State {
-<<<<<<< HEAD
-    let { interval, repetition, easeFactor } = state;
-
-    if (grade < 3) {
-        repetition = 0;
-        interval = 1;
-    } else {
-        if (repetition === 0) interval = 1;
-        else if (repetition === 1) interval = 6;
-        else interval = Math.round(interval * easeFactor);
-        repetition++;
-    }
-
-    easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
-
-=======
     let { interval, repetition, easeFactor, relearningStep } = state;
 
     if (relearningStep) {
@@ -644,7 +529,6 @@ export function sm2(grade: number, state: SM2State): SM2State {
         easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
     }
 
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + interval);
 
@@ -654,11 +538,8 @@ export function sm2(grade: number, state: SM2State): SM2State {
         easeFactor: Math.round(easeFactor * 100) / 100,
         dueDate: dueDate.toISOString().split('T')[0],
         lastReview: new Date().toISOString().split('T')[0],
-<<<<<<< HEAD
-=======
         relearningStep,
         preSuspensionInterval: state.preSuspensionInterval
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
     };
 }
 
@@ -1119,11 +1000,6 @@ export function getSuspendedAnchors(threshold: number = 3): AnchorIssue[] {
 }
 
 export function clearAnchorIssues(surahId: number, anchorId: string): void {
-<<<<<<< HEAD
-    const remaining = getReviewErrors().filter(err => !(err.surahId === surahId && err.anchorId === anchorId));
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEYS.REVIEW_ERRORS, JSON.stringify(remaining));
-=======
     const errors = getReviewErrors();
     const issueErrors = errors.filter(err => err.surahId === surahId && err.anchorId === anchorId);
 
@@ -1157,7 +1033,6 @@ export function clearAnchorIssues(surahId: number, anchorId: string): void {
             saveMemoryNodes(nodes);
         }
     }
->>>>>>> 808af3561afb02764c6979aacc65af686b0c8874
 }
 
 export function findAnchorForRange(surahId: number, startVerse?: number, endVerse?: number): Anchor | undefined {
