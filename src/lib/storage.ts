@@ -74,8 +74,17 @@ async function loadIntoCache() {
 }
 
 // Start loading cache
+let cacheLoadingPromise: Promise<void> | null = null;
+export async function ensureCacheLoaded() {
+    if (typeof window === 'undefined' || !customStore) return;
+    if (cacheLoadingPromise) return cacheLoadingPromise;
+    cacheLoadingPromise = loadIntoCache();
+    await cacheLoadingPromise;
+    return;
+}
+
 if (typeof window !== 'undefined') {
-    loadIntoCache().then(() => {
+    ensureCacheLoaded().then(() => {
         // Dispatch event to notify listeners that initial load is complete
         window.dispatchEvent(new StorageEvent('storage', {
             key: 'quran-app-settings', // generic key to trigger updates
@@ -162,7 +171,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     activePart: 4,
     learnedVerses: {},
     skippedSurahs: [],
-    updatedAt: new Date().toISOString(),
+    updatedAt: "1970-01-01T00:00:00.000Z", // Use EPOCH to ensure cloud always wins over uninitialized local
 };
 
 export function getSettings(): AppSettings {
@@ -254,7 +263,8 @@ export function getSurahLearnedStatus(surahId: number): { learned: number; total
     const surah = SURAHS.find(s => s.id === surahId);
     if (!surah) return { learned: 0, total: 0 };
 
-    const learned = settings.learnedVerses[surahId]?.length || 0;
+    // Use string key for consistent lookup as JSON keys are always strings
+    const learned = settings.learnedVerses[surahId.toString()]?.length || 0;
     return { learned, total: surah.verseCount };
 }
 

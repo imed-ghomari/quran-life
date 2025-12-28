@@ -16,6 +16,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
+        // Ensure local cache is loaded from IndexedDB before syncing with cloud
+        // to prevent empty default settings from winning over remote data
+        const { ensureCacheLoaded } = await import('@/lib/storage');
+        await ensureCacheLoaded();
+
         const { syncWithCloud } = await import('@/lib/sync');
         await syncWithCloud();
       }
