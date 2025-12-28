@@ -1,0 +1,768 @@
+{
+  "0095a9fa74": {
+    "translation": "Viedä"
+  },
+  "00b177e080": {
+    "translation": "Hyväksy kutsu"
+  },
+  "03b3e13197": {
+    "translation": "Vedä tiedosto tämän sivun sivupalkkiin. Tai valitse käyttäjävalikosta vaihtoehto Tuo tiedosto."
+  },
+  "043973ec1f": {
+    "translation": "Onko sinulla edelleen ongelmia? {GetHelpLink}"
+  },
+  "06b9281e39": {
+    "translation": "Auto"
+  },
+  "07dbd11b21": {
+    "translation": "Nimetön tiedosto"
+  },
+  "08331c1710": {
+    "translation": "Hintarajoitus ylitetty, yritä myöhemmin uudelleen."
+  },
+  "08bd40c754": {
+    "translation": "Tili"
+  },
+  "0a91f7fa87": {
+    "translation": "Tiedosto on saavuttanut kokorajoituksensa, eikä muutoksia ehkä enää tallenneta. Poista sisältöä tai aloita uusi tiedosto."
+  },
+  "0ab1ef22a3": {
+    "translation": "Puhu ryhmälle…"
+  },
+  "0b27918290": {
+    "translation": "Tiedosto"
+  },
+  "0b9a4cde72": {
+    "translation": "Tiedosto-valikko"
+  },
+  "0befa10111": {
+    "translation": "Keijut"
+  },
+  "0d1f2bb523": {
+    "translation": "Lähetä palautetta"
+  },
+  "110a4b01be": {
+    "translation": "Julkaista"
+  },
+  "11a755d598": {
+    "translation": "Stop"
+  },
+  "129b9e34ea": {
+    "translation": "Poistu ryhmästä"
+  },
+  "12a6766ba1": {
+    "translation": "Irrota tiedosto"
+  },
+  "12c8a9838c": {
+    "translation": "Kokeile tldraw SDK:ta"
+  },
+  "13ddd375ad": {
+    "translation": "Vie nimellä"
+  },
+  "146ffe2fd9": {
+    "translation": "Näytä lisää"
+  },
+  "14d65465b7": {
+    "translation": "Poista ryhmä"
+  },
+  "181b90f889": {
+    "translation": "Luo tiedosto"
+  },
+  "1da2e8106b": {
+    "translation": "Tapahtui odottamaton virhe."
+  },
+  "1dd1c5fb7f": {
+    "translation": "Tänään"
+  },
+  "23f879f41a": {
+    "translation": "Viikoittainen keijujen käyttökiintiösi on saavutettu. Se nollautuu ensi viikon alussa."
+  },
+  "243924bfd5": {
+    "translation": "Nukkua"
+  },
+  "2445e5e347": {
+    "translation": "Luo ryhmä"
+  },
+  "250ddea65c": {
+    "translation": "Tietoja tldraw'sta"
+  },
+  "269097080b": {
+    "translation": "Keijut odottavat"
+  },
+  "275173253d": {
+    "translation": "Kutsu kaikki"
+  },
+  "284d5cd0dd": {
+    "translation": "Malli:"
+  },
+  "299cb00a7a": {
+    "translation": "Lataus epäonnistui"
+  },
+  "2c3ef76333": {
+    "translation": "Omat tiedostoni"
+  },
+  "30cd34258a": {
+    "translation": "Parvi <b>keijuja</b> on saapunut arpomaan joulukuuta. Jos haluat tutkia asiaa tarkemmin, etsi keiju ja napsauta sitä."
+  },
+  "31246941ad": {
+    "translation": "Sinun on kirjauduttava sisään nähdäksesi tämän tiedoston."
+  },
+  "31418ce4ad": {
+    "translation": "i18n: Korosta puuttuu"
+  },
+  "3209f407ed": {
+    "translation": "kolme keijua"
+  },
+  "32210b37e4": {
+    "translation": "Lisää linkki"
+  },
+  "324a0f3182": {
+    "translation": "Takaisin tldrawiin"
+  },
+  "335defdafe": {
+    "translation": "Yritä päivittää sivu."
+  },
+  "34140869c6": {
+    "translation": "Keijuparvi saapuu arvontaan joulukuussa. Katso tilanne uudelleen 1. joulukuuta."
+  },
+  "344a7f427f": {
+    "translation": "Toimittaja"
+  },
+  "34abfe7a0d": {
+    "translation": "Nuku kaikki"
+  },
+  "34e34c43ec": {
+    "translation": "Hallitse"
+  },
+  "3596c1b1f7": {
+    "translation": "Lopeta seuraaminen"
+  },
+  "3903aab323": {
+    "translation": "Seuraa"
+  },
+  "3b6c2b4caa": {
+    "translation": "Palveluehdot"
+  },
+  "3bc7d6ea2f": {
+    "translation": "Jatka sähköpostitse"
+  },
+  "3bd1b98dbd": {
+    "translation": "Muutoksia ei voi julkaista."
+  },
+  "3c5e891bff": {
+    "translation": "Kiinnitetty"
+  },
+  "3d0238bf16": {
+    "translation": "Hyväksy kaikki"
+  },
+  "42e53c47c1": {
+    "translation": "Pyydä käyttöoikeutta ottamalla yhteyttä omistajaan."
+  },
+  "44db318ee5": {
+    "translation": "Hanki apua Discordissa"
+  },
+  "45b43c2d28": {
+    "translation": "<strong>Keijut</strong> ovat tulleet piirtämään joulukuun viettoon."
+  },
+  "46137245cd": {
+    "translation": "Kiitos, että autat meitä parantamaan tldraw:ta!"
+  },
+  "465a8a92a4": {
+    "translation": "Ei valittuja keijuja"
+  },
+  "477df802ca": {
+    "translation": "Jatkaaksesi muokkaamista, kopioi tiedosto tiedostoihisi."
+  },
+  "47839e47a5": {
+    "translation": "tldraw"
+  },
+  "47f493a590": {
+    "translation": "Kiinnitä tiedosto"
+  },
+  "49049467ff": {
+    "translation": "Liitä tldraw-tiedoston URL-osoite..."
+  },
+  "4908687e50": {
+    "translation": "Haluatko varmasti unohtaa tämän tiedoston?"
+  },
+  "49ee308734": {
+    "translation": "Nimi"
+  },
+  "4c41e0bd95": {
+    "translation": "Valitse kaikki"
+  },
+  "4d0d3ddec9": {
+    "translation": "Tämä sivusto käyttää evästeitä sovelluksen toiminnan varmistamiseksi ja analytiikkatietojen keräämiseksi."
+  },
+  "4d1c8263ba": {
+    "translation": "Lataa uudelleen"
+  },
+  "4da5988a2e": {
+    "translation": "Poista ryhmä…"
+  },
+  "4dab36ac83": {
+    "translation": "Lisää vaihtoehtoja"
+  },
+  "4e6fbf032b": {
+    "translation": "Haluatko varmasti poistaa tämän ryhmän? Tätä toimintoa ei voi perua."
+  },
+  "50db1b7e1e": {
+    "translation": "Tiedoston julkaisua ei voi peruuttaa."
+  },
+  "517bb809d9": {
+    "translation": "Sivuvalikko"
+  },
+  "542248f0ba": {
+    "translation": "Tämä tiedosto on nyt vain luku -tilassa"
+  },
+  "54286b1d01": {
+    "translation": "Yhteistyökumppanien raja saavutettu"
+  },
+  "554a05155c": {
+    "translation": "Onko sinulla edelleen ongelmia? <a>Ilmoita ongelmasta</a>"
+  },
+  "55505ba281": {
+    "translation": "PNG"
+  },
+  "5677e381d2": {
+    "translation": "Käytämme analytiikkaevästeitä parantaaksemme tldraw'ta."
+  },
+  "56c34c6410": {
+    "translation": "Tietosuojakäytäntö"
+  },
+  "5a2ccdc00a": {
+    "translation": "Kutsukoodin lunastus epäonnistui"
+  },
+  "5a86b22fa0": {
+    "translation": "Vedä tiedostot tähän, <create>luo tiedosto</create> tai <invite>kopioi kutsulinkki</invite> aloittaaksesi."
+  },
+  "5a95a425f7": {
+    "translation": "Jakaa"
+  },
+  "5bec508475": {
+    "translation": "Vanha selain havaittu. Päivitä selaimesi käyttääksesi tätä sovellusta."
+  },
+  "5c6fe42bc2": {
+    "translation": "Peruuta tämä linkki ja luo uusi."
+  },
+  "5d26ae7550": {
+    "translation": "Emme pystyneet lataamaan osaa sisällöstä, jonka loit ennen kirjautumista."
+  },
+  "5ea8bb44be": {
+    "translation": "Sinut on kutsuttu liittymään ryhmään:"
+  },
+  "5f3c333678": {
+    "translation": "Palaute lähetetty"
+  },
+  "5fb63579fc": {
+    "translation": "Kopioida"
+  },
+  "61057a0c84": {
+    "translation": "Myöhemmin"
+  },
+  "61daf2e53d": {
+    "translation": "Puhu käyttäjälle {name}…"
+  },
+  "625fd29749": {
+    "translation": "Vanhempi"
+  },
+  "639bae9ac6": {
+    "translation": "sinä"
+  },
+  "6602bbeb29": {
+    "translation": "Opas"
+  },
+  "6609dd239e": {
+    "translation": "Jotain meni pieleen"
+  },
+  "6637a98151": {
+    "translation": "Uusi versio tldraw:sta on saatavilla. Jatka lataamalla sivu uudelleen."
+  },
+  "6832ac5936": {
+    "translation": "Anna sähköpostiosoitteesi"
+  },
+  "688761c83e": {
+    "translation": "Herätä"
+  },
+  "68d390535e": {
+    "translation": "Kirjoita viestisi"
+  },
+  "6910bbdc82": {
+    "translation": "Keijun nimi"
+  },
+  "695c3e899d": {
+    "translation": "Virheenkorjauskeijut"
+  },
+  "6a26f54883": {
+    "translation": "Auttaa"
+  },
+  "6dc0836c1b": {
+    "translation": "Sinulla ei ole tarvittavia oikeuksia tämän toiminnon suorittamiseen."
+  },
+  "6dfc62f621": {
+    "translation": "Tuo sisältö manuaalisesti seuraavasti:"
+  },
+  "70222abcfc": {
+    "translation": "Ryhmän asetukset"
+  },
+  "70a6facb9d": {
+    "translation": "Tällä viikolla"
+  },
+  "71a29b007b": {
+    "translation": "Onko sinulla bugi, ongelma tai idea tldraw'hun liittyen? Kerro meille!"
+  },
+  "73ab799383": {
+    "translation": "Tätä tldraw-versiota ei enää tueta."
+  },
+  "7408cf0d7b": {
+    "translation": "Lataa sivu uudelleen"
+  },
+  "752b79f137": {
+    "translation": "Olet saavuttanut tiedostojen enimmäismäärän. Sinun on poistettava vanhat tiedostot ennen uusien luomista."
+  },
+  "7573b8110a": {
+    "translation": "Ei pääsyä"
+  },
+  "761e93ede9": {
+    "translation": "Hallinnoi evästeitä"
+  },
+  "7697920637": {
+    "translation": "Lataa uudelleen"
+  },
+  "764671e008": {
+    "translation": "Keskustele kanssamme Discordissa"
+  },
+  "76dea3c9ca": {
+    "translation": "tldraw on ilmainen verkkopohjainen valkotaulu. Luo tili tallentaaksesi tiedostosi ja työskennelläksesi ystäviesi kanssa."
+  },
+  "777f9e90cf": {
+    "translation": "Virheellinen pyyntö."
+  },
+  "7827371d1a": {
+    "translation": "Tämä anonyymi tldraw-moninpelitiedosto on nyt vain luku -tilassa. Jatkaaksesi muokkaamista, kirjaudu sisään ja kopioi se tiedostoihisi."
+  },
+  "78e9815992": {
+    "translation": "Selvä"
+  },
+  "797799f35e": {
+    "translation": "Lähetä ongelma GitHubissa"
+  },
+  "79cc22ac6b": {
+    "translation": "Keiju on pieni hahmo, joka voi työskennellä kanssasi kankaalla. Keijut voivat työskennellä yksin tai tiiminä. Keijun kyvyillä ei ole rajoja. Kukaan ei tiedä, mistä he ovat kotoisin."
+  },
+  "7b1329f5ca": {
+    "translation": "Käyttöohje"
+  },
+  "7be10fc592": {
+    "translation": "Palauta versio"
+  },
+  "7c0747a5df": {
+    "translation": "Avaa tldraw"
+  },
+  "7cb471f815": {
+    "translation": "Sinut on kutsuttu liittymään tldraw-keijuihin!"
+  },
+  "7cb5f8b4a5": {
+    "translation": "Unohtaa"
+  },
+  "7cfe6c43dc": {
+    "translation": "Poistu ryhmästä…"
+  },
+  "7daeced9ff": {
+    "translation": "Julkaise muutokset"
+  },
+  "7fcdcc6455": {
+    "translation": "Unohda tiedosto"
+  },
+  "801ab24683": {
+    "translation": "Lataa"
+  },
+  "815e116a2e": {
+    "translation": "Onko sinulla bugi, ongelma tai idea tldraw'hun liittyen? Kerro meille! Täytä tämä lomake, niin otamme sinuun tarvittaessa yhteyttä sähköpostitse. Voit myös <discord>chattailla kanssamme Discordissa</discord> tai <github>lähettää ongelman GitHubissa</github>."
+  },
+  "81aa2078d1": {
+    "translation": "Tyhjennä kaikki"
+  },
+  "83218ac34c": {
+    "translation": "Tervetuloa"
+  },
+  "85a082de1b": {
+    "translation": "Päivitä sivu saadaksesi tldraw:n uusimman version."
+  },
+  "86353d2c41": {
+    "translation": "Lisätty {total} .tldr-tiedostoja."
+  },
+  "86c66437fd": {
+    "translation": "Nimeä tiedosto uudelleen"
+  },
+  "8726ef8909": {
+    "translation": "Pakkolunastus"
+  },
+  "88e83b88c5": {
+    "translation": "Osta keijupaketti"
+  },
+  "8ad4303b83": {
+    "translation": "Ei kiitos"
+  },
+  "8be569f100": {
+    "translation": "kertaluonteinen maksu"
+  },
+  "8c2d3d730c": {
+    "translation": "Tarkista sähköpostistasi vahvistuskoodi."
+  },
+  "8cf04a9734": {
+    "translation": "Kotiin"
+  },
+  "8eb2c00e96": {
+    "translation": "Jaettu kanssasi"
+  },
+  "8f7f4c1ce7": {
+    "translation": "Noin"
+  },
+  "8ff3d0a705": {
+    "translation": "Hinta rajoitettu"
+  },
+  "902b0d55fd": {
+    "translation": "Virhe"
+  },
+  "904a830405": {
+    "translation": "Nimeä uudelleen"
+  },
+  "91e49bb0eb": {
+    "translation": "Kopioi tiedostoihini"
+  },
+  "930390d222": {
+    "translation": "Kutsulinkki kopioitu"
+  },
+  "94186070ef": {
+    "translation": "Poista valinta"
+  },
+  "94966d9074": {
+    "translation": "Lähetä"
+  },
+  "95aacd4d4a": {
+    "translation": "Kirjaudu sisään Googlella"
+  },
+  "95d2109dc8": {
+    "translation": "Rakenna tldraw SDK:lla"
+  },
+  "96165d6df5": {
+    "translation": "Tämä kuukausi"
+  },
+  "985a4b720f": {
+    "translation": "Käyttöehdot"
+  },
+  "98c997a27e": {
+    "translation": "Lisää tiedostolinkki"
+  },
+  "9914a0ce04": {
+    "translation": "Kevyt"
+  },
+  "9953e9946b": {
+    "translation": "Virheenkorjausnäkymä"
+  },
+  "9b33f5c63c": {
+    "translation": "Etkö saanut koodia? <resend>Lähetä uudelleen</resend>."
+  },
+  "9bef626805": {
+    "translation": "Poista tiedosto"
+  },
+  "9ceb927baa": {
+    "translation": "Julkaise tämä tiedosto"
+  },
+  "9e076f5885": {
+    "translation": "Ei löytynyt"
+  },
+  "9e93c98d88": {
+    "translation": "Poista käytöstä"
+  },
+  "a0da245992": {
+    "translation": "Vie sisältö .tldr-tiedostona: Valitse vasemman yläkulman valikosta \"Lataa\"."
+  },
+  "a104439641": {
+    "translation": "Pehmuste"
+  },
+  "a18366b217": {
+    "translation": "Tumma"
+  },
+  "a1c915578c": {
+    "translation": "Etsimääsi tiedostoa ei ole olemassa."
+  },
+  "a239905023": {
+    "translation": "Vie kuva"
+  },
+  "a286d9991c": {
+    "translation": "Liity"
+  },
+  "a3debabee7": {
+    "translation": "Evästekäytäntö"
+  },
+  "a4d3b161ce": {
+    "translation": "Lähetä"
+  },
+  "a603905470": {
+    "translation": "Virheenjäljitys"
+  },
+  "a6cc403d56": {
+    "translation": "Kaikki, joilla on linkki"
+  },
+  "a768caa988": {
+    "translation": "Analytics"
+  },
+  "a8873770ab": {
+    "translation": "Tiedosto kasvaa suureksi"
+  },
+  "a8de4c27a8": {
+    "translation": "Viikoittainen keijuraja saavutettu"
+  },
+  "a917baaf14": {
+    "translation": "Uusi keskustelu"
+  },
+  "a9ded1e5ce": {
+    "translation": "Tausta"
+  },
+  "ab0df9ba36": {
+    "translation": "Tiedostoraja saavutettu"
+  },
+  "af3dc88931": {
+    "notes": "This is used to show the last time the file was published. An example is 'Last published 5 minutes ago'.",
+    "translation": "Viimeksi julkaistu <date></date>"
+  },
+  "b028909917": {
+    "translation": "Vieraskäyttäjä"
+  },
+  "b2c3c2e30c": {
+    "translation": "Tiedosto on täynnä"
+  },
+  "b34a671e2c": {
+    "translation": "Lokin vasteaika"
+  },
+  "b357b524e7": {
+    "translation": "Sähköpostiosoite"
+  },
+  "b3d2db69fe": {
+    "translation": "Tiedoston URL-osoite"
+  },
+  "b6d4223e60": {
+    "translation": "Kirjaudu sisään"
+  },
+  "b6f4a2ec63": {
+    "translation": "Omistaja"
+  },
+  "b758336699": {
+    "translation": "Kopioi linkki"
+  },
+  "ba0318cb81": {
+    "translation": "Kirjaudu sisään jakaaksesi"
+  },
+  "bb93a7590f": {
+    "translation": "Hyväksy ja liity ryhmään"
+  },
+  "bbbcefd7ce": {
+    "translation": "{total, plural, one {Ladataan .tldr-tiedostoa…} other {Ladataan {uploaded} / {total} .tldr-tiedostosta…}}"
+  },
+  "bc88b0e89e": {
+    "translation": "Jakaja {ownerName}"
+  },
+  "be4f1c62d3": {
+    "translation": "Zoomaa keijuun"
+  },
+  "c2276c9127": {
+    "translation": "Lisätietoja jakamisesta."
+  },
+  "c28aed8348": {
+    "translation": "Salli <cookies>analytics</cookies>-palvelun auttaa meitä parantamaan tldrawia."
+  },
+  "c303bd1095": {
+    "translation": "Tiedostoa ei voi julkaista."
+  },
+  "c3bf447eab": {
+    "translation": "Avata"
+  },
+  "c3eb5c3b90": {
+    "translation": "Ymmärrän"
+  },
+  "c4b39a1cc3": {
+    "translation": "Välttämättömät evästeet"
+  },
+  "c6155aaecc": {
+    "translation": "Ryhmän nimi"
+  },
+  "c64518704c": {
+    "translation": "Käyttö"
+  },
+  "c655b27b1e": {
+    "translation": "i18n: Pitkä merkkijono"
+  },
+  "c6a00f137b": {
+    "translation": "Kutsu"
+  },
+  "c74ea6dbff": {
+    "translation": "Näytä vähemmän"
+  },
+  "c87aacf567": {
+    "translation": "Kirjaudu ulos"
+  },
+  "c9cc8cce24": {
+    "translation": "Tallentaa"
+  },
+  "cceaefbc20": {
+    "translation": "Jaa tämä tiedosto"
+  },
+  "cd15a75c26": {
+    "translation": "SVG"
+  },
+  "ce0547606c": {
+    "translation": "Tämä tiedosto lähestyy kokorajoitustaan. Harkitse sisällön poistamista tai uuden tiedoston aloittamista."
+  },
+  "ce1424d44b": {
+    "translation": "Sinulla on jo keijujen käyttöoikeus!"
+  },
+  "cea291e45e": {
+    "translation": "Lisätietoja julkaisemisesta."
+  },
+  "d3d2e61733": {
+    "translation": "Lähellä"
+  },
+  "d46632fe1f": {
+    "translation": "Liikaa pyyntöjä. Hiljennä tahtia."
+  },
+  "d4bbf74f3e": {
+    "translation": "Vaihda sivupalkki"
+  },
+  "d638a3344b": {
+    "translation": "Ennen kuin aloitat, hyväksy <tos>käyttöehtomme</tos> ja <privacy>tietosuojakäytäntömme</privacy>."
+  },
+  "d721757161": {
+    "translation": "Teema"
+  },
+  "d876a9fe1a": {
+    "translation": "Yritä uudelleen"
+  },
+  "d88ad2dc74": {
+    "translation": "Hyväksy ja jatka"
+  },
+  "d9100f3e10": {
+    "translation": "Siirry tänne nähdäksesi sisällön"
+  },
+  "d9bfb9789a": {
+    "translation": "Ota keijut käyttöön"
+  },
+  "d9e35d0f55": {
+    "translation": "Olet saavuttanut ryhmien enimmäismäärän. Sinun on poistettava vanhoja ryhmiä ennen uusien luomista."
+  },
+  "dbbebf3c03": {
+    "translation": "Vain kutsu"
+  },
+  "dc30bc0c79": {
+    "translation": "Tyhjennä"
+  },
+  "dcdaa754fe": {
+    "translation": "Virheellinen tldraw-tiedoston URL-osoite"
+  },
+  "de290d52ef": {
+    "translation": "Valitse oikealta keiju, jonka kanssa keskustella"
+  },
+  "df6ff49394": {
+    "translation": "Keijut ovat <strong>väliaikainen</strong> ominaisuus. Kaikki keijut poistetaan sovelluksesta 1. tammikuuta 2026. Ehkä ne palaavat jonain päivänä. Ostoksesi oikeuttaa keijujen käyttöoikeuteen vain joulukuussa 2025."
+  },
+  "dfdb78a4e4": {
+    "translation": "Sovelluksen virheenkorjausliput"
+  },
+  "e062622261": {
+    "translation": "Valitse"
+  },
+  "e0c88179b3": {
+    "translation": "Kutsu jäseniä"
+  },
+  "e2198d6228": {
+    "translation": "Kopioi kutsulinkki"
+  },
+  "e2ae80a510": {
+    "translation": "Oikeudellinen yhteenveto"
+  },
+  "e3afed0047": {
+    "translation": "Ylläpitäjä"
+  },
+  "e404559826": {
+    "translation": "Palveluehdot"
+  },
+  "e43ec38a93": {
+    "translation": "Siirry osoitteeseen"
+  },
+  "e81c4e4f2b": {
+    "translation": "tai"
+  },
+  "ea0626ac5a": {
+    "translation": "Vaara-alue"
+  },
+  "ea4788705e": {
+    "translation": "Peruuttaa"
+  },
+  "ebfe9ce86e": {
+    "translation": "Eilen"
+  },
+  "ec59b960ea": {
+    "translation": "Tämä tiedosto on saavuttanut aktiivisten yhteiskäyttäjien enimmäismäärän."
+  },
+  "ec611e9a08": {
+    "translation": "Tili-valikko"
+  },
+  "ed53713239": {
+    "translation": "i18n: Aksentoitu"
+  },
+  "ed75712b0e": {
+    "translation": "Kopioi"
+  },
+  "ede55d955f": {
+    "translation": "Lue lisää <a>evästekäytännöstämme</a>."
+  },
+  "eee6f05922": {
+    "translation": "Hajoaminen"
+  },
+  "ef53538ae4": {
+    "translation": "Jäsenet"
+  },
+  "ef7de3f485": {
+    "translation": "valittu"
+  },
+  "efde983742": {
+    "translation": "Kutsu"
+  },
+  "f09b16bc5f": {
+    "translation": "Käytämme evästeitä pitääksemme sinut kirjautuneena sisään, synkronoidaksemme tiedostosi ja kerätäksemme analytiikkaa tldrawin parantamiseksi."
+  },
+  "f0e8bff6f9": {
+    "translation": "Käyttäjäasetukset"
+  },
+  "f2569594b2": {
+    "translation": "Käytämme näitä evästeitä tiedostojesi ja asetuksiesi tallentamiseen."
+  },
+  "f2a6c498fb": {
+    "translation": "Poistaa"
+  },
+  "f4f70727dc": {
+    "translation": "Asetukset"
+  },
+  "f714e36843": {
+    "translation": "Haluatko varmasti poistua tästä ryhmästä?"
+  },
+  "fa2ead697d": {
+    "translation": "Tietosuojakäytäntö"
+  },
+  "fb15c53f22": {
+    "translation": "Katsoja"
+  },
+  "fd1be3efcf": {
+    "translation": "Haluatko varmasti poistaa tämän tiedoston?"
+  },
+  "fed5ec05eb": {
+    "translation": "Linkki kopioitu"
+  },
+  "ff7a814974": {
+    "translation": "Lisää tiedostolinkki…"
+  },
+  "ffcd73e997": {
+    "translation": "Tuo tiedosto…"
+  }
+}

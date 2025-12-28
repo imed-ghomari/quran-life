@@ -1,0 +1,37 @@
+{
+  "name": "quran-reader",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@automerge/automerge": "^3.2.1",
+    "@automerge/automerge-repo": "^2.5.1",
+    "@automerge/automerge-repo-network-broadcastchannel": "^2.5.1",
+    "@automerge/automerge-repo-network-websocket": "^2.5.1",
+    "@automerge/automerge-repo-react-hooks": "^2.5.1",
+    "@automerge/automerge-repo-storage-indexeddb": "^2.5.1",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.89.0",
+    "idb-keyval": "^6.2.2",
+    "lucide-react": "^0.562.0",
+    "next": "^13.5.6",
+    "next-pwa": "^5.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tldraw": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^13.5.6",
+    "minimatch": "^9.0.3",
+    "typescript": "^5.5.4"
+  }
+}
