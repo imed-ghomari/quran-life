@@ -316,7 +316,20 @@ export function getMemoryNodes(): MemoryNode[] {
 }
 
 export function saveMemoryNodes(nodes: MemoryNode[]): void {
-    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, nodes);
+    // Deduplicate by ID before saving to prevent high counter issues
+    const uniqueMap = new Map();
+    nodes.forEach(n => {
+        if (!uniqueMap.has(n.id)) {
+            uniqueMap.set(n.id, n);
+        } else {
+            // If duplicate found, keep the one with more progress (lastReview)
+            const existing = uniqueMap.get(n.id);
+            if ((n.scheduler.lastReview || '') > (existing.scheduler.lastReview || '')) {
+                uniqueMap.set(n.id, n);
+            }
+        }
+    });
+    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, Array.from(uniqueMap.values()));
 }
 
 export function getDueNodes(filterPart?: QuranPart): MemoryNode[] {
@@ -382,6 +395,14 @@ function createNewScheduler(): SM2State {
 export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): void {
     const settings = getSettings();
     const currentNodes = getMemoryNodes();
+
+    // Safety check: if storage cache is empty and we aren't forcing a full reset,
+    // we should NOT proceed, as we might accidentally wipe all progress.
+    if (!forceFullReset && currentNodes.length === 0 && Object.keys(settings.learnedVerses).length > 0) {
+        console.warn('Sync cancelled: Memory nodes cache is empty but learned verses exist. Potential race condition.');
+        return;
+    }
+
     const newNodes: MemoryNode[] = [];
 
     // 1. Keep non-verse nodes unless forceFullReset
