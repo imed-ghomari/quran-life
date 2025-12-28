@@ -287,6 +287,8 @@ export interface SM2State {
     easeFactor: number;
     dueDate: string;
     lastReview: string;
+    relearningStep?: number;
+    preSuspensionInterval?: number;
 }
 
 export interface MemoryNode {
@@ -448,19 +450,41 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
 
 // SM-2 Algorithm
 export function sm2(grade: number, state: SM2State): SM2State {
-    let { interval, repetition, easeFactor } = state;
+    let { interval, repetition, easeFactor, relearningStep } = state;
 
-    if (grade < 3) {
-        repetition = 0;
-        interval = 1;
+    if (relearningStep) {
+        if (grade < 3) {
+            // Failure during re-learning: restart from step 1
+            interval = 1;
+            relearningStep = 1;
+        } else {
+            // Success during re-learning
+            if (relearningStep === 1) {
+                interval = 3;
+                relearningStep = 2;
+            } else if (relearningStep === 2) {
+                // Graduate from re-learning
+                // I = 4 days or 20% of previous interval, whichever is greater
+                const minInterval = 4;
+                const previousInterval = state.preSuspensionInterval || 0;
+                interval = Math.max(minInterval, Math.round(previousInterval * 0.2));
+                relearningStep = undefined;
+                repetition = repetition || 1; // Resume from established repetition
+            }
+        }
     } else {
-        if (repetition === 0) interval = 1;
-        else if (repetition === 1) interval = 6;
-        else interval = Math.round(interval * easeFactor);
-        repetition++;
+        // Standard SM-2
+        if (grade < 3) {
+            repetition = 0;
+            interval = 1;
+        } else {
+            if (repetition === 0) interval = 1;
+            else if (repetition === 1) interval = 6;
+            else interval = Math.round(interval * easeFactor);
+            repetition++;
+        }
+        easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
     }
-
-    easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
 
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + interval);
@@ -471,6 +495,8 @@ export function sm2(grade: number, state: SM2State): SM2State {
         easeFactor: Math.round(easeFactor * 100) / 100,
         dueDate: dueDate.toISOString().split('T')[0],
         lastReview: new Date().toISOString().split('T')[0],
+        relearningStep,
+        preSuspensionInterval: state.preSuspensionInterval
     };
 }
 
@@ -931,9 +957,39 @@ export function getSuspendedAnchors(threshold: number = 3): AnchorIssue[] {
 }
 
 export function clearAnchorIssues(surahId: number, anchorId: string): void {
-    const remaining = getReviewErrors().filter(err => !(err.surahId === surahId && err.anchorId === anchorId));
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEYS.REVIEW_ERRORS, JSON.stringify(remaining));
+    const errors = getReviewErrors();
+    const issueErrors = errors.filter(err => err.surahId === surahId && err.anchorId === anchorId);
+
+    // 1. Clear the errors to unsuspend
+    const remaining = errors.filter(err => !(err.surahId === surahId && err.anchorId === anchorId));
+    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, remaining);
+
+    // 2. Identify and trigger re-learning for the associated MemoryNode
+    if (issueErrors.length > 0) {
+        const nodeId = issueErrors[0].nodeId;
+        const nodes = getMemoryNodes();
+        const nodeIdx = nodes.findIndex(n => n.id === nodeId);
+
+        if (nodeIdx !== -1) {
+            const node = nodes[nodeIdx];
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            node.scheduler = {
+                ...node.scheduler,
+                preSuspensionInterval: node.scheduler.interval,
+                interval: 1,
+                relearningStep: 1,
+                // Soft Ease Penalty + Avoid Hell:
+                // We drop ease by 0.1 but reset it significantly if it was crushed (min 1.9)
+                // because a 'Fix' implies a new mental encoding (structural repair).
+                easeFactor: Math.max(1.9, Math.round((node.scheduler.easeFactor - 0.1) * 100) / 100),
+                dueDate: tomorrow.toISOString().split('T')[0]
+            };
+
+            saveMemoryNodes(nodes);
+        }
+    }
 }
 
 export function findAnchorForRange(surahId: number, startVerse?: number, endVerse?: number): Anchor | undefined {
