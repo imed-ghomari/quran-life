@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
-import { X, Save, Share2, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Save, Share2, Maximize2, Minimize2, Github } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { Tldraw, defaultEditorAssetUrls, DefaultDashStyle, DefaultSizeStyle } from 'tldraw';
 import 'tldraw/tldraw.css';
@@ -135,6 +135,37 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                     Debug: Mounted={editor ? 'Yes' : 'No'} <br />
                     {debugInfo || 'Waiting for update...'}
                 </div>
+                {/* Custom GitHub Link */}
+                <div className="desktop-only" style={{
+                    position: 'absolute',
+                    bottom: '12px',
+                    right: '12px',
+                    zIndex: 1000,
+                }}>
+                    <a
+                        href="https://github.com/imed-ghomari/quran-life"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="View on GitHub"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
+                            background: 'white',
+                            border: '1px solid #e5e5e5',
+                            borderRadius: '8px',
+                            color: '#333',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                            transition: 'all 0.2s ease',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        <Github size={20} />
+                    </a>
+                </div>
+
                 <Tldraw
                     onMount={handleMount}
                     inferDarkMode={true}

@@ -1710,3 +1710,10 @@ input:focus {
     display: flex !important;
   }
 }
+
+/* Utility classes */
+@media (max-width: 1024px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
