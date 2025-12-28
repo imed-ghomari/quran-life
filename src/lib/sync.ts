@@ -23,10 +23,12 @@ export async function syncWithCloud(): Promise<SyncResult> {
       return { status: 'success', message: 'Initial backup created on Supabase' };
     }
 
-    // Merge logic
-    const { mergedData, hasChanges } = mergeBackups(localData, remoteData);
+    // MERGE AGAIN with latest local state right before saving
+    // this prevents losing changes made while the fetch was in flight
+    const latestLocal = exportBackup();
+    const { mergedData, hasChanges: mergedHasChanges } = mergeBackups(latestLocal, remoteData);
 
-    if (hasChanges) {
+    if (mergedHasChanges || localData.exportedAt !== latestLocal.exportedAt) {
       // Update local storage
       mergedData.settings = {
         ...(mergedData.settings || {}),

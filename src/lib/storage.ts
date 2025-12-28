@@ -69,7 +69,12 @@ const storageCache: { [key: string]: any } = {};
 async function loadIntoCache() {
     if (typeof window === 'undefined' || !customStore) return;
     for (const key of Object.values(STORAGE_KEYS)) {
-        storageCache[key] = await get(key, customStore);
+        const val = await get(key, customStore);
+        // ONLY update cache if it hasn't been written to already during startup
+        // This prevents overwriting a fast user action with slow DB load
+        if (val !== undefined && storageCache[key] === undefined) {
+            storageCache[key] = val;
+        }
     }
 }
 

@@ -9,8 +9,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const performSync = async () => {
     if (syncInProgress.current || !navigator.onLine) return;
+
+    // Cross-tab lock using localStorage
+    const now = Date.now();
+    const lastSyncTime = parseInt(localStorage.getItem('quran-app-sync-lock') || '0');
+    // If a sync was started in another tab less than 10 seconds ago, skip this one
+    if (now - lastSyncTime < 10000) return;
+
     try {
       syncInProgress.current = true;
+      localStorage.setItem('quran-app-sync-lock', now.toString());
+
       const { createClient } = await import('@/utils/supabase/client');
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
