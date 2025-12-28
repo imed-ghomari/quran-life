@@ -240,7 +240,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
         DebugMenu: null,
         DebugPanel: null,
         SharePanel: null,
-        MainMenu: null,
     }), []);
 
     return (
