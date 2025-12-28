@@ -8,7 +8,6 @@ const withPWA = withPWAInit({
 });
 
 /** @type {import('next').NextConfig} */
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   productionBrowserSourceMaps: true, // Enable source maps for debugging
   reactStrictMode: false, // Disabled to prevent double-mount issues with Tldraw

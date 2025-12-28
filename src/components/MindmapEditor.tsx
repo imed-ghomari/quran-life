@@ -2,9 +2,9 @@
 
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
-import { X, Save, Share2, Maximize2, Minimize2, Github } from 'lucide-react';
+import { X, Save, Share2, Maximize2, Minimize2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { Tldraw, defaultEditorAssetUrls, DefaultDashStyle, DefaultSizeStyle } from 'tldraw';
+import { Tldraw, DefaultDashStyle, DefaultSizeStyle } from 'tldraw';
 import 'tldraw/tldraw.css';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -50,22 +50,6 @@ interface MindmapEditorProps {
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
 
-    // Debug Effect
-    const [debugInfo, setDebugInfo] = useState('');
-    useEffect(() => {
-        if (!editor) return;
-        const interval = setInterval(() => {
-            const shapes = editor.getCurrentPageShapeIds().size;
-            const camera = editor.getCamera();
-            const container = document.querySelector('.tldraw-container');
-            const dim = container ? `${container.clientWidth}x${container.clientHeight}` : 'N/A';
-            const htmlClass = document.documentElement.className;
-
-            setDebugInfo(`Shps: ${shapes} | Snap: ${initialSnapshot ? 'YES' : 'NO'} | Assets: ${defaultEditorAssetUrls ? 'YES' : 'NO'} | Zoom: ${camera.z.toFixed(2)} | Dim: ${dim} | HTML: ${htmlClass}`);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [editor, initialSnapshot]);
-
     // Set Defaults
     useEffect(() => {
         try {
@@ -77,14 +61,11 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
     }, []);
 
     const handleMount = useCallback((editorInstance: any) => {
-        console.log('Tldraw mounted');
         setEditor(editorInstance);
 
-        // Restore snapshot loading
         if (initialSnapshot) {
             try {
                 editorInstance.store.loadSnapshot(initialSnapshot);
-                // Center content if shapes exist
                 if (Object.keys(initialSnapshot.document.store).length > 0) {
                     editorInstance.zoomToFit();
                 }
@@ -108,9 +89,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
-            {/* Local CSS to ensure availability in production */}
-            <link rel="stylesheet" href="/tldraw-local.css" />
-
             {/* Header */}
             <div style={{
                 height: '50px',
@@ -131,46 +109,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
 
             {/* Editor */}
             <div className="tldraw-container" style={{ position: 'absolute', top: '50px', left: 0, right: 0, bottom: 0, background: '#f8f9fa' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(255,0,0,0.8)', color: 'white', pointerEvents: 'none', padding: 8, fontSize: 12, maxWidth: '100%' }}>
-                    Debug: Mounted={editor ? 'Yes' : 'No'} <br />
-                    {debugInfo || 'Waiting for update...'}
-                </div>
-                {/* Custom GitHub Link */}
-                <div className="desktop-only" style={{
-                    position: 'absolute',
-                    bottom: '12px',
-                    right: '12px',
-                    zIndex: 1000,
-                }}>
-                    <a
-                        href="https://github.com/imed-ghomari/quran-life"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="View on GitHub"
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '40px',
-                            height: '40px',
-                            background: 'white',
-                            border: '1px solid #e5e5e5',
-                            borderRadius: '8px',
-                            color: '#333',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                            transition: 'all 0.2s ease',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <Github size={20} />
-                    </a>
-                </div>
-
                 <Tldraw
                     onMount={handleMount}
                     inferDarkMode={true}
-                    assetUrls={defaultEditorAssetUrls}
-                // forceMobile={true} // Disabled for now to rule out layout issues
                 />
             </div>
         </div>
