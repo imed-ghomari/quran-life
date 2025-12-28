@@ -112,6 +112,14 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 <Tldraw
                     onMount={handleMount}
                     inferDarkMode={true}
+                    forceMobile={true}
+                    components={{
+                        PageMenu: null,
+                        DebugMenu: null,
+                        DebugPanel: null,
+                        SharePanel: null,
+                        MainMenu: null,
+                    }}
                 />
             </div>
         </div>
