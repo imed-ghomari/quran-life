@@ -116,19 +116,18 @@ export default function Navigation() {
                 );
             })}
 
-            <div className="desktop-footer">
-                <a
-                    href="https://github.com/imed-ghomari/quran-life"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="nav-item"
-                    title="View Source on GitHub"
-                >
-                    <span className="nav-icon">
-                        <Github size={24} />
-                    </span>
-                </a>
-            </div>
+            <a
+                href="https://github.com/imed-ghomari/quran-life"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="nav-item github-nav-link"
+                title="GitHub Repository"
+            >
+                <span className="nav-icon">
+                    <Github size={24} />
+                </span>
+                <span>GitHub</span>
+            </a>
         </nav>
     );
 }

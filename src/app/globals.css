@@ -1645,18 +1645,18 @@ input:focus {
   }
 }
 
-.desktop-footer {
+.github-nav-link {
   display: none !important;
 }
 
 @media (min-width: 1024px) {
-  .desktop-footer {
+  .github-nav-link {
     display: flex !important;
-    flex-direction: column;
-    align-items: center;
+    margin-top: auto !important;
+    margin-bottom: 2rem !important;
     width: 100%;
-    margin-top: auto;
-    padding-bottom: 2rem;
+    align-items: center;
+    justify-content: center;
   }
 }
 
