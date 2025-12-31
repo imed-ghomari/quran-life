@@ -950,21 +950,26 @@ export default function SettingsPage() {
                                                             <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
                                                             <Map size={16} /> Mindmaps
                                                         </div>
-                                                        <button
-                                                            className="bulk-btn reset-mut"
-
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (window.confirm('Are you sure you want to reset the maturity of ALL Mindmaps (both Surah and Part mindmaps)?')) {
-                                                                    setGroupMaturity('mindmap', 'reset');
-                                                                    setGroupMaturity('part_mindmap', 'reset');
-                                                                    setVersion(v => v + 1);
-                                                                }
+                                                        <select
+                                                            className="maturity-select"
+                                                            style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                            value=""
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                if (!val) return;
+                                                                if (val === 'reset' && !window.confirm('Are you sure you want to reset the maturity of ALL Mindmaps?')) return;
+                                                                setGroupMaturity('mindmap', val as any);
+                                                                setGroupMaturity('part_mindmap', val as any);
+                                                                setMemoryNodes(getMemoryNodes());
                                                             }}
-                                                            title="Reset all mindmaps maturity"
                                                         >
-                                                            Reset Group
-                                                        </button>
+                                                            <option value="">Set Group...</option>
+                                                            <option value="reset">Reset</option>
+                                                            <option value="medium">Medium</option>
+                                                            <option value="strong">Strong</option>
+                                                            <option value="mastered">Mastered</option>
+                                                        </select>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -978,13 +983,26 @@ export default function SettingsPage() {
                                                                     <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
                                                                     Part Mindmaps
                                                                 </div>
-                                                                <button
-                                                                    className="bulk-btn reset-mut"
-                                                                    onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('part_mindmap'); }}
-                                                                    title="Reset all part mindmaps maturity"
+                                                                <select
+                                                                    className="maturity-select"
+                                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                    value=""
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (!val) return;
+                                                                        if (val === 'reset' && !window.confirm('Reset all part mindmaps maturity?')) return;
+                                                                        handleGroupMaturityReset('part_mindmap'); // existing func resets to 'reset'
+                                                                        if (val !== 'reset') setGroupMaturity('part_mindmap', val as any);
+                                                                        setMemoryNodes(getMemoryNodes());
+                                                                    }}
                                                                 >
-                                                                    Reset Group
-                                                                </button>
+                                                                    <option value="">Set Subgroup...</option>
+                                                                    <option value="reset">Reset</option>
+                                                                    <option value="medium">Medium</option>
+                                                                    <option value="strong">Strong</option>
+                                                                    <option value="mastered">Mastered</option>
+                                                                </select>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -998,13 +1016,15 @@ export default function SettingsPage() {
                                                                         <td>Part {node.partId}</td>
                                                                         <td>
                                                                             <select
-                                                                                value={getMaturityLevel(node.scheduler.interval)}
+                                                                                value=""
                                                                                 onChange={(e) => {
+                                                                                    if (!e.target.value) return;
                                                                                     setNodeMaturity(node.id, e.target.value as any);
                                                                                     setMemoryNodes(getMemoryNodes());
                                                                                 }}
                                                                                 className="maturity-select"
                                                                             >
+                                                                                <option value="">Set To...</option>
                                                                                 <option value="reset">Reset</option>
                                                                                 <option value="medium">Medium</option>
                                                                                 <option value="strong">Strong</option>
@@ -1030,13 +1050,26 @@ export default function SettingsPage() {
                                                                     <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
                                                                     Surah Mindmaps
                                                                 </div>
-                                                                <button
-                                                                    className="bulk-btn reset-mut"
-                                                                    onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('mindmap'); }}
-                                                                    title="Reset all surah mindmaps maturity"
+                                                                <select
+                                                                    className="maturity-select"
+                                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                    value=""
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (!val) return;
+                                                                        if (val === 'reset' && !window.confirm('Reset all surah mindmaps maturity?')) return;
+                                                                        handleGroupMaturityReset('mindmap');
+                                                                        if (val !== 'reset') setGroupMaturity('mindmap', val as any);
+                                                                        setMemoryNodes(getMemoryNodes());
+                                                                    }}
                                                                 >
-                                                                    Reset Group
-                                                                </button>
+                                                                    <option value="">Set Subgroup...</option>
+                                                                    <option value="reset">Reset</option>
+                                                                    <option value="medium">Medium</option>
+                                                                    <option value="strong">Strong</option>
+                                                                    <option value="mastered">Mastered</option>
+                                                                </select>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -1050,13 +1083,15 @@ export default function SettingsPage() {
                                                                         <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
                                                                         <td>
                                                                             <select
-                                                                                value={getMaturityLevel(node.scheduler.interval)}
+                                                                                value=""
                                                                                 onChange={(e) => {
+                                                                                    if (!e.target.value) return;
                                                                                     setNodeMaturity(node.id, e.target.value as any);
                                                                                     setMemoryNodes(getMemoryNodes());
                                                                                 }}
                                                                                 className="maturity-select"
                                                                             >
+                                                                                <option value="">Set To...</option>
                                                                                 <option value="reset">Reset</option>
                                                                                 <option value="medium">Medium</option>
                                                                                 <option value="strong">Strong</option>
@@ -1084,13 +1119,25 @@ export default function SettingsPage() {
                                                             <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
                                                             <Book size={16} /> Verses
                                                         </div>
-                                                        <button
-                                                            className="bulk-btn reset-mut"
-                                                            onClick={(e) => { e.stopPropagation(); handleGroupMaturityReset('verse'); }}
-                                                            title="Reset all verses maturity"
+                                                        <select
+                                                            className="maturity-select"
+                                                            style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                            value=""
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                if (!val) return;
+                                                                if (val === 'reset' && !window.confirm('Are you sure you want to reset the maturity of ALL verses?')) return;
+                                                                setGroupMaturity('verse', val as any);
+                                                                setMemoryNodes(getMemoryNodes());
+                                                            }}
                                                         >
-                                                            Reset Group
-                                                        </button>
+                                                            <option value="">Set Group...</option>
+                                                            <option value="reset">Reset</option>
+                                                            <option value="medium">Medium</option>
+                                                            <option value="strong">Strong</option>
+                                                            <option value="mastered">Mastered</option>
+                                                        </select>
                                                     </div>
                                                 </td>
                                             </tr>

@@ -170,7 +170,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 interface MindmapEditorProps {
     initialSnapshot?: any;
-    onSave?: (snapshot: any, imageBlob?: Blob) => Promise<void>;
+    onSave?: (snapshot: any, images?: { light?: Blob, dark?: Blob }) => Promise<void>;
     onClose: () => void;
     title?: string;
 }
@@ -237,27 +237,41 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 // Get the current snapshot and an image preview
                 const snapshot = typeof editor.getSnapshot === 'function' ? editor.getSnapshot() : editor.store.getSnapshot();
 
-                // Export image for preview
-                let imageBlob: Blob | undefined | null;
+                // Export images for preview (both light and dark)
+                let lightBlob: Blob | undefined;
+                let darkBlob: Blob | undefined;
                 try {
                     const shapeIds = Array.from(editor.getCurrentPageShapeIds());
                     if (shapeIds.length > 0) {
-                        const bounds = editor.getSelectionPageBounds() || editor.getCurrentPageBounds();
-                        const result = await editor.toImage(shapeIds, {
+                        // Light mode version
+                        const lightResult = await editor.toImage(shapeIds, {
                             format: 'png',
                             quality: 1,
                             pixelRatio: 2,
-                            padding: 0,
+                            padding: 10,
+                            theme: 'light'
                         });
-                        if (result && result.blob) {
-                            imageBlob = result.blob;
+                        if (lightResult && lightResult.blob) {
+                            lightBlob = lightResult.blob;
+                        }
+
+                        // Dark mode version
+                        const darkResult = await editor.toImage(shapeIds, {
+                            format: 'png',
+                            quality: 1,
+                            pixelRatio: 2,
+                            padding: 10,
+                            theme: 'dark'
+                        });
+                        if (darkResult && darkResult.blob) {
+                            darkBlob = darkResult.blob;
                         }
                     }
                 } catch (imgError) {
-                    console.warn("Failed to generate preview image", imgError);
+                    console.warn("Failed to generate preview images", imgError);
                 }
 
-                await onSave(snapshot, imageBlob || undefined);
+                await onSave(snapshot, { light: lightBlob, dark: darkBlob });
             } catch (e) {
                 console.error("Save failed", e);
             }

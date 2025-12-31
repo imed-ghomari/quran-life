@@ -4,8 +4,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { SURAHS, getSurah, getSurahsByPart, parseQuranJson } from '@/lib/quranData';
 import {
     getMindMaps,
+    getMindMap,
     saveMindMap,
     getPartMindMaps,
+    getPartMindMap,
     savePartMindMap,
     getSettings,
     getReviewErrors,
@@ -240,12 +242,7 @@ export default function TodoPage() {
         const eligible = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !isSurahSkipped(s.id));
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
-            .sort((a, b) => {
-                const aIncomplete = !a.mindmap || !a.mindmap.isComplete || !a.mindmap.imageUrl;
-                const bIncomplete = !b.mindmap || !b.mindmap.isComplete || !b.mindmap.imageUrl;
-                if (aIncomplete !== bIncomplete) return aIncomplete ? -1 : 1;
-                return a.surah.id - b.surah.id;
-            });
+            .sort((a, b) => a.surah.id - b.surah.id);
     }, [mindmaps, settingsVersion, activePart]);
 
     const incompleteSurahMaps = surahTasks.filter(t => !t.mindmap || !t.mindmap.isComplete || !t.mindmap.imageUrl);
@@ -457,17 +454,16 @@ export default function TodoPage() {
         setSettingsVersion(v => v + 1);
     };
 
-    const handleEditorSave = async (snapshot: any, imageBlob?: Blob) => {
+    const handleEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
         if (!activeMindmapEditor) return;
-
         const { surahId } = activeMindmapEditor;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const imageUrl = reader.result as string;
-            const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
+
+        const save = (lightUrl: string | null, darkUrl: string | null) => {
+            const existing = getMindMap(surahId);
             const updated = {
                 ...existing,
-                imageUrl: (imageBlob && imageBlob.size > 0) ? imageUrl : existing.imageUrl,
+                imageUrl: lightUrl || existing.imageUrl,
+                imageUrlDark: darkUrl || existing.imageUrlDark,
                 tldrawSnapshot: snapshot
             };
             saveMindMap(updated);
@@ -477,30 +473,38 @@ export default function TodoPage() {
             syncWithCloud().catch(console.error);
         };
 
-        if (imageBlob && imageBlob.size > 0) {
-            reader.readAsDataURL(imageBlob);
+        if (images && (images.light || images.dark)) {
+            const blobs = images;
+
+            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
+                if (!blob) return Promise.resolve(null);
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const [light, dark] = await Promise.all([
+                processBlob(blobs.light),
+                processBlob(blobs.dark)
+            ]);
+            save(light, dark);
         } else {
-            const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-            const updated = { ...existing, tldrawSnapshot: snapshot };
-            saveMindMap(updated);
-            setMindmaps(prev => ({ ...prev, [surahId]: updated }));
-            setSettingsVersion(v => v + 1);
-            setActiveMindmapEditor(null);
-            syncWithCloud().catch(console.error);
+            save(null, null);
         }
     };
 
-    const handlePartEditorSave = async (snapshot: any, imageBlob?: Blob) => {
+    const handlePartEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
         if (!activePartEditor) return;
-
         const { partId } = activePartEditor;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const imageUrl = reader.result as string;
-            const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
+
+        const save = (lightUrl: string | null, darkUrl: string | null) => {
+            const existing = getPartMindMap(partId);
             const updated = {
                 ...existing,
-                imageUrl: (imageBlob && imageBlob.size > 0) ? imageUrl : existing.imageUrl,
+                imageUrl: lightUrl || existing.imageUrl,
+                imageUrlDark: darkUrl || existing.imageUrlDark,
                 tldrawSnapshot: snapshot
             };
             savePartMindMap(updated);
@@ -510,16 +514,25 @@ export default function TodoPage() {
             syncWithCloud().catch(console.error);
         };
 
-        if (imageBlob && imageBlob.size > 0) {
-            reader.readAsDataURL(imageBlob);
+        if (images && (images.light || images.dark)) {
+            const blobs = images;
+
+            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
+                if (!blob) return Promise.resolve(null);
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const [light, dark] = await Promise.all([
+                processBlob(blobs.light),
+                processBlob(blobs.dark)
+            ]);
+            save(light, dark);
         } else {
-            const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
-            const updated = { ...existing, tldrawSnapshot: snapshot };
-            savePartMindMap(updated);
-            setPartMindmaps(prev => ({ ...prev, [partId]: updated }));
-            setSettingsVersion(v => v + 1);
-            setActivePartEditor(null);
-            syncWithCloud().catch(console.error);
+            save(null, null);
         }
     };
 
@@ -1025,7 +1038,7 @@ export default function TodoPage() {
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ background: 'var(--accent-light)', color: 'var(--accent)', padding: '8px', borderRadius: '10px', display: 'flex' }}>
+                        <div style={{ background: 'var(--background)', color: 'var(--foreground)', padding: '8px', borderRadius: '10px', border: '1px solid var(--border)', display: 'flex' }}>
                             <Map size={20} />
                         </div>
                         <div>
@@ -1358,8 +1371,8 @@ export default function TodoPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <MapPinned size={16} />
                                             <span style={{ fontWeight: 600 }}>Surah Mindmaps</span>
-                                            <span className={`status-badge ${incompleteSurahMaps.length === 0 ? 'learned' : 'partial'}`} style={incompleteSurahMaps.length === 0 ? { background: 'var(--success-bg)', color: 'var(--success)' } : {}}>
-                                                {incompleteSurahMaps.length} To Do
+                                            <span className="status-badge" style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}>
+                                                {surahTasks.length} surahs
                                             </span>
                                         </div>
                                         {collapsedSubgroups['surah'] ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -1378,17 +1391,20 @@ export default function TodoPage() {
                                                                 onClick={() => toggleSurahExpand(surah.id)}
                                                                 style={{ paddingLeft: '1rem', background: 'var(--background-secondary)', justifyContent: 'space-between', borderTop: 'none' }}
                                                             >
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah.id}</div>
-                                                                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{surah.name}</span>
-                                                                    {/* Issue #7: Show complete/incomplete status badge */}
-                                                                    {(!!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot) && (
-                                                                        <span className={`status-badge ${mindmap?.isComplete ? 'learned' : 'partial'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
-                                                                            {mindmap?.isComplete ? '✓' : '○'}
-                                                                        </span>
-                                                                    )}
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                        <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah.id}</div>
+                                                                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{surah.name}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                                                            <span className={`status-badge ${mindmap?.isComplete ? 'learned' : 'partial'}`} style={{ fontSize: '0.65rem' }}>
+                                                                                {mindmap?.isComplete ? 'Complete' : 'Incomplete'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.5 }} />
+                                                                    </div>
                                                                 </div>
-                                                                <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                                             </div>
 
                                                             {isExpanded && (
@@ -1660,7 +1676,7 @@ export default function TodoPage() {
                                                             <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                                                 <button
                                                                     className="upload-tile"
-                                                                    style={{ padding: '0.5rem', height: 'auto', margin: 0, border: '1px dashed var(--border)', background: 'transparent', width: '100%', cursor: 'pointer' }}
+                                                                    style={{ padding: '0.5rem', height: 'auto', margin: 0, border: '1px dashed var(--border)', background: 'transparent', width: '100%', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}
                                                                     onClick={() => setActiveMindmapEditor({ surahId: surah.id, snapshot: mindmap?.tldrawSnapshot })}
                                                                 >
                                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>

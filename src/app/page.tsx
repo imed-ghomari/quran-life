@@ -525,15 +525,16 @@ export default function TodayPage() {
         syncWithCloud().catch(console.error);
     };
 
-    const handleMindmapEditorSave = async (snapshot: any, imageBlob?: Blob) => {
+    const handleMindmapEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
         if (!activeMindmapEditor) return;
         const { surahId } = activeMindmapEditor;
 
-        const save = (imageUrl: string | null) => {
+        const save = (lightUrl: string | null, darkUrl: string | null) => {
             const existing = getMindMap(surahId);
             saveMindMap({
                 ...existing,
-                imageUrl: imageUrl || existing.imageUrl,
+                imageUrl: lightUrl || existing.imageUrl,
+                imageUrlDark: darkUrl || existing.imageUrlDark,
                 tldrawSnapshot: snapshot
             });
             setSettingsVersion(v => v + 1);
@@ -541,24 +542,39 @@ export default function TodayPage() {
             syncWithCloud().catch(console.error);
         };
 
-        if (imageBlob && imageBlob.size > 0) {
-            const reader = new FileReader();
-            reader.onloadend = () => save(reader.result as string);
-            reader.readAsDataURL(imageBlob);
+        if (images && (images.light || images.dark)) {
+            const blobs = images;
+            const urls: { light: string | null, dark: string | null } = { light: null, dark: null };
+
+            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
+                if (!blob) return Promise.resolve(null);
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const [light, dark] = await Promise.all([
+                processBlob(blobs.light),
+                processBlob(blobs.dark)
+            ]);
+            save(light, dark);
         } else {
-            save(null);
+            save(null, null);
         }
     };
 
-    const handlePartMindmapEditorSave = async (snapshot: any, imageBlob?: Blob) => {
+    const handlePartMindmapEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
-        const save = (imageUrl: string | null) => {
+        const save = (lightUrl: string | null, darkUrl: string | null) => {
             const existing = getPartMindMap(partId);
             savePartMindMap({
                 ...existing,
-                imageUrl: imageUrl || existing.imageUrl,
+                imageUrl: lightUrl || existing.imageUrl,
+                imageUrlDark: darkUrl || existing.imageUrlDark,
                 tldrawSnapshot: snapshot
             });
             setSettingsVersion(v => v + 1);
@@ -566,12 +582,26 @@ export default function TodayPage() {
             syncWithCloud().catch(console.error);
         };
 
-        if (imageBlob && imageBlob.size > 0) {
-            const reader = new FileReader();
-            reader.onloadend = () => save(reader.result as string);
-            reader.readAsDataURL(imageBlob);
+        if (images && (images.light || images.dark)) {
+            const blobs = images;
+            const urls: { light: string | null, dark: string | null } = { light: null, dark: null };
+
+            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
+                if (!blob) return Promise.resolve(null);
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const [light, dark] = await Promise.all([
+                processBlob(blobs.light),
+                processBlob(blobs.dark)
+            ]);
+            save(light, dark);
         } else {
-            save(null);
+            save(null, null);
         }
     };
 
@@ -593,7 +623,7 @@ export default function TodayPage() {
                     onClose={() => setActivePartEditor(null)}
                 />
             )}
-            <h1>Today</h1>
+            <h1 className="hide-mobile">Today</h1>
             <audio ref={audioRef} onEnded={handleAudioEnded} onPlay={handleAudioPlay} preload="auto" />
 
             <div className="today-grid">
@@ -673,7 +703,7 @@ export default function TodayPage() {
                                                 </button>
                                             ) : (
                                                 <div className="review-buttons" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                                                    <button className="review-btn postpone" style={{ padding: '0.65rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={handlePostpone} title="Shortcut: Arrow Left">
+                                                    <button className="review-btn postpone" style={{ padding: '0.65rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">
                                                         <span style={{ fontSize: '0.85rem' }}>Not sure</span>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Today</span>
                                                     </button>
@@ -706,17 +736,24 @@ export default function TodayPage() {
                                                 </div>
                                             ) : (
                                                 <div>
-                                                    {reviewContent.mindmap?.imageUrl && (
-                                                        <div
-                                                            style={{ position: 'relative', cursor: 'zoom-in' }}
-                                                            onClick={() => setZoomImage(reviewContent.mindmap!.imageUrl)}
-                                                        >
-                                                            <img src={reviewContent.mindmap.imageUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
-                                                            <div style={{ position: 'absolute', bottom: 16, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                                <Maximize2 size={12} /> Tap to Zoom
+                                                    {(() => {
+                                                        const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                                                        const displayUrl = isDark ? (reviewContent.mindmap?.imageUrlDark || reviewContent.mindmap?.imageUrl) : reviewContent.mindmap?.imageUrl;
+
+                                                        if (!displayUrl) return null;
+
+                                                        return (
+                                                            <div
+                                                                style={{ position: 'relative', cursor: 'zoom-in' }}
+                                                                onClick={() => setZoomImage(displayUrl)}
+                                                            >
+                                                                <img src={displayUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
+                                                                <div style={{ position: 'absolute', bottom: 16, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                    <Maximize2 size={12} /> Tap to Zoom
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        );
+                                                    })()}
 
                                                     {/* Quick Actions */}
                                                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -874,15 +911,17 @@ export default function TodayPage() {
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 4,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
                         animation: 'slideInRight 0.3s ease-out',
                         background: t.type === 'success' ? 'var(--success)' :
-                            t.type === 'postpone' ? 'var(--bg-secondary)' : 'var(--danger)',
+                            t.type === 'postpone' ? 'var(--background-secondary)' : 'var(--danger)',
                         border: '1px solid var(--border)',
-                        color: t.type === 'postpone' ? 'var(--text-primary)' : 'white',
+                        color: t.type === 'postpone' ? 'var(--foreground)' : 'white',
                         minWidth: '180px',
                         fontSize: '0.85rem',
-                        pointerEvents: 'auto'
+                        pointerEvents: 'auto',
+                        backdropFilter: 'blur(12px)',
+                        opacity: 1
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             {t.type === 'success' ? <Check size={18} /> :

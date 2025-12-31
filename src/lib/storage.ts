@@ -578,6 +578,7 @@ export interface Anchor {
 export interface MindMap {
     surahId: number;
     imageUrl: string | null;
+    imageUrlDark?: string | null;
     anchors: Anchor[];
     isComplete: boolean;
     tldrawSnapshot?: any;
@@ -621,6 +622,7 @@ export function saveMindMap(mindmap: MindMap): void {
 export interface PartMindMap {
     partId: QuranPart;
     imageUrl: string | null;
+    imageUrlDark?: string | null;
     description: string;
     isComplete: boolean;
     tldrawSnapshot?: any;
