@@ -98,33 +98,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         {children}
       </OnlineStatusContext.Provider>
       {!isOnline && (
-        <div style={{
-          position: 'fixed',
-          bottom: '5.25rem',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'var(--background-secondary)',
-          color: 'var(--foreground)',
-          padding: '0.65rem 0.9rem',
-          borderRadius: '14px',
-          border: '1px solid var(--border)',
-          boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.65rem',
-          zIndex: 9999,
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          pointerEvents: 'none',
-          maxWidth: '92vw',
-        }}>
-          <CloudOff size={16} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span>Offline mode</span>
-            <span style={{ fontWeight: 500, fontSize: '0.72rem', color: 'var(--foreground-secondary)' }}>
-              Cloud sync and sign-in are unavailable. Changes will sync when you’re back online.
-            </span>
-          </div>
+        <div className="offline-indicator">
+          <CloudOff size={14} />
+          <span>Offline mode</span>
         </div>
       )}
     </>

@@ -424,23 +424,52 @@ input:focus {
 }
 
 .blurred-chunk {
-  filter: blur(3px);
+  filter: blur(8px);
   background: rgba(0, 0, 0, 0.08);
   border-radius: 4px;
   padding: 0 0.3rem;
 }
 
 .strong-blur {
-  filter: blur(7px);
+  filter: blur(12px);
 }
 
 .next-blur {
-  filter: blur(5px);
+  filter: blur(10px);
   background: rgba(14, 165, 233, 0.25);
   border: 1px dashed var(--accent);
   color: var(--accent);
   border-radius: 4px;
   padding: 0 0.4rem;
+}
+
+/* Offline indicator redesign */
+.offline-indicator {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--background-secondary);
+  color: var(--foreground);
+  padding: 0.4rem 0.6rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  z-index: 9999;
+  font-size: 0.7rem;
+  font-weight: 600;
+  pointer-events: none;
+  max-width: 92vw;
+  top: 0.5rem;
+}
+
+@media (min-width: 769px) {
+  .offline-indicator {
+    top: auto;
+    bottom: 5.25rem;
+  }
 }
 
 /* Progress bar */

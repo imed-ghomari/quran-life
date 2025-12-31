@@ -19,6 +19,7 @@ const STORAGE_KEYS = {
     LISTENING_STATS: 'quran-app-listening-stats',
     CYCLE_START: 'quran-app-cycle-start',
     LISTENING_COMPLETE: 'quran-app-listening-complete',
+    LISTENING_CYCLES: 'quran-app-listening-cycles',
     REVIEW_ERRORS: 'quran-app-review-errors',
     MUTASHABIHAT_DECISIONS: 'quran-app-mutashabihat-decisions',
     CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
@@ -725,6 +726,17 @@ export function savePortionPointer(partId: QuranPart, index: number): void {
     saveToCacheAndStore(STORAGE_KEYS.PORTION_POINTERS, pointers);
 }
 
+export function getListeningCycles(partId: QuranPart): number {
+    const cycles = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.LISTENING_CYCLES, {} as any);
+    return cycles[partId] || 0;
+}
+
+export function saveListeningCycles(partId: QuranPart, count: number): void {
+    const cycles = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.LISTENING_CYCLES, {} as any);
+    cycles[partId] = count;
+    saveToCacheAndStore(STORAGE_KEYS.LISTENING_CYCLES, cycles);
+}
+
 export function markListeningComplete(partId: QuranPart, versesPerDay: number, totalVerses: number): void {
     const today = new Date().toISOString().split('T')[0];
     saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, today);
@@ -732,6 +744,13 @@ export function markListeningComplete(partId: QuranPart, versesPerDay: number, t
     // Advance the progress pointer
     const currentPointer = getPortionPointer(partId);
     const nextPointer = (currentPointer + versesPerDay) % totalVerses;
+    
+    // Check if we completed a cycle
+    if (nextPointer < currentPointer || (nextPointer === 0 && currentPointer > 0)) {
+        const currentCycles = getListeningCycles(partId);
+        saveListeningCycles(partId, currentCycles + 1);
+    }
+    
     savePortionPointer(partId, nextPointer);
 }
 

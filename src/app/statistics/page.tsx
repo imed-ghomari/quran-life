@@ -8,6 +8,8 @@ import {
     getMindMaps,
     getPartMindMaps,
     getMemoryNodes,
+    getListeningCycles,
+    getListeningCompletedToday,
 } from '@/lib/storage';
 import { BarChart3, Layers, Hash, Info, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
 import DocumentationModal from '@/components/DocumentationModal';
@@ -81,7 +83,7 @@ export default function StatisticsPage() {
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
                 { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
-            ].filter(s => s.count > 0)
+            ]
         };
     }, [version, partMindmaps, memoryNodes]);
 
@@ -130,7 +132,7 @@ export default function StatisticsPage() {
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
                 { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
-            ].filter(s => s.count > 0)
+            ]
         };
     }, [version, activePart, mindmaps, memoryNodes, skippedSurahs]);
 
@@ -172,41 +174,44 @@ export default function StatisticsPage() {
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
                 { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
-            ].filter(s => s.count > 0)
+            ]
         };
     }, [version, activePart, memoryNodes, skippedSurahs]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
         const progress = getListeningProgress(activePart);
-        const settings = getSettings();
+        const isCompletedToday = getListeningCompletedToday();
+        const cycles = getListeningCycles(activePart);
         
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
         const totalVersesInPart = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
         
-        // Current portion progress
-        const currentVerseIndex = progress.currentVerseIndex || 0;
+        // Calculate today's portion size
+        const versesPerDay = settings.completionDays > 0 ? Math.ceil(totalVersesInPart / settings.completionDays) : 0;
         
-        // Cycle count: how many times it was repeated
-        // We need to fetch this from pointers or stats. 
-        // Based on storage.ts, completions are not tracked in ListeningStats object but there is a ListeningProgress.
-        // Let's check if we have a way to get cycle count. 
-        // Actually, looking at markListeningComplete in storage.ts, it doesn't seem to increment a cycle counter.
-        // Wait, I saw "completions" in my previous search but it might have been an assumption.
-        // Let's just use the current progress for now.
+        let learnedCount = 0;
+        let total = versesPerDay || 1; // Avoid division by zero
         
-        const learnedCount = currentVerseIndex;
-        const remainingCount = Math.max(0, totalVersesInPart - learnedCount);
+        if (isCompletedToday) {
+            learnedCount = total;
+        } else {
+            // currentVerseIndex is the index within today's portion
+            // We want to show progress within this portion
+            learnedCount = progress.currentVerseIndex || 0;
+        }
+        
+        const remainingCount = Math.max(0, total - learnedCount);
 
         return {
-            total: totalVersesInPart,
-            completions: 0, // Fallback if not tracked
+            total,
+            completions: cycles,
             segments: [
-                { label: 'Completed', count: learnedCount, color: 'var(--chart-mastered)', description: 'Verses completed in current cycle' },
-                { label: 'Remaining', count: remainingCount, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Verses remaining in current cycle' },
-            ].filter(s => s.count > 0)
+                { label: 'Completed', count: learnedCount, color: 'var(--chart-mastered)', description: 'Verses completed in today\'s portion' },
+                { label: 'Remaining', count: remainingCount, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Verses remaining in today\'s portion' },
+            ]
         };
-    }, [version, activePart, skippedSurahs]);
+    }, [version, activePart, skippedSurahs, settings.completionDays]);
 
     return (
         <div className="content-wrapper" style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '2rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
