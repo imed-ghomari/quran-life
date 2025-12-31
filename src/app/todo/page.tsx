@@ -655,17 +655,37 @@ function DesktopAnchorBuilder({
 
                 {/* Existing Breaks Indicators */}
                 {breaks.map(b => (
-                    <div key={b} style={{
-                        position: 'absolute',
-                        left: `${(b / verseCount) * 100}%`,
-                        height: '100%',
-                        width: '2px',
-                        background: 'var(--primary)',
-                        transform: 'translateX(-50%)',
-                        pointerEvents: 'none',
-                        zIndex: 5
-                    }}>
-                    </div>
+                    <React.Fragment key={b}>
+                        <div style={{
+                            position: 'absolute',
+                            left: `${(b / verseCount) * 100}%`,
+                            height: '100%',
+                            width: '2px',
+                            background: 'var(--primary)',
+                            transform: 'translateX(-50%)',
+                            pointerEvents: 'none',
+                            zIndex: 5
+                        }}>
+                        </div>
+                        {isEditing && (
+                            <div style={{
+                                position: 'absolute',
+                                left: `${(b / verseCount) * 100}%`,
+                                bottom: '100%',
+                                transform: 'translateX(-50%)',
+                                background: 'var(--primary)',
+                                color: 'white',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                marginBottom: '2px',
+                                whiteSpace: 'nowrap',
+                                zIndex: 10
+                            }}>
+                                {b} | {b + 1}
+                            </div>
+                        )}
+                    </React.Fragment>
                 ))}
 
                  {/* X Buttons (Only when editing) */}

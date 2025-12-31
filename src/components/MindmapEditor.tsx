@@ -231,6 +231,39 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
         }
     }, [initialSnapshot]);
 
+    useEffect(() => {
+        if (!editor) return;
+
+        const handlePaste = (e: ClipboardEvent) => {
+            const tldrawContent = e.clipboardData?.getData('application/tldraw');
+            if (tldrawContent) {
+                try {
+                    const parsed = JSON.parse(tldrawContent);
+                    // If it has a schema, it might be from a newer version (like Obsidian)
+                    // We strip the schema to force tldraw to use the current environment's schema
+                    if (parsed.data?.schema) {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        const sanitizedData = { ...parsed.data };
+                        delete sanitizedData.schema;
+
+                        editor.putExternalContent({
+                            type: 'tldraw',
+                            data: sanitizedData,
+                            point: editor.inputs.currentPagePoint,
+                        });
+                    }
+                } catch (err) {
+                    console.warn('Failed to sanitize tldraw paste:', err);
+                }
+            }
+        };
+
+        window.addEventListener('paste', handlePaste, true);
+        return () => window.removeEventListener('paste', handlePaste, true);
+    }, [editor]);
+
     const handleClose = async () => {
         if (editor && onSave) {
             try {
