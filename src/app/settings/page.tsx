@@ -219,7 +219,7 @@ export default function SettingsPage() {
         setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
     };
 
-    const handleGroupMaturityReset = (type: 'verse' | 'mindmap' | 'part_mindmap', surahId?: number, surahName?: string, skipConfirm: boolean = false) => {
+    const handleGroupMaturityReset = (type: 'verse' | 'mindmap' | 'part_mindmap', surahId?: number, surahName?: string) => {
         let typeLabel = '';
         if (surahName) {
             typeLabel = `all Verses for ${surahName}`;
@@ -227,7 +227,7 @@ export default function SettingsPage() {
             typeLabel = type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
         }
 
-        if (!skipConfirm && !window.confirm(`Are you sure you want to reset the maturity of ${typeLabel}?`)) return;
+        if (!window.confirm(`Are you sure you want to reset the maturity of ${typeLabel}?`)) return;
         setGroupMaturity(type, 'reset', surahId);
         setVersion(v => v + 1);
     };
@@ -1004,11 +1004,8 @@ export default function SettingsPage() {
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
                                                                         if (!val) return;
-                                                                        const msg = val === 'reset' 
-                                                                            ? 'Reset all part mindmaps maturity?' 
-                                                                            : `Set all part mindmaps maturity to ${val.toUpperCase()}?`;
-                                                                        if (!window.confirm(msg)) return;
-                                                                        handleGroupMaturityReset('part_mindmap', undefined, undefined, true); // existing func resets to 'reset'
+                                                                        if (val === 'reset' && !window.confirm('Reset all part mindmaps maturity?')) return;
+                                                                        handleGroupMaturityReset('part_mindmap'); // existing func resets to 'reset'
                                                                         if (val !== 'reset') setGroupMaturity('part_mindmap', val as any);
                                                                         setMemoryNodes(getMemoryNodes());
                                                                     }}
@@ -1034,13 +1031,8 @@ export default function SettingsPage() {
                                                                             <select
                                                                                 value=""
                                                                                 onChange={(e) => {
-                                                                                    const val = e.target.value;
-                                                                                    if (!val) return;
-                                                                                    const msg = val === 'reset' 
-                                                                                        ? `Reset maturity for Part ${node.partId} mindmap?`
-                                                                                        : `Set maturity for Part ${node.partId} mindmap to ${val.toUpperCase()}?`;
-                                                                                    if (!window.confirm(msg)) return;
-                                                                                    setNodeMaturity(node.id, val as any);
+                                                                                    if (!e.target.value) return;
+                                                                                    setNodeMaturity(node.id, e.target.value as any);
                                                                                     setMemoryNodes(getMemoryNodes());
                                                                                 }}
                                                                                 className="maturity-select"
@@ -1079,11 +1071,8 @@ export default function SettingsPage() {
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
                                                                         if (!val) return;
-                                                                        const msg = val === 'reset' 
-                                                                            ? 'Reset all surah mindmaps maturity?' 
-                                                                            : `Set all surah mindmaps maturity to ${val.toUpperCase()}?`;
-                                                                        if (!window.confirm(msg)) return;
-                                                                        handleGroupMaturityReset('mindmap', undefined, undefined, true);
+                                                                        if (val === 'reset' && !window.confirm('Reset all surah mindmaps maturity?')) return;
+                                                                        handleGroupMaturityReset('mindmap');
                                                                         if (val !== 'reset') setGroupMaturity('mindmap', val as any);
                                                                         setMemoryNodes(getMemoryNodes());
                                                                     }}
@@ -1109,14 +1098,8 @@ export default function SettingsPage() {
                                                                             <select
                                                                                 value=""
                                                                                 onChange={(e) => {
-                                                                                    const val = e.target.value;
-                                                                                    if (!val) return;
-                                                                                    const surahName = getSurah(node.surahId!)?.name;
-                                                                                    const msg = val === 'reset' 
-                                                                                        ? `Reset maturity for Surah ${surahName} mindmap?`
-                                                                                        : `Set maturity for Surah ${surahName} mindmap to ${val.toUpperCase()}?`;
-                                                                                    if (!window.confirm(msg)) return;
-                                                                                    setNodeMaturity(node.id, val as any);
+                                                                                    if (!e.target.value) return;
+                                                                                    setNodeMaturity(node.id, e.target.value as any);
                                                                                     setMemoryNodes(getMemoryNodes());
                                                                                 }}
                                                                                 className="maturity-select"
@@ -1157,10 +1140,7 @@ export default function SettingsPage() {
                                                             onChange={(e) => {
                                                                 const val = e.target.value;
                                                                 if (!val) return;
-                                                                const msg = val === 'reset' 
-                                                                    ? 'Are you sure you want to reset the maturity of ALL verses?' 
-                                                                    : `Are you sure you want to set the maturity of ALL verses to ${val.toUpperCase()}?`;
-                                                                if (!window.confirm(msg)) return;
+                                                                if (val === 'reset' && !window.confirm('Are you sure you want to reset the maturity of ALL verses?')) return;
                                                                 setGroupMaturity('verse', val as any);
                                                                 setMemoryNodes(getMemoryNodes());
                                                             }}
@@ -1220,17 +1200,15 @@ export default function SettingsPage() {
                                                                                     onChange={(e) => {
                                                                                         const val = e.target.value;
                                                                                         if (!val) return;
-                                                                                        const msg = val === 'reset' 
-                                                                                            ? `Reset maturity for all verses in ${surah?.name}?`
-                                                                                            : `Set maturity for all verses in ${surah?.name} to ${val.toUpperCase()}?`;
-                                                                                        if (!window.confirm(msg)) return;
-                                                                                        
                                                                                         if (val === 'reset') {
-                                                                                            setSurahMaturity(surahId!, 'reset');
+                                                                                            if (window.confirm(`Reset maturity for all verses in ${surah?.name}?`)) {
+                                                                                                setSurahMaturity(surahId!, 'reset');
+                                                                                                setMemoryNodes(getMemoryNodes());
+                                                                                            }
                                                                                         } else {
                                                                                             setSurahMaturity(surahId!, val as any);
+                                                                                            setMemoryNodes(getMemoryNodes());
                                                                                         }
-                                                                                        setMemoryNodes(getMemoryNodes());
                                                                                         e.target.value = '';
                                                                                     }}
                                                                                 >
@@ -1250,13 +1228,7 @@ export default function SettingsPage() {
                                                                                 <select
                                                                                     value=""
                                                                                     onChange={(e) => {
-                                                                                        const val = e.target.value;
-                                                                                        if (!val) return;
-                                                                                        const msg = val === 'reset' 
-                                                                                            ? `Reset maturity for Ayat ${node.startVerse}-${node.endVerse} in ${surah?.name}?`
-                                                                                            : `Set maturity for Ayat ${node.startVerse}-${node.endVerse} in ${surah?.name} to ${val.toUpperCase()}?`;
-                                                                                        if (!window.confirm(msg)) return;
-                                                                                        setNodeMaturity(node.id, val as any);
+                                                                                        setNodeMaturity(node.id, e.target.value as any);
                                                                                         setMemoryNodes(getMemoryNodes());
                                                                                     }}
                                                                                     className="maturity-select"
@@ -2138,10 +2110,7 @@ export default function SettingsPage() {
                                     onChange={(e) => {
                                         const val = e.target.value;
                                         if (!val) return;
-                                        const msg = val === 'reset' 
-                                            ? `Reset all nodes in ${activeSlideOverGroup.title}?` 
-                                            : `Set all nodes in ${activeSlideOverGroup.title} to ${val.toUpperCase()}?`;
-                                        if (!window.confirm(msg)) return;
+                                        if (val === 'reset' && !window.confirm(`Reset all nodes in ${activeSlideOverGroup.title}?`)) return;
 
                                         if (activeSlideOverGroup.type === 'verse' && activeSlideOverGroup.surahId) {
                                             setSurahMaturity(activeSlideOverGroup.surahId, val as any);
@@ -2189,13 +2158,6 @@ export default function SettingsPage() {
                                                         onChange={(e) => {
                                                             const val = e.target.value;
                                                             if (!val) return;
-                                                            const nodeLabel = activeSlideOverGroup.type === 'verse' ? `Ayat ${node.startVerse}-${node.endVerse}` :
-                                                                activeSlideOverGroup.type === 'mindmap' ? `${getSurah(node.surahId!)?.name} mindmap` :
-                                                                    `Part ${node.partId} mindmap`;
-                                                            const msg = val === 'reset' 
-                                                                ? `Reset maturity for ${nodeLabel}?`
-                                                                : `Set maturity for ${nodeLabel} to ${val.toUpperCase()}?`;
-                                                            if (!window.confirm(msg)) return;
                                                             setNodeMaturity(node.id, val as any);
                                                             const updated = getMemoryNodes();
                                                             setMemoryNodes(updated);

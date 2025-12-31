@@ -19,7 +19,6 @@ const STORAGE_KEYS = {
     LISTENING_STATS: 'quran-app-listening-stats',
     CYCLE_START: 'quran-app-cycle-start',
     LISTENING_COMPLETE: 'quran-app-listening-complete',
-    LISTENING_CYCLES: 'quran-app-listening-cycles',
     REVIEW_ERRORS: 'quran-app-review-errors',
     MUTASHABIHAT_DECISIONS: 'quran-app-mutashabihat-decisions',
     CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
@@ -448,49 +447,83 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         }
     });
 
-    // 3. Group verses into segments of 5 and Sync
+    // 3. Group verses into segments and Sync
     Object.entries(settings.learnedVerses).forEach(([surahIdStr, verses]) => {
         const surahId = parseInt(surahIdStr);
         if (verses.length === 0 || skips.has(surahId)) return;
 
-        // Create segments of 5 verses
-        const sortedVerses = [...verses].sort((a, b) => a - b);
-        let segmentStart = sortedVerses[0];
-        let segmentEnd = segmentStart;
+        // Check for Mindmap Anchors
+        const mindmap = mindmaps[surahId];
+        const hasAnchors = mindmap?.anchors && mindmap.anchors.length > 0;
 
-        let newSegmentsForThisSurah = 0;
+        if (hasAnchors) {
+            // Use Anchors for segmentation
+            mindmap.anchors.forEach(anchor => {
+                // Check if any learned verse falls within this anchor
+                const hasLearnedVerses = verses.some(v => v >= anchor.startVerse && v <= anchor.endVerse);
 
-        for (let i = 1; i <= sortedVerses.length; i++) {
-            const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
-            const segmentSize = segmentEnd - segmentStart + 1;
+                if (hasLearnedVerses) {
+                    const nodeId = `verse-${surahId}-${anchor.startVerse}-${anchor.endVerse}`;
+                    const existing = currentNodes.find(n => n.id === nodeId);
 
-            if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
-                // Create node for this segment if it doesn't exist
-                const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
-                const existing = currentNodes.find(n => n.id === nodeId);
+                    // If exact match doesn't exist, we might be switching from default to anchored.
+                    // In this case, we currently reset progress. 
+                    // Future improvement: Try to find "contained" nodes to inherit progress from?
 
-                // Use Staggered Genesis: Spreads new reviews over a 7-day period to avoid avalanches
-                const scheduler = (existing && !forceFullReset)
-                    ? existing.scheduler
-                    : createNewScheduler(Math.floor(newSegmentsForThisSurah / 10)); // ~10 clusters per day
+                    const scheduler = (existing && !forceFullReset)
+                        ? existing.scheduler
+                        : createNewScheduler();
 
-                newNodes.push({
-                    id: nodeId,
-                    type: 'verse',
-                    surahId,
-                    startVerse: segmentStart,
-                    endVerse: segmentEnd,
-                    scheduler,
-                });
-
-                if (!existing) newSegmentsForThisSurah++;
-
-                if (i < sortedVerses.length) {
-                    segmentStart = sortedVerses[i];
-                    segmentEnd = segmentStart;
+                    newNodes.push({
+                        id: nodeId,
+                        type: 'verse',
+                        surahId,
+                        startVerse: anchor.startVerse,
+                        endVerse: anchor.endVerse,
+                        scheduler,
+                    });
                 }
-            } else {
-                segmentEnd = sortedVerses[i];
+            });
+        } else {
+            // Default: Create segments of 5 verses
+            const sortedVerses = [...verses].sort((a, b) => a - b);
+            let segmentStart = sortedVerses[0];
+            let segmentEnd = segmentStart;
+
+            let newSegmentsForThisSurah = 0;
+
+            for (let i = 1; i <= sortedVerses.length; i++) {
+                const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
+                const segmentSize = segmentEnd - segmentStart + 1;
+
+                if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
+                    // Create node for this segment if it doesn't exist
+                    const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
+                    const existing = currentNodes.find(n => n.id === nodeId);
+
+                    // Use Staggered Genesis: Spreads new reviews over a 7-day period to avoid avalanches
+                    const scheduler = (existing && !forceFullReset)
+                        ? existing.scheduler
+                        : createNewScheduler(Math.floor(newSegmentsForThisSurah / 10)); // ~10 clusters per day
+
+                    newNodes.push({
+                        id: nodeId,
+                        type: 'verse',
+                        surahId,
+                        startVerse: segmentStart,
+                        endVerse: segmentEnd,
+                        scheduler,
+                    });
+
+                    if (!existing) newSegmentsForThisSurah++;
+
+                    if (i < sortedVerses.length) {
+                        segmentStart = sortedVerses[i];
+                        segmentEnd = segmentStart;
+                    }
+                } else {
+                    segmentEnd = sortedVerses[i];
+                }
             }
         }
     });
@@ -726,17 +759,6 @@ export function savePortionPointer(partId: QuranPart, index: number): void {
     saveToCacheAndStore(STORAGE_KEYS.PORTION_POINTERS, pointers);
 }
 
-export function getListeningCycles(partId: QuranPart): number {
-    const cycles = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.LISTENING_CYCLES, {} as any);
-    return cycles[partId] || 0;
-}
-
-export function saveListeningCycles(partId: QuranPart, count: number): void {
-    const cycles = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.LISTENING_CYCLES, {} as any);
-    cycles[partId] = count;
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_CYCLES, cycles);
-}
-
 export function markListeningComplete(partId: QuranPart, versesPerDay: number, totalVerses: number): void {
     const today = new Date().toISOString().split('T')[0];
     saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, today);
@@ -744,13 +766,6 @@ export function markListeningComplete(partId: QuranPart, versesPerDay: number, t
     // Advance the progress pointer
     const currentPointer = getPortionPointer(partId);
     const nextPointer = (currentPointer + versesPerDay) % totalVerses;
-    
-    // Check if we completed a cycle
-    if (nextPointer < currentPointer || (nextPointer === 0 && currentPointer > 0)) {
-        const currentCycles = getListeningCycles(partId);
-        saveListeningCycles(partId, currentCycles + 1);
-    }
-    
     savePortionPointer(partId, nextPointer);
 }
 

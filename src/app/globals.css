@@ -21,14 +21,13 @@
   --verse-bg: rgba(91, 143, 185, 0.04);
   --input-bg: #ffffff;
 
-  /* Chart Colors (Vibrant Light Mode) */
+  /* Chart Colors (Toned down) */
   --chart-skipped: #f1f5f9;
-  --chart-not-created: #cbd5e1;
-  --chart-not-learned: #f1aeb5;
-  --chart-new: #b7e4c7;
-  --chart-medium: #74c69d;
-  --chart-strong: #40916c;
-  --chart-mastered: #1b4332;
+  --chart-not-learned: #f8d7da;
+  --chart-new: #e9f0e8;
+  --chart-medium: #c2d6bf;
+  --chart-strong: #7e997a;
+  --chart-mastered: #5a7057;
 }
 
 @media (max-width: 768px) {
@@ -37,26 +36,6 @@
   }
   .show-mobile {
     display: block !important;
-  }
-}
-
-/* Stats Grid - 1 column layout */
-.stats-grid {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 1.5rem !important;
-}
-
-/* Chart Labels Color Handling */
-.chart-label {
-  color: #1a1a1a !important; /* Dark text for light mode */
-  text-shadow: none !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  .chart-label {
-    color: white !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5) !important;
   }
 }
 
@@ -92,15 +71,6 @@
     --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     --verse-bg: rgba(122, 158, 177, 0.08);
     --input-bg: #1e2226;
-
-    /* Dark Mode Chart Colors (Vibrant/Light for maximum readability) */
-    --chart-skipped: #333a41;
-    --chart-not-created: #24292e;
-    --chart-not-learned: #a55a5f;
-    --chart-new: #4b6b4b;
-    --chart-medium: #6c916c;
-    --chart-strong: #8fb88f;
-    --chart-mastered: #b8dbb8;
   }
 }
 
@@ -424,52 +394,23 @@ input:focus {
 }
 
 .blurred-chunk {
-  filter: blur(8px);
+  filter: blur(3px);
   background: rgba(0, 0, 0, 0.08);
   border-radius: 4px;
   padding: 0 0.3rem;
 }
 
 .strong-blur {
-  filter: blur(12px);
+  filter: blur(7px);
 }
 
 .next-blur {
-  filter: blur(10px);
+  filter: blur(5px);
   background: rgba(14, 165, 233, 0.25);
   border: 1px dashed var(--accent);
   color: var(--accent);
   border-radius: 4px;
   padding: 0 0.4rem;
-}
-
-/* Offline indicator redesign */
-.offline-indicator {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--background-secondary);
-  color: var(--foreground);
-  padding: 0.4rem 0.6rem;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  z-index: 9999;
-  font-size: 0.7rem;
-  font-weight: 600;
-  pointer-events: none;
-  max-width: 92vw;
-  top: 0.5rem;
-}
-
-@media (min-width: 769px) {
-  .offline-indicator {
-    top: auto;
-    bottom: 5.25rem;
-  }
 }
 
 /* Progress bar */
