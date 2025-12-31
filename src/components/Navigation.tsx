@@ -45,11 +45,13 @@ export default function Navigation() {
             if (activePart === 5) {
                 incompletePartMaps = [1, 2, 3, 4].filter(p => {
                     const map = partMindmaps[p];
-                    return !map || !map.imageUrl || !map.isComplete;
+                    const hasContent = !!map?.imageUrl || !!map?.tldrawSnapshot;
+                    return !map || !hasContent || !map.isComplete;
                 }).length;
             } else {
                 const partMap = partMindmaps[activePart];
-                incompletePartMaps = partMap && partMap.imageUrl && partMap.isComplete ? 0 : 1;
+                const hasContent = !!partMap?.imageUrl || !!partMap?.tldrawSnapshot;
+                incompletePartMaps = partMap && hasContent && partMap.isComplete ? 0 : 1;
             }
 
             const suspendedInPart = suspended.filter(issue => {

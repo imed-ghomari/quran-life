@@ -1,37 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import { CloudOff, RefreshCw } from "lucide-react";
+import { createContext, useEffect, useRef, useState } from "react";
+import { CloudOff } from "lucide-react";
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true };
-  }
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', height: '100vh', justifyContent: 'center' }}>
-          <h2>Something went wrong</h2>
-          <p>The application encountered an error. Please try reloading.</p>
-          <button 
-            onClick={() => window.location.reload()}
-            style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-          >
-            Reload Application
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+export const OnlineStatusContext = createContext(true);
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
@@ -72,14 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Initial online status
-    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
-
-    // Register Service Worker for PWA Offline Support
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(registration => console.log('SW registered:', registration))
-        .catch(error => console.error('SW registration failed:', error));
-    }
+    setIsOnline(navigator.onLine);
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -90,21 +55,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // Setup Auth Listener for sync (covers app load and sign-in)
     let authSubscription: any = null;
     const setupAuth = async () => {
-      try {
-        const { createClient } = await import('@/utils/supabase/client');
-        const supabase = createClient();
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            if (session?.user) {
-              performSync();
-            }
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          if (session?.user) {
+            performSync();
           }
-        });
-        authSubscription = subscription;
-      } catch (e) {
-        console.error("Auth setup failed", e);
-      }
+        }
+      });
+      authSubscription = subscription;
     };
     setupAuth();
 
@@ -132,42 +93,40 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ErrorBoundary>
-      <div className={!isOnline ? "offline-mode" : ""} style={!isOnline ? { filter: 'grayscale(0.1)' } : undefined}>
+    <>
+      <OnlineStatusContext.Provider value={isOnline}>
         {children}
-      </div>
+      </OnlineStatusContext.Provider>
       {!isOnline && (
         <div style={{
           position: 'fixed',
-          bottom: '2rem',
+          bottom: '5.25rem',
           left: '50%',
           transform: 'translateX(-50%)',
           background: 'var(--background-secondary)',
-          border: '1px solid var(--border)',
           color: 'var(--foreground)',
-          padding: '1rem 1.5rem',
-          borderRadius: '16px',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+          padding: '0.65rem 0.9rem',
+          borderRadius: '14px',
+          border: '1px solid var(--border)',
+          boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          gap: '0.5rem',
+          gap: '0.65rem',
           zIndex: 9999,
-          maxWidth: '90vw',
-          textAlign: 'center',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          pointerEvents: 'none',
+          maxWidth: '92vw',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontWeight: 600, color: 'var(--danger)', fontSize: '1rem' }}>
-            <CloudOff size={20} />
-            <span>Offline Mode</span>
+          <CloudOff size={16} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span>Offline mode</span>
+            <span style={{ fontWeight: 500, fontSize: '0.72rem', color: 'var(--foreground-secondary)' }}>
+              Cloud sync and sign-in are unavailable. Changes will sync when you’re back online.
+            </span>
           </div>
-          <span style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: 1.4 }}>
-            You can still use the app. <br/>
-            Changes will sync automatically when back online.
-          </span>
         </div>
       )}
-    </ErrorBoundary>
+    </>
   );
 }

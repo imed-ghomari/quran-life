@@ -132,17 +132,35 @@ export default function TodayPage() {
                 return;
             }
 
-            const response = await fetch('/qpc-hafs-word-by-word.json');
-            const data = await response.json() as Record<string, any>;
-            const verses = parseQuranJson(data);
-            setAllVerses(verses);
-            setIsLoaded(true);
-
-            // Background cache for this session
             try {
-                sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
-            } catch (e) {
-                console.warn('Failed to cache verses in sessionStorage', e);
+                const response = await fetch('/qpc-hafs-word-by-word.json');
+                const data = await response.json() as Record<string, any>;
+                const verses = parseQuranJson(data);
+                setAllVerses(verses);
+                setIsLoaded(true);
+
+                try {
+                    sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
+                } catch (e) {
+                    console.warn('Failed to cache verses in sessionStorage', e);
+                }
+            } catch (_e) {
+                try {
+                    if ('caches' in window) {
+                        const cachedRes = await caches.match('/qpc-hafs-word-by-word.json');
+                        if (cachedRes) {
+                            const data = await cachedRes.json() as Record<string, any>;
+                            const verses = parseQuranJson(data);
+                            setAllVerses(verses);
+                            setIsLoaded(true);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load verses from cache', e);
+                }
+                setAllVerses([]);
+                setIsLoaded(true);
             }
         }
         load();

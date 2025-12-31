@@ -72,14 +72,23 @@ define(['./workbox-e43f5367'], (function (workbox) { 'use strict';
   importScripts();
   self.skipWaiting();
   workbox.clientsClaim();
+  self.addEventListener('install', (event) => {
+    event.waitUntil((async () => {
+      const cache = await caches.open('precache');
+      await cache.addAll([
+        '/',
+        '/manifest.json',
+        '/qpc-hafs-word-by-word.json',
+        '/icon.png',
+        '/favicon.png'
+      ]);
+    })());
+  });
   workbox.registerRoute("/", new workbox.NetworkFirst({
     "cacheName": "start-url",
     plugins: [{
       cacheWillUpdate: async ({
-        request,
-        response,
-        event,
-        state
+        response
       }) => {
         if (response && response.type === 'opaqueredirect') {
           return new Response(response.body, {
@@ -92,8 +101,14 @@ define(['./workbox-e43f5367'], (function (workbox) { 'use strict';
       }
     }]
   }), 'GET');
-  workbox.registerRoute(/.*/i, new workbox.NetworkOnly({
-    "cacheName": "dev",
+
+  workbox.registerRoute(({ request }) => request.mode === 'navigate', new workbox.NetworkFirst({
+    "cacheName": "pages",
+    plugins: []
+  }), 'GET');
+
+  workbox.registerRoute(({ url, request }) => url.origin === self.location.origin && request.method === 'GET', new workbox.NetworkFirst({
+    "cacheName": "assets",
     plugins: []
   }), 'GET');
 

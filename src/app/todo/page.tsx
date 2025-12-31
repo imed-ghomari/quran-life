@@ -252,8 +252,17 @@ export default function TodoPage() {
         return parts.map(p => ({ part: p, mindmap: partMindmaps[p] }));
     }, [partMindmaps, settingsVersion]);
 
-    const visiblePartTasks = partTasks.filter(t => activePart === 5 || t.part === activePart);
-    const incompletePartMaps = visiblePartTasks.filter(t => !t.mindmap || !t.mindmap.isComplete || !t.mindmap.imageUrl);
+    const visiblePartTasks = useMemo(() => {
+        return activePart === 5 ? partTasks : partTasks.filter(t => t.part === activePart);
+    }, [partTasks, activePart]);
+
+    const incompletePartMapsCount = useMemo(() => {
+        return (activePart === 5 ? partTasks : partTasks.filter(t => t.part === activePart)).filter(({ mindmap }) => {
+            const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
+            const isComplete = !!mindmap?.isComplete && hasContent;
+            return !isComplete;
+        }).length;
+    }, [partTasks, activePart]);
 
     const suspendedAnchors = getSuspendedAnchors();
 
@@ -1048,7 +1057,7 @@ export default function TodoPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Course Setup</h2>
                                 <span className="status-badge" style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                                    {1 + incompleteSurahMaps.length}
+                                    {incompletePartMapsCount + incompleteSurahMaps.length}
                                 </span>
                             </div>
                             <p style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)', margin: 0 }}>Construction: Prepare mindmaps for your active parts</p>
@@ -1078,14 +1087,14 @@ export default function TodoPage() {
                                                 {collapsedSubgroups['part'] ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                                                 <Map size={14} /> Part Mindmaps
                                                 <span className="status-badge" style={{ fontSize: '0.65rem', opacity: 0.8, marginLeft: '0.5rem' }}>
-                                                    {incompletePartMaps.length}
+                                                    {incompletePartMapsCount}
                                                 </span>
                                             </div>
                                         </td>
                                     </tr>
                                     {!collapsedSubgroups['part'] && (
                                         visiblePartTasks.map(({ part, mindmap }) => {
-                                            const isActive = part === activePart;
+                                            const isActive = activePart === 5 ? false : part === activePart;
                                             const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
                                             const isComplete = mindmap?.isComplete && hasContent;
                                             return (
@@ -1307,15 +1316,20 @@ export default function TodoPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <Map size={16} />
                                             <span style={{ fontWeight: 600 }}>Part Mindmaps</span>
-                                            <span className={`status-badge ${partTasks.filter(t => t.part === activePart).every(t => t.mindmap?.isComplete && t.mindmap?.imageUrl) ? 'learned' : 'partial'}`}>
-                                                Part {activePart}
+                                            <span
+                                                className={`status-badge ${visiblePartTasks.every(t => {
+                                                    const hasContent = !!t.mindmap?.imageUrl || !!t.mindmap?.tldrawSnapshot;
+                                                    return !!t.mindmap?.isComplete && hasContent;
+                                                }) ? 'learned' : 'partial'}`}
+                                            >
+                                                {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
                                             </span>
                                         </div>
                                         {collapsedSubgroups['part'] ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                                     </div>
                                     {!collapsedSubgroups['part'] && (
                                         <div className="mobile-subgroup-list">
-                                            {partTasks.filter(t => t.part === activePart).map(({ part, mindmap }) => {
+                                            {visiblePartTasks.map(({ part, mindmap }) => {
                                                 const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
                                                 const isComplete = mindmap?.isComplete && hasContent;
                                                 return (
@@ -1485,7 +1499,7 @@ export default function TodoPage() {
                             <Check size={48} style={{ color: 'var(--success)' }} />
                             <div>
                                 <h2 style={{ color: 'var(--success)', marginBottom: '0.25rem' }}>All Clear!</h2>
-                                <p style={{ color: 'var(--foreground-secondary)' }}>You've completed all pending tasks for this part.</p>
+                                <p style={{ color: 'var(--foreground-secondary)' }}>You have completed all pending tasks for this part.</p>
                             </div>
                         </div>
                     </div>
@@ -1621,8 +1635,9 @@ export default function TodoPage() {
 
                                 {activeSlideOver.type === 'part' && (
                                     <div className="mobile-node-list">
-                                        {partTasks.filter(t => t.part === activePart).map(({ part, mindmap }) => {
-                                            const isComplete = mindmap?.isComplete && mindmap?.imageUrl;
+                                        {visiblePartTasks.map(({ part, mindmap }) => {
+                                            const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
+                                            const isComplete = mindmap?.isComplete && hasContent;
                                             return (
                                                 <div key={part} className="mobile-node-card">
                                                     <div className="node-card-main">

@@ -36,6 +36,15 @@ export default function RootLayout({
     return (
         <html lang="ar" dir="ltr">
             <body>
+                <Script id="register-sw" strategy="afterInteractive">
+                    {`
+                        if ('serviceWorker' in navigator) {
+                            window.addEventListener('load', function() {
+                                navigator.serviceWorker.register('/sw.js').catch(function() {});
+                            });
+                        }
+                    `}
+                </Script>
                 <Providers>
                     <div className="app-shell">
                         <Navigation />

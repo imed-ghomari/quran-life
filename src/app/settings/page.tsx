@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
+import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, parseQuranJson } from '@/lib/quranData';
 import {
     AppSettings,
@@ -84,6 +85,7 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 
 export default function SettingsPage() {
     const supabase = createClient();
+    const isOnline = useContext(OnlineStatusContext);
     const [user, setUser] = useState<User | null>(null);
     const [settings, setSettings] = useState<AppSettings>(getSettings());
     const [isSyncing, setIsSyncing] = useState(false);
@@ -436,8 +438,18 @@ export default function SettingsPage() {
                                     : "Sign in to sync your progress across devices."}
                             </p>
 
-                            {user ? (
-                                <>
+                            <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
+                                {!isOnline && (
+                                    <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}>
+                                        <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Offline</div>
+                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                                            Cloud sync and authentication are paused. Keep using the app; changes will sync when online.
+                                        </div>
+                                    </div>
+                                )}
+
+                                {user ? (
+                                    <>
                                     <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--background)', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                             <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
@@ -460,7 +472,7 @@ export default function SettingsPage() {
 
                                     <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                         <button
-                                            className="btn btn-primary requires-online"
+                                            className="btn btn-primary"
                                             onClick={() => handleSync()}
                                             disabled={isSyncing}
                                             style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
@@ -468,16 +480,16 @@ export default function SettingsPage() {
                                             {isSyncing ? 'Syncing...' : 'Sync Now'}
                                         </button>
                                         <button
-                                            className="btn btn-secondary requires-online"
+                                            className="btn btn-secondary"
                                             onClick={() => supabase.auth.signOut()}
                                             style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
                                         >
                                             Sign Out
                                         </button>
                                     </div>
-                                </>
-                            ) : (
-                                <form onSubmit={handleAuth} className="requires-online" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    </>
+                                ) : (
+                                    <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                     <input
                                         type="email"
                                         placeholder="Email"
@@ -510,8 +522,9 @@ export default function SettingsPage() {
                                     >
                                         {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
                                     </button>
-                                </form>
-                            )}
+                                    </form>
+                                )}
+                            </div>
                         </>
                     )}
                 </div>
