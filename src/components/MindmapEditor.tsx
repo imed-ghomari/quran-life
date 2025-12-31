@@ -26,10 +26,17 @@ import {
     useTools,
     useIsToolSelected,
     useEditor,
-    useValue
+    useValue,
+    STROKE_SIZES
 } from 'tldraw';
 import { getStrokePoints, getSvgPathFromStrokePoints } from '@/utils/tldrawStroke';
 import 'tldraw/tldraw.css';
+
+// Mutation of stroke sizes as requested
+STROKE_SIZES.s = 0.1;
+STROKE_SIZES.m = 0.3;
+STROKE_SIZES.l = 0.6;
+STROKE_SIZES.xl = 1.2;
 
 // ============================================
 // Lasso Select Tool Implementation
@@ -52,7 +59,7 @@ class LassoingState extends StateNode {
     }
 
     override onPointerMove(): void {
-        const { x, y, z } = this.editor.inputs.currentPagePoint;
+        const { x, y, z } = this.editor.inputs.currentPagePoint.toFixed();
         this.points.set([...this.points.get(), { x, y, z }]);
     }
 
@@ -112,12 +119,12 @@ const LassoOverlay = () => {
     if (lassoPoints.length < 2) return null;
 
     return (
-        <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 999 }}>
+        <svg className="tl-overlays__item" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 999 }}>
             <path
                 d={svgPath}
                 fill="rgba(66, 153, 225, 0.1)"
                 stroke="#4299e1"
-                strokeWidth={2}
+                strokeWidth="calc(2px / var(--tl-zoom))"
                 strokeDasharray="4 4"
             />
         </svg>

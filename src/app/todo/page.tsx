@@ -465,11 +465,13 @@ export default function TodoPage() {
         reader.onloadend = () => {
             const imageUrl = reader.result as string;
             const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-            saveMindMap({
+            const updated = {
                 ...existing,
-                imageUrl: imageBlob && imageBlob.size > 0 ? imageUrl : existing.imageUrl,
+                imageUrl: (imageBlob && imageBlob.size > 0) ? imageUrl : existing.imageUrl,
                 tldrawSnapshot: snapshot
-            });
+            };
+            saveMindMap(updated);
+            setMindmaps(prev => ({ ...prev, [surahId]: updated }));
             setSettingsVersion(v => v + 1);
             setActiveMindmapEditor(null);
             syncWithCloud().catch(console.error);
@@ -478,9 +480,10 @@ export default function TodoPage() {
         if (imageBlob && imageBlob.size > 0) {
             reader.readAsDataURL(imageBlob);
         } else {
-            // Just save snapshot
             const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-            saveMindMap({ ...existing, tldrawSnapshot: snapshot });
+            const updated = { ...existing, tldrawSnapshot: snapshot };
+            saveMindMap(updated);
+            setMindmaps(prev => ({ ...prev, [surahId]: updated }));
             setSettingsVersion(v => v + 1);
             setActiveMindmapEditor(null);
             syncWithCloud().catch(console.error);
@@ -495,11 +498,13 @@ export default function TodoPage() {
         reader.onloadend = () => {
             const imageUrl = reader.result as string;
             const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
-            savePartMindMap({
+            const updated = {
                 ...existing,
-                imageUrl: imageBlob && imageBlob.size > 0 ? imageUrl : existing.imageUrl,
+                imageUrl: (imageBlob && imageBlob.size > 0) ? imageUrl : existing.imageUrl,
                 tldrawSnapshot: snapshot
-            });
+            };
+            savePartMindMap(updated);
+            setPartMindmaps(prev => ({ ...prev, [partId]: updated }));
             setSettingsVersion(v => v + 1);
             setActivePartEditor(null);
             syncWithCloud().catch(console.error);
@@ -509,7 +514,9 @@ export default function TodoPage() {
             reader.readAsDataURL(imageBlob);
         } else {
             const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
-            savePartMindMap({ ...existing, tldrawSnapshot: snapshot });
+            const updated = { ...existing, tldrawSnapshot: snapshot };
+            savePartMindMap(updated);
+            setPartMindmaps(prev => ({ ...prev, [partId]: updated }));
             setSettingsVersion(v => v + 1);
             setActivePartEditor(null);
             syncWithCloud().catch(console.error);
