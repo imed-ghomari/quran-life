@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { SURAHS } from '@/lib/quranData';
 import {
     getSettings,
-    getSurahLearnedStatus,
     getMindMaps,
     getPartMindMaps,
     getMemoryNodes,
     getListeningCycles,
     getListeningCompletedToday,
+    getPortionPointer,
+    getSurahLearnedStatus,
 } from '@/lib/storage';
 import { BarChart3, Layers, Hash, Info, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
 import DocumentationModal from '@/components/DocumentationModal';
@@ -151,10 +152,14 @@ export default function StatisticsPage() {
             if (skippedSurahs.has(s.id)) {
                 skipped += totalChunks;
             } else {
+                const { learned: learnedCount } = getSurahLearnedStatus(s.id);
                 const nodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === s.id);
-                const learnedCount = nodes.length;
-                notLearned += Math.max(0, totalChunks - learnedCount);
+                
+                // Chunks not yet marked as learned
+                const unlearnedChunks = Math.max(0, totalChunks - nodes.length);
+                notLearned += unlearnedChunks;
 
+                // Categorize existing nodes
                 nodes.forEach(n => {
                     const maturity = getMaturity(n.scheduler.interval);
                     if (maturity === 'mastered') learnedMastered++;
@@ -181,37 +186,26 @@ export default function StatisticsPage() {
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
         const progress = getListeningProgress(activePart);
-        const isCompletedToday = getListeningCompletedToday();
+        const portionPointer = getPortionPointer(activePart);
         const cycles = getListeningCycles(activePart);
         
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
         const totalVersesInPart = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
         
-        // Calculate today's portion size
-        const versesPerDay = settings.completionDays > 0 ? Math.ceil(totalVersesInPart / settings.completionDays) : 0;
-        
-        let learnedCount = 0;
-        let total = versesPerDay || 1; // Avoid division by zero
-        
-        if (isCompletedToday) {
-            learnedCount = total;
-        } else {
-            // currentVerseIndex is the index within today's portion
-            // We want to show progress within this portion
-            learnedCount = progress.currentVerseIndex || 0;
-        }
-        
-        const remainingCount = Math.max(0, total - learnedCount);
+        // Progress is the sum of verses already in previous portions (portionPointer)
+        // plus progress in today's portion (progress.currentVerseIndex)
+        const learnedCount = Math.min(totalVersesInPart, portionPointer + (progress.currentVerseIndex || 0));
+        const remainingCount = Math.max(0, totalVersesInPart - learnedCount);
 
         return {
-            total,
+            total: totalVersesInPart,
             completions: cycles,
             segments: [
-                { label: 'Completed', count: learnedCount, color: 'var(--chart-mastered)', description: 'Verses completed in today\'s portion' },
-                { label: 'Remaining', count: remainingCount, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Verses remaining in today\'s portion' },
+                { label: 'Completed', count: learnedCount, color: 'var(--chart-mastered)', description: 'Total verses completed in current cycle' },
+                { label: 'Remaining', count: remainingCount, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Verses remaining in current cycle' },
             ]
         };
-    }, [version, activePart, skippedSurahs, settings.completionDays]);
+    }, [version, activePart, skippedSurahs]);
 
     return (
         <div className="content-wrapper" style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '2rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
@@ -362,8 +356,12 @@ function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: strin
 
             {/* Legend with Labels (Numbers moved to chart) */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.5rem' }}>
-                {stats.segments.map((s, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                {stats.segments.map((s, i) => s.count > 0 && (
+                    <div key={i} style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.35rem'
+                    }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: s.color, opacity: s.opacity ?? 1 }} />
                         <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600 }}>
                             {s.label}
