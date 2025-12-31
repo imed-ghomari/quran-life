@@ -1070,7 +1070,8 @@ export default function TodoPage() {
                                     {!collapsedSubgroups['part'] && (
                                         partTasks.filter(t => t.part === activePart).map(({ part, mindmap }) => {
                                             const isActive = part === activePart;
-                                            const isComplete = mindmap?.isComplete && mindmap?.imageUrl;
+                                            const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
+                                            const isComplete = mindmap?.isComplete && hasContent;
                                             return (
                                                 <tr key={part} className="node-row">
                                                     <td style={{ fontWeight: 600 }}>
@@ -1102,15 +1103,15 @@ export default function TodoPage() {
                                                                 {mindmap?.tldrawSnapshot ? 'Edit' : 'Create'}
                                                             </button>
                                                             <button
-                                                                className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
-                                                                disabled={!mindmap?.imageUrl}
+                                                                className={`btn ${!hasContent ? 'btn-secondary' : 'btn-success'}`}
+                                                                disabled={!hasContent}
                                                                 onClick={() => handlePartComplete(part)}
                                                                 style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '90px', flex: 1 }}
                                                             >
                                                                 <Check size={14} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
                                                             </button>
                                                             {/* Issue #5: Delete button for Part Mindmaps */}
-                                                            {mindmap?.imageUrl && (
+                                                            {hasContent && (
                                                                 <button
                                                                     className="btn btn-secondary"
                                                                     onClick={() => {
@@ -1159,7 +1160,8 @@ export default function TodoPage() {
                                         ) : (
                                             surahTasks.map(({ surah, mindmap }) => {
                                                 const isExpanded = expandedSurahs[surah.id] || false;
-                                                const isComplete = mindmap?.isComplete && mindmap?.imageUrl;
+                                                const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
+                                                const isComplete = mindmap?.isComplete && hasContent;
                                                 const hasImage = !!mindmap?.imageUrl;
 
                                                 return (
@@ -1167,11 +1169,11 @@ export default function TodoPage() {
                                                         <tr
                                                             className="node-row"
                                                             onClick={(e) => {
-                                                                if (hasImage) {
+                                                                if (hasContent) {
                                                                     toggleSurahExpand(surah.id);
                                                                 }
                                                             }}
-                                                            style={{ cursor: hasImage ? 'pointer' : 'default' }}
+                                                            style={{ cursor: hasContent ? 'pointer' : 'default' }}
                                                         >
                                                             <td style={{ fontWeight: 600 }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1206,8 +1208,8 @@ export default function TodoPage() {
                                                                         {mindmap?.tldrawSnapshot ? 'Edit' : 'Start'}
                                                                     </button>
                                                                     <button
-                                                                        className={`btn ${!hasImage ? 'btn-secondary' : isComplete ? 'btn-secondary' : 'btn-success'}`}
-                                                                        disabled={!hasImage}
+                                                                        className={`btn ${!hasContent ? 'btn-secondary' : isComplete ? 'btn-secondary' : 'btn-success'}`}
+                                                                        disabled={!hasContent}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             handleMarkComplete(surah.id, mindmap);
@@ -1218,7 +1220,7 @@ export default function TodoPage() {
                                                                         {isComplete ? 'Undo' : 'Done'}
                                                                     </button>
 
-                                                                    {hasImage && (
+                                                                    {hasContent && (
                                                                         <>
                                                                             <button
                                                                                 className="btn btn-secondary"
@@ -1245,14 +1247,16 @@ export default function TodoPage() {
                                                                 </div>
                                                             </td>
                                                         </tr>
-                                                        {isExpanded && hasImage && (
+                                                        {isExpanded && hasContent && (
                                                             <tr className="node-row expanded-content" onClick={e => e.stopPropagation()}>
                                                                 <td colSpan={4} style={{ padding: '1.5rem', background: 'var(--background)' }}>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                                            <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                                <img src={mindmap.imageUrl ?? undefined} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
-                                                                            </div>
+                                                                            {hasImage && (
+                                                                                <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                                                                                    <img src={mindmap.imageUrl ?? undefined} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
+                                                                                </div>
+                                                                            )}
 
                                                                             <AnchorBuilder
                                                                                 surahId={surah.id}
@@ -1296,7 +1300,8 @@ export default function TodoPage() {
                                     {!collapsedSubgroups['part'] && (
                                         <div className="mobile-subgroup-list">
                                             {partTasks.filter(t => t.part === activePart).map(({ part, mindmap }) => {
-                                                const isComplete = mindmap?.isComplete && mindmap?.imageUrl;
+                                                const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
+                                                const isComplete = mindmap?.isComplete && hasContent;
                                                 return (
                                                     <div key={part} className="mobile-subgroup-item" style={{ flexDirection: 'column', alignItems: 'flex-start', paddingLeft: '1rem', background: 'var(--background)' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginBottom: '0.5rem' }}>
@@ -1315,15 +1320,15 @@ export default function TodoPage() {
                                                                 {mindmap?.tldrawSnapshot ? 'Edit' : 'Create'}
                                                             </button>
                                                             <button
-                                                                className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
-                                                                disabled={!mindmap?.imageUrl}
+                                                                className={`btn ${!hasContent ? 'btn-secondary' : 'btn-success'}`}
+                                                                disabled={!hasContent}
                                                                 onClick={() => handlePartComplete(part)}
                                                                 style={{ padding: '0.4rem', fontSize: '0.75rem', flex: 1 }}
                                                             >
                                                                 <Check size={14} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
                                                             </button>
                                                             {/* Issue #5: Delete button for mobile Part Mindmaps */}
-                                                            {mindmap?.imageUrl && (
+                                                            {hasContent && (
                                                                 <button
                                                                     className="btn btn-secondary"
                                                                     onClick={() => {
@@ -1377,9 +1382,11 @@ export default function TodoPage() {
                                                                     <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah.id}</div>
                                                                     <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{surah.name}</span>
                                                                     {/* Issue #7: Show complete/incomplete status badge */}
-                                                                    <span className={`status-badge ${mindmap?.isComplete && mindmap?.imageUrl ? 'learned' : 'partial'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
-                                                                        {mindmap?.isComplete && mindmap?.imageUrl ? '✓' : '○'}
-                                                                    </span>
+                                                                    {(!!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot) && (
+                                                                        <span className={`status-badge ${mindmap?.isComplete ? 'learned' : 'partial'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
+                                                                            {mindmap?.isComplete ? '✓' : '○'}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                                             </div>
@@ -1398,15 +1405,15 @@ export default function TodoPage() {
                                                                             </div>
                                                                         </button>
                                                                         <button
-                                                                            className={`btn ${!mindmap?.imageUrl ? 'btn-secondary' : 'btn-success'}`}
-                                                                            disabled={!mindmap?.imageUrl}
+                                                                            className={`btn ${(!mindmap?.imageUrl && !mindmap?.tldrawSnapshot) ? 'btn-secondary' : 'btn-success'}`}
+                                                                            disabled={!mindmap?.imageUrl && !mindmap?.tldrawSnapshot}
                                                                             onClick={() => handleMarkComplete(surah.id, mindmap)}
                                                                             style={{ flex: 1, fontSize: '0.75rem', padding: '0.5rem' }}
                                                                         >
                                                                             <Check size={16} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
                                                                         </button>
                                                                         {/* Issue #4: Delete button for mobile Surah Mindmaps */}
-                                                                        {mindmap?.imageUrl && (
+                                                                        {(mindmap?.imageUrl || mindmap?.tldrawSnapshot) && (
                                                                             <button
                                                                                 className="btn btn-secondary"
                                                                                 onClick={() => {
@@ -1425,7 +1432,7 @@ export default function TodoPage() {
                                                                     </div>
 
                                                                     {/* Complex Anchor Builder Trigger */}
-                                                                    {mindmap?.imageUrl && (
+                                                                    {(mindmap?.imageUrl || mindmap?.tldrawSnapshot) && (
                                                                         <button
                                                                             className="btn btn-secondary"
                                                                             onClick={(e) => {
