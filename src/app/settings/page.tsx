@@ -460,7 +460,7 @@ export default function SettingsPage() {
 
                                     <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                         <button
-                                            className="btn btn-primary"
+                                            className="btn btn-primary requires-online"
                                             onClick={() => handleSync()}
                                             disabled={isSyncing}
                                             style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
@@ -468,7 +468,7 @@ export default function SettingsPage() {
                                             {isSyncing ? 'Syncing...' : 'Sync Now'}
                                         </button>
                                         <button
-                                            className="btn btn-secondary"
+                                            className="btn btn-secondary requires-online"
                                             onClick={() => supabase.auth.signOut()}
                                             style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
                                         >
@@ -477,7 +477,7 @@ export default function SettingsPage() {
                                     </div>
                                 </>
                             ) : (
-                                <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                <form onSubmit={handleAuth} className="requires-online" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                     <input
                                         type="email"
                                         placeholder="Email"

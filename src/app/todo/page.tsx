@@ -252,6 +252,9 @@ export default function TodoPage() {
         return parts.map(p => ({ part: p, mindmap: partMindmaps[p] }));
     }, [partMindmaps, settingsVersion]);
 
+    const visiblePartTasks = partTasks.filter(t => activePart === 5 || t.part === activePart);
+    const incompletePartMaps = visiblePartTasks.filter(t => !t.mindmap || !t.mindmap.isComplete || !t.mindmap.imageUrl);
+
     const suspendedAnchors = getSuspendedAnchors();
 
     const reviewErrors = getReviewErrors().filter(e => e.absoluteAyah);
@@ -1075,13 +1078,13 @@ export default function TodoPage() {
                                                 {collapsedSubgroups['part'] ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                                                 <Map size={14} /> Part Mindmaps
                                                 <span className="status-badge" style={{ fontSize: '0.65rem', opacity: 0.8, marginLeft: '0.5rem' }}>
-                                                    1
+                                                    {incompletePartMaps.length}
                                                 </span>
                                             </div>
                                         </td>
                                     </tr>
                                     {!collapsedSubgroups['part'] && (
-                                        partTasks.filter(t => t.part === activePart).map(({ part, mindmap }) => {
+                                        visiblePartTasks.map(({ part, mindmap }) => {
                                             const isActive = part === activePart;
                                             const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
                                             const isComplete = mindmap?.isComplete && hasContent;
