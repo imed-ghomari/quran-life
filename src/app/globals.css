@@ -20,9 +20,49 @@
   --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   --verse-bg: rgba(91, 143, 185, 0.04);
   --input-bg: #ffffff;
+
+  /* Chart Colors (Toned down) */
+  --chart-skipped: #f1f5f9;
+  --chart-not-created: #e2e8f0;
+  --chart-not-learned: #f8d7da;
+  --chart-new: #e9f0e8;
+  --chart-medium: #c2d6bf;
+  --chart-strong: #7e997a;
+  --chart-mastered: #5a7057;
+}
+
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+  .show-mobile {
+    display: block !important;
+  }
+}
+
+/* Stats Grid - 1 column layout */
+.stats-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.5rem !important;
+}
+
+/* Theme-specific visibility */
+.dark-mode-only {
+  display: none;
+}
+.light-mode-only {
+  display: block;
 }
 
 @media (prefers-color-scheme: dark) {
+  .dark-mode-only {
+    display: block;
+  }
+  .light-mode-only {
+    display: none;
+  }
+  
   :root {
     --background: #0f1113;
     --background-secondary: #171a1d;
@@ -39,6 +79,15 @@
     --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     --verse-bg: rgba(122, 158, 177, 0.08);
     --input-bg: #1e2226;
+
+    /* Dark Mode Chart Colors (Vibrant/Light for maximum readability) */
+    --chart-skipped: #333a41;
+    --chart-not-created: #24292e;
+    --chart-not-learned: #a55a5f;
+    --chart-new: #4b6b4b;
+    --chart-medium: #6c916c;
+    --chart-strong: #8fb88f;
+    --chart-mastered: #b8dbb8;
   }
 }
 

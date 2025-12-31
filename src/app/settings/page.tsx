@@ -423,7 +423,7 @@ export default function SettingsPage() {
                             cursor: 'pointer'
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Database size={18} />
                             </div>
                             <span>Cloud Sync</span>
@@ -549,7 +549,7 @@ export default function SettingsPage() {
                             cursor: 'pointer'
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Download size={18} />
                             </div>
                             <span>Backup & Restore</span>
@@ -592,7 +592,7 @@ export default function SettingsPage() {
                             cursor: 'pointer'
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Clock size={18} />
                             </div>
                             <span>Completion Schedule</span>
@@ -651,7 +651,7 @@ export default function SettingsPage() {
                             cursor: 'pointer'
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <PauseCircle size={18} />
                             </div>
                             <span>Active Part</span>
@@ -721,7 +721,7 @@ export default function SettingsPage() {
                             cursor: 'pointer'
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Check size={18} />
                             </div>
                             <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Surah Status</span>
@@ -834,7 +834,7 @@ export default function SettingsPage() {
                             fontSize: 'clamp(1rem, 5vw, 1.1rem)'
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Activity size={18} />
                             </div>
                             <span>Knowledge Tracking</span>
@@ -1212,7 +1212,7 @@ export default function SettingsPage() {
                                                                                         e.target.value = '';
                                                                                     }}
                                                                                 >
-                                                                                    <option value="">Set All...</option>
+                                                                                    <option value="">Set Subgroup...</option>
                                                                                     <option value="reset">Reset</option>
                                                                                     <option value="medium">Medium</option>
                                                                                     <option value="strong">Strong</option>
@@ -1282,7 +1282,7 @@ export default function SettingsPage() {
                         gap: '1rem',
                         cursor: 'pointer'
                     }}>
-                    <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                    <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <Check size={18} />
                     </div>
                     <div style={{
@@ -1838,7 +1838,7 @@ export default function SettingsPage() {
                     {
                         title: "Active Part",
                         icon: Settings,
-                        description: "Focus your learning by selecting one of the 4 main Quranic portions. This filters all progress data, including Similar Verses and Surah Status, to only show relevant information for your current goal.",
+                        description: "Focus your learning by selecting one of the 4 main Quranic portions. This filters all progress data to only show relevant information for your current goal.",
                         items: [
                             "As-Sab'ut-Tiwal (Long Seven): Surah 2 to 9.",
                             "Al-Mi'un (The Hundreds): Surah 10 to 18.",
@@ -1864,17 +1864,7 @@ export default function SettingsPage() {
                         items: [
                             "Surah Status (Learned/New/Skipped): Determines if a surah is included in your review cycle. 'Skipped' surahs are hidden from all calculations.",
                             "Maturity Levels: Represents how well you know a verse or mindmap. Higher levels (Strong/Mastered) increase the interval between reviews.",
-                            "Resetting: You can reset maturity for entire groups (e.g., all verses in a surah) using the 'Reset Group' buttons."
-                        ]
-                    },
-                    {
-                        title: "Cloud Sync & Backup",
-                        icon: Database,
-                        description: "Protect your progress and access it from any device.",
-                        items: [
-                            "Cloud Sync: Sign in to automatically sync your settings, notes, and maturity progress to the cloud.",
-                            "Manual Backup: Use the 'Export Backup' feature to download a local copy of your data at any time.",
-                            "Data Privacy: Your data is stored securely and only accessible by you when signed in."
+                            "Resetting: You can reset maturity for entire groups (e.g., all verses in a surah) using the 'Set Subgroup' buttons."
                         ]
                     }
                 ]}
@@ -2139,7 +2129,7 @@ export default function SettingsPage() {
                                         } : null);
                                     }}
                                 >
-                                    <option value="">Set All...</option>
+                                    <option value="">Set Subgroup...</option>
                                     <option value="reset">Reset</option>
                                     <option value="medium">Medium</option>
                                     <option value="strong">Strong</option>

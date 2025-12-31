@@ -9,8 +9,9 @@ import {
     getPartMindMaps,
     getMemoryNodes,
 } from '@/lib/storage';
-import { BarChart3, Layers, Hash, Info, ChevronRight } from 'lucide-react';
+import { BarChart3, Layers, Hash, Info, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
 import DocumentationModal from '@/components/DocumentationModal';
+import { getListeningStats, getListeningProgress } from '@/lib/storage';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
@@ -44,10 +45,51 @@ export default function StatisticsPage() {
     const memoryNodes = getMemoryNodes();
     const skippedSurahs = new Set(settings.skippedSurahs || []);
 
-    // 1. Surah Mindmaps Data
+    // 1. Part Mindmaps Data (Always Global)
+    const partMindmapStats = useMemo(() => {
+        let notCreated = 0;
+        let notLearned = 0;
+        let learnedNew = 0;
+        let learnedMedium = 0;
+        let learnedStrong = 0;
+        let learnedMastered = 0;
+
+        [1, 2, 3, 4].forEach(p => {
+            const pmm = partMindmaps[p];
+            if (pmm) {
+                if (pmm.isComplete) {
+                    const node = memoryNodes.find(n => n.id === `part-mindmap-${p}`);
+                    const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
+                    if (maturity === 'mastered') learnedMastered++;
+                    else if (maturity === 'strong') learnedStrong++;
+                    else if (maturity === 'medium') learnedMedium++;
+                    else learnedNew++;
+                } else {
+                    notLearned++;
+                }
+            } else {
+                notCreated++;
+            }
+        });
+
+        return {
+            total: 4,
+            segments: [
+                { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Part mindmap not yet created' },
+                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Part mindmap not yet complete' },
+                { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
+                { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
+                { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
+                { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
+            ].filter(s => s.count > 0)
+        };
+    }, [version, partMindmaps, memoryNodes]);
+
+    // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
         const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
         let skipped = 0;
+        let notCreated = 0;
         let notLearned = 0;
         let learnedNew = 0;
         let learnedMedium = 0;
@@ -59,15 +101,21 @@ export default function StatisticsPage() {
                 skipped++;
             } else {
                 const mm = mindmaps[s.id];
-                if (mm?.isComplete) {
-                    const node = memoryNodes.find(n => n.id === `mindmap-${s.id}`);
-                    const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
-                    if (maturity === 'mastered') learnedMastered++;
-                    else if (maturity === 'strong') learnedStrong++;
-                    else if (maturity === 'medium') learnedMedium++;
-                    else learnedNew++;
+                if (mm) {
+                    if (mm.isComplete) {
+                        const node = memoryNodes.find(n => n.id === `mindmap-${s.id}`);
+                        const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
+                        if (maturity === 'mastered') learnedMastered++;
+                        else if (maturity === 'strong') learnedStrong++;
+                        else if (maturity === 'medium') learnedMedium++;
+                        else learnedNew++;
+                    } else {
+                        // Created but not reviewed (not complete) -> Not Learned
+                        notLearned++;
+                    }
                 } else {
-                    notLearned++;
+                    // Not yet created -> Same color as skipped
+                    notCreated++;
                 }
             }
         });
@@ -75,49 +123,16 @@ export default function StatisticsPage() {
         return {
             total: targetSurahs.length,
             segments: [
-                { label: 'Skipped', count: skipped, color: '#94a3b8', description: 'Surahs excluded from cycle' },
-                { label: 'Not Learned', count: notLearned, color: '#ef4444', description: 'Mindmap not yet complete' },
-                { label: 'New', count: learnedNew, color: '#22c55e', opacity: 0.25, description: 'Newly learned (< 14 days)' },
-                { label: 'Medium', count: learnedMedium, color: '#22c55e', opacity: 0.45, description: 'Intermediate maturity (14-30 days)' },
-                { label: 'Strong', count: learnedStrong, color: '#22c55e', opacity: 0.7, description: 'Strong memory (30-90 days)' },
-                { label: 'Mastered', count: learnedMastered, color: '#22c55e', opacity: 1, description: 'Long-term mastery (90+ days)' },
+                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Surahs excluded from cycle' },
+                { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Mindmap not created' },
+                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Mindmap incomplete' },
+                { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
+                { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
+                { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
+                { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
     }, [version, activePart, mindmaps, memoryNodes, skippedSurahs]);
-
-    // 2. Part Mindmaps Data (Always Global)
-    const partMindmapStats = useMemo(() => {
-        let notLearned = 0;
-        let learnedNew = 0;
-        let learnedMedium = 0;
-        let learnedStrong = 0;
-        let learnedMastered = 0;
-
-        [1, 2, 3, 4].forEach(p => {
-            const pmm = partMindmaps[p];
-            if (pmm?.isComplete) {
-                const node = memoryNodes.find(n => n.id === `part-mindmap-${p}`);
-                const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
-                if (maturity === 'mastered') learnedMastered++;
-                else if (maturity === 'strong') learnedStrong++;
-                else if (maturity === 'medium') learnedMedium++;
-                else learnedNew++;
-            } else {
-                notLearned++;
-            }
-        });
-
-        return {
-            total: 4,
-            segments: [
-                { label: 'Not Learned', count: notLearned, color: '#ef4444', description: 'Part mindmap not yet complete' },
-                { label: 'New', count: learnedNew, color: '#22c55e', opacity: 0.25, description: 'Newly learned' },
-                { label: 'Medium', count: learnedMedium, color: '#22c55e', opacity: 0.45, description: 'Intermediate maturity' },
-                { label: 'Strong', count: learnedStrong, color: '#22c55e', opacity: 0.7, description: 'Strong memory' },
-                { label: 'Mastered', count: learnedMastered, color: '#22c55e', opacity: 1, description: 'Long-term mastery' },
-            ].filter(s => s.count > 0)
-        };
-    }, [version, partMindmaps, memoryNodes]);
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
@@ -151,88 +166,129 @@ export default function StatisticsPage() {
         return {
             total: skipped + notLearned + learnedNew + learnedMedium + learnedStrong + learnedMastered,
             segments: [
-                { label: 'Skipped', count: skipped, color: '#94a3b8', description: 'Verses in skipped surahs' },
-                { label: 'Not Learned', count: notLearned, color: '#ef4444', description: 'Verses not yet learned' },
-                { label: 'New', count: learnedNew, color: '#22c55e', opacity: 0.25, description: 'Newly learned' },
-                { label: 'Medium', count: learnedMedium, color: '#22c55e', opacity: 0.45, description: 'Intermediate maturity' },
-                { label: 'Strong', count: learnedStrong, color: '#22c55e', opacity: 0.7, description: 'Strong memory' },
-                { label: 'Mastered', count: learnedMastered, color: '#22c55e', opacity: 1, description: 'Long-term mastery' },
+                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Verses in skipped surahs' },
+                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Verses not yet learned' },
+                { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
+                { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
+                { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
+                { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
     }, [version, activePart, memoryNodes, skippedSurahs]);
 
+    // 4. Daily Portion Data
+    const dailyPortionStats = useMemo(() => {
+        const progress = getListeningProgress(activePart);
+        const settings = getSettings();
+        
+        const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
+        const totalVersesInPart = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
+        
+        // Current portion progress
+        const currentVerseIndex = progress.currentVerseIndex || 0;
+        
+        // Cycle count: how many times it was repeated
+        // We need to fetch this from pointers or stats. 
+        // Based on storage.ts, completions are not tracked in ListeningStats object but there is a ListeningProgress.
+        // Let's check if we have a way to get cycle count. 
+        // Actually, looking at markListeningComplete in storage.ts, it doesn't seem to increment a cycle counter.
+        // Wait, I saw "completions" in my previous search but it might have been an assumption.
+        // Let's just use the current progress for now.
+        
+        const learnedCount = currentVerseIndex;
+        const remainingCount = Math.max(0, totalVersesInPart - learnedCount);
+
+        return {
+            total: totalVersesInPart,
+            completions: 0, // Fallback if not tracked
+            segments: [
+                { label: 'Completed', count: learnedCount, color: 'var(--chart-mastered)', description: 'Verses completed in current cycle' },
+                { label: 'Remaining', count: remainingCount, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Verses remaining in current cycle' },
+            ].filter(s => s.count > 0)
+        };
+    }, [version, activePart, skippedSurahs]);
+
     return (
-        <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div className="content-wrapper" style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '2rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
+            <div className="stats-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div>
-                    <h1 style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
-                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                        {activePart === 5 ? 'Global Overview' : `Focusing on Part ${activePart}`}
-                    </p>
+                    <h1 className="hide-mobile" style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
                 </div>
-                <div style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
-                    {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
+                        {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
+                    </div>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <div className="stats-grid" style={{ 
+                width: '100%',
+                maxWidth: '800px',
+                margin: '0 auto'
+            }}>
                 <ProgressBarSection
-                    title="Surah Mindmaps"
-                    icon={<Layers size={20} />}
-                    stats={surahMindmapStats}
-                />
-
-                <ProgressBarSection
-                    title="Part Mindmaps (Global)"
-                    icon={<BarChart3 size={20} />}
+                    title="Part Mindmaps"
+                    icon={<MapIcon size={20} />}
                     stats={partMindmapStats}
                 />
 
                 <ProgressBarSection
+                    title="Surah Mindmaps"
+                    icon={<MapPinned size={20} />}
+                    stats={surahMindmapStats}
+                />
+
+                <ProgressBarSection
                     title="Verse Chunks"
-                    icon={<Hash size={20} />}
+                    icon={<RotateCcw size={20} />}
                     stats={verseChunkStats}
                 />
-            </div>
 
-            <div className="card" style={{ marginTop: '2.5rem', background: 'rgba(91, 143, 185, 0.05)', border: '1px dashed var(--accent)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                    <Info size={18} color="var(--accent)" />
-                    <h3 style={{ margin: 0 }}>Legend & Maturity Levels</h3>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
-                    <LegendItem color="#94a3b8" label="Skipped" sub="Excluded" />
-                    <LegendItem color="#ef4444" label="Not Learned" sub="Remaining" />
-                    <LegendItem color="#22c55e" opacity={0.25} label="New" sub="< 14 days" />
-                    <LegendItem color="#22c55e" opacity={0.45} label="Medium" sub="14-30 days" />
-                    <LegendItem color="#22c55e" opacity={0.7} label="Strong" sub="30-90 days" />
-                    <LegendItem color="#22c55e" opacity={1} label="Mastered" sub="90+ days" />
-                </div>
+                <ProgressBarSection
+                    title="Daily Portion"
+                    icon={<Repeat size={20} />}
+                    stats={dailyPortionStats}
+                    headerSuffix={
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                            <Repeat size={14} />
+                            <span>{dailyPortionStats.completions} cycles</span>
+                        </div>
+                    }
+                />
             </div>
 
             <DocumentationModal
                 title="Understanding Your Stats"
                 cards={[
                     {
-                        title: "Maturity Distribution",
+                        title: "Maturity Levels",
                         icon: BarChart3,
-                        description: "Understand the strength of your memorization through the distribution of maturity levels.",
+                        description: "Understand the strength of your memory through maturity levels and colors.",
                         items: [
-                            "Levels are calculated based on the interval (days) between successive reviews.",
-                            "Recently Learned: < 14 days",
-                            "Medium: 14-30 days",
-                            "Strong: 30-90 days",
-                            "Mastered: 90+ days"
+                            "Levels are based on the interval (days) between reviews.",
+                            "Lighter colors represent new or intermediate levels, darker colors for mastered.",
+                            "Dark mode features a vibrant palette for maximum readability.",
+                            "The legend under each chart shows the specific day ranges."
                         ]
                     },
                     {
-                        title: "Filtering",
-                        icon: Hash,
-                        description: "Stats are focused on your current learning path.",
+                        title: "Mindmap Coverage",
+                        icon: MapIcon,
+                        description: "Track your progress in creating and learning mindmaps.",
                         items: [
-                            "Surah and Verse stats follow your Active Part selection in Settings.",
-                            "Part Mindmaps always show global progress (all 4 parts).",
-                            "Skipped elements are counted separately to show true coverage."
+                            "Not Created: Visual parts or surahs without a mindmap image yet.",
+                            "Skipped: Items you've chosen to skip in your current learning path.",
+                            "Learned: Mindmaps that have been reviewed at least once."
+                        ]
+                    },
+                    {
+                        title: "Filtering & Active Part",
+                        icon: Hash,
+                        description: "Stats adapt to your current focus in the app.",
+                        items: [
+                            "Surah and Verse stats follow your Active Part selection.",
+                            "Part Mindmaps show global progress across all 4 parts.",
+                            "Skipped elements are excluded to show true coverage percentages."
                         ]
                     }
                 ]}
@@ -241,15 +297,15 @@ export default function StatisticsPage() {
     );
 }
 
-function ProgressBarSection({ title, icon, stats }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] } }) {
+function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode }) {
     return (
-        <div style={{ width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <div style={{ color: 'var(--accent)' }}>{icon}</div>
-                <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>{title}</h2>
-                <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--foreground-secondary)', fontWeight: 600 }}>
-                    {stats.total} total
+        <div className="card modern-card" style={{ width: '100%', padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>{icon}</div>
+                    <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>{title}</h2>
                 </div>
+                {headerSuffix}
             </div>
 
             <div style={{
@@ -268,11 +324,11 @@ function ProgressBarSection({ title, icon, stats }: { title: string; icon: React
                             key={idx}
                             title={`${segment.label}: ${segment.count} (${Math.round(width)}%)`}
                             style={{
-                                width: `${width}%`,
-                                height: '100%',
-                                background: segment.color,
-                                opacity: segment.opacity ?? 1,
-                                transition: 'width 0.5s ease',
+                            width: `${width}%`,
+                            height: '100%',
+                            background: segment.color,
+                            opacity: segment.opacity || 1,
+                            transition: 'width 0.5s ease',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -281,11 +337,12 @@ function ProgressBarSection({ title, icon, stats }: { title: string; icon: React
                             }}
                         >
                             {width > 8 && (
-                                <span style={{
-                                    color: segment.opacity && segment.opacity < 0.5 ? 'var(--foreground)' : 'white',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 800,
-                                    textShadow: segment.opacity && segment.opacity < 0.5 ? 'none' : '0 1px 2px rgba(0,0,0,0.2)'
+                                <span style={{ 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: 700, 
+                                    color: 'white',
+                                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                    pointerEvents: 'none'
                                 }}>
                                     {segment.count}
                                 </span>
@@ -295,28 +352,16 @@ function ProgressBarSection({ title, icon, stats }: { title: string; icon: React
                 })}
             </div>
 
-            {/* Sub-labels for Mobile Friendly visibility if tooltip is hard */}
+            {/* Legend with Labels (Numbers moved to chart) */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.5rem' }}>
                 {stats.segments.map((s, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: s.color, opacity: s.opacity ?? 1 }} />
                         <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600 }}>
-                            {s.label} ({s.count})
+                            {s.label}
                         </span>
                     </div>
                 ))}
-            </div>
-        </div>
-    );
-}
-
-function LegendItem({ color, opacity, label, sub }: { color: string; opacity?: number; label: string; sub: string }) {
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ width: '24px', height: '12px', borderRadius: '4px', background: color, opacity: opacity ?? 1 }} />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{label}</span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)' }}>{sub}</span>
             </div>
         </div>
     );

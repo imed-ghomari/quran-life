@@ -609,10 +609,10 @@ export default function TodoPage() {
                             <table className="debug-table" style={{ minWidth: '800px', width: '100%', tableLayout: 'fixed' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '25%' }}>Target</th>
-                                        <th style={{ width: '40%' }}>Detail</th>
-                                        <th style={{ width: '15%' }}>Status</th>
-                                        <th style={{ width: '20%' }}>Actions</th>
+                                        <th style={{ width: '25%', textAlign: 'left' }}>Target</th>
+                                        <th style={{ width: '40%', textAlign: 'left' }}>Detail</th>
+                                        <th style={{ width: '15%', textAlign: 'left' }}>Status</th>
+                                        <th style={{ width: '20%', textAlign: 'left' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1055,8 +1055,8 @@ export default function TodoPage() {
                         </div>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Course Setup</h2>
-                                <span className="status-badge" style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                                <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Study Progress</h2>
+                                <span className="status-badge" style={{ fontSize: '0.7rem', color: 'var(--warning)', opacity: 0.8 }}>
                                     {incompletePartMapsCount + incompleteSurahMaps.length}
                                 </span>
                             </div>
@@ -1073,10 +1073,10 @@ export default function TodoPage() {
                             <table className="debug-table" style={{ minWidth: '800px', width: '100%', tableLayout: 'fixed' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '25%' }}>Target</th>
-                                        <th style={{ width: '35%' }}>Detail</th>
-                                        <th style={{ width: '15%' }}>Status</th>
-                                        <th style={{ width: '25%' }}>Actions</th>
+                                        <th style={{ width: '25%', textAlign: 'left', paddingLeft: '1rem' }}>Target</th>
+                                        <th style={{ width: '35%', textAlign: 'left' }}>Detail</th>
+                                        <th style={{ width: '15%', textAlign: 'left' }}>Status</th>
+                                        <th style={{ width: '25%', textAlign: 'right', paddingRight: '1rem' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1086,7 +1086,7 @@ export default function TodoPage() {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'inherit' }}>
                                                 {collapsedSubgroups['part'] ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                                                 <Map size={14} /> Part Mindmaps
-                                                <span className="status-badge" style={{ fontSize: '0.65rem', opacity: 0.8, marginLeft: '0.5rem' }}>
+                                                <span className="status-badge" style={{ fontSize: '0.65rem', color: 'var(--warning)', opacity: 0.8, marginLeft: '0.5rem' }}>
                                                     {incompletePartMapsCount}
                                                 </span>
                                             </div>
@@ -1099,26 +1099,26 @@ export default function TodoPage() {
                                             const isComplete = mindmap?.isComplete && hasContent;
                                             return (
                                                 <tr key={part} className="node-row">
-                                                    <td style={{ fontWeight: 600 }}>
+                                                    <td style={{ fontWeight: 600, paddingLeft: '1rem' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                             <div className="surah-number" style={{ background: isActive ? 'var(--accent)' : 'var(--foreground-secondary)', width: '2rem', height: '2rem', fontSize: '0.85rem' }}>P{part}</div>
                                                             <span>Part {part}</span>
                                                         </div>
                                                     </td>
-                                                    <td>
+                                                    <td style={{ textAlign: 'left' }}>
                                                         <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
                                                             {getSurahsByPart(part).length} surahs
                                                         </span>
                                                     </td>
-                                                    <td>
+                                                    <td style={{ textAlign: 'left' }}>
                                                         {isComplete ? (
                                                             <span className="status-badge learned" style={{ fontSize: '0.75rem' }}>Complete</span>
                                                         ) : (
                                                             <span className="status-badge partial" style={{ fontSize: '0.75rem' }}>Incomplete</span>
                                                         )}
                                                     </td>
-                                                    <td>
-                                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <td style={{ paddingRight: '1rem' }}>
+                                                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                                             <button
                                                                 className="btn btn-secondary"
                                                                 onClick={() => setActivePartEditor({ partId: part, snapshot: mindmap?.tldrawSnapshot })}
@@ -1166,7 +1166,7 @@ export default function TodoPage() {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'inherit' }}>
                                                 {collapsedSubgroups['surah'] ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                                                 <MapPinned size={14} /> Surah Mindmaps
-                                                <span className="status-badge" style={{ fontSize: '0.65rem', opacity: 0.8, marginLeft: '0.5rem' }}>
+                                                <span className="status-badge" style={{ fontSize: '0.65rem', color: 'var(--warning)', opacity: 0.8, marginLeft: '0.5rem' }}>
                                                     {incompleteSurahMaps.length}
                                                 </span>
                                             </div>
@@ -1200,7 +1200,7 @@ export default function TodoPage() {
                                                             }}
                                                             style={{ cursor: hasContent ? 'pointer' : 'default' }}
                                                         >
-                                                            <td style={{ fontWeight: 600 }}>
+                                                            <td style={{ fontWeight: 600, paddingLeft: '1rem' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                                     <div className="surah-number" style={{ width: '2rem', height: '2rem', fontSize: '0.85rem' }}>{surah.id}</div>
                                                                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1209,17 +1209,17 @@ export default function TodoPage() {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td>
+                                                            <td style={{ textAlign: 'left' }}>
                                                                 <span style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
                                                                     {mindmap?.anchors?.length || 0} anchors
                                                                 </span>
                                                             </td>
-                                                            <td>
+                                                            <td style={{ textAlign: 'left' }}>
                                                                 <span className={`status-badge ${isComplete ? 'learned' : 'partial'}`} style={{ fontSize: '0.75rem' }}>
                                                                     {isComplete ? 'Complete' : 'Incomplete'}
                                                                 </span>
                                                             </td>
-                                                            <td>
+                                                            <td style={{ paddingRight: '1rem' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                                                     <button
                                                                         className="btn btn-secondary"
@@ -1277,9 +1277,10 @@ export default function TodoPage() {
                                                                 <td colSpan={4} style={{ padding: '1.5rem', background: 'var(--background)' }}>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                                            {hasImage && (
+                                                                            {(mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                                 <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                                    <img src={mindmap.imageUrl ?? undefined} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
+                                                                                    <img src={mindmap.imageUrl ?? undefined} className="light-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
+                                                                                    <img src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? undefined} className="dark-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
                                                                                 </div>
                                                                             )}
 
@@ -1388,7 +1389,7 @@ export default function TodoPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <MapPinned size={16} />
                                             <span style={{ fontWeight: 600 }}>Surah Mindmaps</span>
-                                            <span className="status-badge" style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}>
+                                            <span className="status-badge" style={{ fontSize: '0.65rem', color: 'var(--warning)', opacity: 0.8, marginLeft: '0.5rem' }}>
                                                 {surahTasks.length} surahs
                                             </span>
                                         </div>
@@ -1426,6 +1427,12 @@ export default function TodoPage() {
 
                                                             {isExpanded && (
                                                                 <div style={{ background: 'var(--background)', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                                    {(mindmap?.imageUrl || mindmap?.imageUrlDark) && (
+                                                                        <div style={{ position: 'relative', width: '100%', height: '250px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                                                                            <img src={mindmap.imageUrl ?? undefined} className="light-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
+                                                                            <img src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? undefined} className="dark-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
+                                                                        </div>
+                                                                    )}
                                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                                         <button
                                                                             className="upload-tile"

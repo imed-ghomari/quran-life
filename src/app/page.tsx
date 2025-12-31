@@ -98,7 +98,7 @@ export default function TodayPage() {
         }
     }, []);
 
-    const [zoomImage, setZoomImage] = useState<string | null>(null);
+    const [zoomImage, setZoomImage] = useState<{ src: string; srcDark?: string } | null>(null);
 
     // Toast & Undo
     interface ToastItem {
@@ -755,17 +755,16 @@ export default function TodayPage() {
                                             ) : (
                                                 <div>
                                                     {(() => {
-                                                        const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                                                        const displayUrl = isDark ? (reviewContent.mindmap?.imageUrlDark || reviewContent.mindmap?.imageUrl) : reviewContent.mindmap?.imageUrl;
-
-                                                        if (!displayUrl) return null;
+                                                        const mindmap = reviewContent.mindmap;
+                                                        if (!mindmap?.imageUrl) return null;
 
                                                         return (
                                                             <div
                                                                 style={{ position: 'relative', cursor: 'zoom-in' }}
-                                                                onClick={() => setZoomImage(displayUrl)}
+                                                                onClick={() => setZoomImage({ src: mindmap.imageUrl!, srcDark: mindmap.imageUrlDark || undefined })}
                                                             >
-                                                                <img src={displayUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
+                                                                <img src={mindmap.imageUrl} className="light-mode-only" style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
+                                                                <img src={mindmap.imageUrlDark || mindmap.imageUrl} className="dark-mode-only" style={{ width: '100%', borderRadius: 8, marginBottom: 8, filter: !mindmap.imageUrlDark ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
                                                                 <div style={{ position: 'absolute', bottom: 16, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
                                                                     <Maximize2 size={12} /> Tap to Zoom
                                                                 </div>
@@ -806,7 +805,7 @@ export default function TodayPage() {
                                                     </div>
 
                                                     <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                                                        <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
+                                                        <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
                                                         <button className="review-btn not-remembered" onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={20} /> Forgot</button>
                                                         <button className="review-btn remembered" onClick={() => handleGrade(true)} title="Shortcut: Arrow Right"><Check size={20} /> Remembered</button>
                                                     </div>
@@ -1003,7 +1002,8 @@ export default function TodayPage() {
             {/* Zoom Modal */}
             {zoomImage && (
                 <ImageZoomModal
-                    src={zoomImage}
+                    src={zoomImage.src}
+                    srcDark={zoomImage.srcDark}
                     onClose={() => setZoomImage(null)}
                 />
             )}
@@ -1011,7 +1011,7 @@ export default function TodayPage() {
     );
 }
 
-function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) {
+function ImageZoomModal({ src, srcDark, onClose }: { src: string; srcDark?: string; onClose: () => void }) {
     const [zoom, setZoom] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
@@ -1137,6 +1137,7 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             >
                 <img
                     src={src}
+                    className="light-mode-only"
                     style={{
                         maxWidth: '95%',
                         maxHeight: '90%',
@@ -1144,6 +1145,20 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                         transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
                         transition: isDragging ? 'none' : 'transform 0.2s ease-out',
                         userSelect: 'none',
+                    } as any}
+                    draggable={false}
+                />
+                <img
+                    src={srcDark || src}
+                    className="dark-mode-only"
+                    style={{
+                        maxWidth: '95%',
+                        maxHeight: '90%',
+                        objectFit: 'contain',
+                        transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                        transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+                        userSelect: 'none',
+                        filter: !srcDark ? 'invert(0.9) hue-rotate(180deg)' : 'none'
                     } as any}
                     draggable={false}
                 />
