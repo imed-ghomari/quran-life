@@ -563,13 +563,12 @@ function DesktopAnchorBuilder({
         const rect = barRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const width = rect.width;
-        const percent = Math.max(0, Math.min(1, x / width));
+        // Map pixel x to a split point between verses
+        // There are (verseCount - 1) possible split points
+        const splitPoint = Math.round((x / width) * verseCount);
         
-        const val = percent * verseCount;
-        const rounded = Math.round(val);
-        
-        if (rounded > 0 && rounded < verseCount) {
-             setHoverVal(rounded);
+        if (splitPoint > 0 && splitPoint < verseCount) {
+             setHoverVal(splitPoint);
         } else {
              setHoverVal(null);
         }
@@ -626,7 +625,7 @@ function DesktopAnchorBuilder({
                    border: '1px solid var(--border)'
                 }}
             >
-                {/* Visual Segments and Labels (When not editing or always?) - Always show segments */}
+                {/* Visual Segments and Labels - Always show segments */}
                 {boundaries.slice(0, -1).map((start, idx) => {
                     const end = boundaries[idx + 1] - 1;
                     const widthPercent = ((end - start + 1) / verseCount) * 100;
@@ -642,7 +641,8 @@ function DesktopAnchorBuilder({
                             alignItems: 'center',
                             justifyContent: 'center',
                             pointerEvents: 'none',
-                            borderRight: idx < boundaries.length - 2 ? '1px solid var(--border)' : 'none'
+                            borderRight: idx < boundaries.length - 2 ? '1px solid var(--border)' : 'none',
+                            background: isEditing ? 'transparent' : (idx % 2 === 0 ? 'rgba(var(--accent-rgb), 0.05)' : 'transparent')
                         }}>
                             {!isEditing && (
                                 <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', background: 'var(--background-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
@@ -701,7 +701,7 @@ function DesktopAnchorBuilder({
                             left: `${(b / verseCount) * 100}%`,
                             top: '100%',
                             transform: 'translateX(-50%)',
-                            marginTop: '4px',
+                            marginTop: '2px',
                             background: 'var(--danger)',
                             color: 'white',
                             border: 'none',
@@ -713,7 +713,8 @@ function DesktopAnchorBuilder({
                             justifyContent: 'center',
                             fontSize: '12px',
                             cursor: 'pointer',
-                            zIndex: 10
+                            zIndex: 10,
+                            padding: 0
                         }}
                     >
                         <X size={12} />
