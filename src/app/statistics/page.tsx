@@ -337,13 +337,16 @@ function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: strin
                             }}
                         >
                             {width > 8 && (
-                                <span style={{ 
-                                    fontSize: '0.85rem', 
-                                    fontWeight: 700, 
-                                    color: 'white',
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                                    pointerEvents: 'none'
-                                }}>
+                                <span 
+                                    className="chart-label"
+                                    style={{ 
+                                        fontSize: '0.85rem', 
+                                        fontWeight: 700, 
+                                        color: 'white', // Default for dark/mastered
+                                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                        pointerEvents: 'none'
+                                    }}
+                                >
                                     {segment.count}
                                 </span>
                             )}
