@@ -237,23 +237,20 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 // Get the current snapshot and an image preview
                 const snapshot = typeof editor.getSnapshot === 'function' ? editor.getSnapshot() : editor.store.getSnapshot();
 
-                // Export image for preview using tldraw utility if available
+                // Export image for preview
                 let imageBlob: Blob | undefined | null;
                 try {
-                    const { getSvgAsImage } = await import('tldraw');
                     const shapeIds = Array.from(editor.getCurrentPageShapeIds());
                     if (shapeIds.length > 0) {
-                        const svg = await editor.getSvg(shapeIds);
-                        if (svg) {
-                            // In v3, width and height are often required
-                            const bounds = editor.getSelectionPageBounds() || editor.getCurrentPageBounds();
-                            imageBlob = await getSvgAsImage(svg, {
-                                type: 'png',
-                                quality: 1,
-                                pixelRatio: 2,
-                                width: (bounds?.width || 1000) * 2,
-                                height: (bounds?.height || 1000) * 2,
-                            });
+                        const bounds = editor.getSelectionPageBounds() || editor.getCurrentPageBounds();
+                        const result = await editor.toImage(shapeIds, {
+                            format: 'png',
+                            quality: 1,
+                            pixelRatio: 2,
+                            padding: 0,
+                        });
+                        if (result && result.blob) {
+                            imageBlob = result.blob;
                         }
                     }
                 } catch (imgError) {
