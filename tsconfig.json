@@ -35,6 +35,7 @@
     ],
     "exclude": [
         "node_modules",
-        "tldraw-main"
+        "tldraw-main",
+        "tldraw-in-obsidian-main (customized)"
     ]
 }

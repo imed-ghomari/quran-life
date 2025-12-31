@@ -783,7 +783,6 @@ export default function TodayPage() {
                             ) : (
                                 <>
                                     <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
-                                        <h1 className="hide-mobile" style={{ marginBottom: '1.5rem' }}>Today's Review</h1>
                                         <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
                                             {getSettings().activePart === 5 ? 'All Quran' : `Part ${getSettings().activePart}`}
                                         </p>
