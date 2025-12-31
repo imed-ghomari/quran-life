@@ -8,188 +8,205 @@ import {
     getMindMaps,
     getPartMindMaps,
     getMemoryNodes,
-    getDueNodes,
 } from '@/lib/storage';
-import { BarChart3, CheckCircle, Gauge, Layers, Timer, SkipForward, Activity } from 'lucide-react';
+import { BarChart3, Layers, Hash, Info, ChevronRight } from 'lucide-react';
 import DocumentationModal from '@/components/DocumentationModal';
 
-type MaturityBucket = 'reset' | 'medium' | 'strong' | 'mastered';
+type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
-function bucket(interval: number): MaturityBucket {
+function getMaturity(interval: number): MaturityBucket {
     if (interval >= 90) return 'mastered';
     if (interval >= 30) return 'strong';
     if (interval >= 14) return 'medium';
-    return 'reset';
+    return 'new';
+}
+
+interface StatSegment {
+    label: string;
+    count: number;
+    color: string;
+    opacity?: number;
+    description: string;
 }
 
 export default function StatisticsPage() {
     const [version, setVersion] = useState(0);
     const settings = getSettings();
-    const learnedCounts = useMemo(() => {
-        return SURAHS.map(s => {
-            const { learned, total } = getSurahLearnedStatus(s.id);
-            return { surahId: s.id, learned, total };
-        });
-    }, [version]);
+    const activePart = settings.activePart;
+
+    useEffect(() => {
+        const interval = setInterval(() => setVersion(v => v + 1), 2000);
+        return () => clearInterval(interval);
+    }, []);
 
     const mindmaps = getMindMaps();
     const partMindmaps = getPartMindMaps();
     const memoryNodes = getMemoryNodes();
-    const dueNodes = getDueNodes();
+    const skippedSurahs = new Set(settings.skippedSurahs || []);
 
-    useEffect(() => {
-        const interval = setInterval(() => setVersion(v => v + 1), 1500);
-        return () => clearInterval(interval);
-    }, []);
+    // 1. Surah Mindmaps Data
+    const surahMindmapStats = useMemo(() => {
+        const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
+        let skipped = 0;
+        let notLearned = 0;
+        let learnedNew = 0;
+        let learnedMedium = 0;
+        let learnedStrong = 0;
+        let learnedMastered = 0;
 
-    const totalLearned = learnedCounts.reduce((sum, s) => sum + s.learned, 0);
-    const totalVerses = SURAHS.reduce((sum, s) => sum + s.verseCount, 0);
-    const learnedPercent = Math.round((totalLearned / totalVerses) * 100);
+        targetSurahs.forEach(s => {
+            if (skippedSurahs.has(s.id)) {
+                skipped++;
+            } else {
+                const mm = mindmaps[s.id];
+                if (mm?.isComplete) {
+                    const node = memoryNodes.find(n => n.id === `mindmap-${s.id}`);
+                    const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
+                    if (maturity === 'mastered') learnedMastered++;
+                    else if (maturity === 'strong') learnedStrong++;
+                    else if (maturity === 'medium') learnedMedium++;
+                    else learnedNew++;
+                } else {
+                    notLearned++;
+                }
+            }
+        });
 
-    const surahMaturity = useMemo(() => {
-        const buckets: Record<MaturityBucket, number> = { reset: 0, medium: 0, strong: 0, mastered: 0 };
-        memoryNodes
-            .filter(n => n.type === 'verse' || n.type === 'mindmap')
-            .forEach(n => {
-                buckets[bucket(n.scheduler.interval)] += 1;
-            });
-        return buckets;
-    }, [version]);
+        return {
+            total: targetSurahs.length,
+            segments: [
+                { label: 'Skipped', count: skipped, color: '#94a3b8', description: 'Surahs excluded from cycle' },
+                { label: 'Not Learned', count: notLearned, color: '#ef4444', description: 'Mindmap not yet complete' },
+                { label: 'New', count: learnedNew, color: '#22c55e', opacity: 0.25, description: 'Newly learned (< 14 days)' },
+                { label: 'Medium', count: learnedMedium, color: '#22c55e', opacity: 0.45, description: 'Intermediate maturity (14-30 days)' },
+                { label: 'Strong', count: learnedStrong, color: '#22c55e', opacity: 0.7, description: 'Strong memory (30-90 days)' },
+                { label: 'Mastered', count: learnedMastered, color: '#22c55e', opacity: 1, description: 'Long-term mastery (90+ days)' },
+            ].filter(s => s.count > 0)
+        };
+    }, [version, activePart, mindmaps, memoryNodes, skippedSurahs]);
 
-    const totalMindmaps = SURAHS.length;
-    const completedMindmaps = Object.values(mindmaps).filter(m => m.isComplete && m.imageUrl).length;
+    // 2. Part Mindmaps Data (Always Global)
+    const partMindmapStats = useMemo(() => {
+        let notLearned = 0;
+        let learnedNew = 0;
+        let learnedMedium = 0;
+        let learnedStrong = 0;
+        let learnedMastered = 0;
 
-    const totalPartMaps = 4;
-    const completedPartMaps = Object.values(partMindmaps).filter(m => m.isComplete && m.imageUrl).length;
+        [1, 2, 3, 4].forEach(p => {
+            const pmm = partMindmaps[p];
+            if (pmm?.isComplete) {
+                const node = memoryNodes.find(n => n.id === `part-mindmap-${p}`);
+                const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
+                if (maturity === 'mastered') learnedMastered++;
+                else if (maturity === 'strong') learnedStrong++;
+                else if (maturity === 'medium') learnedMedium++;
+                else learnedNew++;
+            } else {
+                notLearned++;
+            }
+        });
 
-    const skippedCount = settings.skippedSurahs?.length || 0;
-    const overdue = dueNodes.length;
-    const totalNodes = memoryNodes.length;
+        return {
+            total: 4,
+            segments: [
+                { label: 'Not Learned', count: notLearned, color: '#ef4444', description: 'Part mindmap not yet complete' },
+                { label: 'New', count: learnedNew, color: '#22c55e', opacity: 0.25, description: 'Newly learned' },
+                { label: 'Medium', count: learnedMedium, color: '#22c55e', opacity: 0.45, description: 'Intermediate maturity' },
+                { label: 'Strong', count: learnedStrong, color: '#22c55e', opacity: 0.7, description: 'Strong memory' },
+                { label: 'Mastered', count: learnedMastered, color: '#22c55e', opacity: 1, description: 'Long-term mastery' },
+            ].filter(s => s.count > 0)
+        };
+    }, [version, partMindmaps, memoryNodes]);
 
-    const activePartSurahs = SURAHS.filter(s => settings.activePart === 5 || s.part === settings.activePart);
-    const activePartLearned = activePartSurahs.reduce((acc, s) => acc + getSurahLearnedStatus(s.id).learned, 0);
-    const activePartTotal = activePartSurahs.reduce((acc, s) => acc + s.verseCount, 0);
+    // 3. Verse Chunks Data
+    const verseChunkStats = useMemo(() => {
+        const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
+        let skipped = 0;
+        let notLearned = 0;
+        let learnedNew = 0;
+        let learnedMedium = 0;
+        let learnedStrong = 0;
+        let learnedMastered = 0;
 
-    const progressCards = [
-        { icon: <CheckCircle size={22} />, label: 'Learned verses', value: `${totalLearned}/${totalVerses}`, sub: `${learnedPercent}% of Quran` },
-        { icon: <Gauge size={22} />, label: settings.activePart === 5 ? 'Global Progress' : 'Active Part Progress', value: `${activePartLearned}/${activePartTotal}`, sub: settings.activePart === 5 ? 'All Quran' : `Part ${settings.activePart}` },
-        { icon: <Timer size={22} />, label: 'Due Reviews', value: `${overdue}`, sub: `${totalNodes} total scheduled` },
-        { icon: <Layers size={22} />, label: 'Surah Mindmaps', value: `${completedMindmaps}/${totalMindmaps}`, sub: 'Completed mindmaps' },
-        { icon: <BarChart3 size={22} />, label: 'Part Mindmaps', value: `${completedPartMaps}/${totalPartMaps}`, sub: 'Complete overview per part' },
-        { icon: <SkipForward size={22} />, label: 'Skipped Surahs', value: `${skippedCount}`, sub: 'Excluded from cycle' },
-    ];
+        targetSurahs.forEach(s => {
+            const totalChunks = Math.ceil(s.verseCount / 5);
+            if (skippedSurahs.has(s.id)) {
+                skipped += totalChunks;
+            } else {
+                const nodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === s.id);
+                const learnedCount = nodes.length;
+                notLearned += Math.max(0, totalChunks - learnedCount);
+
+                nodes.forEach(n => {
+                    const maturity = getMaturity(n.scheduler.interval);
+                    if (maturity === 'mastered') learnedMastered++;
+                    else if (maturity === 'strong') learnedStrong++;
+                    else if (maturity === 'medium') learnedMedium++;
+                    else learnedNew++;
+                });
+            }
+        });
+
+        return {
+            total: skipped + notLearned + learnedNew + learnedMedium + learnedStrong + learnedMastered,
+            segments: [
+                { label: 'Skipped', count: skipped, color: '#94a3b8', description: 'Verses in skipped surahs' },
+                { label: 'Not Learned', count: notLearned, color: '#ef4444', description: 'Verses not yet learned' },
+                { label: 'New', count: learnedNew, color: '#22c55e', opacity: 0.25, description: 'Newly learned' },
+                { label: 'Medium', count: learnedMedium, color: '#22c55e', opacity: 0.45, description: 'Intermediate maturity' },
+                { label: 'Strong', count: learnedStrong, color: '#22c55e', opacity: 0.7, description: 'Strong memory' },
+                { label: 'Mastered', count: learnedMastered, color: '#22c55e', opacity: 1, description: 'Long-term mastery' },
+            ].filter(s => s.count > 0)
+        };
+    }, [version, activePart, memoryNodes, skippedSurahs]);
 
     return (
-        <div className="content-wrapper" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem' }}>
-            <h1 className="hide-mobile">Statistics</h1>
-            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>
-                Focused on your current progress: learned verses, maturity levels, and mindmap readiness.
-            </p>
-            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.9rem' }}>
-                {progressCards.map(card => {
-                    // Extract progress percentage from value string like "10/100"
-                    let pct = 0;
-                    if (card.value.includes('/')) {
-                        const [curr, tot] = card.value.split('/').map(n => parseInt(n.replace(/,/g, ''), 10));
-                        pct = Math.min(100, Math.round((curr / tot) * 100));
-                    } else if (card.label === 'Overdue Reviews') {
-                        pct = 0; // No bar for raw counts like overdue
-                    }
-
-                    return (
-                        <StatCard
-                            key={card.label}
-                            icon={card.icon}
-                            label={card.label}
-                            value={card.value}
-                            sub={card.sub}
-                            progress={pct > 0 ? pct : undefined}
-                        />
-                    );
-                })}
+        <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                <div>
+                    <h1 style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
+                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                        {activePart === 5 ? 'Global Overview' : `Focusing on Part ${activePart}`}
+                    </p>
+                </div>
+                <div style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
+                    {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
+                </div>
             </div>
 
-            <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(14, 165, 233, 0.03)', border: '1px solid var(--accent)', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.08)' }}>
-                <div className="section-title" style={{ color: 'var(--accent)' }}><Gauge size={18} /> <span>Maturity Distribution</span></div>
-                <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                    Visual division of verses across all maturity levels.
-                </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <ProgressBarSection
+                    title="Surah Mindmaps"
+                    icon={<Layers size={20} />}
+                    stats={surahMindmapStats}
+                />
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '1rem 0' }}>
-                    {/* Unified Donut Chart */}
-                    <div style={{ position: 'relative', width: '200px', height: '200px' }}>
-                        <svg width="200" height="200" viewBox="0 0 200 200">
-                            {(() => {
-                                const buckets = ['reset', 'medium', 'strong', 'mastered'] as const;
-                                const bucketColors: Record<string, string> = {
-                                    reset: '#ef4444',
-                                    medium: '#f59e0b',
-                                    strong: '#0ea5e9',
-                                    mastered: '#22c55e'
-                                };
-                                const total = Object.values(surahMaturity).reduce((a, b) => a + b, 0) || 1;
-                                let currentOffset = 0;
-                                const radius = 80;
-                                const circumference = 2 * Math.PI * radius;
+                <ProgressBarSection
+                    title="Part Mindmaps (Global)"
+                    icon={<BarChart3 size={20} />}
+                    stats={partMindmapStats}
+                />
 
-                                return buckets.map(key => {
-                                    const value = surahMaturity[key];
-                                    const percentage = (value / total) * 100;
-                                    const strokeDashoffset = circumference * (1 - percentage / 100);
-                                    const rotation = (currentOffset / total) * 360 - 90;
-                                    currentOffset += value;
+                <ProgressBarSection
+                    title="Verse Chunks"
+                    icon={<Hash size={20} />}
+                    stats={verseChunkStats}
+                />
+            </div>
 
-                                    if (value === 0) return null;
-
-                                    return (
-                                        <circle
-                                            key={key}
-                                            cx="100"
-                                            cy="100"
-                                            r={radius}
-                                            fill="none"
-                                            stroke={bucketColors[key]}
-                                            strokeWidth="20"
-                                            strokeDasharray={`${circumference}`}
-                                            strokeDashoffset={strokeDashoffset}
-                                            strokeLinecap="butt"
-                                            transform={`rotate(${rotation} 100 100)`}
-                                            style={{ transition: 'all 0.5s ease' }}
-                                        />
-                                    );
-                                });
-                            })()}
-                        </svg>
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: '1.5rem', fontWeight: 800 }}>{Object.values(surahMaturity).reduce((a, b) => a + b, 0)}</span>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)' }}>Total Nodes</span>
-                        </div>
-                    </div>
-
-                    {/* Legend */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', width: '100%' }}>
-                        {(['reset', 'medium', 'strong', 'mastered'] as const).map(bucketKey => {
-                            const bucketColors: Record<string, string> = {
-                                reset: 'var(--danger)',
-                                medium: 'var(--warning)',
-                                strong: 'var(--accent)',
-                                mastered: 'var(--success)'
-                            };
-                            const total = Object.values(surahMaturity).reduce((a, b) => a + b, 0) || 1;
-                            const value = surahMaturity[bucketKey];
-                            const pct = Math.round((value / total) * 100);
-                            return (
-                                <div key={bucketKey} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'var(--background-secondary)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                                    <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: bucketColors[bucketKey] }} />
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--foreground-secondary)' }}>{bucketKey}</div>
-                                        <div style={{ fontSize: '1rem', fontWeight: 800 }}>{value}</div>
-                                        <div style={{ fontSize: '0.7rem', color: bucketColors[bucketKey], fontWeight: 600 }}>{pct}%</div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+            <div className="card" style={{ marginTop: '2.5rem', background: 'rgba(91, 143, 185, 0.05)', border: '1px dashed var(--accent)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <Info size={18} color="var(--accent)" />
+                    <h3 style={{ margin: 0 }}>Legend & Maturity Levels</h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
+                    <LegendItem color="#94a3b8" label="Skipped" sub="Excluded" />
+                    <LegendItem color="#ef4444" label="Not Learned" sub="Remaining" />
+                    <LegendItem color="#22c55e" opacity={0.25} label="New" sub="< 14 days" />
+                    <LegendItem color="#22c55e" opacity={0.45} label="Medium" sub="14-30 days" />
+                    <LegendItem color="#22c55e" opacity={0.7} label="Strong" sub="30-90 days" />
+                    <LegendItem color="#22c55e" opacity={1} label="Mastered" sub="90+ days" />
                 </div>
             </div>
 
@@ -202,18 +219,20 @@ export default function StatisticsPage() {
                         description: "Understand the strength of your memorization through the distribution of maturity levels.",
                         items: [
                             "Levels are calculated based on the interval (days) between successive reviews.",
-                            "Reset: 0-14 days | Medium: 14-30 days",
-                            "Strong: 30-90 days | Mastered: 90+ days"
+                            "Recently Learned: < 14 days",
+                            "Medium: 14-30 days",
+                            "Strong: 30-90 days",
+                            "Mastered: 90+ days"
                         ]
                     },
                     {
-                        title: "Progress Tracking",
-                        icon: Activity,
-                        description: "A high-level view of your daily consistency and overall Quran coverage.",
+                        title: "Filtering",
+                        icon: Hash,
+                        description: "Stats are focused on your current learning path.",
                         items: [
-                            "Learned Verses: The total percentage of the Quran you have marked as learned.",
-                            "Active Part: Your progress specifically within the currently selected part.",
-                            "Mindmap Readiness: Ensures you have visual anchors for every Surah."
+                            "Surah and Verse stats follow your Active Part selection in Settings.",
+                            "Part Mindmaps always show global progress (all 4 parts).",
+                            "Skipped elements are counted separately to show true coverage."
                         ]
                     }
                 ]}
@@ -222,20 +241,83 @@ export default function StatisticsPage() {
     );
 }
 
-function StatCard({ icon, label, value, sub, progress }: { icon: React.ReactNode; label: string; value: string; sub?: string; progress?: number }) {
+function ProgressBarSection({ title, icon, stats }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] } }) {
     return (
-        <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--foreground-secondary)' }}>
-                {icon}
-                <span style={{ fontWeight: 600 }}>{label}</span>
-            </div>
-            <div className="stat-value" style={{ fontSize: '1.3rem' }}>{value}</div>
-            {progress !== undefined && (
-                <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden', margin: '2px 0' }}>
-                    <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)' }} />
+        <div style={{ width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <div style={{ color: 'var(--accent)' }}>{icon}</div>
+                <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>{title}</h2>
+                <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--foreground-secondary)', fontWeight: 600 }}>
+                    {stats.total} total
                 </div>
-            )}
-            {sub && <div className="stat-label" style={{ fontSize: '0.7rem' }}>{sub}</div>}
+            </div>
+
+            <div style={{
+                width: '100%',
+                height: '32px',
+                background: 'var(--border)',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                display: 'flex',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+            }}>
+                {stats.segments.map((segment, idx) => {
+                    const width = (segment.count / stats.total) * 100;
+                    return (
+                        <div
+                            key={idx}
+                            title={`${segment.label}: ${segment.count} (${Math.round(width)}%)`}
+                            style={{
+                                width: `${width}%`,
+                                height: '100%',
+                                background: segment.color,
+                                opacity: segment.opacity ?? 1,
+                                transition: 'width 0.5s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                cursor: 'help'
+                            }}
+                        >
+                            {width > 8 && (
+                                <span style={{
+                                    color: segment.opacity && segment.opacity < 0.5 ? 'var(--foreground)' : 'white',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 800,
+                                    textShadow: segment.opacity && segment.opacity < 0.5 ? 'none' : '0 1px 2px rgba(0,0,0,0.2)'
+                                }}>
+                                    {segment.count}
+                                </span>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Sub-labels for Mobile Friendly visibility if tooltip is hard */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.5rem' }}>
+                {stats.segments.map((s, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: s.color, opacity: s.opacity ?? 1 }} />
+                        <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600 }}>
+                            {s.label} ({s.count})
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function LegendItem({ color, opacity, label, sub }: { color: string; opacity?: number; label: string; sub: string }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ width: '24px', height: '12px', borderRadius: '4px', background: color, opacity: opacity ?? 1 }} />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{label}</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)' }}>{sub}</span>
+            </div>
         </div>
     );
 }
