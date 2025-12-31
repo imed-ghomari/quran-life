@@ -51,6 +51,7 @@ import {
     getListeningProgress,
     saveListeningProgress,
     postponeNode,
+    getPortionPointer,
 } from '@/lib/storage';
 import { syncWithCloud } from '@/lib/sync';
 
@@ -178,26 +179,27 @@ export default function TodayPage() {
 
     // Calculate today's portion (preserve per-part listening progress)
     const portionData = useMemo(() => {
-        if (allVerses.length === 0) return { portion: [], startVerseIndex: 0 };
+        if (allVerses.length === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
         const settings = getSettings();
         const surahsInPart = getSurahsByPart(settings.activePart).filter(s => !isSurahSkipped(s.id));
-        if (surahsInPart.length === 0) return { portion: [], startVerseIndex: 0 };
+        if (surahsInPart.length === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
         // Flatten verses - optimized filter
         const activeSurahIds = new Set(surahsInPart.map(s => s.id));
         const allVersesInPart = allVerses.filter(v => activeSurahIds.has(v.surahId));
 
         const totalVerses = allVersesInPart.length;
-        if (totalVerses === 0) return { portion: [], startVerseIndex: 0 };
+        if (totalVerses === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
         const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
-        const currentDay = getCurrentDayInCycle();
-        const startIdx = (currentDay * versesPerDay) % totalVerses;
+        const startIdx = getPortionPointer(settings.activePart);
         const endIdx = Math.min(startIdx + versesPerDay, totalVerses);
 
         let portion: Verse[];
         if (endIdx <= totalVerses) {
             portion = allVersesInPart.slice(startIdx, endIdx);
+            // If we hit exactly the end or close to it, and there's remaining in cycle wrap-around? 
+            // Actually the pointer logic handles wrap-around on Mark Done.
         } else {
             portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
         }
@@ -205,7 +207,7 @@ export default function TodayPage() {
         const saved = getListeningProgress(settings.activePart);
         const startVerseIndex = portion.length > 0 ? Math.min(saved.currentVerseIndex, portion.length - 1) : 0;
 
-        return { portion, startVerseIndex };
+        return { portion, startVerseIndex, versesPerDay, totalVerses };
     }, [allVerses, settingsVersion]);
 
     useEffect(() => {
@@ -382,8 +384,10 @@ export default function TodayPage() {
     }, [toasts]);
 
     const handleCompleteListening = () => {
-        markListeningComplete();
+        const settings = getSettings();
+        markListeningComplete(settings.activePart, portionData.versesPerDay, portionData.totalVerses);
         setListeningComplete(true);
+        setSettingsVersion(v => v + 1);
     };
 
     // Get content
