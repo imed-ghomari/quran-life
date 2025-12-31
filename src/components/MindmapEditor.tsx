@@ -26,10 +26,9 @@ import {
     useTools,
     useIsToolSelected,
     useEditor,
-    useValue,
-    getStrokePoints,
-    getSvgPathFromStrokePoints
+    useValue
 } from 'tldraw';
+import { getStrokePoints, getSvgPathFromStrokePoints } from '@/utils/tldrawStroke';
 import 'tldraw/tldraw.css';
 
 // ============================================
@@ -265,7 +264,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 <Tldraw
                     onMount={handleMount}
                     inferDarkMode={true}
-                    forceMobile={true}
                     tools={[LassoSelectTool]}
                     overrides={uiOverrides}
                     components={components}
