@@ -369,6 +369,12 @@ export function getDueNodes(): MemoryNode[] {
                 return learned === total;
             }
             return true;
+        })
+        .sort((a, b) => {
+            const priority: Record<string, number> = { 'part_mindmap': 0, 'mindmap': 1, 'verse': 2 };
+            const pA = priority[a.type] ?? 99;
+            const pB = priority[b.type] ?? 99;
+            return pA - pB;
         });
 }
 
