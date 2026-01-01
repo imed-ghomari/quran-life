@@ -55,7 +55,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const handleOnline = () => {
       appLogger.addLog('App is online', 'success');
       setIsOnline(true);
-      performSync();
     };
     const handleOffline = () => {
       appLogger.addLog('App is offline', 'warning');
@@ -70,9 +69,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          if (session?.user) {
-            performSync();
-          }
+          // Automatic sync removed - user must sync manually from settings
         }
       });
       authSubscription = subscription;
@@ -81,7 +78,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        performSync();
         // Dispatch storage event to trigger refresh across components
         window.dispatchEvent(new StorageEvent('storage', {
           key: 'quran-app-visibility-refresh',

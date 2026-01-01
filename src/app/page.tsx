@@ -234,10 +234,11 @@ export default function TodayPage() {
     }, [portionData]);
 
     // Persist listening progress per part
-    useEffect(() => {
-        const settings = getSettings();
-        saveListeningProgress(settings.activePart, currentVerseIndex);
-    }, [currentVerseIndex]);
+    // (REMOVED: Automatic saving on every verse change)
+    // useEffect(() => {
+    //     const settings = getSettings();
+    //     saveListeningProgress(settings.activePart, currentVerseIndex);
+    // }, [currentVerseIndex]);
 
     // Audio setup
     useEffect(() => {
@@ -529,7 +530,8 @@ export default function TodayPage() {
         saveMindMap(updated);
         setSettingsVersion(v => v + 1);
         addToast('success', 'Mindmap marked as incomplete', getSurah(surahId)?.name);
-        syncWithCloud().catch(console.error);
+        // (REMOVED: Automatic sync)
+        // syncWithCloud().catch(console.error);
     };
 
     const handlePartMindmapIncomplete = (partId: QuranPart) => {
@@ -540,7 +542,8 @@ export default function TodayPage() {
         savePartMindMap(updated);
         setSettingsVersion(v => v + 1);
         addToast('success', 'Part mindmap marked as incomplete', `Part ${partId}`);
-        syncWithCloud().catch(console.error);
+        // (REMOVED: Automatic sync)
+        // syncWithCloud().catch(console.error);
     };
 
     const handleMindmapEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
@@ -557,7 +560,8 @@ export default function TodayPage() {
             });
             setSettingsVersion(v => v + 1);
             setActiveMindmapEditor(null);
-            syncWithCloud().catch(console.error);
+            // (REMOVED: Automatic sync)
+            // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {
@@ -597,7 +601,8 @@ export default function TodayPage() {
             });
             setSettingsVersion(v => v + 1);
             setActivePartEditor(null);
-            syncWithCloud().catch(console.error);
+            // (REMOVED: Automatic sync)
+            // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {

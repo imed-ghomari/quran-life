@@ -133,11 +133,11 @@ export default function SettingsPage() {
         setIsSyncing(false);
     };
 
-    // Auto-sync on session load - only if we haven't synced in this component instance
+    // Auto-sync removed as per user request
     const hasAutoSynced = useRef(false);
     useEffect(() => {
         if (user && !hasAutoSynced.current) {
-            handleSync();
+            // handleSync();
             hasAutoSynced.current = true;
         }
     }, [user]);

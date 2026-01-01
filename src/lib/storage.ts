@@ -836,6 +836,9 @@ export function markListeningComplete(partId: QuranPart, versesPerDay: number, t
     const today = new Date().toISOString().split('T')[0];
     saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, today);
 
+    // Reset current progress within the portion
+    saveListeningProgress(partId, 0);
+
     // Advance the progress pointer
     const currentPointer = getPortionPointer(partId);
     let nextPointer = currentPointer + versesPerDay;

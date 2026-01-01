@@ -1008,7 +1008,7 @@ export default function TodoPage() {
         // Update local state to reflect change immediately
         setMindmaps(prev => ({ ...prev, [surahId]: updated }));
         setSettingsVersion(v => v + 1);
-        syncWithCloud().catch(console.error);
+        // syncWithCloud().catch(console.error);
     };
 
     const handlePartMindmapUpdate = (part: QuranPart, file: File | null) => {
@@ -1034,7 +1034,7 @@ export default function TodoPage() {
         // Update local state to reflect change immediately
         setPartMindmaps(prev => ({ ...prev, [part]: updated }));
         setSettingsVersion(v => v + 1);
-        syncWithCloud().catch(console.error);
+        // syncWithCloud().catch(console.error);
     };
 
     const handleFixConfirm = (surahId: number, anchorId: string) => {
@@ -1042,7 +1042,7 @@ export default function TodoPage() {
         // This function just resolves the specific issue.
         clearAnchorIssues(surahId, anchorId);
         setSettingsVersion(v => v + 1);
-        syncWithCloud().catch(console.error);
+        // syncWithCloud().catch(console.error);
     };
 
     const handleSimilarityDecision = (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm: boolean = true) => {
@@ -1082,7 +1082,7 @@ export default function TodoPage() {
             setMindmaps(prev => ({ ...prev, [surahId]: updated }));
             setSettingsVersion(v => v + 1);
             setActiveMindmapEditor(null);
-            syncWithCloud().catch(console.error);
+            // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {
@@ -1123,7 +1123,7 @@ export default function TodoPage() {
             setPartMindmaps(prev => ({ ...prev, [partId]: updated }));
             setSettingsVersion(v => v + 1);
             setActivePartEditor(null);
-            syncWithCloud().catch(console.error);
+            // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {
