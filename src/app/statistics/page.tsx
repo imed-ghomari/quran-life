@@ -8,6 +8,8 @@ import {
     getMindMaps,
     getPartMindMaps,
     getMemoryNodes,
+    getPortionPointer,
+    getListeningCycles,
 } from '@/lib/storage';
 import { BarChart3, Layers, Hash, Info, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
 import DocumentationModal from '@/components/DocumentationModal';
@@ -32,6 +34,7 @@ interface StatSegment {
 
 export default function StatisticsPage() {
     const [version, setVersion] = useState(0);
+    const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
     const settings = getSettings();
     const activePart = settings.activePart;
 
@@ -145,66 +148,120 @@ export default function StatisticsPage() {
         let learnedMastered = 0;
 
         targetSurahs.forEach(s => {
-            const totalChunks = Math.ceil(s.verseCount / 5);
-            if (skippedSurahs.has(s.id)) {
-                skipped += totalChunks;
+            if (verseChunkMode === 'surahs') {
+                if (skippedSurahs.has(s.id)) {
+                    skipped++;
+                } else {
+                    const { learned, total } = getSurahLearnedStatus(s.id);
+                    if (learned === 0) {
+                        notLearned++;
+                    } else {
+                        // If it has any learned verses, we look at the maturity of its nodes
+                        const nodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === s.id);
+                        if (nodes.length === 0) {
+                            learnedNew++; // Learned but nodes not synced yet
+                        } else {
+                            const avgInterval = nodes.reduce((acc, n) => acc + n.scheduler.interval, 0) / nodes.length;
+                            const maturity = getMaturity(avgInterval);
+                            if (maturity === 'mastered') learnedMastered++;
+                            else if (maturity === 'strong') learnedStrong++;
+                            else if (maturity === 'medium') learnedMedium++;
+                            else learnedNew++;
+                        }
+                    }
+                }
             } else {
-                const nodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === s.id);
-                const learnedCount = nodes.length;
-                notLearned += Math.max(0, totalChunks - learnedCount);
+                // Chunk Mode (Aya Chunks of 5)
+                const totalChunks = Math.ceil(s.verseCount / 5);
+                if (skippedSurahs.has(s.id)) {
+                    skipped += totalChunks;
+                } else {
+                    const learnedVerses = settings.learnedVerses[s.id] || [];
+                    
+                    // Logic to calculate chunks directly from learnedVerses to avoid sync issues
+                    const sortedVerses = [...learnedVerses].sort((a, b) => a - b);
+                    let learnedChunksCount = 0;
+                    const chunkMaturities: MaturityBucket[] = [];
 
-                nodes.forEach(n => {
-                    const maturity = getMaturity(n.scheduler.interval);
-                    if (maturity === 'mastered') learnedMastered++;
-                    else if (maturity === 'strong') learnedStrong++;
-                    else if (maturity === 'medium') learnedMedium++;
-                    else learnedNew++;
-                });
+                    if (sortedVerses.length > 0) {
+                        let segmentStart = sortedVerses[0];
+                        let segmentEnd = segmentStart;
+
+                        for (let i = 1; i <= sortedVerses.length; i++) {
+                            const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
+                            const segmentSize = segmentEnd - segmentStart + 1;
+
+                            if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
+                                const nodeId = `verse-${s.id}-${segmentStart}-${segmentEnd}`;
+                                const node = memoryNodes.find(n => n.id === nodeId);
+                                chunkMaturities.push(node ? getMaturity(node.scheduler.interval) : 'new');
+                                learnedChunksCount++;
+
+                                if (i < sortedVerses.length) {
+                                    segmentStart = sortedVerses[i];
+                                    segmentEnd = segmentStart;
+                                }
+                            } else {
+                                segmentEnd = sortedVerses[i];
+                            }
+                        }
+                    }
+
+                    const unlearnedChunks = Math.max(0, totalChunks - learnedChunksCount);
+                    notLearned += unlearnedChunks;
+
+                    chunkMaturities.forEach(maturity => {
+                        if (maturity === 'mastered') learnedMastered++;
+                        else if (maturity === 'strong') learnedStrong++;
+                        else if (maturity === 'medium') learnedMedium++;
+                        else learnedNew++;
+                    });
+                }
             }
         });
 
         return {
             total: skipped + notLearned + learnedNew + learnedMedium + learnedStrong + learnedMastered,
             segments: [
-                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Verses in skipped surahs' },
-                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Verses not yet learned' },
+                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: verseChunkMode === 'surahs' ? 'Skipped surahs' : 'Verses in skipped surahs' },
+                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: verseChunkMode === 'surahs' ? 'Surahs not yet started' : 'Verses not yet learned' },
                 { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
                 { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [version, activePart, memoryNodes, skippedSurahs]);
+    }, [version, activePart, memoryNodes, skippedSurahs, verseChunkMode, settings.learnedVerses]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
         const progress = getListeningProgress(activePart);
-        const settings = getSettings();
+        const portionPointer = getPortionPointer(activePart);
+        const cycles = getListeningCycles(activePart);
         
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
         const totalVersesInPart = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
         
-        // Current portion progress
-        const currentVerseIndex = progress.currentVerseIndex || 0;
+        const learnedVerseCount = Math.min(totalVersesInPart, portionPointer + (progress.currentVerseIndex || 0));
         
-        // Cycle count: how many times it was repeated
-        // We need to fetch this from pointers or stats. 
-        // Based on storage.ts, completions are not tracked in ListeningStats object but there is a ListeningProgress.
-        // Let's check if we have a way to get cycle count. 
-        // Actually, looking at markListeningComplete in storage.ts, it doesn't seem to increment a cycle counter.
-        // Wait, I saw "completions" in my previous search but it might have been an assumption.
-        // Let's just use the current progress for now.
-        
-        const learnedCount = currentVerseIndex;
-        const remainingCount = Math.max(0, totalVersesInPart - learnedCount);
+        // Calculate surah counts
+        let completedSurahs = 0;
+        let currentVerseTotal = 0;
+        surahsInPart.forEach(s => {
+            if (currentVerseTotal + s.verseCount <= learnedVerseCount) {
+                completedSurahs++;
+            }
+            currentVerseTotal += s.verseCount;
+        });
+        const remainingSurahs = Math.max(0, surahsInPart.length - completedSurahs);
 
         return {
-            total: totalVersesInPart,
-            completions: 0, // Fallback if not tracked
+            total: surahsInPart.length,
+            completions: cycles,
             segments: [
-                { label: 'Completed', count: learnedCount, color: 'var(--chart-mastered)', description: 'Verses completed in current cycle' },
-                { label: 'Remaining', count: remainingCount, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Verses remaining in current cycle' },
-            ].filter(s => s.count > 0)
+                { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
+                { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Surahs remaining in current cycle' },
+            ]
         };
     }, [version, activePart, skippedSurahs]);
 
@@ -238,6 +295,42 @@ export default function StatisticsPage() {
                     title="Verse Chunks"
                     icon={<RotateCcw size={20} />}
                     stats={verseChunkStats}
+                    headerSuffix={
+                        <div style={{ display: 'flex', background: 'var(--verse-bg)', borderRadius: '8px', padding: '2px' }}>
+                            <button
+                                onClick={() => setVerseChunkMode('chunks')}
+                                style={{
+                                    padding: '4px 8px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: verseChunkMode === 'chunks' ? 'var(--accent)' : 'transparent',
+                                    color: verseChunkMode === 'chunks' ? 'white' : 'var(--foreground-secondary)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                CHUNKS
+                            </button>
+                            <button
+                                onClick={() => setVerseChunkMode('surahs')}
+                                style={{
+                                    padding: '4px 8px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: verseChunkMode === 'surahs' ? 'var(--accent)' : 'transparent',
+                                    color: verseChunkMode === 'surahs' ? 'white' : 'var(--foreground-secondary)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                SURAHS
+                            </button>
+                        </div>
+                    }
                 />
 
                 <ProgressBarSection
