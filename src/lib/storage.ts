@@ -5,6 +5,7 @@
 import { SURAHS } from './quranData';
 import { QuranPart } from './types';
 import { get, set, createStore } from 'idb-keyval';
+import { appLogger } from './logger';
 
 // ========================================
 // Storage Engine Migration & Helpers
@@ -42,18 +43,21 @@ async function migrateFromLocalStorage() {
     const migrationFlag = 'quran-app-migrated-to-idb';
     if (localStorage.getItem(migrationFlag)) return;
 
+    appLogger.addLog('Migrating data from localStorage to IndexedDB...', 'info');
     for (const key of Object.values(STORAGE_KEYS)) {
         const value = localStorage.getItem(key);
         if (value) {
             try {
                 await set(key, JSON.parse(value), customStore);
             } catch (e) {
+                appLogger.addLog(`Migration failed for key ${key}`, 'error');
                 console.error(`Migration failed for key ${key}:`, e);
             }
         }
     }
 
     localStorage.setItem(migrationFlag, 'true');
+    appLogger.addLog('Successfully migrated data to IndexedDB', 'success');
     console.log('Successfully migrated data from localStorage to IndexedDB');
 }
 
@@ -136,6 +140,10 @@ if (storageChannel) {
 
 function saveToCacheAndStore(key: string, value: any) {
     storageCache[key] = value;
+    
+    // Human readable key name
+    const keyName = key.replace('quran-app-', '').replace(/-/g, ' ');
+    appLogger.addLog(`Saving ${keyName}...`, 'info');
 
     // Update last modified timestamp (except for the timestamp itself)
     if (key !== STORAGE_KEYS.LAST_MODIFIED) {
@@ -148,7 +156,12 @@ function saveToCacheAndStore(key: string, value: any) {
     }
 
     if (typeof window !== 'undefined' && customStore) {
-        set(key, value, customStore).catch(err => console.error(`Failed to persist ${key}:`, err));
+        set(key, value, customStore)
+            .then(() => appLogger.addLog(`${keyName} saved successfully`, 'success'))
+            .catch(err => {
+                appLogger.addLog(`Failed to save ${keyName}`, 'error');
+                console.error(`Failed to persist ${key}:`, err);
+            });
 
         // Notify other tabs via BroadcastChannel
         storageChannel?.postMessage({ key, value });

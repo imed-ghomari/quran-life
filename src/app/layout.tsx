@@ -4,6 +4,7 @@ import './globals.css';
 import 'tldraw/tldraw.css';
 import Navigation from '@/components/Navigation';
 import { Providers } from '@/components/Providers';
+import { LogOverlay } from '@/components/LogOverlay';
 
 export const metadata: Metadata = {
     title: 'Quran Life',
@@ -46,6 +47,7 @@ export default function RootLayout({
                     `}
                 </Script>
                 <Providers>
+                    <LogOverlay />
                     <div className="app-shell">
                         <Navigation />
                         <div className="page-container">

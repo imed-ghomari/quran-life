@@ -1,5 +1,6 @@
 import { BackupData, exportBackup, importBackup, saveSettings } from './storage';
 import { fetchSupabaseBackup, uploadSupabaseBackup } from './supabaseSync';
+import { appLogger } from './logger';
 
 export interface SyncResult {
   status: 'success' | 'no_change' | 'error';
@@ -14,12 +15,15 @@ export interface SyncResult {
  */
 export async function syncWithCloud(): Promise<SyncResult> {
   try {
+    appLogger.addLog('Starting cloud sync...', 'info');
     const localData = exportBackup();
     const { data: remoteData } = await fetchSupabaseBackup();
 
     if (!remoteData) {
       // No remote data, push local data as the first backup
+      appLogger.addLog('No remote data found. Creating initial backup...', 'info');
       await uploadSupabaseBackup(localData);
+      appLogger.addLog('Initial backup created successfully', 'success');
       return { status: 'success', message: 'Initial backup created on Supabase' };
     }
 
@@ -29,6 +33,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
     const { mergedData, hasChanges: mergedHasChanges } = mergeBackups(latestLocal, remoteData);
 
     if (mergedHasChanges || localData.exportedAt !== latestLocal.exportedAt) {
+      appLogger.addLog('Changes detected. Merging and uploading...', 'info');
       // Update local storage
       mergedData.settings = {
         ...(mergedData.settings || {}),
@@ -38,6 +43,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
       importBackup(mergedData);
       // Update remote storage
       await uploadSupabaseBackup(mergedData);
+      appLogger.addLog('Sync complete: Data merged and uploaded', 'success');
       return { status: 'success', message: 'Sync complete: data merged' };
     }
 
@@ -47,8 +53,10 @@ export async function syncWithCloud(): Promise<SyncResult> {
     // We don't want to reload the page if nothing changed, so we just save the setting
     saveSettings(settings);
 
+    appLogger.addLog('Sync complete: Already in sync', 'success');
     return { status: 'no_change', message: 'Already in sync' };
   } catch (error: any) {
+    appLogger.addLog(`Sync failed: ${error.message || 'Unknown error'}`, 'error');
     console.error('Sync failed:', error);
     return { status: 'error', message: error.message || 'Unknown sync error' };
   }

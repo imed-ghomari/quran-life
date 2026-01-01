@@ -2,6 +2,7 @@
 
 import { createContext, useEffect, useRef, useState } from "react";
 import { CloudOff } from "lucide-react";
+import { appLogger } from "@/lib/logger";
 
 export const OnlineStatusContext = createContext(true);
 
@@ -22,11 +23,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       syncInProgress.current = true;
       localStorage.setItem('quran-app-sync-lock', now.toString());
 
+      appLogger.addLog('Sync trigger: Initiating sync check...', 'info');
       const { createClient } = await import('@/utils/supabase/client');
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
+        appLogger.addLog(`User authenticated: ${session.user.email}`, 'info');
         // Ensure local cache is loaded from IndexedDB before syncing with cloud
         // to prevent empty default settings from winning over remote data
         const { ensureCacheLoaded } = await import('@/lib/storage');
@@ -34,8 +37,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
         const { syncWithCloud } = await import('@/lib/sync');
         await syncWithCloud();
+      } else {
+        appLogger.addLog('No active session, skipping cloud sync', 'warning');
       }
-    } catch (e) {
+    } catch (e: any) {
+      appLogger.addLog(`Global sync failed: ${e.message}`, 'error');
       console.error('Global sync failed:', e);
     } finally {
       syncInProgress.current = false;
@@ -47,10 +53,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     setIsOnline(navigator.onLine);
 
     const handleOnline = () => {
+      appLogger.addLog('App is online', 'success');
       setIsOnline(true);
       performSync();
     };
-    const handleOffline = () => setIsOnline(false);
+    const handleOffline = () => {
+      appLogger.addLog('App is offline', 'warning');
+      setIsOnline(false);
+    };
 
     // Setup Auth Listener for sync (covers app load and sign-in)
     let authSubscription: any = null;
