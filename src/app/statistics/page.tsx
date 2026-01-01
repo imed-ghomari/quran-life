@@ -265,6 +265,81 @@ export default function StatisticsPage() {
         };
     }, [version, activePart, skippedSurahs]);
 
+    // 5. Future Due Data
+    const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
+    const [showBacklog, setShowBacklog] = useState(true);
+
+    const futureDueStats = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
+        const nodes = memoryNodes.filter(n => !n.surahId || targetSurahs.has(n.surahId));
+
+        const dayCounts: Record<number, number> = {};
+        let totalReviews = 0;
+        let backlogCount = 0;
+        let dueTomorrow = 0;
+
+        nodes.forEach(node => {
+            const dueDate = new Date(node.scheduler.dueDate);
+            dueDate.setHours(0, 0, 0, 0);
+            
+            const diffTime = dueDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) {
+                backlogCount++;
+                if (showBacklog) {
+                    dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
+                    totalReviews++;
+                }
+            } else {
+                dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
+                totalReviews++;
+                if (diffDays === 1) dueTomorrow++;
+            }
+        });
+
+        const rangeDays = timeRange === '1m' ? 31 : timeRange === '3m' ? 90 : timeRange === '1y' ? 365 : 0;
+        
+        // Determine x-axis range
+        let minDay = showBacklog ? Math.min(...Object.keys(dayCounts).map(Number), -15) : 0;
+        let maxDay = rangeDays || Math.max(...Object.keys(dayCounts).map(Number), 30);
+        
+        // If 'all', we might want to cap it or just show everything
+        if (timeRange === 'all') {
+            maxDay = Math.max(...Object.keys(dayCounts).map(Number), 30);
+        }
+
+        const data: { day: number; count: number; cumulative: number }[] = [];
+        let cumulative = 0;
+        
+        // Calculate cumulative starting from the earliest day in dayCounts if backlog is shown
+        const sortedDays = Object.keys(dayCounts).map(Number).sort((a, b) => a - b);
+        const earliestDay = sortedDays[0] || 0;
+
+        for (let d = earliestDay; d <= maxDay; d++) {
+            const count = dayCounts[d] || 0;
+            cumulative += count;
+            if (d >= minDay) {
+                data.push({ day: d, count, cumulative });
+            }
+        }
+
+        const average = totalReviews / (maxDay - minDay + 1);
+
+        return {
+            data,
+            total: totalReviews,
+            average: average.toFixed(1),
+            dueTomorrow,
+            dailyLoad: (totalReviews / (maxDay - minDay + 1)).toFixed(1), // Simplified for now
+            minDay,
+            maxDay
+        };
+    }, [version, activePart, memoryNodes, showBacklog, timeRange]);
+
     return (
         <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '2rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
             <div className="stats-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -344,6 +419,14 @@ export default function StatisticsPage() {
                         </div>
                     }
                 />
+
+                <FutureDueSection
+                    stats={futureDueStats}
+                    showBacklog={showBacklog}
+                    setShowBacklog={setShowBacklog}
+                    timeRange={timeRange}
+                    setTimeRange={setTimeRange}
+                />
             </div>
 
             <DocumentationModal
@@ -371,6 +454,141 @@ export default function StatisticsPage() {
                     }
                 ]}
             />
+        </div>
+    );
+}
+
+function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTimeRange }: {
+    stats: any;
+    showBacklog: boolean;
+    setShowBacklog: (v: boolean) => void;
+    timeRange: '1m' | '3m' | '1y' | 'all';
+    setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
+}) {
+    return (
+        <div className="card modern-card" style={{ width: '100%', padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)' }}>
+            <h2 style={{ fontSize: '1.75rem', margin: '0 0 1rem 0', fontWeight: 700 }}>Future Due</h2>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                <p style={{ fontSize: '0.9rem', color: 'var(--foreground-secondary)', margin: '0 0 1rem 0' }}>The number of reviews due in the future.</p>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1rem', fontSize: '0.85rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} />
+                        Backlog
+                    </label>
+                    {(['1m', '3m', '1y', 'all'] as const).map(range => (
+                        <label key={range} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                            <input
+                                type="radio"
+                                name="timeRange"
+                                checked={timeRange === range}
+                                onChange={() => setTimeRange(range)}
+                            />
+                            {range === '1m' ? '1 month' : range === '3m' ? '3 months' : range === '1y' ? '1 year' : 'all'}
+                        </label>
+                    ))}
+                </div>
+            </div>
+
+            <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} />
+
+            <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ fontWeight: 600 }}>Total: {stats.total} reviews</div>
+                <div style={{ color: 'var(--foreground-secondary)' }}>Average: {stats.average} reviews/day</div>
+                <div style={{ color: 'var(--foreground-secondary)' }}>Due tomorrow: {stats.dueTomorrow} reviews</div>
+                <div style={{ color: 'var(--foreground-secondary)' }}>Daily load: {stats.dailyLoad} reviews/day</div>
+            </div>
+        </div>
+    );
+}
+
+function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number; maxDay: number }) {
+    if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+
+    const chartHeight = 200;
+    const chartWidth = 700;
+    const padding = { top: 20, right: 40, bottom: 30, left: 40 };
+
+    const maxCount = Math.max(...data.map(d => d.count), 1);
+    const maxCumulative = Math.max(...data.map(d => d.cumulative), 1);
+
+    const getX = (day: number) => padding.left + ((day - minDay) / (maxDay - minDay)) * (chartWidth - padding.left - padding.right);
+    const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxCount) * (chartHeight - padding.top - padding.bottom);
+    const getYCumulative = (cumulative: number) => chartHeight - padding.bottom - (cumulative / maxCumulative) * (chartHeight - padding.top - padding.bottom);
+
+    // Area path for cumulative
+    let areaPath = `M ${getX(data[0].day)} ${chartHeight - padding.bottom}`;
+    data.forEach(d => {
+        areaPath += ` L ${getX(d.day)} ${getYCumulative(d.cumulative)}`;
+    });
+    areaPath += ` L ${getX(data[data.length - 1].day)} ${chartHeight - padding.bottom} Z`;
+
+    // Grid lines and axes
+    const yTicksCount = 4;
+    const yTicksCumulative = 4;
+    const xTicksCount = 10;
+
+    return (
+        <div style={{ overflowX: 'auto', width: '100%' }}>
+            <svg width={chartWidth} height={chartHeight} style={{ overflow: 'visible' }}>
+                {/* Cumulative Area */}
+                <path d={areaPath} fill="var(--chart-skipped)" opacity="0.1" />
+                <path d={areaPath.replace(' Z', '')} fill="none" stroke="var(--foreground-secondary)" strokeWidth="1" opacity="0.2" />
+
+                {/* Bars */}
+                {data.map((d, i) => {
+                    const barWidth = Math.max(2, (chartWidth - padding.left - padding.right) / (maxDay - minDay + 1) - 1);
+                    return (
+                        <rect
+                            key={i}
+                            x={getX(d.day) - barWidth / 2}
+                            y={getYCount(d.count)}
+                            width={barWidth}
+                            height={chartHeight - padding.bottom - getYCount(d.count)}
+                            fill="var(--chart-mastered)"
+                            opacity={d.day < 0 ? 0.8 : 0.6}
+                        />
+                    );
+                })}
+
+                {/* X-axis */}
+                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={chartWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                {Array.from({ length: xTicksCount + 1 }).map((_, i) => {
+                    const day = Math.round(minDay + (i / xTicksCount) * (maxDay - minDay));
+                    return (
+                        <g key={i}>
+                            <line x1={getX(day)} y1={chartHeight - padding.bottom} x2={getX(day)} y2={chartHeight - padding.bottom + 5} stroke="var(--border)" />
+                            <text x={getX(day)} y={chartHeight - padding.bottom + 20} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">{day}</text>
+                        </g>
+                    );
+                })}
+
+                {/* Left Y-axis (Daily Count) */}
+                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                {Array.from({ length: yTicksCount + 1 }).map((_, i) => {
+                    const val = (i / yTicksCount) * maxCount;
+                    const y = getYCount(val);
+                    return (
+                        <g key={i}>
+                            <line x1={padding.left - 5} y1={y} x2={padding.left} y2={y} stroke="var(--border)" />
+                            <text x={padding.left - 10} y={y + 4} textAnchor="end" fontSize="10" fill="var(--foreground-secondary)">{val % 1 === 0 ? val : val.toFixed(1)}</text>
+                        </g>
+                    );
+                })}
+
+                {/* Right Y-axis (Cumulative) */}
+                <line x1={chartWidth - padding.right} y1={padding.top} x2={chartWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                {Array.from({ length: yTicksCumulative + 1 }).map((_, i) => {
+                    const val = (i / yTicksCumulative) * maxCumulative;
+                    const y = getYCumulative(val);
+                    return (
+                        <g key={i}>
+                            <line x1={chartWidth - padding.right} y1={y} x2={chartWidth - padding.right + 5} y2={y} stroke="var(--border)" />
+                            <text x={chartWidth - padding.right + 10} y={y + 4} textAnchor="start" fontSize="10" fill="var(--foreground-secondary)">{Math.round(val)}</text>
+                        </g>
+                    );
+                })}
+            </svg>
         </div>
     );
 }
