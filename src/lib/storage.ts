@@ -157,7 +157,15 @@ function saveToCacheAndStore(key: string, value: any) {
 
     if (typeof window !== 'undefined' && customStore) {
         set(key, value, customStore)
-            .then(() => appLogger.addLog(`${keyName} saved successfully`, 'success'))
+            .then(() => {
+                appLogger.addLog(`${keyName} saved successfully`, 'success');
+                // Dispatch a storage event manually so the page.tsx useEffect catches it
+                // This works even in the same tab for our custom listener
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: key,
+                    newValue: JSON.stringify(value),
+                }));
+            })
             .catch(err => {
                 appLogger.addLog(`Failed to save ${keyName}`, 'error');
                 console.error(`Failed to persist ${key}:`, err);
@@ -660,11 +668,12 @@ export function saveMindMap(mindmap: MindMap): void {
     maps[mindmap.surahId] = mindmap;
     saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, maps);
 
-    // Create/update memory node for mindmap if complete
+    // Create/update memory node for mindmap if complete, otherwise remove it
+    const nodes = getMemoryNodes();
+    const nodeId = `mindmap-${mindmap.surahId}`;
+    const exists = nodes.some(n => n.id === nodeId);
+
     if (mindmap.isComplete) {
-        const nodes = getMemoryNodes();
-        const nodeId = `mindmap-${mindmap.surahId}`;
-        const exists = nodes.some(n => n.id === nodeId);
         if (!exists) {
             nodes.push({
                 id: nodeId,
@@ -674,6 +683,8 @@ export function saveMindMap(mindmap: MindMap): void {
             });
             saveMemoryNodes(nodes);
         }
+    } else if (exists) {
+        saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
     }
 }
 
@@ -706,11 +717,12 @@ export function savePartMindMap(mindmap: PartMindMap): void {
     maps[mindmap.partId] = mindmap;
     saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, maps);
 
-    // Create memory node for part mindmap if complete
+    // Create memory node for part mindmap if complete, otherwise remove it
+    const nodes = getMemoryNodes();
+    const nodeId = `part-mindmap-${mindmap.partId}`;
+    const exists = nodes.some(n => n.id === nodeId);
+
     if (mindmap.isComplete) {
-        const nodes = getMemoryNodes();
-        const nodeId = `part-mindmap-${mindmap.partId}`;
-        const exists = nodes.some(n => n.id === nodeId);
         if (!exists) {
             nodes.push({
                 id: nodeId,
@@ -720,6 +732,8 @@ export function savePartMindMap(mindmap: PartMindMap): void {
             });
             saveMemoryNodes(nodes);
         }
+    } else if (exists) {
+        saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
     }
 }
 

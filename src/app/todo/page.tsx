@@ -806,6 +806,16 @@ export default function TodoPage() {
     const settings = getSettings();
 
     useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === null || e.key.startsWith('quran-app-')) {
+                setSettingsVersion(v => v + 1);
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, []);
+
+    useEffect(() => {
         setMindmaps(getMindMaps());
         setPartMindmaps(getPartMindMaps());
         setDecisions(getMutashabihatDecisions());
@@ -1741,10 +1751,11 @@ export default function TodoPage() {
                                                                     className="btn btn-secondary"
                                                                     onClick={() => {
                                                                         if (confirm('Are you sure you want to delete this part mindmap? This cannot be undone.')) {
-                                                                            const updatedMap = { partId: part, imageUrl: null, description: '', isComplete: false, tldrawSnapshot: undefined };
-                                                                            setPartMindmaps(prev => ({ ...prev, [part]: updatedMap }));
-                                                                            savePartMindMap(updatedMap);
-                                                                            syncWithCloud().catch(console.error);
+                                                                            const newMaps = { ...partMindmaps };
+                                                                            delete newMaps[part];
+                                                                            setPartMindmaps(newMaps);
+                                                                            savePartMindMap({ partId: part, imageUrl: null, imageUrlDark: null, description: '', isComplete: false, tldrawSnapshot: undefined });
+                                                                            // syncWithCloud().catch(console.error);
                                                                         }
                                                                     }}
                                                                     style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
@@ -1852,11 +1863,11 @@ export default function TodoPage() {
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
                                                                                     if (confirm('Are you sure you want to delete this mindmap? This cannot be undone.')) {
-                                                                                        const updatedMap = { ...mindmap, imageUrl: null, tldrawSnapshot: undefined, isComplete: false };
-                                                                                        const newMaps = { ...mindmaps, [surah.id]: updatedMap };
+                                                                                        const newMaps = { ...mindmaps };
+                                                                                        delete newMaps[surah.id];
                                                                                         setMindmaps(newMaps);
-                                                                                        saveMindMap(updatedMap);
-                                                                                        syncWithCloud().catch(console.error);
+                                                                                        saveMindMap({ ...mindmap, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false });
+                                                                                        // syncWithCloud().catch(console.error);
                                                                                     }
                                                                                 }}
                                                                                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.7rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
@@ -1877,7 +1888,7 @@ export default function TodoPage() {
                                                                 <td colSpan={4} style={{ padding: '1.5rem', background: 'var(--background)' }}>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                                            {(mindmap.imageUrl || mindmap.imageUrlDark) && (
+                                                                            {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                                 <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                                                                                     <img src={mindmap.imageUrl ?? undefined} className="light-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
                                                                                     <img src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? undefined} className="dark-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
@@ -1962,10 +1973,11 @@ export default function TodoPage() {
                                                                     className="btn btn-secondary"
                                                                     onClick={() => {
                                                                         if (confirm('Delete this part mindmap?')) {
-                                                                            const updatedMap = { partId: part, imageUrl: null, description: '', isComplete: false, tldrawSnapshot: undefined };
-                                                                            setPartMindmaps(prev => ({ ...prev, [part]: updatedMap }));
-                                                                            savePartMindMap(updatedMap);
-                                                                            syncWithCloud().catch(console.error);
+                                                                            const newMaps = { ...partMindmaps };
+                                                                            delete newMaps[part];
+                                                                            setPartMindmaps(newMaps);
+                                                                            savePartMindMap({ partId: part, imageUrl: null, imageUrlDark: null, description: '', isComplete: false, tldrawSnapshot: undefined });
+                                                                            // syncWithCloud().catch(console.error);
                                                                         }
                                                                     }}
                                                                     style={{ padding: '0.4rem', fontSize: '0.75rem', color: 'var(--danger)' }}
@@ -2025,7 +2037,7 @@ export default function TodoPage() {
 
                                                             {isExpanded && (
                                                                 <div style={{ background: 'var(--background)', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                                    {(mindmap?.imageUrl || mindmap?.imageUrlDark) && (
+                                                                    {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                         <div style={{ position: 'relative', width: '100%', height: '250px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                                                                             <img src={mindmap.imageUrl ?? undefined} className="light-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
                                                                             <img src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? undefined} className="dark-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
@@ -2056,10 +2068,11 @@ export default function TodoPage() {
                                                                                 className="btn btn-secondary"
                                                                                 onClick={() => {
                                                                                     if (confirm('Delete this mindmap?')) {
-                                                                                        const updatedMap = { ...mindmap, imageUrl: null, tldrawSnapshot: undefined, isComplete: false };
-                                                                                        setMindmaps(prev => ({ ...prev, [surah.id]: updatedMap }));
-                                                                                        saveMindMap(updatedMap);
-                                                                                        syncWithCloud().catch(console.error);
+                                                                                        const newMaps = { ...mindmaps };
+                                                                                        delete newMaps[surah.id];
+                                                                                        setMindmaps(newMaps);
+                                                                                        saveMindMap({ ...mindmap, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false });
+                                                                                        // syncWithCloud().catch(console.error);
                                                                                     }
                                                                                 }}
                                                                                 style={{ padding: '0.5rem', fontSize: '0.75rem', color: 'var(--danger)' }}
