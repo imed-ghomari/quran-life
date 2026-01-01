@@ -154,9 +154,21 @@ function saveToCacheAndStore(key: string, value: any) {
         storageChannel?.postMessage({ key, value });
 
         // Also update localStorage for fallback sync awareness across tabs
+        // IMPORTANT: We only use localStorage for small metadata or sync signals.
+        // Putting massive JSONs here causes QuotaExceededError and slows down the browser.
         try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (e) { }
+            const stringified = JSON.stringify(value);
+            // Limit to 500KB per key in localStorage to be safe (total limit is ~5MB)
+            if (stringified.length < 500000) {
+                localStorage.setItem(key, stringified);
+            } else {
+                // If data is large, we store a marker to let other tabs know they should check IndexedDB
+                localStorage.setItem(key, JSON.stringify({ _isLargeData: true, timestamp: new Date().toISOString() }));
+                console.log(`Key ${key} is large (${(stringified.length / 1024).toFixed(1)} KB), skipping localStorage.`);
+            }
+        } catch (e) {
+            console.warn(`Failed to save ${key} to localStorage (likely size limit):`, e);
+        }
     }
 }
 
@@ -617,6 +629,7 @@ export interface MindMap {
     anchors: Anchor[];
     isComplete: boolean;
     tldrawSnapshot?: any;
+    updatedAt?: string;
 }
 
 export function getMindMaps(): { [surahId: string]: MindMap } {
@@ -630,6 +643,7 @@ export function getMindMap(surahId: number): MindMap {
 
 export function saveMindMap(mindmap: MindMap): void {
     const maps = getMindMaps();
+    mindmap.updatedAt = new Date().toISOString();
     maps[mindmap.surahId] = mindmap;
     saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, maps);
 
@@ -661,6 +675,7 @@ export interface PartMindMap {
     description: string;
     isComplete: boolean;
     tldrawSnapshot?: any;
+    updatedAt?: string;
 }
 
 export function getPartMindMaps(): { [partId: string]: PartMindMap } {
@@ -674,6 +689,7 @@ export function getPartMindMap(partId: QuranPart): PartMindMap {
 
 export function savePartMindMap(mindmap: PartMindMap): void {
     const maps = getPartMindMaps();
+    mindmap.updatedAt = new Date().toISOString();
     maps[mindmap.partId] = mindmap;
     saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, maps);
 
@@ -707,16 +723,38 @@ export interface ListeningStats {
 export interface ListeningProgress {
     partId: QuranPart;
     currentVerseIndex: number;
+    portionPointer: number;
+    cycles: number;
+    updatedAt: string;
 }
 
 export function getListeningProgress(partId: QuranPart): ListeningProgress {
     const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    return map[partId] || { partId, currentVerseIndex: 0 };
+    const existing = map[partId];
+    if (existing) return existing;
+
+    // Fallback/Migration: check old separate keys
+    const pointers = getFromCache<Record<string, number>>(STORAGE_KEYS.PORTION_POINTERS, {});
+    const cyclesMap = getFromCache<Record<string, number>>(STORAGE_KEYS.LISTENING_CYCLES, {});
+    
+    return { 
+        partId, 
+        currentVerseIndex: 0, 
+        portionPointer: pointers[partId] || 0,
+        cycles: cyclesMap[partId] || 0,
+        updatedAt: new Date().toISOString()
+    };
 }
 
 export function saveListeningProgress(partId: QuranPart, currentVerseIndex: number): void {
     const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    map[partId] = { partId, currentVerseIndex };
+    const existing = getListeningProgress(partId);
+    
+    map[partId] = {
+        ...existing,
+        currentVerseIndex,
+        updatedAt: new Date().toISOString()
+    };
     saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
 }
 
@@ -750,25 +788,35 @@ export function getListeningCompletedToday(): boolean {
 }
 
 export function getPortionPointer(partId: QuranPart): number {
-    const pointers = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.PORTION_POINTERS, {} as any);
-    return pointers[partId] || 0;
+    return getListeningProgress(partId).portionPointer;
 }
 
 export function savePortionPointer(partId: QuranPart, index: number): void {
-    const pointers = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.PORTION_POINTERS, {} as any);
-    pointers[partId] = index;
-    saveToCacheAndStore(STORAGE_KEYS.PORTION_POINTERS, pointers);
+    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
+    const existing = getListeningProgress(partId);
+    
+    map[partId] = {
+        ...existing,
+        portionPointer: index,
+        updatedAt: new Date().toISOString()
+    };
+    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
 }
 
 export function getListeningCycles(partId: QuranPart): number {
-    const cycles = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.LISTENING_CYCLES, {} as any);
-    return cycles[partId] || 0;
+    return getListeningProgress(partId).cycles;
 }
 
 export function saveListeningCycles(partId: QuranPart, count: number): void {
-    const cycles = getFromCache<Record<QuranPart, number>>(STORAGE_KEYS.LISTENING_CYCLES, {} as any);
-    cycles[partId] = count;
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_CYCLES, cycles);
+    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
+    const existing = getListeningProgress(partId);
+    
+    map[partId] = {
+        ...existing,
+        cycles: count,
+        updatedAt: new Date().toISOString()
+    };
+    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
 }
 
 export function markListeningComplete(partId: QuranPart, versesPerDay: number, totalVerses: number): void {

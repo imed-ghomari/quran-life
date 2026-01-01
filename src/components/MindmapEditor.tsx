@@ -276,11 +276,12 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 try {
                     const shapeIds = Array.from(editor.getCurrentPageShapeIds());
                     if (shapeIds.length > 0) {
+                        // Use lower pixelRatio and potentially smaller format to save space
                         // Light mode version
                         const lightResult = await editor.toImage(shapeIds, {
                             format: 'png',
-                            quality: 1,
-                            pixelRatio: 2,
+                            quality: 0.8, // Slightly lower quality
+                            pixelRatio: 1, // Reduced from 2 to save 4x space
                             padding: 10,
                             theme: 'light'
                         });
@@ -291,8 +292,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                         // Dark mode version
                         const darkResult = await editor.toImage(shapeIds, {
                             format: 'png',
-                            quality: 1,
-                            pixelRatio: 2,
+                            quality: 0.8,
+                            pixelRatio: 1,
                             padding: 10,
                             theme: 'dark'
                         });
@@ -304,7 +305,21 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                     console.warn("Failed to generate preview images", imgError);
                 }
 
-                await onSave(snapshot, { light: lightBlob, dark: darkBlob });
+                // Sanitize snapshot: remove non-document records to save space
+                // (camera, pointer, transient state etc)
+                const sanitizedSnapshot = { ...snapshot };
+                if (sanitizedSnapshot.store) {
+                    const documentTypes = ['shape', 'asset', 'binding', 'page'];
+                    const filteredStore: any = {};
+                    Object.entries(sanitizedSnapshot.store).forEach(([id, record]: [string, any]) => {
+                        if (documentTypes.some(type => id.startsWith(type + ':'))) {
+                            filteredStore[id] = record;
+                        }
+                    });
+                    sanitizedSnapshot.store = filteredStore;
+                }
+
+                await onSave(sanitizedSnapshot, { light: lightBlob, dark: darkBlob });
             } catch (e) {
                 console.error("Save failed", e);
             }

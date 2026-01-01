@@ -160,31 +160,23 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     const remoteMaps = remote.mindmaps || {};
     const mergedMaps = { ...localMaps };
 
-    // For now, if a surah exists in both, we prioritize REMOTE if remote is globally newer, 
-    // otherwise we keep LOCAL. Ideally we'd have per-item timestamps.
-    // However, this at least allows disjoint updates (Surah A on phone, Surah B on desktop).
-    Object.entries(remoteMaps).forEach(([id, map]) => {
-      // If we don't have it, or if we define "remote is newer" as the tie-breaker
-      if (!mergedMaps[id] || (remoteTime > localTime && JSON.stringify(mergedMaps[id]) !== JSON.stringify(map))) {
-        mergedMaps[id] = map;
+    // Merge each mindmap individually using its own updatedAt if available
+    Object.entries(remoteMaps).forEach(([id, rMap]) => {
+      const lMap = mergedMaps[id];
+      const rTime = rMap.updatedAt || remoteTime;
+      const lTime = lMap?.updatedAt || localTime;
+
+      if (!lMap || (rTime > lTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
+        mergedMaps[id] = rMap;
         hasChanges = true;
       }
     });
 
-    // Also check if we have local maps that aren't in remote, 
-    // and if we are pushing (local > remote), we keep them (already in ...localMaps).
-    // If local is OLDER, strictly speaking we might want to respect deletions? 
-    // But for this app, we generally accumulate data. Keeping local additions is safer.
-
-    // If we kept a local map that differs from remote (and wasn't overwritten above), 
-    // that constitutes a change to push back.
     if (JSON.stringify(merged.mindmaps) !== JSON.stringify(mergedMaps)) {
       merged.mindmaps = mergedMaps;
-      if (Object.keys(mergedMaps).length > Object.keys(remoteMaps).length) {
-        hasChanges = true;
-      }
+      // If we added new maps or updated existing ones from remote, that's already tracked by hasChanges.
+      // But we should also check if local had maps that remote didn't, which is handled by { ...localMaps } initial state.
     }
-    // Explicitly set the merged result
     merged.mindmaps = mergedMaps;
   }
 
@@ -194,9 +186,13 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     const remotePartMaps = remote.partMindmaps || {};
     const mergedPartMaps = { ...localPartMaps };
 
-    Object.entries(remotePartMaps).forEach(([id, map]) => {
-      if (!mergedPartMaps[id] || (remoteTime > localTime && JSON.stringify(mergedPartMaps[id]) !== JSON.stringify(map))) {
-        mergedPartMaps[id] = map;
+    Object.entries(remotePartMaps).forEach(([id, rMap]) => {
+      const lMap = mergedPartMaps[id];
+      const rTime = rMap.updatedAt || remoteTime;
+      const lTime = lMap?.updatedAt || localTime;
+
+      if (!lMap || (rTime > lTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
+        mergedPartMaps[id] = rMap;
         hasChanges = true;
       }
     });
@@ -226,10 +222,13 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     const remoteProg = remote.listeningProgress || {};
     const mergedProg = { ...localProg };
 
-    Object.entries(remoteProg).forEach(([id, prog]) => {
-      // No timestamp here, so fallback to global time
-      if (!mergedProg[id] || remoteTime > localTime) {
-        mergedProg[id] = prog;
+    Object.entries(remoteProg).forEach(([id, rProg]) => {
+      const lProg = mergedProg[id];
+      const rTime = rProg.updatedAt || remoteTime;
+      const lTime = lProg?.updatedAt || localTime;
+
+      if (!lProg || (rTime > lTime && JSON.stringify(lProg) !== JSON.stringify(rProg))) {
+        mergedProg[id] = rProg;
         hasChanges = true;
       }
     });
