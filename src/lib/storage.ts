@@ -836,21 +836,26 @@ export function markListeningComplete(partId: QuranPart, versesPerDay: number, t
     const today = new Date().toISOString().split('T')[0];
     saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, today);
 
-    // Reset current progress within the portion
-    saveListeningProgress(partId, 0);
+    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
+    const existing = getListeningProgress(partId);
 
-    // Advance the progress pointer
-    const currentPointer = getPortionPointer(partId);
-    let nextPointer = currentPointer + versesPerDay;
-    
-    // Check for cycle completion
+    let nextPointer = existing.portionPointer + versesPerDay;
+    let nextCycles = existing.cycles;
+
     if (nextPointer >= totalVerses) {
         nextPointer = nextPointer % totalVerses;
-        const currentCycles = getListeningCycles(partId);
-        saveListeningCycles(partId, currentCycles + 1);
+        nextCycles += 1;
     }
-    
-    savePortionPointer(partId, nextPointer);
+
+    map[partId] = {
+        ...existing,
+        currentVerseIndex: 0,
+        portionPointer: nextPointer,
+        cycles: nextCycles,
+        updatedAt: new Date().toISOString()
+    };
+
+    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
 }
 
 // ========================================
