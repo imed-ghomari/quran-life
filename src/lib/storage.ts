@@ -686,6 +686,15 @@ export function saveMindMap(mindmap: MindMap): void {
     const nodeId = `mindmap-${mindmap.surahId}`;
     const nodeIdx = nodes.findIndex(n => n.id === nodeId);
 
+    if (mindmap.deletedAt) {
+        // Explicit deletion: remove the review node entirely
+        if (nodeIdx !== -1) {
+            appLogger.addLog(`Surah ${mindmap.surahId} mindmap deleted. Review node removed.`, 'info');
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+        }
+        return;
+    }
+
     if (mindmap.isComplete) {
         if (nodeIdx === -1) {
             nodes.push({
@@ -700,8 +709,8 @@ export function saveMindMap(mindmap: MindMap): void {
     } else if (nodeIdx !== -1) {
         const node = nodes[nodeIdx];
         // Distinguish between a node that has been reviewed and one that is new
-        // A reviewed node will have an interval > 1 or have a lastReview date
-        const hasBeenReviewed = node.scheduler.interval > 1 || !!node.scheduler.lastReview;
+        // A reviewed node will have an interval > 0 or have a lastReview date
+        const hasBeenReviewed = node.scheduler.repetition > 0 || !!node.scheduler.lastReview;
 
         if (hasBeenReviewed) {
             // "Lapse" approach: reduce strength but don't reset to zero
@@ -760,6 +769,15 @@ export function savePartMindMap(mindmap: PartMindMap): void {
     const nodeId = `part-mindmap-${mindmap.partId}`;
     const nodeIdx = nodes.findIndex(n => n.id === nodeId);
 
+    if (mindmap.deletedAt) {
+        // Explicit deletion: remove the review node entirely
+        if (nodeIdx !== -1) {
+            appLogger.addLog(`Part ${mindmap.partId} mindmap deleted. Review node removed.`, 'info');
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+        }
+        return;
+    }
+
     if (mindmap.isComplete) {
         if (nodeIdx === -1) {
             nodes.push({
@@ -774,7 +792,7 @@ export function savePartMindMap(mindmap: PartMindMap): void {
     } else if (nodeIdx !== -1) {
         const node = nodes[nodeIdx];
         // Distinguish between a node that has been reviewed and one that is new
-        const hasBeenReviewed = node.scheduler.interval > 1 || !!node.scheduler.lastReview;
+        const hasBeenReviewed = node.scheduler.repetition > 0 || !!node.scheduler.lastReview;
 
         if (hasBeenReviewed) {
             // "Lapse" approach: reduce strength but don't reset to zero
