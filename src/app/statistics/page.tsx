@@ -39,13 +39,8 @@ export default function StatisticsPage() {
     const activePart = settings.activePart;
 
     useEffect(() => {
-        const handleStorage = () => setVersion(v => v + 1);
-        window.addEventListener('storage', handleStorage);
         const interval = setInterval(() => setVersion(v => v + 1), 2000);
-        return () => {
-            window.removeEventListener('storage', handleStorage);
-            clearInterval(interval);
-        };
+        return () => clearInterval(interval);
     }, []);
 
     const mindmaps = getMindMaps();

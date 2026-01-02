@@ -760,16 +760,7 @@ export default function TodayPage() {
                                             ) : (
                                                 <div>
                                                     {(() => {
-                                                        const [isDark, setIsDark] = useState(false);
-
-                                                        useEffect(() => {
-                                                            const mql = window.matchMedia('(prefers-color-scheme: dark)');
-                                                            setIsDark(mql.matches);
-                                                            const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-                                                            mql.addEventListener('change', handler);
-                                                            return () => mql.removeEventListener('change', handler);
-                                                        }, []);
-
+                                                        const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
                                                         const displayUrl = isDark ? (reviewContent.mindmap?.imageUrlDark || reviewContent.mindmap?.imageUrl) : reviewContent.mindmap?.imageUrl;
 
                                                         if (!displayUrl) return null;

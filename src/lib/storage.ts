@@ -416,10 +416,7 @@ export function getDueNodes(): MemoryNode[] {
             const priority: Record<string, number> = { 'part_mindmap': 0, 'mindmap': 1, 'verse': 2 };
             const pA = priority[a.type] ?? 99;
             const pB = priority[b.type] ?? 99;
-            if (pA !== pB) return pA - pB;
-
-            // Secondary sort by due date (ascending) to keep order deterministic
-            return a.scheduler.dueDate.localeCompare(b.scheduler.dueDate);
+            return pA - pB;
         });
 }
 

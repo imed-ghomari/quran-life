@@ -563,15 +563,13 @@ function DesktopAnchorBuilder({
         const rect = barRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const width = rect.width;
-        // Clamp 0..1
         const percent = Math.max(0, Math.min(1, x / width));
 
-        // Map the continuous space of verses to "split after verse X"
-        // e.g. clicking anywhere on Verse 1 (0..1/N) should yield split 1 (after verse 1)
-        const val = Math.floor(percent * verseCount) + 1;
+        const val = percent * verseCount;
+        const rounded = Math.round(val);
 
-        if (val > 0 && val < verseCount) {
-            setHoverVal(val);
+        if (rounded > 0 && rounded < verseCount) {
+            setHoverVal(rounded);
         } else {
             setHoverVal(null);
         }
@@ -703,7 +701,7 @@ function DesktopAnchorBuilder({
                             left: `${(b / verseCount) * 100}%`,
                             top: '100%',
                             transform: 'translateX(-50%)',
-                            marginTop: '8px', // Increased spacing
+                            marginTop: '4px',
                             background: 'var(--danger)',
                             color: 'white',
                             border: 'none',
