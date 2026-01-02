@@ -140,7 +140,7 @@ if (storageChannel) {
 
 function saveToCacheAndStore(key: string, value: any) {
     storageCache[key] = value;
-    
+
     // Human readable key name
     const keyName = key.replace('quran-app-', '').replace(/-/g, ' ');
     appLogger.addLog(`Saving ${keyName}...`, 'info');
@@ -416,7 +416,10 @@ export function getDueNodes(): MemoryNode[] {
             const priority: Record<string, number> = { 'part_mindmap': 0, 'mindmap': 1, 'verse': 2 };
             const pA = priority[a.type] ?? 99;
             const pB = priority[b.type] ?? 99;
-            return pA - pB;
+            if (pA !== pB) return pA - pB;
+
+            // Secondary sort by due date (ascending) to keep order deterministic
+            return a.scheduler.dueDate.localeCompare(b.scheduler.dueDate);
         });
 }
 
@@ -730,7 +733,7 @@ export function saveMindMap(mindmap: MindMap): void {
             const oldInterval = node.scheduler.interval;
             const newInterval = Math.max(1, Math.round(oldInterval * 0.6)); // 60% of current interval
             const newEase = Math.max(1.3, Math.round((node.scheduler.easeFactor - 0.15) * 100) / 100);
-            
+
             node.scheduler = {
                 ...node.scheduler,
                 interval: newInterval,
@@ -812,7 +815,7 @@ export function savePartMindMap(mindmap: PartMindMap): void {
             const oldInterval = node.scheduler.interval;
             const newInterval = Math.max(1, Math.round(oldInterval * 0.6)); // 60% of current interval
             const newEase = Math.max(1.3, Math.round((node.scheduler.easeFactor - 0.15) * 100) / 100);
-            
+
             node.scheduler = {
                 ...node.scheduler,
                 interval: newInterval,
@@ -855,10 +858,10 @@ export function getListeningProgress(partId: QuranPart): ListeningProgress {
     // Fallback/Migration: check old separate keys
     const pointers = getFromCache<Record<string, number>>(STORAGE_KEYS.PORTION_POINTERS, {});
     const cyclesMap = getFromCache<Record<string, number>>(STORAGE_KEYS.LISTENING_CYCLES, {});
-    
-    return { 
-        partId, 
-        currentVerseIndex: 0, 
+
+    return {
+        partId,
+        currentVerseIndex: 0,
         portionPointer: pointers[partId] || 0,
         cycles: cyclesMap[partId] || 0,
         updatedAt: new Date().toISOString()
@@ -868,7 +871,7 @@ export function getListeningProgress(partId: QuranPart): ListeningProgress {
 export function saveListeningProgress(partId: QuranPart, currentVerseIndex: number): void {
     const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
     const existing = getListeningProgress(partId);
-    
+
     map[partId] = {
         ...existing,
         currentVerseIndex,
@@ -913,7 +916,7 @@ export function getPortionPointer(partId: QuranPart): number {
 export function savePortionPointer(partId: QuranPart, index: number): void {
     const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
     const existing = getListeningProgress(partId);
-    
+
     map[partId] = {
         ...existing,
         portionPointer: index,
@@ -929,7 +932,7 @@ export function getListeningCycles(partId: QuranPart): number {
 export function saveListeningCycles(partId: QuranPart, count: number): void {
     const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
     const existing = getListeningProgress(partId);
-    
+
     map[partId] = {
         ...existing,
         cycles: count,

@@ -39,8 +39,13 @@ export default function StatisticsPage() {
     const activePart = settings.activePart;
 
     useEffect(() => {
+        const handleStorage = () => setVersion(v => v + 1);
+        window.addEventListener('storage', handleStorage);
         const interval = setInterval(() => setVersion(v => v + 1), 2000);
-        return () => clearInterval(interval);
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            clearInterval(interval);
+        };
     }, []);
 
     const mindmaps = getMindMaps();
@@ -180,7 +185,7 @@ export default function StatisticsPage() {
                     skipped += totalChunks;
                 } else {
                     const learnedVerses = settings.learnedVerses[s.id] || [];
-                    
+
                     // Logic to calculate chunks directly from learnedVerses to avoid sync issues
                     const sortedVerses = [...learnedVerses].sort((a, b) => a - b);
                     let learnedChunksCount = 0;
@@ -241,12 +246,12 @@ export default function StatisticsPage() {
         const progress = getListeningProgress(activePart);
         const portionPointer = getPortionPointer(activePart);
         const cycles = getListeningCycles(activePart);
-        
+
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
         const totalVersesInPart = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
-        
+
         const learnedVerseCount = Math.min(totalVersesInPart, portionPointer + (progress.currentVerseIndex || 0));
-        
+
         // Calculate surah counts
         let completedSurahs = 0;
         let currentVerseTotal = 0;
@@ -275,7 +280,7 @@ export default function StatisticsPage() {
     const futureDueStats = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
         const nodes = memoryNodes.filter(n => !n.surahId || targetSurahs.has(n.surahId));
 
@@ -287,7 +292,7 @@ export default function StatisticsPage() {
         nodes.forEach(node => {
             const dueDate = new Date(node.scheduler.dueDate);
             dueDate.setHours(0, 0, 0, 0);
-            
+
             const diffTime = dueDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -305,11 +310,11 @@ export default function StatisticsPage() {
         });
 
         const rangeDays = timeRange === '1m' ? 31 : timeRange === '3m' ? 90 : timeRange === '1y' ? 365 : 0;
-        
+
         // Determine x-axis range
         let minDay = showBacklog ? Math.min(...Object.keys(dayCounts).map(Number), -15) : 0;
         let maxDay = rangeDays || Math.max(...Object.keys(dayCounts).map(Number), 30);
-        
+
         // If 'all', we might want to cap it or just show everything
         if (timeRange === 'all') {
             maxDay = Math.max(...Object.keys(dayCounts).map(Number), 30);
@@ -317,7 +322,7 @@ export default function StatisticsPage() {
 
         const data: { day: number; count: number; cumulative: number }[] = [];
         let cumulative = 0;
-        
+
         // Calculate cumulative starting from the earliest day in dayCounts if backlog is shown
         const sortedDays = Object.keys(dayCounts).map(Number).sort((a, b) => a - b);
         const earliestDay = sortedDays[0] || 0;
@@ -473,7 +478,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
             <h2 style={{ fontSize: '1.75rem', margin: '0 0 1rem 0', fontWeight: 700 }}>Future Due</h2>
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                 <p style={{ fontSize: '0.9rem', color: 'var(--foreground-secondary)', margin: '0 0 1rem 0' }}>The number of reviews due in the future.</p>
-                
+
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1rem', fontSize: '0.85rem' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
                         <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} />
@@ -623,11 +628,11 @@ function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: strin
                             key={idx}
                             title={`${segment.label}: ${segment.count} (${Math.round(width)}%)`}
                             style={{
-                            width: `${width}%`,
-                            height: '100%',
-                            background: segment.color,
-                            opacity: segment.opacity || 1,
-                            transition: 'width 0.5s ease',
+                                width: `${width}%`,
+                                height: '100%',
+                                background: segment.color,
+                                opacity: segment.opacity || 1,
+                                transition: 'width 0.5s ease',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -636,9 +641,9 @@ function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: strin
                             }}
                         >
                             {width > 8 && (
-                                <span style={{ 
-                                    fontSize: '0.7rem', 
-                                    fontWeight: 800, 
+                                <span style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
                                     color: 'rgba(0,0,0,0.6)',
                                     pointerEvents: 'none'
                                 }}>

@@ -113,12 +113,12 @@ function MobileAnchorBuilder({
 
         return () => observer.disconnect();
     }, [verseCount, isEditing, builderState.breaks]); // Re-run when layout changes
-    
+
     // Sort breaks and create segments for view mode
     const breaks = Array.from(new Set([...builderState.breaks]))
         .sort((a, b) => a - b)
         .filter(b => b > 0 && b < verseCount);
-    
+
     const boundaries = Array.from(new Set([1, ...breaks, verseCount + 1])).sort((a, b) => a - b);
 
     // IntersectionObserver handles update now
@@ -127,7 +127,7 @@ function MobileAnchorBuilder({
     // Full Screen Mindmap Overlay
     if (showFullMindmap && mindmapImageUrl) {
         return (
-            <div 
+            <div
                 style={{
                     position: 'fixed',
                     inset: 0,
@@ -141,38 +141,38 @@ function MobileAnchorBuilder({
                 onClick={() => setShowFullMindmap(false)}
             >
                 <div style={{ position: 'absolute', top: 20, right: 20, color: 'white', zIndex: 101, display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                     <button 
+                    <button
                         onClick={(e) => { e.stopPropagation(); setZoomLevel(z => Math.max(0.5, z - 0.25)); }}
                         style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                     >
+                    >
                         <Minus size={24} />
-                     </button>
-                     <button 
+                    </button>
+                    <button
                         onClick={(e) => { e.stopPropagation(); setZoomLevel(z => Math.min(3, z + 0.25)); }}
                         style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                     >
+                    >
                         <Plus size={24} />
-                     </button>
-                     <button 
-                        onClick={() => setShowFullMindmap(false)} 
+                    </button>
+                    <button
+                        onClick={() => setShowFullMindmap(false)}
                         style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', marginLeft: '0.5rem' }}
-                     >
+                    >
                         <X size={32} />
-                     </button>
+                    </button>
                 </div>
                 <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <img 
-                        src={mindmapImageUrl} 
-                        alt="Full Mindmap" 
-                        style={{ 
-                            maxWidth: zoomLevel <= 1 ? '100%' : 'none', 
-                            maxHeight: zoomLevel <= 1 ? '100%' : 'none', 
+                    <img
+                        src={mindmapImageUrl}
+                        alt="Full Mindmap"
+                        style={{
+                            maxWidth: zoomLevel <= 1 ? '100%' : 'none',
+                            maxHeight: zoomLevel <= 1 ? '100%' : 'none',
                             objectFit: 'contain',
                             transform: `scale(${zoomLevel})`,
                             transition: 'transform 0.2s ease-out',
                             cursor: zoomLevel > 1 ? 'grab' : 'default'
-                        }} 
-                        onClick={(e) => e.stopPropagation()} 
+                        }}
+                        onClick={(e) => e.stopPropagation()}
                     />
                 </div>
                 <span style={{ position: 'absolute', bottom: 30, color: 'white', background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: '20px' }}>
@@ -185,40 +185,40 @@ function MobileAnchorBuilder({
     // View Mode: List of Segments
     if (!isEditing) {
         return (
-            <div className="mobile-anchor-builder" style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                height: '100%', 
+            <div className="mobile-anchor-builder" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
                 background: 'var(--background)',
                 borderRadius: '16px',
                 border: '1px solid var(--border)',
                 overflow: 'hidden'
             }}>
                 {/* Header */}
-                <div style={{ 
-                    padding: '1rem', 
-                    background: 'var(--background-secondary)', 
+                <div style={{
+                    padding: '1rem',
+                    background: 'var(--background-secondary)',
                     borderBottom: '1px solid var(--border)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '1rem'
                 }}>
                     {mindmapImageUrl && (
-                        <div 
-                            style={{ 
-                                height: '150px', 
-                                borderRadius: '8px', 
-                                overflow: 'hidden', 
+                        <div
+                            style={{
+                                height: '150px',
+                                borderRadius: '8px',
+                                overflow: 'hidden',
                                 background: '#000',
                                 position: 'relative',
                                 cursor: 'pointer'
                             }}
                             onClick={() => setShowFullMindmap(true)}
                         >
-                            <img 
-                                src={mindmapImageUrl} 
-                                alt="Mindmap Preview" 
-                                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                            <img
+                                src={mindmapImageUrl}
+                                alt="Mindmap Preview"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                             />
                             <div style={{
                                 position: 'absolute',
@@ -238,8 +238,8 @@ function MobileAnchorBuilder({
                             </div>
                         </div>
                     )}
-                    <button 
-                        className="btn btn-secondary btn-full" 
+                    <button
+                        className="btn btn-secondary btn-full"
                         onClick={() => setIsEditing(true)}
                     >
                         <PenTool size={16} style={{ marginRight: 8 }} />
@@ -266,14 +266,14 @@ function MobileAnchorBuilder({
                                     justifyContent: 'space-between'
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ 
-                                            background: 'var(--accent)', 
-                                            color: 'white', 
-                                            width: '24px', 
-                                            height: '24px', 
-                                            borderRadius: '50%', 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
+                                        <div style={{
+                                            background: 'var(--accent)',
+                                            color: 'white',
+                                            width: '24px',
+                                            height: '24px',
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
                                             justifyContent: 'center',
                                             fontSize: '0.75rem',
                                             fontWeight: 700
@@ -296,10 +296,10 @@ function MobileAnchorBuilder({
 
     // Edit Mode
     return (
-        <div className="mobile-anchor-builder" style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            height: '100%', 
+        <div className="mobile-anchor-builder" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
             background: 'var(--background)',
             position: 'relative',
             overflow: 'hidden',
@@ -308,9 +308,9 @@ function MobileAnchorBuilder({
             minHeight: '600px'
         }}>
             {/* Sticky Header Actions */}
-            <div style={{ 
-                padding: '0.75rem', 
-                background: 'var(--background-secondary)', 
+            <div style={{
+                padding: '0.75rem',
+                background: 'var(--background-secondary)',
                 borderBottom: '1px solid var(--border)',
                 zIndex: 40,
                 display: 'flex',
@@ -319,8 +319,8 @@ function MobileAnchorBuilder({
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
                 <span style={{ fontWeight: 600 }}>Editing Splits</span>
-                <button 
-                    className="btn btn-primary btn-sm" 
+                <button
+                    className="btn btn-primary btn-sm"
                     onClick={() => {
                         setIsEditing(false);
                         onSave();
@@ -333,9 +333,9 @@ function MobileAnchorBuilder({
 
             {/* Sticky Mindmap Preview (Small) */}
             {mindmapImageUrl && (
-                <div 
-                    style={{ 
-                        height: '80px', 
+                <div
+                    style={{
+                        height: '80px',
                         background: '#000',
                         position: 'relative',
                         zIndex: 30,
@@ -344,13 +344,13 @@ function MobileAnchorBuilder({
                     }}
                     onClick={() => setShowFullMindmap(true)}
                 >
-                    <img 
-                        src={mindmapImageUrl} 
-                        alt="Mindmap Preview" 
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: 0.8 }} 
+                    <img
+                        src={mindmapImageUrl}
+                        alt="Mindmap Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: 0.8 }}
                     />
                     <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
-                         <ImageIcon size={10} color="white" />
+                        <ImageIcon size={10} color="white" />
                     </div>
                 </div>
             )}
@@ -372,7 +372,7 @@ function MobileAnchorBuilder({
                 }}>
                     {/* Left Dashed Line */}
                     <div style={{ flex: 1, height: '2px', background: 'var(--accent)', opacity: 0.5 }}></div>
-                    
+
                     {/* Center Pill */}
                     <div style={{
                         padding: '6px 16px',
@@ -402,10 +402,10 @@ function MobileAnchorBuilder({
                 }}>
                     {breaks.includes(currentSplitPoint) ? (
                         <div style={{ padding: '8px', background: 'rgba(var(--background-rgb), 0.8)', borderRadius: '20px', border: '1px solid var(--border)' }}>
-                             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>Split Active</span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>Split Active</span>
                         </div>
                     ) : (
-                        <button 
+                        <button
                             className="btn btn-primary btn-sm"
                             onClick={() => onAddBreak(currentSplitPoint)}
                             style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
@@ -417,9 +417,9 @@ function MobileAnchorBuilder({
                 </div>
 
                 {/* Scrolling List */}
-                <div 
+                <div
                     ref={scrollContainerRef}
-                    style={{ 
+                    style={{
                         position: 'absolute',
                         inset: 0,
                         overflowY: 'auto',
@@ -427,20 +427,20 @@ function MobileAnchorBuilder({
                         WebkitOverflowScrolling: 'touch'
                     }}
                 >
-                    <div style={{ 
+                    <div style={{
                         position: 'relative',
                         // Large padding to allow first/last gap to reach center
-                        paddingTop: '50vh', 
+                        paddingTop: '50vh',
                         paddingBottom: '50vh',
                     }}>
                         {Array.from({ length: verseCount }).map((_, i) => {
                             const vNum = i + 1;
                             const isSplit = breaks.includes(vNum); // Split is AFTER this verse
-                            
+
                             // We render the Verse, and then the Gap AFTER it.
                             // The Gap is the snap target.
                             // Gap `vNum` represents the split AFTER vNum (Between vNum & vNum+1)
-                            
+
                             return (
                                 <React.Fragment key={vNum}>
                                     {/* Verse Content */}
@@ -453,8 +453,8 @@ function MobileAnchorBuilder({
                                         position: 'relative',
                                         // Verse is NOT the snap target
                                     }}>
-                                        <div style={{ 
-                                            display: 'flex', 
+                                        <div style={{
+                                            display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
                                             // Dim verses that are far from center? 
@@ -467,7 +467,7 @@ function MobileAnchorBuilder({
                                             <span>Ayah {vNum}</span>
                                             {/* Easy Remove Button for existing splits */}
                                             {isSplit && (
-                                                <button 
+                                                <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         onRemoveBreak(vNum);
@@ -497,7 +497,7 @@ function MobileAnchorBuilder({
                                     {/* The Snap Target (Gap) */}
                                     {/* Only render gap if not the last verse (cannot split after last) */}
                                     {vNum < verseCount && (
-                                        <div 
+                                        <div
                                             className="anchor-gap-target"
                                             data-split-val={vNum}
                                             style={{
@@ -554,7 +554,7 @@ function DesktopAnchorBuilder({
     const breaks = Array.from(new Set([...builderState.breaks]))
         .sort((a, b) => a - b)
         .filter(b => b > 0 && b < verseCount);
-    
+
     // Ensure boundaries are unique
     const boundaries = Array.from(new Set([1, ...breaks, verseCount + 1])).sort((a, b) => a - b);
 
@@ -563,15 +563,17 @@ function DesktopAnchorBuilder({
         const rect = barRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const width = rect.width;
+        // Clamp 0..1
         const percent = Math.max(0, Math.min(1, x / width));
-        
-        const val = percent * verseCount;
-        const rounded = Math.round(val);
-        
-        if (rounded > 0 && rounded < verseCount) {
-             setHoverVal(rounded);
+
+        // Map the continuous space of verses to "split after verse X"
+        // e.g. clicking anywhere on Verse 1 (0..1/N) should yield split 1 (after verse 1)
+        const val = Math.floor(percent * verseCount) + 1;
+
+        if (val > 0 && val < verseCount) {
+            setHoverVal(val);
         } else {
-             setHoverVal(null);
+            setHoverVal(null);
         }
     };
 
@@ -588,7 +590,7 @@ function DesktopAnchorBuilder({
 
     return (
         <div className="anchor-builder-desktop" style={{ padding: '1rem', background: 'var(--background-secondary)', borderRadius: '16px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                         <SplitSquareHorizontal size={18} />
@@ -596,34 +598,34 @@ function DesktopAnchorBuilder({
                     <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Anchors</span>
                 </div>
                 {!isEditing ? (
-                     <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>
+                    <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>
                         Edit Anchors
-                     </button>
-                 ) : (
-                     <button className="btn btn-primary" onClick={() => {
-                         setIsEditing(false);
-                         onSave();
-                     }}>
+                    </button>
+                ) : (
+                    <button className="btn btn-primary" onClick={() => {
+                        setIsEditing(false);
+                        onSave();
+                    }}>
                         Confirm Changes
-                     </button>
-                 )}
+                    </button>
+                )}
             </div>
 
-            <div 
-                className="anchor-bar-track" 
+            <div
+                className="anchor-bar-track"
                 ref={barRef}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
-                style={{ 
-                   position: 'relative', 
-                   height: '40px', 
-                   background: isEditing ? 'rgba(0,0,0,0.1)' : 'var(--background)', 
-                   borderRadius: '8px',
-                   cursor: isEditing ? 'pointer' : 'default',
-                   marginTop: '1rem',
-                   marginBottom: '2rem',
-                   border: '1px solid var(--border)'
+                style={{
+                    position: 'relative',
+                    height: '40px',
+                    background: isEditing ? 'rgba(0,0,0,0.1)' : 'var(--background)',
+                    borderRadius: '8px',
+                    cursor: isEditing ? 'pointer' : 'default',
+                    marginTop: '1rem',
+                    marginBottom: '2rem',
+                    border: '1px solid var(--border)'
                 }}
             >
                 {/* Visual Segments and Labels (When not editing or always?) - Always show segments */}
@@ -631,7 +633,7 @@ function DesktopAnchorBuilder({
                     const end = boundaries[idx + 1] - 1;
                     const widthPercent = ((end - start + 1) / verseCount) * 100;
                     const leftPercent = ((start - 1) / verseCount) * 100;
-                    
+
                     return (
                         <div key={`seg-${start}`} style={{
                             position: 'absolute',
@@ -688,8 +690,8 @@ function DesktopAnchorBuilder({
                     </React.Fragment>
                 ))}
 
-                 {/* X Buttons (Only when editing) */}
-                 {isEditing && breaks.map(b => (
+                {/* X Buttons (Only when editing) */}
+                {isEditing && breaks.map(b => (
                     <button
                         key={`remove-${b}`}
                         onClick={(e) => {
@@ -701,7 +703,7 @@ function DesktopAnchorBuilder({
                             left: `${(b / verseCount) * 100}%`,
                             top: '100%',
                             transform: 'translateX(-50%)',
-                            marginTop: '4px',
+                            marginTop: '8px', // Increased spacing
                             background: 'var(--danger)',
                             color: 'white',
                             border: 'none',
@@ -718,16 +720,16 @@ function DesktopAnchorBuilder({
                     >
                         <X size={12} />
                     </button>
-                 ))}
+                ))}
 
                 {/* Hover Indicator */}
                 {isEditing && hoverVal && !breaks.includes(hoverVal) && (
-                     <div style={{
+                    <div style={{
                         position: 'absolute',
                         left: `${(hoverVal / verseCount) * 100}%`,
                         height: '100%',
                         width: '2px',
-                        background: 'var(--accent)', 
+                        background: 'var(--accent)',
                         opacity: 0.5,
                         pointerEvents: 'none',
                         transform: 'translateX(-50%)',
@@ -838,8 +840,8 @@ export default function TodoPage() {
 
     const surahTasks = useMemo(() => {
         const learnedSurahIds = new Set(Object.keys(settings.learnedVerses).map(id => parseInt(id)));
-        const eligible = SURAHS.filter(s => 
-            (activePart === 5 || s.part === activePart) && 
+        const eligible = SURAHS.filter(s =>
+            (activePart === 5 || s.part === activePart) &&
             !isSurahSkipped(s.id) &&
             learnedSurahIds.has(s.id)
         );
