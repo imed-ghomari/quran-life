@@ -21,13 +21,13 @@
   --verse-bg: rgba(91, 143, 185, 0.04);
   --input-bg: #ffffff;
 
-  /* Chart Colors (Toned down) */
-  --chart-skipped: #f1f5f9;
-  --chart-not-learned: #f8d7da;
-  --chart-new: #e9f0e8;
-  --chart-medium: #c2d6bf;
-  --chart-strong: #7e997a;
-  --chart-mastered: #5a7057;
+  /* Chart Colors (Enhanced) */
+  --chart-skipped: #cbd5e1;
+  --chart-not-learned: #fca5a5;
+  --chart-new: #bbf7d0;
+  --chart-medium: #4ade80;
+  --chart-strong: #16a34a;
+  --chart-mastered: #14532d;
 }
 
 @media (max-width: 768px) {
@@ -71,6 +71,14 @@
     --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     --verse-bg: rgba(122, 158, 177, 0.08);
     --input-bg: #1e2226;
+
+    /* Chart Colors (Dark Mode Adapted) */
+    --chart-skipped: #334155;
+    --chart-not-learned: #991b1b;
+    --chart-new: #064e3b;
+    --chart-medium: #14532d;
+    --chart-strong: #166534;
+    --chart-mastered: #15803d;
   }
 }
 
@@ -394,19 +402,19 @@ input:focus {
 }
 
 .blurred-chunk {
-  filter: blur(3px);
-  background: rgba(0, 0, 0, 0.08);
+  filter: blur(6px);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 4px;
   padding: 0 0.3rem;
 }
 
 .strong-blur {
-  filter: blur(7px);
+  filter: blur(16px);
 }
 
 .next-blur {
-  filter: blur(5px);
-  background: rgba(14, 165, 233, 0.25);
+  filter: blur(10px);
+  background: rgba(14, 165, 233, 0.3);
   border: 1px dashed var(--accent);
   color: var(--accent);
   border-radius: 4px;
