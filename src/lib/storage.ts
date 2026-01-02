@@ -461,6 +461,10 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     const partMindmaps = getPartMindMaps();
     const skips = new Set(settings.skippedSurahs || []);
 
+    // Track which nodes from currentNodes we have already "accounted for"
+    // to ensure we don't duplicate them and can preserve inactive ones.
+    const accountedForIds = new Set<string>();
+
     // 1. Sync / Preserve Mindmap Nodes
     Object.values(mindmaps).forEach(mm => {
         if (mm.isComplete && !skips.has(mm.surahId)) {
@@ -472,6 +476,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                 surahId: mm.surahId,
                 scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
             });
+            accountedForIds.add(nodeId);
         }
     });
 
@@ -486,6 +491,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                 partId: pmm.partId,
                 scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
             });
+            accountedForIds.add(nodeId);
         }
     });
 
@@ -508,10 +514,6 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                     const nodeId = `verse-${surahId}-${anchor.startVerse}-${anchor.endVerse}`;
                     const existing = currentNodes.find(n => n.id === nodeId);
 
-                    // If exact match doesn't exist, we might be switching from default to anchored.
-                    // In this case, we currently reset progress. 
-                    // Future improvement: Try to find "contained" nodes to inherit progress from?
-
                     const scheduler = (existing && !forceFullReset)
                         ? existing.scheduler
                         : createNewScheduler();
@@ -524,6 +526,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                         endVerse: anchor.endVerse,
                         scheduler,
                     });
+                    accountedForIds.add(nodeId);
                 }
             });
         } else {
@@ -556,6 +559,7 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
                         endVerse: segmentEnd,
                         scheduler,
                     });
+                    accountedForIds.add(nodeId);
 
                     if (!existing) newSegmentsForThisSurah++;
 
@@ -570,7 +574,16 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
         }
     });
 
-    // Orphan Pruning is implicit because we only push nodes that match current settings/mindmaps.
+    // 4. PRESERVATION: Add all nodes from currentNodes that were NOT accounted for
+    // This ensures that when a surah is unlearned or skipped, its memory progress is preserved in storage.
+    currentNodes.forEach(node => {
+        if (!accountedForIds.has(node.id)) {
+            newNodes.push(node);
+        }
+    });
+
+    // Orphan Pruning is now explicit: we only prune if we want to.
+    // For now, we prefer preservation over pruning to avoid data loss.
     const addedCount = newNodes.length - currentNodes.length;
     if (addedCount !== 0) {
         appLogger.addLog(`Memory nodes updated: ${newNodes.length} total (${addedCount > 0 ? '+' : ''}${addedCount})`, 'info');
