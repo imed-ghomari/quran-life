@@ -17,12 +17,14 @@ import {
 } from '@/lib/storage';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
+import SyncButton from './SyncButton';
 
 export default function Navigation() {
     const pathname = usePathname();
     const [pendingCount, setPendingCount] = useState(0);
     const [todayReviews, setTodayReviews] = useState(0);
     const [isPortionComplete, setIsPortionComplete] = useState(false);
+
     const settings = useMemo(() => getSettings(), []);
 
     useEffect(() => {
@@ -117,6 +119,8 @@ export default function Navigation() {
                     </Link>
                 );
             })}
+
+            <SyncButton className="nav-item hide-mobile" />
 
             <a
                 href="https://github.com/imed-ghomari/quran-life"

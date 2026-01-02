@@ -20,6 +20,7 @@ import {
     CustomMutashabih,
     isSurahSkipped,
     MutashabihatDecision,
+    getMemoryNodes,
 } from '@/lib/storage';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { QuranPart } from '@/lib/types';
@@ -66,6 +67,7 @@ function MobileAnchorBuilder({
     onAddBreak,
     onRemoveBreak,
     onSave,
+    hasReviewedHistory,
 }: {
     surahId: number;
     verseCount: number;
@@ -74,6 +76,7 @@ function MobileAnchorBuilder({
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
     onSave: () => void;
+    hasReviewedHistory: boolean;
 }) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [currentSplitPoint, setCurrentSplitPoint] = useState<number>(1);
@@ -119,7 +122,7 @@ function MobileAnchorBuilder({
         .sort((a, b) => a - b)
         .filter(b => b > 0 && b < verseCount);
 
-    const boundaries = Array.from(new Set([1, ...breaks, verseCount + 1])).sort((a, b) => a - b);
+    const boundaries = Array.from(new Set([1, ...breaks.map(b => b + 1), verseCount + 1])).sort((a, b) => a - b);
 
     // IntersectionObserver handles update now
     // const handleScroll = () => { ... }; 
@@ -240,7 +243,14 @@ function MobileAnchorBuilder({
                     )}
                     <button
                         className="btn btn-secondary btn-full"
-                        onClick={() => setIsEditing(true)}
+                        onClick={() => {
+                            if (hasReviewedHistory) {
+                                if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying anchors will reset the review progress (memory nodes) for these chunks.\n\nAre you sure you want to proceed?")) {
+                                    return;
+                                }
+                            }
+                            setIsEditing(true);
+                        }}
                     >
                         <PenTool size={16} style={{ marginRight: 8 }} />
                         Edit Splits
@@ -539,6 +549,7 @@ function DesktopAnchorBuilder({
     onAddBreak,
     onRemoveBreak,
     onSave,
+    hasReviewedHistory,
 }: {
     surahId: number;
     verseCount: number;
@@ -546,6 +557,7 @@ function DesktopAnchorBuilder({
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
     onSave: () => void;
+    hasReviewedHistory: boolean;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [hoverVal, setHoverVal] = useState<number | null>(null);
@@ -556,7 +568,7 @@ function DesktopAnchorBuilder({
         .filter(b => b > 0 && b < verseCount);
 
     // Ensure boundaries are unique
-    const boundaries = Array.from(new Set([1, ...breaks, verseCount + 1])).sort((a, b) => a - b);
+    const boundaries = Array.from(new Set([1, ...breaks.map(b => b + 1), verseCount + 1])).sort((a, b) => a - b);
 
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!isEditing || !barRef.current) return;
@@ -596,7 +608,14 @@ function DesktopAnchorBuilder({
                     <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Anchors</span>
                 </div>
                 {!isEditing ? (
-                    <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>
+                    <button className="btn btn-secondary" onClick={() => {
+                        if (hasReviewedHistory) {
+                            if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying anchors will reset the review progress (memory nodes) for these chunks.\n\nAre you sure you want to proceed?")) {
+                                return;
+                            }
+                        }
+                        setIsEditing(true);
+                    }}>
                         Edit Anchors
                     </button>
                 ) : (
@@ -671,16 +690,17 @@ function DesktopAnchorBuilder({
                             <div style={{
                                 position: 'absolute',
                                 left: `${(b / verseCount) * 100}%`,
-                                bottom: '100%',
+                                bottom: 'calc(100% + 10px)',
                                 transform: 'translateX(-50%)',
-                                background: 'var(--primary)',
+                                background: '#333',
                                 color: 'white',
-                                padding: '2px 6px',
+                                padding: '4px 8px',
                                 borderRadius: '4px',
-                                fontSize: '10px',
-                                marginBottom: '2px',
+                                fontSize: '12px',
+                                fontWeight: 600,
                                 whiteSpace: 'nowrap',
-                                zIndex: 10
+                                zIndex: 20,
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                             }}>
                                 {b} | {b + 1}
                             </div>
@@ -735,16 +755,17 @@ function DesktopAnchorBuilder({
                     }}>
                         <div style={{
                             position: 'absolute',
-                            bottom: '100%',
+                            bottom: 'calc(100% + 10px)',
                             left: '50%',
                             transform: 'translateX(-50%)',
-                            background: 'black',
+                            background: '#333',
                             color: 'white',
                             padding: '4px 8px',
                             borderRadius: '4px',
                             fontSize: '12px',
-                            marginBottom: '4px',
-                            whiteSpace: 'nowrap'
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}>
                             {hoverVal} | {hoverVal + 1}
                         </div>
@@ -797,6 +818,11 @@ export default function TodoPage() {
 
     const toggleSubgroup = (group: string) => {
         setCollapsedSubgroups(prev => ({ ...prev, [group]: !prev[group] }));
+    };
+
+    const hasReviewedChunks = (surahId: number) => {
+        const nodes = getMemoryNodes();
+        return nodes.some(n => n.type === 'verse' && n.surahId === surahId && (n.scheduler.repetition > 0 || !!n.scheduler.lastReview));
     };
 
     useEffect(() => {
@@ -1906,7 +1932,9 @@ export default function TodoPage() {
                                                                                 builderState={getBuilderState(surah.id)}
                                                                                 onAddBreak={(val) => handleAddBreak(surah.id, val)}
                                                                                 onRemoveBreak={(val) => handleRemoveBreakValue(surah.id, val)}
+
                                                                                 onSave={() => handleSaveAnchors(surah.id, surah.verseCount)}
+                                                                                hasReviewedHistory={hasReviewedChunks(surah.id)}
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -2327,6 +2355,7 @@ export default function TodoPage() {
                                                                             onAddBreak={(val) => handleAddBreak(surah.id, val)}
                                                                             onRemoveBreak={(val) => handleRemoveBreakValue(surah.id, val)}
                                                                             onSave={() => handleSaveAnchors(surah.id, surah.verseCount)}
+                                                                            hasReviewedHistory={hasReviewedChunks(surah.id)}
                                                                         />
                                                                     </div>
                                                                 )}
