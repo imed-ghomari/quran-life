@@ -3,7 +3,6 @@ import Script from 'next/script';
 import './globals.css';
 import 'tldraw/tldraw.css';
 import Navigation from '@/components/Navigation';
-import MobileHeader from '@/components/MobileHeader';
 import { Providers } from '@/components/Providers';
 import { LogOverlay } from '@/components/LogOverlay';
 
@@ -50,7 +49,6 @@ export default function RootLayout({
                 <Providers>
                     <LogOverlay />
                     <div className="app-shell">
-                        <MobileHeader />
                         <Navigation />
                         <div className="page-container">
                             {children}

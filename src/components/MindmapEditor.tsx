@@ -267,37 +267,29 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
     const handleClose = async () => {
         if (editor && onSave) {
             try {
-                // Get the current snapshot
+                // Get the current snapshot and an image preview
                 const snapshot = typeof editor.getSnapshot === 'function' ? editor.getSnapshot() : editor.store.getSnapshot();
 
                 // Export images for preview (both light and dark)
                 let lightBlob: Blob | undefined;
                 let darkBlob: Blob | undefined;
-
                 try {
                     const shapeIds = Array.from(editor.getCurrentPageShapeIds());
                     if (shapeIds.length > 0) {
-                        // Capture original preference
-                        const originalDarkMode = editor.user.getIsDarkMode();
-
-                        // 1. Force Light Mode & Capture
-                        editor.user.updateUserPreferences({ isDarkMode: false });
-                        // Brief wait to ensure styles apply if they depend on CSS variables
-                        await new Promise(r => setTimeout(r, 50));
-
+                        // Use lower pixelRatio and potentially smaller format to save space
+                        // Light mode version
                         const lightResult = await editor.toImage(shapeIds, {
                             format: 'png',
-                            quality: 0.8,
-                            pixelRatio: 1,
+                            quality: 0.8, // Slightly lower quality
+                            pixelRatio: 1, // Reduced from 2 to save 4x space
                             padding: 10,
                             theme: 'light'
                         });
-                        if (lightResult && lightResult.blob) lightBlob = lightResult.blob;
+                        if (lightResult && lightResult.blob) {
+                            lightBlob = lightResult.blob;
+                        }
 
-                        // 2. Force Dark Mode & Capture
-                        editor.user.updateUserPreferences({ isDarkMode: true });
-                        await new Promise(r => setTimeout(r, 50));
-
+                        // Dark mode version
                         const darkResult = await editor.toImage(shapeIds, {
                             format: 'png',
                             quality: 0.8,
@@ -305,10 +297,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                             padding: 10,
                             theme: 'dark'
                         });
-                        if (darkResult && darkResult.blob) darkBlob = darkResult.blob;
-
-                        // 3. Restore original preference
-                        editor.user.updateUserPreferences({ isDarkMode: originalDarkMode });
+                        if (darkResult && darkResult.blob) {
+                            darkBlob = darkResult.blob;
+                        }
                     }
                 } catch (imgError) {
                     console.warn("Failed to generate preview images", imgError);

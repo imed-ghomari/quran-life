@@ -1769,33 +1769,4 @@ input:focus {
   .show-mobile-flex {
     display: flex !important;
   }
-
-  .mobile-header {
-    display: flex !important;
-    background: var(--background);
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    padding: 0.75rem 1rem;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .page-container {
-    margin-left: 0 !important;
-    padding: 1rem !important;
-  }
-
-  /* Adjust shell for mobile components */
-  .app-shell {
-    padding-bottom: 70px;
-    /* Space for bottom nav */
-  }
-}
-
-@media (min-width: 769px) {
-  .mobile-header {
-    display: none !important;
-  }
 }
