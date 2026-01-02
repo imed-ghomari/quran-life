@@ -811,7 +811,7 @@ export default function TodayPage() {
                                                     </div>
 
                                                     <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                                                        <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
+                                                        <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
                                                         <button className="review-btn not-remembered" onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={20} /> Forgot</button>
                                                         <button className="review-btn remembered" onClick={() => handleGrade(true)} title="Shortcut: Arrow Right"><Check size={20} /> Remembered</button>
                                                     </div>

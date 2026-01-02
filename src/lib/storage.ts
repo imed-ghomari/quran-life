@@ -241,8 +241,10 @@ export function toggleSurahSkipped(surahId: number): void {
     const current = new Set(settings.skippedSurahs || []);
     if (current.has(surahId)) {
         current.delete(surahId);
+        appLogger.addLog(`Surah ${surahId} restored (unskipped)`, 'success');
     } else {
         current.add(surahId);
+        appLogger.addLog(`Surah ${surahId} skipped`, 'warning');
         // Note: We no longer remove learned data or prune artifacts here.
         // Artifacts are preserved but hidden by UI filters.
     }
@@ -287,8 +289,10 @@ export function toggleSurahLearned(surahId: number): void {
 
     if (current.length === surah.verseCount) {
         delete settings.learnedVerses[surahKey];
+        appLogger.addLog(`Surah ${surahId} marked as NOT learned`, 'warning');
     } else {
         settings.learnedVerses[surahKey] = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
+        appLogger.addLog(`Surah ${surahId} marked as learned`, 'success');
     }
 
     saveSettings(settings);
@@ -567,6 +571,10 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     });
 
     // Orphan Pruning is implicit because we only push nodes that match current settings/mindmaps.
+    const addedCount = newNodes.length - currentNodes.length;
+    if (addedCount !== 0) {
+        appLogger.addLog(`Memory nodes updated: ${newNodes.length} total (${addedCount > 0 ? '+' : ''}${addedCount})`, 'info');
+    }
     saveMemoryNodes(newNodes);
 }
 
