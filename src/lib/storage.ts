@@ -651,6 +651,7 @@ export interface MindMap {
     isComplete: boolean;
     tldrawSnapshot?: any;
     updatedAt?: string;
+    deletedAt?: string;
 }
 
 export function getMindMaps(): { [surahId: string]: MindMap } {
@@ -700,6 +701,7 @@ export interface PartMindMap {
     isComplete: boolean;
     tldrawSnapshot?: any;
     updatedAt?: string;
+    deletedAt?: string;
 }
 
 export function getPartMindMaps(): { [partId: string]: PartMindMap } {

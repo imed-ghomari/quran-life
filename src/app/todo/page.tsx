@@ -1754,7 +1754,7 @@ export default function TodoPage() {
                                                                             const newMaps = { ...partMindmaps };
                                                                             delete newMaps[part];
                                                                             setPartMindmaps(newMaps);
-                                                                            savePartMindMap({ partId: part, imageUrl: null, imageUrlDark: null, description: '', isComplete: false, tldrawSnapshot: undefined });
+                                                                            savePartMindMap({ partId: part, imageUrl: null, imageUrlDark: null, description: '', isComplete: false, tldrawSnapshot: undefined, deletedAt: new Date().toISOString() });
                                                                             // syncWithCloud().catch(console.error);
                                                                         }
                                                                     }}
@@ -1866,7 +1866,7 @@ export default function TodoPage() {
                                                                                         const newMaps = { ...mindmaps };
                                                                                         delete newMaps[surah.id];
                                                                                         setMindmaps(newMaps);
-                                                                                        saveMindMap({ ...mindmap, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false });
+                                                                                        saveMindMap({ ...mindmap, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false, deletedAt: new Date().toISOString() });
                                                                                         // syncWithCloud().catch(console.error);
                                                                                     }
                                                                                 }}
@@ -1976,7 +1976,7 @@ export default function TodoPage() {
                                                                             const newMaps = { ...partMindmaps };
                                                                             delete newMaps[part];
                                                                             setPartMindmaps(newMaps);
-                                                                            savePartMindMap({ partId: part, imageUrl: null, imageUrlDark: null, description: '', isComplete: false, tldrawSnapshot: undefined });
+                                                                            savePartMindMap({ partId: part, imageUrl: null, imageUrlDark: null, description: '', isComplete: false, tldrawSnapshot: undefined, deletedAt: new Date().toISOString() });
                                                                             // syncWithCloud().catch(console.error);
                                                                         }
                                                                     }}
@@ -2071,7 +2071,7 @@ export default function TodoPage() {
                                                                                         const newMaps = { ...mindmaps };
                                                                                         delete newMaps[surah.id];
                                                                                         setMindmaps(newMaps);
-                                                                                        saveMindMap({ ...mindmap, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false });
+                                                                                        saveMindMap({ ...mindmap, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false, deletedAt: new Date().toISOString() });
                                                                                         // syncWithCloud().catch(console.error);
                                                                                     }
                                                                                 }}

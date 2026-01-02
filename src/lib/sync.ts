@@ -174,7 +174,15 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
       const rTime = rMap.updatedAt || remoteTime;
       const lTime = lMap?.updatedAt || localTime;
 
-      if (!lMap || (rTime > lTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
+      const rDeleted = rMap.deletedAt || '';
+      const lDeleted = lMap?.deletedAt || '';
+
+      // Rule: If either is explicitly deleted, the latest deletion OR latest update wins
+      // But a deletion always trumps an older update.
+      const rMaxTime = rDeleted > rTime ? rDeleted : rTime;
+      const lMaxTime = lDeleted > lTime ? lDeleted : lTime;
+
+      if (!lMap || (rMaxTime > lMaxTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
         mergedMaps[id] = rMap;
         hasChanges = true;
       }
@@ -199,7 +207,13 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
       const rTime = rMap.updatedAt || remoteTime;
       const lTime = lMap?.updatedAt || localTime;
 
-      if (!lMap || (rTime > lTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
+      const rDeleted = rMap.deletedAt || '';
+      const lDeleted = lMap?.deletedAt || '';
+
+      const rMaxTime = rDeleted > rTime ? rDeleted : rTime;
+      const lMaxTime = lDeleted > lTime ? lDeleted : lTime;
+
+      if (!lMap || (rMaxTime > lMaxTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
         mergedPartMaps[id] = rMap;
         hasChanges = true;
       }
