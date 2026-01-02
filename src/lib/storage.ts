@@ -718,6 +718,14 @@ export function saveMindMap(mindmap: MindMap): void {
             });
             appLogger.addLog(`Review node created for Surah ${mindmap.surahId} mindmap`, 'info');
             saveMemoryNodes(nodes);
+        } else {
+            // Reactivation: If node exists but was suspended (e.g. cleared due date), set to today
+            const node = nodes[nodeIdx];
+            if (!node.scheduler.dueDate || node.scheduler.dueDate === '') {
+                node.scheduler.dueDate = new Date().toISOString().split('T')[0];
+                appLogger.addLog(`Surah ${mindmap.surahId} mindmap reactivated. Due date set to today.`, 'info');
+                saveMemoryNodes(nodes);
+            }
         }
     } else if (nodeIdx !== -1) {
         const node = nodes[nodeIdx];
@@ -735,9 +743,9 @@ export function saveMindMap(mindmap: MindMap): void {
                 ...node.scheduler,
                 interval: newInterval,
                 easeFactor: newEase,
-                dueDate: new Date().toISOString().split('T')[0], // Due today for re-review
+                dueDate: '', // Suspended: Clear due date per user request
             };
-            appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15`, 'warning');
+            appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15, suspended.`, 'warning');
             saveMemoryNodes(nodes);
         } else {
             // Never reviewed: just remove it until it's complete again
@@ -801,6 +809,14 @@ export function savePartMindMap(mindmap: PartMindMap): void {
             });
             appLogger.addLog(`Review node created for Part ${mindmap.partId} mindmap`, 'info');
             saveMemoryNodes(nodes);
+        } else {
+            // Reactivation
+            const node = nodes[nodeIdx];
+            if (!node.scheduler.dueDate || node.scheduler.dueDate === '') {
+                node.scheduler.dueDate = new Date().toISOString().split('T')[0];
+                appLogger.addLog(`Part ${mindmap.partId} mindmap reactivated. Due date set to today.`, 'info');
+                saveMemoryNodes(nodes);
+            }
         }
     } else if (nodeIdx !== -1) {
         const node = nodes[nodeIdx];
@@ -817,9 +833,9 @@ export function savePartMindMap(mindmap: PartMindMap): void {
                 ...node.scheduler,
                 interval: newInterval,
                 easeFactor: newEase,
-                dueDate: new Date().toISOString().split('T')[0],
+                dueDate: '', // Suspended
             };
-            appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15`, 'warning');
+            appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15, suspended.`, 'warning');
             saveMemoryNodes(nodes);
         } else {
             // Never reviewed: just remove it until it's complete again
