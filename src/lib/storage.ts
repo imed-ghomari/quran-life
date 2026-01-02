@@ -669,23 +669,47 @@ export function saveMindMap(mindmap: MindMap): void {
     maps[mindmap.surahId] = mindmap;
     saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, maps);
 
-    // Create/update memory node for mindmap if complete, otherwise remove it
+    // Create/update memory node for mindmap if complete, otherwise handle "Lapse" or removal
     const nodes = getMemoryNodes();
     const nodeId = `mindmap-${mindmap.surahId}`;
-    const exists = nodes.some(n => n.id === nodeId);
+    const nodeIdx = nodes.findIndex(n => n.id === nodeId);
 
     if (mindmap.isComplete) {
-        if (!exists) {
+        if (nodeIdx === -1) {
             nodes.push({
                 id: nodeId,
                 type: 'mindmap',
                 surahId: mindmap.surahId,
                 scheduler: createNewScheduler(),
             });
+            appLogger.addLog(`Review node created for Surah ${mindmap.surahId} mindmap`, 'info');
             saveMemoryNodes(nodes);
         }
-    } else if (exists) {
-        saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+    } else if (nodeIdx !== -1) {
+        const node = nodes[nodeIdx];
+        // Distinguish between a node that has been reviewed and one that is new
+        // A reviewed node will have an interval > 1 or have a lastReview date
+        const hasBeenReviewed = node.scheduler.interval > 1 || !!node.scheduler.lastReview;
+
+        if (hasBeenReviewed) {
+            // "Lapse" approach: reduce strength but don't reset to zero
+            const oldInterval = node.scheduler.interval;
+            const newInterval = Math.max(1, Math.round(oldInterval * 0.6)); // 60% of current interval
+            const newEase = Math.max(1.3, Math.round((node.scheduler.easeFactor - 0.15) * 100) / 100);
+            
+            node.scheduler = {
+                ...node.scheduler,
+                interval: newInterval,
+                easeFactor: newEase,
+                dueDate: new Date().toISOString().split('T')[0], // Due today for re-review
+            };
+            appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15`, 'warning');
+            saveMemoryNodes(nodes);
+        } else {
+            // Never reviewed: just remove it until it's complete again
+            appLogger.addLog(`Surah ${mindmap.surahId} mindmap removed (never reviewed)`, 'info');
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+        }
     }
 }
 
@@ -719,23 +743,46 @@ export function savePartMindMap(mindmap: PartMindMap): void {
     maps[mindmap.partId] = mindmap;
     saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, maps);
 
-    // Create memory node for part mindmap if complete, otherwise remove it
+    // Create/update memory node for part mindmap if complete, otherwise handle "Lapse" or removal
     const nodes = getMemoryNodes();
     const nodeId = `part-mindmap-${mindmap.partId}`;
-    const exists = nodes.some(n => n.id === nodeId);
+    const nodeIdx = nodes.findIndex(n => n.id === nodeId);
 
     if (mindmap.isComplete) {
-        if (!exists) {
+        if (nodeIdx === -1) {
             nodes.push({
                 id: nodeId,
                 type: 'part_mindmap',
                 partId: mindmap.partId,
                 scheduler: createNewScheduler(),
             });
+            appLogger.addLog(`Review node created for Part ${mindmap.partId} mindmap`, 'info');
             saveMemoryNodes(nodes);
         }
-    } else if (exists) {
-        saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+    } else if (nodeIdx !== -1) {
+        const node = nodes[nodeIdx];
+        // Distinguish between a node that has been reviewed and one that is new
+        const hasBeenReviewed = node.scheduler.interval > 1 || !!node.scheduler.lastReview;
+
+        if (hasBeenReviewed) {
+            // "Lapse" approach: reduce strength but don't reset to zero
+            const oldInterval = node.scheduler.interval;
+            const newInterval = Math.max(1, Math.round(oldInterval * 0.6)); // 60% of current interval
+            const newEase = Math.max(1.3, Math.round((node.scheduler.easeFactor - 0.15) * 100) / 100);
+            
+            node.scheduler = {
+                ...node.scheduler,
+                interval: newInterval,
+                easeFactor: newEase,
+                dueDate: new Date().toISOString().split('T')[0],
+            };
+            appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15`, 'warning');
+            saveMemoryNodes(nodes);
+        } else {
+            // Never reviewed: just remove it until it's complete again
+            appLogger.addLog(`Part ${mindmap.partId} mindmap removed (never reviewed)`, 'info');
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+        }
     }
 }
 
