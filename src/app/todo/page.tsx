@@ -837,11 +837,16 @@ export default function TodoPage() {
     const activePart = settings.activePart;
 
     const surahTasks = useMemo(() => {
-        const eligible = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !isSurahSkipped(s.id));
+        const learnedSurahIds = new Set(Object.keys(settings.learnedVerses).map(id => parseInt(id)));
+        const eligible = SURAHS.filter(s => 
+            (activePart === 5 || s.part === activePart) && 
+            !isSurahSkipped(s.id) &&
+            learnedSurahIds.has(s.id)
+        );
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
             .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, settingsVersion, activePart]);
+    }, [mindmaps, settingsVersion, activePart, settings.learnedVerses, settings.skippedSurahs]);
 
     const incompleteSurahMaps = surahTasks.filter(t => !t.mindmap || !t.mindmap.isComplete || !t.mindmap.imageUrl);
 

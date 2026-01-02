@@ -243,11 +243,8 @@ export function toggleSurahSkipped(surahId: number): void {
         current.delete(surahId);
     } else {
         current.add(surahId);
-        // Also remove any learned data for this surah
-        if (settings.learnedVerses[surahId]) {
-            delete settings.learnedVerses[surahId];
-        }
-        pruneSurahArtifacts(surahId);
+        // Note: We no longer remove learned data or prune artifacts here.
+        // Artifacts are preserved but hidden by UI filters.
     }
     settings.skippedSurahs = Array.from(current).sort((a, b) => a - b);
     saveSettings(settings);
@@ -376,13 +373,20 @@ export function getDueNodes(): MemoryNode[] {
     const today = new Date().toISOString().split('T')[0];
     const settings = getSettings();
     const skips = new Set(settings.skippedSurahs || []);
+    const learnedSurahIds = new Set(Object.keys(settings.learnedVerses).map(id => parseInt(id)));
     const suspended = getSuspendedAnchors();
     const mindmaps = getMindMaps();
     const partMindmaps = getPartMindMaps();
 
     return getMemoryNodes()
         .filter(n => n.scheduler.dueDate <= today)
+        // Filter out skipped surahs
         .filter(n => !n.surahId || !skips.has(n.surahId))
+        // Filter out nodes for surahs that are not marked as learned
+        .filter(n => {
+            if (n.surahId && !learnedSurahIds.has(n.surahId)) return false;
+            return true;
+        })
         .filter(n => !isNodeSuspended(n, suspended))
         // Issue #2: Filter out incomplete or image-less mindmaps
         .filter(n => {
@@ -1318,9 +1322,6 @@ export function resetMutashabihatDecisions(absoluteAyat: number[]): void {
 export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new' | 'skipped'): void {
     const settings = getSettings();
     const allSurahs = SURAHS;
-    let currentNodes = getMemoryNodes();
-    let currentMaps = getMindMaps();
-    let currentErrors = getReviewErrors();
 
     surahIds.forEach(id => {
         const surah = allSurahs.find(s => s.id === id);
@@ -1328,21 +1329,16 @@ export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new'
 
         const surahKey = id.toString();
 
-        // Reset state for this surah first
-        delete settings.learnedVerses[surahKey];
-        settings.skippedSurahs = (settings.skippedSurahs || []).filter(sId => sId !== id);
-
+        // Update settings but preserve artifacts
         if (status === 'learned') {
+            settings.skippedSurahs = (settings.skippedSurahs || []).filter(sId => sId !== id);
             const verseIds = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
             settings.learnedVerses[surahKey] = verseIds;
-        } else if (status === 'skipped' || status === 'new') {
-            if (status === 'skipped') {
-                settings.skippedSurahs = [...(settings.skippedSurahs || []), id];
-            }
-            // Batch pruning logic
-            currentNodes = currentNodes.filter(n => n.surahId !== id);
-            delete currentMaps[id];
-            currentErrors = currentErrors.filter(err => err.surahId !== id);
+        } else if (status === 'skipped') {
+            settings.skippedSurahs = Array.from(new Set([...(settings.skippedSurahs || []), id]));
+        } else if (status === 'new') {
+            settings.skippedSurahs = (settings.skippedSurahs || []).filter(sId => sId !== id);
+            delete settings.learnedVerses[surahKey];
         }
     });
 
@@ -1350,13 +1346,8 @@ export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new'
         settings.skippedSurahs.sort((a, b) => a - b);
     }
 
-    // Save everything once
     saveSettings(settings);
-    saveMemoryNodes(currentNodes);
-    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, currentMaps);
-    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, currentErrors);
-
-    // Final sync to create nodes for 'learned' surahs
+    // Sync memory nodes to ensure UI reflects current status visibility
     syncMemoryNodesWithLearned();
 }
 

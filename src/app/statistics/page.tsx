@@ -91,6 +91,8 @@ export default function StatisticsPage() {
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
         const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
+        const settings = getSettings();
+        const learnedVerses = settings.learnedVerses || {};
         let skipped = 0;
         let notCreated = 0;
         let notLearned = 0;
@@ -100,7 +102,8 @@ export default function StatisticsPage() {
         let learnedMastered = 0;
 
         targetSurahs.forEach(s => {
-            if (skippedSurahs.has(s.id)) {
+            const isLearned = learnedVerses[s.id.toString()];
+            if (skippedSurahs.has(s.id) || !isLearned) {
                 skipped++;
             } else {
                 const mm = mindmaps[s.id];
