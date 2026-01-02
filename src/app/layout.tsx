@@ -5,6 +5,7 @@ import 'tldraw/tldraw.css';
 import Navigation from '@/components/Navigation';
 import { Providers } from '@/components/Providers';
 import { LogOverlay } from '@/components/LogOverlay';
+import MobileSyncBar from '@/components/MobileSyncBar';
 
 export const metadata: Metadata = {
     title: 'Quran Life',
@@ -51,6 +52,7 @@ export default function RootLayout({
                     <div className="app-shell">
                         <Navigation />
                         <div className="page-container">
+                            <MobileSyncBar />
                             {children}
                         </div>
                     </div>

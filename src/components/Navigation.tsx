@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, Github } from 'lucide-react';
+import SyncStatus from './SyncStatus';
 import {
     getSettings,
     getMindMaps,
@@ -117,6 +118,11 @@ export default function Navigation() {
                     </Link>
                 );
             })}
+
+            {/* Sync Status - Desktop only */}
+            <div className="hide-mobile sync-nav-wrapper">
+                <SyncStatus variant="desktop" />
+            </div>
 
             <a
                 href="https://github.com/imed-ghomari/quran-life"

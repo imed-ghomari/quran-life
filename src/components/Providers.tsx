@@ -3,8 +3,25 @@
 import { createContext, useEffect, useRef, useState } from "react";
 import { CloudOff } from "lucide-react";
 import { appLogger } from "@/lib/logger";
+import { SyncProvider, useSyncState } from "@/hooks/useSyncState";
+import SyncConflictModal from "./SyncConflictModal";
 
 export const OnlineStatusContext = createContext(true);
+
+// Inner component that can use the sync context
+function SyncConflictHandler() {
+  const { status, conflict, resolveConflict, dismissError } = useSyncState();
+
+  if (status !== 'conflict' || !conflict) return null;
+
+  return (
+    <SyncConflictModal
+      conflict={conflict}
+      onResolve={resolveConflict}
+      onCancel={dismissError}
+    />
+  );
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
@@ -101,10 +118,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       <OnlineStatusContext.Provider value={isOnline}>
-        {children}
+        <SyncProvider>
+          {children}
+          <SyncConflictHandler />
+        </SyncProvider>
       </OnlineStatusContext.Provider>
       {!isOnline && (
-        <div 
+        <div
           className="offline-indicator-minimal"
           style={{
             position: 'fixed',

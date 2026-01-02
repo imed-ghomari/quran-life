@@ -1770,3 +1770,48 @@ input:focus {
     display: flex !important;
   }
 }
+
+/* ========================================
+   Sync Status Styles
+   ======================================== */
+
+/* Spinning animation for sync icon */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sync-spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Sync button hover effect */
+.sync-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--verse-bg) !important;
+}
+
+/* Sync nav wrapper in desktop sidebar */
+.sync-nav-wrapper {
+  width: 100%;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+/* Desktop sync status hover */
+.sync-status-desktop:hover:not(:disabled) {
+  background: var(--verse-bg);
+}
+
+/* Mobile sync bar positioning */
+.sync-status-mobile {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}

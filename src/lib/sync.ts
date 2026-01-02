@@ -1,17 +1,284 @@
-import { BackupData, exportBackup, importBackup, saveSettings } from './storage';
+import { BackupData, exportBackup, importBackup, saveSettings, getMindMaps, getPartMindMaps, getMemoryNodes, getMutashabihatDecisions, getReviewErrors, getCustomMutashabihat } from './storage';
 import { fetchSupabaseBackup, uploadSupabaseBackup } from './supabaseSync';
 import { appLogger } from './logger';
+import { SURAHS } from './quranData';
+
+// ========================================
+// Types
+// ========================================
+
+export interface ChangeDetail {
+  category: string;           // e.g., "Mindmaps", "Memory Nodes", "Settings"
+  description: string;        // Human-readable description
+  count: number;              // Number of items changed
+  items?: string[];           // Optional: specific item names for collapsible details
+}
+
+export interface ConflictInfo {
+  localChanges: ChangeDetail[];
+  remoteChanges: ChangeDetail[];
+  localTimestamp: string;
+  remoteTimestamp: string;
+}
 
 export interface SyncResult {
-  status: 'success' | 'no_change' | 'error';
+  status: 'success' | 'no_change' | 'error' | 'conflict';
   message?: string;
+  conflict?: ConflictInfo;
+}
+
+// Store for pending conflict resolution
+let pendingConflict: { local: BackupData; remote: BackupData } | null = null;
+
+/**
+ * Helper function to get surah name by ID
+ */
+function getSurahName(surahId: number): string {
+  const surah = SURAHS.find(s => s.id === surahId);
+  return surah ? surah.name : `Surah ${surahId}`;
+}
+
+/**
+ * Detect changes between local and a reference (e.g., cloud) backup
+ * Returns detailed change information categorized by type
+ */
+function detectChanges(current: BackupData, reference: BackupData): ChangeDetail[] {
+  const changes: ChangeDetail[] = [];
+
+  // Settings changes
+  if (current.settings && reference.settings) {
+    const localUpdated = current.settings.updatedAt || '';
+    const refUpdated = reference.settings.updatedAt || '';
+    if (localUpdated > refUpdated && JSON.stringify(current.settings) !== JSON.stringify(reference.settings)) {
+      const changedFields: string[] = [];
+      if (current.settings.completionDays !== reference.settings.completionDays) changedFields.push('Completion days');
+      if (current.settings.activePart !== reference.settings.activePart) changedFields.push('Active part');
+      if (JSON.stringify(current.settings.learnedVerses) !== JSON.stringify(reference.settings.learnedVerses)) changedFields.push('Learned verses');
+      if (JSON.stringify(current.settings.skippedSurahs) !== JSON.stringify(reference.settings.skippedSurahs)) changedFields.push('Skipped surahs');
+
+      if (changedFields.length > 0) {
+        changes.push({
+          category: 'Settings',
+          description: 'App settings modified',
+          count: changedFields.length,
+          items: changedFields,
+        });
+      }
+    }
+  }
+
+  // Mindmap changes
+  if (current.mindmaps && reference.mindmaps) {
+    const localMaps = current.mindmaps;
+    const refMaps = reference.mindmaps;
+    const changedMindmaps: string[] = [];
+
+    Object.entries(localMaps).forEach(([id, lMap]) => {
+      const rMap = refMaps[id];
+      const lTime = lMap.updatedAt || '';
+      const rTime = rMap?.updatedAt || '';
+      if (lTime > rTime && JSON.stringify(lMap) !== JSON.stringify(rMap)) {
+        changedMindmaps.push(getSurahName(parseInt(id)));
+      }
+    });
+
+    if (changedMindmaps.length > 0) {
+      changes.push({
+        category: 'Surah Mindmaps',
+        description: `${changedMindmaps.length} mindmap${changedMindmaps.length > 1 ? 's' : ''} updated`,
+        count: changedMindmaps.length,
+        items: changedMindmaps,
+      });
+    }
+  }
+
+  // Part Mindmap changes
+  if (current.partMindmaps && reference.partMindmaps) {
+    const localParts = current.partMindmaps;
+    const refParts = reference.partMindmaps;
+    const changedParts: string[] = [];
+
+    Object.entries(localParts).forEach(([id, lMap]) => {
+      const rMap = refParts[id];
+      const lTime = lMap.updatedAt || '';
+      const rTime = rMap?.updatedAt || '';
+      if (lTime > rTime && JSON.stringify(lMap) !== JSON.stringify(rMap)) {
+        changedParts.push(`Part ${id}`);
+      }
+    });
+
+    if (changedParts.length > 0) {
+      changes.push({
+        category: 'Part Mindmaps',
+        description: `${changedParts.length} part mindmap${changedParts.length > 1 ? 's' : ''} updated`,
+        count: changedParts.length,
+        items: changedParts,
+      });
+    }
+  }
+
+  // Memory nodes changes
+  if (current.memoryNodes && reference.memoryNodes) {
+    const localNodes = current.memoryNodes;
+    const refNodes = reference.memoryNodes;
+    const refNodeMap = new Map(refNodes.map(n => [n.id, n]));
+    const changedNodes: string[] = [];
+
+    localNodes.forEach(lNode => {
+      const rNode = refNodeMap.get(lNode.id);
+      const lReview = lNode.scheduler.lastReview || '';
+      const rReview = rNode?.scheduler.lastReview || '';
+      if (lReview > rReview) {
+        if (lNode.type === 'mindmap' && lNode.surahId) {
+          changedNodes.push(`${getSurahName(lNode.surahId)} mindmap review`);
+        } else if (lNode.type === 'verse' && lNode.surahId) {
+          changedNodes.push(`${getSurahName(lNode.surahId)} ${lNode.startVerse}-${lNode.endVerse}`);
+        } else if (lNode.type === 'part_mindmap' && lNode.partId) {
+          changedNodes.push(`Part ${lNode.partId} mindmap review`);
+        }
+      }
+    });
+
+    if (changedNodes.length > 0) {
+      changes.push({
+        category: 'Review Progress',
+        description: `${changedNodes.length} review${changedNodes.length > 1 ? 's' : ''} recorded`,
+        count: changedNodes.length,
+        items: changedNodes.slice(0, 20), // Limit for display
+      });
+    }
+  }
+
+  // Mutashabihat decisions
+  if (current.mutashabihatDecisions && reference.mutashabihatDecisions) {
+    const localDecs = current.mutashabihatDecisions;
+    const refDecs = reference.mutashabihatDecisions;
+    let changedCount = 0;
+
+    Object.entries(localDecs).forEach(([key, lDec]) => {
+      const rDec = refDecs[key];
+      const lTime = lDec.updatedAt || lDec.confirmedAt || '';
+      const rTime = rDec?.updatedAt || rDec?.confirmedAt || '';
+      if (lTime > rTime && JSON.stringify(lDec) !== JSON.stringify(rDec)) {
+        changedCount++;
+      }
+    });
+
+    if (changedCount > 0) {
+      changes.push({
+        category: 'Similar Verses Decisions',
+        description: `${changedCount} decision${changedCount > 1 ? 's' : ''} updated`,
+        count: changedCount,
+      });
+    }
+  }
+
+  // Review errors
+  if (current.reviewErrors && reference.reviewErrors) {
+    const localErrs = current.reviewErrors;
+    const refErrIds = new Set(reference.reviewErrors.map(e => e.id));
+    const newErrors = localErrs.filter(e => !refErrIds.has(e.id));
+
+    if (newErrors.length > 0) {
+      changes.push({
+        category: 'Review Errors',
+        description: `${newErrors.length} new error${newErrors.length > 1 ? 's' : ''} recorded`,
+        count: newErrors.length,
+      });
+    }
+  }
+
+  return changes;
+}
+
+/**
+ * Check if there's a conflict between local and remote data.
+ * A conflict exists when BOTH sides have changes since the last known sync.
+ */
+function checkForConflicts(local: BackupData, remote: BackupData): ConflictInfo | null {
+  const lastSyncedAt = local.settings?.lastSyncedAt || '';
+
+  // If never synced before, no conflict - just merge
+  if (!lastSyncedAt) return null;
+
+  const localExportedAt = local.exportedAt || '';
+  const remoteExportedAt = remote.exportedAt || '';
+
+  // If both local and remote were modified after last sync, we have a potential conflict
+  const localModifiedAfterSync = localExportedAt > lastSyncedAt;
+  const remoteModifiedAfterSync = remoteExportedAt > lastSyncedAt;
+
+  if (!localModifiedAfterSync || !remoteModifiedAfterSync) {
+    // Only one side changed, no conflict
+    return null;
+  }
+
+  // Both sides modified - detect specific changes
+  // Create a "baseline" representing the last synced state (approximated by comparing differences)
+  const localChanges = detectChanges(local, remote);
+  const remoteChanges = detectChanges(remote, local);
+
+  // Only show conflict if there are actual changes on both sides
+  if (localChanges.length === 0 || remoteChanges.length === 0) {
+    return null;
+  }
+
+  return {
+    localChanges,
+    remoteChanges,
+    localTimestamp: localExportedAt,
+    remoteTimestamp: remoteExportedAt,
+  };
+}
+
+/**
+ * Resolve a conflict by choosing local or remote data
+ */
+export async function resolveConflict(choice: 'local' | 'remote'): Promise<SyncResult> {
+  if (!pendingConflict) {
+    return { status: 'error', message: 'No conflict to resolve' };
+  }
+
+  const { local, remote } = pendingConflict;
+  pendingConflict = null;
+
+  try {
+    appLogger.addLog(`Resolving conflict: keeping ${choice} data...`, 'info');
+
+    if (choice === 'local') {
+      // Push local data to cloud, overwriting remote
+      local.settings = {
+        ...(local.settings || {}),
+        lastSyncedAt: new Date().toISOString()
+      } as any;
+      local.exportedAt = new Date().toISOString();
+
+      await uploadSupabaseBackup(local);
+      appLogger.addLog('Conflict resolved: Local data uploaded to cloud', 'success');
+    } else {
+      // Import remote data, overwriting local
+      remote.settings = {
+        ...(remote.settings || {}),
+        lastSyncedAt: new Date().toISOString()
+      } as any;
+
+      importBackup(remote);
+      appLogger.addLog('Conflict resolved: Cloud data imported locally', 'success');
+    }
+
+    return { status: 'success', message: `Conflict resolved: ${choice === 'local' ? 'Uploaded to cloud' : 'Downloaded from cloud'}` };
+  } catch (error: any) {
+    appLogger.addLog(`Conflict resolution failed: ${error.message}`, 'error');
+    return { status: 'error', message: error.message || 'Failed to resolve conflict' };
+  }
 }
 
 /**
  * Orchestrates the sync process:
  * 1. Pull remote data from Supabase
- * 2. Merge with local data
- * 3. Push merged data back to Supabase (if changed)
+ * 2. Check for conflicts
+ * 3. If conflict exists, return conflict info for user decision
+ * 4. Otherwise, merge and push
  */
 export async function syncWithCloud(): Promise<SyncResult> {
   try {
@@ -25,6 +292,14 @@ export async function syncWithCloud(): Promise<SyncResult> {
       await uploadSupabaseBackup(localData);
       appLogger.addLog('Initial backup created successfully', 'success');
       return { status: 'success', message: 'Initial backup created on Supabase' };
+    }
+
+    // Check for conflicts before merging
+    const conflict = checkForConflicts(localData, remoteData);
+    if (conflict) {
+      appLogger.addLog('Sync conflict detected. Awaiting user decision...', 'warning');
+      pendingConflict = { local: localData, remote: remoteData };
+      return { status: 'conflict', message: 'Conflict detected', conflict };
     }
 
     // MERGE AGAIN with latest local state right before saving
