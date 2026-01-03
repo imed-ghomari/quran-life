@@ -1055,7 +1055,13 @@ export default function TodoPage() {
 
     const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
         try {
-            const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
+            // Try fetching .json first (which may contain anchors and other metadata)
+            // Fallback to .tldraw for raw exports
+            let response = await fetch(`/assets/premade-mindmaps/${type}-${id}.json`);
+            if (!response.ok) {
+                response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
+            }
+
             if (!response.ok) {
                 if (response.status === 404) {
                     alert(`Premade mindmap for this ${type} is not available yet.`);
@@ -1066,12 +1072,22 @@ export default function TodoPage() {
             }
             const data = await response.json();
 
+            // Normalize data: it could be a raw tldraw JSON or a combined object { tldrawSnapshot, anchors, ... }
+            const snapshot = data.tldrawSnapshot || (data.document ? data : null);
+            const anchors = data.anchors || [];
+
+            if (!snapshot) {
+                alert('Invalid mindmap file format');
+                return;
+            }
+
             if (type === 'surah') {
                 const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
-                    ...data,
-                    surahId: id, // Ensure ID matches
+                    tldrawSnapshot: snapshot,
+                    anchors: anchors.length > 0 ? anchors : existing.anchors,
+                    surahId: id,
                     isComplete: true
                 };
                 saveMindMap(updated);
@@ -1081,7 +1097,8 @@ export default function TodoPage() {
                 const existing = partMindmaps[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
-                    ...data,
+                    tldrawSnapshot: snapshot,
+                    description: data.description || existing.description || '',
                     partId: pId,
                     isComplete: true
                 };
@@ -1090,7 +1107,7 @@ export default function TodoPage() {
             }
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
             setSettingsVersion(v => v + 1);
-            alert(`Premade mindmap for ${type} ${id} successfully imported!`);
+            alert(`Premade mindmap for ${type} ${id} successfully imported!${anchors.length > 0 ? ' (including verse chunks)' : ''}`);
         } catch (error) {
             console.error('Import failed:', error);
             alert('Failed to import mindmap. Please try again.');

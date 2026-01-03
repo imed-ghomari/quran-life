@@ -106,8 +106,10 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                     padding: '0.5rem 1rem',
                     background: 'var(--background-secondary)',
                     borderBottom: '1px solid var(--border)',
-                    position: 'sticky',
+                    position: 'fixed',
                     top: 0,
+                    left: 0,
+                    right: 0,
                     zIndex: 100,
                 }}
             >

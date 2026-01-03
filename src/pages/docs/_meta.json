@@ -1,11 +1,5 @@
 {
     "index": "Introduction",
-    "philosophy": {
-        "title": "Philosophy",
-        "type": "folder"
-    },
-    "mindmaps": {
-        "title": "Mindmaps",
-        "type": "folder"
-    }
+    "philosophy": "Philosophy",
+    "mindmaps": "Mindmaps"
 }
