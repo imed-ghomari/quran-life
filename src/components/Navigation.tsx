@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useRouter as usePagesRouter } from 'next/router';
 import { BookOpen, BarChart3, Settings, ListTodo, Github, HelpCircle } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 import {
@@ -20,7 +21,16 @@ import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabi
 import { SURAHS } from '@/lib/quranData';
 
 export default function Navigation() {
-    const pathname = usePathname();
+    let pathname = usePathname();
+
+    // Fallback for Pages Router (Nextra)
+    try {
+        const pagesRouter = usePagesRouter();
+        if (!pathname && pagesRouter) {
+            pathname = pagesRouter.pathname;
+        }
+    } catch (e) { }
+
     const [pendingCount, setPendingCount] = useState(0);
     const [todayReviews, setTodayReviews] = useState(0);
     const [isPortionComplete, setIsPortionComplete] = useState(false);
@@ -101,7 +111,7 @@ export default function Navigation() {
         <nav className="bottom-nav">
             {navItems.map(item => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
                 return (
                     <Link
                         key={item.href}

@@ -2,10 +2,8 @@ import type { Metadata } from 'next';
 import Script from 'next/script';
 import './globals.css';
 import 'tldraw/tldraw.css';
-import Navigation from '@/components/Navigation';
 import { Providers } from '@/components/Providers';
-import { LogOverlay } from '@/components/LogOverlay';
-import MobileSyncBar from '@/components/MobileSyncBar';
+import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
     title: 'Quran Life',
@@ -48,13 +46,9 @@ export default function RootLayout({
                     `}
                 </Script>
                 <Providers>
-                    <div className="app-shell">
-                        <Navigation />
-                        <div className="page-container">
-                            <MobileSyncBar />
-                            {children}
-                        </div>
-                    </div>
+                    <AppShell>
+                        {children}
+                    </AppShell>
                 </Providers>
             </body>
         </html>

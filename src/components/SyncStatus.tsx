@@ -161,7 +161,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '2px',
                 padding: '0.65rem 0.5rem',
                 width: '100%',
                 color: getStatusColor(),
@@ -194,6 +194,18 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                         {displayStatus === 'conflict' ? '!' : pendingChangesCount}
                     </span>
                 )}
+            </span>
+            <span style={{
+                fontSize: '0.6rem',
+                fontWeight: 600,
+                marginTop: '1px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '70px',
+                opacity: 0.8
+            }}>
+                {displayStatus === 'syncing' ? 'Syncing' : (displayStatus === 'synced' ? 'Synced' : (displayStatus === 'offline' ? 'Offline' : (isAuthenticated ? 'Ready' : 'Sign In')))}
             </span>
         </button>
     );

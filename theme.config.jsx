@@ -1,9 +1,13 @@
 import React from 'react'
 
 export default {
-    logo: <span>Quran Life Documentation</span>,
+    logo: <span>Quran Life Docs</span>,
     project: {
         link: 'https://github.com/imed-ghomari/quran-life',
+        component: null, // Hide GitHub link in header
+    },
+    themeSwitch: {
+        component: null, // Hide theme chooser
     },
     docsRepositoryBase: 'https://github.com/imed-ghomari/quran-life/blob/main',
     footer: {

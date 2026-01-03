@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, parseQuranJson } from '@/lib/quranData';
@@ -85,6 +86,7 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 
 export default function SettingsPage() {
     const supabase = createClient();
+    const router = useRouter();
     const isOnline = useContext(OnlineStatusContext);
     const [user, setUser] = useState<User | null>(null);
     const [settings, setSettings] = useState<AppSettings>(getSettings());
@@ -473,7 +475,12 @@ export default function SettingsPage() {
                                         <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={() => supabase.auth.signOut()}
+                                                onClick={async () => {
+                                                    if (window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) {
+                                                        await supabase.auth.signOut();
+                                                        router.push('/');
+                                                    }
+                                                }}
                                                 style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
                                             >
                                                 Sign Out

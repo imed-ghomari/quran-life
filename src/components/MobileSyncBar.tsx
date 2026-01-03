@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useRouter as usePagesRouter } from 'next/router';
 import SyncStatus from './SyncStatus';
 
 /**
@@ -10,7 +11,15 @@ import SyncStatus from './SyncStatus';
  */
 export default function MobileSyncBar() {
     const [isMobile, setIsMobile] = useState(false);
-    const pathname = usePathname();
+    let pathname = usePathname();
+
+    // Fallback for Pages Router
+    try {
+        const pagesRouter = usePagesRouter();
+        if (!pathname && pagesRouter) {
+            pathname = pagesRouter.pathname;
+        }
+    } catch (e) { }
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
