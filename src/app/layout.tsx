@@ -56,7 +56,6 @@ export default function RootLayout({
                         </div>
                     </div>
                 </Providers>
-                <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
             </body>
         </html>
     );
