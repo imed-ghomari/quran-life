@@ -146,13 +146,6 @@ body {
   overflow-x: hidden;
 }
 
-@media (max-width: 768px) {
-  .page-container {
-    padding-top: 44px;
-    /* Space for the fixed sync bar */
-  }
-}
-
 .content-wrapper {
   max-width: 900px;
   margin: 0 auto;
@@ -1859,11 +1852,9 @@ input:focus {
 
 /* Mobile sync bar positioning */
 .sync-status-mobile {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
+  z-index: 40;
 }
 
 /* Nextra Documentation Heading Overrides */

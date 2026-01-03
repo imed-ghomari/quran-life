@@ -26,7 +26,7 @@ export default function AppShell({ children }: AppShellProps) {
     return (
         <div className="app-shell">
             <Navigation />
-            <div className="page-container">
+            <div className="page-container" style={!isAuthOrHome ? { paddingTop: '3.5rem' } : {}}>
                 <MobileSyncBar />
                 {children}
             </div>

@@ -110,6 +110,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                     top: 0,
                     left: 0,
                     right: 0,
+                    width: '100%',
                     zIndex: 100,
                 }}
             >

@@ -1055,13 +1055,7 @@ export default function TodoPage() {
 
     const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
         try {
-            // Try fetching .json first (which may contain anchors and other metadata)
-            // Fallback to .tldraw for raw exports
-            let response = await fetch(`/assets/premade-mindmaps/${type}-${id}.json`);
-            if (!response.ok) {
-                response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
-            }
-
+            const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
             if (!response.ok) {
                 if (response.status === 404) {
                     alert(`Premade mindmap for this ${type} is not available yet.`);
@@ -1072,22 +1066,39 @@ export default function TodoPage() {
             }
             const data = await response.json();
 
-            // Normalize data: it could be a raw tldraw JSON or a combined object { tldrawSnapshot, anchors, ... }
-            const snapshot = data.tldrawSnapshot || (data.document ? data : null);
-            const anchors = data.anchors || [];
-
-            if (!snapshot) {
-                alert('Invalid mindmap file format');
-                return;
+            // Try to fetch premade anchors for surahs
+            let importedAnchors: any[] = [];
+            if (type === 'surah') {
+                try {
+                    const anchorResponse = await fetch(`/assets/premade-mindmaps/surah-${id}.chunks.txt`);
+                    if (anchorResponse.ok) {
+                        const text = await anchorResponse.text();
+                        importedAnchors = text.split('\n')
+                            .filter(line => line.trim() && line.includes('|'))
+                            .map((line, idx) => {
+                                const [range, label] = line.split('|').map(s => s.trim());
+                                const [start, end] = range.split('-').map(n => parseInt(n.trim()));
+                                return {
+                                    id: `imported-${id}-${idx}-${Date.now()}`,
+                                    startVerse: start,
+                                    endVerse: end || start,
+                                    label: label || `Chunk ${idx + 1}`
+                                };
+                            });
+                        appLogger.addLog(`Found and parsed ${importedAnchors.length} anchors for surah ${id}`, 'info');
+                    }
+                } catch (anchorError) {
+                    console.warn('Error fetching or parsing premade anchors:', anchorError);
+                }
             }
 
             if (type === 'surah') {
                 const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
-                    tldrawSnapshot: snapshot,
-                    anchors: anchors.length > 0 ? anchors : existing.anchors,
-                    surahId: id,
+                    ...data,
+                    surahId: id, // Ensure ID matches
+                    anchors: importedAnchors.length > 0 ? importedAnchors : (existing.anchors || []),
                     isComplete: true
                 };
                 saveMindMap(updated);
@@ -1097,8 +1108,7 @@ export default function TodoPage() {
                 const existing = partMindmaps[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
-                    tldrawSnapshot: snapshot,
-                    description: data.description || existing.description || '',
+                    ...data,
                     partId: pId,
                     isComplete: true
                 };
@@ -1107,7 +1117,7 @@ export default function TodoPage() {
             }
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
             setSettingsVersion(v => v + 1);
-            alert(`Premade mindmap for ${type} ${id} successfully imported!${anchors.length > 0 ? ' (including verse chunks)' : ''}`);
+            alert(`Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`);
         } catch (error) {
             console.error('Import failed:', error);
             alert('Failed to import mindmap. Please try again.');
