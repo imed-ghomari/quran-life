@@ -3,7 +3,8 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Image from 'next/image';
 import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
 import { Verse, getAudioPath } from '@/lib/types';
 import {
@@ -109,13 +110,13 @@ export default function TodayPage() {
     const [toasts, setToasts] = useState<ToastItem[]>([]);
     const [lastGrading, setLastGrading] = useState<{ node: MemoryNode; index: number; errorId?: string } | null>(null);
 
-    const addToast = (type: 'success' | 'error' | 'postpone', message: string, info?: string) => {
+    const addToast = useCallback((type: 'success' | 'error' | 'postpone', message: string, info?: string) => {
         const id = Math.random().toString(36).substring(2, 9);
         setToasts(prev => [...prev, { id, type, message, info }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 4000);
-    };
+    }, []);
 
     const audioRef = useRef<HTMLAudioElement>(null);
     const targetBoxRef = useRef<HTMLDivElement>(null);
@@ -192,7 +193,7 @@ export default function TodayPage() {
             setDueNodes(getDueNodes());
         }
         setListeningComplete(getListeningCompletedToday());
-    }, [settingsVersion, isLoaded]);
+    }, [settingsVersion, isLoaded, dueNodes.length, currentReviewIndex]);
 
     // Calculate today's portion (preserve per-part listening progress)
     const portionData = useMemo(() => {
@@ -225,7 +226,7 @@ export default function TodayPage() {
         const startVerseIndex = portion.length > 0 ? Math.min(saved.currentVerseIndex, portion.length - 1) : 0;
 
         return { portion, startVerseIndex, versesPerDay, totalVerses };
-    }, [allVerses, settingsVersion]);
+    }, [allVerses]);
 
     useEffect(() => {
         setTodaysPortion(portionData.portion);
@@ -280,7 +281,7 @@ export default function TodayPage() {
                 setIsPlaying(false);
             }
         }
-    }, [readOnlyMode]);
+    }, [readOnlyMode, isPlaying]);
 
 
     const handleAudioEnded = () => {
@@ -305,7 +306,7 @@ export default function TodayPage() {
     };
 
     // Grade review
-    const handleGrade = (remembered: boolean) => {
+    const handleGrade = useCallback((remembered: boolean) => {
         const node = dueNodes[currentReviewIndex];
         if (!node) return;
 
@@ -352,9 +353,9 @@ export default function TodayPage() {
         } else {
             setDueNodes([]); // Done
         }
-    };
+    }, [dueNodes, currentReviewIndex, addToast]);
 
-    const handlePostpone = () => {
+    const handlePostpone = useCallback(() => {
         const node = dueNodes[currentReviewIndex];
         if (!node) return;
 
@@ -379,7 +380,7 @@ export default function TodayPage() {
         } else {
             setDueNodes([]);
         }
-    };
+    }, [dueNodes, currentReviewIndex, addToast]);
 
     const handleUndo = () => {
         if (!lastGrading) return;
@@ -458,7 +459,7 @@ export default function TodayPage() {
         ? reviewContent.verses?.map(v => splitIntoChunks(v.text)) || []
         : [];
 
-    const handleRevealNext = () => {
+    const handleRevealNext = useCallback(() => {
         if (revealedChunks < totalChunks) {
             setRevealedChunks(prev => prev + 1);
         } else if (currentVerseInReview < totalVerses - 1) {
@@ -467,7 +468,7 @@ export default function TodayPage() {
         } else {
             setShowGrading(true);
         }
-    };
+    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses]);
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -496,7 +497,7 @@ export default function TodayPage() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [dueNodes, showGrading, revealedChunks, currentVerseInReview, totalChunks, totalVerses, currentReviewIndex]);
+    }, [dueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext]);
 
     useEffect(() => {
         if (targetBoxRef.current) {
@@ -785,10 +786,10 @@ export default function TodayPage() {
 
                                                         return (
                                                             <div
-                                                                style={{ position: 'relative', cursor: 'zoom-in' }}
+                                                                style={{ position: 'relative', cursor: 'zoom-in', width: '100%', height: '300px' }}
                                                                 onClick={() => setZoomImage(displayUrl)}
                                                             >
-                                                                <img src={displayUrl} style={{ width: '100%', borderRadius: 8, marginBottom: 8 }} />
+                                                                <Image src={displayUrl} alt="Mindmap preview" fill style={{ objectFit: 'contain', borderRadius: 8 }} />
                                                                 <div style={{ position: 'absolute', bottom: 16, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
                                                                     <Maximize2 size={12} /> Tap to Zoom
                                                                 </div>
@@ -1121,7 +1122,8 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                     alignItems: 'center',
                     justifyContent: 'center',
                     overflow: 'hidden',
-                    cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                    cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                    position: 'relative'
                 }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
@@ -1132,11 +1134,11 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                 onTouchEnd={handleMouseUp}
                 onClick={(e) => e.stopPropagation()}
             >
-                <img
+                <Image
                     src={src}
+                    alt="Zoomed mindmap"
+                    fill
                     style={{
-                        maxWidth: '95%',
-                        maxHeight: '90%',
                         objectFit: 'contain',
                         transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
                         transition: isDragging ? 'none' : 'transform 0.2s ease-out',

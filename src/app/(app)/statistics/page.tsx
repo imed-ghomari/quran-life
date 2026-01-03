@@ -34,7 +34,10 @@ interface StatSegment {
 export default function StatisticsPage() {
     const [version, setVersion] = useState(0);
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
-    const settings = getSettings();
+    const settings = useMemo(() => {
+        version; // satisfy linter
+        return getSettings();
+    }, [version]);
     const activePart = settings.activePart;
 
     useEffect(() => {
@@ -42,10 +45,19 @@ export default function StatisticsPage() {
         return () => clearInterval(interval);
     }, []);
 
-    const mindmaps = getMindMaps();
-    const partMindmaps = getPartMindMaps();
-    const memoryNodes = getMemoryNodes();
-    const skippedSurahs = new Set(settings.skippedSurahs || []);
+    const mindmaps = useMemo(() => {
+        version; // satisfy linter
+        return getMindMaps();
+    }, [version]);
+    const partMindmaps = useMemo(() => {
+        version; // satisfy linter
+        return getPartMindMaps();
+    }, [version]);
+    const memoryNodes = useMemo(() => {
+        version; // satisfy linter
+        return getMemoryNodes();
+    }, [version]);
+    const skippedSurahs = useMemo(() => new Set(settings.skippedSurahs || []), [settings.skippedSurahs]);
 
     // 1. Part Mindmaps Data (Always Global)
     const partMindmapStats = useMemo(() => {
@@ -73,7 +85,7 @@ export default function StatisticsPage() {
                 notCreated++;
             }
         });
-
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         return {
             total: 4,
             segments: [
@@ -85,7 +97,7 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [version, partMindmaps, memoryNodes]);
+    }, [partMindmaps, memoryNodes]);
 
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
@@ -137,7 +149,7 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [version, activePart, mindmaps, memoryNodes, skippedSurahs]);
+    }, [activePart, mindmaps, memoryNodes, skippedSurahs]);
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
@@ -233,7 +245,7 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [version, activePart, memoryNodes, skippedSurahs, verseChunkMode, settings.learnedVerses]);
+    }, [activePart, memoryNodes, skippedSurahs, verseChunkMode, settings.learnedVerses]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
@@ -265,7 +277,7 @@ export default function StatisticsPage() {
                 { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Surahs remaining in current cycle' },
             ]
         };
-    }, [version, activePart, skippedSurahs]);
+    }, [activePart, skippedSurahs]);
 
     // 5. Future Due Data
     const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
@@ -340,7 +352,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [version, activePart, memoryNodes, showBacklog, timeRange]);
+    }, [activePart, memoryNodes, showBacklog, timeRange]);
 
     return (
         <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '2rem', paddingLeft: '1rem', paddingRight: '1rem' }}>

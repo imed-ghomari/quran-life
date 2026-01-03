@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import Image from 'next/image';
 import { SURAHS, getSurah, getSurahsByPart, parseQuranJson } from '@/lib/quranData';
 import {
     getMindMaps,
@@ -164,20 +165,21 @@ function MobileAnchorBuilder({
                         <X size={32} />
                     </button>
                 </div>
-                <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <img
-                        src={mindmapImageUrl}
-                        alt="Full Mindmap"
-                        style={{
-                            maxWidth: zoomLevel <= 1 ? '100%' : 'none',
-                            maxHeight: zoomLevel <= 1 ? '100%' : 'none',
-                            objectFit: 'contain',
-                            transform: `scale(${zoomLevel})`,
-                            transition: 'transform 0.2s ease-out',
-                            cursor: zoomLevel > 1 ? 'grab' : 'default'
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                    />
+                <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    {mindmapImageUrl && (
+                        <Image
+                            src={mindmapImageUrl}
+                            alt="Full Mindmap"
+                            fill
+                            style={{
+                                objectFit: 'contain',
+                                transform: `scale(${zoomLevel})`,
+                                transition: 'transform 0.2s ease-out',
+                                cursor: zoomLevel > 1 ? 'grab' : 'default'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    )}
                 </div>
                 <span style={{ position: 'absolute', bottom: 30, color: 'white', background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: '20px' }}>
                     Tap anywhere to close • Zoom: {Math.round(zoomLevel * 100)}%
@@ -219,10 +221,11 @@ function MobileAnchorBuilder({
                             }}
                             onClick={() => setShowFullMindmap(true)}
                         >
-                            <img
+                            <Image
                                 src={mindmapImageUrl}
                                 alt="Mindmap Preview"
-                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                fill
+                                style={{ objectFit: 'contain' }}
                             />
                             <div style={{
                                 position: 'absolute',
@@ -355,10 +358,11 @@ function MobileAnchorBuilder({
                     }}
                     onClick={() => setShowFullMindmap(true)}
                 >
-                    <img
+                    <Image
                         src={mindmapImageUrl}
                         alt="Mindmap Preview"
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: 0.8 }}
+                        fill
+                        style={{ objectFit: 'contain', opacity: 0.8 }}
                     />
                     <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
                         <ImageIcon size={10} color="white" />
@@ -873,14 +877,14 @@ export default function TodoPage() {
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
             .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, settingsVersion, activePart, settings.learnedVerses, settings.skippedSurahs]);
+    }, [mindmaps, activePart, settings.learnedVerses]);
 
     const incompleteSurahMaps = surahTasks.filter(t => !t.mindmap || !t.mindmap.isComplete || !t.mindmap.imageUrl);
 
     const partTasks = useMemo(() => {
         const parts: QuranPart[] = [1, 2, 3, 4];
         return parts.map(p => ({ part: p, mindmap: partMindmaps[p] }));
-    }, [partMindmaps, settingsVersion]);
+    }, [partMindmaps]);
 
     const visiblePartTasks = useMemo(() => {
         return activePart === 5 ? partTasks : partTasks.filter(t => t.part === activePart);
@@ -2040,8 +2044,10 @@ export default function TodoPage() {
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                                                             {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                                 <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                                    <img src={mindmap.imageUrl ?? undefined} className="light-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
-                                                                                    <img src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? undefined} className="dark-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
+                                                                                    {mindmap.imageUrl && (
+                                                                                        <Image src={mindmap.imageUrl} alt="Mindmap light mode" fill className="light-mode-only" style={{ objectFit: 'contain', background: '#f5f5f5' }} />
+                                                                                    )}
+                                                                                    <Image src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? ''} alt="Mindmap dark mode" fill className="dark-mode-only" style={{ objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
                                                                                 </div>
                                                                             )}
 
@@ -2210,8 +2216,10 @@ export default function TodoPage() {
                                                                 <div style={{ background: 'var(--background)', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                                                     {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                         <div style={{ position: 'relative', width: '100%', height: '250px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                            <img src={mindmap.imageUrl ?? undefined} className="light-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f5f5f5' }} />
-                                                                            <img src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? undefined} className="dark-mode-only" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
+                                                                            {mindmap.imageUrl && (
+                                                                                <Image src={mindmap.imageUrl} alt="Mindmap light mode" fill className="light-mode-only" style={{ objectFit: 'contain', background: '#f5f5f5' }} />
+                                                                            )}
+                                                                            <Image src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? ''} alt="Mindmap dark mode" fill className="dark-mode-only" style={{ objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
                                                                         </div>
                                                                     )}
                                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
