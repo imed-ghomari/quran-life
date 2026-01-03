@@ -361,7 +361,7 @@ export default function StatisticsPage() {
                     <h1 className="hide-mobile" style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
+                    <div className="hide-mobile" style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
                         {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
                     </div>
                 </div>
@@ -464,14 +464,14 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                     <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>Future Reviews</h2>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>
                         <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} />
                         Backlog
                     </label>
                     <select
                         value={timeRange}
                         onChange={(e) => setTimeRange(e.target.value as any)}
-                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.75rem', background: 'var(--background)', outline: 'none' }}
+                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.75rem', background: 'var(--background)', outline: 'none', color: 'var(--foreground)' }}
                     >
                         <option value="1m">1 Month</option>
                         <option value="3m">3 Months</option>
