@@ -11,8 +11,7 @@ import {
     getPortionPointer,
     getListeningCycles,
 } from '@/lib/storage';
-import { BarChart3, Layers, Hash, Info, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
-import DocumentationModal from '@/components/DocumentationModal';
+import { BarChart3, Layers, Hash, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
 import { getListeningStats, getListeningProgress } from '@/lib/storage';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
@@ -432,31 +431,6 @@ export default function StatisticsPage() {
                 />
             </div>
 
-            <DocumentationModal
-                title="Understanding Your Stats"
-                cards={[
-                    {
-                        title: "Maturity Levels",
-                        icon: BarChart3,
-                        description: "Understand the strength of your memory through maturity levels.",
-                        items: [
-                            "Levels are based on the interval (days) between reviews.",
-                            "Longer intervals indicate stronger, more durable memory.",
-                            "The legend under each chart shows the specific day ranges."
-                        ]
-                    },
-                    {
-                        title: "Filtering",
-                        icon: Hash,
-                        description: "Stats are updated based on your active learning path.",
-                        items: [
-                            "Surah and Verse stats follow your Active Part selection.",
-                            "Part Mindmaps always show global progress (all 4 parts).",
-                            "Skipped elements are excluded to show true coverage."
-                        ]
-                    }
-                ]}
-            />
         </div>
     );
 }

@@ -26,7 +26,6 @@ import {
     PenTool,
     RotateCcw
 } from 'lucide-react';
-import DocumentationModal from '@/components/DocumentationModal';
 import dynamic from 'next/dynamic';
 import { QuranPart } from '@/lib/types';
 import {
@@ -997,32 +996,6 @@ export default function TodayPage() {
                     </div>
                 ))}
             </div>
-
-            <DocumentationModal
-                title="Today's Goals & Instructions"
-                cards={[
-                    {
-                        title: "The Review System",
-                        icon: Brain,
-                        description: "Our SM-2 algorithm ensures long-term retention by scheduling reviews at optimal intervals.",
-                        items: [
-                            "Reveal chunks to test your memory piece by piece.",
-                            "Grading a card as 'Remembered' increases its next appearance interval.",
-                            "Cards you forget will appear more frequently until they are mastered."
-                        ]
-                    },
-                    {
-                        title: "Daily Portion (Passive Learning)",
-                        icon: Info,
-                        description: "A specialized tool to help with memorization while you prepare your visual mindmaps.",
-                        items: [
-                            "Listen to your daily portion to subconsciously absorb the verses. This passive learning builds a foundation for your active memorization.",
-                            "The portion updates daily based on your cycle settings to ensure you cover the entire active part.",
-                            "Mark as complete once finished to clear the notification badge."
-                        ]
-                    }
-                ]}
-            />
 
             {/* Zoom Modal */}
             {zoomImage && (

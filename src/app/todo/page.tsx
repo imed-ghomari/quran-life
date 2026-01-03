@@ -26,7 +26,6 @@ import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabi
 import { QuranPart } from '@/lib/types';
 import { syncWithCloud } from '@/lib/sync';
 import { ChevronDown, Brain, Map, MapPinned, AlertTriangle, ShieldAlert, SplitSquareHorizontal, Check, ImageIcon, ChevronRight, X, AlertCircle, Download, Upload, MoreVertical, FileText, Settings2, PenTool, Trash2, Plus, Minus } from 'lucide-react';
-import DocumentationModal from '@/components/DocumentationModal';
 import MindmapEditor from '@/components/MindmapEditor';
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
@@ -2373,40 +2372,6 @@ export default function TodoPage() {
                 )
             }
 
-            <DocumentationModal
-                title="Todo & Setup Help"
-                cards={[
-                    {
-                        title: "Surah & Part Mindmaps",
-                        icon: Map,
-                        description: "Visual memory aids (mindmaps) are key to long-term retention. We use two levels of mapping:",
-                        items: [
-                            "Part Mindmap: A high-level overview of an entire section (Part) to help you understand the core themes and flow.",
-                            "Surah Mindmap: A detailed visual guide for a specific Surah. You upload an image and use the builder to split it into smaller, manageable segments for review.",
-                            "Mark a mindmap as 'Complete' to enable its automatic review cycle."
-                        ]
-                    },
-                    {
-                        title: "Fixing Memory Gaps",
-                        icon: ShieldAlert,
-                        description: "When you reach 3 failed reviews for a specific segment, it is automatically suspended to prevent repeating mistakes.",
-                        items: [
-                            "Suspended segments appear here to alert you of a 'memory gap'.",
-                            "Review your mental image, update the mindmap if needed, and 'Clear Issues' to resume your reviews."
-                        ]
-                    },
-                    {
-                        title: "Verifying Similarity",
-                        icon: Brain,
-                        description: "Mutashabihat (similar verses) often cause confusion. This section helps you verify if a mistake was due to a similarity.",
-                        items: [
-                            "Check if your review errors stem from confusion between two similar verses.",
-                            "Add a distinction note or update your mindmap to highlight the difference between them.",
-                            "Once you decide how to handle the similarity, the warning will clear from your list."
-                        ]
-                    }
-                ]}
-            />
         </div >
     );
 }

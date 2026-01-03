@@ -45,7 +45,6 @@ import {
     Activity,
     X
 } from 'lucide-react';
-import DocumentationModal from '@/components/DocumentationModal';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { MemoryNode, getMemoryNodes } from '@/lib/storage';
@@ -428,7 +427,7 @@ export default function SettingsPage() {
                             <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Database size={18} />
                             </div>
-                            <span>Cloud Sync</span>
+                            <span>User Account</span>
                         </div>
                         <ChevronDown size={20} style={{ transform: sectionsExpanded.cloudSync ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
@@ -1830,44 +1829,6 @@ export default function SettingsPage() {
                     </div>
                 );
             })()}
-
-            <DocumentationModal
-                title="Settings & Setup"
-                cards={[
-                    {
-                        title: "Active Part",
-                        icon: Settings,
-                        description: "Focus your learning by selecting one of the 4 main Quranic portions. This filters all progress data to only show relevant information for your current goal.",
-                        items: [
-                            "As-Sab'ut-Tiwal (Long Seven): Surah 2 to 9.",
-                            "Al-Mi'un (The Hundreds): Surah 10 to 18.",
-                            "Al-Mathani (The Often-Repeated): Surah 19 to 33.",
-                            "Al-Mufassal (The Brief): Surah 34 to 114."
-                        ]
-                    },
-                    {
-                        title: "Similar Verse Coverage",
-                        icon: Brain,
-                        description: "Track and resolve similar phrases (Mutashabihat) that often cause confusion during memorization.",
-                        items: [
-                            "Resolved: Mark a group as resolved once you've memorized the distinctions.",
-                            "Notes: Add personal hints or mnemonic devices to help you differentiate similar verses.",
-                            "Coverage: The progress bar reflects how many identified similarity groups you have addressed in the active part.",
-                            "Custom: Use the 'Add Custom' button to create your own similarity comparisons between any two verses."
-                        ]
-                    },
-                    {
-                        title: "Status vs. Maturity",
-                        icon: ShieldCheck,
-                        description: "Understanding the difference between availability and review frequency.",
-                        items: [
-                            "Surah Status (Learned/New/Skipped): Determines if a surah is included in your review cycle. 'Skipped' surahs are hidden from all calculations.",
-                            "Maturity Levels: Represents how well you know a verse or mindmap. Higher levels (Strong/Mastered) increase the interval between reviews.",
-                            "Resetting: You can reset maturity for entire groups (e.g., all verses in a surah) using the 'Set Subgroup' buttons."
-                        ]
-                    }
-                ]}
-            />
 
             <style jsx>{`
                 .add-custom-mut-btn {

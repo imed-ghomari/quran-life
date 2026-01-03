@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useRouter as usePagesRouter } from 'next/router';
-import { BookOpen, BarChart3, Settings, ListTodo, Github, HelpCircle } from 'lucide-react';
+import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 import {
     getSettings,
@@ -136,19 +136,6 @@ export default function Navigation() {
             <div className="hide-mobile sync-nav-wrapper">
                 <SyncStatus variant="desktop" />
             </div>
-
-            <a
-                href="https://github.com/imed-ghomari/quran-life"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="nav-item github-nav-link"
-                title="GitHub Repository"
-            >
-                <span className="nav-icon">
-                    <Github size={24} />
-                </span>
-                <span>GitHub</span>
-            </a>
         </nav>
     );
 }
