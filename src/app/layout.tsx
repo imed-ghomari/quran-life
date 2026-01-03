@@ -48,7 +48,6 @@ export default function RootLayout({
                     `}
                 </Script>
                 <Providers>
-                    <LogOverlay />
                     <div className="app-shell">
                         <Navigation />
                         <div className="page-container">

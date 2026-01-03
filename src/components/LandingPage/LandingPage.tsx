@@ -2,18 +2,19 @@ import React from 'react';
 import {
   Brain,
   Repeat,
-  BarChart,
+  Copy, // For Similar Verses
   Check,
   ArrowRight,
   Zap,
   Layers,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 import './LandingPage.css';
 
 interface LandingPageProps {
   /** * Callback function triggered when the user clicks the 
-   * "Buy Premium" button in the pricing section.
+   * "Buy Premium" button.
    */
   onBuy: () => void;
 }
@@ -44,19 +45,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
         <section className="hero">
           <div className="container">
             <div className="animate-entry">
-              <span className="badge" style={{ position: 'relative', top: 'auto', left: 'auto', transform: 'none', display: 'inline-block', marginBottom: '1rem' }}>
-                New v2.0 Released
-              </span>
               <h1 className="hero-title">
                 Master your Quran Hifdh<br /> with Visual Mindmaps.
               </h1>
               <p className="hero-subtitle delay-100 animate-entry">
-                The first platform combining Tldraw mindmapping, SM-2 Spaced Repetition,
-                and deep analytics to help you memorize and retain the Quran forever.
+                The first platform combining intuitive mindmapping and smart spaced repetition
+                to help you memorize and retain the Quran forever—without the struggle.
               </p>
               <div className="cta-group delay-200 animate-entry">
                 <button className="btn btn-primary" onClick={onBuy}>
-                  Start Memorizing Free
+                  Start Your Journey
                   <ArrowRight size={18} />
                 </button>
                 <button className="btn btn-secondary">
@@ -78,109 +76,98 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             </div>
 
             <div className="grid">
-              {/* Feature 1 */}
+              {/* Feature 1: Mindmapping */}
               <div className="card">
                 <div className="icon-wrapper">
                   <Brain size={28} />
                 </div>
                 <h3>Visual Mindmapping</h3>
                 <p>
-                  Connect verses visually using our Tldraw integration.
-                  Create mental hooks and structural maps for every Surah.
+                  Connect verses visually on an infinite canvas.
+                  Create mental hooks and structural maps for every Surah to recall them effortlessly.
                 </p>
               </div>
 
-              {/* Feature 2 */}
+              {/* Feature 2: Smart Repetition */}
               <div className="card">
                 <div className="icon-wrapper">
                   <Repeat size={28} />
                 </div>
-                <h3>Smart Repetition</h3>
+                <h3>Smart Spaced Repetition</h3>
                 <p>
-                  Never forget a verse. Our SM-2 algorithm calculates the exact
-                  moment you need to review a page before you forget it.
+                  Never forget a verse. Our system calculates the exact
+                  moment you need to review a page before you forget it, maximizing efficiency.
                 </p>
               </div>
 
-              {/* Feature 3 */}
+              {/* Feature 3: Similar Verses (Mutashabihat) */}
               <div className="card">
                 <div className="icon-wrapper">
-                  <BarChart size={28} />
+                  <Copy size={28} />
                 </div>
-                <h3>Deep Analytics</h3>
+                <h3>Similar Verse Integration</h3>
                 <p>
-                  Track your strength on every Juz. Visualize your retention rates,
-                  daily streaks, and forecasted completion dates.
+                  Automatically detect and link similar verses (Mutashabihat).
+                  See exactly where else a phrase appears to prevent mixing up Surahs.
                 </p>
               </div>
 
-              {/* Feature 4 */}
-              <div className="card">
+              {/* Feature 4: Reduced Rote Memorization */}
+              <div className="card highlight-card">
                 <div className="icon-wrapper">
-                  <Zap size={28} />
+                  <Sparkles size={28} />
                 </div>
-                <h3>Offline & Sync</h3>
+                <h3>Reduced Rote Memorization</h3>
                 <p>
-                  Study anywhere. Your mindmaps and progress sync seamlessly
-                  across devices and work perfectly offline.
+                  Stop repeating verses blindly. Understand the structure to memorize faster.
                 </p>
+                <div className="note-box">
+                  <strong>What is Rote Memorization?</strong>
+                  <br />
+                  It&apos;s the traditional method of learning by pure repetition without understanding structure. It is often slow and easy to forget.
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* --- Pricing Section --- */}
+        {/* --- Pricing Section (Premium Only) --- */}
         <section className="pricing">
           <div className="container">
             <div className="section-header">
-              <h2 className="section-title">Simple, Transparent Pricing</h2>
+              <h2 className="section-title">Invest in your Akhirah</h2>
               <p style={{ color: 'var(--foreground-secondary)' }}>
-                Invest in your Akhirah without breaking the bank.
+                One plan. Everything you need to master the Quran.
               </p>
             </div>
 
-            <div className="pricing-grid">
-              {/* Free Tier */}
-              <div className="price-card">
-                <h3>Seeker</h3>
-                <div className="price">$0<span>/mo</span></div>
-                <p style={{ color: 'var(--foreground-secondary)' }}>Perfect for getting started.</p>
-
-                <ul className="features-list">
-                  <li><Check size={20} className="check-icon" /> Core Mindmapping Tools</li>
-                  <li><Check size={20} className="check-icon" /> Basic SM-2 Repetition</li>
-                  <li><Check size={20} className="check-icon" /> 1 Device Sync</li>
-                  <li><Check size={20} className="check-icon" /> Standard Support</li>
-                </ul>
-
-                <button className="btn btn-secondary btn-full" onClick={onBuy}>
-                  Start for Free
-                </button>
-              </div>
-
+            <div className="pricing-grid single-plan">
               {/* Premium Tier */}
               <div className="price-card premium">
-                <div className="badge">Most Popular</div>
+                <div className="badge">Complete Access</div>
                 <h3>Hafidh Pro</h3>
                 <div className="price">$10<span>/mo</span></div>
-                <p style={{ color: 'var(--foreground-secondary)' }}>For serious students.</p>
+                <p style={{ color: 'var(--foreground-secondary)' }}>
+                  Unlock the full power of visual learning.
+                </p>
 
                 <ul className="features-list">
-                  <li><Check size={20} className="check-icon" /> <strong>Everything in Seeker</strong></li>
-                  <li><Check size={20} className="check-icon" /> Unlimited Mindmap Exports</li>
-                  <li><Check size={20} className="check-icon" /> Advanced Retention Stats</li>
+                  <li><Check size={20} className="check-icon" /> Unlimited Visual Mindmaps</li>
+                  <li><Check size={20} className="check-icon" /> Advanced Spaced Repetition System</li>
+                  <li><Check size={20} className="check-icon" /> <strong>Mutashabihat (Similar Verses) Tool</strong></li>
                   <li><Check size={20} className="check-icon" /> Cross-device Cloud Sync</li>
-                  <li><Check size={20} className="check-icon" /> Priority Feature Access</li>
+                  <li><Check size={20} className="check-icon" /> Offline Access</li>
                 </ul>
 
-                {/* CRITICAL: Button calls the onBuy prop, NOT a link */}
+                {/* CRITICAL: Button calls the onBuy prop */}
                 <button
-                  className="btn btn-primary btn-full"
+                  className="btn btn-primary btn-full btn-lg"
                   onClick={onBuy}
                   aria-label="Purchase Premium Subscription"
                 >
-                  Upgrade to Pro
+                  Get Full Access Now
                 </button>
+                <p className="guarantee">30-day money-back guarantee</p>
               </div>
             </div>
           </div>

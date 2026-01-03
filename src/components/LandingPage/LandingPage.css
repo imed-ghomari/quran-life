@@ -7,20 +7,20 @@
   --background-secondary: #f4f6f8;
   --foreground: #2d2d2d;
   --foreground-secondary: #717171;
-  
+
   --accent: #5b8fb9;
   --accent-hover: #4a7496;
   --accent-light: rgba(91, 143, 185, 0.1);
-  
+
   --border: #ececec;
   --success: #7e997a;
-  
+
   /* Glassmorphism & Effects */
   --glass-bg: rgba(253, 253, 253, 0.75);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
   --blur: blur(12px);
-  
+
   /* Spacing & Type */
   --radius-lg: 24px;
   --radius-md: 12px;
@@ -34,13 +34,13 @@
     --background-secondary: #1a1a1a;
     --foreground: #f1f1f1;
     --foreground-secondary: #a0a0a0;
-    
-    --accent: #6ca5d4; /* Slightly lighter for contrast */
+
+    --accent: #6ca5d4;
     --accent-hover: #5b8fb9;
     --accent-light: rgba(108, 165, 212, 0.15);
-    
+
     --border: #333333;
-    
+
     --glass-bg: rgba(28, 28, 28, 0.65);
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
@@ -59,7 +59,6 @@ body {
   color: var(--foreground);
   font-family: var(--font-main);
   line-height: 1.6;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
@@ -71,17 +70,28 @@ body {
 
 /* --- 3. Animations --- */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-entry {
   animation: fadeUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-.delay-100 { animation-delay: 0.1s; }
-.delay-200 { animation-delay: 0.2s; }
-.delay-300 { animation-delay: 0.3s; }
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
 
 /* --- 4. Component Styles --- */
 
@@ -120,7 +130,7 @@ body {
   position: relative;
 }
 
-/* Abstract Background Blob */
+/* Background Abstract Glow */
 .hero::before {
   content: '';
   position: absolute;
@@ -149,7 +159,7 @@ body {
 .hero-subtitle {
   font-size: 1.25rem;
   color: var(--foreground-secondary);
-  max-width: 600px;
+  max-width: 650px;
   margin: 0 auto 3rem;
 }
 
@@ -197,6 +207,11 @@ body {
   background-color: var(--background-secondary);
 }
 
+.btn-lg {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
 /* Features Grid */
 .features {
   padding: 6rem 0;
@@ -226,11 +241,13 @@ body {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .icon-wrapper {
@@ -252,6 +269,26 @@ body {
 
 .card p {
   color: var(--foreground-secondary);
+  margin-bottom: 1rem;
+}
+
+/* Specific Style for the Note Box in Feature Card */
+.note-box {
+  margin-top: auto;
+  /* Pushes to bottom of card */
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  color: var(--foreground-secondary);
+  line-height: 1.5;
+}
+
+.note-box strong {
+  color: var(--accent);
+  display: block;
+  margin-bottom: 0.25rem;
 }
 
 /* Pricing Section */
@@ -261,45 +298,49 @@ body {
 }
 
 .pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 400px));
+  display: flex;
   justify-content: center;
-  gap: 2rem;
+  padding: 0 1rem;
 }
 
+/* Styling for the Single Pricing Card */
 .price-card {
   background: var(--glass-bg);
   backdrop-filter: var(--blur);
-  border: 1px solid var(--glass-border);
-  padding: 3rem 2rem;
+  padding: 3.5rem 2.5rem;
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   position: relative;
+  width: 100%;
+  max-width: 480px;
+  /* Wider for single view */
+  text-align: center;
 }
 
 .price-card.premium {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), var(--glass-shadow);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-light), var(--glass-shadow);
 }
 
 .badge {
   position: absolute;
-  top: -12px;
+  top: -15px;
   left: 50%;
   transform: translateX(-50%);
   background-color: var(--accent);
   color: white;
-  padding: 0.25rem 1rem;
+  padding: 0.4rem 1.25rem;
   border-radius: 20px;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   font-weight: 600;
+  box-shadow: 0 4px 10px rgba(91, 143, 185, 0.3);
 }
 
 .price {
-  font-size: 3rem;
+  font-size: 3.5rem;
   font-weight: 800;
-  margin: 1.5rem 0;
+  margin: 1.5rem 0 0.5rem;
   color: var(--foreground);
 }
 
@@ -311,26 +352,37 @@ body {
 
 .features-list {
   list-style: none;
-  margin: 2rem 0;
-  flex-grow: 1;
+  margin: 2.5rem 0;
+  text-align: left;
+  /* Keep bullets aligned left even if card is centered */
 }
 
 .features-list li {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   color: var(--foreground);
+  font-size: 1.05rem;
 }
 
 .check-icon {
   color: var(--success);
   flex-shrink: 0;
+  background: rgba(126, 153, 122, 0.1);
+  border-radius: 50%;
+  padding: 2px;
 }
 
 .btn-full {
   width: 100%;
   justify-content: center;
+}
+
+.guarantee {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--foreground-secondary);
 }
 
 /* Footer */
@@ -343,6 +395,15 @@ body {
 }
 
 @media (max-width: 768px) {
-  .hero-title { font-size: 2.5rem; }
-  .pricing-grid { grid-template-columns: 1fr; }
+  .hero-title {
+    font-size: 2.5rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .price-card {
+    padding: 2rem 1.5rem;
+  }
 }
