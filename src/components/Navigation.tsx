@@ -88,11 +88,13 @@ export default function Navigation() {
     }, []);
 
     const navItems = [
-        { href: '/', icon: BookOpen, label: 'Today', badge: todayReviews, status: !isPortionComplete },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayReviews, status: !isPortionComplete },
         { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount },
         { href: '/statistics', icon: BarChart3, label: 'Statistics' },
         { href: '/settings', icon: Settings, label: 'Settings' },
     ];
+
+    if (pathname === '/') return null;
 
     return (
         <nav className="bottom-nav">

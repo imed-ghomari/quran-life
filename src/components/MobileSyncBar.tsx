@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import SyncStatus from './SyncStatus';
 
 /**
@@ -9,6 +10,7 @@ import SyncStatus from './SyncStatus';
  */
 export default function MobileSyncBar() {
     const [isMobile, setIsMobile] = useState(false);
+    const pathname = usePathname();
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -17,7 +19,7 @@ export default function MobileSyncBar() {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    if (!isMobile) return null;
+    if (!isMobile || pathname === '/') return null;
 
     return <SyncStatus variant="mobile" />;
 }
