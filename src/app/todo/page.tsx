@@ -25,8 +25,10 @@ import {
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { QuranPart } from '@/lib/types';
 import { syncWithCloud } from '@/lib/sync';
-import { ChevronDown, Brain, Map, MapPinned, AlertTriangle, ShieldAlert, SplitSquareHorizontal, Check, ImageIcon, ChevronRight, X, AlertCircle, Download, Upload, MoreVertical, FileText, Settings2, PenTool, Trash2, Plus, Minus } from 'lucide-react';
+import { ChevronDown, Brain, Map, MapPinned, AlertTriangle, ShieldAlert, SplitSquareHorizontal, Check, ImageIcon, ChevronRight, X, AlertCircle, Download, Upload, MoreVertical, FileText, Settings2, PenTool, Trash2, Plus, Minus, Info } from 'lucide-react';
 import MindmapEditor from '@/components/MindmapEditor';
+import { appLogger } from '@/lib/logger';
+import Link from 'next/link';
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'pending', label: 'Pending Review' },
@@ -1051,6 +1053,50 @@ export default function TodoPage() {
         // syncWithCloud().catch(console.error);
     };
 
+    const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
+        try {
+            const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    alert(`Premade mindmap for this ${type} is not available yet.`);
+                } else {
+                    alert(`Failed to import mindmap: ${response.statusText}`);
+                }
+                return;
+            }
+            const data = await response.json();
+
+            if (type === 'surah') {
+                const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
+                const updated = {
+                    ...existing,
+                    ...data,
+                    surahId: id, // Ensure ID matches
+                    isComplete: true
+                };
+                saveMindMap(updated);
+                setMindmaps(prev => ({ ...prev, [id]: updated }));
+            } else {
+                const pId = id as QuranPart;
+                const existing = partMindmaps[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
+                const updated = {
+                    ...existing,
+                    ...data,
+                    partId: pId,
+                    isComplete: true
+                };
+                savePartMindMap(updated);
+                setPartMindmaps(prev => ({ ...prev, [pId]: updated }));
+            }
+            appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
+            setSettingsVersion(v => v + 1);
+            alert(`Premade mindmap for ${type} ${id} successfully imported!`);
+        } catch (error) {
+            console.error('Import failed:', error);
+            alert('Failed to import mindmap. Please try again.');
+        }
+    };
+
     const handlePartMindmapUpdate = (part: QuranPart, file: File | null) => {
         if (!file) return;
         const reader = new FileReader();
@@ -1768,6 +1814,24 @@ export default function TodoPage() {
                                                                 {mindmap?.tldrawSnapshot ? 'Edit' : 'Create'}
                                                             </button>
                                                             <button
+                                                                className="btn btn-secondary"
+                                                                onClick={() => handleImportPremade('part', part)}
+                                                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}
+                                                                title="Import Premade Mindmap"
+                                                            >
+                                                                <Download size={14} />
+                                                            </button>
+                                                            {hasContent && (
+                                                                <Link
+                                                                    href={`/docs/mindmaps/part-${part}`}
+                                                                    className="btn btn-secondary"
+                                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}
+                                                                    title="View Documentation"
+                                                                >
+                                                                    <Info size={14} />
+                                                                </Link>
+                                                            )}
+                                                            <button
                                                                 className={`btn ${!hasContent ? 'btn-secondary' : 'btn-success'}`}
                                                                 disabled={!hasContent}
                                                                 onClick={() => handlePartComplete(part)}
@@ -1873,6 +1937,28 @@ export default function TodoPage() {
                                                                         <PenTool size={12} style={{ marginRight: '4px' }} />
                                                                         {mindmap?.tldrawSnapshot ? 'Edit' : 'Start'}
                                                                     </button>
+                                                                    <button
+                                                                        className="btn btn-secondary"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleImportPremade('surah', surah.id);
+                                                                        }}
+                                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.7rem' }}
+                                                                        title="Import Premade"
+                                                                    >
+                                                                        <Download size={12} />
+                                                                    </button>
+                                                                    {hasContent && (
+                                                                        <Link
+                                                                            href={`/docs/mindmaps/surah-${surah.id}`}
+                                                                            className="btn btn-secondary"
+                                                                            onClick={e => e.stopPropagation()}
+                                                                            style={{ padding: '0.3rem 0.5rem', fontSize: '0.7rem', display: 'flex', alignItems: 'center' }}
+                                                                            title="View Documentation"
+                                                                        >
+                                                                            <Info size={12} />
+                                                                        </Link>
+                                                                    )}
                                                                     <button
                                                                         className={`btn ${!hasContent ? 'btn-secondary' : isComplete ? 'btn-secondary' : 'btn-success'}`}
                                                                         disabled={!hasContent}
@@ -1992,6 +2078,23 @@ export default function TodoPage() {
                                                                 {mindmap?.tldrawSnapshot ? 'Edit' : 'Create'}
                                                             </button>
                                                             <button
+                                                                className="btn btn-secondary"
+                                                                onClick={() => handleImportPremade('part', part)}
+                                                                style={{ padding: '0.4rem', fontSize: '0.75rem' }}
+                                                                title="Import Premade"
+                                                            >
+                                                                <Download size={14} />
+                                                            </button>
+                                                            {hasContent && (
+                                                                <Link
+                                                                    href={`/docs/mindmaps/part-${part}`}
+                                                                    className="btn btn-secondary"
+                                                                    style={{ padding: '0.4rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}
+                                                                >
+                                                                    <Info size={14} />
+                                                                </Link>
+                                                            )}
+                                                            <button
                                                                 className={`btn ${!hasContent ? 'btn-secondary' : 'btn-success'}`}
                                                                 disabled={!hasContent}
                                                                 onClick={() => handlePartComplete(part)}
@@ -2044,6 +2147,8 @@ export default function TodoPage() {
                                             ) : (
                                                 surahTasks.map(({ surah, mindmap }) => {
                                                     const isExpanded = expandedSurahs[surah.id] || false;
+                                                    const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
+                                                    const isComplete = mindmap?.isComplete && hasContent;
                                                     return (
                                                         <div key={surah.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                                             <div
@@ -2086,6 +2191,23 @@ export default function TodoPage() {
                                                                                 <span style={{ fontSize: '0.75rem' }}>{mindmap?.tldrawSnapshot ? 'Edit Map' : 'Start Map'}</span>
                                                                             </div>
                                                                         </button>
+                                                                        <button
+                                                                            className="btn btn-secondary"
+                                                                            style={{ padding: '0.5rem', height: 'auto', margin: 0, justifyContent: 'center' }}
+                                                                            onClick={() => handleImportPremade('surah', surah.id)}
+                                                                            title="Import Premade"
+                                                                        >
+                                                                            <Download size={16} />
+                                                                        </button>
+                                                                        {hasContent && (
+                                                                            <Link
+                                                                                href={`/docs/mindmaps/surah-${surah.id}`}
+                                                                                className="btn btn-secondary"
+                                                                                style={{ padding: '0.5rem', height: 'auto', margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                            >
+                                                                                <Info size={16} />
+                                                                            </Link>
+                                                                        )}
                                                                         <button
                                                                             className={`btn ${(!mindmap?.imageUrl && !mindmap?.tldrawSnapshot) ? 'btn-secondary' : 'btn-success'}`}
                                                                             disabled={!mindmap?.imageUrl && !mindmap?.tldrawSnapshot}
