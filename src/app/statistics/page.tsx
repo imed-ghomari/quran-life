@@ -11,7 +11,7 @@ import {
     getPortionPointer,
     getListeningCycles,
 } from '@/lib/storage';
-import { BarChart3, Layers, Hash, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw } from 'lucide-react';
+import { BarChart3, Layers, Hash, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock } from 'lucide-react';
 import { getListeningStats, getListeningProgress } from '@/lib/storage';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
@@ -443,37 +443,53 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
     return (
-        <div className="card modern-card" style={{ width: '100%', padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)' }}>
-            <h2 style={{ fontSize: '1.75rem', margin: '0 0 1rem 0', fontWeight: 700 }}>Future Due</h2>
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                <p style={{ fontSize: '0.9rem', color: 'var(--foreground-secondary)', margin: '0 0 1rem 0' }}>The number of reviews due in the future.</p>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1rem', fontSize: '0.85rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+        <div className="card modern-card" style={{ width: '100%', padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                        <CalendarClock size={20} />
+                    </div>
+                    <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>Future Reviews</h2>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)' }}>
                         <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} />
                         Backlog
                     </label>
-                    {(['1m', '3m', '1y', 'all'] as const).map(range => (
-                        <label key={range} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
-                            <input
-                                type="radio"
-                                name="timeRange"
-                                checked={timeRange === range}
-                                onChange={() => setTimeRange(range)}
-                            />
-                            {range === '1m' ? '1 month' : range === '3m' ? '3 months' : range === '1y' ? '1 year' : 'all'}
-                        </label>
-                    ))}
+                    <select
+                        value={timeRange}
+                        onChange={(e) => setTimeRange(e.target.value as any)}
+                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.75rem', background: 'var(--background)', outline: 'none' }}
+                    >
+                        <option value="1m">1 Month</option>
+                        <option value="3m">3 Months</option>
+                        <option value="1y">1 Year</option>
+                        <option value="all">All Time</option>
+                    </select>
                 </div>
             </div>
 
-            <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} />
 
-            <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ fontWeight: 600 }}>Total: {stats.total} reviews</div>
-                <div style={{ color: 'var(--foreground-secondary)' }}>Average: {stats.average} reviews/day</div>
-                <div style={{ color: 'var(--foreground-secondary)' }}>Due tomorrow: {stats.dueTomorrow} reviews</div>
-                <div style={{ color: 'var(--foreground-secondary)' }}>Daily load: {stats.dailyLoad} reviews/day</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Total Reviews</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.total}</div>
+                    </div>
+                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Average / Day</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.average}</div>
+                    </div>
+                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Due Tomorrow</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)' }}>{stats.dueTomorrow}</div>
+                    </div>
+                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Daily Load</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.dailyLoad}</div>
+                    </div>
+                </div>
             </div>
         </div>
     );

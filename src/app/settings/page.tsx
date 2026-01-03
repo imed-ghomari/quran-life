@@ -435,7 +435,7 @@ export default function SettingsPage() {
                         <>
                             <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
                                 {user
-                                    ? `Signed in as ${user.email}. Your data is synced automatically.`
+                                    ? `Signed in as ${user.email}. Your data is synced manually.`
                                     : "Sign in to sync your progress across devices."}
                             </p>
 
@@ -557,7 +557,7 @@ export default function SettingsPage() {
                     {sectionsExpanded.backupRestore && (
                         <>
                             <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
-                                Secure your progress by exporting a local JSON file. You can import this file later to restore your data or transfer it to another device without using a cloud account.
+                                Secure your progress by exporting a local JSON file. You can import this file later to restore your data or transfer it to another device. An account is required to access the app, but local backups ensure you own your data.
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <button

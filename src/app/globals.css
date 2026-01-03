@@ -149,7 +149,7 @@ body {
 .content-wrapper {
   max-width: 900px;
   margin: 0 auto;
-  padding: 0.75rem;
+  padding: 0.2rem 0.75rem;
   width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;

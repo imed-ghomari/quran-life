@@ -1074,17 +1074,24 @@ export default function TodoPage() {
                     if (anchorResponse.ok) {
                         const text = await anchorResponse.text();
                         importedAnchors = text.split('\n')
-                            .filter(line => line.trim() && line.includes('|'))
+                            .filter(line => line.trim())
                             .map((line, idx) => {
-                                const [range, label] = line.split('|').map(s => s.trim());
+                                const parts = line.split('|').map(s => s.trim());
+                                const range = parts[0];
+                                const label = parts[1]; // Might be undefined
                                 const [start, end] = range.split('-').map(n => parseInt(n.trim()));
+
+                                // Skip if invalid range
+                                if (isNaN(start)) return null;
+
                                 return {
                                     id: `imported-${id}-${idx}-${Date.now()}`,
                                     startVerse: start,
                                     endVerse: end || start,
                                     label: label || `Chunk ${idx + 1}`
                                 };
-                            });
+                            })
+                            .filter(Boolean); // Filter out nulls
                         appLogger.addLog(`Found and parsed ${importedAnchors.length} anchors for surah ${id}`, 'info');
                     }
                 } catch (anchorError) {
@@ -1322,10 +1329,10 @@ export default function TodoPage() {
                             <table className="debug-table" style={{ minWidth: '800px', width: '100%', tableLayout: 'fixed' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '25%', textAlign: 'left' }}>Target</th>
+                                        <th style={{ width: '20%', textAlign: 'left' }}>Target</th>
                                         <th style={{ width: '40%', textAlign: 'left' }}>Detail</th>
-                                        <th style={{ width: '15%', textAlign: 'left' }}>Status</th>
-                                        <th style={{ width: '20%', textAlign: 'left' }}>Actions</th>
+                                        <th style={{ width: '10%', textAlign: 'left' }}>Status</th>
+                                        <th style={{ width: '30%', textAlign: 'left' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1786,10 +1793,10 @@ export default function TodoPage() {
                             <table className="debug-table" style={{ minWidth: '800px', width: '100%', tableLayout: 'fixed' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '25%', textAlign: 'left', paddingLeft: '1rem' }}>Target</th>
+                                        <th style={{ width: '20%', textAlign: 'left', paddingLeft: '1rem' }}>Target</th>
                                         <th style={{ width: '35%', textAlign: 'left' }}>Detail</th>
-                                        <th style={{ width: '15%', textAlign: 'left' }}>Status</th>
-                                        <th style={{ width: '25%', textAlign: 'right', paddingRight: '1rem' }}>Actions</th>
+                                        <th style={{ width: '10%', textAlign: 'left' }}>Status</th>
+                                        <th style={{ width: '35%', textAlign: 'right', paddingRight: '1rem' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>

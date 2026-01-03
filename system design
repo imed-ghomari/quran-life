@@ -196,3 +196,34 @@ Upon successful graduation from Step 2:
 - **New Interval**: `max(4 days, 20% of preSuspensionInterval)`.
 - This ensures users with long-term mastery don't start from zero while still verifying the new fix.
 - Standard SM-2 resume thereafter.
+
+---
+
+## 12. Premade Content Import Guide
+
+Users can import high-quality mindmaps and verse chunk divisions (anchors) directly from the **Todo** tab.
+
+### 12.1 File Storage & Naming
+All premade files must be placed in `public/assets/premade-mindmaps/`.
+
+| Item | File Type | Naming Convention |
+|------|-----------|-------------------|
+| **Surah Mindmap** | `.tldraw` (JSON) | `surah-<surahId>.tldraw` |
+| **Part Mindmap** | `.tldraw` (JSON) | `part-<partId>.tldraw` |
+| **Surah Chunks** | `.txt` | `surah-<surahId>.chunks.txt` |
+
+### 12.2 Verse Chunk Format (`.chunks.txt`)
+The importer supports two formats for verse chunks:
+
+1. **Range only**: `startVerse-endVerse` (e.g., `1-7`)
+2. **Range with Label**: `startVerse-endVerse | Label` (e.g., `1-3 | Introduction`)
+
+**Rules**:
+- Each chunk goes on a new line.
+- If no label is provided, the app automatically names it "Chunk 1", "Chunk 2", etc.
+- If `endVerse` is missing (e.g. `5`), it defaults to the same as `startVerse`.
+
+### 12.3 Import Behavior
+- Clicking the **Import (Download)** icon fetches the `.tldraw` file first.
+- If a corresponding `.chunks.txt` file exists, it is fetched and parsed into `anchors`.
+- On success, the mindmap is marked as `isComplete: true` automatically.
