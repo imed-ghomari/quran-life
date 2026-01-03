@@ -88,6 +88,18 @@ export default function TodayPage() {
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
 
+    // Theme detection
+    const [isDark, setIsDark] = useState(false);
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const mq = window.matchMedia('(prefers-color-scheme: dark)');
+            setIsDark(mq.matches);
+            const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
+            mq.addEventListener('change', handler);
+            return () => mq.removeEventListener('change', handler);
+        }
+    }, []);
+
     // Mindmap Editor States
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
@@ -760,7 +772,6 @@ export default function TodayPage() {
                                             ) : (
                                                 <div>
                                                     {(() => {
-                                                        const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
                                                         const displayUrl = isDark ? (reviewContent.mindmap?.imageUrlDark || reviewContent.mindmap?.imageUrl) : reviewContent.mindmap?.imageUrl;
 
                                                         if (!displayUrl) {

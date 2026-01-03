@@ -1,12 +1,9 @@
 {
-  "pages": [
-    "getting-started",
-    "strategy",
-    "spaced-repetition",
-    "mutashabihat",
-    "re-learning",
-    "statistics",
-    "settings"
-  ],
-  "title": "Philosophy"
+    "getting-started": "Getting Started",
+    "strategy": "Strategy",
+    "spaced-repetition": "Spaced Repetition",
+    "mutashabihat": "Mutashabihat",
+    "re-learning": "Re-Learning",
+    "statistics": "Statistics",
+    "settings": "Settings"
 }

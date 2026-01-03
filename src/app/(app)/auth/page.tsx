@@ -27,6 +27,10 @@ function AuthContent() {
         checkUser();
     }, [supabase, router]);
 
+    // Owner email from env - owner bypasses Polar checkout
+    const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
+    const POLAR_PRODUCT_ID = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID || 'your_product_id';
+
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setAuthError(null);
@@ -47,15 +51,35 @@ function AuthContent() {
         if (error) {
             console.error('Auth error:', error.message);
             setAuthError(error.message);
-        } else if (isSignUp) {
-            // Check if user session was created (might depend on "Confirm Email" setting)
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                router.push('/dashboard');
-            } else {
+            return;
+        }
+
+        // Get user after auth
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+            if (isSignUp) {
                 setAuthError('Check your email for the confirmation link!');
             }
+            return;
+        }
+
+        // Check if user is the owner (by email) - bypass Polar checkout
+        const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+
+        if (isOwner) {
+            // Owner goes directly to dashboard
+            router.push('/dashboard');
+            return;
+        }
+
+        if (isSignUp) {
+            // New users need to complete Polar checkout
+            // Redirect to Polar checkout with user info
+            const checkoutUrl = `/api/polar/checkout?product_id=${POLAR_PRODUCT_ID}`;
+            window.location.href = checkoutUrl;
         } else {
+            // Existing users (sign-in) already completed checkout - go to dashboard
             router.push('/dashboard');
         }
     };

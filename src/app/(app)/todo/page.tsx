@@ -798,6 +798,18 @@ export default function TodoPage() {
 
     // Expansion states
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
+
+    // Theme detection
+    const [isDark, setIsDark] = useState(false);
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const mq = window.matchMedia('(prefers-color-scheme: dark)');
+            setIsDark(mq.matches);
+            const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
+            mq.addEventListener('change', handler);
+            return () => mq.removeEventListener('change', handler);
+        }
+    }, []);
     const [expandedMutItems, setExpandedMutItems] = useState<Record<string, boolean>>({});
 
     // Mobile Slide-over State
@@ -2044,10 +2056,22 @@ export default function TodoPage() {
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                                                             {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                                 <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                                    {mindmap.imageUrl && (
-                                                                                        <Image src={mindmap.imageUrl} alt="Mindmap light mode" fill className="light-mode-only" style={{ objectFit: 'contain', background: '#f5f5f5' }} />
-                                                                                    )}
-                                                                                    <Image src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? ''} alt="Mindmap dark mode" fill className="dark-mode-only" style={{ objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
+                                                                                    {(() => {
+                                                                                        const displayUrl = isDark ? (mindmap.imageUrlDark || mindmap.imageUrl) : mindmap.imageUrl;
+                                                                                        if (!displayUrl) return null;
+                                                                                        return (
+                                                                                            <Image
+                                                                                                src={displayUrl}
+                                                                                                alt="Mindmap preview"
+                                                                                                fill
+                                                                                                style={{
+                                                                                                    objectFit: 'contain',
+                                                                                                    background: isDark ? '#1e1e1e' : '#f5f5f5',
+                                                                                                    filter: isDark && !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none'
+                                                                                                }}
+                                                                                            />
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             )}
 
@@ -2216,10 +2240,22 @@ export default function TodoPage() {
                                                                 <div style={{ background: 'var(--background)', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                                                     {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
                                                                         <div style={{ position: 'relative', width: '100%', height: '250px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                            {mindmap.imageUrl && (
-                                                                                <Image src={mindmap.imageUrl} alt="Mindmap light mode" fill className="light-mode-only" style={{ objectFit: 'contain', background: '#f5f5f5' }} />
-                                                                            )}
-                                                                            <Image src={mindmap.imageUrlDark ?? mindmap.imageUrl ?? ''} alt="Mindmap dark mode" fill className="dark-mode-only" style={{ objectFit: 'contain', background: '#1e1e1e', filter: !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none' }} />
+                                                                            {(() => {
+                                                                                const displayUrl = isDark ? (mindmap.imageUrlDark || mindmap.imageUrl) : mindmap.imageUrl;
+                                                                                if (!displayUrl) return null;
+                                                                                return (
+                                                                                    <Image
+                                                                                        src={displayUrl}
+                                                                                        alt="Mindmap preview"
+                                                                                        fill
+                                                                                        style={{
+                                                                                            objectFit: 'contain',
+                                                                                            background: isDark ? '#1e1e1e' : '#f5f5f5',
+                                                                                            filter: isDark && !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none'
+                                                                                        }}
+                                                                                    />
+                                                                                );
+                                                                            })()}
                                                                         </div>
                                                                     )}
                                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>

@@ -35,7 +35,7 @@ export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone()
 
   // Protected routes pattern
-  const protectedRoutes = ['/dashboard', '/settings', '/todo', '/statistics']
+  const protectedRoutes = ['/dashboard', '/settings', '/todo', '/statistics', '/docs']
   const isProtectedRoute = protectedRoutes.some(route => url.pathname.startsWith(route))
 
   // If user is NOT logged in and tries to access a protected route, redirect to home/auth

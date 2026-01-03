@@ -30,19 +30,8 @@ export default function Home() {
     }, [supabase, router]);
 
     const handleGetStarted = () => {
-        // Check if it's the owner by looking for a special URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const ownerKey = urlParams.get('owner');
-
-        // If owner parameter is present and matches, skip to auth
-        if (ownerKey === 'true' && OWNER_EMAIL) {
-            router.push('/auth?owner=true');
-            return;
-        }
-
-        // Regular users: Redirect to Polar checkout
-        const checkoutUrl = `/api/polar/checkout?product_id=${POLAR_PRODUCT_ID}`;
-        window.location.href = checkoutUrl;
+        // Navigate to auth page - owner detection and Polar checkout happens there
+        router.push('/auth');
     };
 
     if (loading) {
