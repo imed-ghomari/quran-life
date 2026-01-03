@@ -763,7 +763,26 @@ export default function TodayPage() {
                                                         const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
                                                         const displayUrl = isDark ? (reviewContent.mindmap?.imageUrlDark || reviewContent.mindmap?.imageUrl) : reviewContent.mindmap?.imageUrl;
 
-                                                        if (!displayUrl) return null;
+                                                        if (!displayUrl) {
+                                                            return (
+                                                                <div
+                                                                    className="verse-hidden"
+                                                                    style={{ background: 'var(--accent-light)', border: '1px dashed var(--accent)', color: 'var(--accent)', cursor: 'pointer' }}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (reviewContent.type === 'mindmap') {
+                                                                            setActiveMindmapEditor({ surahId: reviewContent.surah!.id, snapshot: reviewContent.mindmap?.tldrawSnapshot });
+                                                                        } else {
+                                                                            setActivePartEditor({ partId: reviewContent.partId as QuranPart, snapshot: reviewContent.mindmap?.tldrawSnapshot });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <PenTool size={24} style={{ marginBottom: 8 }} />
+                                                                    <p>Preview missing (Lean Sync)</p>
+                                                                    <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Click to view & generate local preview</p>
+                                                                </div>
+                                                            );
+                                                        }
 
                                                         return (
                                                             <div

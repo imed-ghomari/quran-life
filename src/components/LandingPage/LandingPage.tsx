@@ -73,7 +73,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <div className="section-header">
               <h2 className="section-title">Designed for Retention</h2>
               <p style={{ color: 'var(--foreground-secondary)' }}>
-                Tools built specifically to solve the "forgetting curve" of Hifdh.
+                Tools built specifically to solve the &quot;forgetting curve&quot; of Hifdh.
               </p>
             </div>
 

@@ -458,7 +458,11 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
       const lMaxTime = lDeleted > lTime ? lDeleted : lTime;
 
       if (!lMap || (rMaxTime > lMaxTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
-        mergedMaps[id] = rMap;
+        mergedMaps[id] = {
+          ...rMap,
+          imageUrl: rMap.imageUrl || lMap?.imageUrl || null,
+          imageUrlDark: rMap.imageUrlDark || lMap?.imageUrlDark || null,
+        };
         hasChanges = true;
       }
     });
@@ -489,7 +493,11 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
       const lMaxTime = lDeleted > lTime ? lDeleted : lTime;
 
       if (!lMap || (rMaxTime > lMaxTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
-        mergedPartMaps[id] = rMap;
+        mergedPartMaps[id] = {
+          ...rMap,
+          imageUrl: rMap.imageUrl || lMap?.imageUrl || null,
+          imageUrlDark: rMap.imageUrlDark || lMap?.imageUrlDark || null,
+        };
         hasChanges = true;
       }
     });

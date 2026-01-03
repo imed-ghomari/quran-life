@@ -1472,10 +1472,27 @@ export function importBackup(data: BackupData): void {
     if (data.settings) saveSettings(data.settings);
     if (data.memoryNodes) saveMemoryNodes(data.memoryNodes);
     if (data.mindmaps) {
-        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, data.mindmaps);
+        const current = getMindMaps();
+        const incoming = data.mindmaps;
+        Object.keys(incoming).forEach(id => {
+            if (!incoming[id].imageUrl && current[id]?.imageUrl) {
+                incoming[id].imageUrl = current[id].imageUrl;
+                incoming[id].imageUrlDark = current[id].imageUrlDark;
+            }
+        });
+        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, incoming);
     }
     if (data.partMindmaps) {
-        saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, data.partMindmaps);
+        const current = getPartMindMaps();
+        const incoming = data.partMindmaps;
+        Object.keys(incoming).forEach(id => {
+            const pId = id as any;
+            if (!incoming[pId].imageUrl && current[pId]?.imageUrl) {
+                incoming[pId].imageUrl = current[pId].imageUrl;
+                incoming[pId].imageUrlDark = current[pId].imageUrlDark;
+            }
+        });
+        saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, incoming);
     }
     if (data.listeningStats) {
         saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats);
