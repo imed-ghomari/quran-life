@@ -1,7 +1,7 @@
 import React from 'react'
 
 export default {
-    logo: <span>Quran Life Docs</span>,
+    logo: <span>Documentation</span>,
     project: {
         link: 'https://github.com/imed-ghomari/quran-life',
         component: null, // Hide GitHub link in header

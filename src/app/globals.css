@@ -1856,3 +1856,17 @@ input:focus {
   top: 0;
   z-index: 40;
 }
+/* Nextra Documentation Heading Overrides */
+.nextra-content h1 {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 1.5rem !important;
+  color: var(--foreground) !important;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 768px) {
+  .nextra-content h1 {
+    font-size: 1.25rem !important;
+  }
+}

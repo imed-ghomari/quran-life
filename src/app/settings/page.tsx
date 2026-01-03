@@ -550,19 +550,55 @@ export default function SettingsPage() {
                             <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Download size={18} />
                             </div>
-                            <span>Backup & Restore</span>
+                            <span>Local Backup & Import</span>
                         </div>
                         <ChevronDown size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     {sectionsExpanded.backupRestore && (
                         <>
-                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Secure your progress or transfer to another device.</p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                <button className="btn btn-secondary" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.85rem', fontSize: '0.9rem' }}>
-                                    <Download size={18} /> <span className="hide-mobile">Export</span>
+                            <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
+                                Secure your progress by exporting a local JSON file. You can import this file later to restore your data or transfer it to another device without using a cloud account.
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleExport}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem',
+                                        fontSize: '0.9rem',
+                                        height: 'auto',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px'
+                                    }}
+                                >
+                                    <Download size={20} style={{ color: 'var(--accent)' }} />
+                                    <span>Export Data</span>
                                 </button>
-                                <label className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.85rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-                                    <Upload size={18} /> <span className="hide-mobile">Import</span>
+                                <label
+                                    className="btn btn-secondary"
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        height: 'auto',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px'
+                                    }}
+                                >
+                                    <Upload size={20} style={{ color: 'var(--accent)' }} />
+                                    <span>Import Data</span>
                                     <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
                                 </label>
                             </div>

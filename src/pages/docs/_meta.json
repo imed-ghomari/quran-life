@@ -1,10 +1,11 @@
 {
     "index": "Introduction",
-    "getting-started": "Getting Started",
-    "mindmaps": "Mindmap Encoding",
-    "spaced-repetition": "Spaced Repetition",
-    "mutashabihat": "Mutashabihat",
-    "re-learning": "The Re-learning Phase",
-    "statistics": "Statistics",
-    "settings": "Settings"
+    "philosophy": {
+        "title": "Philosophy",
+        "type": "folder"
+    },
+    "mindmaps": {
+        "title": "Mindmaps",
+        "type": "folder"
+    }
 }
