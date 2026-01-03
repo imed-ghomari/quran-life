@@ -121,11 +121,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Stop repeating verses blindly. Understand the structure to memorize faster.
                 </p>
-                <div className="note-box">
-                  <strong>What is Rote Memorization?</strong>
-                  <br />
-                  It&apos;s the traditional method of learning by pure repetition without understanding structure. It is often slow and easy to forget.
-                </div>
               </div>
             </div>
           </div>

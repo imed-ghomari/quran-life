@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { BookOpen, BarChart3, Settings, ListTodo, Github } from 'lucide-react';
+import { BookOpen, BarChart3, Settings, ListTodo, Github, HelpCircle } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 import {
     getSettings,
@@ -91,6 +91,7 @@ export default function Navigation() {
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayReviews, status: !isPortionComplete },
         { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount },
         { href: '/statistics', icon: BarChart3, label: 'Statistics' },
+        { href: '/docs', icon: HelpCircle, label: 'Docs' },
         { href: '/settings', icon: Settings, label: 'Settings' },
     ];
 

@@ -4,8 +4,9 @@ import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Mail, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { Suspense } from 'react';
 
-export default function AuthPage() {
+function AuthContent() {
     const supabase = createClient();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -13,7 +14,7 @@ export default function AuthPage() {
     const [authLoading, setAuthLoading] = useState(false);
     const [authStatus, setAuthStatus] = useState<'idle' | 'sent' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
-    const checkoutId = searchParams.get('checkout_id');
+    const checkoutId = searchParams?.get('checkout_id');
 
     useEffect(() => {
         const checkUser = async () => {
@@ -187,5 +188,13 @@ export default function AuthPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function AuthPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <AuthContent />
+        </Suspense>
     );
 }
