@@ -1,30 +1,11 @@
-import React from 'react'
-
 export default {
-    logo: <span>Documentation</span>,
+    logo: <span>Quran Life</span>,
     project: {
-        link: 'https://github.com/imed-ghomari/quran-life',
-        component: null, // Hide GitHub link in header
+        link: 'https://github.com/shuding/nextra'
     },
-    themeSwitch: {
-        component: null, // Hide theme chooser
-    },
-    docsRepositoryBase: 'https://github.com/imed-ghomari/quran-life/blob/main',
+    docsRepositoryBase: 'https://github.com/shuding/nextra/blob/master',
     footer: {
-        text: 'Quran Life - Spaced Repetition Memorization System',
+        text: 'Nextra Docs Template'
     },
-    useNextSeoProps() {
-        return {
-            titleTemplate: '%s – Quran Life'
-        }
-    },
-    head: (
-        <>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta property="og:title" content="Quran Life Documentation" />
-            <meta property="og:description" content="Philosophy and features of the Quran Life memorization app" />
-        </>
-    ),
-    primaryHue: 205, // Steel blue color (~ #5b8fb9)
-    darkMode: true,
+    primaryHue: 205,
 }
