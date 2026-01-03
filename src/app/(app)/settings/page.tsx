@@ -1300,7 +1300,7 @@ export default function SettingsPage() {
                 background: 'var(--background-secondary)',
                 border: '1px solid var(--border)',
                 borderRadius: '16px',
-                padding: 'clamp(1rem, 4vw, 1.5rem)'
+                padding: sectionsExpanded.mutashabihat ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem'
             }}>
                 <div className="section-title mut-header"
                     onClick={() => setSectionsExpanded(s => ({ ...s, mutashabihat: !s.mutashabihat }))}
@@ -1705,6 +1705,8 @@ export default function SettingsPage() {
                     </div>
                 )}
             </div>
+
+
 
             {/* Similar Verses Slide-over Detail View */}
             {activeMutSlideOver && (() => {

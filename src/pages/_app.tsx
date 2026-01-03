@@ -11,7 +11,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <Providers>
             <div className="app-shell">
                 <Navigation />
-                <div className="page-container" style={{ paddingTop: '1rem' }}>
+                <div className="page-container" style={{ paddingTop: '0.5rem' }}>
                     <MobileSyncBar />
                     <Component {...pageProps} />
                 </div>

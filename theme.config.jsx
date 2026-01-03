@@ -1,11 +1,12 @@
 export default {
-    logo: <span>Quran Life</span>,
+    logo: <span></span>,
     project: {
-        link: 'https://github.com/shuding/nextra'
+        link: null
     },
     docsRepositoryBase: 'https://github.com/shuding/nextra/blob/master',
     footer: {
         text: 'Nextra Docs Template'
     },
+    darkMode: false,
     primaryHue: 205,
 }
