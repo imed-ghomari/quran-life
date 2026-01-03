@@ -28,7 +28,30 @@ export async function updateSession(request: NextRequest) {
   )
 
   // This will refresh the session if it's expired
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const url = request.nextUrl.clone()
+
+  // Protected routes pattern
+  const protectedRoutes = ['/dashboard', '/settings', '/todo', '/statistics']
+  const isProtectedRoute = protectedRoutes.some(route => url.pathname.startsWith(route))
+
+  // If user is NOT logged in and tries to access a protected route, redirect to home/auth
+  if (!user && isProtectedRoute) {
+    // Check if it's the owner bypass (for new signups/demos)
+    // We already handle owner bypass in the page logic, but if they try to access dashboard directly
+    // without a session, they should probably authenticate first.
+
+    // We can preserve the destination to redirect back after login
+    // BUT for security, let's just send them to the main page which acts as login
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  // Optional: If user IS logged in and is on the landing page/auth page, redirect to dashboard?
+  // Use your discretion. For now, strict protection of internal routes is the priority.
 
   return supabaseResponse
 }
