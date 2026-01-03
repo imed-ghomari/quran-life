@@ -19,7 +19,7 @@ export default function MobileSyncBar() {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    if (!isMobile || pathname === '/') return null;
+    if (!isMobile || pathname === '/' || pathname === '/auth') return null;
 
     return <SyncStatus variant="mobile" />;
 }

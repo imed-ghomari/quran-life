@@ -95,7 +95,7 @@ export default function Navigation() {
         { href: '/settings', icon: Settings, label: 'Settings' },
     ];
 
-    if (pathname === '/') return null;
+    if (pathname === '/' || pathname === '/auth') return null;
 
     return (
         <nav className="bottom-nav">

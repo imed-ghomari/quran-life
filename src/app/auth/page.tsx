@@ -3,7 +3,7 @@
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Mail, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { Mail, ArrowRight, Loader2, CheckCircle, Lock } from 'lucide-react';
 import { Suspense } from 'react';
 
 function AuthContent() {
@@ -11,9 +11,10 @@ function AuthContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isSignUp, setIsSignUp] = useState(false);
     const [authLoading, setAuthLoading] = useState(false);
-    const [authStatus, setAuthStatus] = useState<'idle' | 'sent' | 'error'>('idle');
-    const [errorMessage, setErrorMessage] = useState('');
+    const [authError, setAuthError] = useState<string | null>(null);
     const checkoutId = searchParams?.get('checkout_id');
 
     useEffect(() => {
@@ -26,29 +27,36 @@ function AuthContent() {
         checkUser();
     }, [supabase, router]);
 
-    const handleSendMagicLink = async (e: React.FormEvent) => {
+    const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email) return;
-
+        setAuthError(null);
         setAuthLoading(true);
-        setAuthStatus('idle');
-        setErrorMessage('');
 
-        const { error } = await supabase.auth.signInWithOtp({
-            email,
-            options: {
-                emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-            },
-        });
+        const { error } = isSignUp
+            ? await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                }
+            })
+            : await supabase.auth.signInWithPassword({ email, password });
 
         setAuthLoading(false);
 
         if (error) {
             console.error('Auth error:', error.message);
-            setAuthStatus('error');
-            setErrorMessage(error.message);
+            setAuthError(error.message);
+        } else if (isSignUp) {
+            // Check if user session was created (might depend on "Confirm Email" setting)
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                router.push('/dashboard');
+            } else {
+                setAuthError('Check your email for the confirmation link!');
+            }
         } else {
-            setAuthStatus('sent');
+            router.push('/dashboard');
         }
     };
 
@@ -87,7 +95,7 @@ function AuthContent() {
                                 Payment Successful!
                             </p>
                             <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                                Sign in to access your Quran Life account
+                                Set up your account to access Quran Life
                             </p>
                         </div>
                     </div>
@@ -105,87 +113,120 @@ function AuthContent() {
                         justifyContent: 'center',
                         margin: '0 auto 1.5rem'
                     }}>
-                        <Mail size={32} />
+                        <Lock size={32} />
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                        Sign in to Quran Life
+                        {isSignUp ? 'Create Account' : 'Sign in to Quran Life'}
                     </h2>
                     <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                        We&apos;ll send a magic link to your email to get you started.
+                        {isSignUp
+                            ? 'Start your memorization journey today.'
+                            : 'Welcome back to your daily review.'}
                     </p>
                 </div>
 
-                {authStatus === 'sent' ? (
-                    <div style={{
-                        textAlign: 'center',
-                        padding: '1.5rem',
-                        background: 'rgba(126, 153, 122, 0.1)',
-                        borderRadius: '12px',
-                        border: '1px solid var(--success)',
-                        color: 'var(--success)'
-                    }}>
-                        <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Magic link sent!</p>
-                        <p style={{ fontSize: '0.85rem' }}>Check your email and click the link to sign in.</p>
-                    </div>
-                ) : (
-                    <form onSubmit={handleSendMagicLink}>
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{
-                                display: 'block',
-                                fontSize: '0.85rem',
-                                fontWeight: 600,
-                                marginBottom: '0.5rem',
-                                color: 'var(--foreground)'
-                            }}>
-                                Email Address
-                            </label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
-                                required
-                                style={{
-                                    width: '100%',
-                                    padding: '0.875rem 1rem',
-                                    borderRadius: '12px',
-                                    border: '1px solid var(--border)',
-                                    background: 'var(--background-secondary)',
-                                    color: 'var(--foreground)',
-                                    fontSize: '1rem',
-                                    outline: 'none'
-                                }}
-                            />
-                        </div>
-
-                        {authStatus === 'error' && (
-                            <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginBottom: '1rem' }}>
-                                {errorMessage}
-                            </p>
-                        )}
-
-                        <button
-                            type="submit"
-                            disabled={authLoading}
-                            className="btn btn-primary"
+                <form onSubmit={handleAuth}>
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label style={{
+                            display: 'block',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            marginBottom: '0.5rem',
+                            color: 'var(--foreground)'
+                        }}>
+                            Email Address
+                        </label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            required
                             style={{
                                 width: '100%',
-                                justifyContent: 'center',
-                                padding: '1rem',
-                                opacity: authLoading ? 0.7 : 1
+                                padding: '0.875rem 1rem',
+                                borderRadius: '12px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                color: 'var(--foreground)',
+                                fontSize: '1rem',
+                                outline: 'none'
                             }}
-                        >
-                            {authLoading ? (
-                                <Loader2 className="animate-spin" size={20} />
-                            ) : (
-                                <>
-                                    Continue with Email
-                                    <ArrowRight size={18} />
-                                </>
-                            )}
-                        </button>
-                    </form>
-                )}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{
+                            display: 'block',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            marginBottom: '0.5rem',
+                            color: 'var(--foreground)'
+                        }}>
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            required
+                            style={{
+                                width: '100%',
+                                padding: '0.875rem 1rem',
+                                borderRadius: '12px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                color: 'var(--foreground)',
+                                fontSize: '1rem',
+                                outline: 'none'
+                            }}
+                        />
+                    </div>
+
+                    {authError && (
+                        <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginBottom: '1rem' }}>
+                            {authError}
+                        </p>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={authLoading}
+                        className="btn btn-primary"
+                        style={{
+                            width: '100%',
+                            justifyContent: 'center',
+                            padding: '1rem',
+                            opacity: authLoading ? 0.7 : 1
+                        }}
+                    >
+                        {authLoading ? (
+                            <Loader2 className="animate-spin" size={20} />
+                        ) : (
+                            <>
+                                {isSignUp ? 'Sign Up' : 'Continue'}
+                                <ArrowRight size={18} />
+                            </>
+                        )}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsSignUp(!isSignUp)}
+                        style={{
+                            width: '100%',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--accent)',
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            marginTop: '1rem'
+                        }}
+                    >
+                        {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                    </button>
+                </form>
             </div>
         </div>
     );
