@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
             }
 
             // Store purchase information in Supabase
-            const supabase = createClient();
+            const supabase = await createClient();
 
             // Insert purchase record
             const { error: purchaseError } = await supabase

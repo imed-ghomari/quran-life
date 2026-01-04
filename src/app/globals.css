@@ -1,3 +1,385 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+}
+
+/* Documentation Layout */
+.docs-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--background);
+  overflow: hidden;
+  position: fixed;
+  top: 3.5rem; /* Mobile: Account for the app's top sync bar */
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+}
+
+@media (min-width: 1024px) {
+  .docs-container {
+    top: 0; /* Desktop: No top sync bar */
+    left: 80px; /* Account for the app's global sidebar (80px) */
+    padding-left: 1rem; /* Added padding between global sidebar and docs sidebar */
+  }
+}
+
+.docs-header {
+  height: 3.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem; /* Reduced for mobile */
+  background-color: var(--background);
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .docs-header {
+    padding: 0 1.5rem; /* Original for desktop */
+  }
+}
+
+.docs-sidebar {
+  width: 280px;
+  height: calc(100vh - 7rem); /* Mobile default */
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background-color: var(--background);
+  flex-shrink: 0;
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .docs-sidebar {
+    height: calc(100vh - 3.5rem); /* Desktop: No top sync bar */
+  }
+}
+
+@media (min-width: 768px) {
+  .docs-sidebar {
+    display: block;
+  }
+}
+
+.docs-main {
+  flex: 1;
+  height: calc(100vh - 7rem); /* Mobile default */
+  overflow-y: auto;
+  background-color: var(--background);
+  position: relative;
+  padding-bottom: 5rem; /* Account for mobile navigation bar */
+}
+
+@media (min-width: 1024px) {
+  .docs-main {
+    height: calc(100vh - 3.5rem); /* Desktop: No top sync bar */
+  }
+}
+
+@media (min-width: 768px) {
+  .docs-main {
+    padding-bottom: 0;
+  }
+}
+
+.docs-content {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 4rem;
+}
+
+@media (min-width: 768px) {
+  .docs-content {
+    padding: 2rem 4rem 4rem;
+  }
+}
+
+.docs-toc {
+  width: 280px;
+  height: calc(100vh - 7rem); /* Mobile default */
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background-color: var(--background);
+  flex-shrink: 0;
+  display: none;
+  padding: 2rem 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .docs-toc {
+    height: calc(100vh - 3.5rem); /* Desktop: No top sync bar */
+  }
+}
+
+@media (min-width: 1200px) {
+  .docs-toc {
+    display: block;
+  }
+}
+
+.docs-mobile-nav {
+  display: none; /* We will integrate it into the header */
+}
+
+
+/* Prose Fallbacks */
+article.prose {
+  color: var(--foreground);
+  line-height: 1.6;
+}
+
+article.prose h1, 
+article.prose h2, 
+article.prose h3, 
+article.prose h4 {
+  color: var(--foreground);
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+article.prose h1 { font-size: 2.25rem; }
+article.prose h2 { font-size: 1.875rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+article.prose h3 { font-size: 1.5rem; }
+
+article.prose p {
+  margin-bottom: 1.25rem;
+}
+
+article.prose a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+article.prose a:hover {
+  text-decoration: underline;
+}
+
+article.prose ul, 
+article.prose ol {
+  margin-bottom: 1.25rem;
+  padding-left: 1.5rem;
+}
+
+article.prose li {
+  margin-bottom: 0.5rem;
+}
+
+article.prose blockquote {
+  border-left: 4px solid var(--accent);
+  padding-left: 1rem;
+  font-style: italic;
+  color: var(--foreground-secondary);
+  margin: 1.5rem 0;
+}
+
+article.prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+
+article.prose code {
+  background-color: var(--verse-bg);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-family: monospace;
+}
+
+article.prose pre {
+  background-color: #1a1a1a;
+  color: #fff;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+}
+
+/* Sidebar Nav Fallbacks */
+.sidebar-nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav-list.nested {
+  margin-left: 0.75rem;
+  margin-top: 0.25rem;
+  border-left: 1px solid var(--border);
+  padding-left: 0.75rem;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: var(--foreground-secondary);
+}
+
+.sidebar-link:hover {
+  background-color: var(--verse-bg);
+  color: var(--foreground);
+}
+
+.active-sidebar-link {
+  background-color: var(--verse-bg) !important;
+  color: var(--accent) !important;
+  font-weight: 500;
+}
+
+.sidebar-item-container {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-item-container:hover .expand-button {
+  color: var(--accent);
+}
+
+.expand-button {
+  padding: 0.375rem;
+  color: var(--foreground-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.25rem;
+}
+
+.expand-button:hover {
+  background-color: var(--verse-bg);
+  color: var(--accent);
+}
+
+/* Docs Search Trigger */
+.docs-search-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center content on mobile (icon only) */
+  width: 2.25rem; /* Small square button on mobile */
+  height: 2.25rem;
+  padding: 0;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  color: var(--foreground-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.docs-search-trigger:hover {
+  background-color: var(--background-secondary);
+  color: var(--foreground);
+}
+
+.docs-search-text {
+  display: none;
+}
+
+.docs-search-shortcut {
+  display: none;
+}
+
+.docs-search-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .docs-search-trigger {
+    justify-content: space-between;
+    width: 100%;
+    max-width: 160px;
+    height: auto;
+    padding: 0.35rem 0.5rem;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border);
+  }
+
+  .docs-search-trigger:hover {
+    border-color: var(--accent);
+    background-color: rgba(0, 0, 0, 0.2);
+  }
+
+  .docs-search-text {
+    display: inline-block;
+    font-size: 0.75rem;
+  }
+
+  .docs-search-shortcut {
+    display: flex;
+    font-size: 0.7rem;
+    color: var(--foreground-secondary);
+    opacity: 0.8;
+    gap: 2px;
+  }
+  
+  .docs-search-icon {
+    width: 0.75rem; /* Smaller icon on desktop (12px) */
+    height: 0.75rem;
+  }
+}
+
+/* Back to Top Button */
+.back-to-top {
+  position: fixed;
+  bottom: 5.5rem; /* Default mobile: above bottom nav */
+  right: 1.5rem;
+  z-index: 1000;
+  padding: 0.75rem;
+  border-radius: 50%;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+@media (min-width: 768px) {
+  .back-to-top {
+    bottom: 2rem; /* Desktop position */
+    right: 2rem;
+  }
+}
+
+.back-to-top:hover {
+  transform: scale(1.1);
+  border-color: var(--accent);
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-secondary);
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @keyframes fadeUp {
@@ -144,6 +526,10 @@ body {
   padding-bottom: 80px;
   width: 100%;
   overflow-x: hidden;
+}
+
+.has-sync-bar {
+  padding-top: 3.5rem;
 }
 
 .content-wrapper {
@@ -1266,6 +1652,10 @@ input:focus {
     max-width: 100%;
     width: auto;
     margin: 0;
+  }
+
+  .has-sync-bar {
+    padding-top: 1.5rem; /* Match standard desktop padding */
   }
 
   .app-shell:has(.bottom-nav) .page-container {
