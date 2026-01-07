@@ -12,6 +12,7 @@ import {
     ExternalLink,
     Star
 } from 'lucide-react';
+import Link from 'next/link';
 import { AppSettings, getSettings, saveSettings, toggleSurahLearned, getSurahLearnedStatus } from '@/lib/storage';
 import { SURAHS } from '@/lib/quranData';
 import { PART_NAMES, QuranPart } from '@/lib/types';
@@ -352,7 +353,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
                                     Explore our comprehensive documentation to learn more about the methodology.
                                 </p>
-                                <a
+                                <Link
                                     href="/docs"
                                     style={{
                                         display: 'inline-flex',
@@ -365,7 +366,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                     }}
                                 >
                                     Read Documentation <ExternalLink size={16} />
-                                </a>
+                                </Link>
                             </div>
                         </div>
                     )}
