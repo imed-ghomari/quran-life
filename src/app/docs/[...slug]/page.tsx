@@ -3,6 +3,7 @@ import path from 'path';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from '../mdx-components';
+import MindmapDocHeader from '../MindmapDocHeader';
 
 interface PageProps {
     params: Promise<{
@@ -30,6 +31,9 @@ export default async function Page({ params }: PageProps) {
 
     return (
         <div className="w-full">
+            {(slugPath.startsWith('mindmaps/surah-') || slugPath.startsWith('mindmaps/part-')) && (
+                <MindmapDocHeader slug={slugPath} />
+            )}
             <article className="prose prose-slate dark:prose-invert max-w-none 
                 prose-headings:text-[var(--foreground)] 
                 prose-p:text-[var(--foreground)] 
