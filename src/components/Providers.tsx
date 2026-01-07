@@ -138,43 +138,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
         </SyncProvider>
       </OnlineStatusContext.Provider>
-      {!isOnline && (
-        <div
-          className="offline-indicator-minimal"
-          style={{
-            position: 'fixed',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'var(--background-secondary)',
-            color: 'var(--foreground)',
-            padding: '0.4rem 0.6rem',
-            borderRadius: '10px',
-            border: '1px solid var(--border)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            zIndex: 9999,
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            pointerEvents: 'none',
-          }}
-        >
-          <CloudOff size={14} />
-          <span>Offline</span>
-        </div>
-      )}
-      <style jsx>{`
-        .offline-indicator-minimal {
-          bottom: 1rem;
-        }
-        @media (max-width: 768px) {
-          .offline-indicator-minimal {
-            bottom: auto;
-            top: 1rem;
-          }
-        }
-      `}</style>
     </>
   );
 }

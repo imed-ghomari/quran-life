@@ -13,6 +13,7 @@ import {
     Star
 } from 'lucide-react';
 import Link from 'next/link';
+import DailyCompletionSlider from './DailyCompletionSlider';
 import { AppSettings, getSettings, saveSettings, toggleSurahLearned, getSurahLearnedStatus } from '@/lib/storage';
 import { SURAHS } from '@/lib/quranData';
 import { PART_NAMES, QuranPart } from '@/lib/types';
@@ -183,44 +184,12 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '2rem', lineHeight: 1.6 }}>
                                 How many days do you want to complete a full review cycle of your selected part?
                             </p>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', width: '100%' }}>
-                                <div style={{ width: '100%', padding: '0 10px' }}>
-                                    <div style={{ position: 'relative', width: '100%' }}>
-                                        <input
-                                            type="range"
-                                            min="7"
-                                            max="120"
-                                            value={days}
-                                            onChange={(e) => setDays(parseInt(e.target.value))}
-                                            style={{
-                                                width: '100%',
-                                                accentColor: 'var(--accent)',
-                                                height: '8px',
-                                                borderRadius: '4px',
-                                                cursor: 'pointer',
-                                                background: 'var(--border)',
-                                                appearance: 'none',
-                                                WebkitAppearance: 'none',
-                                                margin: 0,
-                                            }}
-                                        />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 2px', marginTop: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
-                                            <span>7 days</span>
-                                            <span>120 days</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{
-                                    background: 'var(--verse-bg)',
-                                    padding: '2rem',
-                                    borderRadius: '24px',
-                                    textAlign: 'center',
-                                    border: '1px solid var(--border)',
-                                    width: '100%',
-                                }}>
-                                    <span style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--accent)', display: 'block', lineHeight: 1 }}>{days}</span>
-                                    <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--foreground-secondary)', marginTop: '0.5rem', display: 'block' }}>Days until completion</span>
-                                </div>
+                            <div style={{ width: '100%', marginTop: '1rem' }}>
+                                <DailyCompletionSlider
+                                    days={days}
+                                    onChange={setDays}
+                                    activePart={selectedPart}
+                                />
                             </div>
                         </div>
                     )}

@@ -699,8 +699,9 @@ function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: strin
                                 <span style={{
                                     fontSize: '0.7rem',
                                     fontWeight: 800,
-                                    color: 'rgba(0,0,0,0.6)',
-                                    pointerEvents: 'none'
+                                    color: 'white',
+                                    pointerEvents: 'none',
+                                    textShadow: '0 1px 2px rgba(0,0,0,0.3)'
                                 }}>
                                     {segment.count}
                                 </span>

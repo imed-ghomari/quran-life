@@ -71,7 +71,7 @@ export default function DocsSearch() {
                 className="docs-search-trigger"
                 aria-label="Search documentation"
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '250px' }}>
                     <Search size={14} className="docs-search-icon" />
                     <span className="docs-search-text">Search...</span>
                 </div>
@@ -83,7 +83,7 @@ export default function DocsSearch() {
 
             {/* Search Modal Backdrop */}
             {isOpen && (
-                <div 
+                <div
                     style={{
                         position: 'fixed',
                         inset: 0,
@@ -98,7 +98,7 @@ export default function DocsSearch() {
                     onClick={() => setIsOpen(false)}
                 >
                     {/* Search Modal Content */}
-                    <div 
+                    <div
                         style={{
                             width: '100%',
                             maxWidth: '600px',

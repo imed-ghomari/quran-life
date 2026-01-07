@@ -46,6 +46,7 @@ import {
     X
 } from 'lucide-react';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
+import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { MemoryNode, getMemoryNodes } from '@/lib/storage';
 
@@ -635,31 +636,10 @@ export default function SettingsPage() {
                     </div>
                     {sectionsExpanded.schedule && (
                         <>
-                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>How many days to complete the active part.</p>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={settings.completionDays || ''}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    if (val === '') {
-                                        updateSetting('completionDays', 0);
-                                        setVersion(v => v + 1);
-                                        return;
-                                    }
-                                    const parsed = parseInt(val, 10);
-                                    if (!isNaN(parsed)) {
-                                        updateSetting('completionDays', Math.min(180, parsed));
-                                        setVersion(v => v + 1);
-                                    }
-                                }}
-                                onBlur={() => {
-                                    if (!settings.completionDays || settings.completionDays < 5) {
-                                        handleCompletionDays(5);
-                                    }
-                                }}
-                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                            <DailyCompletionSlider
+                                days={settings.completionDays || 30}
+                                onChange={handleCompletionDays}
+                                activePart={settings.activePart}
                             />
                         </>
                     )}
