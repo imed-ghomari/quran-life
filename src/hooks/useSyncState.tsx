@@ -127,22 +127,57 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for storage changes to detect pending changes
     useEffect(() => {
-        const handleStorageChange = () => {
+        const handleStorageChange = (e?: StorageEvent) => {
+            // Only care about our own storage keys
+            if (e && e.key && !e.key.startsWith('quran-app')) return;
+
             const settings = getSettings();
             const lastSync = settings.lastSyncedAt;
-            const lastModified = settings.updatedAt;
 
-            // If local data is newer than last sync, we have pending changes
+            // Get the global last modified timestamp from localStorage
+            // This is updated on every save in storage.ts
+            const lastModifiedStr = localStorage.getItem('quran-app-last-modified');
+            const lastModified = lastModifiedStr ? JSON.parse(lastModifiedStr) : null;
+
             if (lastSync && lastModified && new Date(lastModified) > new Date(lastSync)) {
+                // If local data is newer than last sync, we have pending changes
+                // Recalculate based on actual data if possible
+                try {
+                    const { exportBackup } = require('@/lib/storage');
+                    const backup = exportBackup();
+                    // Simple heuristic: if exportedAt > lastSyncedAt, we have changes
+                    if (backup.exportedAt && lastSync && backup.exportedAt > lastSync) {
+                        setState(prev => ({
+                            ...prev,
+                            // Set count to 1 minimum if we know something changed
+                            pendingChangesCount: Math.max(1, prev.pendingChangesCount),
+                            status: prev.status === 'synced' || prev.status === 'idle' ? 'needs_push' : prev.status,
+                        }));
+                    }
+                } catch (err) {
+                    // Fallback to simpler check
+                    setState(prev => ({
+                        ...prev,
+                        pendingChangesCount: Math.max(1, prev.pendingChangesCount),
+                        status: prev.status === 'synced' || prev.status === 'idle' ? 'needs_push' : prev.status,
+                    }));
+                }
+            } else if (lastSync && lastModified && new Date(lastModified) <= new Date(lastSync)) {
+                // If sync caught up, clear pending count
                 setState(prev => ({
                     ...prev,
-                    pendingChangesCount: prev.pendingChangesCount + 1,
-                    status: prev.status === 'synced' || prev.status === 'idle' ? 'needs_push' : prev.status,
+                    pendingChangesCount: 0,
+                    status: prev.status === 'needs_push' ? 'synced' : prev.status
                 }));
             }
         };
 
+        // Listen for both window storage event (cross-tab) and custom events (same-tab)
         window.addEventListener('storage', handleStorageChange);
+
+        // Initial check
+        handleStorageChange();
+
         return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 

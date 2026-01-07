@@ -86,7 +86,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          // Automatic sync removed - user must sync manually from settings
+          // Automatic sync on load/sign-in
+          if (session?.user) {
+            performSync();
+          }
         }
       });
       authSubscription = subscription;

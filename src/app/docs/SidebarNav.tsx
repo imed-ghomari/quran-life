@@ -25,7 +25,10 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
     // Track which items are expanded
     const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
 
-    // Auto-expand the active path's ancestors
+    // Track which items were manually toggled by the user
+    const [manuallyToggled, setManuallyToggled] = useState<Record<string, boolean>>({});
+
+    // Auto-expand the active path's ancestors ONLY on mount or when navigation occurs
     useEffect(() => {
         const newExpanded: Record<string, boolean> = { ...expandedPaths };
         let changed = false;
@@ -33,13 +36,14 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
         const checkExpand = (items: SidebarItem[]) => {
             for (const item of items) {
                 if (item.children) {
-                    // If any child is active or expanded, expand this parent
-                    const isChildActive = item.children.some(child => 
-                        normalize(child.href) === activePath || 
+                    // If any child is active, expand this parent
+                    const isChildActive = item.children.some(child =>
+                        normalize(child.href) === activePath ||
                         (child.children && child.children.some(c => normalize(c.href) === activePath))
                     );
 
-                    if (isChildActive && !newExpanded[item.href]) {
+                    // Only auto-expand if the user hasn't manually toggled this path yet
+                    if (isChildActive && !expandedPaths[item.href] && !manuallyToggled[item.href]) {
                         newExpanded[item.href] = true;
                         changed = true;
                     }
@@ -52,11 +56,15 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
         if (changed) {
             setExpandedPaths(newExpanded);
         }
-    }, [activePath, items, expandedPaths]);
+    }, [activePath, items]); // Removed expandedPaths dependency to prevent infinite loops and override issues
 
     const toggleExpand = (e: React.MouseEvent, href: string) => {
         e.preventDefault();
         e.stopPropagation();
+
+        // Mark as manually toggled so auto-expand doesn't override this decision
+        setManuallyToggled(prev => ({ ...prev, [href]: true }));
+
         setExpandedPaths(prev => ({
             ...prev,
             [href]: !prev[href]
@@ -72,18 +80,18 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
 
                 return (
                     <li key={item.href} style={{ marginBottom: '0.25rem' }}>
-                        <SidebarLink 
-                            href={item.href} 
-                            title={item.title} 
+                        <SidebarLink
+                            href={item.href}
+                            title={item.title}
                             onClick={onLinkClick}
                             hasChildren={hasChildren}
                             isExpanded={isExpanded}
                             onToggle={(e) => toggleExpand(e, item.href)}
                         />
                         {hasChildren && isExpanded && (
-                            <SidebarNav 
-                                items={item.children!} 
-                                level={level + 1} 
+                            <SidebarNav
+                                items={item.children!}
+                                level={level + 1}
                                 onLinkClick={onLinkClick}
                             />
                         )}

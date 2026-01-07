@@ -27,17 +27,19 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
             case 'syncing':
                 return 'Syncing...';
             case 'synced':
-                return 'Synced';
+                return pendingChangesCount > 0
+                    ? `${pendingChangesCount} ${pendingChangesCount === 1 ? 'change' : 'changes'} to sync`
+                    : 'Up to date';
             case 'conflict':
                 return 'Conflict detected';
             case 'needs_push':
-                return `${pendingChangesCount} to sync`;
+                return `${pendingChangesCount} ${pendingChangesCount === 1 ? 'change' : 'changes'} to sync`;
             case 'needs_pull':
                 return 'Update available';
             case 'error':
                 return 'Sync failed';
             default:
-                return isAuthenticated ? 'Ready' : 'Sign in to sync';
+                return isAuthenticated ? 'Up to date' : 'Sign in to sync';
         }
     };
 
@@ -211,7 +213,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                 maxWidth: '70px',
                 opacity: 0.8
             }}>
-                {displayStatus === 'syncing' ? 'Syncing' : (displayStatus === 'synced' ? 'Synced' : (displayStatus === 'offline' ? 'Offline' : (isAuthenticated ? 'Ready' : 'Sign In')))}
+                {displayStatus === 'syncing' ? 'Syncing' : (pendingChangesCount > 0 ? `${pendingChangesCount} to sync` : (displayStatus === 'offline' ? 'Offline' : (isAuthenticated ? 'Up to date' : 'Sign In')))}
             </span>
         </button>
     );
