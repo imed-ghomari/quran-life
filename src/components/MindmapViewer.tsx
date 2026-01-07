@@ -36,6 +36,20 @@ export default function MindmapViewer({
 }: MindmapViewerProps) {
     const [isFullScreen, setIsFullScreen] = useState(false);
 
+    useEffect(() => {
+        if (isFullScreen) {
+            document.body.setAttribute('data-mindmap-open', 'true');
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.removeAttribute('data-mindmap-open');
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.removeAttribute('data-mindmap-open');
+            document.body.style.overflow = '';
+        };
+    }, [isFullScreen]);
+
     const displayUrl = isDark ? (imageUrlDark || imageUrl) : imageUrl;
     const hasImage = !!displayUrl;
     const hasSnapshot = !!snapshot;
