@@ -23,10 +23,10 @@
   z-index: 40;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .docs-container {
     top: 0;
-    /* Desktop: No top sync bar */
+    /* Desktop/Tablet: No top sync bar */
     left: 80px;
     /* Account for the app's global sidebar (80px) */
     padding-left: 1rem;
@@ -65,10 +65,10 @@
   display: none;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .docs-sidebar {
     height: calc(100vh - 3.5rem);
-    /* Desktop: No top sync bar */
+    /* Desktop/Tablet: No top sync bar */
   }
 }
 
@@ -89,10 +89,10 @@
   /* Account for mobile navigation bar */
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .docs-main {
     height: calc(100vh - 3.5rem);
-    /* Desktop: No top sync bar */
+    /* Desktop/Tablet: No top sync bar */
   }
 }
 
@@ -127,10 +127,10 @@
   padding: 2rem 1.5rem;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .docs-toc {
     height: calc(100vh - 3.5rem);
-    /* Desktop: No top sync bar */
+    /* Desktop/Tablet: No top sync bar */
   }
 }
 
@@ -466,7 +466,7 @@ article.prose pre {
   --chart-mastered: #14532d;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .hide-mobile {
     display: none !important;
   }
@@ -1500,7 +1500,7 @@ input:focus {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .show-mobile {
     display: inline-block !important;
   }
@@ -1521,7 +1521,7 @@ input:focus {
   }
 }
 
-@media (min-width: 769px) {
+@media (min-width: 768px) {
   .show-mobile {
     display: none !important;
   }
@@ -1563,7 +1563,7 @@ input:focus {
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .content-wrapper {
     max-width: 100%;
     margin: 0 auto;
@@ -2154,7 +2154,7 @@ input:focus {
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .github-nav-link {
     display: flex !important;
     margin-top: auto !important;
@@ -2221,7 +2221,7 @@ input:focus {
   display: none !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .show-mobile {
     display: block !important;
   }

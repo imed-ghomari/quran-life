@@ -1893,13 +1893,13 @@ export default function SettingsPage() {
                     -webkit-tap-highlight-color: transparent;
                 }
 
-                @media (max-width: 1023px) {
+                @media (max-width: 767px) {
                     .hide-mobile {
                         display: none !important;
                     }
                 }
 
-                @media (min-width: 1024px) {
+                @media (min-width: 768px) {
                     .show-mobile {
                         display: none !important;
                     }
