@@ -25,26 +25,44 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
         if (slug.startsWith('mindmaps/surah-')) {
             const surahId = parseInt(slug.replace('mindmaps/surah-', ''));
             if (!isNaN(surahId)) {
-                setMindmapData({ type: 'surah', id: surahId, data: getMindMap(surahId) });
+                setMindmapData({ 
+                    type: 'surah', 
+                    id: surahId, 
+                    data: getMindMap(surahId),
+                    templateUrl: `/assets/premade-mindmaps/surah-${surahId}.tldraw`
+                });
             }
         } else if (slug.startsWith('mindmaps/part-')) {
             const partId = parseInt(slug.replace('mindmaps/part-', '')) as QuranPart;
             if (!isNaN(partId)) {
-                setMindmapData({ type: 'part', id: partId, data: getPartMindMap(partId) });
+                setMindmapData({ 
+                    type: 'part', 
+                    id: partId, 
+                    data: getPartMindMap(partId),
+                    templateUrl: `/assets/premade-mindmaps/part-${partId}.tldraw`
+                });
             }
         }
     }, [slug]);
 
-    if (!mindmapData || !mindmapData.data || (!mindmapData.data.imageUrl && !mindmapData.data.tldrawSnapshot)) {
+    if (!mindmapData) {
+        return null;
+    }
+
+    const hasContent = mindmapData.templateUrl || 
+                      (mindmapData.data && (mindmapData.data.imageUrl || mindmapData.data.tldrawSnapshot));
+
+    if (!hasContent) {
         return null;
     }
 
     return (
         <div style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
             <MindmapViewer
-                snapshot={mindmapData.data.tldrawSnapshot}
-                imageUrl={mindmapData.data.imageUrl}
-                imageUrlDark={mindmapData.data.imageUrlDark}
+                snapshot={mindmapData.data?.tldrawSnapshot}
+                templateUrl={mindmapData.templateUrl}
+                imageUrl={mindmapData.data?.imageUrl}
+                imageUrlDark={mindmapData.data?.imageUrlDark}
                 isDark={isDark}
                 title={mindmapData.type === 'surah' ? `Surah ${mindmapData.id} Mindmap` : `Part ${mindmapData.id} Mindmap`}
                 height={400}

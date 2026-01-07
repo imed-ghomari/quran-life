@@ -19,6 +19,7 @@ import 'tldraw/tldraw.css';
 
 interface MindmapViewerProps {
     snapshot?: any;
+    templateUrl?: string | null;
     imageUrl?: string | null;
     imageUrlDark?: string | null;
     isDark: boolean;
@@ -28,6 +29,7 @@ interface MindmapViewerProps {
 
 export default function MindmapViewer({
     snapshot,
+    templateUrl,
     imageUrl,
     imageUrlDark,
     isDark,
@@ -35,6 +37,24 @@ export default function MindmapViewer({
     height = '400px'
 }: MindmapViewerProps) {
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [fetchedSnapshot, setFetchedSnapshot] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (templateUrl) {
+            setIsLoading(true);
+            fetch(templateUrl)
+                .then(res => res.json())
+                .then(data => {
+                    setFetchedSnapshot(data);
+                    setIsLoading(false);
+                })
+                .catch(err => {
+                    console.error('Failed to fetch template mindmap:', err);
+                    setIsLoading(false);
+                });
+        }
+    }, [templateUrl]);
 
     useEffect(() => {
         if (isFullScreen) {
@@ -68,17 +88,15 @@ export default function MindmapViewer({
     }), []);
 
     const handleMount = useCallback((editor: any) => {
-        if (snapshot) {
+        const activeSnapshot = fetchedSnapshot || snapshot;
+        if (activeSnapshot) {
             try {
                 if (typeof editor.loadSnapshot === 'function') {
-                    editor.loadSnapshot(snapshot);
+                    editor.loadSnapshot(activeSnapshot);
                 } else {
-                    editor.store.loadSnapshot(snapshot);
+                    editor.store.loadSnapshot(activeSnapshot);
                 }
-
-                // Read-only settings
                 editor.updateInstanceState({ isReadonly: true });
-
                 setTimeout(() => {
                     editor.zoomToFit();
                 }, 100);
@@ -86,10 +104,20 @@ export default function MindmapViewer({
                 console.warn('Failed to load snapshot in viewer', e);
             }
         }
-    }, [snapshot]);
+    }, [snapshot, fetchedSnapshot]);
 
     const renderContent = (isFS: boolean) => {
-        if (hasSnapshot) {
+        const activeSnapshot = fetchedSnapshot || snapshot;
+
+        if (isLoading) {
+            return (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>
+                    Loading official mindmap...
+                </div>
+            );
+        }
+
+        if (activeSnapshot) {
             return (
                 <div style={{ width: '100%', height: '100%', position: 'relative', background: isDark ? '#1e1e1e' : '#f5f5f5' }}>
                     <div style={{ width: '100%', height: '100%', pointerEvents: isFS ? 'auto' : 'none' }}>

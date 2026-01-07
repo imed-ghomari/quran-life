@@ -1073,6 +1073,10 @@ export default function TodoPage() {
     };
 
     const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
+        // Implementation follows "Working on a Copy" pattern:
+        // We fetch official templates from /assets/premade-mindmaps/ but save them to the user's 
+        // local storage. This allows users to modify their copy while the documentation 
+        // remains linked to the original official template.
         try {
             const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
             if (!response.ok) {
@@ -1296,6 +1300,7 @@ export default function TodoPage() {
                     onSave={handleEditorSave}
                     onClose={() => setActiveMindmapEditor(null)}
                     title="Surah Mindmap Editor"
+                    docLink={`/docs/mindmaps/surah-${activeMindmapEditor.surahId}`}
                 />
             )}
             {/* Part Mindmap Editor */}
@@ -1305,6 +1310,7 @@ export default function TodoPage() {
                     onSave={handlePartEditorSave}
                     onClose={() => setActivePartEditor(null)}
                     title={`Part ${activePartEditor.partId} Mindmap Editor`}
+                    docLink={`/docs/mindmaps/part-${activePartEditor.partId}`}
                 />
             )}
 

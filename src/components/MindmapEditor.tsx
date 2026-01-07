@@ -173,9 +173,10 @@ interface MindmapEditorProps {
     onSave?: (snapshot: any, images?: { light?: Blob, dark?: Blob }) => Promise<void>;
     onClose: () => void;
     title?: string;
+    docLink?: string | null;
 }
 
-function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: MindmapEditorProps) {
+function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
 
     useEffect(() => {
@@ -380,10 +381,28 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title }: Mindm
                 padding: '0 1rem'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <button onClick={handleClose} style={{ border: 'none', background: 'transparent' }}>
+                    <button onClick={handleClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', display: 'flex' }}>
                         <X size={24} />
                     </button>
                     <span style={{ fontWeight: 600 }}>{title || 'Mindmap Editor'}</span>
+                    {docLink && (
+                        <a 
+                            href={docLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ 
+                                fontSize: '0.75rem', 
+                                color: 'var(--accent)', 
+                                textDecoration: 'none',
+                                padding: '4px 8px',
+                                border: '1px solid var(--accent)',
+                                borderRadius: '4px',
+                                marginLeft: '0.5rem'
+                            }}
+                        >
+                            Back to Documentation
+                        </a>
+                    )}
                 </div>
                 <span style={{ fontSize: '0.8rem', color: '#666' }}>Auto-saves on close</span>
             </div>
