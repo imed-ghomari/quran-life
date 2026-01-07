@@ -436,6 +436,18 @@ article.prose pre {
   animation: spin 1s linear infinite;
 }
 
+/* Search Highlighting */
+@keyframes highlight-fade {
+  0% { background-color: rgba(234, 179, 8, 0.4); border-radius: 4px; }
+  100% { background-color: transparent; }
+}
+
+.search-highlight {
+  animation: highlight-fade 2s ease-out forwards;
+  padding: 0 2px;
+  margin: 0 -2px;
+}
+
 :root {
   --background: #fdfdfd;
   --background-secondary: #ffffff;

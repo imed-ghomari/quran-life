@@ -58,7 +58,9 @@ export default function DocsSearch() {
     }, [query, handleSearch]);
 
     const navigateTo = (href: string) => {
-        router.push(href);
+        const highlightParam = query.trim() ? `?highlight=${encodeURIComponent(query.trim())}` : '';
+        const finalHref = href.includes('?') ? `${href}&highlight=${encodeURIComponent(query.trim())}` : `${href}${highlightParam}`;
+        router.push(finalHref);
         setIsOpen(false);
         setQuery('');
     };

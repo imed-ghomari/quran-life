@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { ReactNode } from 'react';
+import { ReactNode, Suspense } from 'react';
 import MobileDocsNav from './MobileDocsNav';
 import SidebarNav, { SidebarItem } from './SidebarNav';
 import TableOfContents from './TableOfContents';
 import DocsSearch from './DocsSearch';
 import DocsBreadcrumbs from './DocsBreadcrumbs';
 import BackToTop from './BackToTop';
+import SearchHighlight from './SearchHighlight';
 
 function getSidebarData(dirPath: string, baseRoute = '/docs'): SidebarItem[] {
     const metaPath = path.join(dirPath, '_meta.json');
@@ -78,6 +79,9 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 {/* Main Content */}
                 <main className="docs-main custom-scrollbar">
                     <article className="docs-content">
+                        <Suspense fallback={null}>
+                            <SearchHighlight />
+                        </Suspense>
                         {children}
                     </article>
                 </main>
