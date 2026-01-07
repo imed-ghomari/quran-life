@@ -4,28 +4,28 @@ import { usePathname } from 'next/navigation';
 
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
-export default function SidebarLink({ 
-    href, 
-    title, 
+export default function SidebarLink({
+    href,
+    title,
     onClick,
     hasChildren,
     isExpanded,
     onToggle
-}: { 
-    href: string; 
-    title: string; 
+}: {
+    href: string;
+    title: string;
     onClick?: () => void;
     hasChildren?: boolean;
     isExpanded?: boolean;
     onToggle?: (e: React.MouseEvent) => void;
 }) {
     const pathname = usePathname();
-    
+
     // Normalize paths for comparison
     const normalize = (p: string) => p.replace(/\/$/, '') || '/';
     const activePath = normalize(pathname || '');
     const targetPath = normalize(href);
-    const isActive = activePath === targetPath;
+    const isActive = activePath === targetPath || (hasChildren && activePath.startsWith(targetPath + '/'));
 
     return (
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -49,7 +49,7 @@ export default function SidebarLink({
                     className="hover:bg-[var(--background-secondary)]"
                 >
                     <span>{title}</span>
-                    <div 
+                    <div
                         style={{
                             display: 'flex',
                             alignItems: 'center',

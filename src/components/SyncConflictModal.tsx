@@ -3,6 +3,19 @@
 import { useState, useMemo } from 'react';
 import { AlertTriangle, Upload, Download, X, ChevronDown, ChevronRight, Settings2, CheckCircle2, RotateCcw } from 'lucide-react';
 import { ConflictInfo, ChangeDetail } from '@/lib/sync';
+import { PART_NAMES } from '@/lib/types';
+
+const CATEGORY_MAP: Record<string, string> = {
+    'nodes review': 'Review Progress',
+    'nodes module': 'Module Content',
+    'surahs': 'Surah Status',
+    'settings': 'App Settings',
+    'anchors': 'Verse Splits',
+};
+
+function getHumanReadableCategory(category: string): string {
+    return CATEGORY_MAP[category] || category;
+}
 
 interface SyncConflictModalProps {
     conflict: ConflictInfo;
@@ -54,7 +67,7 @@ function ChangeDetailItem({
                     {hasItems && !isManualChoice && (
                         isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
                     )}
-                    <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{change.category}</span>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{getHumanReadableCategory(change.category)}</span>
                     <span
                         style={{
                             background: side === 'local' ? 'var(--accent)' : side === 'remote' ? 'var(--success)' : 'var(--warning)',
@@ -202,6 +215,14 @@ export default function SyncConflictModal({ conflict, onResolve, onCancel }: Syn
 
         return Object.values(categories).filter(c => c.itemIds.length > 0);
     }, [conflict]);
+
+    const handleBulkChoice = (choice: 'local' | 'remote') => {
+        const newChoices: Record<string, 'local' | 'remote'> = {};
+        conflict.conflictingItemIds.forEach(id => {
+            newChoices[id] = choice;
+        });
+        setManualChoices(newChoices);
+    };
 
     return (
         <div
@@ -403,6 +424,41 @@ export default function SyncConflictModal({ conflict, onResolve, onCancel }: Syn
                                 Toggle between your current device and cloud versions for each item below.
                                 Unresolved items will default to the Cloud version.
                             </p>
+
+                            <div style={{ display: 'flex', gap: '0.75rem', padding: '0 0.25rem' }}>
+                                <button
+                                    onClick={() => handleBulkChoice('local')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '0.5rem',
+                                        borderRadius: '8px',
+                                        background: 'rgba(91, 143, 185, 0.1)',
+                                        border: '1px solid var(--accent)',
+                                        color: 'var(--accent)',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Select All Device
+                                </button>
+                                <button
+                                    onClick={() => handleBulkChoice('remote')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '0.5rem',
+                                        borderRadius: '8px',
+                                        background: 'rgba(34, 197, 94, 0.1)',
+                                        border: '1px solid var(--success)',
+                                        color: 'var(--success)',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Select All Cloud
+                                </button>
+                            </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 {manualCategories.map((cat, idx) => (

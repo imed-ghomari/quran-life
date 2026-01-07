@@ -188,6 +188,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                             height: '8px',
                                             borderRadius: '4px',
                                             cursor: 'pointer',
+                                            background: 'var(--border)',
+                                            appearance: 'none',
+                                            WebkitAppearance: 'none',
                                         }}
                                     />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
@@ -434,6 +437,20 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                     cursor: pointer;
                     box-shadow: 0 0 10px rgba(0,0,0,0.1);
                     border: 2px solid white;
+                }
+                input[type="range"]::-webkit-slider-runnable-track {
+                    width: 100%;
+                    height: 8px;
+                    cursor: pointer;
+                    background: var(--border);
+                    border-radius: 4px;
+                }
+                input[type="range"]::-moz-range-track {
+                    width: 100%;
+                    height: 8px;
+                    cursor: pointer;
+                    background: var(--border);
+                    border-radius: 4px;
                 }
             `}</style>
         </div>
