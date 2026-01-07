@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "unset npm_config_prefix && source ~/.nvm/nvm.sh && nvm use && next dev",
-    "build": "unset npm_config_prefix && source ~/.nvm/nvm.sh && nvm use && next build",
-    "start": "unset npm_config_prefix && source ~/.nvm/nvm.sh && nvm use && next start",
-    "lint": "unset npm_config_prefix && source ~/.nvm/nvm.sh && nvm use && next lint"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "engines": {
     "node": ">=20"
