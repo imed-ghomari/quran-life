@@ -1,33 +1,31 @@
-# Spaced Repetition (SM-2)
+# Smart Review System (Spaced Repetition)
 
-Quran Life uses the **SM-2 Algorithm**, the same science that powers apps like Anki, to manage your review schedule.
+Quran Life uses a **Smart Review System** (technically known as the SM-2 Algorithm) to manage your review schedule. This is the same science used by world-class language learning apps to ensure long-term memory.
 
-## The Science of Forgetting
+## How Your Brain Remembers
 
-Memories fade over time. However, if you review information just as you are about to forget it, the memory becomes much stronger, and the interval until the next review can be longer.
+Memories fade over time. However, if you review information just as you are about to forget it, that memory becomes significantly stronger. Each time you successfully remember a verse, the "gap" until your next review can be longer.
 
-*Our system uses [Mindmaps](/docs/philosophy/strategy) as the primary review unit to provide visual anchors for this process.*
+*Our system uses [Visual Mindmaps](/docs/philosophy/strategy) as the primary review unit to give your brain a physical 'place' to store these memories.*
 
-## The Review System
+## The Review Process
 
-Our SM-2 algorithm ensures long-term retention by scheduling reviews at optimal intervals.
-- **Gradual Revelation**: Long verses are revealed gradually to help you in your review. Reciting too much and then re-checking after the fact is difficult and prone to missing small errors. By revealing the verse word-by-word or phrase-by-phrase, the risk is reduced as there are fewer words to check immediately after recitation.
-- **Recall, Don't Read**: The goal is to recall the verse from your mind (and mindmap) before the app reveals it.
-- **Reveal Chunks**: Test your memory piece by piece by clicking through verse chunks.
-- **Grading**: After revealing the full content, you must grade your performance:
-    - **Forgot**: If you couldn't recall the content correctly.
+The smart system schedules reviews at optimal intervals to minimize your workload while maximizing retention.
+- **Step-by-Step Revelation**: Long verses are shown word-by-word. This helps you check your recitation in small pieces, reducing the risk of missing minor errors.
+- **Recall, Don't Read**: The goal is to recall the verse from memory *before* clicking to reveal it.
+- **Grading Your Performance**: After revealing the verses, you must tell the app how you did:
+    - **Forgot**: If you couldn't recall it or made a mistake.
     - **Remembered**: If you recalled it perfectly.
-    - **Not Sure**: Use this if you are uncertain whether you made a mistake due to a genuine memory gap or a simple error in manipulation. This will postpone the item without negatively impacting its progress as much as a "Forgot" grade would.
-- **Review Frequency**: Reviews are not necessarily daily for every item. As you consistently remember an item, the intervals between reviews increase, significantly reducing your daily workload over time.
+    - **Not Sure**: Use this if you're uncertain (e.g., you made a typo or were distracted). This postpones the review without resetting your progress entirely.
+- **Reducing Workload**: Reviews are not daily for everything. As you get better, you'll see items less often—sometimes only once every few months.
 - **Mastery**: Items eventually reach a "Mastered" state where you only need to review them once every few months.
 
-## The Science of Review Resets
+## Why Reviews Sometimes Reset
 
-A review interval for a specific chunk might be reset to its initial state (due for review today) in several situations:
-1. **Manual Reset**: If you mark a Surah as "To Learn" and then back to "Learned".
-2. **Anchor Changes**: If you use the AnchorBuilder to change the start or end of a verse chunk, the memory nodes for that surah are reset. This is because the "chunk" you originally memorized has changed its boundaries, requiring a fresh round of reinforcement.
-3. **Low Recall Score**: If you consistently fail a review (marking "Forgot" multiple times), the SM-2 algorithm will naturally shrink the interval back toward a daily frequency until the memory is re-stabilized.
-4. **Consistency**: We reset to ensure that your mental "anchors" are always aligned with the digital structure of the app. If the structure changes, your memory needs to be re-verified.
+Occasionally, a review interval might be reset to "Today." This happens to ensure your memory stays perfectly aligned with the app:
+1. **Manual Changes**: If you mark a Surah as "To Learn" and then back to "Learned."
+2. **Changing Verse Ranges**: If you change the start or end of a verse chunk. Because the "chunk" you memorized has changed, the app asks you to verify it again to be safe.
+3. **Repeated Mistakes**: If you mark "Forgot" multiple times, the system will naturally show that item more frequently until you've mastered it again.
 
 ## Keyboard Shortcuts
 
@@ -36,26 +34,11 @@ For a faster and more focused review experience on desktop, you can use the foll
 - **Arrow Left**: Mark as **Not Sure** (Postpone) when in the grading screen.
 - **Arrow Down**: Mark as **Forgot** when in the grading screen.
 
-## SM-2 Customizations
+## Smart Adjustments
 
-While based on the standard SM-2 algorithm, we have made several customizations to better suit Quranic memorization:
-- **Postpone Logic**: The "Not Sure" button allows for flexible scheduling without the harsh penalty of a total reset.
-- **Mutashabihat Awareness**: The system can intelligently adjust intervals or group similar verses to ensure you aren't confused by similar-sounding passages. (*Learn more about [Managing Mutashabihat](/docs/philosophy/mutashabihat)*)
-- **Initial Ease**: We've tuned the starting "ease factor" to account for the unique structural nature of Quranic verses.
-
-## Daily Portion (Passive Learning)
-
-A specialized tool to help with memorization while you prepare your visual mindmaps.
-- **Passive Learning**: Listen to your daily portion to subconsciously absorb the verses. This builds a foundation for your active memorization.
-- **Cycle Settings**: The portion updates daily based on your completion days to ensure you cover the entire active part.
-- **Tracking**: Mark as complete once finished to clear the notification badge and move the pointer forward for tomorrow.
-
-## Maturity Levels
-We categorize your progress into four buckets based on review intervals:
-- **New**: Just started (< 14 days).
-- **Medium**: Starting to stick (14-30 days).
-- **Strong**: Solid long-term memory (30-90 days).
-- **Mastered**: Deeply encoded (90+ days).
+We've customized the standard logic to better fit the Quran:
+- **Flexible Postponing**: The "Not Sure" button lets you skip a review without the harsh penalty of a full reset.
+- **Similar Verse Awareness**: The system can adjust your schedule if it detects you are confusing two similar-sounding passages. (*Learn more about [Similar Verses](/docs/philosophy/mutashabihat)*)
 
 ## Philosophy Tie-back
 Spaced repetition ensures **minimal wasted effort**. You don't spend time reviewing what you already know well, and you don't lose progress on what you've just learned. The app handles the "when", so you can focus on the "what".
