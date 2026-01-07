@@ -4,7 +4,8 @@ import { appLogger } from './logger';
 
 export async function fetchSupabaseBackup() {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
 
   if (!user) {
     appLogger.addLog('Not signed in, skipping cloud fetch', 'warning');
@@ -35,7 +36,8 @@ export async function fetchSupabaseBackup() {
 
 export async function uploadSupabaseBackup(backupData: BackupData) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
 
   if (!user) {
     appLogger.addLog('Not signed in, skipping cloud upload', 'warning');

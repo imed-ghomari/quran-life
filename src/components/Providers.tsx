@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useEffect, useRef, useState } from "react";
-import { CloudOff } from "lucide-react";
 import { appLogger } from "@/lib/logger";
 import { SyncProvider, useSyncState } from "@/hooks/useSyncState";
 import SyncConflictModal from "./SyncConflictModal";
@@ -115,9 +114,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     const handleInitialOnboarding = async () => {
       await ensureCacheLoaded();
-      // For testing: Always show on reload. 
-      // In production, we'd check if (!getSettings().isOnboardingComplete)
-      setShowOnboarding(true);
+      const settings = getSettings();
+      if (!settings.isOnboardingComplete) {
+        setShowOnboarding(true);
+      }
     };
     handleInitialOnboarding();
 

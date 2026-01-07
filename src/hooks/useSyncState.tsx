@@ -141,31 +141,19 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             const lastModifiedStr = localStorage.getItem('quran-app-last-modified');
             const lastModified = lastModifiedStr ? JSON.parse(lastModifiedStr) : null;
 
+            // Get actual count from localStorage if available
+            const pendingCountStr = localStorage.getItem('quran-app-pending-count');
+            const actualCount = pendingCountStr ? parseInt(pendingCountStr) : 0;
+
             if (lastSync && lastModified && new Date(lastModified) > new Date(lastSync)) {
-                // If local data is newer than last sync, we have pending changes
-                // Recalculate based on actual data if possible
-                try {
-                    const { exportBackup } = require('@/lib/storage');
-                    const backup = exportBackup();
-                    // Simple heuristic: if exportedAt > lastSyncedAt, we have changes
-                    if (backup.exportedAt && lastSync && backup.exportedAt > lastSync) {
-                        setState(prev => ({
-                            ...prev,
-                            // Set count to 1 minimum if we know something changed
-                            pendingChangesCount: Math.max(1, prev.pendingChangesCount),
-                            status: prev.status === 'synced' || prev.status === 'idle' ? 'needs_push' : prev.status,
-                        }));
-                    }
-                } catch (err) {
-                    // Fallback to simpler check
-                    setState(prev => ({
-                        ...prev,
-                        pendingChangesCount: Math.max(1, prev.pendingChangesCount),
-                        status: prev.status === 'synced' || prev.status === 'idle' ? 'needs_push' : prev.status,
-                    }));
-                }
+                setState(prev => ({
+                    ...prev,
+                    pendingChangesCount: Math.max(actualCount, 1),
+                    status: prev.status === 'synced' || prev.status === 'idle' ? 'needs_push' : prev.status,
+                }));
             } else if (lastSync && lastModified && new Date(lastModified) <= new Date(lastSync)) {
                 // If sync caught up, clear pending count
+                localStorage.setItem('quran-app-pending-count', '0');
                 setState(prev => ({
                     ...prev,
                     pendingChangesCount: 0,
@@ -229,6 +217,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 }));
             } else {
                 const settings = getSettings();
+                localStorage.setItem('quran-app-pending-count', '0');
                 setState(prev => ({
                     ...prev,
                     status: 'synced',
@@ -254,6 +243,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             await resolveSync(choice, manualChoices);
 
             const settings = getSettings();
+            localStorage.setItem('quran-app-pending-count', '0');
             setState(prev => ({
                 ...prev,
                 status: 'synced',

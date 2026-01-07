@@ -153,6 +153,10 @@ function saveToCacheAndStore(key: string, value: any) {
         if (typeof window !== 'undefined' && customStore) {
             set(STORAGE_KEYS.LAST_MODIFIED, now, customStore).catch(() => { });
             localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, JSON.stringify(now));
+
+            // Increment pending changes count
+            const currentCount = parseInt(localStorage.getItem('quran-app-pending-count') || '0');
+            localStorage.setItem('quran-app-pending-count', (currentCount + 1).toString());
         }
     }
 

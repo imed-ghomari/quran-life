@@ -19,8 +19,8 @@ function AuthContent() {
 
     useEffect(() => {
         const checkUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
                 router.push('/dashboard');
             }
         };
@@ -55,7 +55,8 @@ function AuthContent() {
         }
 
         // Get user after auth
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
 
         if (!user) {
             if (isSignUp) {
