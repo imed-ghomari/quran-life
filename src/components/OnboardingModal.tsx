@@ -174,28 +174,31 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '2rem', lineHeight: 1.6 }}>
                                 How many days do you want to complete a full review cycle of your selected part?
                             </p>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
-                                <div style={{ position: 'relative', width: '100%' }}>
-                                    <input
-                                        type="range"
-                                        min="7"
-                                        max="120"
-                                        value={days}
-                                        onChange={(e) => setDays(parseInt(e.target.value))}
-                                        style={{
-                                            width: '100%',
-                                            accentColor: 'var(--accent)',
-                                            height: '8px',
-                                            borderRadius: '4px',
-                                            cursor: 'pointer',
-                                            background: 'var(--border)',
-                                            appearance: 'none',
-                                            WebkitAppearance: 'none',
-                                        }}
-                                    />
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
-                                        <span>7 days</span>
-                                        <span>120 days</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', width: '100%' }}>
+                                <div style={{ width: '100%', padding: '0 10px' }}>
+                                    <div style={{ position: 'relative', width: '100%' }}>
+                                        <input
+                                            type="range"
+                                            min="7"
+                                            max="120"
+                                            value={days}
+                                            onChange={(e) => setDays(parseInt(e.target.value))}
+                                            style={{
+                                                width: '100%',
+                                                accentColor: 'var(--accent)',
+                                                height: '8px',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                background: 'var(--border)',
+                                                appearance: 'none',
+                                                WebkitAppearance: 'none',
+                                                margin: 0,
+                                            }}
+                                        />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 2px', marginTop: '0.75rem', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                                            <span>7 days</span>
+                                            <span>120 days</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div style={{

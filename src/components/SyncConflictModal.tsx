@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { AlertTriangle, Upload, Download, X, ChevronDown, ChevronRight, Settings2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Upload, Download, X, ChevronDown, ChevronRight, Settings2, CheckCircle2, RotateCcw, Brain } from 'lucide-react';
 import { ConflictInfo, ChangeDetail } from '@/lib/sync';
 import { PART_NAMES } from '@/lib/types';
 
@@ -320,20 +320,25 @@ export default function SyncConflictModal({ conflict, onResolve, onCancel }: Syn
                     }}
                 >
                     {mode === 'simple' ? (
-                        <>
-                            <div style={{
-                                background: 'var(--verse-bg)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '12px',
-                                padding: '1rem',
-                                marginBottom: '1.5rem',
-                                fontSize: '0.9rem',
-                                color: 'var(--foreground)',
-                                lineHeight: 1.6,
-                            }}>
-                                Both this device and the cloud have changed the <strong>same items</strong> since your last sync.
-                                To prevent data loss, please choose which version to prioritize.
-                                Changes that don{'\''}t overlap will be merged automatically.
+                        <div className="sync-conflict-body">
+                            <div className="sync-conflict-header">
+                                <AlertTriangle className="warning-icon" />
+                                <h2>Sync Conflict</h2>
+                            </div>
+
+                            <div className="sync-conflict-description">
+                                Both this device and the cloud have changed the same items. Please choose which version to keep. Other changes will be merged automatically.
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <button
+                                    className="btn btn-secondary btn-full"
+                                    onClick={() => setMode('manual')}
+                                    style={{ borderStyle: 'dashed', color: 'var(--accent)' }}
+                                >
+                                    <Brain size={18} />
+                                    Manual Selection (Advanced)
+                                </button>
                             </div>
 
                             {/* Local Changes */}
@@ -385,35 +390,19 @@ export default function SyncConflictModal({ conflict, onResolve, onCancel }: Syn
                                     <ChangeDetailItem key={idx} change={change} side="remote" />
                                 ))}
                             </div>
-
-                            {/* Manual Mode Trigger */}
-                            <button
-                                onClick={() => setMode('manual')}
-                                style={{
-                                    width: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.6rem',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
-                                    background: 'var(--background)',
-                                    color: 'var(--foreground)',
-                                    border: '1px solid var(--border)',
-                                    fontWeight: 700,
-                                    fontSize: '0.9rem',
-                                    cursor: 'pointer',
-                                    marginBottom: '0.5rem',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                }}
-                            >
-                                <Settings2 size={18} style={{ color: 'var(--accent)' }} />
-                                Manual Selection (Advanced)
-                            </button>
-                        </>
+                        </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div className="sync-conflict-body">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3 style={{ margin: 0 }}>Manual Resolution</h3>
+                                <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => setMode('simple')}
+                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                >
+                                    Back to Simple
+                                </button>
+                            </div>
                             <p style={{
                                 fontSize: '0.9rem',
                                 color: 'var(--foreground-secondary)',

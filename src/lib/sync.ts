@@ -261,9 +261,34 @@ function checkForConflicts(local: BackupData, remote: BackupData): ConflictInfo 
     return null;
   }
 
+  // Filter changes to ONLY include the specific items that overlap
+  const filterChanges = (changes: ChangeDetail[]): ChangeDetail[] => {
+    return changes
+      .map(c => {
+        const filteredIds = c.itemIds.filter(id => conflictingItemIds.includes(id));
+        if (filteredIds.length === 0) return null;
+
+        // If items labels are present, filter them too
+        let filteredItems = c.items;
+        if (c.items && c.items.length === c.itemIds.length) {
+          filteredItems = c.items.filter((_, idx) => conflictingItemIds.includes(c.itemIds[idx]));
+        }
+
+        const result: ChangeDetail = {
+          ...c,
+          itemIds: filteredIds,
+          items: filteredItems,
+          count: filteredIds.length,
+          description: `${filteredIds.length} ${c.category.toLowerCase()} item${filteredIds.length > 1 ? 's' : ''} in conflict`
+        };
+        return result;
+      })
+      .filter((c): c is ChangeDetail => c !== null);
+  };
+
   return {
-    localChanges: localChanges.filter(c => c.itemIds.some(id => conflictingItemIds.includes(id))),
-    remoteChanges: remoteChanges.filter(c => c.itemIds.some(id => conflictingItemIds.includes(id))),
+    localChanges: filterChanges(localChanges),
+    remoteChanges: filterChanges(remoteChanges),
     conflictingItemIds,
     localTimestamp: localExportedAt,
     remoteTimestamp: remoteExportedAt,

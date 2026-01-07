@@ -25,7 +25,8 @@ import {
     Maximize2,
     Move,
     PenTool,
-    RotateCcw
+    RotateCcw,
+    AlertCircle
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import MindmapViewer from '@/components/MindmapViewer';
@@ -886,7 +887,7 @@ export default function TodayPage() {
                 {/* Daily Portion Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, dailyExpanded: !s.dailyExpanded }))}>
-                        <div className="section-title"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete && <span className="status-badge learned">✓</span>}</div>
+                        <div className="section-title"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete ? <span className="status-badge learned">✓</span> : <span className="status-badge partial show-mobile" style={{ background: 'transparent', padding: 0, color: 'var(--warning)', display: 'flex', alignItems: 'center' }}><AlertCircle size={18} /></span>}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             {!listeningComplete && (
                                 <div className="toggle-wrapper" onClick={(e) => { e.stopPropagation(); setReadOnlyMode(!readOnlyMode); }} style={{ cursor: 'pointer' }}>
