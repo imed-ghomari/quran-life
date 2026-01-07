@@ -1425,6 +1425,7 @@ export default function TodoPage() {
                                                     .filter(v => v.surahId === issue.surahId && v.ayahId >= (issue.startVerse || 0) && v.ayahId <= (issue.endVerse || 0))
                                                     .map(v => v.text)
                                                     .join(' ');
+                                                const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
 
                                                 return (
                                                     <tr key={key} className="node-row">
@@ -1653,6 +1654,7 @@ export default function TodoPage() {
                                                         .filter(v => v.surahId === issue.surahId && v.ayahId >= (issue.startVerse || 0) && v.ayahId <= (issue.endVerse || 0))
                                                         .map(v => v.text)
                                                         .join(' ');
+                                                    const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
 
                                                     return (
                                                         <div key={key} className="mobile-subgroup-item" style={{ flexDirection: 'column', alignItems: 'flex-start', paddingLeft: '1rem', background: 'var(--background)' }}>
