@@ -204,6 +204,7 @@ export interface AppSettings {
     skippedSurahs?: number[];
     lastSyncedAt?: string;
     updatedAt?: string;
+    isOnboardingComplete?: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -212,6 +213,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     learnedVerses: {},
     skippedSurahs: [],
     updatedAt: "1970-01-01T00:00:00.000Z", // Use EPOCH to ensure cloud always wins over uninitialized local
+    isOnboardingComplete: false,
 };
 
 export function getSettings(): AppSettings {

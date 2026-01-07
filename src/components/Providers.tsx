@@ -5,6 +5,8 @@ import { CloudOff } from "lucide-react";
 import { appLogger } from "@/lib/logger";
 import { SyncProvider, useSyncState } from "@/hooks/useSyncState";
 import SyncConflictModal from "./SyncConflictModal";
+import OnboardingModal from "./OnboardingModal";
+import { getSettings, ensureCacheLoaded } from "@/lib/storage";
 
 export const OnlineStatusContext = createContext(true);
 
@@ -25,6 +27,7 @@ function SyncConflictHandler() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const syncInProgress = useRef(false);
 
   const performSync = async () => {
@@ -110,6 +113,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     window.addEventListener("offline", handleOffline);
     document.addEventListener("visibilitychange", handleVisibility);
 
+    const handleInitialOnboarding = async () => {
+      await ensureCacheLoaded();
+      // For testing: Always show on reload. 
+      // In production, we'd check if (!getSettings().isOnboardingComplete)
+      setShowOnboarding(true);
+    };
+    handleInitialOnboarding();
+
     return () => {
       if (authSubscription) authSubscription.unsubscribe();
       window.removeEventListener("online", handleOnline);
@@ -124,6 +135,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <SyncProvider>
           {children}
           <SyncConflictHandler />
+          {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
         </SyncProvider>
       </OnlineStatusContext.Provider>
       {!isOnline && (
