@@ -29,6 +29,21 @@ function getTitleFromMeta(dirPath: string, fileName: string): string {
     return fileName.replace(/\.mdx$/, '').split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
+function getNearestHeadingAnchor(content: string, matchIndex: number): string {
+    const contentBeforeMatch = content.substring(0, matchIndex);
+    // Matches markdown headings like ## Heading or ### Heading
+    const headingRegex = /^###?\s+(.+)$/gm;
+    let lastAnchor = '';
+    let match;
+
+    while ((match = headingRegex.exec(contentBeforeMatch)) !== null) {
+        const headingText = match[1].trim();
+        lastAnchor = headingText.toLowerCase().replace(/\s+/g, '-');
+    }
+
+    return lastAnchor ? `#${lastAnchor}` : '';
+}
+
 function searchFiles(dirPath: string, query: string, baseRoute = '/docs'): SearchResult[] {
     const results: SearchResult[] = [];
     const files = fs.readdirSync(dirPath);
@@ -49,10 +64,13 @@ function searchFiles(dirPath: string, query: string, baseRoute = '/docs'): Searc
             if (lowerContent.includes(lowerQuery)) {
                 const title = getTitleFromMeta(dirPath, file);
                 const href = `${baseRoute}/${file.replace(/\.mdx$/, '')}`.replace(/\/index$/, '');
-                const finalHref = href === '/docs/index' ? '/docs' : (href || '/docs');
+                const finalBaseHref = href === '/docs/index' ? '/docs' : (href || '/docs');
 
                 // Extract a clean excerpt
                 const index = lowerContent.indexOf(lowerQuery);
+                const anchor = getNearestHeadingAnchor(content, index);
+                const finalHref = `${finalBaseHref}${anchor}`;
+
                 const start = Math.max(0, index - 40);
                 const end = Math.min(content.length, index + lowerQuery.length + 80);
                 let excerpt = content.substring(start, end)

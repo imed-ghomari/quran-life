@@ -18,8 +18,14 @@ export const mdxComponents: MDXComponents = {
         );
     },
     h1: (props: any) => <h1 className="text-3xl font-bold mb-6 text-[var(--foreground)]" {...props} />,
-    h2: (props: any) => <h2 className="text-2xl font-semibold mt-10 mb-4 text-[var(--foreground)] border-b border-[var(--border)] pb-2" {...props} />,
-    h3: (props: any) => <h3 className="text-xl font-semibold mt-8 mb-3 text-[var(--foreground)]" {...props} />,
+    h2: ({ children, ...props }: any) => {
+        const id = typeof children === 'string' ? children.toLowerCase().replace(/\s+/g, '-') : undefined;
+        return <h2 id={id} className="text-2xl font-semibold mt-10 mb-4 text-[var(--foreground)] border-b border-[var(--border)] pb-2" {...props}>{children}</h2>;
+    },
+    h3: ({ children, ...props }: any) => {
+        const id = typeof children === 'string' ? children.toLowerCase().replace(/\s+/g, '-') : undefined;
+        return <h3 id={id} className="text-xl font-semibold mt-8 mb-3 text-[var(--foreground)]" {...props}>{children}</h3>;
+    },
     p: (props: any) => <p className="mb-4 leading-relaxed text-[var(--foreground)]" {...props} />,
     ul: (props: any) => <ul className="list-disc ml-6 mb-4 space-y-2 text-[var(--foreground)]" {...props} />,
     ol: (props: any) => <ol className="list-decimal ml-6 mb-4 space-y-2 text-[var(--foreground)]" {...props} />,

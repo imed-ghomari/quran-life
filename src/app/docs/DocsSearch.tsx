@@ -63,6 +63,28 @@ export default function DocsSearch() {
         setQuery('');
     };
 
+    const Highlight = ({ text, query }: { text: string; query: string }) => {
+        if (!query.trim()) return <>{text}</>;
+        
+        // Strip common markdown characters that might be in the title/excerpt
+        const cleanText = text.replace(/[#*`_]/g, '');
+        const parts = cleanText.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+        
+        return (
+            <>
+                {parts.map((part, i) => 
+                    part.toLowerCase() === query.toLowerCase() ? (
+                        <mark key={i} style={{ backgroundColor: 'rgba(234, 179, 8, 0.3)', color: 'inherit', borderRadius: '2px', padding: '0 1px' }}>
+                            {part}
+                        </mark>
+                    ) : (
+                        <span key={i}>{part}</span>
+                    )
+                )}
+            </>
+        );
+    };
+
     return (
         <>
             {/* Search Trigger Button */}
@@ -164,10 +186,10 @@ export default function DocsSearch() {
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, color: 'var(--foreground)' }}>
                                                 <FileText size={16} style={{ color: 'var(--accent)' }} />
-                                                {result.title}
+                                                <Highlight text={result.title} query={query} />
                                             </div>
                                             <div style={{ fontSize: '0.8125rem', color: 'var(--foreground-secondary)', paddingLeft: '1.5rem' }}>
-                                                {result.excerpt}
+                                                <Highlight text={result.excerpt} query={query} />
                                             </div>
                                         </button>
                                     ))}
