@@ -12,11 +12,13 @@ export interface ChangeDetail {
   description: string;        // Human-readable description
   count: number;              // Number of items changed
   items?: string[];           // Optional: specific item names for collapsible details
+  itemIds: string[];          // UNIQUE IDs for granular merging (e.g., "mindmap-1", "settings-completionDays")
 }
 
 export interface ConflictInfo {
   localChanges: ChangeDetail[];
   remoteChanges: ChangeDetail[];
+  conflictingItemIds: string[]; // List of IDs that changed on BOTH sides
   localTimestamp: string;
   remoteTimestamp: string;
 }
@@ -47,38 +49,48 @@ function detectChanges(current: BackupData, reference: BackupData): ChangeDetail
 
   // Settings changes
   if (current.settings && reference.settings) {
-    const localUpdated = current.settings.updatedAt || '';
-    const refUpdated = reference.settings.updatedAt || '';
-    if (localUpdated > refUpdated && JSON.stringify(current.settings) !== JSON.stringify(reference.settings)) {
-      const changedFields: string[] = [];
-      if (current.settings.completionDays !== reference.settings.completionDays) changedFields.push('Completion days');
-      if (current.settings.activePart !== reference.settings.activePart) changedFields.push('Active part');
-      if (JSON.stringify(current.settings.learnedVerses) !== JSON.stringify(reference.settings.learnedVerses)) changedFields.push('Learned verses');
-      if (JSON.stringify(current.settings.skippedSurahs) !== JSON.stringify(reference.settings.skippedSurahs)) changedFields.push('Skipped surahs');
+    const changedFields: string[] = [];
+    const changedIds: string[] = [];
 
-      if (changedFields.length > 0) {
-        changes.push({
-          category: 'Settings',
-          description: 'App settings modified',
-          count: changedFields.length,
-          items: changedFields,
-        });
-      }
+    if (current.settings.completionDays !== reference.settings.completionDays) {
+      changedFields.push('Completion days');
+      changedIds.push('settings-completionDays');
+    }
+    if (current.settings.activePart !== reference.settings.activePart) {
+      changedFields.push('Active part');
+      changedIds.push('settings-activePart');
+    }
+    if (JSON.stringify(current.settings.learnedVerses) !== JSON.stringify(reference.settings.learnedVerses)) {
+      changedFields.push('Learned verses');
+      changedIds.push('settings-learnedVerses');
+    }
+    if (JSON.stringify(current.settings.skippedSurahs) !== JSON.stringify(reference.settings.skippedSurahs)) {
+      changedFields.push('Skipped surahs');
+      changedIds.push('settings-skippedSurahs');
+    }
+
+    if (changedFields.length > 0) {
+      changes.push({
+        category: 'Settings',
+        description: 'App settings modified',
+        count: changedFields.length,
+        items: changedFields,
+        itemIds: changedIds,
+      });
     }
   }
 
   // Mindmap changes
-  if (current.mindmaps && reference.mindmaps) {
-    const localMaps = current.mindmaps;
-    const refMaps = reference.mindmaps;
+  if (current.mindmaps) {
+    const refMaps = reference.mindmaps || {};
     const changedMindmaps: string[] = [];
+    const changedIds: string[] = [];
 
-    Object.entries(localMaps).forEach(([id, lMap]) => {
+    Object.entries(current.mindmaps).forEach(([id, lMap]) => {
       const rMap = refMaps[id];
-      const lTime = lMap.updatedAt || '';
-      const rTime = rMap?.updatedAt || '';
-      if (lTime > rTime && JSON.stringify(lMap) !== JSON.stringify(rMap)) {
+      if (JSON.stringify(lMap) !== JSON.stringify(rMap)) {
         changedMindmaps.push(getSurahName(parseInt(id)));
+        changedIds.push(`mindmap-${id}`);
       }
     });
 
@@ -88,22 +100,22 @@ function detectChanges(current: BackupData, reference: BackupData): ChangeDetail
         description: `${changedMindmaps.length} mindmap${changedMindmaps.length > 1 ? 's' : ''} updated`,
         count: changedMindmaps.length,
         items: changedMindmaps,
+        itemIds: changedIds,
       });
     }
   }
 
   // Part Mindmap changes
-  if (current.partMindmaps && reference.partMindmaps) {
-    const localParts = current.partMindmaps;
-    const refParts = reference.partMindmaps;
+  if (current.partMindmaps) {
+    const refParts = reference.partMindmaps || {};
     const changedParts: string[] = [];
+    const changedIds: string[] = [];
 
-    Object.entries(localParts).forEach(([id, lMap]) => {
+    Object.entries(current.partMindmaps).forEach(([id, lMap]) => {
       const rMap = refParts[id];
-      const lTime = lMap.updatedAt || '';
-      const rTime = rMap?.updatedAt || '';
-      if (lTime > rTime && JSON.stringify(lMap) !== JSON.stringify(rMap)) {
+      if (JSON.stringify(lMap) !== JSON.stringify(rMap)) {
         changedParts.push(`Part ${id}`);
+        changedIds.push(`part-mindmap-${id}`);
       }
     });
 
@@ -113,22 +125,21 @@ function detectChanges(current: BackupData, reference: BackupData): ChangeDetail
         description: `${changedParts.length} part mindmap${changedParts.length > 1 ? 's' : ''} updated`,
         count: changedParts.length,
         items: changedParts,
+        itemIds: changedIds,
       });
     }
   }
 
   // Memory nodes changes
-  if (current.memoryNodes && reference.memoryNodes) {
-    const localNodes = current.memoryNodes;
-    const refNodes = reference.memoryNodes;
+  if (current.memoryNodes) {
+    const refNodes = reference.memoryNodes || [];
     const refNodeMap = new Map(refNodes.map(n => [n.id, n]));
     const changedNodes: string[] = [];
+    const changedIds: string[] = [];
 
-    localNodes.forEach(lNode => {
+    current.memoryNodes.forEach(lNode => {
       const rNode = refNodeMap.get(lNode.id);
-      const lReview = lNode.scheduler.lastReview || '';
-      const rReview = rNode?.scheduler.lastReview || '';
-      if (lReview > rReview) {
+      if (JSON.stringify(lNode) !== JSON.stringify(rNode)) {
         if (lNode.type === 'mindmap' && lNode.surahId) {
           changedNodes.push(`${getSurahName(lNode.surahId)} mindmap review`);
         } else if (lNode.type === 'verse' && lNode.surahId) {
@@ -136,31 +147,32 @@ function detectChanges(current: BackupData, reference: BackupData): ChangeDetail
         } else if (lNode.type === 'part_mindmap' && lNode.partId) {
           changedNodes.push(`Part ${lNode.partId} mindmap review`);
         }
+        changedIds.push(`memory-node-${lNode.id}`);
       }
     });
 
     if (changedNodes.length > 0) {
       changes.push({
         category: 'Review Progress',
-        description: `${changedNodes.length} review${changedNodes.length > 1 ? 's' : ''} recorded`,
+        description: `${changedNodes.length} node${changedNodes.length > 1 ? 's' : ''} updated`,
         count: changedNodes.length,
-        items: changedNodes.slice(0, 20), // Limit for display
+        items: changedNodes.slice(0, 20),
+        itemIds: changedIds,
       });
     }
   }
 
   // Mutashabihat decisions
-  if (current.mutashabihatDecisions && reference.mutashabihatDecisions) {
-    const localDecs = current.mutashabihatDecisions;
-    const refDecs = reference.mutashabihatDecisions;
+  if (current.mutashabihatDecisions) {
+    const refDecs = reference.mutashabihatDecisions || {};
+    const changedIds: string[] = [];
     let changedCount = 0;
 
-    Object.entries(localDecs).forEach(([key, lDec]) => {
+    Object.entries(current.mutashabihatDecisions).forEach(([key, lDec]) => {
       const rDec = refDecs[key];
-      const lTime = lDec.updatedAt || lDec.confirmedAt || '';
-      const rTime = rDec?.updatedAt || rDec?.confirmedAt || '';
-      if (lTime > rTime && JSON.stringify(lDec) !== JSON.stringify(rDec)) {
+      if (JSON.stringify(lDec) !== JSON.stringify(rDec)) {
         changedCount++;
+        changedIds.push(`mutashabihat-decision-${key}`);
       }
     });
 
@@ -169,21 +181,43 @@ function detectChanges(current: BackupData, reference: BackupData): ChangeDetail
         category: 'Similar Verses Decisions',
         description: `${changedCount} decision${changedCount > 1 ? 's' : ''} updated`,
         count: changedCount,
+        itemIds: changedIds,
+      });
+    }
+  }
+
+  // Custom Mutashabihat
+  if (current.customMutashabihat) {
+    const refCustoms = reference.customMutashabihat || [];
+    const refCustomIds = new Set(refCustoms.map(c => c.id));
+    const changedIds: string[] = [];
+    const newCustoms = current.customMutashabihat.filter(c => !refCustomIds.has(c.id));
+
+    if (newCustoms.length > 0) {
+      newCustoms.forEach(c => changedIds.push(`custom-mutashabihat-${c.id}`));
+      changes.push({
+        category: 'Custom Similar Verses',
+        description: `${newCustoms.length} new custom verse${newCustoms.length > 1 ? 's' : ''}`,
+        count: newCustoms.length,
+        itemIds: changedIds,
       });
     }
   }
 
   // Review errors
-  if (current.reviewErrors && reference.reviewErrors) {
-    const localErrs = current.reviewErrors;
-    const refErrIds = new Set(reference.reviewErrors.map(e => e.id));
-    const newErrors = localErrs.filter(e => !refErrIds.has(e.id));
+  if (current.reviewErrors) {
+    const refErrs = reference.reviewErrors || [];
+    const refErrIds = new Set(refErrs.map(e => e.id));
+    const changedIds: string[] = [];
+    const newErrors = current.reviewErrors.filter(e => !refErrIds.has(e.id));
 
     if (newErrors.length > 0) {
+      newErrors.forEach(e => changedIds.push(`review-error-${e.id}`));
       changes.push({
         category: 'Review Errors',
         description: `${newErrors.length} new error${newErrors.length > 1 ? 's' : ''} recorded`,
         count: newErrors.length,
+        itemIds: changedIds,
       });
     }
   }
@@ -193,7 +227,7 @@ function detectChanges(current: BackupData, reference: BackupData): ChangeDetail
 
 /**
  * Check if there's a conflict between local and remote data.
- * A conflict exists when BOTH sides have changes since the last known sync.
+ * A conflict exists when BOTH sides have changes to the SAME ITEM since the last known sync.
  */
 function checkForConflicts(local: BackupData, remote: BackupData): ConflictInfo | null {
   const lastSyncedAt = local.settings?.lastSyncedAt || '';
@@ -214,62 +248,120 @@ function checkForConflicts(local: BackupData, remote: BackupData): ConflictInfo 
   }
 
   // Both sides modified - detect specific changes
-  // Create a "baseline" representing the last synced state (approximated by comparing differences)
   const localChanges = detectChanges(local, remote);
   const remoteChanges = detectChanges(remote, local);
 
-  // Only show conflict if there are actual changes on both sides
-  if (localChanges.length === 0 || remoteChanges.length === 0) {
+  // Identify specific items that changed on BOTH sides
+  const localIds = new Set(localChanges.flatMap(c => c.itemIds));
+  const remoteIds = new Set(remoteChanges.flatMap(c => c.itemIds));
+  const conflictingItemIds = Array.from(localIds).filter(id => remoteIds.has(id));
+
+  // Only show conflict if there are actual overlapping changes
+  if (conflictingItemIds.length === 0) {
     return null;
   }
 
   return {
-    localChanges,
-    remoteChanges,
+    localChanges: localChanges.filter(c => c.itemIds.some(id => conflictingItemIds.includes(id))),
+    remoteChanges: remoteChanges.filter(c => c.itemIds.some(id => conflictingItemIds.includes(id))),
+    conflictingItemIds,
     localTimestamp: localExportedAt,
     remoteTimestamp: remoteExportedAt,
   };
 }
 
 /**
- * Resolve a conflict by choosing local or remote data
+ * Resolve granular conflict by choosing per-item or global resolution
  */
-export async function resolveConflict(choice: 'local' | 'remote'): Promise<SyncResult> {
+export async function resolveConflict(
+  choice: 'local' | 'remote' | 'manual',
+  manualChoices?: Record<string, 'local' | 'remote'>
+): Promise<SyncResult> {
   if (!pendingConflict) {
     return { status: 'error', message: 'No conflict to resolve' };
   }
 
   const { local, remote } = pendingConflict;
+  const baselineExportedAt = local.exportedAt; // Use this to track what we resolved
   pendingConflict = null;
 
   try {
-    appLogger.addLog(`Resolving conflict: keeping ${choice} data...`, 'info');
+    appLogger.addLog(`Resolving conflict: ${choice} resolution...`, 'info');
+
+    let resultData: BackupData;
 
     if (choice === 'local') {
-      // Push local data to cloud, overwriting remote
-      local.settings = {
-        ...(local.settings || {}),
-        lastSyncedAt: new Date().toISOString()
-      } as any;
-      local.exportedAt = new Date().toISOString();
-
-      await uploadSupabaseBackup(local);
-      appLogger.addLog('Conflict resolved: Local data uploaded to cloud', 'success');
+      resultData = { ...local };
+    } else if (choice === 'remote') {
+      resultData = { ...remote };
     } else {
-      // Import remote data, overwriting local
-      remote.settings = {
-        ...(remote.settings || {}),
-        lastSyncedAt: new Date().toISOString()
-      } as any;
+      // Manual merge
+      const { mergedData } = mergeBackups(local, remote);
+      resultData = mergedData;
 
-      importBackup(remote);
-      appLogger.addLog('Conflict resolved: Cloud data imported locally', 'success');
+      if (manualChoices) {
+        // Overwrite merged items with explicit choices
+        Object.entries(manualChoices).forEach(([itemId, side]) => {
+          const data = side === 'local' ? local : remote;
+          applyGranularItem(resultData, data, itemId);
+        });
+      }
     }
 
-    return { status: 'success', message: `Conflict resolved: ${choice === 'local' ? 'Uploaded to cloud' : 'Downloaded from cloud'}` };
+    // Mark as resolved for this state
+    resultData.settings = {
+      ...(resultData.settings || {}),
+      lastSyncedAt: new Date().toISOString()
+    } as any;
+    resultData.exportedAt = new Date().toISOString();
+    resultData.lastResolvedFor = baselineExportedAt;
+
+    // Save locally
+    importBackup(resultData);
+    // Push to cloud
+    await uploadSupabaseBackup(resultData);
+
+    appLogger.addLog('Conflict resolved and synced', 'success');
+    return { status: 'success', message: 'Conflict resolved successfully' };
   } catch (error: any) {
     appLogger.addLog(`Conflict resolution failed: ${error.message}`, 'error');
     return { status: 'error', message: error.message || 'Failed to resolve conflict' };
+  }
+}
+
+/**
+ * Applies a single item from source to target based on itemId
+ */
+function applyGranularItem(target: BackupData, source: BackupData, itemId: string) {
+  if (itemId.startsWith('settings-')) {
+    const field = itemId.replace('settings-', '') as keyof any;
+    if (target.settings && source.settings) {
+      (target.settings as any)[field] = (source.settings as any)[field];
+    }
+  } else if (itemId.startsWith('mindmap-')) {
+    const id = itemId.replace('mindmap-', '');
+    if (target.mindmaps && source.mindmaps && source.mindmaps[id]) {
+      target.mindmaps[id] = source.mindmaps[id];
+    }
+  } else if (itemId.startsWith('part-mindmap-')) {
+    const id = itemId.replace('part-mindmap-', '');
+    if (target.partMindmaps && source.partMindmaps && source.partMindmaps[id]) {
+      target.partMindmaps[id] = source.partMindmaps[id];
+    }
+  } else if (itemId.startsWith('memory-node-')) {
+    const id = itemId.replace('memory-node-', '');
+    if (target.memoryNodes && source.memoryNodes) {
+      const sourceNode = source.memoryNodes.find(n => n.id === id);
+      if (sourceNode) {
+        target.memoryNodes = target.memoryNodes.filter(n => n.id !== id);
+        target.memoryNodes.push(sourceNode);
+      }
+    }
+  } else if (itemId.startsWith('mutashabihat-decision-')) {
+    const key = itemId.replace('mutashabihat-decision-', '');
+    if (target.mutashabihatDecisions && source.mutashabihatDecisions && source.mutashabihatDecisions[key]) {
+      target.mutashabihatDecisions[key] = source.mutashabihatDecisions[key];
+    }
   }
 }
 
@@ -292,6 +384,17 @@ export async function syncWithCloud(): Promise<SyncResult> {
       await uploadSupabaseBackup(localData);
       appLogger.addLog('Initial backup created successfully', 'success');
       return { status: 'success', message: 'Initial backup created on Supabase' };
+    }
+
+    // Check if remote already contains the resolution for our current state
+    if (remoteData.lastResolvedFor === localData.exportedAt) {
+      appLogger.addLog('Sync: Adopting remote resolution for current state...', 'info');
+      remoteData.settings = {
+        ...(remoteData.settings || {}),
+        lastSyncedAt: new Date().toISOString()
+      } as any;
+      importBackup(remoteData);
+      return { status: 'success', message: 'Resolution adopted from cloud' };
     }
 
     // Check for conflicts before merging

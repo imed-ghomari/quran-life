@@ -22,11 +22,13 @@ export interface ChangeDetail {
     description: string;        // Human-readable description
     count: number;              // Number of items changed
     items?: string[];           // Optional: specific item names for collapsible details
+    itemIds: string[];          // UNIQUE IDs for granular merging
 }
 
 export interface ConflictInfo {
     localChanges: ChangeDetail[];
     remoteChanges: ChangeDetail[];
+    conflictingItemIds: string[];
     localTimestamp: string;
     remoteTimestamp: string;
 }
@@ -46,7 +48,7 @@ export interface SyncState {
 
 interface SyncContextValue extends SyncState {
     triggerSync: () => Promise<void>;
-    resolveConflict: (choice: 'local' | 'remote') => Promise<void>;
+    resolveConflict: (choice: 'local' | 'remote' | 'manual', manualChoices?: Record<string, 'local' | 'remote'>) => Promise<void>;
     dismissError: () => void;
 }
 
@@ -244,12 +246,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         }
     }, [isOnline]);
 
-    const resolveConflict = useCallback(async (choice: 'local' | 'remote') => {
+    const resolveConflict = useCallback(async (choice: 'local' | 'remote' | 'manual', manualChoices?: Record<string, 'local' | 'remote'>) => {
         setState(prev => ({ ...prev, status: 'syncing' }));
 
         try {
             const { resolveConflict: resolveSync } = await import('@/lib/sync');
-            await resolveSync(choice);
+            await resolveSync(choice, manualChoices);
 
             const settings = getSettings();
             setState(prev => ({

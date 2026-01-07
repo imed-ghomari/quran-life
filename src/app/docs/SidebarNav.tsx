@@ -56,7 +56,7 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
         if (changed) {
             setExpandedPaths(newExpanded);
         }
-    }, [activePath, items]); // Removed expandedPaths dependency to prevent infinite loops and override issues
+    }, [activePath, items, expandedPaths, manuallyToggled]);
 
     const toggleExpand = (e: React.MouseEvent, href: string) => {
         e.preventDefault();

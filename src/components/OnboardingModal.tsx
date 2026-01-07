@@ -128,7 +128,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Choose Your Scope</h2>
                             </div>
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-                                Select the part of the Qur'an you are currently focusing on. This will filter your dashboard and statistics.
+                                Select the part of the Qur&apos;an you are currently focusing on. This will filter your dashboard and statistics.
                             </p>
                             <div style={{ display: 'grid', gap: '0.75rem' }}>
                                 {(Object.entries(PART_NAMES) as [string, any][]).map(([id, info]) => {
@@ -319,7 +319,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 }}>
                                     <Star size={40} fill="var(--success)" />
                                 </div>
-                                <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>You're all set!</h2>
+                                <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>You&apos;re all set!</h2>
                                 <p style={{ color: 'var(--foreground-secondary)', lineHeight: 1.6 }}>
                                     Welcome to Quran Life. Your personalized review plan is ready.
                                 </p>

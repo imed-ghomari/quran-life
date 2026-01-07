@@ -26,6 +26,7 @@ const STORAGE_KEYS = {
     CUSTOM_MUTASHABIHAT: 'quran-app-custom-mutashabihat',
     LAST_MODIFIED: 'quran-app-last-modified',
     PORTION_POINTERS: 'quran-app-portion-pointers',
+    LAST_RESOLVED_FOR: 'quran-app-last-resolved-for',
 };
 
 const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
@@ -1450,6 +1451,7 @@ export interface BackupData {
     customMutashabihat?: CustomMutashabih[];
     cycleStart?: string;
     listeningComplete?: string | null;
+    lastResolvedFor?: string;
     exportedAt: string;
 }
 
@@ -1466,6 +1468,7 @@ export function exportBackup(): BackupData {
         customMutashabihat: getCustomMutashabihat(),
         cycleStart: getCycleStart(),
         listeningComplete: getFromCache(STORAGE_KEYS.LISTENING_COMPLETE, null),
+        lastResolvedFor: getFromCache(STORAGE_KEYS.LAST_RESOLVED_FOR, undefined),
         exportedAt: getFromCache(STORAGE_KEYS.LAST_MODIFIED, new Date().toISOString()),
     };
 }
@@ -1513,6 +1516,7 @@ export function importBackup(data: BackupData): void {
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);
+    if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor);
 
     // Finally, update the last modified timestamp to match the imported backup's time
     if (data.exportedAt) {
