@@ -28,6 +28,7 @@ import { QuranPart } from '@/lib/types';
 import { syncWithCloud } from '@/lib/sync';
 import { ChevronDown, Brain, Map, MapPinned, AlertTriangle, ShieldAlert, SplitSquareHorizontal, Check, ImageIcon, ChevronRight, X, AlertCircle, Download, Upload, MoreVertical, FileText, Settings2, PenTool, Trash2, Plus, Minus, Info } from 'lucide-react';
 import MindmapEditor from '@/components/MindmapEditor';
+import MindmapViewer from '@/components/MindmapViewer';
 import { appLogger } from '@/lib/logger';
 import Link from 'next/link';
 
@@ -833,6 +834,8 @@ export default function TodoPage() {
         'surah': true
     });
 
+    const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
+
     const toggleSubgroup = (group: string) => {
         setCollapsedSubgroups(prev => ({ ...prev, [group]: !prev[group] }));
     };
@@ -1304,6 +1307,45 @@ export default function TodoPage() {
                     title={`Part ${activePartEditor.partId} Mindmap Editor`}
                 />
             )}
+
+            {/* Mindmap Preview Modal */}
+            {activeMindmapPreview && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 10000,
+                    background: 'var(--background)',
+                    display: 'flex',
+                    flexDirection: 'column'
+                }}>
+                    <div style={{
+                        height: '50px',
+                        borderBottom: '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0 1rem'
+                    }}>
+                        <span style={{ fontWeight: 600 }}>Mindmap Preview</span>
+                        <button
+                            onClick={() => setActiveMindmapPreview(null)}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--foreground)' }}
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <MindmapViewer
+                            snapshot={activeMindmapPreview.snapshot}
+                            imageUrl={activeMindmapPreview.imageUrl}
+                            imageUrlDark={activeMindmapPreview.imageUrlDark}
+                            isDark={isDark}
+                            title="Mindmap Preview"
+                            height="100%"
+                        />
+                    </div>
+                </div>
+            )}
             <h1 className="hide-mobile">Todo</h1>
 
             {/* Maintenance Section */}
@@ -1418,6 +1460,21 @@ export default function TodoPage() {
                                                                     <PenTool size={14} style={{ marginRight: '4px' }} />
                                                                     Edit Map
                                                                 </button>
+                                                                {hasContent && (
+                                                                    <button
+                                                                        className="btn btn-secondary"
+                                                                        onClick={() => setActiveMindmapPreview({
+                                                                            surahId: issue.surahId,
+                                                                            snapshot: mindmap?.tldrawSnapshot,
+                                                                            imageUrl: mindmap?.imageUrl,
+                                                                            imageUrlDark: mindmap?.imageUrlDark
+                                                                        })}
+                                                                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', flex: 1 }}
+                                                                    >
+                                                                        <Brain size={14} style={{ marginRight: '4px' }} />
+                                                                        Show Map
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     className="btn btn-primary"
                                                                     style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', flex: 1 }}
@@ -1612,11 +1669,26 @@ export default function TodoPage() {
                                                                 <button
                                                                     className="btn btn-secondary"
                                                                     onClick={() => setActiveMindmapEditor({ surahId: issue.surahId, snapshot: mindmap?.tldrawSnapshot })}
-                                                                    style={{ padding: '0.4rem', fontSize: '0.75rem', flex: 1 }}
+                                                                    style={{ padding: '0.4rem', fontSize: '0.75rem', flex: 2 }}
                                                                 >
                                                                     <PenTool size={14} style={{ marginRight: '4px' }} />
                                                                     Edit Map
                                                                 </button>
+                                                                {hasContent && (
+                                                                    <button
+                                                                        className="btn btn-secondary"
+                                                                        onClick={() => setActiveMindmapPreview({
+                                                                            surahId: issue.surahId,
+                                                                            snapshot: mindmap?.tldrawSnapshot,
+                                                                            imageUrl: mindmap?.imageUrl,
+                                                                            imageUrlDark: mindmap?.imageUrlDark
+                                                                        })}
+                                                                        style={{ padding: '0.4rem', fontSize: '0.75rem', flex: 2 }}
+                                                                    >
+                                                                        <Brain size={14} style={{ marginRight: '4px' }} />
+                                                                        Map
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     className="btn btn-primary"
                                                                     style={{ padding: '0.4rem', fontSize: '0.75rem', flex: 1 }}
@@ -2054,24 +2126,16 @@ export default function TodoPage() {
                                                                 <td colSpan={4} style={{ padding: '1.5rem', background: 'var(--background)' }}>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                                            {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
-                                                                                <div style={{ position: 'relative', width: '100%', height: '400px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                                    {(() => {
-                                                                                        const displayUrl = isDark ? (mindmap.imageUrlDark || mindmap.imageUrl) : mindmap.imageUrl;
-                                                                                        if (!displayUrl) return null;
-                                                                                        return (
-                                                                                            <Image
-                                                                                                src={displayUrl}
-                                                                                                alt="Mindmap preview"
-                                                                                                fill
-                                                                                                style={{
-                                                                                                    objectFit: 'contain',
-                                                                                                    background: isDark ? '#1e1e1e' : '#f5f5f5',
-                                                                                                    filter: isDark && !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none'
-                                                                                                }}
-                                                                                            />
-                                                                                        );
-                                                                                    })()}
+                                                                            {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark || mindmap.tldrawSnapshot) && (
+                                                                                <div style={{ marginBottom: '1rem' }}>
+                                                                                    <MindmapViewer
+                                                                                        snapshot={mindmap.tldrawSnapshot}
+                                                                                        imageUrl={mindmap.imageUrl}
+                                                                                        imageUrlDark={mindmap.imageUrlDark}
+                                                                                        isDark={isDark}
+                                                                                        title={`${surah.name} Mindmap`}
+                                                                                        height={400}
+                                                                                    />
                                                                                 </div>
                                                                             )}
 
@@ -2239,24 +2303,16 @@ export default function TodoPage() {
 
                                                             {isExpanded && (
                                                                 <div style={{ background: 'var(--background)', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                                    {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark) && (
-                                                                        <div style={{ position: 'relative', width: '100%', height: '250px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                                            {(() => {
-                                                                                const displayUrl = isDark ? (mindmap.imageUrlDark || mindmap.imageUrl) : mindmap.imageUrl;
-                                                                                if (!displayUrl) return null;
-                                                                                return (
-                                                                                    <Image
-                                                                                        src={displayUrl}
-                                                                                        alt="Mindmap preview"
-                                                                                        fill
-                                                                                        style={{
-                                                                                            objectFit: 'contain',
-                                                                                            background: isDark ? '#1e1e1e' : '#f5f5f5',
-                                                                                            filter: isDark && !mindmap.imageUrlDark && mindmap.imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none'
-                                                                                        }}
-                                                                                    />
-                                                                                );
-                                                                            })()}
+                                                                    {mindmap && (mindmap.imageUrl || mindmap.imageUrlDark || mindmap.tldrawSnapshot) && (
+                                                                        <div style={{ position: 'relative', width: '100%', height: '250px' }}>
+                                                                            <MindmapViewer
+                                                                                snapshot={mindmap.tldrawSnapshot}
+                                                                                imageUrl={mindmap.imageUrl}
+                                                                                imageUrlDark={mindmap.imageUrlDark}
+                                                                                isDark={isDark}
+                                                                                title={`${surah.name} Mindmap`}
+                                                                                height={250}
+                                                                            />
                                                                         </div>
                                                                     )}
                                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>

@@ -28,6 +28,7 @@ import {
     RotateCcw
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import MindmapViewer from '@/components/MindmapViewer';
 import { QuranPart } from '@/lib/types';
 import {
     getSettings,
@@ -798,9 +799,9 @@ export default function TodayPage() {
                                             ) : (
                                                 <div>
                                                     {(() => {
-                                                        const displayUrl = isDark ? (reviewContent.mindmap?.imageUrlDark || reviewContent.mindmap?.imageUrl) : reviewContent.mindmap?.imageUrl;
+                                                        const hasContent = !!reviewContent.mindmap?.imageUrl || !!reviewContent.mindmap?.imageUrlDark || !!reviewContent.mindmap?.tldrawSnapshot;
 
-                                                        if (!displayUrl) {
+                                                        if (!hasContent) {
                                                             return (
                                                                 <div
                                                                     className="verse-hidden"
@@ -822,14 +823,15 @@ export default function TodayPage() {
                                                         }
 
                                                         return (
-                                                            <div
-                                                                style={{ position: 'relative', cursor: 'zoom-in', width: '100%', height: '300px' }}
-                                                                onClick={() => setZoomImage(displayUrl)}
-                                                            >
-                                                                <Image src={displayUrl} alt="Mindmap preview" fill style={{ objectFit: 'contain', borderRadius: 8 }} />
-                                                                <div style={{ position: 'absolute', bottom: 16, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                                    <Maximize2 size={12} /> Tap to Zoom
-                                                                </div>
+                                                            <div style={{ marginBottom: '1rem' }}>
+                                                                <MindmapViewer
+                                                                    snapshot={reviewContent.mindmap?.tldrawSnapshot}
+                                                                    imageUrl={reviewContent.mindmap?.imageUrl}
+                                                                    imageUrlDark={reviewContent.mindmap?.imageUrlDark}
+                                                                    isDark={isDark}
+                                                                    title={reviewContent.type === 'mindmap' ? `${reviewContent.surah?.arabicName} Mindmap` : `Part ${reviewContent.partId} Mindmap`}
+                                                                    height={320}
+                                                                />
                                                             </div>
                                                         );
                                                     })()}
