@@ -10,9 +10,11 @@ import {
     getMemoryNodes,
     getPortionPointer,
     getListeningCycles,
+    getMutashabihatDecisions,
 } from '@/lib/storage';
-import { BarChart3, Layers, Hash, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock } from 'lucide-react';
+import { BarChart3, Layers, Hash, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 import { getListeningStats, getListeningProgress } from '@/lib/storage';
+import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
@@ -279,7 +281,57 @@ export default function StatisticsPage() {
         };
     }, [activePart, skippedSurahs]);
 
-    // 5. Future Due Data
+    // 5. Mutashabihat Coverage Data
+    const mutashabihatDecisions = useMemo(() => {
+        version;
+        return getMutashabihatDecisions();
+    }, [version]);
+
+    const mutashabihatStats = useMemo(() => {
+        const allRefs = getAllMutashabihatRefs();
+        const targetRefs = allRefs.filter(abs => {
+            const { surahId } = absoluteToSurahAyah(abs);
+            const surah = SURAHS.find(s => s.id === surahId);
+            return activePart === 5 || surah?.part === activePart;
+        });
+
+        const total = targetRefs.length;
+        if (total === 0) return { total: 0, segments: [] };
+
+        let solvedMindmap = 0;
+        let solvedNote = 0;
+        let ignored = 0;
+        let pending = 0;
+
+        targetRefs.forEach(abs => {
+            const decisions = Object.entries(mutashabihatDecisions).filter(([key]) => key.startsWith(`${abs}-`) || key === abs.toString());
+
+            if (decisions.length > 0) {
+                const anySolvedMindmap = decisions.some(([_, d]) => d.status === 'solved_mindmap');
+                const anySolvedNote = decisions.some(([_, d]) => d.status === 'solved_note');
+                const anyIgnored = decisions.some(([_, d]) => d.status === 'ignored');
+
+                if (anySolvedMindmap) solvedMindmap++;
+                else if (anySolvedNote) solvedNote++;
+                else if (anyIgnored) ignored++;
+                else pending++;
+            } else {
+                pending++;
+            }
+        });
+
+        return {
+            total,
+            segments: [
+                { label: 'Pending', count: pending, color: 'var(--chart-not-learned)', description: 'Verses with mutashabihat not yet addressed' },
+                { label: 'Ignored', count: ignored, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Marked as not requiring attention' },
+                { label: 'Solved (Note)', count: solvedNote, color: 'var(--chart-medium)', description: 'Addressed with a memory note' },
+                { label: 'Solved (MM)', count: solvedMindmap, color: 'var(--chart-mastered)', description: 'Addressed within a mindmap' },
+            ].filter(s => s.count > 0)
+        };
+    }, [activePart, mutashabihatDecisions]);
+
+    // 6. Future Due Data
     const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
     const [showBacklog, setShowBacklog] = useState(true);
 
@@ -420,6 +472,12 @@ export default function StatisticsPage() {
                             </button>
                         </div>
                     }
+                />
+
+                <ProgressBarSection
+                    title="Similar Verses Coverage"
+                    icon={<BookCopy size={20} />}
+                    stats={mutashabihatStats}
                 />
 
                 <ProgressBarSection

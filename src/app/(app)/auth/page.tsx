@@ -73,15 +73,24 @@ function AuthContent() {
             return;
         }
 
-        if (isSignUp) {
-            // New users need to complete Polar checkout
-            // Redirect to Polar checkout with user info
-            const checkoutUrl = `/api/polar/checkout?product_id=${POLAR_PRODUCT_ID}`;
-            window.location.href = checkoutUrl;
-        } else {
-            // Existing users (sign-in) already completed checkout - go to dashboard
+        // Check if user has already paid
+        const { data: purchase } = await supabase
+            .from('purchases')
+            .select('id')
+            .eq('email', user.email)
+            .eq('status', 'completed')
+            .single();
+
+        if (purchase) {
+            // User has already paid, go to dashboard
             router.push('/dashboard');
+            return;
         }
+
+        // If not owner and not paid, they must go to checkout
+        // (Even if it's a sign-in, they might have skipped checkout before)
+        const checkoutUrl = `/api/polar/checkout?product_id=${POLAR_PRODUCT_ID}`;
+        window.location.href = checkoutUrl;
     };
 
     return (

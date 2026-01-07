@@ -29,14 +29,12 @@ export async function GET(request: NextRequest) {
 
     try {
         // Create checkout session with Polar
-        // Endpoint: POST https://api.polar.sh/v1/checkouts/custom/ 
-        // NOTE: 'Method Not Allowed' often means the endpoint URL is slightly off.
-        // We will try the standard endpoint: /v1/checkouts/ (with trailing slash) OR just /v1/checkouts/custom/
+        const isSandbox = process.env.POLAR_SANDBOX === 'true';
+        const polarApiUrl = isSandbox 
+            ? 'https://sandbox-api.polar.sh/v1/checkouts/custom/' 
+            : 'https://api.polar.sh/v1/checkouts/custom/';
 
-        // Let's use the 'custom' endpoint but ensure request is formed correctly.
-        // If that fails, we can fallback to just constructing a direct link, but that risks losing the dynamic success_url.
-
-        const response = await fetch('https://api.polar.sh/v1/checkouts/custom/', {
+        const response = await fetch(polarApiUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${process.env.POLAR_ACCESS_TOKEN}`,

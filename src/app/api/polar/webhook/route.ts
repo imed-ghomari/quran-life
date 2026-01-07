@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { validateEvent } from '@polar-sh/sdk/webhooks';
 
 /**
  * Polar Webhook Handler
@@ -8,13 +9,42 @@ import { createClient } from '@/utils/supabase/server';
  */
 export async function POST(request: NextRequest) {
     try {
-        const payload = await request.json();
+        const body = await request.text();
+        
+        // Extract required headers for Polar webhook validation
+        const webhookId = request.headers.get('webhook-id');
+        const webhookSignature = request.headers.get('webhook-signature');
+        const webhookTimestamp = request.headers.get('webhook-timestamp');
 
-        // Verify webhook signature (optional but recommended)
-        const signature = request.headers.get('polar-signature');
-        // TODO: Implement signature verification when Polar provides webhook secrets
+        console.log('--- Webhook Received ---');
+        console.log('Headers:', JSON.stringify({
+            'webhook-id': webhookId,
+            'webhook-signature': webhookSignature,
+            'webhook-timestamp': webhookTimestamp
+        }, null, 2));
 
-        const { event, data } = payload;
+        if (!webhookSignature || !webhookId || !webhookTimestamp) {
+            console.error('Missing required webhook headers');
+            return NextResponse.json({ error: 'Missing headers' }, { status: 401 });
+        }
+
+        let payload;
+        try {
+            payload = validateEvent(
+                body,
+                {
+                    'webhook-id': webhookId,
+                    'webhook-signature': webhookSignature,
+                    'webhook-timestamp': webhookTimestamp,
+                },
+                process.env.POLAR_WEBHOOK_SECRET || ''
+            );
+        } catch (err) {
+            console.error('Webhook signature verification failed:', err);
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+        }
+
+        const { type: event, data } = payload as any;
 
         // Handle checkout.completed event
         if (event === 'checkout.completed' || event === 'order.created') {

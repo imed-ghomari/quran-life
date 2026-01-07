@@ -2224,11 +2224,12 @@ export default function TodoPage() {
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                         <div className="surah-number" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem' }}>{surah.id}</div>
                                                                         <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{surah.name}</span>
+                                                                        {hasContent && <Brain size={14} style={{ color: 'var(--accent)', opacity: 0.8 }} />}
                                                                     </div>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                                            <span className={`status-badge ${mindmap?.isComplete ? 'learned' : 'partial'}`} style={{ fontSize: '0.65rem' }}>
-                                                                                {mindmap?.isComplete ? 'Complete' : 'Incomplete'}
+                                                                            <span className={`status-badge ${isComplete ? 'learned' : 'partial'}`} style={{ fontSize: '0.65rem' }}>
+                                                                                {isComplete ? 'Complete' : 'Incomplete'}
                                                                             </span>
                                                                         </div>
                                                                         <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.5 }} />
@@ -2287,12 +2288,12 @@ export default function TodoPage() {
                                                                             </Link>
                                                                         )}
                                                                         <button
-                                                                            className={`btn ${(!mindmap?.imageUrl && !mindmap?.tldrawSnapshot) ? 'btn-secondary' : 'btn-success'}`}
-                                                                            disabled={!mindmap?.imageUrl && !mindmap?.tldrawSnapshot}
+                                                                            className={`btn ${!hasContent ? 'btn-secondary' : isComplete ? 'btn-secondary' : 'btn-success'}`}
+                                                                            disabled={!hasContent}
                                                                             onClick={() => handleMarkComplete(surah.id, mindmap)}
                                                                             style={{ flex: 1, fontSize: '0.75rem', padding: '0.5rem' }}
                                                                         >
-                                                                            <Check size={16} /> {mindmap?.isComplete ? 'Done' : 'Complete'}
+                                                                            <Check size={16} /> {isComplete ? 'Undo' : 'Done'}
                                                                         </button>
                                                                         {/* Issue #4: Delete button for mobile Surah Mindmaps */}
                                                                         {(mindmap?.imageUrl || mindmap?.tldrawSnapshot) && (

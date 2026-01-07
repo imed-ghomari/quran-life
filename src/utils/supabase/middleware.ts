@@ -40,18 +40,32 @@ export async function updateSession(request: NextRequest) {
 
   // If user is NOT logged in and tries to access a protected route, redirect to home/auth
   if (!user && isProtectedRoute) {
-    // Check if it's the owner bypass (for new signups/demos)
-    // We already handle owner bypass in the page logic, but if they try to access dashboard directly
-    // without a session, they should probably authenticate first.
-
-    // We can preserve the destination to redirect back after login
-    // BUT for security, let's just send them to the main page which acts as login
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  // Optional: If user IS logged in and is on the landing page/auth page, redirect to dashboard?
-  // Use your discretion. For now, strict protection of internal routes is the priority.
+  // If user is logged in, check for purchase (unless owner)
+  if (user && isProtectedRoute) {
+    const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL
+    const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase()
+
+    if (!isOwner) {
+      // Check if user has a completed purchase
+      const { data: purchase, error } = await supabase
+        .from('purchases')
+        .select('id')
+        .eq('email', user.email)
+        .eq('status', 'completed')
+        .single()
+
+      if (error || !purchase) {
+        console.log(`User ${user.email} has no purchase, redirecting to auth`)
+        // Redirect to auth page with a flag to show they need to pay
+        url.pathname = '/auth'
+        return NextResponse.redirect(url)
+      }
+    }
+  }
 
   return supabaseResponse
 }

@@ -223,14 +223,40 @@ export default function TodayPage() {
 
         const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
         const startIdx = getPortionPointer(settings.activePart);
-        const endIdx = Math.min(startIdx + versesPerDay, totalVerses);
+        let endIdx = startIdx + versesPerDay;
+
+        // Intelligent Division: Merge short trailing surah segments
+        if (endIdx < totalVerses) {
+            const lastVerseInProposed = allVersesInPart[endIdx - 1];
+            const nextVerse = allVersesInPart[endIdx];
+            if (nextVerse && nextVerse.surahId === lastVerseInProposed.surahId) {
+                // Check how many are left in this surah
+                let i = endIdx;
+                let remainingCount = 0;
+                let remainingLength = 0;
+                while (i < totalVerses && allVersesInPart[i].surahId === lastVerseInProposed.surahId) {
+                    remainingCount++;
+                    remainingLength += allVersesInPart[i].text.length;
+                    i++;
+                }
+                // If <= 5 verses or total text is short (< 400 chars)
+                if (remainingCount <= 5 || remainingLength < 400) {
+                    // Ignore surahs with very long verses (e.g. Baqarah 282)
+                    const surahVerses = allVersesInPart.filter(v => v.surahId === lastVerseInProposed.surahId);
+                    const hasVeryLongVerses = surahVerses.some(v => v.text.length > 600);
+
+                    if (!hasVeryLongVerses) {
+                        endIdx = i;
+                    }
+                }
+            }
+        }
 
         let portion: Verse[];
         if (endIdx <= totalVerses) {
             portion = allVersesInPart.slice(startIdx, endIdx);
-            // If we hit exactly the end or close to it, and there's remaining in cycle wrap-around? 
-            // Actually the pointer logic handles wrap-around on Mark Done.
         } else {
+            // Handle wrap-around
             portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
         }
 
@@ -900,13 +926,18 @@ export default function TodayPage() {
                                                         <div className="verse-ref">
                                                             {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
                                                         </div>
-                                                        {todaysPortion[currentVerseIndex].ayahId === 1 &&
+                                                        {todaysPortion[currentVerseIndex].ayahId === 1 ? (
                                                             todaysPortion[currentVerseIndex].surahId !== 1 &&
                                                             todaysPortion[currentVerseIndex].surahId !== 9 && (
                                                                 <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
                                                                     بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                                                                 </div>
-                                                            )}
+                                                            )
+                                                        ) : (
+                                                            <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                                                أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
+                                                            </div>
+                                                        )}
                                                         <div className="arabic-text">{todaysPortion[currentVerseIndex].text}</div>
                                                     </>
                                                 )}
@@ -925,7 +956,11 @@ export default function TodayPage() {
                                                         {isNewSurah && surah && (
                                                             <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
                                                                 <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
-                                                                {surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>}
+                                                                {v.ayahId === 1 ? (
+                                                                    surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
+                                                                ) : (
+                                                                    <p className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
+                                                                )}
                                                             </div>
                                                         )}
                                                         <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
