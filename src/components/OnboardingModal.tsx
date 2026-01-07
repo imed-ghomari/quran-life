@@ -134,6 +134,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 {(Object.entries(PART_NAMES) as [string, any][]).map(([id, info]) => {
                                     const partId = parseInt(id) as QuranPart;
                                     const isActive = selectedPart === partId;
+                                    const startSurah = SURAHS.find(s => s.id === info.surahs[0])?.name;
+                                    const endSurah = SURAHS.find(s => s.id === info.surahs[1])?.name;
+
                                     return (
                                         <button
                                             key={id}
@@ -151,11 +154,16 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                                 textAlign: 'left',
                                             }}
                                         >
-                                            <div>
+                                            <div style={{ flex: 1 }}>
                                                 <div style={{ fontWeight: 700, fontSize: '1rem', color: isActive ? 'var(--accent)' : 'var(--foreground)' }}>{info.english}</div>
-                                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>{info.arabic}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)', marginTop: '4px', opacity: 0.8 }}>
+                                                    From <b>{startSurah}</b> to <b>{endSurah}</b>
+                                                </div>
                                             </div>
-                                            {isActive && <Check size={20} color="var(--accent)" strokeWidth={3} />}
+                                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>{info.arabic}</div>
+                                                {isActive && <Check size={20} color="var(--accent)" strokeWidth={3} />}
+                                            </div>
                                         </button>
                                     );
                                 })}
@@ -346,7 +354,6 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 </p>
                                 <a
                                     href="/docs"
-                                    target="_blank"
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
