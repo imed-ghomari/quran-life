@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import SidebarLink from './SidebarLink';
 
@@ -65,10 +64,17 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
         // Mark as manually toggled so auto-expand doesn't override this decision
         setManuallyToggled(prev => ({ ...prev, [href]: true }));
 
-        setExpandedPaths(prev => ({
-            ...prev,
-            [href]: !prev[href]
-        }));
+        setExpandedPaths(prev => {
+            const isExpanding = !prev[href];
+            
+            // Accordion effect: if we're expanding, collapse all other items at this level
+            if (isExpanding) {
+                return { [href]: true };
+            } else {
+                // If we're collapsing, just collapse this one
+                return { ...prev, [href]: false };
+            }
+        });
     };
 
     return (
@@ -76,7 +82,6 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
             {items.map((item) => {
                 const isExpanded = expandedPaths[item.href];
                 const hasChildren = item.children && item.children.length > 0;
-                const isTargetActive = normalize(item.href) === activePath;
 
                 return (
                     <li key={item.href} style={{ marginBottom: '0.25rem' }}>

@@ -8,74 +8,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2026-01-07]
 
 ### Added
-- **Search Highlighting**: Search terms are now highlighted in the documentation search results and briefly on the destination page for better visibility.
-- **Deep Linking**: Clicking a search result now navigates directly to the closest heading anchor.
-- **PWA Installation Guides**: Added platform-specific instructions for iOS, Android, and Desktop (Chrome/Edge).
-- **Sync Improvements**: Added auto-merge for non-conflicting items and a more intuitive manual conflict resolution modal.
-- **Statistics**: Added "Similar Verse Coverage" chart to the Statistics tab.
-- **UI Enhancements**: Added dynamic mindmap previews and optimized layouts for tablet and mobile headers.
-- **Onboarding**: Improved the onboarding progress bar and ensured it correctly triggers for new users.
+- **Smarter Documentation Sidebar**: Sections now collapse automatically to help you stay focused on the content you're reading.
+- **Typo-Tolerant Search**: You can now find documentation even if you make small spelling mistakes.
+- **Visual Search Highlights**: Search terms are now highlighted in results and on the page to help you find answers faster.
+- **Direct Navigation**: Search results now take you exactly to the relevant section of a page.
+- **New Installation Guides**: Step-by-step instructions for adding Quran Life to your iPhone, Android, or Desktop for offline use.
+- **Reliable Data Sync**: Improved background syncing and a new, clearer window to help you resolve conflicts between devices.
+- **New Progress Chart**: Visualize your memorization depth with the "Similar Verse Coverage" chart in the Statistics tab.
+- **Better Mobile Experience**: Improved layouts for phones and tablets, plus new live previews for your mindmaps.
+- **Smoother Start**: Refined the onboarding process for new users with a better progress tracker.
 
 ### Changed
-- **Documentation Overhaul**: Major restructuring into "Philosophy" and "Application" sections with simplified, jargon-free language.
-- **Mindmap Strategy**: Refined the workflow to encourage early mindmap creation to decrease rote memorization time.
-- **Sync Logic**: Transitioned to auto-sync on load and manual sync via a dynamic toolbar button with clear labels.
-- **Daily Portion Logic**: Intelligent merging of short trailing segments and added "Isti3atha" display for mid-surah starts.
-- **Review System**: Clarified "Not Sure" (Postpone) button usage and automated Mutashabihat flagging in the Todo tab after errors.
-- **Settings**: Redefined "Skipping Surahs" for mastered texts and restricted AnchorBuilder to create/edit modes.
+- **Simpler Documentation**: Completely rewritten guides using clearer language and a new "Philosophy vs. Application" structure.
+- **Optimized Memorization Workflow**: Updated recommendations to use mindmaps earlier in your process, helping you save time on rote memorization.
+- **Smart Syncing**: The app now syncs automatically when you open it, with a handy new toolbar button to show your status.
+- **Smarter Daily Portions**: Improved how the app divides your daily reading, including proper "Isti3atha" display for mid-surah starts.
+- **Clearer Review Actions**: Better "Not Sure" button guidance and automatic flagging of similar verses (Mutashabihat) when you make a mistake.
+- **Refined Settings**: Easier surah skipping for mastered texts and improved controls in the mindmap builder.
 
 ### Fixed
-- **Sync & Offline**: Resolved issues with offline launching and corrected sync count tracking.
-- **Mobile Layout**: Fixed various mobile UI issues, including header sizes, icon alignments, and empty states.
-- **Vercel Build**: Resolved several build-related errors for deployment.
-- **Mindmap Viewer**: Fixed missing `useEffect` import in `MindmapViewer.tsx` that caused compilation failure.
+- **Sync & Offline**: Fixed offline access issues and improved the accuracy of sync counts.
+- **Mobile Layout**: Polished the mobile interface, fixing alignment issues and header sizes.
+- **Stability**: Fixed a crash in the mindmap viewer.
 
 ### Removed
-- **Obsolete Sections**: Removed "Mindmap Meta" and outdated "periodic sync" descriptions.
+- **Clean Up**: Removed outdated settings and old, unnecessary sync descriptions.
 
 ## [2025-12-27]
 
 ### Fixed
-- **Production Crashes**: Resolved critical Tldraw crashes in production by implementing a unique `persistenceKey` and a robust `ErrorBoundary`.
-- **Blank Screen Issues**: Fixed blank screen interface by disabling React Strict Mode, ensuring proper CSS loading, and using dynamic imports with SSR disabled for the Mindmap Editor.
-- **Asset Loading**: Hardcoded Tldraw asset URLs to prevent missing resource errors in production environments.
-- **Code Stability**: Fixed `ReferenceError` in storage logic and removed duplicate React hooks that caused render crashes.
-- **Debug Tools**: Enhanced the debug overlay with layout and state diagnostics to better identify UI issues.
+- **Reliability**: Resolved several critical issues that caused the app to crash or show a blank screen during mindmap editing.
+- **Performance**: Fixed various technical bugs to ensure the interface remains stable and responsive.
 
 ## [2025-12-26]
 
 ### Added
-- **Review UI**: Enhanced the review system interface for better user experience.
-- **Offline Support**: Improved application reliability when working without an internet connection.
-- **Mobile Design**: Added slide-over designs for "Similar Verse Coverage" and optimized documentation layouts for mobile devices.
+- **Refined Review Experience**: Enhanced the daily review interface for a smoother, more focused experience.
+- **Improved Offline Support**: The app is now more reliable when you're using it without an internet connection.
+- **New Mobile Layouts**: Added mobile-optimized views for progress charts and documentation.
 
 ### Changed
-- **UI Optimization**: Refined settings and todo pages for better mobile usability and layout polish.
+- **Navigation Polish**: Smoother interactions and layout improvements for the Settings and Todo pages.
 
 ## [2025-12-25]
 
 ### Added
-- **Knowledge Tracking**: Introduced "Memory Nodes Transparency" section in settings to track memorization progress.
-- **PWA Enhancements**: Added new PWA icons and updated configuration for better installation support.
-- **Mindmap Tools**: Added zoom functionality to the mindmap editor.
+- **Detailed Progress Tracking**: See exactly how well you know each verse with the new "Memory Nodes" section in settings.
+- **Native Look & Feel**: Updated app icons for a better experience when Quran Life is installed on your home screen.
+- **Mindmap Zoom**: You can now zoom in and out while editing your mindmaps.
 
 ### Changed
-- **Rebranding**: Renamed the application to **Quran Life**.
-- **Terminology**: Transitioned from "Maturity" to "Knowledge Tracking" across the interface.
-- **Mobile Layout**: Removed redundant card styles and improved space utilization for mobile screens.
-- **Logic Improvements**: Refined daily portion division and surah ordering.
+- **New Name**: We've officially renamed the application to **Quran Life**!
+- **Clearer Terminology**: Changed "Maturity" to "Knowledge Tracking" to better reflect your memorization journey.
+- **Optimized Mobile Layout**: Removed redundant borders and clutter to make better use of your phone's screen space.
+- **Daily Reading Improvements**: Refined how daily portions are calculated for a more natural reading flow.
 
 ### Fixed
-- **Sync Persistence**: Resolved issues with Supabase sync data not persisting correctly.
-- **Type Safety**: Fixed various TypeScript errors related to memory nodes and settings.
+- **Cloud Saving**: Fixed a bug where progress wouldn't always save correctly to your account.
 
 ## [2025-12-24]
 
 ### Added
-- **Infrastructure**: Initial project setup with Supabase integration and Vercel deployment configuration.
-- **PWA Support**: Added manifest, metadata, and SVG icons to enable PWA installation.
-- **Core Features**: Initial implementation of cross-tab sync and review due dates.
+- **Initial Release**: Quran Life is now live! Featuring cloud sync, progress tracking, and PWA support for all your devices.
 
 ### Fixed
-- **Compatibility**: Downgraded ESLint for Next.js 14 compatibility and resolved initial Vercel build errors.
-- **Sync Loops**: Prevented infinite sync loops and resolved dark mode UI persistence issues.
+- **Sync Reliability**: Fixed a rare issue where the app would sync repeatedly in a loop.
+- **Visuals**: Resolved issues with dark mode settings not being saved correctly.

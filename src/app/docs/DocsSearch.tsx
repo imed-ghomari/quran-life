@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, FileText, ChevronRight, X } from 'lucide-react';
+import { Search, FileText, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface SearchResult {
@@ -68,14 +68,43 @@ export default function DocsSearch() {
     const Highlight = ({ text, query }: { text: string; query: string }) => {
         if (!query.trim()) return <>{text}</>;
         
-        // Strip common markdown characters that might be in the title/excerpt
+        // Strip common markdown characters
         const cleanText = text.replace(/[#*`_]/g, '');
-        const parts = cleanText.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+        
+        // Split query into words and escape them for regex
+        const words = query.trim().split(/\s+/).filter(word => word.length > 1);
+        
+        if (words.length === 0) {
+            // Fallback for single characters or empty queries
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const parts = cleanText.split(new RegExp(`(${escapedQuery})`, 'gi'));
+            return (
+                <>
+                    {parts.map((part, i) => 
+                        part.toLowerCase() === query.toLowerCase() ? (
+                            <mark key={i} style={{ backgroundColor: 'rgba(234, 179, 8, 0.3)', color: 'inherit', borderRadius: '2px', padding: '0 1px' }}>
+                                {part}
+                            </mark>
+                        ) : (
+                            <span key={i}>{part}</span>
+                        )
+                    )}
+                </>
+            );
+        }
+
+        // Create a regex that matches any of the words
+        const pattern = words
+            .map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('|');
+        
+        const parts = cleanText.split(new RegExp(`(${pattern})`, 'gi'));
+        const wordSet = new Set(words.map(w => w.toLowerCase()));
         
         return (
             <>
                 {parts.map((part, i) => 
-                    part.toLowerCase() === query.toLowerCase() ? (
+                    wordSet.has(part.toLowerCase()) || part.toLowerCase() === query.toLowerCase() ? (
                         <mark key={i} style={{ backgroundColor: 'rgba(234, 179, 8, 0.3)', color: 'inherit', borderRadius: '2px', padding: '0 1px' }}>
                             {part}
                         </mark>

@@ -6,10 +6,48 @@ interface SearchResult {
     title: string;
     href: string;
     excerpt: string;
+    score?: number;
 }
 
 interface MetaData {
     [key: string]: string | { title: string; type?: string };
+}
+
+function fuzzyMatch(text: string, query: string): { matches: boolean; score: number; index: number } {
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    
+    // 1. Exact match (highest score)
+    const exactIndex = lowerText.indexOf(lowerQuery);
+    if (exactIndex !== -1) {
+        return { matches: true, score: 100, index: exactIndex };
+    }
+    
+    // 2. All words present (high score)
+    const words = lowerQuery.split(/\s+/).filter(Boolean);
+    if (words.length > 1) {
+        const allWordsPresent = words.every(word => lowerText.includes(word));
+        if (allWordsPresent) {
+            // Find the index of the first word
+            const firstWordIndex = lowerText.indexOf(words[0]);
+            return { matches: true, score: 80, index: firstWordIndex };
+        }
+    }
+    
+    // 3. Simple character-skipping fuzzy (medium score)
+    if (lowerQuery.length > 2) {
+        // Create a regex like f.*u.*z.*z.*y
+        const fuzzyPattern = lowerQuery.split('').map(char => 
+            char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // escape special chars
+        ).join('.*');
+        const fuzzyRegex = new RegExp(fuzzyPattern, 'i');
+        const match = lowerText.match(fuzzyRegex);
+        if (match) {
+            return { matches: true, score: 50, index: match.index || 0 };
+        }
+    }
+    
+    return { matches: false, score: 0, index: -1 };
 }
 
 function getTitleFromMeta(dirPath: string, fileName: string): string {
@@ -58,21 +96,24 @@ function searchFiles(dirPath: string, query: string, baseRoute = '/docs'): Searc
             results.push(...searchFiles(fullPath, query, `${baseRoute}/${file}`));
         } else if (file.endsWith('.mdx')) {
             const content = fs.readFileSync(fullPath, 'utf8');
-            const lowerContent = content.toLowerCase();
-            const lowerQuery = query.toLowerCase();
-
-            if (lowerContent.includes(lowerQuery)) {
-                const title = getTitleFromMeta(dirPath, file);
+            const title = getTitleFromMeta(dirPath, file);
+            
+            // Search in both title and content
+            const titleMatch = fuzzyMatch(title, query);
+            const contentMatch = fuzzyMatch(content, query);
+            
+            if (titleMatch.matches || contentMatch.matches) {
+                const bestMatch = titleMatch.score >= contentMatch.score ? titleMatch : contentMatch;
                 const href = `${baseRoute}/${file.replace(/\.mdx$/, '')}`.replace(/\/index$/, '');
                 const finalBaseHref = href === '/docs/index' ? '/docs' : (href || '/docs');
 
                 // Extract a clean excerpt
-                const index = lowerContent.indexOf(lowerQuery);
+                const index = contentMatch.matches ? contentMatch.index : 0;
                 const anchor = getNearestHeadingAnchor(content, index);
                 const finalHref = `${finalBaseHref}${anchor}`;
 
                 const start = Math.max(0, index - 40);
-                const end = Math.min(content.length, index + lowerQuery.length + 80);
+                const end = Math.min(content.length, index + query.length + 80);
                 let excerpt = content.substring(start, end)
                     .replace(/[#*`]/g, '') // Remove markdown symbols
                     .replace(/\n/g, ' ')   // Remove newlines
@@ -84,7 +125,8 @@ function searchFiles(dirPath: string, query: string, baseRoute = '/docs'): Searc
                 results.push({
                     title,
                     href: finalHref,
-                    excerpt
+                    excerpt,
+                    score: Math.max(titleMatch.score, contentMatch.score) + (titleMatch.matches ? 10 : 0) // Boost title matches
                 });
             }
         }
@@ -104,14 +146,8 @@ export async function GET(request: NextRequest) {
     const contentDir = path.join(process.cwd(), 'content');
     const results = searchFiles(contentDir, query);
 
-    // Sort by relevance (exact title matches first, then content matches)
-    const sortedResults = results.sort((a, b) => {
-        const aTitleMatch = a.title.toLowerCase().includes(query.toLowerCase());
-        const bTitleMatch = b.title.toLowerCase().includes(query.toLowerCase());
-        if (aTitleMatch && !bTitleMatch) return -1;
-        if (!aTitleMatch && bTitleMatch) return 1;
-        return 0;
-    }).slice(0, 10); // Limit to top 10 results
+    // Sort results by score (descending)
+    results.sort((a, b) => (b.score || 0) - (a.score || 0));
 
-    return NextResponse.json({ results: sortedResults });
+    return NextResponse.json({ results: results.slice(0, 10) });
 }
