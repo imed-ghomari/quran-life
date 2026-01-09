@@ -195,6 +195,25 @@ export default function TodoKanban({
 
     }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]); // creating dependency on kanbanState usually fine as it comes from settings which updates rarely
 
+    const handleCompletionTrigger = useCallback((item: KanbanItem) => {
+        if (item.type === 'suspended') {
+            onFixConfirm(item.data.surahId, item.data.anchorId);
+        } else if (item.type === 'similarity') {
+            // Confirm all pending comparisons in this group
+            const group = item.data;
+            group.items.forEach((simItem: any) => {
+                simItem.muts.forEach((entry: any) => {
+                    // Only if pending?
+                    onSimilarityDecision(simItem.err.absoluteAyah, 'solved_note', entry.phraseId, true);
+                });
+            });
+        } else if (item.type === 'part') {
+            onPartComplete(item.data.part);
+        } else if (item.type === 'surah') {
+            onSurahComplete(item.data.surah.id, item.data.mindmap);
+        }
+    }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
+
     const onDragEnd = useCallback((result: DropResult) => {
         const { source, destination } = result;
 
@@ -232,26 +251,7 @@ export default function TodoKanban({
 
             return newColsMap;
         });
-    }, [onKanbanStateChange]);
-
-    const handleCompletionTrigger = (item: KanbanItem) => {
-        if (item.type === 'suspended') {
-            onFixConfirm(item.data.surahId, item.data.anchorId);
-        } else if (item.type === 'similarity') {
-            // Confirm all pending comparisons in this group
-            const group = item.data;
-            group.items.forEach((simItem: any) => {
-                simItem.muts.forEach((entry: any) => {
-                    // Only if pending?
-                    onSimilarityDecision(simItem.err.absoluteAyah, 'solved_note', entry.phraseId, true);
-                });
-            });
-        } else if (item.type === 'part') {
-            onPartComplete(item.data.part);
-        } else if (item.type === 'surah') {
-            onSurahComplete(item.data.surah.id, item.data.mindmap);
-        }
-    };
+    }, [onKanbanStateChange, handleCompletionTrigger]);
 
     const renderSlideOverContent = () => {
         if (!activeItem) return null;

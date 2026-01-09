@@ -102,7 +102,7 @@ function renderCardContent(item: KanbanItem) {
                     </div>
                     <div>
                         <h4 className="font-semibold text-sm leading-tight text-[var(--foreground)] mb-1 group-hover:text-[var(--accent)] transition-colors">
-                            Juz' {partTask.part} Map
+                            Juz&apos; {partTask.part} Map
                         </h4>
                         <div className="flex items-center gap-2 mt-2">
                             <div className="h-1.5 flex-1 bg-[var(--border)] rounded-full overflow-hidden">

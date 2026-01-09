@@ -98,15 +98,16 @@ export default function TodoPage() {
     const activePart = settings.activePart;
 
     const surahTasks = useMemo(() => {
+        const learnedSurahIds = new Set(Object.keys(settings.learnedVerses || {}).map(Number));
         const eligible = SURAHS.filter(s =>
             (activePart === 5 || s.part === activePart) &&
-            !isSurahSkipped(s.id)
-            // Show all surahs in the part to allow adding them to todo
+            !isSurahSkipped(s.id) &&
+            learnedSurahIds.has(s.id)
         );
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
             .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, activePart]);
+    }, [mindmaps, activePart, settings.learnedVerses]);
 
     const partTasks = useMemo(() => {
         const parts: QuranPart[] = [1, 2, 3, 4];
