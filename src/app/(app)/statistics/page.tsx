@@ -12,8 +12,8 @@ import {
     getListeningCycles,
     getMutashabihatDecisions,
 } from '@/lib/storage';
-import { BarChart3, Layers, Hash, ChevronRight, Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
-import { getListeningStats, getListeningProgress } from '@/lib/storage';
+import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
+import { getListeningProgress } from '@/lib/storage';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
@@ -91,7 +91,7 @@ export default function StatisticsPage() {
         return {
             total: 4,
             segments: [
-                { label: 'Not Created', count: notCreated, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Part mindmap not yet created' },
+                { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Part mindmap not yet created' },
                 { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Part mindmap not yet complete' },
                 { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
@@ -142,8 +142,8 @@ export default function StatisticsPage() {
         return {
             total: targetSurahs.length,
             segments: [
-                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Surahs excluded from cycle' },
-                { label: 'Not Created', count: notCreated, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Mindmap not created' },
+                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Surahs excluded from cycle' },
+                { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Mindmap not created' },
                 { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Mindmap incomplete' },
                 { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
@@ -276,7 +276,7 @@ export default function StatisticsPage() {
             completions: cycles,
             segments: [
                 { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
-                { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Surahs remaining in current cycle' },
+                { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', description: 'Surahs remaining in current cycle' },
             ]
         };
     }, [activePart, skippedSurahs]);
@@ -324,7 +324,7 @@ export default function StatisticsPage() {
             total,
             segments: [
                 { label: 'Pending', count: pending, color: 'var(--chart-not-learned)', description: 'Verses with mutashabihat not yet addressed' },
-                { label: 'Ignored', count: ignored, color: 'var(--chart-skipped)', opacity: 0.5, description: 'Marked as not requiring attention' },
+                { label: 'Ignored', count: ignored, color: 'var(--chart-skipped)', description: 'Marked as not requiring attention' },
                 { label: 'Solved (Note)', count: solvedNote, color: 'var(--chart-medium)', description: 'Addressed with a memory note' },
                 { label: 'Solved (MM)', count: solvedMindmap, color: 'var(--chart-mastered)', description: 'Addressed within a mindmap' },
             ].filter(s => s.count > 0)
@@ -407,8 +407,8 @@ export default function StatisticsPage() {
     }, [activePart, memoryNodes, showBacklog, timeRange]);
 
     return (
-        <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '2rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
-            <div className="stats-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div className="statistics-container" style={{ width: '100%', paddingBottom: '2rem', maxWidth: '100%' }}>
+            <div className="stats-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', width: '100%' }}>
                 <div>
                     <h1 className="hide-mobile" style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
                 </div>
@@ -419,7 +419,7 @@ export default function StatisticsPage() {
                 </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0 0.5rem' }}>
+            <div className="stats-grid-main">
                 <ProgressBarSection
                     title="Part Mindmaps"
                     icon={<MapIcon size={20} />}
@@ -437,11 +437,11 @@ export default function StatisticsPage() {
                     icon={<RotateCcw size={20} />}
                     stats={verseChunkStats}
                     headerSuffix={
-                        <div style={{ display: 'flex', background: 'var(--verse-bg)', borderRadius: '8px', padding: '2px' }}>
+                        <div style={{ display: 'flex', background: 'var(--background)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border)' }}>
                             <button
                                 onClick={() => setVerseChunkMode('chunks')}
                                 style={{
-                                    padding: '4px 8px',
+                                    padding: '4px 10px',
                                     fontSize: '0.65rem',
                                     fontWeight: 700,
                                     borderRadius: '6px',
@@ -449,7 +449,8 @@ export default function StatisticsPage() {
                                     background: verseChunkMode === 'chunks' ? 'var(--accent)' : 'transparent',
                                     color: verseChunkMode === 'chunks' ? 'white' : 'var(--foreground-secondary)',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    boxShadow: verseChunkMode === 'chunks' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                 }}
                             >
                                 CHUNKS
@@ -457,7 +458,7 @@ export default function StatisticsPage() {
                             <button
                                 onClick={() => setVerseChunkMode('surahs')}
                                 style={{
-                                    padding: '4px 8px',
+                                    padding: '4px 10px',
                                     fontSize: '0.65rem',
                                     fontWeight: 700,
                                     borderRadius: '6px',
@@ -465,7 +466,8 @@ export default function StatisticsPage() {
                                     background: verseChunkMode === 'surahs' ? 'var(--accent)' : 'transparent',
                                     color: verseChunkMode === 'surahs' ? 'white' : 'var(--foreground-secondary)',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    boxShadow: verseChunkMode === 'surahs' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                 }}
                             >
                                 SURAHS
@@ -523,7 +525,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>
-                        <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} />
+                        <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
                         Backlog
                     </label>
                     <select
@@ -568,159 +570,192 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number; maxDay: number }) {
     if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
 
-    const chartHeight = 200;
-    const chartWidth = 700;
-    const padding = { top: 20, right: 40, bottom: 30, left: 40 };
+    const chartHeight = 180;
+    const padding = { top: 20, right: 10, bottom: 30, left: 35 };
 
     const maxCount = Math.max(...data.map(d => d.count), 1);
     const maxCumulative = Math.max(...data.map(d => d.cumulative), 1);
 
-    const getX = (day: number) => padding.left + ((day - minDay) / (maxDay - minDay)) * (chartWidth - padding.left - padding.right);
-    const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxCount) * (chartHeight - padding.top - padding.bottom);
-    const getYCumulative = (cumulative: number) => chartHeight - padding.bottom - (cumulative / maxCumulative) * (chartHeight - padding.top - padding.bottom);
+    // Use a ref to get the container width for responsiveness
+    return (
+        <div style={{ width: '100%', height: chartHeight, position: 'relative' }}>
+            <svg width="100%" height={chartHeight} style={{ overflow: 'visible' }} preserveAspectRatio="none">
+                {/* We use percentage-based coordinates or just let SVG handle scaling if possible, 
+                    but for precise mapping we need the actual width. 
+                    Actually, we can use viewBox for responsiveness. */}
+                <svg viewBox={`0 0 500 ${chartHeight}`} width="100%" height="100%" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                    {(() => {
+                        const vWidth = 500;
+                        const getX = (day: number) => padding.left + ((day - minDay) / (maxDay - minDay)) * (vWidth - padding.left - padding.right);
+                        const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxCount) * (chartHeight - padding.top - padding.bottom);
+                        const getYCumulative = (cumulative: number) => chartHeight - padding.bottom - (cumulative / maxCumulative) * (chartHeight - padding.top - padding.bottom);
 
-    // Area path for cumulative
-    let areaPath = `M ${getX(data[0].day)} ${chartHeight - padding.bottom}`;
-    data.forEach(d => {
-        areaPath += ` L ${getX(d.day)} ${getYCumulative(d.cumulative)}`;
-    });
-    areaPath += ` L ${getX(data[data.length - 1].day)} ${chartHeight - padding.bottom} Z`;
+                        let areaPath = `M ${getX(data[0].day)} ${chartHeight - padding.bottom}`;
+                        data.forEach(d => {
+                            areaPath += ` L ${getX(d.day)} ${getYCumulative(d.cumulative)}`;
+                        });
+                        areaPath += ` L ${getX(data[data.length - 1].day)} ${chartHeight - padding.bottom} Z`;
 
-    // Grid lines and axes
-    const yTicksCount = 4;
-    const yTicksCumulative = 4;
-    const xTicksCount = 10;
+                        return (
+                            <>
+                                {/* Cumulative Area */}
+                                <path d={areaPath} fill="var(--chart-skipped)" opacity="0.1" />
+                                <path d={areaPath.replace(' Z', '')} fill="none" stroke="var(--foreground-secondary)" strokeWidth="1" opacity="0.2" />
+
+                                {/* Bars */}
+                                {data.map((d, i) => {
+                                    const barWidth = Math.max(1, (vWidth - padding.left - padding.right) / (maxDay - minDay + 1) - 0.5);
+                                    return (
+                                        <rect
+                                            key={i}
+                                            x={getX(d.day) - barWidth / 2}
+                                            y={getYCount(d.count)}
+                                            width={barWidth}
+                                            height={Math.max(0, chartHeight - padding.bottom - getYCount(d.count))}
+                                            fill="var(--chart-mastered)"
+                                            opacity={d.day < 0 ? 0.8 : 0.6}
+                                        />
+                                    );
+                                })}
+
+                                {/* X-axis */}
+                                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={vWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                                
+                                {/* Left Y-axis (Daily Count) */}
+                                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                                {[0, 0.5, 1].map((p, i) => {
+                                    const val = p * maxCount;
+                                    const y = getYCount(val);
+                                    return (
+                                        <g key={i}>
+                                            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{Math.round(val)}</text>
+                                        </g>
+                                    );
+                                })}
+                            </>
+                        );
+                    })()}
+                </svg>
+            </svg>
+        </div>
+    );
+}
+
+function HalfDonutChart({ total, segments }: { total: number; segments: StatSegment[] }) {
+    const radius = 65;
+    const strokeWidth = 12;
+    const viewBoxWidth = 160;
+    const viewBoxHeight = 100; // Increased height to prevent clipping
+    const centerX = viewBoxWidth / 2;
+    const centerY = 85;
+
+    // Filter segments with count > 0 to avoid rendering artifacts
+    const activeSegments = segments.filter(s => s.count > 0);
+    
+    // Calculate gaps: we want a small gap between segments
+    // Total degrees available is 180.
+    const gapDegrees = activeSegments.length > 1 ? 4 : 0;
+    const totalGapDegrees = gapDegrees * (activeSegments.length - 1);
+    const availableDegrees = 180 - totalGapDegrees;
+    
+    let currentStartAngle = 180; // Start from left
 
     return (
-        <div style={{ overflowX: 'auto', width: '100%' }}>
-            <svg width={chartWidth} height={chartHeight} style={{ overflow: 'visible' }}>
-                {/* Cumulative Area */}
-                <path d={areaPath} fill="var(--chart-skipped)" opacity="0.1" />
-                <path d={areaPath.replace(' Z', '')} fill="none" stroke="var(--foreground-secondary)" strokeWidth="1" opacity="0.2" />
+        <div style={{ position: 'relative', width: '180px', height: '100px', display: 'flex', justifyContent: 'center' }}>
+            <svg viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                {/* Background track */}
+                <path
+                    d={`M ${centerX - radius} ${centerY} A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}`}
+                    fill="none"
+                    stroke="var(--border)"
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="round"
+                    opacity="0.1"
+                />
+                
+                {activeSegments.map((segment, idx) => {
+                    const segmentDegrees = (segment.count / total) * availableDegrees;
+                    
+                    const startAngle = currentStartAngle;
+                    const endAngle = startAngle - segmentDegrees;
+                    
+                    // Update currentStartAngle for next segment, including gap
+                    currentStartAngle = endAngle - gapDegrees;
 
-                {/* Bars */}
-                {data.map((d, i) => {
-                    const barWidth = Math.max(2, (chartWidth - padding.left - padding.right) / (maxDay - minDay + 1) - 1);
+                    // Convert angles to polar coordinates for SVG path
+                    // SVG angles: 0 is right, 90 is bottom, 180 is left, 270 is top
+                    // But we want 180 to be left, 90 to be top, 0 to be right
+                    const startRad = (startAngle * Math.PI) / 180;
+                    const endRad = (endAngle * Math.PI) / 180;
+                    
+                    const x1 = centerX + radius * Math.cos(startRad);
+                    const y1 = centerY - radius * Math.sin(startRad);
+                    const x2 = centerX + radius * Math.cos(endRad);
+                    const y2 = centerY - radius * Math.sin(endRad);
+
+                    // Large arc flag is 0 because no segment can be > 180 degrees
+                    // Sweep flag is 1 because we are moving clockwise from left to right (in our custom coord system)
                     return (
-                        <rect
-                            key={i}
-                            x={getX(d.day) - barWidth / 2}
-                            y={getYCount(d.count)}
-                            width={barWidth}
-                            height={chartHeight - padding.bottom - getYCount(d.count)}
-                            fill="var(--chart-mastered)"
-                            opacity={d.day < 0 ? 0.8 : 0.6}
+                        <path
+                            key={idx}
+                            d={`M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`}
+                            fill="none"
+                            stroke={segment.color}
+                            strokeOpacity={segment.opacity ?? 1}
+                            strokeWidth={strokeWidth}
+                            strokeLinecap="round"
+                            style={{ transition: 'all 0.5s ease' }}
                         />
                     );
                 })}
-
-                {/* X-axis */}
-                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={chartWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
-                {Array.from({ length: xTicksCount + 1 }).map((_, i) => {
-                    const day = Math.round(minDay + (i / xTicksCount) * (maxDay - minDay));
-                    return (
-                        <g key={i}>
-                            <line x1={getX(day)} y1={chartHeight - padding.bottom} x2={getX(day)} y2={chartHeight - padding.bottom + 5} stroke="var(--border)" />
-                            <text x={getX(day)} y={chartHeight - padding.bottom + 20} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">{day}</text>
-                        </g>
-                    );
-                })}
-
-                {/* Left Y-axis (Daily Count) */}
-                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" />
-                {Array.from({ length: yTicksCount + 1 }).map((_, i) => {
-                    const val = (i / yTicksCount) * maxCount;
-                    const y = getYCount(val);
-                    return (
-                        <g key={i}>
-                            <line x1={padding.left - 5} y1={y} x2={padding.left} y2={y} stroke="var(--border)" />
-                            <text x={padding.left - 10} y={y + 4} textAnchor="end" fontSize="10" fill="var(--foreground-secondary)">{val % 1 === 0 ? val : val.toFixed(1)}</text>
-                        </g>
-                    );
-                })}
-
-                {/* Right Y-axis (Cumulative) */}
-                <line x1={chartWidth - padding.right} y1={padding.top} x2={chartWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
-                {Array.from({ length: yTicksCumulative + 1 }).map((_, i) => {
-                    const val = (i / yTicksCumulative) * maxCumulative;
-                    const y = getYCumulative(val);
-                    return (
-                        <g key={i}>
-                            <line x1={chartWidth - padding.right} y1={y} x2={chartWidth - padding.right + 5} y2={y} stroke="var(--border)" />
-                            <text x={chartWidth - padding.right + 10} y={y + 4} textAnchor="start" fontSize="10" fill="var(--foreground-secondary)">{Math.round(val)}</text>
-                        </g>
-                    );
-                })}
             </svg>
+            <div style={{
+                position: 'absolute',
+                bottom: '12px',
+                left: '0',
+                right: '0',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                pointerEvents: 'none'
+            }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total</span>
+                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--foreground)', lineHeight: 1.1 }}>{total.toLocaleString()}</span>
+            </div>
         </div>
     );
 }
 
 function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode }) {
     return (
-        <div className="card modern-card" style={{ width: '100%', padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <div className="card modern-card" style={{ width: '100%', padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>{icon}</div>
-                    <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>{title}</h2>
+                    <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>{title}</h2>
                 </div>
                 {headerSuffix}
             </div>
 
-            <div style={{
-                width: '100%',
-                height: '32px',
-                background: 'var(--border)',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                display: 'flex',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
-            }}>
-                {stats.segments.map((segment, idx) => {
-                    const width = (segment.count / stats.total) * 100;
-                    return (
-                        <div
-                            key={idx}
-                            title={`${segment.label}: ${segment.count} (${Math.round(width)}%)`}
-                            style={{
-                                width: `${width}%`,
-                                height: '100%',
-                                background: segment.color,
-                                opacity: segment.opacity || 1,
-                                transition: 'width 0.5s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                position: 'relative',
-                                cursor: 'help'
-                            }}
-                        >
-                            {width > 8 && (
-                                <span style={{
-                                    fontSize: '0.7rem',
-                                    fontWeight: 800,
-                                    color: 'white',
-                                    pointerEvents: 'none',
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-                                }}>
-                                    {segment.count}
-                                </span>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap', flex: 1 }}>
+                <HalfDonutChart total={stats.total} segments={stats.segments} />
 
-            {/* Legend with Labels (Numbers moved to chart) */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.5rem' }}>
-                {stats.segments.map((s, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: s.color, opacity: s.opacity ?? 1 }} />
-                        <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600 }}>
-                            {s.label}
-                        </span>
+                <div style={{ flex: '1', minWidth: '200px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1rem', justifyContent: 'flex-start' }}>
+                        {stats.segments.map((s, i) => (                    
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '2px 0' }}>
+                                <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: s.color, opacity: s.opacity ?? 1, flexShrink: 0 }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        {s.label}
+                                    </span>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground)' }}>{s.count}</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                ))}
+                </div>
             </div>
         </div>
     );
