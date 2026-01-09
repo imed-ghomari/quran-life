@@ -744,9 +744,9 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
 
       mergedMaps[id] = {
         ...baseMap,
-        // Keep images from either source
-        imageUrl: rMap.imageUrl || lMap.imageUrl || null,
-        imageUrlDark: rMap.imageUrlDark || lMap.imageUrlDark || null,
+        // Optimization: Do NOT sync images (heavy Base64). Rely on JSON snapshot.
+        imageUrl: null,
+        imageUrlDark: null,
         // Use merged snapshot and anchors
         tldrawSnapshot: mergedSnapshot,
         anchors: mergedAnchors,
@@ -806,8 +806,8 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
 
       mergedPartMaps[id] = {
         ...baseMap,
-        imageUrl: rMap.imageUrl || lMap.imageUrl || null,
-        imageUrlDark: rMap.imageUrlDark || lMap.imageUrlDark || null,
+        imageUrl: null, // Optimization: No image sync
+        imageUrlDark: null,
         tldrawSnapshot: mergedSnapshot,
         isComplete: lMap.isComplete || rMap.isComplete,
         updatedAt: rTime > lTime ? rTime : lTime,
