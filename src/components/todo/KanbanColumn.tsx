@@ -37,7 +37,7 @@ const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnP
                         {...provided.droppableProps}
                         className={`
                             flex-1 p-2 transition-colors
-                            ${isMobile ? 'flex overflow-x-auto gap-3 pb-4 min-h-[140px] items-start' : 'overflow-y-auto flex flex-col gap-2'}
+                            ${isMobile ? 'flex overflow-x-auto gap-3 pb-4 min-h-[140px] items-start' : 'overflow-y-auto flex flex-col gap-4'}
                             ${snapshot.isDraggingOver ? 'bg-[var(--accent)]/5 rounded-lg' : ''}
                         `}
                         style={{

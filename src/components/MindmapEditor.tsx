@@ -330,12 +330,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 // Get the current snapshot and an image preview
                 const snapshot = typeof editor.getSnapshot === 'function' ? editor.getSnapshot() : editor.store.getSnapshot();
 
-                // Debug: Check a random shape for timestamp
-                // const shapeIds = Array.from(editor.getCurrentPageShapeIds());
-                // if (shapeIds.length > 0) {
-                //    const sample = editor.getShape(shapeIds[0]);
-                //    appLogger.addLog(`[Editor] Saving. Sample shape updatedAt: ${sample?.meta?.updatedAt}`, 'info');
-                // }
+                // Debug: Check snapshot content size
+                const storeKeys = Object.keys(snapshot?.store || {});
+                appLogger.addLog(`[Editor] Saving Snapshot. Items: ${storeKeys.length}`, 'info');
 
                 // Export images for preview (both light and dark)
                 let lightBlob: Blob | undefined;

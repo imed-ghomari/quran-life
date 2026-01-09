@@ -162,20 +162,17 @@ export default function TodoKanban({
                 itemIds.forEach(itemId => {
                     const item = itemMap.get(itemId);
                     if (item) {
-                        // Special Case: If item is externally 'complete', force it to complete column
-                        // unless it's already in complete column.
-                        if (item.status === 'complete' && colId !== 'complete') {
-                            // Will be handled in fallback pass
-                        } else {
-                            newCols[colId].push(item);
-                            processedIds.add(itemId);
-                        }
+                        // Special Case: If item is externally 'complete' BUT saved in a different column?
+                        // We prioritize the persistent state (User knows best). 
+                        // If it's in backlog but status is complete, maybe user re-opened it.
+                        newCols[colId].push(item);
+                        processedIds.add(itemId);
                     }
                 });
             });
         }
 
-        // 3. Handle leftover items (New items, or forced completions)
+        // 3. Handle leftover items (New items)
         Array.from(itemMap.values()).forEach(item => {
             if (processedIds.has(item.id)) return;
 
@@ -193,17 +190,15 @@ export default function TodoKanban({
             'complete': { id: 'complete', title: 'Complete', items: newCols['complete'] },
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]); // creating dependency on kanbanState usually fine as it comes from settings which updates rarely
+    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]);
 
     const handleCompletionTrigger = useCallback((item: KanbanItem) => {
         if (item.type === 'suspended') {
             onFixConfirm(item.data.surahId, item.data.anchorId);
         } else if (item.type === 'similarity') {
-            // Confirm all pending comparisons in this group
             const group = item.data;
             group.items.forEach((simItem: any) => {
                 simItem.muts.forEach((entry: any) => {
-                    // Only if pending?
                     onSimilarityDecision(simItem.err.absoluteAyah, 'solved_note', entry.phraseId, true);
                 });
             });
@@ -244,9 +239,16 @@ export default function TodoKanban({
                 onKanbanStateChange(state);
             }
 
-            // Trigger Completion Logic (unchanged)
+            // Trigger Completion Logic
             if (destination.droppableId === 'complete' && source.droppableId !== 'complete') {
                 handleCompletionTrigger(movedItem);
+            }
+            // Trigger Re-Open Logic (Toggle back if moving out of complete)
+            else if (source.droppableId === 'complete' && destination.droppableId !== 'complete') {
+                // For Surah and Part, this toggles "isComplete" to false (since it acts as toggle)
+                if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                    handleCompletionTrigger(movedItem);
+                }
             }
 
             return newColsMap;
