@@ -40,10 +40,8 @@ import {
     getNodeDifficulty,
     getNodeReps,
     getNodeDueDate,
-    getRetrievability,
-    formatRecallChance
 } from '@/lib/storage';
-import { getSchedulingPreview, createPresetState } from '@/lib/fsrs';
+import { getSchedulingPreview, createPresetState, getRetrievability, formatRecallChance } from '@/lib/fsrs';
 import { QuranPart } from '@/lib/types';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
