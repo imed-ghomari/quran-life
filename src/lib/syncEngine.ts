@@ -137,13 +137,12 @@ export function hasPending(): boolean {
     return hasPendingChanges || syncState$.pendingChangesCount.get() > 0;
 }
 
-// ========================================
-// Core Commit Function
-// ========================================
-
 /**
  * Commit all pending local changes to Supabase.
  * This is the main entry point for task-finish sync triggers.
+ * 
+ * IMPORTANT: This always syncs with cloud to pull remote changes,
+ * even if there are no local pending changes.
  * 
  * @param taskName Optional name for logging purposes
  * @returns Promise that resolves when sync completes
@@ -159,18 +158,13 @@ export async function commitTask(taskName?: string): Promise<{ success: boolean;
         return { success: true }; // Success from local perspective
     }
 
-    // If no pending changes, skip
-    if (!hasPending()) {
-        appLogger.addLog('No pending changes to sync', 'info');
-        return { success: true };
-    }
-
     // Set syncing state
     syncState$.status.set('syncing');
     syncState$.errorMessage.set(null);
 
     try {
-        // Use existing sync infrastructure
+        // ALWAYS sync with cloud to pull remote changes
+        // This is critical for multi-device sync!
         const { syncWithCloud } = await import('./sync');
         const result = await syncWithCloud();
 
