@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { appLogger } from '@/lib/logger';
@@ -179,6 +179,7 @@ interface MindmapEditorProps {
 
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
+    const editorRef = useRef<any>(null);
 
     useEffect(() => {
         try {
@@ -191,6 +192,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
     const handleMount = useCallback((editorInstance: any) => {
         setEditor(editorInstance);
+        editorRef.current = editorInstance;
 
         // --- Obsidian-style switching logic ---
         const pointingCanvasState = editorInstance.getStateDescendant('select.pointing_canvas');
@@ -325,14 +327,20 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
     }, [editor]);
 
     const handleClose = async () => {
-        if (editor && onSave) {
+        const editorInst = editorRef.current || editor;
+        if (editorInst && onSave) {
             try {
-                // Get the current snapshot and an image preview
-                const snapshot = typeof editor.getSnapshot === 'function' ? editor.getSnapshot() : editor.store.getSnapshot();
+                // Force store snapshot to ensure we get schema and full store
+                const snapshot = editorInst.store.getSnapshot();
 
                 // Debug: Check snapshot content size
                 const storeKeys = Object.keys(snapshot?.store || {});
-                appLogger.addLog(`[Editor] Saving Snapshot. Items: ${storeKeys.length}`, 'info');
+                const hasSchema = !!snapshot?.schema;
+                appLogger.addLog(`[Editor] Saving Snapshot. Items: ${storeKeys.length}. Schema: ${hasSchema}`, 'info');
+
+                if (storeKeys.length === 0) {
+                    appLogger.addLog(`[Editor] Warning: Snapshot store appears empty.`, 'error');
+                }
 
                 // Export images for preview (both light and dark)
                 let lightBlob: Blob | undefined;
