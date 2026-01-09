@@ -465,30 +465,140 @@ export async function syncWithCloud(): Promise<SyncResult> {
   }
 }
 
+// ========================================
+// Conflict-Free Merge Helpers
+// ========================================
+
+/**
+ * Merge tldraw snapshots at the shape level.
+ * Each shape in the records array has a unique ID.
+ * Union all shapes from both snapshots, prefer newer version if same ID exists.
+ */
+function mergeTldrawSnapshots(local: any, remote: any): any {
+  // Handle missing snapshots
+  if (!local && !remote) return undefined;
+  if (!local) return remote;
+  if (!remote) return local;
+
+  // If neither has records array, prefer the one with more data
+  if (!local.records && !remote.records) {
+    return local || remote;
+  }
+  if (!local.records) return remote;
+  if (!remote.records) return local;
+
+  // Build shape map by ID, keep newer version of each shape
+  const shapeMap = new Map<string, any>();
+
+  // Add all local shapes first
+  (local.records || []).forEach((record: any) => {
+    shapeMap.set(record.id, record);
+  });
+
+  // Merge remote shapes - add if new, or replace if both have updatedAt and remote is newer
+  (remote.records || []).forEach((record: any) => {
+    const existing = shapeMap.get(record.id);
+    if (!existing) {
+      // New shape from remote - add it
+      shapeMap.set(record.id, record);
+    } else {
+      // Both have this shape - use updatedAt if available, otherwise keep local
+      const localTime = existing.meta?.updatedAt || existing.updatedAt || '';
+      const remoteTime = record.meta?.updatedAt || record.updatedAt || '';
+      if (remoteTime > localTime) {
+        shapeMap.set(record.id, record);
+      }
+    }
+  });
+
+  // Return merged snapshot with union of all shapes
+  return {
+    ...remote, // Take remote's schema version etc.
+    ...local,  // But prefer local's metadata
+    records: Array.from(shapeMap.values()),
+  };
+}
+
+/**
+ * Merge anchors by ID - union of both arrays.
+ */
+function mergeAnchors(local: any[] = [], remote: any[] = []): any[] {
+  const anchorMap = new Map<string, any>();
+
+  // Add all local anchors
+  local.forEach(a => anchorMap.set(a.id, a));
+
+  // Add remote anchors if they don't exist locally
+  remote.forEach(a => {
+    if (!anchorMap.has(a.id)) {
+      anchorMap.set(a.id, a);
+    }
+  });
+
+  return Array.from(anchorMap.values());
+}
+
+/**
+ * Merge learnedVerses - union of verse arrays per surah.
+ * Never lose learned verses from either device.
+ */
+function mergeLearnedVerses(
+  local: Record<string, number[]> = {},
+  remote: Record<string, number[]> = {}
+): Record<string, number[]> {
+  const allSurahs = new Set([...Object.keys(local), ...Object.keys(remote)]);
+  const merged: Record<string, number[]> = {};
+
+  allSurahs.forEach(surahId => {
+    const localVerses = new Set(local[surahId] || []);
+    const remoteVerses = remote[surahId] || [];
+    // Union: add all remote verses to local set
+    remoteVerses.forEach(v => localVerses.add(v));
+    if (localVerses.size > 0) {
+      merged[surahId] = Array.from(localVerses).sort((a, b) => a - b);
+    }
+  });
+
+  return merged;
+}
+
 /**
  * Merges local and remote backups.
- * Simple strategy: 
+ * Conflict-free strategy:
  * - For sets/dictionaries: Union of keys/values
+ * - For mindmaps: Shape-level merge (no data loss)
+ * - For counters: Take MAX values
  * - For single values: Latest date wins
  */
 function mergeBackups(local: BackupData, remote: BackupData): { mergedData: BackupData; hasChanges: boolean } {
   const merged: BackupData = { ...local };
   let hasChanges = false;
 
-  // 1. Settings (Latest updatedAt wins)
-  if (remote.settings) {
-    const localUpdated = local.settings?.updatedAt ? new Date(local.settings.updatedAt).getTime() : 0;
-    const remoteUpdated = remote.settings?.updatedAt ? new Date(remote.settings.updatedAt).getTime() : 0;
+  // 1. Settings (Merge with conflict-free learnedVerses)
+  if (remote.settings || local.settings) {
+    const localSettings = local.settings || {} as any;
+    const remoteSettings = remote.settings || {} as any;
+    const localUpdated = localSettings.updatedAt ? new Date(localSettings.updatedAt).getTime() : 0;
+    const remoteUpdated = remoteSettings.updatedAt ? new Date(remoteSettings.updatedAt).getTime() : 0;
 
-    // If remote is newer, adopt it completely
-    if (remoteUpdated > localUpdated) {
-      merged.settings = { ...remote.settings };
-      hasChanges = true;
-    }
-    // If local is newer or equal, we keep local settings (which are already in 'merged')
-    // but we might want to flag hasChanges if they are different from remote 
-    // so we can push the local changes to cloud.
-    else if (JSON.stringify(local.settings) !== JSON.stringify(remote.settings)) {
+    // Start with whichever settings is newer for scalar fields
+    const baseSettings = remoteUpdated > localUpdated ? { ...remoteSettings } : { ...localSettings };
+
+    // But ALWAYS merge learnedVerses from both devices (never lose data)
+    baseSettings.learnedVerses = mergeLearnedVerses(
+      localSettings.learnedVerses || {},
+      remoteSettings.learnedVerses || {}
+    );
+
+    // Union skipped surahs from both devices
+    const localSkipped = new Set<number>(localSettings.skippedSurahs || []);
+    const remoteSkipped: number[] = remoteSettings.skippedSurahs || [];
+    remoteSkipped.forEach((s: number) => localSkipped.add(s));
+    baseSettings.skippedSurahs = Array.from(localSkipped).sort((a: number, b: number) => a - b);
+
+    merged.settings = baseSettings;
+
+    if (JSON.stringify(local.settings) !== JSON.stringify(merged.settings)) {
       hasChanges = true;
     }
   }
@@ -562,90 +672,177 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     merged.customMutashabihat = Array.from(customMap.values());
   }
 
-  // 5. Mindmaps (Merge by Surah ID)
+  // 5. Mindmaps (Merge by Surah ID with shape-level tldraw merge)
   const remoteTime = remote.exportedAt || '';
   const localTime = local.exportedAt || '';
 
-  if (remote.mindmaps) {
+  if (remote.mindmaps || local.mindmaps) {
     const localMaps = local.mindmaps || {};
     const remoteMaps = remote.mindmaps || {};
-    const mergedMaps = { ...localMaps };
+    const mergedMaps: typeof localMaps = {};
 
-    // Merge each mindmap individually using its own updatedAt if available
-    Object.entries(remoteMaps).forEach(([id, rMap]) => {
-      const lMap = mergedMaps[id];
-      const rTime = rMap.updatedAt || remoteTime;
-      const lTime = lMap?.updatedAt || localTime;
+    // Get all mindmap IDs from both sources
+    const allIds = new Set([...Object.keys(localMaps), ...Object.keys(remoteMaps)]);
 
+    allIds.forEach(id => {
+      const lMap = localMaps[id];
+      const rMap = remoteMaps[id];
+
+      // If only one side has it, use that
+      if (!lMap) {
+        mergedMaps[id] = rMap;
+        hasChanges = true;
+        return;
+      }
+      if (!rMap) {
+        mergedMaps[id] = lMap;
+        return;
+      }
+
+      // Both have this mindmap - merge at shape level
       const rDeleted = rMap.deletedAt || '';
-      const lDeleted = lMap?.deletedAt || '';
+      const lDeleted = lMap.deletedAt || '';
 
-      // Rule: If either is explicitly deleted, the latest deletion OR latest update wins
-      // But a deletion always trumps an older update.
-      const rMaxTime = rDeleted > rTime ? rDeleted : rTime;
-      const lMaxTime = lDeleted > lTime ? lDeleted : lTime;
+      // If either deleted, check which is newer
+      if (rDeleted || lDeleted) {
+        const rMaxTime = rDeleted > (rMap.updatedAt || '') ? rDeleted : (rMap.updatedAt || '');
+        const lMaxTime = lDeleted > (lMap.updatedAt || '') ? lDeleted : (lMap.updatedAt || '');
+        if (rMaxTime > lMaxTime) {
+          mergedMaps[id] = rMap;
+        } else {
+          mergedMaps[id] = lMap;
+        }
+        hasChanges = true;
+        return;
+      }
 
-      if (!lMap || (rMaxTime > lMaxTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
-        mergedMaps[id] = {
-          ...rMap,
-          imageUrl: rMap.imageUrl || lMap?.imageUrl || null,
-          imageUrlDark: rMap.imageUrlDark || lMap?.imageUrlDark || null,
-        };
+      // Shape-level merge: combine both tldraw snapshots
+      const mergedSnapshot = mergeTldrawSnapshots(lMap.tldrawSnapshot, rMap.tldrawSnapshot);
+
+      // Union anchors from both
+      const mergedAnchors = mergeAnchors(lMap.anchors || [], rMap.anchors || []);
+
+      // Use newer metadata for other fields
+      const rTime = rMap.updatedAt || remoteTime;
+      const lTime = lMap.updatedAt || localTime;
+      const baseMap = rTime > lTime ? rMap : lMap;
+
+      mergedMaps[id] = {
+        ...baseMap,
+        // Keep images from either source
+        imageUrl: rMap.imageUrl || lMap.imageUrl || null,
+        imageUrlDark: rMap.imageUrlDark || lMap.imageUrlDark || null,
+        // Use merged snapshot and anchors
+        tldrawSnapshot: mergedSnapshot,
+        anchors: mergedAnchors,
+        // isComplete is true if either thinks it's complete
+        isComplete: lMap.isComplete || rMap.isComplete,
+        // Use latest updatedAt
+        updatedAt: rTime > lTime ? rTime : lTime,
+      };
+
+      if (JSON.stringify(lMap) !== JSON.stringify(mergedMaps[id])) {
         hasChanges = true;
       }
     });
 
-    if (JSON.stringify(merged.mindmaps) !== JSON.stringify(mergedMaps)) {
-      merged.mindmaps = mergedMaps;
-      // If we added new maps or updated existing ones from remote, that's already tracked by hasChanges.
-      // But we should also check if local had maps that remote didn't, which is handled by { ...localMaps } initial state.
-    }
     merged.mindmaps = mergedMaps;
   }
 
-  // 6. Part Mindmaps (Merge by Part ID)
-  if (remote.partMindmaps) {
+  // 6. Part Mindmaps (Merge by Part ID with shape-level merge)
+  if (remote.partMindmaps || local.partMindmaps) {
     const localPartMaps = local.partMindmaps || {};
     const remotePartMaps = remote.partMindmaps || {};
-    const mergedPartMaps = { ...localPartMaps };
+    const mergedPartMaps: typeof localPartMaps = {};
 
-    Object.entries(remotePartMaps).forEach(([id, rMap]) => {
-      const lMap = mergedPartMaps[id];
-      const rTime = rMap.updatedAt || remoteTime;
-      const lTime = lMap?.updatedAt || localTime;
+    const allPartIds = new Set([...Object.keys(localPartMaps), ...Object.keys(remotePartMaps)]);
 
+    allPartIds.forEach(id => {
+      const lMap = localPartMaps[id];
+      const rMap = remotePartMaps[id];
+
+      if (!lMap) {
+        mergedPartMaps[id] = rMap;
+        hasChanges = true;
+        return;
+      }
+      if (!rMap) {
+        mergedPartMaps[id] = lMap;
+        return;
+      }
+
+      // Both have this part mindmap - merge at shape level
       const rDeleted = rMap.deletedAt || '';
-      const lDeleted = lMap?.deletedAt || '';
+      const lDeleted = lMap.deletedAt || '';
 
-      const rMaxTime = rDeleted > rTime ? rDeleted : rTime;
-      const lMaxTime = lDeleted > lTime ? lDeleted : lTime;
+      if (rDeleted || lDeleted) {
+        const rMaxTime = rDeleted > (rMap.updatedAt || '') ? rDeleted : (rMap.updatedAt || '');
+        const lMaxTime = lDeleted > (lMap.updatedAt || '') ? lDeleted : (lMap.updatedAt || '');
+        mergedPartMaps[id] = rMaxTime > lMaxTime ? rMap : lMap;
+        hasChanges = true;
+        return;
+      }
 
-      if (!lMap || (rMaxTime > lMaxTime && JSON.stringify(lMap) !== JSON.stringify(rMap))) {
-        mergedPartMaps[id] = {
-          ...rMap,
-          imageUrl: rMap.imageUrl || lMap?.imageUrl || null,
-          imageUrlDark: rMap.imageUrlDark || lMap?.imageUrlDark || null,
-        };
+      // Shape-level merge
+      const mergedSnapshot = mergeTldrawSnapshots(lMap.tldrawSnapshot, rMap.tldrawSnapshot);
+      const rTime = rMap.updatedAt || remoteTime;
+      const lTime = lMap.updatedAt || localTime;
+      const baseMap = rTime > lTime ? rMap : lMap;
+
+      mergedPartMaps[id] = {
+        ...baseMap,
+        imageUrl: rMap.imageUrl || lMap.imageUrl || null,
+        imageUrlDark: rMap.imageUrlDark || lMap.imageUrlDark || null,
+        tldrawSnapshot: mergedSnapshot,
+        isComplete: lMap.isComplete || rMap.isComplete,
+        updatedAt: rTime > lTime ? rTime : lTime,
+      };
+
+      if (JSON.stringify(lMap) !== JSON.stringify(mergedPartMaps[id])) {
         hasChanges = true;
       }
     });
+
     merged.partMindmaps = mergedPartMaps;
   }
 
-  // 7. Listening Stats (Merge by Surah ID)
-  if (remote.listeningStats) {
+  // 7. Listening Stats (Merge by Surah ID - take MAX values)
+  if (remote.listeningStats || local.listeningStats) {
     const localStats = local.listeningStats || {};
     const remoteStats = remote.listeningStats || {};
-    const mergedStats = { ...localStats };
+    const mergedStats: typeof localStats = {};
 
-    Object.entries(remoteStats).forEach(([id, stat]) => {
-      const lStat = mergedStats[id];
-      // Here we have specific timestamps inside the object!
-      if (!lStat || (stat.lastListened > lStat.lastListened)) {
-        mergedStats[id] = stat;
+    const allStatIds = new Set([...Object.keys(localStats), ...Object.keys(remoteStats)]);
+
+    allStatIds.forEach(id => {
+      const lStat = localStats[id];
+      const rStat = remoteStats[id];
+
+      if (!lStat) {
+        mergedStats[id] = rStat;
+        hasChanges = true;
+        return;
+      }
+      if (!rStat) {
+        mergedStats[id] = lStat;
+        return;
+      }
+
+      // Take MAX values for counters (never lose progress)
+      mergedStats[id] = {
+        surahId: lStat.surahId,
+        totalMinutes: Math.max(lStat.totalMinutes || 0, rStat.totalMinutes || 0),
+        lastListened: (lStat.lastListened || '') > (rStat.lastListened || '')
+          ? lStat.lastListened
+          : rStat.lastListened,
+      };
+
+      if (lStat.totalMinutes !== mergedStats[id].totalMinutes ||
+        lStat.lastListened !== mergedStats[id].lastListened) {
         hasChanges = true;
       }
     });
+
     merged.listeningStats = mergedStats;
   }
 
