@@ -423,11 +423,11 @@ export async function syncWithCloud(): Promise<SyncResult> {
     }
 
     // Check for conflicts before merging
+    // We now AUTO-MERGE conflicts instead of stopping
     const conflict = checkForConflicts(localData, remoteData);
     if (conflict) {
-      appLogger.addLog('Sync conflict detected. Awaiting user decision...', 'warning');
-      pendingConflict = { local: localData, remote: remoteData };
-      return { status: 'conflict', message: 'Conflict detected', conflict };
+      appLogger.addLog('Sync conflict detected. Auto-merging...', 'warning');
+      // We do NOT return conflict status anymore, we proceed to mergeBackups
     }
 
     // MERGE AGAIN with latest local state right before saving
