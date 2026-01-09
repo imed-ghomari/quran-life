@@ -283,11 +283,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     const [from, to] = update;
                     if (isShape(to)) {
                         // Avoid infinite loops: only update if updatedAt is NOT what we just set
-                        // (Though 'source: user' check usually prevents this, double safety)
                         if (to.meta?.updatedAt !== now) {
                             updates.push({
-                                id: to.id,
-                                typeName: to.typeName,
+                                ...to, // <--- Vital: Spread the full record (x, y, props, etc)
                                 meta: { ...to.meta, updatedAt: now }
                             });
                         }
@@ -298,8 +296,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 Object.values(changes.added || {}).forEach((record: any) => {
                     if (isShape(record)) {
                         updates.push({
-                            id: record.id,
-                            typeName: record.typeName,
+                            ...record, // <--- Vital: Spread the full record
                             meta: { ...record.meta, updatedAt: now }
                         });
                     }
