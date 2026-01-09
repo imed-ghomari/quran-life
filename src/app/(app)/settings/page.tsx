@@ -2173,20 +2173,20 @@ export default function SettingsPage() {
                                                 <div className="node-card-details">
                                                     <div className="stat-item">
                                                         <span className="stat-label">Interval</span>
-                                                        <span className="stat-value">{node.scheduler.interval}d</span>
+                                                        <span className="stat-value">{getNodeStability(node.scheduler)}d</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Ease</span>
-                                                        <span className="stat-value">{node.scheduler.easeFactor}</span>
+                                                        <span className="stat-value">{getNodeDifficulty(node.scheduler)}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Reps</span>
-                                                        <span className="stat-value">{node.scheduler.repetition}</span>
+                                                        <span className="stat-value">{getNodeReps(node.scheduler)}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Next</span>
-                                                        <span className={`stat-value ${node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
-                                                            {node.scheduler.dueDate}
+                                                        <span className={`stat-value ${getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
+                                                            {getNodeDueDate(node.scheduler)}
                                                         </span>
                                                     </div>
                                                 </div>
