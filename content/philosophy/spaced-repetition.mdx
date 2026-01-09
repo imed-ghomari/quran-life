@@ -1,10 +1,10 @@
-# Smart Review System (Spaced Repetition)
+# Smart Review System (FSRS)
 
-Quran Life uses a **Smart Review System** (technically known as the SM-2 Algorithm) to manage your review schedule. This is the same science used by world-class language learning apps to ensure long-term memory.
+Quran Life uses the advanced **FSRS (Free Spaced Repetition Scheduler)** algorithm to manage your review schedule. FSRS is a modern, data-driven system that outperforms older algorithms (like SM-2 or Anki's default) by adapting more accurately to your personal memory patterns.
 
 ## How Your Brain Remembers
 
-Memories fade over time. However, if you review information just as you are about to forget it, that memory becomes significantly stronger. Each time you successfully remember a verse, the "gap" until your next review can be longer.
+Memories fade over time. However, if you review information just as you are about to forget it, that memory becomes significantly stronger. FSRS calculates this "forgetting curve" precisely for every single verse.
 
 *Our system uses [Visual Mindmaps](/docs/philosophy/strategy) as the primary review unit to give your brain a physical 'place' to store these memories.*
 
@@ -15,19 +15,24 @@ The smart system schedules reviews at optimal intervals to minimize your workloa
 - **Recall, Don't Read**: The goal is to recall the verse from memory *before* clicking to reveal it.
 - **Grading Your Performance**: After revealing the verses, you must tell the app how you did:
     - **Forgot**: If you couldn't recall it or made a mistake.
-    - **Remembered**: If you recalled it perfectly.
+    - **Hard**: If you recalled it but it took significant mental effort.
+    - **Good**: If you recalled it with a normal amount of effort.
+    - **Easy**: If you recalled it instantly without hesitation.
+    
+    *Note: Unlike older systems, FSRS uses these grades to fine-tune your future schedule with high precision.*
+
     - **Not Sure**: Use this if you're uncertain about a review. This postpones the review to a later time without resetting your progress entirely. It is especially useful when:
         - You aren't sure if your mistake was a genuine **memory gap** or just an **error in manipulating the app** (like an accidental click).
         - You were distracted during the review and want to try again later.
         - You feel you need more time with the verses before committing to a grade.
-- **Reducing Workload**: Reviews are not daily for everything. As you get better, you'll see items less often—sometimes only once every few months.
-- **Mastery**: Items eventually reach a "Mastered" state where you only need to review them once every few months.
+- **Reducing Workload**: FSRS is highly efficient. As you prove your mastery, you will see items much less often than with traditional schedulers, saving you hours of review time in the long run.
+- **Mastery**: Items eventually reach a "Mastered" state where reviews occur very infrequently (e.g., years apart), effectively becoming permanent knowledge.
 
 ## Why Reviews Sometimes Reset
 
-Occasionally, a review interval might be reset to "Today." This happens to ensure your memory stays perfectly aligned with the app:
+Occasionally, a review interval might be shortened or reset. This happens to ensure your memory stays perfectly aligned with the app:
 1. **Manual Changes**: If you mark a Surah as "To Learn" and then back to "Learned."
-2. **Changing Verse Ranges**: If you change the start or end of a verse chunk. Because the "chunk" you memorized has changed, the app asks you to verify it again to be safe.
+2. **Changing Verse Ranges**: If you change the start or end of a verse chunk. Because the "chunk" you memorized has changed, the app asks you to verify it again.
 3. **Repeated Mistakes**: If you mark "Forgot" multiple times, the system will naturally show that item more frequently until you've mastered it again.
 
 ## Keyboard Shortcuts

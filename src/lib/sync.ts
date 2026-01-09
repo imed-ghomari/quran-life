@@ -480,23 +480,31 @@ function mergeTldrawSnapshots(local: any, remote: any): any {
   if (!local) return remote;
   if (!remote) return local;
 
-  // If neither has records array, prefer the one with more data
-  if (!local.records && !remote.records) {
+  // Helper to extract records from either 'store' (object) or 'records' (array)
+  const getRecords = (snapshot: any): any[] => {
+    if (snapshot?.store) return Object.values(snapshot.store);
+    if (Array.isArray(snapshot?.records)) return snapshot.records;
+    return [];
+  };
+
+  const localRecords = getRecords(local);
+  const remoteRecords = getRecords(remote);
+
+  // If neither has records, prefer the one with more data or remote
+  if (localRecords.length === 0 && remoteRecords.length === 0) {
     return local || remote;
   }
-  if (!local.records) return remote;
-  if (!remote.records) return local;
 
   // Build shape map by ID, keep newer version of each shape
   const shapeMap = new Map<string, any>();
 
   // Add all local shapes first
-  (local.records || []).forEach((record: any) => {
+  localRecords.forEach((record: any) => {
     shapeMap.set(record.id, record);
   });
 
   // Merge remote shapes - add if new, or replace if both have updatedAt and remote is newer
-  (remote.records || []).forEach((record: any) => {
+  remoteRecords.forEach((record: any) => {
     const existing = shapeMap.get(record.id);
     if (!existing) {
       // New shape from remote - add it
@@ -511,11 +519,12 @@ function mergeTldrawSnapshots(local: any, remote: any): any {
     }
   });
 
-  // Return merged snapshot with union of all shapes
+  // Return merged snapshot. MindmapEditor expects { store: ... } so we return that format.
   return {
     ...remote, // Take remote's schema version etc.
     ...local,  // But prefer local's metadata
-    records: Array.from(shapeMap.values()),
+    store: Object.fromEntries(shapeMap.entries()), // Return as 'store' object
+    records: undefined, // Clear records to avoid confusion
   };
 }
 
