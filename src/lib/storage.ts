@@ -27,6 +27,9 @@ const STORAGE_KEYS = {
     LAST_MODIFIED: 'quran-app-last-modified',
     PORTION_POINTERS: 'quran-app-portion-pointers',
     LAST_RESOLVED_FOR: 'quran-app-last-resolved-for',
+    // FSRS v6 keys
+    FSRS_REVIEW_LOGS: 'quran-app-fsrs-review-logs',
+    FSRS_OPTIMIZATION_META: 'quran-app-fsrs-optimization-meta',
 };
 
 const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
@@ -336,9 +339,22 @@ export function getLearnedVersesInPart(part: QuranPart): { surahId: number; ayah
 }
 
 // ========================================
-// Memory Nodes (SM-2)
+// Memory Nodes (SM-2 / FSRS)
 // ========================================
 
+import {
+    type ReviewLogEntry,
+    type OptimizationMeta,
+    createPresetState,
+    unsuspendCard,
+    migrateSM2ToFSRS,
+    isSM2State,
+    FSRSCardState,
+    createNewFSRSState,
+    FSRSState
+} from './fsrs';
+
+// Legacy SM-2 state (for migration)
 export interface SM2State {
     interval: number;
     repetition: number;
@@ -349,6 +365,9 @@ export interface SM2State {
     preSuspensionInterval?: number;
 }
 
+// Unified scheduler type - supports both formats during migration
+export type SchedulerState = SM2State | FSRSState;
+
 export interface MemoryNode {
     id: string;
     type: 'verse' | 'mindmap' | 'part_mindmap';
@@ -356,7 +375,87 @@ export interface MemoryNode {
     partId?: QuranPart;
     startVerse?: number;
     endVerse?: number;
-    scheduler: SM2State;
+    scheduler: SchedulerState;
+}
+
+
+// Helper to get due date from either scheduler type
+export function getNodeDueDate(scheduler: SchedulerState): string {
+    if ('due' in scheduler) {
+        return scheduler.due; // FSRS
+    }
+    return scheduler.dueDate; // SM-2
+}
+
+// Helper to set due date for either scheduler type
+export function setNodeDueDate(scheduler: SchedulerState, dueDate: string): SchedulerState {
+    if ('due' in scheduler) {
+        return { ...scheduler, due: dueDate }; // FSRS
+    }
+    return { ...scheduler, dueDate }; // SM-2
+}
+
+// Helper to get last review from either scheduler type
+export function getNodeLastReview(scheduler: SchedulerState): string {
+    if ('last_review' in scheduler) {
+        return scheduler.last_review; // FSRS
+    }
+    return scheduler.lastReview; // SM-2
+}
+
+// Helper to get stability/interval for maturity calculations
+export function getNodeStability(scheduler: SchedulerState): number {
+    if ('stability' in scheduler) {
+        return scheduler.stability; // FSRS
+    }
+    return scheduler.interval; // SM-2
+}
+
+// Helper to get repetition count
+export function getNodeReps(scheduler: SchedulerState): number {
+    if ('reps' in scheduler) {
+        return scheduler.reps; // FSRS
+    }
+    return scheduler.repetition; // SM-2
+}
+
+// Helper to get difficulty/ease (formatted as string)
+export function getNodeDifficulty(scheduler: SchedulerState): string {
+    if ('difficulty' in scheduler) {
+        return `D: ${scheduler.difficulty}`; // FSRS (1-10)
+    }
+    return `E: ${scheduler.easeFactor}`; // SM-2 (1.3-2.5)
+}
+
+// Helper to check if node has been reviewed
+export function hasNodeBeenReviewed(scheduler: SchedulerState): boolean {
+    if ('reps' in scheduler) {
+        return scheduler.reps > 0 || !!scheduler.last_review; // FSRS
+    }
+    return scheduler.repetition > 0 || !!scheduler.lastReview; // SM-2
+}
+
+// Helper to create a suspended state (for mindmap incomplete)
+function createSuspendedScheduler(scheduler: SchedulerState): SchedulerState {
+    if ('stability' in scheduler) {
+        // FSRS: reduce stability by 40%, clear due date
+        const newStability = Math.max(1, Math.round(scheduler.stability * 0.6));
+        return {
+            ...scheduler,
+            stability: newStability,
+            due: '', // Suspended
+        };
+    }
+    // SM-2: reduce interval by 40%, reduce ease factor
+    const sm2 = scheduler as SM2State;
+    const newInterval = Math.max(1, Math.round(sm2.interval * 0.6));
+    const newEase = Math.max(1.3, Math.round((sm2.easeFactor - 0.15) * 100) / 100);
+    return {
+        ...sm2,
+        interval: newInterval,
+        easeFactor: newEase,
+        dueDate: '', // Suspended
+    };
 }
 
 export function getMemoryNodes(): MemoryNode[] {
@@ -372,7 +471,7 @@ export function saveMemoryNodes(nodes: MemoryNode[]): void {
         } else {
             // If duplicate found, keep the one with more progress (lastReview)
             const existing = uniqueMap.get(n.id);
-            if ((n.scheduler.lastReview || '') > (existing.scheduler.lastReview || '')) {
+            if ((getNodeLastReview(n.scheduler) || '') > (getNodeLastReview(existing.scheduler) || '')) {
                 uniqueMap.set(n.id, n);
             }
         }
@@ -390,7 +489,7 @@ export function getDueNodes(): MemoryNode[] {
     const partMindmaps = getPartMindMaps();
 
     return getMemoryNodes()
-        .filter(n => n.scheduler.dueDate <= today)
+        .filter(n => getNodeDueDate(n.scheduler) <= today)
         // Filter out skipped surahs
         .filter(n => !n.surahId || !skips.has(n.surahId))
         // Filter out nodes for surahs that are not marked as learned
@@ -438,17 +537,15 @@ export function updateMemoryNode(node: MemoryNode): void {
     saveMemoryNodes(nodes);
 }
 
-function createNewScheduler(staggerDays: number = 0): SM2State {
-    const today = new Date();
-    today.setDate(today.getDate() + staggerDays);
-    const dueDate = today.toISOString().split('T')[0];
-    return {
-        interval: 0,
-        repetition: 0,
-        easeFactor: 2.5,
-        dueDate: dueDate,
-        lastReview: '',
-    };
+function createNewScheduler(staggerDays: number = 0): FSRSState {
+    const state = createNewFSRSState();
+    if (staggerDays > 0) {
+        // Simple stagger: just push due date
+        const due = new Date(state.due);
+        due.setDate(due.getDate() + staggerDays);
+        state.due = due.toISOString().split('T')[0];
+    }
+    return state;
 }
 
 // Sync memory nodes with learned verses - create nodes for learned verses
@@ -599,58 +696,21 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
 }
 
 // SM-2 Algorithm
-export function sm2(grade: number, state: SM2State): SM2State {
-    let { interval, repetition, easeFactor, relearningStep } = state;
+// SM-2 function removed (replaced by FSRS)
 
-    if (relearningStep) {
-        if (grade < 3) {
-            // Failure during re-learning: restart from step 1
-            interval = 1;
-            relearningStep = 1;
-        } else {
-            // Success during re-learning
-            if (relearningStep === 1) {
-                interval = 3;
-                relearningStep = 2;
-            } else if (relearningStep === 2) {
-                // Graduate from re-learning
-                // I = 4 days or 20% of previous interval, whichever is greater
-                const minInterval = 4;
-                const previousInterval = state.preSuspensionInterval || 0;
-                interval = Math.max(minInterval, Math.round(previousInterval * 0.2));
-                relearningStep = undefined;
-                repetition = repetition || 1; // Resume from established repetition
-            }
-        }
-    } else {
-        // Standard SM-2
-        if (grade < 3) {
-            repetition = 0;
-            interval = 1;
-        } else {
-            if (repetition === 0) interval = 1;
-            else if (repetition === 1) interval = 6;
-            else interval = Math.round(interval * easeFactor);
-            repetition++;
-        }
-        easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
-    }
-
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + interval);
-
-    return {
-        interval,
-        repetition,
-        easeFactor: Math.round(easeFactor * 100) / 100,
-        dueDate: dueDate.toISOString().split('T')[0],
-        lastReview: new Date().toISOString().split('T')[0],
-        relearningStep,
-        preSuspensionInterval: state.preSuspensionInterval
-    };
-}
+import { buryCard } from './fsrs';
 
 export function postponeNode(node: MemoryNode): MemoryNode {
+    // Check if FSRS or SM-2
+    if (!isSM2State(node.scheduler)) {
+        // FSRS
+        return {
+            ...node,
+            scheduler: buryCard(node.scheduler as any)
+        };
+    }
+
+    // Legacy SM-2 fallback (just increment due date)
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -728,8 +788,9 @@ export function saveMindMap(mindmap: MindMap): void {
         } else {
             // Reactivation: If node exists but was suspended (e.g. cleared due date), set to today
             const node = nodes[nodeIdx];
-            if (!node.scheduler.dueDate || node.scheduler.dueDate === '') {
-                node.scheduler.dueDate = new Date().toISOString().split('T')[0];
+            const dueDate = getNodeDueDate(node.scheduler);
+            if (!dueDate || dueDate === '') {
+                node.scheduler = setNodeDueDate(node.scheduler, new Date().toISOString().split('T')[0]);
                 appLogger.addLog(`Surah ${mindmap.surahId} mindmap reactivated. Due date set to today.`, 'info');
                 saveMemoryNodes(nodes);
             }
@@ -737,22 +798,14 @@ export function saveMindMap(mindmap: MindMap): void {
     } else if (nodeIdx !== -1) {
         const node = nodes[nodeIdx];
         // Distinguish between a node that has been reviewed and one that is new
-        // A reviewed node will have an interval > 0 or have a lastReview date
-        const hasBeenReviewed = node.scheduler.repetition > 0 || !!node.scheduler.lastReview;
+        const hasBeenReviewed = hasNodeBeenReviewed(node.scheduler);
 
         if (hasBeenReviewed) {
             // "Lapse" approach: reduce strength but don't reset to zero
-            const oldInterval = node.scheduler.interval;
-            const newInterval = Math.max(1, Math.round(oldInterval * 0.6)); // 60% of current interval
-            const newEase = Math.max(1.3, Math.round((node.scheduler.easeFactor - 0.15) * 100) / 100);
-
-            node.scheduler = {
-                ...node.scheduler,
-                interval: newInterval,
-                easeFactor: newEase,
-                dueDate: '', // Suspended: Clear due date per user request
-            };
-            appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15, suspended.`, 'warning');
+            const oldStability = getNodeStability(node.scheduler);
+            node.scheduler = createSuspendedScheduler(node.scheduler);
+            const newStability = getNodeStability(node.scheduler);
+            appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: stability ${oldStability}d -> ${newStability}d, suspended.`, 'warning');
             saveMemoryNodes(nodes);
         } else {
             // Never reviewed: just remove it until it's complete again
@@ -819,8 +872,9 @@ export function savePartMindMap(mindmap: PartMindMap): void {
         } else {
             // Reactivation
             const node = nodes[nodeIdx];
-            if (!node.scheduler.dueDate || node.scheduler.dueDate === '') {
-                node.scheduler.dueDate = new Date().toISOString().split('T')[0];
+            const dueDate = getNodeDueDate(node.scheduler);
+            if (!dueDate || dueDate === '') {
+                node.scheduler = setNodeDueDate(node.scheduler, new Date().toISOString().split('T')[0]);
                 appLogger.addLog(`Part ${mindmap.partId} mindmap reactivated. Due date set to today.`, 'info');
                 saveMemoryNodes(nodes);
             }
@@ -828,21 +882,14 @@ export function savePartMindMap(mindmap: PartMindMap): void {
     } else if (nodeIdx !== -1) {
         const node = nodes[nodeIdx];
         // Distinguish between a node that has been reviewed and one that is new
-        const hasBeenReviewed = node.scheduler.repetition > 0 || !!node.scheduler.lastReview;
+        const hasBeenReviewed = hasNodeBeenReviewed(node.scheduler);
 
         if (hasBeenReviewed) {
             // "Lapse" approach: reduce strength but don't reset to zero
-            const oldInterval = node.scheduler.interval;
-            const newInterval = Math.max(1, Math.round(oldInterval * 0.6)); // 60% of current interval
-            const newEase = Math.max(1.3, Math.round((node.scheduler.easeFactor - 0.15) * 100) / 100);
-
-            node.scheduler = {
-                ...node.scheduler,
-                interval: newInterval,
-                easeFactor: newEase,
-                dueDate: '', // Suspended
-            };
-            appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: interval ${oldInterval}d -> ${newInterval}d, ease -0.15, suspended.`, 'warning');
+            const oldStability = getNodeStability(node.scheduler);
+            node.scheduler = createSuspendedScheduler(node.scheduler);
+            const newStability = getNodeStability(node.scheduler);
+            appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: stability ${oldStability}d -> ${newStability}d, suspended.`, 'warning');
             saveMemoryNodes(nodes);
         } else {
             // Never reviewed: just remove it until it's complete again
@@ -1051,6 +1098,60 @@ export function getErrorsByAnchor(): { label: string; count: number; surahId?: n
 }
 
 // ========================================
+// FSRS Review Logs (for optimization)
+// ========================================
+
+
+
+export function getReviewLogs(): ReviewLogEntry[] {
+    return getFromCache(STORAGE_KEYS.FSRS_REVIEW_LOGS, []);
+}
+
+export function saveReviewLog(log: ReviewLogEntry): void {
+    const logs = getReviewLogs();
+    logs.push(log);
+    // Keep last 2000 logs for optimization (allows multiple optimization cycles)
+    const trimmed = logs.slice(-2000);
+    saveToCacheAndStore(STORAGE_KEYS.FSRS_REVIEW_LOGS, trimmed);
+}
+
+export function getReviewLogCount(): number {
+    return getReviewLogs().length;
+}
+
+export function clearReviewLogs(): void {
+    saveToCacheAndStore(STORAGE_KEYS.FSRS_REVIEW_LOGS, []);
+}
+
+// ========================================
+// FSRS Optimization Metadata
+// ========================================
+
+const DEFAULT_OPTIMIZATION_META: OptimizationMeta = {
+    lastOptimizedAt: null,
+    logCountAtLastOptimization: 0,
+    customWeights: null,
+};
+
+export function getOptimizationMeta(): OptimizationMeta {
+    return getFromCache(STORAGE_KEYS.FSRS_OPTIMIZATION_META, DEFAULT_OPTIMIZATION_META);
+}
+
+export function saveOptimizationMeta(meta: OptimizationMeta): void {
+    saveToCacheAndStore(STORAGE_KEYS.FSRS_OPTIMIZATION_META, meta);
+}
+
+export function getCustomWeights(): number[] | undefined {
+    return getOptimizationMeta().customWeights || undefined;
+}
+
+export function saveCustomWeights(weights: number[]): void {
+    const meta = getOptimizationMeta();
+    meta.customWeights = weights;
+    saveOptimizationMeta(meta);
+}
+
+// ========================================
 // Cycle Management
 // ========================================
 
@@ -1095,43 +1196,14 @@ export function setNodeMaturity(nodeId: string, level: MaturityLevel): void {
     if (index === -1) return;
 
     const node = nodes[index];
-    const now = new Date();
-    let interval = 1;
-    let easeFactor = 2.5;
 
-    switch (level) {
-        case 'reset':
-            interval = 1;
-            break;
-        case 'medium':
-            interval = 14;
-            break;
-        case 'strong':
-            interval = 30;
-            break;
-        case 'mastered':
-            interval = 90;
-            break;
-    }
+    // Use FSRS preset logic
+    node.scheduler = createPresetState(level);
 
-    // Add jitter: +/- 20%
-    if (level !== 'reset') {
-        const jitter = interval * 0.2;
-        interval = Math.round(interval + (Math.random() * jitter * 2 - jitter));
-    }
-
-    const dueDate = new Date(now);
-    dueDate.setDate(dueDate.getDate() + interval);
-
-    nodes[index] = {
-        ...node,
-        scheduler: {
-            ...node.scheduler,
-            interval,
-            easeFactor,
-            dueDate: dueDate.toISOString().split('T')[0],
-        }
-    };
+    // If existing node had ID or other props, scheduler is just the state
+    // FSRSState has: due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review
+    // MemoryNode.scheduler is union. createPresetState returns FSRSState.
+    // So this assignment is valid.
 
     saveMemoryNodes(nodes);
 }
@@ -1145,41 +1217,10 @@ export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
             return node;
         }
 
-        let interval = 1;
-        let easeFactor = 2.5;
-
-        switch (level) {
-            case 'reset':
-                interval = 1;
-                break;
-            case 'medium':
-                interval = 14;
-                break;
-            case 'strong':
-                interval = 30;
-                break;
-            case 'mastered':
-                interval = 90;
-                break;
-        }
-
-        // Add jitter: +/- 20%
-        if (level !== 'reset') {
-            const jitter = interval * 0.2;
-            interval = Math.round(interval + (Math.random() * jitter * 2 - jitter));
-        }
-
-        const dueDate = new Date(now);
-        dueDate.setDate(dueDate.getDate() + interval);
-
+        // Use FSRS preset
         return {
             ...node,
-            scheduler: {
-                ...node.scheduler,
-                interval,
-                easeFactor,
-                dueDate: dueDate.toISOString().split('T')[0],
-            }
+            scheduler: createPresetState(level)
         };
     });
 
@@ -1200,41 +1241,10 @@ export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap', lev
             return node;
         }
 
-        let interval = 1;
-        let easeFactor = 2.5;
-
-        switch (level) {
-            case 'reset':
-                interval = 1;
-                break;
-            case 'medium':
-                interval = 14;
-                break;
-            case 'strong':
-                interval = 30;
-                break;
-            case 'mastered':
-                interval = 90;
-                break;
-        }
-
-        // Add jitter: +/- 20%
-        if (level !== 'reset') {
-            const jitter = interval * 0.2;
-            interval = Math.round(interval + (Math.random() * jitter * 2 - jitter));
-        }
-
-        const dueDate = new Date(now);
-        dueDate.setDate(dueDate.getDate() + interval);
-
+        // Use FSRS preset
         return {
             ...node,
-            scheduler: {
-                ...node.scheduler,
-                interval,
-                easeFactor,
-                dueDate: dueDate.toISOString().split('T')[0],
-            }
+            scheduler: createPresetState(level)
         };
     });
 
@@ -1293,17 +1303,16 @@ export function clearAnchorIssues(surahId: number, anchorId: string): void {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
 
-            node.scheduler = {
-                ...node.scheduler,
-                preSuspensionInterval: node.scheduler.interval,
-                interval: 1,
-                relearningStep: 1,
-                // Soft Ease Penalty + Avoid Hell:
-                // We drop ease by 0.1 but reset it significantly if it was crushed (min 1.9)
-                // because a 'Fix' implies a new mental encoding (structural repair).
-                easeFactor: Math.max(1.9, Math.round((node.scheduler.easeFactor - 0.1) * 100) / 100),
-                dueDate: tomorrow.toISOString().split('T')[0]
-            };
+            // Check if FSRS or SM-2 and handle accordingly
+            // Check if FSRS or SM-2
+            if (!isSM2State(node.scheduler)) {
+                // Already FSRS: just unsuspend
+                node.scheduler = unsuspendCard(node.scheduler as any);
+            } else {
+                // SM-2: Migrate first, then unsuspend
+                const fsrsState = migrateSM2ToFSRS(node.scheduler as any);
+                node.scheduler = unsuspendCard(fsrsState);
+            }
 
             saveMemoryNodes(nodes);
         }

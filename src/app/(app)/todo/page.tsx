@@ -18,6 +18,7 @@ import {
     setMutashabihatDecision,
     getCustomMutashabihat,
     saveCustomMutashabih,
+    hasNodeBeenReviewed,
     CustomMutashabih,
     isSurahSkipped,
     MutashabihatDecision,
@@ -842,7 +843,7 @@ export default function TodoPage() {
 
     const hasReviewedChunks = (surahId: number) => {
         const nodes = getMemoryNodes();
-        return nodes.some(n => n.type === 'verse' && n.surahId === surahId && (n.scheduler.repetition > 0 || !!n.scheduler.lastReview));
+        return nodes.some(n => n.type === 'verse' && n.surahId === surahId && hasNodeBeenReviewed(n.scheduler));
     };
 
     useEffect(() => {

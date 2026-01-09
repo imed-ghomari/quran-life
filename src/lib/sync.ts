@@ -1,4 +1,4 @@
-import { BackupData, exportBackup, importBackup, saveSettings, getMindMaps, getPartMindMaps, getMemoryNodes, getMutashabihatDecisions, getReviewErrors, getCustomMutashabihat } from './storage';
+import { BackupData, exportBackup, importBackup, saveSettings, getMindMaps, getPartMindMaps, getMemoryNodes, getMutashabihatDecisions, getReviewErrors, getCustomMutashabihat, getNodeLastReview } from './storage';
 import { fetchSupabaseBackup, uploadSupabaseBackup } from './supabaseSync';
 import { appLogger } from './logger';
 import { SURAHS } from './quranData';
@@ -501,7 +501,7 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
 
     remoteNodes.forEach(rNode => {
       const lNode = nodeMap.get(rNode.id);
-      if (!lNode || rNode.scheduler.lastReview > lNode.scheduler.lastReview) {
+      if (!lNode || getNodeLastReview(rNode.scheduler) > getNodeLastReview(lNode.scheduler)) {
         nodeMap.set(rNode.id, rNode);
         hasChanges = true;
       }

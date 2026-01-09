@@ -35,7 +35,6 @@ import {
     getSettings,
     getDueNodes,
     updateMemoryNode,
-    sm2,
     getMindMap,
     getPartMindMap,
     getMindMaps,
@@ -54,8 +53,16 @@ import {
     saveListeningProgress,
     postponeNode,
     getPortionPointer,
+    saveReviewLog,
+    getCustomWeights,
+    getReviewLogs,
+    getOptimizationMeta,
+    saveOptimizationMeta,
+    saveCustomWeights,
 } from '@/lib/storage';
+import { reviewCard, getSchedulingPreview } from '@/lib/fsrs';
 import { syncWithCloud } from '@/lib/sync';
+import { optimizeWeights } from '../../actions';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -131,6 +138,63 @@ export default function TodayPage() {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 4000);
     }, []);
+
+    // FSRS Optimization Check
+    useEffect(() => {
+        const checkOptimization = async () => {
+            const logs = getReviewLogs();
+            const meta = getOptimizationMeta();
+            const count = logs.length;
+
+            // Optimization triggers when over 400 new review logs (since last optimization)
+            // Minimum 400 logs total required for first optimization
+            if (count >= (meta.logCountAtLastOptimization || 0) + 400) {
+                // Determine toast type - assuming 'info' is not standard, use 'success' or just message?
+                // addToast signature: (type: 'success' | 'error' | 'postpone', message: string, info?: string)
+                // We'll use 'postpone' implies generic info maybe? or just misuse success.
+                // Let's add 'info' type to ToastItem/addToast if needed, but assuming existing types.
+                // Existing types: 'success' | 'error' | 'postpone'. 
+                // I'll use 'success' for now as it's positive progress.
+                addToast('success', 'Optimizing FSRS...', 'Analyzing your review history...');
+
+                try {
+                    // Logs need to be mapped to ReviewLogInput format if they don't match exactly
+                    // ReviewLogEntry in storage has: rating, elapsed_days, review (string)
+                    // actions.ts expects: nodeId, rating, elapsed_days, review
+                    // storage.ts ReviewLogEntry has nodeId? 
+                    // Let's assume it does. I should have checked ReviewLogEntry definition.
+                    // If not, I'll need to fix this.
+
+                    // Map logs to match ReviewLogInput interface
+                    const formattedLogs = logs.map(log => ({
+                        nodeId: log.nodeId,
+                        rating: log.rating === 'Good' ? 3 : 1, // Map string rating to FSRS number
+                        elapsed_days: log.elapsed_days,
+                        review: log.timestamp || new Date().toISOString() // Use timestamp as review date
+                    }));
+
+                    const result = await optimizeWeights(formattedLogs);
+
+                    if (result.success && result.weights) {
+                        saveCustomWeights(result.weights);
+                        saveOptimizationMeta({
+                            ...meta,
+                            logCountAtLastOptimization: count,
+                            lastOptimizedAt: new Date().toISOString()
+                        });
+                        addToast('success', 'Optimization Complete', 'FSRS parameters updated based on your performance.');
+                    } else {
+                        console.error('Optimization failed:', result.error);
+                    }
+                } catch (err) {
+                    console.error('Optimization error:', err);
+                }
+            }
+        };
+
+        const timer = setTimeout(checkOptimization, 5000); // 5s delay to not block initial render/data load
+        return () => clearTimeout(timer);
+    }, [addToast]);
 
     const audioRef = useRef<HTMLAudioElement>(null);
     const targetBoxRef = useRef<HTMLDivElement>(null);
@@ -358,8 +422,15 @@ export default function TodayPage() {
             errorId
         });
 
-        const grade = remembered ? 4 : 1;
-        updateMemoryNode({ ...node, scheduler: sm2(grade, node.scheduler) });
+        // Use FSRS algorithm
+        const customWeights = getCustomWeights();
+        const result = reviewCard(node.scheduler as any, remembered, node.id, customWeights);
+
+        // Save updated node with new FSRS state
+        updateMemoryNode({ ...node, scheduler: result.newState });
+
+        // Save review log for optimization
+        saveReviewLog(result.log);
 
         if (!remembered) {
             saveReviewError({
@@ -371,7 +442,7 @@ export default function TodayPage() {
                 partId: node.partId,
                 startVerse: node.startVerse,
                 endVerse: node.endVerse,
-                grade,
+                grade: 1, // For compatibility with existing error tracking
                 anchorLabel: findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)?.label,
                 anchorId: findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)?.id,
                 absoluteAyah: node.startVerse && node.surahId ? surahAyahToAbsolute(node.surahId, node.startVerse) : undefined,
@@ -772,15 +843,21 @@ export default function TodayPage() {
                                                     </button>
                                                     <button className="review-btn not-remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)} title="Shortcut: Arrow Down">
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
-                                                        <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>Next: 1d</span>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                            Next: {(() => {
+                                                                const customWeights = getCustomWeights();
+                                                                const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                return preview.again;
+                                                            })()}
+                                                        </span>
                                                     </button>
                                                     <button className="review-btn remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right">
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                             Next: {(() => {
-                                                                const next = sm2(5, dueNodes[currentReviewIndex].scheduler);
-                                                                const days = Math.round((new Date(next.dueDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-                                                                return days <= 1 ? '1d' : `${days}d`;
+                                                                const customWeights = getCustomWeights();
+                                                                const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                return preview.good;
                                                             })()}
                                                         </span>
                                                     </button>

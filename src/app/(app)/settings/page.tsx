@@ -29,7 +29,21 @@ import {
     MutashabihatDecision,
     bulkSetSurahStatus,
     resetMutashabihatDecisions,
+    saveReviewError,
+    removeReviewError,
+    findAnchorForRange,
+    getListeningProgress,
+    saveListeningProgress,
+    postponeNode,
+    getPortionPointer,
+    getNodeStability,
+    getNodeDifficulty,
+    getNodeReps,
+    getNodeDueDate,
+    getRetrievability,
+    formatRecallChance
 } from '@/lib/storage';
+import { getSchedulingPreview, createPresetState } from '@/lib/fsrs';
 import { QuranPart } from '@/lib/types';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
@@ -1058,10 +1072,10 @@ export default function SettingsPage() {
                                                                                 <option value="mastered">Mastered</option>
                                                                             </select>
                                                                         </td>
-                                                                        <td>{node.scheduler.interval}d</td>
-                                                                        <td>{node.scheduler.easeFactor}</td>
-                                                                        <td>{node.scheduler.repetition}</td>
-                                                                        <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                                        <td>{getNodeStability(node.scheduler)}d</td>
+                                                                        <td>{getNodeDifficulty(node.scheduler)}</td>
+                                                                        <td>{getNodeReps(node.scheduler)}</td>
+                                                                        <td className={getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node.scheduler)}</td>
                                                                     </tr>
                                                                 ))
                                                         ) : (
@@ -1125,10 +1139,10 @@ export default function SettingsPage() {
                                                                                 <option value="mastered">Mastered</option>
                                                                             </select>
                                                                         </td>
-                                                                        <td>{node.scheduler.interval}d</td>
-                                                                        <td>{node.scheduler.easeFactor}</td>
-                                                                        <td>{node.scheduler.repetition}</td>
-                                                                        <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                                        <td>{getNodeStability(node.scheduler)}d</td>
+                                                                        <td>{getNodeDifficulty(node.scheduler)}</td>
+                                                                        <td>{getNodeReps(node.scheduler)}</td>
+                                                                        <td className={getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node.scheduler)}</td>
                                                                     </tr>
                                                                 ))
                                                         ) : (
@@ -1254,10 +1268,10 @@ export default function SettingsPage() {
                                                                                     <option value="mastered">Mastered</option>
                                                                                 </select>
                                                                             </td>
-                                                                            <td>{node.scheduler.interval}d</td>
-                                                                            <td>{node.scheduler.easeFactor}</td>
-                                                                            <td>{node.scheduler.repetition}</td>
-                                                                            <td className={node.scheduler.dueDate <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{node.scheduler.dueDate}</td>
+                                                                            <td>{getNodeStability(node.scheduler)}d</td>
+                                                                            <td>{getNodeDifficulty(node.scheduler)}</td>
+                                                                            <td>{getNodeReps(node.scheduler)}</td>
+                                                                            <td className={getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node.scheduler)}</td>
                                                                         </tr>
                                                                     ))}
                                                                 </React.Fragment>

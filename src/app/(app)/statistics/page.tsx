@@ -8,9 +8,11 @@ import {
     getMindMaps,
     getPartMindMaps,
     getMemoryNodes,
+    getMutashabihatDecisions,
     getPortionPointer,
     getListeningCycles,
-    getMutashabihatDecisions,
+    getNodeStability,
+    getNodeDueDate,
 } from '@/lib/storage';
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 import { getListeningProgress } from '@/lib/storage';
@@ -75,7 +77,7 @@ export default function StatisticsPage() {
             if (pmm) {
                 if (pmm.isComplete) {
                     const node = memoryNodes.find(n => n.id === `part-mindmap-${p}`);
-                    const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
+                    const maturity = node ? getMaturity(getNodeStability(node.scheduler)) : 'new';
                     if (maturity === 'mastered') learnedMastered++;
                     else if (maturity === 'strong') learnedStrong++;
                     else if (maturity === 'medium') learnedMedium++;
@@ -123,7 +125,7 @@ export default function StatisticsPage() {
                 if (mm) {
                     if (mm.isComplete) {
                         const node = memoryNodes.find(n => n.id === `mindmap-${s.id}`);
-                        const maturity = node ? getMaturity(node.scheduler.interval) : 'new';
+                        const maturity = node ? getMaturity(getNodeStability(node.scheduler)) : 'new';
                         if (maturity === 'mastered') learnedMastered++;
                         else if (maturity === 'strong') learnedStrong++;
                         else if (maturity === 'medium') learnedMedium++;
@@ -177,7 +179,7 @@ export default function StatisticsPage() {
                         if (nodes.length === 0) {
                             learnedNew++; // Learned but nodes not synced yet
                         } else {
-                            const avgInterval = nodes.reduce((acc, n) => acc + n.scheduler.interval, 0) / nodes.length;
+                            const avgInterval = nodes.reduce((acc, n) => acc + getNodeStability(n.scheduler), 0) / nodes.length;
                             const maturity = getMaturity(avgInterval);
                             if (maturity === 'mastered') learnedMastered++;
                             else if (maturity === 'strong') learnedStrong++;
@@ -210,7 +212,7 @@ export default function StatisticsPage() {
                             if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
                                 const nodeId = `verse-${s.id}-${segmentStart}-${segmentEnd}`;
                                 const node = memoryNodes.find(n => n.id === nodeId);
-                                chunkMaturities.push(node ? getMaturity(node.scheduler.interval) : 'new');
+                                chunkMaturities.push(node ? getMaturity(getNodeStability(node.scheduler)) : 'new');
                                 learnedChunksCount++;
 
                                 if (i < sortedVerses.length) {
@@ -348,7 +350,7 @@ export default function StatisticsPage() {
         let dueTomorrow = 0;
 
         nodes.forEach(node => {
-            const dueDate = new Date(node.scheduler.dueDate);
+            const dueDate = new Date(getNodeDueDate(node.scheduler));
             dueDate.setHours(0, 0, 0, 0);
 
             const diffTime = dueDate.getTime() - today.getTime();
@@ -620,7 +622,7 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
 
                                 {/* X-axis */}
                                 <line x1={padding.left} y1={chartHeight - padding.bottom} x2={vWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
-                                
+
                                 {/* Left Y-axis (Daily Count) */}
                                 <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" />
                                 {[0, 0.5, 1].map((p, i) => {
@@ -651,13 +653,13 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
 
     // Filter segments with count > 0 to avoid rendering artifacts
     const activeSegments = segments.filter(s => s.count > 0);
-    
+
     // Calculate gaps: we want a small gap between segments
     // Total degrees available is 180.
     const gapDegrees = activeSegments.length > 1 ? 4 : 0;
     const totalGapDegrees = gapDegrees * (activeSegments.length - 1);
     const availableDegrees = 180 - totalGapDegrees;
-    
+
     let currentStartAngle = 180; // Start from left
 
     return (
@@ -672,13 +674,13 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
                     strokeLinecap="round"
                     opacity="0.1"
                 />
-                
+
                 {activeSegments.map((segment, idx) => {
                     const segmentDegrees = (segment.count / total) * availableDegrees;
-                    
+
                     const startAngle = currentStartAngle;
                     const endAngle = startAngle - segmentDegrees;
-                    
+
                     // Update currentStartAngle for next segment, including gap
                     currentStartAngle = endAngle - gapDegrees;
 
@@ -687,7 +689,7 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
                     // But we want 180 to be left, 90 to be top, 0 to be right
                     const startRad = (startAngle * Math.PI) / 180;
                     const endRad = (endAngle * Math.PI) / 180;
-                    
+
                     const x1 = centerX + radius * Math.cos(startRad);
                     const y1 = centerY - radius * Math.sin(startRad);
                     const x2 = centerX + radius * Math.cos(endRad);
@@ -743,7 +745,7 @@ function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: strin
 
                 <div style={{ flex: '1', minWidth: '200px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1rem', justifyContent: 'flex-start' }}>
-                        {stats.segments.map((s, i) => (                    
+                        {stats.segments.map((s, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '2px 0' }}>
                                 <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: s.color, opacity: s.opacity ?? 1, flexShrink: 0 }} />
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
