@@ -114,8 +114,23 @@ function stringToState(state: FSRSCardState): State {
  * Convert FSRSState to ts-fsrs Card
  */
 function stateToCard(fsrsState: FSRSState): Card {
+    // Handle invalid/empty due date (e.g. from suspended cards) by defaulting to now
+    let due = new Date(fsrsState.due);
+    if (isNaN(due.getTime())) {
+        due = new Date();
+    }
+
+    // Handle invalid last_review
+    let last_review: Date | undefined;
+    if (fsrsState.last_review) {
+        last_review = new Date(fsrsState.last_review);
+        if (isNaN(last_review.getTime())) {
+            last_review = undefined;
+        }
+    }
+
     return {
-        due: new Date(fsrsState.due),
+        due,
         stability: fsrsState.stability,
         difficulty: fsrsState.difficulty,
         elapsed_days: fsrsState.elapsed_days,
@@ -123,7 +138,7 @@ function stateToCard(fsrsState: FSRSState): Card {
         reps: fsrsState.reps,
         lapses: fsrsState.lapses,
         state: stringToState(fsrsState.state),
-        last_review: fsrsState.last_review ? new Date(fsrsState.last_review) : undefined,
+        last_review,
         learning_steps: 0,  // Not used with enable_short_term: false
     };
 }

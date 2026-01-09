@@ -975,7 +975,7 @@ export default function SettingsPage() {
                                                 <th>Target / Range</th>
                                                 <th>Maturity</th>
                                                 <th>Interval</th>
-                                                <th>Ease</th>
+                                                <th>Difficulty</th>
                                                 <th>Reps</th>
                                                 <th>Next Review</th>
                                             </tr>
@@ -2176,7 +2176,7 @@ export default function SettingsPage() {
                                                         <span className="stat-value">{getNodeStability(node.scheduler)}d</span>
                                                     </div>
                                                     <div className="stat-item">
-                                                        <span className="stat-label">Ease</span>
+                                                        <span className="stat-label">Difficulty</span>
                                                         <span className="stat-value">{getNodeDifficulty(node.scheduler)}</span>
                                                     </div>
                                                     <div className="stat-item">
