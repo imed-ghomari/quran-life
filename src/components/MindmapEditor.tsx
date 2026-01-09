@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { appLogger } from '@/lib/logger';
 import {
     Tldraw,
     DefaultDashStyle,
@@ -269,6 +270,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         // This allows our sync engine to perform granular Last-Write-Wins merging on shapes.
         const cleanupListener = editor.store.listen(
             (event: any) => {
+                // appLogger.addLog(`[Editor] Store update source: ${event.source}`, 'info');
                 if (event.source !== 'user') return;
 
                 const changes = event.changes;
@@ -292,6 +294,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     }
                 });
 
+                if (Object.keys(changes.added || {}).length > 0) {
+                    // appLogger.addLog(`[Editor] Added ${Object.keys(changes.added).length} items`, 'info');
+                }
+
                 // Handle additions
                 Object.values(changes.added || {}).forEach((record: any) => {
                     if (isShape(record)) {
@@ -305,6 +311,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 if (updates.length > 0) {
                     // We use store.put to update directly without creating a new undo/redo entry
                     // and usually this triggers source: 'code' which avoids loop
+                    appLogger.addLog(`[Editor] Injecting timestamps for ${updates.length} shapes`, 'info');
                     editor.store.put(updates);
                 }
             },
@@ -322,6 +329,13 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             try {
                 // Get the current snapshot and an image preview
                 const snapshot = typeof editor.getSnapshot === 'function' ? editor.getSnapshot() : editor.store.getSnapshot();
+
+                // Debug: Check a random shape for timestamp
+                // const shapeIds = Array.from(editor.getCurrentPageShapeIds());
+                // if (shapeIds.length > 0) {
+                //    const sample = editor.getShape(shapeIds[0]);
+                //    appLogger.addLog(`[Editor] Saving. Sample shape updatedAt: ${sample?.meta?.updatedAt}`, 'info');
+                // }
 
                 // Export images for preview (both light and dark)
                 let lightBlob: Blob | undefined;

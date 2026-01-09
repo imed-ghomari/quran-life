@@ -11,6 +11,7 @@ import {
     getPartMindMap,
     savePartMindMap,
     getSettings,
+    saveSettings,
     getReviewErrors,
     getSuspendedAnchors,
     clearAnchorIssues,
@@ -43,10 +44,6 @@ export default function TodoPage() {
     const [decisions, setDecisions] = useState<Record<string, any>>(getMutashabihatDecisions());
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
 
-    // Default main sections to open
-
-    // Expansion states
-
     // Theme detection
     const [isDark, setIsDark] = useState(false);
     useEffect(() => {
@@ -59,13 +56,9 @@ export default function TodoPage() {
         }
     }, []);
 
-    // Mobile Slide-over State
-
     // Mindmap Editor State (for Surah and Part mindmaps)
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
-
-    // Default subsections to collapsed
 
     const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
 
@@ -74,10 +67,6 @@ export default function TodoPage() {
         const nodes = getMemoryNodes();
         return nodes.some(n => n.type === 'verse' && n.surahId === surahId && hasNodeBeenReviewed(n.scheduler));
     };
-
-    useEffect(() => {
-        // No longer forcing false on mobile since it's now false by default
-    }, []);
 
     const settings = getSettings();
 
@@ -109,35 +98,20 @@ export default function TodoPage() {
     const activePart = settings.activePart;
 
     const surahTasks = useMemo(() => {
-        const learnedSurahIds = new Set(Object.keys(settings.learnedVerses).map(id => parseInt(id)));
         const eligible = SURAHS.filter(s =>
             (activePart === 5 || s.part === activePart) &&
-            !isSurahSkipped(s.id) &&
-            learnedSurahIds.has(s.id)
+            !isSurahSkipped(s.id)
+            // Show all surahs in the part to allow adding them to todo
         );
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
             .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, activePart, settings.learnedVerses]);
-
-    const incompleteSurahMaps = surahTasks.filter(t => !t.mindmap || !t.mindmap.isComplete || !t.mindmap.imageUrl);
+    }, [mindmaps, activePart]);
 
     const partTasks = useMemo(() => {
         const parts: QuranPart[] = [1, 2, 3, 4];
         return parts.map(p => ({ part: p, mindmap: partMindmaps[p] }));
     }, [partMindmaps]);
-
-    const visiblePartTasks = useMemo(() => {
-        return activePart === 5 ? partTasks : partTasks.filter(t => t.part === activePart);
-    }, [partTasks, activePart]);
-
-    const incompletePartMapsCount = useMemo(() => {
-        return (activePart === 5 ? partTasks : partTasks.filter(t => t.part === activePart)).filter(({ mindmap }) => {
-            const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
-            const isComplete = !!mindmap?.isComplete && hasContent;
-            return !isComplete;
-        }).length;
-    }, [partTasks, activePart]);
 
     const suspendedAnchors = getSuspendedAnchors();
 
@@ -206,30 +180,6 @@ export default function TodoPage() {
         return { breaks: [], labels: {} };
     };
 
-    const handleAddPointer = (surahId: number, verseCount: number) => {
-        const current = getBuilderState(surahId);
-        const sorted = [...current.breaks].sort((a, b) => a - b);
-        const last = sorted[sorted.length - 1] || 0;
-        const seed = Math.min(verseCount - 1, Math.max(last + 1, 1));
-        const nextBreaks = Array.from(new Set([...current.breaks, seed])).sort((a, b) => a - b).filter(b => b > 0 && b < verseCount);
-        setAnchorBuilders(prev => ({ ...prev, [surahId]: { ...current, breaks: nextBreaks } }));
-    };
-
-    const handleMovePointer = (surahId: number, index: number, value: number, verseCount: number) => {
-        const current = getBuilderState(surahId);
-        const clamped = Math.min(Math.max(1, value), verseCount - 1);
-        const nextBreaks = [...current.breaks];
-        nextBreaks[index] = clamped;
-        const uniqueSorted = Array.from(new Set(nextBreaks)).sort((a, b) => a - b);
-        setAnchorBuilders(prev => ({ ...prev, [surahId]: { ...current, breaks: uniqueSorted } }));
-    };
-
-    const handleRemovePointer = (surahId: number, index: number) => {
-        const current = getBuilderState(surahId);
-        const nextBreaks = current.breaks.filter((_, i) => i !== index);
-        setAnchorBuilders(prev => ({ ...prev, [surahId]: { ...current, breaks: nextBreaks } }));
-    };
-
     const handleAddBreak = (surahId: number, breakPoint: number) => {
         const current = getBuilderState(surahId);
         const nextBreaks = Array.from(new Set([...current.breaks, breakPoint])).sort((a, b) => a - b);
@@ -240,14 +190,6 @@ export default function TodoPage() {
         const current = getBuilderState(surahId);
         const nextBreaks = current.breaks.filter(b => b !== breakPoint);
         setAnchorBuilders(prev => ({ ...prev, [surahId]: { ...current, breaks: nextBreaks } }));
-    };
-
-    const handleLabelChange = (surahId: number, segmentIndex: number, value: string) => {
-        const current = getBuilderState(surahId);
-        setAnchorBuilders(prev => ({
-            ...prev,
-            [surahId]: { ...current, labels: { ...current.labels, [segmentIndex]: value } },
-        }));
     };
 
     const handleSaveAnchors = (surahId: number, verseCount: number) => {
@@ -586,17 +528,25 @@ export default function TodoPage() {
                     mindmaps={mindmaps}
                     partMindmaps={partMindmaps}
                     isDark={isDark}
+                    // Persisted State
+                    kanbanState={settings.kanbanColumns}
+                    onKanbanStateChange={(cols) => {
+                        const s = getSettings();
+                        s.kanbanColumns = cols;
+                        saveSettings(s);
+                        setSettingsVersion(v => v + 1);
+                    }}
                     onFixConfirm={handleFixConfirm}
                     onSimilarityDecision={handleSimilarityDecision}
                     onPartComplete={handlePartComplete}
                     onSurahComplete={handleMarkComplete}
                     onImportPremade={handleImportPremade}
                     onEditMindmap={(id, snapshot, isPart) => {
-                         if (isPart) {
-                             setActivePartEditor({ partId: id as any, snapshot });
-                         } else {
-                             setActiveMindmapEditor({ surahId: id, snapshot });
-                         }
+                        if (isPart) {
+                            setActivePartEditor({ partId: id as any, snapshot });
+                        } else {
+                            setActiveMindmapEditor({ surahId: id, snapshot });
+                        }
                     }}
                     onViewMindmap={(data) => setActiveMindmapPreview(data)}
                     getBuilderState={getBuilderState}

@@ -61,6 +61,9 @@ interface TodoKanbanProps {
     onRemoveBreak: (surahId: number, val: number) => void;
     onSaveAnchors: (surahId: number, verseCount: number) => void;
     hasReviewedChunks: (surahId: number) => boolean;
+    // New Props for Persistence
+    kanbanState?: Record<string, string[]>;
+    onKanbanStateChange?: (state: Record<string, string[]>) => void;
 }
 
 export default function TodoKanban({
@@ -84,7 +87,9 @@ export default function TodoKanban({
     onAddBreak,
     onRemoveBreak,
     onSaveAnchors,
-    hasReviewedChunks
+    hasReviewedChunks,
+    kanbanState,
+    onKanbanStateChange
 }: TodoKanbanProps) {
     const [columns, setColumns] = useState<Record<string, KanbanColumnData>>({
         'backlog': { id: 'backlog', title: 'Backlog', items: [] },
@@ -112,97 +117,86 @@ export default function TodoKanban({
 
     // Sync Props to Kanban State
     useEffect(() => {
-        // Construct all items
-        const newItems: KanbanItem[] = [];
+        // 1. Construct map of all available items from data source
+        const itemMap = new Map<string, KanbanItem>();
 
-        // 1. Suspended Anchors
+        // Suspended Anchors
         suspendedAnchors.forEach(item => {
-            newItems.push({
-                id: `suspended-${item.surahId}-${item.anchorId}`,
-                type: 'suspended',
-                data: item,
-                status: 'backlog'
-            });
+            const id = `suspended-${item.surahId}-${item.anchorId}`;
+            itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
         });
 
-        // 2. Similarity Groups
+        // Similarity Groups
         similarityGroups.forEach(group => {
-            newItems.push({
-                id: `similarity-${group.surah.id}`,
-                type: 'similarity',
-                data: group,
-                status: 'backlog'
-            });
+            const id = `similarity-${group.surah.id}`;
+            itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
-        // 3. Part Maps
+        // Part Maps
         partTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
-            newItems.push({
-                id: `part-${item.part}`,
-                type: 'part',
-                data: item,
-                status: isComplete ? 'complete' : 'backlog'
-            });
+            const id = `part-${item.part}`;
+            itemMap.set(id, { id, type: 'part', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
-        // 4. Surah Maps
+        // Surah Maps
         surahTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
-            newItems.push({
-                id: `surah-${item.surah.id}`,
-                type: 'surah',
-                data: item,
-                status: isComplete ? 'complete' : 'backlog'
-            });
+            const id = `surah-${item.surah.id}`;
+            itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
-        // Merge with existing state to preserve 'in-progress' or manual ordering?
-        // For simplicity and correctness with "triggered logic", we rebuild columns derived from status
-        // BUT we need to respect if user moved something to 'in-progress'.
-        // We'll map IDs to their current column in `columns` state.
+        // 2. Distribute items into columns based on Persistent State (kanbanState) OR default logic
+        const newCols: Record<string, KanbanItem[]> = {
+            'backlog': [],
+            'in-progress': [],
+            'complete': []
+        };
 
-        setColumns(prev => {
-            const idToCol = new Map<string, string>();
-            Object.values(prev).forEach(col => {
-                col.items.forEach(i => idToCol.set(i.id, col.id));
+        const processedIds = new Set<string>();
+
+        // If we have saved state, try to respect it
+        if (kanbanState) {
+            Object.entries(kanbanState).forEach(([colId, itemIds]) => {
+                if (!newCols[colId]) return; // Skip invalid columns
+                itemIds.forEach(itemId => {
+                    const item = itemMap.get(itemId);
+                    if (item) {
+                        // Special Case: If item is externally 'complete', force it to complete column
+                        // unless it's already in complete column.
+                        if (item.status === 'complete' && colId !== 'complete') {
+                            // Will be handled in fallback pass
+                        } else {
+                            newCols[colId].push(item);
+                            processedIds.add(itemId);
+                        }
+                    }
+                });
             });
+        }
 
-            const backlogItems: KanbanItem[] = [];
-            const wipItems: KanbanItem[] = [];
-            const completeItems: KanbanItem[] = [];
+        // 3. Handle leftover items (New items, or forced completions)
+        Array.from(itemMap.values()).forEach(item => {
+            if (processedIds.has(item.id)) return;
 
-            newItems.forEach(item => {
-                // Determine column
-                let targetCol = idToCol.get(item.id);
-
-                // If item is naturally complete (mindmaps), force complete
-                if (item.status === 'complete') targetCol = 'complete';
-
-                // If no record, use default (backlog or complete)
-                if (!targetCol) targetCol = item.status;
-
-                if (targetCol === 'complete') completeItems.push(item);
-                else if (targetCol === 'in-progress') wipItems.push(item);
-                else backlogItems.push(item); // Default to backlog
-            });
-
-            // Maintain Sort Order in Backlog if it's a fresh init? 
-            // The user wants specific order: suspended, similar, part, surah.
-            // newItems is already pushed in that order. 
-            // So iterating newItems preserves that order.
-
-            return {
-                'backlog': { ...prev['backlog'], items: backlogItems },
-                'in-progress': { ...prev['in-progress'], items: wipItems },
-                'complete': { ...prev['complete'], items: completeItems },
-            };
+            // Default placement
+            if (item.status === 'complete') {
+                newCols['complete'].push(item);
+            } else {
+                newCols['backlog'].push(item);
+            }
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks]);
+        setColumns({
+            'backlog': { id: 'backlog', title: 'Backlog', items: newCols['backlog'] },
+            'in-progress': { id: 'in-progress', title: 'In Progress', items: newCols['in-progress'] },
+            'complete': { id: 'complete', title: 'Complete', items: newCols['complete'] },
+        });
+
+    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]); // creating dependency on kanbanState usually fine as it comes from settings which updates rarely
 
     const onDragEnd = useCallback((result: DropResult) => {
-        const { source, destination, draggableId } = result;
+        const { source, destination } = result;
 
         if (!destination) return;
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
@@ -216,20 +210,29 @@ export default function TodoKanban({
             const [movedItem] = sourceItems.splice(source.index, 1);
             destItems.splice(destination.index, 0, movedItem);
 
-            const newCols = {
+            const newColsMap = {
                 ...prev,
                 [source.droppableId]: { ...sourceCol, items: sourceItems },
                 [destination.droppableId]: { ...destCol, items: destItems }
             };
 
-            // Trigger Completion Logic
+            // Calculate new state for persistence
+            if (onKanbanStateChange) {
+                const state: Record<string, string[]> = {};
+                Object.values(newColsMap).forEach(col => {
+                    state[col.id] = col.items.map(i => i.id);
+                });
+                onKanbanStateChange(state);
+            }
+
+            // Trigger Completion Logic (unchanged)
             if (destination.droppableId === 'complete' && source.droppableId !== 'complete') {
                 handleCompletionTrigger(movedItem);
             }
 
-            return newCols;
+            return newColsMap;
         });
-    }, []);
+    }, [onKanbanStateChange]);
 
     const handleCompletionTrigger = (item: KanbanItem) => {
         if (item.type === 'suspended') {

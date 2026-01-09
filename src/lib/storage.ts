@@ -220,6 +220,7 @@ export interface AppSettings {
     lastSyncedAt?: string;
     updatedAt?: string;
     isOnboardingComplete?: boolean;
+    kanbanColumns: Record<string, string[]>; // colId -> listOfItemIds
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -229,6 +230,11 @@ const DEFAULT_SETTINGS: AppSettings = {
     skippedSurahs: [],
     updatedAt: "1970-01-01T00:00:00.000Z", // Use EPOCH to ensure cloud always wins over uninitialized local
     isOnboardingComplete: false,
+    kanbanColumns: {
+        'backlog': [],
+        'in-progress': [],
+        'complete': []
+    }
 };
 
 export function getSettings(): AppSettings {

@@ -480,7 +480,9 @@ function mergeTldrawSnapshots(local: any, remote: any): any {
   if (!local) return remote;
   if (!remote) return local;
 
-  // Helper to extract records from either 'store' (object) or 'records' (array)
+  appLogger.addLog('[Sync] Merging Mindmaps...', 'info');
+
+  // Normalize both to lists of records
   const getRecords = (snapshot: any): any[] => {
     if (snapshot?.store) return Object.values(snapshot.store);
     if (Array.isArray(snapshot?.records)) return snapshot.records;
@@ -490,43 +492,38 @@ function mergeTldrawSnapshots(local: any, remote: any): any {
   const localRecords = getRecords(local);
   const remoteRecords = getRecords(remote);
 
-  appLogger.addLog(`Merging Mindmap: Local records ${localRecords.length}, Remote records ${remoteRecords.length}`, 'info');
+  appLogger.addLog(`[Sync] Local records: ${localRecords.length}, Remote records: ${remoteRecords.length}`, 'info');
 
-  // If neither has records, prefer the one with more data or remote
-  if (localRecords.length === 0 && remoteRecords.length === 0) {
-    return local || remote;
-  }
-
-  // Build shape map by ID, keep newer version of each shape
   const shapeMap = new Map<string, any>();
+  const allRecords = [...remoteRecords, ...localRecords];
 
-  // Add all local shapes first
-  localRecords.forEach((record: any) => {
-    shapeMap.set(record.id, record);
-  });
+  let updates = 0;
+  let conflicts = 0;
 
-  let newFromRemote = 0;
-  let updatedFromRemote = 0;
-
-  // Merge remote shapes - add if new, or replace if both have updatedAt and remote is newer
-  remoteRecords.forEach((record: any) => {
-    const existing = shapeMap.get(record.id);
-    if (!existing) {
-      // New shape from remote - add it
+  allRecords.forEach(record => {
+    if (!record) return;
+    const exists = shapeMap.get(record.id);
+    if (!exists) {
       shapeMap.set(record.id, record);
-      newFromRemote++;
     } else {
-      // Both have this shape - use updatedAt if available, otherwise keep local
-      const localTime = existing.meta?.updatedAt || existing.updatedAt || '';
-      const remoteTime = record.meta?.updatedAt || record.updatedAt || '';
-      if (remoteTime > localTime && remoteTime !== '') { // strict check to ensure we don't accidentally swap on empty
+      conflicts++;
+      // LWW based on updatedAt
+      const timeA = exists.meta?.updatedAt || 0;
+      const timeB = record.meta?.updatedAt || 0;
+
+      // Debug granular merge for shapes
+      // if (record.typeName === 'shape') {
+      //    console.log(`[Sync] Conflict ${record.id}: Existing(${timeA}) vs New(${timeB})`);
+      // }
+
+      if (timeB > timeA) {
         shapeMap.set(record.id, record);
-        updatedFromRemote++;
+        updates++;
       }
     }
   });
 
-  appLogger.addLog(`Merge Stats: Added ${newFromRemote} new, Updated ${updatedFromRemote} existing from remote. Total: ${shapeMap.size}`, 'info');
+  appLogger.addLog(`[Sync] Merge complete. Total items: ${shapeMap.size}. Conflicts detected: ${conflicts}. Overwrites: ${updates}`, 'info');
 
   // Return merged snapshot. MindmapEditor expects { store: ... } so we return that format.
   return {
