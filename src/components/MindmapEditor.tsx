@@ -262,7 +262,62 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         };
 
         window.addEventListener('paste', handlePaste, true);
-        return () => window.removeEventListener('paste', handlePaste, true);
+
+        // --- Change Listener for Sync Timestamps ---
+        // We listen to all changes. If a shape is updated/added by 'user',
+        // we essentially "tag" it with a new updatedAt timestamp in its meta.
+        // This allows our sync engine to perform granular Last-Write-Wins merging on shapes.
+        const cleanupListener = editor.store.listen(
+            (event: any) => {
+                if (event.source !== 'user') return;
+
+                const changes = event.changes;
+                const updates: any[] = [];
+                const now = new Date().toISOString();
+
+                // Helper to check if record is a shape
+                const isShape = (rec: any) => rec.typeName === 'shape';
+
+                // Handle updates
+                Object.values(changes.updated || {}).forEach((update: any) => {
+                    const [from, to] = update;
+                    if (isShape(to)) {
+                        // Avoid infinite loops: only update if updatedAt is NOT what we just set
+                        // (Though 'source: user' check usually prevents this, double safety)
+                        if (to.meta?.updatedAt !== now) {
+                            updates.push({
+                                id: to.id,
+                                typeName: to.typeName,
+                                meta: { ...to.meta, updatedAt: now }
+                            });
+                        }
+                    }
+                });
+
+                // Handle additions
+                Object.values(changes.added || {}).forEach((record: any) => {
+                    if (isShape(record)) {
+                        updates.push({
+                            id: record.id,
+                            typeName: record.typeName,
+                            meta: { ...record.meta, updatedAt: now }
+                        });
+                    }
+                });
+
+                if (updates.length > 0) {
+                    // We use store.put to update directly without creating a new undo/redo entry
+                    // and usually this triggers source: 'code' which avoids loop
+                    editor.store.put(updates);
+                }
+            },
+            { scope: 'document', source: 'user' } // Only listen to user actions
+        );
+
+        return () => {
+            cleanupListener();
+            window.removeEventListener('paste', handlePaste, true);
+        };
     }, [editor]);
 
     const handleClose = async () => {
@@ -386,13 +441,13 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     </button>
                     <span style={{ fontWeight: 600 }}>{title || 'Mindmap Editor'}</span>
                     {docLink && (
-                        <a 
-                            href={docLink} 
-                            target="_blank" 
+                        <a
+                            href={docLink}
+                            target="_blank"
                             rel="noopener noreferrer"
-                            style={{ 
-                                fontSize: '0.75rem', 
-                                color: 'var(--accent)', 
+                            style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--accent)',
                                 textDecoration: 'none',
                                 padding: '4px 8px',
                                 border: '1px solid var(--accent)',

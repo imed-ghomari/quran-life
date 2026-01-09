@@ -490,6 +490,8 @@ function mergeTldrawSnapshots(local: any, remote: any): any {
   const localRecords = getRecords(local);
   const remoteRecords = getRecords(remote);
 
+  appLogger.addLog(`Merging Mindmap: Local records ${localRecords.length}, Remote records ${remoteRecords.length}`, 'info');
+
   // If neither has records, prefer the one with more data or remote
   if (localRecords.length === 0 && remoteRecords.length === 0) {
     return local || remote;
@@ -503,21 +505,28 @@ function mergeTldrawSnapshots(local: any, remote: any): any {
     shapeMap.set(record.id, record);
   });
 
+  let newFromRemote = 0;
+  let updatedFromRemote = 0;
+
   // Merge remote shapes - add if new, or replace if both have updatedAt and remote is newer
   remoteRecords.forEach((record: any) => {
     const existing = shapeMap.get(record.id);
     if (!existing) {
       // New shape from remote - add it
       shapeMap.set(record.id, record);
+      newFromRemote++;
     } else {
       // Both have this shape - use updatedAt if available, otherwise keep local
       const localTime = existing.meta?.updatedAt || existing.updatedAt || '';
       const remoteTime = record.meta?.updatedAt || record.updatedAt || '';
-      if (remoteTime > localTime) {
+      if (remoteTime > localTime && remoteTime !== '') { // strict check to ensure we don't accidentally swap on empty
         shapeMap.set(record.id, record);
+        updatedFromRemote++;
       }
     }
   });
+
+  appLogger.addLog(`Merge Stats: Added ${newFromRemote} new, Updated ${updatedFromRemote} existing from remote. Total: ${shapeMap.size}`, 'info');
 
   // Return merged snapshot. MindmapEditor expects { store: ... } so we return that format.
   return {
