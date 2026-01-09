@@ -438,8 +438,14 @@ article.prose pre {
 
 /* Search Highlighting */
 @keyframes highlight-fade {
-  0% { background-color: rgba(234, 179, 8, 0.4); border-radius: 4px; }
-  100% { background-color: transparent; }
+  0% {
+    background-color: rgba(234, 179, 8, 0.4);
+    border-radius: 4px;
+  }
+
+  100% {
+    background-color: transparent;
+  }
 }
 
 .search-highlight {
@@ -1490,7 +1496,7 @@ input:focus {
     grid-template-columns: repeat(2, 1fr);
     align-items: start;
   }
-  
+
   .statistics-container {
     padding-left: 1.5rem;
     padding-right: 1.5rem;

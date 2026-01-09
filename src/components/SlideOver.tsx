@@ -1,0 +1,61 @@
+import React, { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
+
+interface SlideOverProps {
+    isOpen: boolean;
+    onClose: () => void;
+    title: string;
+    children: React.ReactNode;
+}
+
+export default function SlideOver({ isOpen, onClose, title, children }: SlideOverProps) {
+    const [visible, setVisible] = useState(isOpen);
+
+    useEffect(() => {
+        if (isOpen) {
+            setVisible(true);
+            document.body.style.overflow = 'hidden';
+        } else {
+            const timer = setTimeout(() => setVisible(false), 300); // Wait for transition
+            document.body.style.overflow = 'unset';
+            return () => clearTimeout(timer);
+        }
+        return () => { document.body.style.overflow = 'unset'; };
+    }, [isOpen]);
+
+    if (!visible && !isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+            {/* Backdrop */}
+            <div
+                className={`fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+                onClick={onClose}
+                aria-hidden="true"
+            />
+
+            {/* Panel */}
+            <div
+                className={`relative w-full max-w-md h-full bg-[var(--background)] border-l border-[var(--border)] shadow-2xl transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            >
+                <div className="flex flex-col h-full">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+                        <h2 className="text-lg font-semibold">{title}</h2>
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-6">
+                        {children}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

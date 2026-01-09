@@ -160,6 +160,13 @@ function saveToCacheAndStore(key: string, value: any) {
             // Increment pending changes count
             const currentCount = parseInt(localStorage.getItem('quran-app-pending-count') || '0');
             localStorage.setItem('quran-app-pending-count', (currentCount + 1).toString());
+
+            // Notify sync engine of pending changes
+            import('./syncEngine').then(({ markPendingChanges }) => {
+                markPendingChanges();
+            }).catch(() => {
+                // Sync engine not yet loaded, changes tracked via localStorage count
+            });
         }
     }
 

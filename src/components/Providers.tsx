@@ -3,31 +3,39 @@
 import { createContext, useEffect, useRef, useState } from "react";
 import { appLogger } from "@/lib/logger";
 import { SyncProvider, useSyncState } from "@/hooks/useSyncState";
-import SyncConflictModal from "./SyncConflictModal";
+// Conflict modal commented out per user request - using LWW strategy instead
+// import SyncConflictModal from "./SyncConflictModal";
 import OnboardingModal from "./OnboardingModal";
 import { getSettings, ensureCacheLoaded } from "@/lib/storage";
+import { initializeSyncEngine, setOnlineStatus, setAuthStatus } from "@/lib/syncEngine";
 
 export const OnlineStatusContext = createContext(true);
 
-// Inner component that can use the sync context
-function SyncConflictHandler() {
-  const { status, conflict, resolveConflict, dismissError } = useSyncState();
-
-  if (status !== 'conflict' || !conflict) return null;
-
-  return (
-    <SyncConflictModal
-      conflict={conflict}
-      onResolve={resolveConflict}
-      onCancel={dismissError}
-    />
-  );
-}
+// Conflict handler commented out - using LWW strategy instead
+// function SyncConflictHandler() {
+//   const { status, conflict, resolveConflict, dismissError } = useSyncState();
+//
+//   if (status !== 'conflict' || !conflict) return null;
+//
+//   return (
+//     <SyncConflictModal
+//       conflict={conflict}
+//       onResolve={resolveConflict}
+//       onCancel={dismissError}
+//     />
+//   );
+// }
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const syncInProgress = useRef(false);
+
+  // Initialize sync engine and connect online status
+  useEffect(() => {
+    // Initialize the new sync engine
+    initializeSyncEngine();
+  }, []);
 
   const performSync = async () => {
     if (syncInProgress.current || !navigator.onLine) return;
@@ -49,15 +57,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       if (session?.user) {
         appLogger.addLog(`User authenticated: ${session.user.email}`, 'info');
+        setAuthStatus(true);
         // Ensure local cache is loaded from IndexedDB before syncing with cloud
         // to prevent empty default settings from winning over remote data
         const { ensureCacheLoaded } = await import('@/lib/storage');
         await ensureCacheLoaded();
 
-        const { syncWithCloud } = await import('@/lib/sync');
-        await syncWithCloud();
+        // Use new sync engine's commitTask
+        const { commitTask } = await import('@/lib/syncEngine');
+        await commitTask('auth-trigger');
       } else {
         appLogger.addLog('No active session, skipping cloud sync', 'warning');
+        setAuthStatus(false);
       }
     } catch (e: any) {
       appLogger.addLog(`Global sync failed: ${e.message}`, 'error');
@@ -70,14 +81,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Initial online status
     setIsOnline(navigator.onLine);
+    setOnlineStatus(navigator.onLine);
 
     const handleOnline = () => {
       appLogger.addLog('App is online', 'success');
       setIsOnline(true);
+      setOnlineStatus(true);
     };
     const handleOffline = () => {
       appLogger.addLog('App is offline', 'warning');
       setIsOnline(false);
+      setOnlineStatus(false);
     };
 
     // Setup Auth Listener for sync (covers app load and sign-in)
@@ -87,6 +101,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       const supabase = createClient();
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        setAuthStatus(!!session?.user);
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           // Automatic sync on load/sign-in
           if (session?.user) {
@@ -134,10 +149,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <OnlineStatusContext.Provider value={isOnline}>
         <SyncProvider>
           {children}
-          <SyncConflictHandler />
+          {/* Conflict modal commented out - using LWW strategy instead */}
+          {/* <SyncConflictHandler /> */}
           {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
         </SyncProvider>
       </OnlineStatusContext.Provider>
     </>
   );
 }
+
