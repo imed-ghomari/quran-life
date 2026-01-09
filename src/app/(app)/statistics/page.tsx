@@ -275,8 +275,8 @@ export default function StatisticsPage() {
             total: surahsInPart.length,
             completions: cycles,
             segments: [
-                { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
                 { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', description: 'Surahs remaining in current cycle' },
+                { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
             ]
         };
     }, [activePart, skippedSurahs]);
