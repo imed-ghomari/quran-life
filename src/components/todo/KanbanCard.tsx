@@ -19,9 +19,8 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
                     {...provided.dragHandleProps}
                     onClick={onClick}
                     className={`
-                        group relative bg-[var(--background)] p-4 rounded-xl border border-[var(--border)]
-                        shadow-sm hover:shadow-md hover:border-[var(--accent)] transition-all duration-200 cursor-pointer
-                        ${snapshot.isDragging ? 'shadow-xl ring-2 ring-[var(--accent)] rotate-2 z-50' : 'mb-3'}
+                        card group relative cursor-pointer hover:border-[var(--accent)] transition-all duration-200 p-4
+                        ${snapshot.isDragging ? 'shadow-xl ring-2 ring-[var(--accent)] rotate-2 z-50' : ''}
                     `}
                     style={{
                         ...provided.draggableProps.style,
@@ -44,7 +43,7 @@ function renderCardContent(item: KanbanItem) {
             return (
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                        <span className="status-badge" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)' }}>
                             <AlertTriangle size={12} strokeWidth={3} />
                             Critical
                         </span>
@@ -68,7 +67,7 @@ function renderCardContent(item: KanbanItem) {
             return (
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">
+                        <span className="status-badge" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
                             <Brain size={12} strokeWidth={3} />
                             Similarity
                         </span>
@@ -92,10 +91,7 @@ function renderCardContent(item: KanbanItem) {
             return (
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider ${pComplete
-                            ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
-                            }`}>
+                        <span className={`status-badge ${pComplete ? 'learned' : ''}`} style={!pComplete ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6' } : undefined}>
                             <Layout size={12} strokeWidth={3} />
                             {pComplete ? 'Done' : 'Part Map'}
                         </span>
@@ -126,10 +122,7 @@ function renderCardContent(item: KanbanItem) {
             return (
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider ${sComplete
-                            ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300'
-                            : 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
-                            }`}>
+                        <span className={`status-badge ${sComplete ? 'learned' : ''}`} style={!sComplete ? { background: 'rgba(249,115,22,0.1)', color: '#f97316' } : undefined}>
                             <MapPinned size={12} strokeWidth={3} />
                             {surahTask.surah.verseCount} Verses
                         </span>

@@ -14,7 +14,7 @@ interface KanbanColumnProps {
 
 const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnProps) => {
     return (
-        <div className={`flex flex-col h-full ${isMobile ? 'min-h-[180px] mb-6' : 'min-w-[300px] max-w-[300px] h-[calc(100vh-120px)] rounded-xl bg-[var(--background-secondary)] border border-[var(--border)]'}`}>
+        <div className={`card flex flex-col h-full p-0 overflow-hidden ${isMobile ? 'min-h-[180px] mb-6' : 'min-w-[300px] max-w-[300px] h-[calc(100vh-120px)]'}`}>
             {/* Header */}
             <div className={`p-4 flex items-center justify-between ${isMobile ? 'mb-2 px-1' : 'border-b border-[var(--border)]'}`}>
                 <div className="flex items-center gap-2">
