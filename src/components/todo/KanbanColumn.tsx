@@ -30,7 +30,7 @@ const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnP
             ${isMobile ? 'min-h-[180px] mb-8' : 'max-w-[420px]'}
         `}>
             {/* Structural Containment Background */}
-            <div className="flex flex-col h-full bg-[var(--foreground)]/[0.02] rounded-2xl p-5 border border-[var(--border)] shadow-sm">
+            <div className="flex flex-col h-full bg-[var(--foreground)]/[0.02] dark:bg-black/20 rounded-2xl p-5 border border-[var(--border)] shadow-sm">
                 {/* Header Area - Now contained */}
                 <div className="flex items-center mb-10 px-2 pt-2">
                     <div className="flex items-center gap-3">

@@ -22,6 +22,7 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
                     className={`
                         card group relative cursor-pointer transition-all duration-200 ease-out !p-6
                         !rounded-2xl !mb-0 border border-[var(--border)] bg-[var(--background-secondary)]
+                        dark:shadow-lg dark:shadow-black/20
                         hover:border-[var(--accent)] hover:shadow-xl hover:shadow-black/5
                         ${snapshot.isDragging ? 'z-50 shadow-2xl scale-[1.02] bg-[var(--background-secondary)] !border-[var(--accent)]' : ''}
                         ${item.status === 'in-progress' ? 'border-l-2 !border-l-[var(--accent)]' : ''}
