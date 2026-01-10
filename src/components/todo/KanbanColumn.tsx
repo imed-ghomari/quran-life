@@ -30,17 +30,17 @@ const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnP
             ${isMobile ? 'min-h-[180px] mb-8' : 'max-w-[420px]'}
         `}>
             {/* Structural Containment Background */}
-            <div className="flex flex-col h-full bg-white/[0.015] rounded-[32px] p-5 border border-white/[0.02]">
+            <div className="flex flex-col h-full bg-[var(--foreground)]/[0.02] rounded-2xl p-5 border border-[var(--border)] shadow-sm">
                 {/* Header Area - Now contained */}
                 <div className="flex items-center mb-10 px-2 pt-2">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-[var(--verse-bg)] text-[var(--accent)] border border-[var(--accent)] border-opacity-10 opacity-60">
+                            <div className="p-1.5 rounded-lg bg-[var(--verse-bg)] text-[var(--accent)] border border-[var(--accent)]/10">
                                 {getColumnIcon(id)}
                             </div>
-                            <h3 className="text-[15px] font-bold tracking-tight text-[var(--foreground)] opacity-100">{title}</h3>
+                            <h3 className="text-[15px] font-bold tracking-tight text-[var(--foreground)]">{title}</h3>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full bg-[var(--verse-bg)] text-[10px] font-bold text-[var(--accent)] border border-[var(--accent)] border-opacity-10 opacity-70">
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--verse-bg)] text-[10px] font-bold text-[var(--accent)] border border-[var(--accent)]/10">
                             {items.length}
                         </span>
                     </div>

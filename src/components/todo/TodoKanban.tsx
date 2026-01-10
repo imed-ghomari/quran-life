@@ -431,21 +431,27 @@ export default function TodoKanban({
                 <h1 className="text-2xl font-bold tracking-tight">Todo</h1>
 
                 {/* Filters (Right - Navigation Grade Style) */}
-                <div className="flex items-center gap-1 bg-white/[0.03] rounded-xl p-1 border border-white/5 shadow-inner">
+                <div style={{ display: 'flex', background: 'var(--background)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border)' }}>
                     {[
-                        { id: 'all', label: 'All Items' },
-                        { id: 'maintenance', label: 'Review Fixes' },
-                        { id: 'construction', label: 'Study Progress' }
+                        { id: 'all', label: 'ALL ITEMS' },
+                        { id: 'maintenance', label: 'REVIEW FIXES' },
+                        { id: 'construction', label: 'STUDY PROGRESS' }
                     ].map((f) => (
                         <button
                             key={f.id}
                             onClick={() => setFilter(f.id as any)}
-                            className={`
-                                px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-200
-                                ${filter === f.id
-                                    ? 'bg-white/10 text-white shadow-sm'
-                                    : 'bg-transparent text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-white/[0.05]'}
-                            `}
+                            style={{
+                                padding: '4px 10px',
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: filter === f.id ? 'var(--accent)' : 'transparent',
+                                color: filter === f.id ? 'white' : 'var(--foreground-secondary)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: filter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                            }}
                         >
                             {f.label}
                         </button>

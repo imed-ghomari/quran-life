@@ -21,8 +21,8 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
                     onClick={onClick}
                     className={`
                         card group relative cursor-pointer transition-all duration-200 ease-out !p-6
-                        !rounded-3xl !mb-0 border border-white/10 bg-[#171a1d]
-                        hover:border-[var(--accent)] hover:shadow-xl hover:shadow-black/20
+                        !rounded-2xl !mb-0 border border-[var(--border)] bg-[var(--background-secondary)]
+                        hover:border-[var(--accent)] hover:shadow-xl hover:shadow-black/5
                         ${snapshot.isDragging ? 'z-50 shadow-2xl scale-[1.02] bg-[var(--background-secondary)] !border-[var(--accent)]' : ''}
                         ${item.status === 'in-progress' ? 'border-l-2 !border-l-[var(--accent)]' : ''}
                         ${item.status === 'complete' ? 'opacity-80' : ''}
@@ -82,8 +82,8 @@ function renderCardZones(item: KanbanItem) {
             const partTask = item.data;
             zone1 = { label: "PART MAP", color: "var(--accent)" };
             zone2 = {
-                english: `Juz' ${partTask.part}`,
-                arabic: `جزء ${partTask.part}`
+                english: `Part ${partTask.part}`,
+                arabic: `الجزء ${partTask.part}`
             };
             zone4 = {
                 meta: "Full Part Map",
@@ -125,10 +125,10 @@ function renderCardZones(item: KanbanItem) {
 
             {/* TITLE AREA: English & Arabic on same line, spread to edges */}
             <div className="flex items-center justify-between gap-3">
-                <h4 className="text-lg font-bold text-[var(--foreground)] tracking-tight opacity-100">
+                <h4 className="text-lg font-bold text-[var(--foreground)] tracking-tight">
                     {zone2.english}
                 </h4>
-                <span className="text-[17px] font-arabic text-[var(--foreground)] opacity-60">
+                <span className="text-[17px] font-arabic text-[var(--foreground)] opacity-80">
                     {zone2.arabic}
                 </span>
             </div>
@@ -141,7 +141,7 @@ function renderCardZones(item: KanbanItem) {
             </div>
 
             {/* FOOTER: Separator with pt-5 */}
-            <div className="border-t border-white/5 pt-5 flex items-center justify-between">
+            <div className="border-t border-[var(--border)] pt-5 flex items-center justify-between">
                 <div className="text-[11px] font-medium text-[var(--foreground-secondary)] opacity-80">
                     {zone4.meta}
                 </div>
