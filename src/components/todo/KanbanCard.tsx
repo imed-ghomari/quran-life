@@ -1,7 +1,8 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
-import { AlertTriangle, Brain, Map, MapPinned, Check, PenTool, Layout, BookOpen, Clock } from 'lucide-react';
+import { AlertTriangle, Brain, Map, MapPinned, Check, PenTool, Layout, BookOpen, Clock, ExternalLink } from 'lucide-react';
+import { getSurah } from '@/lib/quranData';
 
 interface KanbanCardProps {
     item: KanbanItem;
@@ -19,133 +20,142 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
                     {...provided.dragHandleProps}
                     onClick={onClick}
                     className={`
-                        card group relative cursor-pointer hover:border-[var(--accent)] transition-all duration-200 p-4
-                        ${snapshot.isDragging ? 'shadow-xl ring-2 ring-[var(--accent)] rotate-2 z-50' : ''}
+                        card group relative cursor-pointer transition-all duration-200 ease-out !p-6
+                        !rounded-3xl !mb-0 border border-white/10 bg-[#171a1d]
+                        hover:border-[var(--accent)] hover:shadow-xl hover:shadow-black/20
+                        ${snapshot.isDragging ? 'z-50 shadow-2xl scale-[1.02] bg-[var(--background-secondary)] !border-[var(--accent)]' : ''}
+                        ${item.status === 'in-progress' ? 'border-l-2 !border-l-[var(--accent)]' : ''}
+                        ${item.status === 'complete' ? 'opacity-80' : ''}
                     `}
                     style={{
                         ...provided.draggableProps.style,
                     }}
                 >
-                    {renderCardContent(item)}
-
-                    {/* Hover Indicator */}
-                    <div className="absolute inset-y-0 left-0 w-1 bg-[var(--accent)] rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex flex-col space-y-3">
+                        {renderCardZones(item)}
+                    </div>
                 </div>
             )}
         </Draggable>
     );
 };
 
-function renderCardContent(item: KanbanItem) {
+function renderCardZones(item: KanbanItem) {
+    let zone1 = { label: "TASK", color: "bg-blue-400" };
+    let zone2 = { english: "", arabic: "" };
+    let zone3 = "";
+    let zone4 = { meta: "", actionLabel: "Open", actionIcon: <ExternalLink size={14} /> };
+
     switch (item.type) {
-        case 'suspended':
+        case 'suspended': {
             const issue = item.data;
-            return (
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <span className="status-badge" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)' }}>
-                            <AlertTriangle size={12} strokeWidth={3} />
-                            Critical
-                        </span>
-                        <span className="text-[10px] text-[var(--foreground-secondary)] font-mono">
-                            {issue.surahId}:{issue.startVerse}
-                        </span>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-sm leading-tight text-[var(--foreground)] mb-1 group-hover:text-[var(--accent)] transition-colors">
-                            Surah {issue.surahId} Fix
-                        </h4>
-                        <p className="text-xs text-[var(--foreground-secondary)] line-clamp-2 leading-relaxed">
-                            {issue.label || "Review anchors to fix suspended status."}
-                        </p>
-                    </div>
-                </div>
-            );
-
-        case 'similarity':
+            const surah = getSurah(issue.surahId);
+            zone1 = { label: "FIX REQUIRED", color: "var(--danger)" };
+            zone2 = {
+                english: surah?.name || `Surah ${issue.surahId}`,
+                arabic: surah?.arabicName || 'الإصلاح'
+            };
+            zone3 = issue.label || "Review anchors to fix suspended status.";
+            zone4 = {
+                meta: `${issue.surahId}:${issue.startVerse}`,
+                actionLabel: "View",
+                actionIcon: <Layout size={14} />
+            };
+            break;
+        }
+        case 'similarity': {
             const sim = item.data;
-            return (
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <span className="status-badge" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
-                            <Brain size={12} strokeWidth={3} />
-                            Similarity
-                        </span>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-sm leading-tight text-[var(--foreground)] mb-1 group-hover:text-[var(--accent)] transition-colors">
-                            {sim.surah?.name} Analysis
-                        </h4>
-                        <p className="text-xs text-[var(--foreground-secondary)]">
-                            {sim.count} pending confusion points.
-                        </p>
-                    </div>
-                </div>
-            );
-
-        case 'part':
+            zone1 = { label: "SIMILARITY", color: "var(--warning)" };
+            zone2 = {
+                english: sim.surah?.name || "Similarity",
+                arabic: sim.surah?.arabicName || 'التشابه'
+            };
+            zone3 = `${sim.count} pending points to distinguish. Requires deep analysis of contextual nuances.`;
+            zone4 = {
+                meta: "Needs distinction",
+                actionLabel: "Manage",
+                actionIcon: <PenTool size={14} />
+            };
+            break;
+        }
+        case 'part': {
             const partTask = item.data;
-            const pmindmap = partTask.mindmap;
-            const pComplete = pmindmap?.isComplete && (!!pmindmap?.imageUrl || !!pmindmap?.tldrawSnapshot);
-
-            return (
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <span className={`status-badge ${pComplete ? 'learned' : ''}`} style={!pComplete ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6' } : undefined}>
-                            <Layout size={12} strokeWidth={3} />
-                            {pComplete ? 'Done' : 'Part Map'}
-                        </span>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-sm leading-tight text-[var(--foreground)] mb-1 group-hover:text-[var(--accent)] transition-colors">
-                            Juz&apos; {partTask.part} Map
-                        </h4>
-                        <div className="flex items-center gap-2 mt-2">
-                            <div className="h-1.5 flex-1 bg-[var(--border)] rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full ${pComplete ? 'bg-green-500 w-full' : 'bg-blue-500 w-[10%]'}`}
-                                />
-                            </div>
-                            <span className="text-[10px] text-[var(--foreground-secondary)] font-mono">
-                                {pComplete ? '100%' : 'Start'}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            );
-
-        case 'surah':
+            zone1 = { label: "PART MAP", color: "var(--accent)" };
+            zone2 = {
+                english: `Juz' ${partTask.part}`,
+                arabic: `جزء ${partTask.part}`
+            };
+            zone4 = {
+                meta: "Full Part Map",
+                actionLabel: "Open",
+                actionIcon: <BookOpen size={14} />
+            };
+            break;
+        }
+        case 'surah': {
             const surahTask = item.data;
-            const smindmap = surahTask.mindmap;
-            const sComplete = smindmap?.isComplete && (!!smindmap?.imageUrl || !!smindmap?.tldrawSnapshot);
+            zone1 = { label: "SURAH MAP", color: "var(--success)" };
+            zone2 = {
+                english: surahTask.surah.name,
+                arabic: surahTask.surah.arabicName || 'سورة'
+            };
+            zone4 = {
+                meta: `${surahTask.surah.verseCount} Verses`,
+                actionLabel: "Open",
+                actionIcon: <ExternalLink size={14} />
+            };
+            break;
+        }
+    }
 
-            return (
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <span className={`status-badge ${sComplete ? 'learned' : ''}`} style={!sComplete ? { background: 'rgba(249,115,22,0.1)', color: '#f97316' } : undefined}>
-                            <MapPinned size={12} strokeWidth={3} />
-                            {surahTask.surah.verseCount} Verses
-                        </span>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-sm leading-tight text-[var(--foreground)] mb-1 group-hover:text-[var(--accent)] transition-colors">
-                            {surahTask.surah.name}
-                        </h4>
-                        {sComplete ? (
-                            <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                                <Check size={12} /> Mindmap Ready
-                            </p>
-                        ) : (
-                            <p className="text-xs text-[var(--foreground-secondary)] flex items-center gap-1">
-                                <PenTool size={10} /> Create mindmap
-                            </p>
-                        )}
+    return (
+        <>
+            {/* EYEBROW: The High-Contrast Pill - using app secondary colors */}
+            <div className="flex">
+                <span
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.1em] opacity-60"
+                    style={{
+                        backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 92%)`,
+                        color: zone1.color
+                    }}
+                >
+                    {zone1.label}
+                </span>
+            </div>
+
+            {/* TITLE AREA: English & Arabic on same line, spread to edges */}
+            <div className="flex items-center justify-between gap-3">
+                <h4 className="text-lg font-bold text-[var(--foreground)] tracking-tight opacity-100">
+                    {zone2.english}
+                </h4>
+                <span className="text-[17px] font-arabic text-[var(--foreground)] opacity-60">
+                    {zone2.arabic}
+                </span>
+            </div>
+
+            {/* DESCRIPTION: Breathable text with clear air */}
+            <div className="py-2">
+                <p className="text-sm text-[var(--foreground-secondary)] leading-relaxed line-clamp-2">
+                    {zone3}
+                </p>
+            </div>
+
+            {/* FOOTER: Separator with pt-5 */}
+            <div className="border-t border-white/5 pt-5 flex items-center justify-between">
+                <div className="text-[11px] font-medium text-[var(--foreground-secondary)] opacity-80">
+                    {zone4.meta}
+                </div>
+                <div className="flex items-center gap-2 text-[11px] font-bold text-[var(--foreground)] opacity-80 hover:opacity-100 transition-all cursor-pointer">
+                    <span className="leading-none">{zone4.actionLabel}</span>
+                    <div className="p-1 rounded-full bg-[var(--verse-bg)] transition-colors">
+                        {zone4.actionIcon}
                     </div>
                 </div>
-            );
-        default:
-            return null;
-    }
+            </div>
+        </>
+    );
 }
+
+
 
 export default KanbanCard;

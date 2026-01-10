@@ -213,7 +213,7 @@ export default function TodoPage() {
         setSettingsVersion(v => v + 1);
     };
 
-    const handleMarkComplete = (surahId: number, currentMindmap?: any) => {
+    const handleMarkComplete = (surahId: number, currentMindmap?: any, forceState?: boolean) => {
         // Use current state as base if available to prevent data loss from stale storage
         // Otherwise read from storage
         const freshMaps = getMindMaps();
@@ -226,7 +226,7 @@ export default function TodoPage() {
             ...existing,
             imageUrl,
             tldrawSnapshot,
-            isComplete: !existing.isComplete
+            isComplete: forceState !== undefined ? forceState : !existing.isComplete
         };
 
         saveMindMap(updated);
@@ -331,12 +331,12 @@ export default function TodoPage() {
         reader.readAsDataURL(file);
     };
 
-    const handlePartComplete = (part: QuranPart) => {
+    const handlePartComplete = (part: QuranPart, forceState?: boolean) => {
         // Read directly from storage to avoid stale state closures
         const freshMaps = getPartMindMaps();
         const existing = freshMaps[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
 
-        const updated = { ...existing, isComplete: !existing.isComplete };
+        const updated = { ...existing, isComplete: forceState !== undefined ? forceState : !existing.isComplete };
         savePartMindMap(updated);
 
         // Update local state to reflect change immediately

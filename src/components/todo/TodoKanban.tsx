@@ -7,7 +7,7 @@ import SlideOver from '../SlideOver';
 import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
-import { ChevronDown, Check, PenTool, Download, Info, Trash2, Brain, AlertTriangle } from 'lucide-react';
+import { ChevronDown, Check, PenTool, Download, Info, Trash2, Brain, AlertTriangle, Layout, Calendar, BarChart2, Users, LayoutGrid, List } from 'lucide-react';
 import Link from 'next/link';
 import { getSurah } from '@/lib/quranData';
 import { absoluteToSurahAyah } from '@/lib/mutashabihat';
@@ -49,8 +49,8 @@ interface TodoKanbanProps {
     // Callbacks
     onFixConfirm: (surahId: number, anchorId: string) => void;
     onSimilarityDecision: (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm?: boolean) => void;
-    onPartComplete: (part: QuranPart) => void;
-    onSurahComplete: (surahId: number, mindmap?: any) => void;
+    onPartComplete: (part: QuranPart, forceState?: boolean) => void;
+    onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
     onImportPremade: (type: 'surah' | 'part', id: number) => void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
     onViewMindmap: (data: any) => void; // For preview modal
@@ -192,7 +192,7 @@ export default function TodoKanban({
 
     }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]);
 
-    const handleCompletionTrigger = useCallback((item: KanbanItem) => {
+    const handleCompletionTrigger = useCallback((item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
             onFixConfirm(item.data.surahId, item.data.anchorId);
         } else if (item.type === 'similarity') {
@@ -203,9 +203,9 @@ export default function TodoKanban({
                 });
             });
         } else if (item.type === 'part') {
-            onPartComplete(item.data.part);
+            onPartComplete(item.data.part, forceState);
         } else if (item.type === 'surah') {
-            onSurahComplete(item.data.surah.id, item.data.mindmap);
+            onSurahComplete(item.data.surah.id, item.data.mindmap, forceState);
         }
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
@@ -240,14 +240,20 @@ export default function TodoKanban({
             }
 
             // Trigger Completion Logic
-            if (destination.droppableId === 'complete' && source.droppableId !== 'complete') {
-                handleCompletionTrigger(movedItem);
-            }
-            // Trigger Re-Open Logic (Toggle back if moving out of complete)
-            else if (source.droppableId === 'complete' && destination.droppableId !== 'complete') {
-                // For Surah and Part, this toggles "isComplete" to false (since it acts as toggle)
+            if (destination.droppableId === 'complete') {
+                // Moving TO Complete -> Force TRUE
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                    if (movedItem.status !== 'complete') {
+                        handleCompletionTrigger(movedItem, true);
+                    }
+                } else if (source.droppableId !== 'complete') {
                     handleCompletionTrigger(movedItem);
+                }
+            }
+            // Moving FROM Complete -> Force FALSE
+            else if (source.droppableId === 'complete') {
+                if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                    handleCompletionTrigger(movedItem, false);
                 }
             }
 
@@ -418,31 +424,40 @@ export default function TodoKanban({
     };
 
     return (
-        <div className="h-full flex flex-col">
-            {/* Filter Bar */}
-            <div className="flex gap-2 mb-4 px-1 overflow-x-auto">
-                <button
-                    onClick={() => setFilter('all')}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${filter === 'all' ? 'bg-[var(--foreground)] text-[var(--background)]' : 'bg-[var(--background-secondary)] text-[var(--foreground-secondary)] hover:bg-[var(--border)]'}`}
-                >
-                    All Items
-                </button>
-                <button
-                    onClick={() => setFilter('maintenance')}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${filter === 'maintenance' ? 'bg-red-500 text-white' : 'bg-[var(--background-secondary)] text-[var(--foreground-secondary)] hover:bg-[var(--border)]'}`}
-                >
-                    Review Fixes
-                </button>
-                <button
-                    onClick={() => setFilter('construction')}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${filter === 'construction' ? 'bg-blue-500 text-white' : 'bg-[var(--background-secondary)] text-[var(--foreground-secondary)] hover:bg-[var(--border)]'}`}
-                >
-                    Study Progress
-                </button>
+        <div className="flex h-screen w-full flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
+            {/* Header Area */}
+            <div className="flex items-center justify-between px-8 pt-8 shrink-0">
+                {/* Title (Left) */}
+                <h1 className="text-2xl font-bold tracking-tight">Todo</h1>
+
+                {/* Filters (Right - Navigation Grade Style) */}
+                <div className="flex items-center gap-1 bg-white/[0.03] rounded-xl p-1 border border-white/5 shadow-inner">
+                    {[
+                        { id: 'all', label: 'All Items' },
+                        { id: 'maintenance', label: 'Review Fixes' },
+                        { id: 'construction', label: 'Study Progress' }
+                    ].map((f) => (
+                        <button
+                            key={f.id}
+                            onClick={() => setFilter(f.id as any)}
+                            className={`
+                                px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-200
+                                ${filter === f.id
+                                    ? 'bg-white/10 text-white shadow-sm'
+                                    : 'bg-transparent text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-white/[0.05]'}
+                            `}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
+            {/* CRITICAL GAP 1: mt-12 (48px) Margin between Filter Bar and Kanban Board */}
+            <div className="mt-12" />
+
             <DragDropContext onDragEnd={onDragEnd}>
-                <div className={`flex h-full gap-4 ${isMobile ? 'flex-col overflow-y-auto pb-20' : 'overflow-x-auto flex-row'}`}>
+                <div className={`flex gap-8 px-8 pb-8 h-full overflow-x-auto ${isMobile ? 'flex-col overflow-y-auto' : 'flex-row'}`}>
                     {Object.values(columns).map(col => (
                         <KanbanColumn
                             key={col.id}
@@ -455,6 +470,7 @@ export default function TodoKanban({
                     ))}
                 </div>
             </DragDropContext>
+
 
             <SlideOver
                 isOpen={!!activeItem}

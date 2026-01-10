@@ -36,12 +36,12 @@ export default function SlideOver({ isOpen, onClose, title, children }: SlideOve
 
             {/* Panel */}
             <div
-                className={`relative w-full max-w-md h-full bg-[var(--background)] border-l border-[var(--border)] shadow-2xl transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                className={`relative w-full max-w-2xl h-full bg-[var(--background)] border-l border-[var(--border)] shadow-2xl transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
                 <div className="flex flex-col h-full">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-                        <h2 className="text-lg font-semibold">{title}</h2>
+                    <div className="flex items-center justify-between px-10 py-6 border-b border-[var(--border)]">
+                        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
                         <button
                             onClick={onClose}
                             className="p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
@@ -51,7 +51,7 @@ export default function SlideOver({ isOpen, onClose, title, children }: SlideOve
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-6">
+                    <div className="flex-1 overflow-y-auto px-10 py-8">
                         {children}
                     </div>
                 </div>
