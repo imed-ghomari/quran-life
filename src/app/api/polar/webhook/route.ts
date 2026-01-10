@@ -1,33 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { validateEvent } from '@polar-sh/sdk/webhooks';
+import {
+    unauthorized,
+    badRequest,
+    internalError,
+    successResponse,
+    addSecurityHeaders,
+    getClientIP
+} from '@/lib/apiUtils';
 
 /**
  * Polar Webhook Handler
  * Handles post-checkout events from Polar
  * Verifies payment and updates user status in Supabase
+ * 
+ * Security:
+ * - Webhook signature verification
+ * - Structured error responses
+ * - Comprehensive logging
  */
 export async function POST(request: NextRequest) {
+    const requestId = crypto.randomUUID().slice(0, 8);
+    const clientIP = getClientIP(request);
+
     try {
         const body = await request.text();
-        
+
         // Extract required headers for Polar webhook validation
         const webhookId = request.headers.get('webhook-id');
         const webhookSignature = request.headers.get('webhook-signature');
         const webhookTimestamp = request.headers.get('webhook-timestamp');
 
-        console.log('--- Webhook Received ---');
-        console.log('Headers:', JSON.stringify({
-            'webhook-id': webhookId,
-            'webhook-signature': webhookSignature,
-            'webhook-timestamp': webhookTimestamp
-        }, null, 2));
+        console.log(`[Webhook ${requestId}] Received from ${clientIP}`);
 
         if (!webhookSignature || !webhookId || !webhookTimestamp) {
-            console.error('Missing required webhook headers');
-            return NextResponse.json({ error: 'Missing headers' }, { status: 401 });
+            console.error(`[Webhook ${requestId}] Missing required headers`, {
+                hasId: !!webhookId,
+                hasSignature: !!webhookSignature,
+                hasTimestamp: !!webhookTimestamp,
+            });
+            return addSecurityHeaders(unauthorized('Missing required webhook headers'));
         }
 
+        // Validate webhook signature
         let payload;
         try {
             payload = validateEvent(
@@ -40,19 +56,22 @@ export async function POST(request: NextRequest) {
                 process.env.POLAR_WEBHOOK_SECRET || ''
             );
         } catch (err) {
-            console.error('Webhook signature verification failed:', err);
-            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+            console.error(`[Webhook ${requestId}] Signature verification failed:`,
+                err instanceof Error ? err.message : err
+            );
+            return addSecurityHeaders(unauthorized('Invalid webhook signature'));
         }
 
-        const { type: event, data } = payload as any;
+        const { type: event, data } = payload as { type: string; data: Record<string, unknown> };
+        console.log(`[Webhook ${requestId}] Event type: ${event}`);
 
         // Handle checkout.completed event
         if (event === 'checkout.completed' || event === 'order.created') {
             const { customer_email, customer_id, checkout_id, product_id } = data;
 
-            if (!customer_email) {
-                console.error('No customer email in webhook payload');
-                return NextResponse.json({ error: 'Missing customer email' }, { status: 400 });
+            if (!customer_email || typeof customer_email !== 'string') {
+                console.error(`[Webhook ${requestId}] No customer email in payload`);
+                return addSecurityHeaders(badRequest('Missing customer email in webhook payload'));
             }
 
             // Store purchase information in Supabase
@@ -71,19 +90,22 @@ export async function POST(request: NextRequest) {
                 });
 
             if (purchaseError) {
-                console.error('Failed to store purchase:', purchaseError);
+                console.error(`[Webhook ${requestId}] Failed to store purchase:`, purchaseError);
                 // Don't fail the webhook - log and continue
+                // Polar will retry if we return error, which could cause duplicates
+            } else {
+                console.log(`[Webhook ${requestId}] ✅ Purchase recorded for ${customer_email}`);
             }
-
-            console.log(`✅ Purchase recorded for ${customer_email}`);
         }
 
-        return NextResponse.json({ received: true });
+        return addSecurityHeaders(successResponse({ received: true }));
+
     } catch (error) {
-        console.error('Webhook error:', error);
-        return NextResponse.json(
-            { error: 'Webhook processing failed' },
-            { status: 500 }
-        );
+        console.error(`[Webhook ${requestId}] Unexpected error:`, {
+            error: error instanceof Error ? error.message : error,
+            stack: error instanceof Error ? error.stack : undefined,
+            ip: clientIP,
+        });
+        return addSecurityHeaders(internalError('Webhook processing failed'));
     }
 }

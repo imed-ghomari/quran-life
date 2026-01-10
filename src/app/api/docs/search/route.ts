@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import {
+    sanitizeSearchQuery,
+    successResponse,
+    badRequest,
+    internalError,
+    addSecurityHeaders,
+    getClientIP
+} from '@/lib/apiUtils';
+import { applyRateLimit, RATE_LIMIT_STANDARD, addRateLimitHeaders } from '@/lib/rateLimit';
 
 interface SearchResult {
     title: string;
@@ -16,13 +25,13 @@ interface MetaData {
 function fuzzyMatch(text: string, query: string): { matches: boolean; score: number; index: number } {
     const lowerText = text.toLowerCase();
     const lowerQuery = query.toLowerCase();
-    
+
     // 1. Exact match (highest score)
     const exactIndex = lowerText.indexOf(lowerQuery);
     if (exactIndex !== -1) {
         return { matches: true, score: 100, index: exactIndex };
     }
-    
+
     // 2. All words present (high score)
     const words = lowerQuery.split(/\s+/).filter(Boolean);
     if (words.length > 1) {
@@ -33,11 +42,11 @@ function fuzzyMatch(text: string, query: string): { matches: boolean; score: num
             return { matches: true, score: 80, index: firstWordIndex };
         }
     }
-    
+
     // 3. Simple character-skipping fuzzy (medium score)
     if (lowerQuery.length > 2) {
         // Create a regex like f.*u.*z.*z.*y
-        const fuzzyPattern = lowerQuery.split('').map(char => 
+        const fuzzyPattern = lowerQuery.split('').map(char =>
             char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // escape special chars
         ).join('.*');
         const fuzzyRegex = new RegExp(fuzzyPattern, 'i');
@@ -46,7 +55,7 @@ function fuzzyMatch(text: string, query: string): { matches: boolean; score: num
             return { matches: true, score: 50, index: match.index || 0 };
         }
     }
-    
+
     return { matches: false, score: 0, index: -1 };
 }
 
@@ -84,70 +93,114 @@ function getNearestHeadingAnchor(content: string, matchIndex: number): string {
 
 function searchFiles(dirPath: string, query: string, baseRoute = '/docs'): SearchResult[] {
     const results: SearchResult[] = [];
-    const files = fs.readdirSync(dirPath);
 
-    for (const file of files) {
-        if (file.startsWith('_') || file.startsWith('.')) continue;
+    try {
+        if (!fs.existsSync(dirPath)) {
+            return [];
+        }
 
-        const fullPath = path.join(dirPath, file);
-        const stat = fs.statSync(fullPath);
+        const files = fs.readdirSync(dirPath);
 
-        if (stat.isDirectory()) {
-            results.push(...searchFiles(fullPath, query, `${baseRoute}/${file}`));
-        } else if (file.endsWith('.mdx')) {
-            const content = fs.readFileSync(fullPath, 'utf8');
-            const title = getTitleFromMeta(dirPath, file);
-            
-            // Search in both title and content
-            const titleMatch = fuzzyMatch(title, query);
-            const contentMatch = fuzzyMatch(content, query);
-            
-            if (titleMatch.matches || contentMatch.matches) {
-                const bestMatch = titleMatch.score >= contentMatch.score ? titleMatch : contentMatch;
-                const href = `${baseRoute}/${file.replace(/\.mdx$/, '')}`.replace(/\/index$/, '');
-                const finalBaseHref = href === '/docs/index' ? '/docs' : (href || '/docs');
+        for (const file of files) {
+            // Skip hidden files/dirs
+            if (file.startsWith('_') || file.startsWith('.')) continue;
 
-                // Extract a clean excerpt
-                const index = contentMatch.matches ? contentMatch.index : 0;
-                const anchor = getNearestHeadingAnchor(content, index);
-                const finalHref = `${finalBaseHref}${anchor}`;
+            const fullPath = path.join(dirPath, file);
 
-                const start = Math.max(0, index - 40);
-                const end = Math.min(content.length, index + query.length + 80);
-                let excerpt = content.substring(start, end)
-                    .replace(/[#*`]/g, '') // Remove markdown symbols
-                    .replace(/\n/g, ' ')   // Remove newlines
-                    .trim();
-                
-                if (start > 0) excerpt = '...' + excerpt;
-                if (end < content.length) excerpt = excerpt + '...';
+            // Handle symlinks safely or just stick to lstat/stat
+            let stat;
+            try {
+                stat = fs.statSync(fullPath);
+            } catch (e) {
+                continue;
+            }
 
-                results.push({
-                    title,
-                    href: finalHref,
-                    excerpt,
-                    score: Math.max(titleMatch.score, contentMatch.score) + (titleMatch.matches ? 10 : 0) // Boost title matches
-                });
+            if (stat.isDirectory()) {
+                results.push(...searchFiles(fullPath, query, `${baseRoute}/${file}`));
+            } else if (file.endsWith('.mdx')) {
+                const content = fs.readFileSync(fullPath, 'utf8');
+                const title = getTitleFromMeta(dirPath, file);
+
+                // Search in both title and content
+                const titleMatch = fuzzyMatch(title, query);
+                const contentMatch = fuzzyMatch(content, query);
+
+                if (titleMatch.matches || contentMatch.matches) {
+                    const bestMatch = titleMatch.score >= contentMatch.score ? titleMatch : contentMatch;
+                    const href = `${baseRoute}/${file.replace(/\.mdx$/, '')}`.replace(/\/index$/, '');
+                    const finalBaseHref = href === '/docs/index' ? '/docs' : (href || '/docs');
+
+                    // Extract a clean excerpt
+                    const index = contentMatch.matches ? contentMatch.index : 0;
+                    const anchor = getNearestHeadingAnchor(content, index);
+                    const finalHref = `${finalBaseHref}${anchor}`;
+
+                    const start = Math.max(0, index - 40);
+                    const end = Math.min(content.length, index + query.length + 80);
+                    let excerpt = content.substring(start, end)
+                        .replace(/[#*`]/g, '') // Remove markdown symbols
+                        .replace(/\n/g, ' ')   // Remove newlines
+                        .trim();
+
+                    if (start > 0) excerpt = '...' + excerpt;
+                    if (end < content.length) excerpt = excerpt + '...';
+
+                    results.push({
+                        title,
+                        href: finalHref,
+                        excerpt,
+                        score: Math.max(titleMatch.score, contentMatch.score) + (titleMatch.matches ? 10 : 0) // Boost title matches
+                    });
+                }
             }
         }
+    } catch (error) {
+        console.error('Error in searchFiles:', error);
     }
 
     return results;
 }
 
+/**
+ * Docs Search API Route
+ * Searches through MDX documentation files
+ * 
+ * Security:
+ * - Rate limited: 30 requests per minute
+ * - Query sanitization
+ * - Error handling
+ */
 export async function GET(request: NextRequest) {
-    const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
-
-    if (!query || query.length < 2) {
-        return NextResponse.json({ results: [] });
+    // Apply rate limiting
+    const rateLimitResponse = applyRateLimit(request, RATE_LIMIT_STANDARD);
+    if (rateLimitResponse) {
+        return addSecurityHeaders(rateLimitResponse);
     }
 
-    const contentDir = path.join(process.cwd(), 'content');
-    const results = searchFiles(contentDir, query);
+    const { searchParams } = new URL(request.url);
+    const rawQuery = searchParams.get('q');
 
-    // Sort results by score (descending)
-    results.sort((a, b) => (b.score || 0) - (a.score || 0));
+    // Sanitize query
+    const query = sanitizeSearchQuery(rawQuery);
 
-    return NextResponse.json({ results: results.slice(0, 10) });
+    if (!query || query.length < 2) {
+        // Return empty results rather than error for short queries
+        const response = successResponse({ results: [] });
+        return addSecurityHeaders(addRateLimitHeaders(response, `${getClientIP(request)}:${request.nextUrl.pathname}`, RATE_LIMIT_STANDARD));
+    }
+
+    try {
+        const contentDir = path.join(process.cwd(), 'content');
+        const results = searchFiles(contentDir, query);
+
+        // Sort results by score (descending)
+        results.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        const response = successResponse({ results: results.slice(0, 10) });
+        return addSecurityHeaders(addRateLimitHeaders(response, `${getClientIP(request)}:${request.nextUrl.pathname}`, RATE_LIMIT_STANDARD));
+
+    } catch (error) {
+        console.error('[DocsSearch] Error:', error);
+        return addSecurityHeaders(internalError('Failed to perform search'));
+    }
 }

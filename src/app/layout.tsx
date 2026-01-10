@@ -4,6 +4,7 @@ import './globals.css';
 import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
 import AppShell from '@/components/AppShell';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 export const metadata: Metadata = {
     title: 'Quran Life',
@@ -46,9 +47,11 @@ export default function RootLayout({
                     `}
                 </Script>
                 <Providers>
-                    <AppShell>
-                        {children}
-                    </AppShell>
+                    <ErrorBoundary>
+                        <AppShell>
+                            {children}
+                        </AppShell>
+                    </ErrorBoundary>
                 </Providers>
             </body>
         </html>
