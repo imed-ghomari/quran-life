@@ -550,6 +550,19 @@ export default function TodoPage() {
                         }
                     }}
                     onViewMindmap={(data) => setActiveMindmapPreview(data)}
+                    onDeleteMindmap={(type, id) => {
+                        if (type === 'surah') {
+                            const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
+                            saveMindMap({ ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false });
+                            setMindmaps(prev => ({ ...prev, [id]: { ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false } }));
+                        } else {
+                            const pId = id as QuranPart;
+                            const existing = partMindmaps[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
+                            savePartMindMap({ ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false });
+                            setPartMindmaps(prev => ({ ...prev, [pId]: { ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false } }));
+                        }
+                        setSettingsVersion(v => v + 1);
+                    }}
                     getBuilderState={getBuilderState}
                     onAddBreak={(sid, val) => handleAddBreak(sid, val)}
                     onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}

@@ -1,16 +1,55 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useRef } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
-import { AlertTriangle, Brain, Map, MapPinned, Check, PenTool, Layout, BookOpen, Clock, ExternalLink } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
+import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
 
 interface KanbanCardProps {
     item: KanbanItem;
     index: number;
-    onClick: () => void;
+    isMobile: boolean;
+    hasMindmap: boolean;
+    docLink?: string;
+    onEditMindmap: () => void;
+    onImportMindmap: () => void;
+    onDeleteMindmap: () => void;
+    onChangeSplits: () => void;
+    onCardAction?: (action: 'fix' | 'resolve', item: KanbanItem) => void; // Generic action handler fallback
 }
 
-const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
+const KanbanCard = ({
+    item,
+    index,
+    isMobile,
+    hasMindmap,
+    docLink,
+    onEditMindmap,
+    onImportMindmap,
+    onDeleteMindmap,
+    onChangeSplits,
+    onCardAction
+}: KanbanCardProps) => {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+    const handleMenuClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setMenuOpen(prev => !prev);
+    };
+
+    // Responsive Spacing Config - Tighter for Mobile
+    const padding = isMobile ? '!p-3.5' : '!p-6';
+    const borderRadius = isMobile ? '!rounded-[14px]' : '!rounded-2xl';
+    const verticalGap = isMobile ? 'space-y-1.5' : 'space-y-3';
+    const minWidth = isMobile ? 'min-w-[260px]' : '';
+    const footerPad = isMobile ? 'pt-2.5' : 'pt-5';
+
+    // Determine card type for menu
+    const cardType = item.type; // 'surah' | 'part' | 'suspended' | 'similarity'
+
     return (
         <Draggable draggableId={item.id} index={index}>
             {(provided, snapshot) => (
@@ -18,12 +57,12 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    onClick={onClick}
                     className={`
-                        card group relative cursor-pointer transition-all duration-200 ease-out !p-6
-                        !rounded-2xl !mb-0 border border-[var(--border)] bg-[var(--background-secondary)]
+                        card group relative cursor-pointer transition-all duration-200 ease-out ${padding}
+                        ${borderRadius} !mb-0 border border-[var(--border)] bg-[var(--background-secondary)]
                         dark:shadow-lg dark:shadow-black/20
                         hover:border-[var(--accent)] hover:shadow-xl hover:shadow-black/5
+                        ${minWidth} ${isMobile ? 'flex-shrink-0' : ''}
                         ${snapshot.isDragging ? 'z-50 shadow-2xl scale-[1.02] bg-[var(--background-secondary)] !border-[var(--accent)]' : ''}
                         ${item.status === 'in-progress' ? 'border-l-2 !border-l-[var(--accent)]' : ''}
                         ${item.status === 'complete' ? 'opacity-80' : ''}
@@ -32,8 +71,24 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
                         ...provided.draggableProps.style,
                     }}
                 >
-                    <div className="flex flex-col space-y-3">
-                        {renderCardZones(item)}
+                    <div className={`flex flex-col ${verticalGap}`}>
+                        {renderCardZones({
+                            item,
+                            hasMindmap,
+                            cardType,
+                            menuOpen,
+                            setMenuOpen,
+                            menuButtonRef,
+                            handleMenuClick,
+                            isMobile,
+                            onEditMindmap,
+                            onImportMindmap,
+                            onDeleteMindmap,
+                            onChangeSplits,
+                            onCardAction,
+                            footerPad,
+                            docLink
+                        })}
                     </div>
                 </div>
             )}
@@ -41,12 +96,47 @@ const KanbanCard = ({ item, index, onClick }: KanbanCardProps) => {
     );
 };
 
-function renderCardZones(item: KanbanItem) {
+interface RenderZoneProps {
+    item: KanbanItem;
+    hasMindmap: boolean;
+    cardType: string;
+    menuOpen: boolean;
+    setMenuOpen: (open: boolean) => void;
+    menuButtonRef: React.RefObject<HTMLButtonElement | null>;
+    handleMenuClick: (e: React.MouseEvent) => void;
+    isMobile: boolean;
+    onEditMindmap: () => void;
+    onImportMindmap: () => void;
+    onDeleteMindmap: () => void;
+    onChangeSplits: () => void;
+    onCardAction?: (action: 'fix' | 'resolve', item: KanbanItem) => void;
+    footerPad: string;
+    docLink?: string;
+}
+
+function renderCardZones({
+    item,
+    hasMindmap,
+    cardType,
+    menuOpen,
+    setMenuOpen,
+    menuButtonRef,
+    handleMenuClick,
+    isMobile,
+    onEditMindmap,
+    onImportMindmap,
+    onDeleteMindmap,
+    onChangeSplits,
+    onCardAction,
+    footerPad,
+    docLink
+}: RenderZoneProps) {
     let zone1 = { label: "TASK", color: "bg-blue-400" };
     let zone2 = { english: "", arabic: "" };
     let zone3 = "";
-    let zone4 = { meta: "", actionLabel: "Open", actionIcon: <ExternalLink size={14} /> };
+    let zone4Meta = "";
 
+    // Type-specific logic
     switch (item.type) {
         case 'suspended': {
             const issue = item.data;
@@ -57,11 +147,7 @@ function renderCardZones(item: KanbanItem) {
                 arabic: surah?.arabicName || 'الإصلاح'
             };
             zone3 = issue.label || "Review anchors to fix suspended status.";
-            zone4 = {
-                meta: `${issue.surahId}:${issue.startVerse}`,
-                actionLabel: "View",
-                actionIcon: <Layout size={14} />
-            };
+            zone4Meta = `${issue.surahId}:${issue.startVerse}`;
             break;
         }
         case 'similarity': {
@@ -71,12 +157,8 @@ function renderCardZones(item: KanbanItem) {
                 english: sim.surah?.name || "Similarity",
                 arabic: sim.surah?.arabicName || 'التشابه'
             };
-            zone3 = `${sim.count} pending points to distinguish. Requires deep analysis of contextual nuances.`;
-            zone4 = {
-                meta: "Needs distinction",
-                actionLabel: "Manage",
-                actionIcon: <PenTool size={14} />
-            };
+            zone3 = `${sim.count} similarity issues detected.`;
+            zone4Meta = "Needs distinction";
             break;
         }
         case 'part': {
@@ -86,11 +168,7 @@ function renderCardZones(item: KanbanItem) {
                 english: `Part ${partTask.part}`,
                 arabic: `الجزء ${partTask.part}`
             };
-            zone4 = {
-                meta: "Full Part Map",
-                actionLabel: "Open",
-                actionIcon: <BookOpen size={14} />
-            };
+            zone4Meta = "Full Part Map";
             break;
         }
         case 'surah': {
@@ -100,18 +178,24 @@ function renderCardZones(item: KanbanItem) {
                 english: surahTask.surah.name,
                 arabic: surahTask.surah.arabicName || 'سورة'
             };
-            zone4 = {
-                meta: `${surahTask.surah.verseCount} Verses`,
-                actionLabel: "Open",
-                actionIcon: <ExternalLink size={14} />
-            };
+            zone4Meta = `${surahTask.surah.verseCount} Verses`;
             break;
         }
     }
 
+    // Adjust font sizes for mobile density
+    const titleSize = isMobile ? 'text-[15px]' : 'text-lg'; // Smaller title on mobile
+    const descSize = isMobile ? 'text-[11px]' : 'text-sm';
+    const arabicSize = isMobile ? 'text-[13px]' : 'text-[17px]';
+    const metaSize = isMobile ? 'text-[10px]' : 'text-[11px]';
+
+    // Handlers for specific card types
+    const handleFixIssue = () => onCardAction?.('fix', item);
+    const handleResolve = () => onCardAction?.('resolve', item);
+
     return (
         <>
-            {/* EYEBROW: The High-Contrast Pill - using app secondary colors */}
+            {/* EYEBROW */}
             <div className="flex">
                 <span
                     className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.1em] opacity-60"
@@ -124,39 +208,60 @@ function renderCardZones(item: KanbanItem) {
                 </span>
             </div>
 
-            {/* TITLE AREA: English & Arabic on same line, spread to edges */}
-            <div className="flex items-center justify-between gap-3">
-                <h4 className="text-lg font-bold text-[var(--foreground)] tracking-tight">
-                    {zone2.english}
-                </h4>
-                <span className="text-[17px] font-arabic text-[var(--foreground)] opacity-80">
+            {/* TITLE AREA */}
+            <div className={`flex items-center justify-between gap-3 ${isMobile ? '-mt-0.5' : ''}`}>
+                <div className="flex items-center gap-2">
+                    <h4 className={`${titleSize} font-bold text-[var(--foreground)] tracking-tight`}>
+                        {zone2.english}
+                    </h4>
+                    {/* Brain icon logic: show only if mindmap exists AND is relevant type */}
+                    {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
+                        <Brain size={isMobile ? 12 : 16} className="text-[var(--accent)] opacity-70" />
+                    )}
+                </div>
+                <span className={`${arabicSize} font-arabic text-[var(--foreground)] opacity-80`}>
                     {zone2.arabic}
                 </span>
             </div>
 
-            {/* DESCRIPTION: Breathable text with clear air */}
-            <div className="py-2">
-                <p className="text-sm text-[var(--foreground-secondary)] leading-relaxed line-clamp-2">
+            {/* DESCRIPTION */}
+            <div className={isMobile ? 'py-0.5' : 'py-2'}>
+                <p className={`${descSize} text-[var(--foreground-secondary)] leading-relaxed line-clamp-2`}>
                     {zone3}
                 </p>
             </div>
 
-            {/* FOOTER: Separator with pt-5 */}
-            <div className="border-t border-[var(--border)] pt-5 flex items-center justify-between">
-                <div className="text-[11px] font-medium text-[var(--foreground-secondary)] opacity-80">
-                    {zone4.meta}
+            {/* FOOTER */}
+            <div className={`border-t border-[var(--border)] ${footerPad} flex items-center justify-between`}>
+                <div className={`${metaSize} font-medium text-[var(--foreground-secondary)] opacity-80`}>
+                    {zone4Meta}
                 </div>
-                <div className="flex items-center gap-2 text-[11px] font-bold text-[var(--foreground)] opacity-80 hover:opacity-100 transition-all cursor-pointer">
-                    <span className="leading-none">{zone4.actionLabel}</span>
-                    <div className="p-1 rounded-full bg-[var(--verse-bg)] transition-colors">
-                        {zone4.actionIcon}
-                    </div>
+
+                {/* Menu Trigger Available for ALL Cards Now */}
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <CardMenuTrigger
+                        buttonRef={menuButtonRef}
+                        onClick={handleMenuClick}
+                    />
+                    <CardActionMenu
+                        isMobile={isMobile}
+                        hasMindmap={hasMindmap}
+                        cardType={cardType as any}
+                        isOpen={menuOpen}
+                        onClose={() => setMenuOpen(false)}
+                        onEditMindmap={onEditMindmap}
+                        onImportMindmap={onImportMindmap}
+                        onDeleteMindmap={onDeleteMindmap}
+                        onChangeSplits={onChangeSplits}
+                        onFixIssue={handleFixIssue}
+                        onResolveSimilarity={handleResolve}
+                        docLink={docLink}
+                        anchorRef={menuButtonRef}
+                    />
                 </div>
             </div>
         </>
     );
 }
-
-
 
 export default KanbanCard;

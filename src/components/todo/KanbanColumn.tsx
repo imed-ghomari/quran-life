@@ -1,8 +1,10 @@
+'use client';
+
 import React from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import KanbanCard from './KanbanCard';
 import { KanbanItem } from './types';
-import { MoreHorizontal } from 'lucide-react';
+import { Inbox, Activity, CheckCircle2 } from 'lucide-react';
 
 interface KanbanColumnProps {
     id: string;
@@ -10,9 +12,14 @@ interface KanbanColumnProps {
     items: KanbanItem[];
     isMobile: boolean;
     onCardClick: (item: KanbanItem) => void;
+    // New props for card actions
+    onEditMindmap: (item: KanbanItem) => void;
+    onImportMindmap: (item: KanbanItem) => void;
+    onDeleteMindmap: (item: KanbanItem) => void;
+    onChangeSplits: (item: KanbanItem) => void;
+    getHasMindmap: (item: KanbanItem) => boolean;
+    getDocLink: (item: KanbanItem) => string | undefined;
 }
-
-import { Inbox, Activity, CheckCircle2 } from 'lucide-react';
 
 const getColumnIcon = (columnId: string) => {
     switch (columnId) {
@@ -23,16 +30,28 @@ const getColumnIcon = (columnId: string) => {
     }
 };
 
-const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnProps) => {
+const KanbanColumn = ({
+    id,
+    title,
+    items,
+    isMobile,
+    onCardClick,
+    onEditMindmap,
+    onImportMindmap,
+    onDeleteMindmap,
+    onChangeSplits,
+    getHasMindmap,
+    getDocLink
+}: KanbanColumnProps) => {
     return (
         <div className={`
-            flex flex-col h-full flex-1 min-w-[320px] transition-all duration-300
-            ${isMobile ? 'min-h-[180px] mb-8' : 'max-w-[420px]'}
+            flex flex-col flex-1 min-w-[320px] transition-all duration-300
+            ${isMobile ? 'min-h-[200px] mb-4' : 'max-w-[420px] h-full'}
         `}>
             {/* Structural Containment Background */}
             <div className="flex flex-col h-full bg-[var(--foreground)]/[0.02] dark:bg-black/20 rounded-2xl p-5 border border-[var(--border)] shadow-sm">
                 {/* Header Area - Now contained */}
-                <div className="flex items-center mb-10 px-2 pt-2">
+                <div className="flex items-center mb-6 px-2 pt-2 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2.5">
                             <div className="p-1.5 rounded-lg bg-[var(--verse-bg)] text-[var(--accent)] border border-[var(--accent)]/10">
@@ -46,20 +65,32 @@ const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnP
                     </div>
                 </div>
 
-                {/* Cards Area - With consistent vertical rhythm */}
-                <Droppable droppableId={id}>
+                {/* Cards Area - Horizontal scroll on mobile, vertical on desktop */}
+                <Droppable droppableId={id} direction={isMobile ? 'horizontal' : 'vertical'}>
                     {(provided) => (
                         <div
                             {...provided.droppableProps}
                             ref={provided.innerRef}
-                            className="flex-1 flex flex-col space-y-4 overflow-y-auto min-h-[150px] custom-scrollbar"
+                            className={`
+                                flex-1 min-h-[150px] custom-scrollbar
+                                ${isMobile
+                                    ? 'flex flex-row gap-4 overflow-x-auto overflow-y-hidden pb-2'
+                                    : 'flex flex-col space-y-4 overflow-y-auto'
+                                }
+                            `}
                         >
                             {items.map((item, index) => (
                                 <KanbanCard
                                     key={item.id}
                                     item={item}
                                     index={index}
-                                    onClick={() => onCardClick(item)}
+                                    isMobile={isMobile}
+                                    hasMindmap={getHasMindmap(item)}
+                                    docLink={getDocLink(item)}
+                                    onEditMindmap={() => onEditMindmap(item)}
+                                    onImportMindmap={() => onImportMindmap(item)}
+                                    onDeleteMindmap={() => onDeleteMindmap(item)}
+                                    onChangeSplits={() => onChangeSplits(item)}
                                 />
                             ))}
                             {provided.placeholder}
@@ -70,7 +101,5 @@ const KanbanColumn = ({ id, title, items, isMobile, onCardClick }: KanbanColumnP
         </div>
     );
 };
-
-
 
 export default KanbanColumn;

@@ -7,14 +7,14 @@ import SlideOver from '../SlideOver';
 import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
-import { ChevronDown, Check, PenTool, Download, Info, Trash2, Brain, AlertTriangle, Layout, Calendar, BarChart2, Users, LayoutGrid, List } from 'lucide-react';
-import Link from 'next/link';
-import { getSurah } from '@/lib/quranData';
+import SplitsModal from './SplitsModal';
+import { Check, PenTool, Download } from 'lucide-react';
+import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { QuranPart } from '@/lib/types';
 import { MutashabihatDecision } from '@/lib/storage';
 
-// Helper to highlight logic - copied from TodoPage usually, but simplified here
+// Helper to highlight logic
 function HighlightedVerse({ text, range }: { text: string; range?: [number, number] }) {
     if (!range) return <>{text}</>;
     const words = text.trim().split(/\s+/);
@@ -53,15 +53,17 @@ interface TodoKanbanProps {
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
     onImportPremade: (type: 'surah' | 'part', id: number) => void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
-    onViewMindmap: (data: any) => void; // For preview modal
+    onViewMindmap: (data: any) => void;
+    onDeleteMindmap?: (type: 'surah' | 'part', id: number) => void;
 
-    // Achor Builder Props
+    // Anchor Builder Props
     getBuilderState: (surahId: number) => AnchorBuilderState;
     onAddBreak: (surahId: number, val: number) => void;
     onRemoveBreak: (surahId: number, val: number) => void;
     onSaveAnchors: (surahId: number, verseCount: number) => void;
     hasReviewedChunks: (surahId: number) => boolean;
-    // New Props for Persistence
+
+    // Persistence
     kanbanState?: Record<string, string[]>;
     onKanbanStateChange?: (state: Record<string, string[]>) => void;
 }
@@ -83,6 +85,7 @@ export default function TodoKanban({
     onImportPremade,
     onEditMindmap,
     onViewMindmap,
+    onDeleteMindmap,
     getBuilderState,
     onAddBreak,
     onRemoveBreak,
@@ -101,6 +104,9 @@ export default function TodoKanban({
     const [isMobile, setIsMobile] = useState(false);
     const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>('all');
 
+    // Splits Modal State
+    const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
+
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
         checkMobile();
@@ -117,36 +123,30 @@ export default function TodoKanban({
 
     // Sync Props to Kanban State
     useEffect(() => {
-        // 1. Construct map of all available items from data source
         const itemMap = new Map<string, KanbanItem>();
 
-        // Suspended Anchors
         suspendedAnchors.forEach(item => {
             const id = `suspended-${item.surahId}-${item.anchorId}`;
             itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
         });
 
-        // Similarity Groups
         similarityGroups.forEach(group => {
             const id = `similarity-${group.surah.id}`;
             itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
-        // Part Maps
         partTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `part-${item.part}`;
             itemMap.set(id, { id, type: 'part', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
-        // Surah Maps
         surahTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `surah-${item.surah.id}`;
             itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
-        // 2. Distribute items into columns based on Persistent State (kanbanState) OR default logic
         const newCols: Record<string, KanbanItem[]> = {
             'backlog': [],
             'in-progress': [],
@@ -155,16 +155,12 @@ export default function TodoKanban({
 
         const processedIds = new Set<string>();
 
-        // If we have saved state, try to respect it
         if (kanbanState) {
             Object.entries(kanbanState).forEach(([colId, itemIds]) => {
-                if (!newCols[colId]) return; // Skip invalid columns
+                if (!newCols[colId]) return;
                 itemIds.forEach(itemId => {
                     const item = itemMap.get(itemId);
                     if (item) {
-                        // Special Case: If item is externally 'complete' BUT saved in a different column?
-                        // We prioritize the persistent state (User knows best). 
-                        // If it's in backlog but status is complete, maybe user re-opened it.
                         newCols[colId].push(item);
                         processedIds.add(itemId);
                     }
@@ -172,11 +168,8 @@ export default function TodoKanban({
             });
         }
 
-        // 3. Handle leftover items (New items)
         Array.from(itemMap.values()).forEach(item => {
             if (processedIds.has(item.id)) return;
-
-            // Default placement
             if (item.status === 'complete') {
                 newCols['complete'].push(item);
             } else {
@@ -230,7 +223,6 @@ export default function TodoKanban({
                 [destination.droppableId]: { ...destCol, items: destItems }
             };
 
-            // Calculate new state for persistence
             if (onKanbanStateChange) {
                 const state: Record<string, string[]> = {};
                 Object.values(newColsMap).forEach(col => {
@@ -239,9 +231,7 @@ export default function TodoKanban({
                 onKanbanStateChange(state);
             }
 
-            // Trigger Completion Logic
             if (destination.droppableId === 'complete') {
-                // Moving TO Complete -> Force TRUE
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     if (movedItem.status !== 'complete') {
                         handleCompletionTrigger(movedItem, true);
@@ -249,9 +239,7 @@ export default function TodoKanban({
                 } else if (source.droppableId !== 'complete') {
                     handleCompletionTrigger(movedItem);
                 }
-            }
-            // Moving FROM Complete -> Force FALSE
-            else if (source.droppableId === 'complete') {
+            } else if (source.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     handleCompletionTrigger(movedItem, false);
                 }
@@ -260,6 +248,56 @@ export default function TodoKanban({
             return newColsMap;
         });
     }, [onKanbanStateChange, handleCompletionTrigger]);
+
+    // Card Action Handlers
+    const handleCardEditMindmap = useCallback((item: KanbanItem) => {
+        if (item.type === 'surah') {
+            onEditMindmap(item.data.surah.id, item.data.mindmap?.tldrawSnapshot, false);
+        } else if (item.type === 'part') {
+            onEditMindmap(item.data.part, item.data.mindmap?.tldrawSnapshot, true);
+        }
+    }, [onEditMindmap]);
+
+    const handleCardImportMindmap = useCallback((item: KanbanItem) => {
+        if (item.type === 'surah') {
+            onImportPremade('surah', item.data.surah.id);
+        } else if (item.type === 'part') {
+            onImportPremade('part', item.data.part);
+        }
+    }, [onImportPremade]);
+
+    const handleCardDeleteMindmap = useCallback((item: KanbanItem) => {
+        if (onDeleteMindmap) {
+            if (item.type === 'surah') {
+                onDeleteMindmap('surah', item.data.surah.id);
+            } else if (item.type === 'part') {
+                onDeleteMindmap('part', item.data.part);
+            }
+        }
+    }, [onDeleteMindmap]);
+
+    const handleCardChangeSplits = useCallback((item: KanbanItem) => {
+        if (item.type === 'surah') {
+            setSplitsModalItem(item);
+        }
+    }, []);
+
+    const getHasMindmap = useCallback((item: KanbanItem): boolean => {
+        if (item.type === 'surah' || item.type === 'part') {
+            const mindmap = item.data.mindmap;
+            return !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl);
+        }
+        return false;
+    }, []);
+
+    const getDocLink = useCallback((item: KanbanItem): string | undefined => {
+        if (item.type === 'surah') {
+            return `/docs/mindmaps/surah-${item.data.surah.id}`;
+        } else if (item.type === 'part') {
+            return `/docs/mindmaps/part-${item.data.part}`;
+        }
+        return undefined;
+    }, []);
 
     const renderSlideOverContent = () => {
         if (!activeItem) return null;
@@ -290,12 +328,6 @@ export default function TodoKanban({
                             <Check size={16} className="mr-2" /> Complete
                         </button>
                     </div>
-
-                    {/* Embed Editor if needed? No, user uses modal editor. SlideOver just shows info/actions */}
-                    {/* User said "displays the same content as the folded section". Folded section has DesktopAnchorBuilder if expanded? */}
-                    {/* Suspended Anchors folded section (lines 1416+) shows row with issue details. It DOES NOT show AnchorBuilder. */}
-                    {/* It shows "Edit Map", "Show Map", "Complete". */}
-                    {/* So my render above is correct. */}
                 </div>
             );
         }
@@ -309,9 +341,6 @@ export default function TodoKanban({
                     {group.items.map((item: any) => {
                         const abs = item.err.absoluteAyah!;
                         return item.muts.map((entry: any, idx: number) => {
-                            const decisionKey = `${abs}-${entry.phraseId}`;
-                            const existing = decisions[decisionKey] || { status: 'pending' };
-
                             const baseVerse = verses.find((v: any) => {
                                 const r = absoluteToSurahAyah(abs);
                                 return v.surahId === r.surahId && v.ayahId === r.ayahId;
@@ -350,14 +379,11 @@ export default function TodoKanban({
         }
 
         if (type === 'part' || type === 'surah') {
-            // Part/Surah logic is very similar
             const isSurah = type === 'surah';
             const id = isSurah ? data.surah.id : data.part;
             const mindmap = data.mindmap;
             const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
 
-            // Content from "folded section expanded content" (lines 2135+)
-            // It holds MindmapViewer and DesktopAnchorBuilder (for Surah)
             return (
                 <div className="flex flex-col gap-6">
                     <div className="flex justify-between items-center">
@@ -367,7 +393,7 @@ export default function TodoKanban({
                         </span>
                     </div>
 
-                    <div className="flex grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                         <button className="btn btn-secondary text-xs" onClick={() => onEditMindmap(id, mindmap?.tldrawSnapshot, !isSurah)}>
                             <PenTool size={14} className="mr-1" /> {mindmap?.tldrawSnapshot ? 'Edit Map' : 'Start Map'}
                         </button>
@@ -389,7 +415,6 @@ export default function TodoKanban({
                         </div>
                     )}
 
-                    {/* Anchor Builder for Surahs */}
                     {isSurah && (mindmap?.imageUrl || mindmap?.tldrawSnapshot) && (
                         <div className="mt-4 h-full">
                             {!isMobile ? (
@@ -408,7 +433,7 @@ export default function TodoKanban({
                                         surahId={id}
                                         verseCount={data.surah.verseCount}
                                         builderState={getBuilderState(id)}
-                                        mindmapImageUrl={mindmap?.imageUrl || null} // Basic preview support
+                                        mindmapImageUrl={mindmap?.imageUrl || null}
                                         onAddBreak={(val) => onAddBreak(id, val)}
                                         onRemoveBreak={(val) => onRemoveBreak(id, val)}
                                         onSave={() => onSaveAnchors(id, data.surah.verseCount)}
@@ -423,15 +448,44 @@ export default function TodoKanban({
         }
     };
 
-    return (
-        <div className="flex h-screen w-full flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
-            {/* Header Area */}
-            <div className="flex items-center justify-between px-8 pt-8 shrink-0">
-                {/* Title (Left) */}
-                <h1 className="text-2xl font-bold tracking-tight">Todo</h1>
+    // Get surah data for splits modal
+    const getSplitsModalData = () => {
+        if (!splitsModalItem || splitsModalItem.type !== 'surah') return null;
+        const surahId = splitsModalItem.data.surah.id;
+        const surahMeta = SURAHS.find(s => s.id === surahId);
+        return {
+            surahId,
+            verseCount: surahMeta?.verseCount || 1,
+            mindmapImageUrl: splitsModalItem.data.mindmap?.imageUrl || null
+        };
+    };
 
-                {/* Filters (Right - Navigation Grade Style) */}
-                <div style={{ display: 'flex', background: 'var(--background)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border)' }}>
+    const splitsData = getSplitsModalData();
+
+    return (
+        <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
+            {/* Header Area - Sticky on mobile */}
+            <div className={`
+                flex items-center justify-between px-8 pt-8 pb-4 shrink-0 bg-[var(--background)]
+                ${isMobile ? 'sticky top-0 z-20' : ''}
+            `}>
+                {/* Title (Left) - Hidden on mobile */}
+                {!isMobile && (
+                    <h1 className="text-2xl font-bold tracking-tight">Todo</h1>
+                )}
+
+                {/* Filters - Full width on mobile */}
+                <div
+                    className={isMobile ? 'w-full' : ''}
+                    style={{
+                        display: 'flex',
+                        background: 'var(--background)',
+                        borderRadius: '8px',
+                        padding: '3px',
+                        border: '1px solid var(--border)',
+                        flex: isMobile ? 1 : 'unset'
+                    }}
+                >
                     {[
                         { id: 'all', label: 'ALL ITEMS' },
                         { id: 'maintenance', label: 'REVIEW FIXES' },
@@ -450,7 +504,8 @@ export default function TodoKanban({
                                 color: filter === f.id ? 'white' : 'var(--foreground-secondary)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
-                                boxShadow: filter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                boxShadow: filter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                flex: isMobile ? 1 : 'unset'
                             }}
                         >
                             {f.label}
@@ -459,11 +514,11 @@ export default function TodoKanban({
                 </div>
             </div>
 
-            {/* CRITICAL GAP 1: mt-12 (48px) Margin between Filter Bar and Kanban Board */}
-            <div className="mt-12" />
+            {/* Gap between header and board - smaller on mobile but enough to clear fixed header */}
+            <div className={isMobile ? 'mt-[60px]' : 'mt-12'} />
 
             <DragDropContext onDragEnd={onDragEnd}>
-                <div className={`flex gap-8 px-8 pb-8 h-full overflow-x-auto ${isMobile ? 'flex-col overflow-y-auto' : 'flex-row'}`}>
+                <div className={`flex gap-8 px-8 pb-8 h-full overflow-x-auto ${isMobile ? 'flex-col overflow-y-auto pt-4' : 'flex-row'}`}>
                     {Object.values(columns).map(col => (
                         <KanbanColumn
                             key={col.id}
@@ -472,11 +527,16 @@ export default function TodoKanban({
                             items={col.items.filter(filteredItem)}
                             isMobile={isMobile}
                             onCardClick={(item) => setActiveItem(item)}
+                            onEditMindmap={handleCardEditMindmap}
+                            onImportMindmap={handleCardImportMindmap}
+                            onDeleteMindmap={handleCardDeleteMindmap}
+                            onChangeSplits={handleCardChangeSplits}
+                            getHasMindmap={getHasMindmap}
+                            getDocLink={getDocLink}
                         />
                     ))}
                 </div>
             </DragDropContext>
-
 
             <SlideOver
                 isOpen={!!activeItem}
@@ -485,6 +545,23 @@ export default function TodoKanban({
             >
                 {renderSlideOverContent()}
             </SlideOver>
+
+            {/* Splits Modal for Change Splits action */}
+            {splitsData && (
+                <SplitsModal
+                    isOpen={!!splitsModalItem}
+                    onClose={() => setSplitsModalItem(null)}
+                    isMobile={isMobile}
+                    surahId={splitsData.surahId}
+                    verseCount={splitsData.verseCount}
+                    builderState={getBuilderState(splitsData.surahId)}
+                    mindmapImageUrl={splitsData.mindmapImageUrl}
+                    onAddBreak={(val) => onAddBreak(splitsData.surahId, val)}
+                    onRemoveBreak={(val) => onRemoveBreak(splitsData.surahId, val)}
+                    onSave={() => onSaveAnchors(splitsData.surahId, splitsData.verseCount)}
+                    hasReviewedHistory={hasReviewedChunks(splitsData.surahId)}
+                />
+            )}
         </div>
     );
 }
