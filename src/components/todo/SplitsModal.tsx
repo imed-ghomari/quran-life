@@ -4,9 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import SlideOver from '../SlideOver'; // Using generic SlideOver for behavior consistency? Or replicating styles?
-// Note: Generic SlideOver in src/components/SlideOver.tsx uses a Portal + right-side slide.
-// The user asked for "like the slideover is in the setting sections in mobile".
-// A dedicated implementation here is safer to strictly control the content and avoid conflicts with global SlideOver state if any.
+import MindmapViewer from '../MindmapViewer';
 
 interface SplitsModalProps {
     isOpen: boolean;
@@ -16,6 +14,9 @@ interface SplitsModalProps {
     verseCount: number;
     builderState: AnchorBuilderState;
     mindmapImageUrl?: string | null;
+    mindmapImageUrlDark?: string | null;
+    snapshot?: any;
+    isDark?: boolean;
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
     onSave: () => void;
@@ -30,6 +31,9 @@ export default function SplitsModal({
     verseCount,
     builderState,
     mindmapImageUrl,
+    mindmapImageUrlDark,
+    snapshot,
+    isDark,
     onAddBreak,
     onRemoveBreak,
     onSave,
@@ -121,7 +125,7 @@ export default function SplitsModal({
             >
                 <div className="flex flex-col h-full max-h-[85vh]">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--border)]">
+                    <div className="flex items-center justify-between px-10 py-6 border-b border-[var(--border)]">
                         <div>
                             <h2 className="text-xl font-bold tracking-tight">Splits Configuration</h2>
                             <p className="text-sm text-[var(--foreground-secondary)] mt-1">Adjust anchor points for optimal memorization</p>
@@ -135,7 +139,21 @@ export default function SplitsModal({
                     </div>
 
                     {/* Content - Breathable Padding */}
-                    <div className="flex-1 overflow-y-auto p-10">
+                    <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-6">
+                        {/* Mindmap Preview - Only if available */}
+                        {(mindmapImageUrl || snapshot) && (
+                            <div className="border border-[var(--border)] rounded-lg overflow-hidden h-[300px] shrink-0 relative bg-[var(--background-secondary)]">
+                                <MindmapViewer
+                                    snapshot={snapshot}
+                                    imageUrl={mindmapImageUrl}
+                                    imageUrlDark={mindmapImageUrlDark}
+                                    isDark={isDark || false}
+                                    title="Reference Map"
+                                    height="100%"
+                                />
+                            </div>
+                        )}
+
                         <DesktopAnchorBuilder
                             surahId={surahId}
                             verseCount={verseCount}

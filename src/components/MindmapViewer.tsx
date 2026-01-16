@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
@@ -97,6 +98,7 @@ export default function MindmapViewer({
                     editor.store.loadSnapshot(activeSnapshot);
                 }
                 editor.updateInstanceState({ isReadonly: true });
+                editor.setCurrentTool('hand');
                 setTimeout(() => {
                     editor.zoomToFit();
                 }, 100);
@@ -224,11 +226,11 @@ export default function MindmapViewer({
                 {renderContent(false)}
             </div>
 
-            {isFullScreen && (
+            {isFullScreen && createPortal(
                 <div style={{
                     position: 'fixed',
                     inset: 0,
-                    zIndex: 9999,
+                    zIndex: 2147483647, // Maximum z-index to ensure it's on top of everything including sidebar
                     background: 'var(--background)',
                     display: 'flex',
                     flexDirection: 'column'
@@ -252,7 +254,8 @@ export default function MindmapViewer({
                     <div style={{ flex: 1, position: 'relative' }}>
                         {renderContent(true)}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

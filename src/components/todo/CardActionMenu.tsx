@@ -181,11 +181,12 @@ export default function CardActionMenu({
     // Render Logic
     const renderContent = () => {
         if (!isMobile) {
+            if (!position) return null;
             // Desktop Dropdown
             return (
                 <div
                     ref={menuRef}
-                    className="fixed z-[9999] min-w-[220px] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+                    className="fixed z-[9999] min-w-[220px] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden"
                     style={{ top: position.top, left: position.left }}
                     onClick={(e) => e.stopPropagation()}
                 >

@@ -41,11 +41,11 @@ const KanbanCard = ({
     };
 
     // Responsive Spacing Config - Tighter for Mobile
-    const padding = isMobile ? '!p-3.5' : '!p-6';
-    const borderRadius = isMobile ? '!rounded-[14px]' : '!rounded-2xl';
-    const verticalGap = isMobile ? 'space-y-1.5' : 'space-y-3';
-    const minWidth = isMobile ? 'min-w-[260px]' : '';
-    const footerPad = isMobile ? 'pt-2.5' : 'pt-5';
+    const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-6';
+    const borderRadius = isMobile ? '!rounded-[12px]' : '!rounded-2xl';
+    const verticalGap = isMobile ? 'space-y-0.5' : 'space-y-3';
+    const minWidth = isMobile ? 'min-w-[240px]' : '';
+    const footerPad = isMobile ? 'pt-1.5' : 'pt-5';
 
     // Determine card type for menu
     const cardType = item.type; // 'surah' | 'part' | 'suspended' | 'similarity'
@@ -143,7 +143,7 @@ function renderCardZones({
             const surah = getSurah(issue.surahId);
             zone1 = { label: "FIX REQUIRED", color: "var(--danger)" };
             zone2 = {
-                english: surah?.name || `Surah ${issue.surahId}`,
+                english: surah ? `${surah.id}. ${surah.name}` : `Surah ${issue.surahId}`,
                 arabic: surah?.arabicName || 'الإصلاح'
             };
             zone3 = issue.label || "Review anchors to fix suspended status.";
@@ -154,7 +154,7 @@ function renderCardZones({
             const sim = item.data;
             zone1 = { label: "SIMILARITY", color: "var(--warning)" };
             zone2 = {
-                english: sim.surah?.name || "Similarity",
+                english: sim.surah ? `${sim.surah.id}. ${sim.surah.name}` : "Similarity",
                 arabic: sim.surah?.arabicName || 'التشابه'
             };
             zone3 = `${sim.count} similarity issues detected.`;
@@ -175,7 +175,7 @@ function renderCardZones({
             const surahTask = item.data;
             zone1 = { label: "SURAH MAP", color: "var(--success)" };
             zone2 = {
-                english: surahTask.surah.name,
+                english: `${surahTask.surah.id}. ${surahTask.surah.name}`,
                 arabic: surahTask.surah.arabicName || 'سورة'
             };
             zone4Meta = `${surahTask.surah.verseCount} Verses`;
@@ -184,10 +184,10 @@ function renderCardZones({
     }
 
     // Adjust font sizes for mobile density
-    const titleSize = isMobile ? 'text-[15px]' : 'text-lg'; // Smaller title on mobile
-    const descSize = isMobile ? 'text-[11px]' : 'text-sm';
-    const arabicSize = isMobile ? 'text-[13px]' : 'text-[17px]';
-    const metaSize = isMobile ? 'text-[10px]' : 'text-[11px]';
+    const titleSize = isMobile ? 'text-[14px]' : 'text-lg'; // Smaller title on mobile
+    const descSize = isMobile ? 'text-[10px]' : 'text-sm';
+    const arabicSize = isMobile ? 'text-[12px]' : 'text-[17px]';
+    const metaSize = isMobile ? 'text-[9px]' : 'text-[11px]';
 
     // Handlers for specific card types
     const handleFixIssue = () => onCardAction?.('fix', item);
@@ -225,11 +225,13 @@ function renderCardZones({
             </div>
 
             {/* DESCRIPTION */}
-            <div className={isMobile ? 'py-0.5' : 'py-2'}>
-                <p className={`${descSize} text-[var(--foreground-secondary)] leading-relaxed line-clamp-2`}>
-                    {zone3}
-                </p>
-            </div>
+            {zone3 && (
+                <div className={isMobile ? 'py-0.5' : 'py-2'}>
+                    <p className={`${descSize} text-[var(--foreground-secondary)] leading-relaxed line-clamp-2`}>
+                        {zone3}
+                    </p>
+                </div>
+            )}
 
             {/* FOOTER */}
             <div className={`border-t border-[var(--border)] ${footerPad} flex items-center justify-between`}>

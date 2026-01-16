@@ -4,6 +4,7 @@ const nextConfig = {
     images: {
         unoptimized: true,
     },
+    serverExternalPackages: ['@open-spaced-repetition/binding'],
     // Add security headers to all responses
     async headers() {
         return [

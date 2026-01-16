@@ -46,12 +46,12 @@ const KanbanColumn = ({
     return (
         <div className={`
             flex flex-col flex-1 min-w-[320px] transition-all duration-300
-            ${isMobile ? 'min-h-[200px] mb-4' : 'max-w-[420px] h-full'}
+            ${isMobile ? 'min-h-[120px] mb-2' : 'max-w-[420px] h-full'}
         `}>
             {/* Structural Containment Background */}
-            <div className="flex flex-col h-full bg-[var(--foreground)]/[0.02] dark:bg-black/20 rounded-2xl p-5 border border-[var(--border)] shadow-sm">
+            <div className={`flex flex-col h-full bg-[var(--foreground)]/[0.02] dark:bg-black/20 rounded-2xl border border-[var(--border)] shadow-sm ${isMobile ? 'p-3' : 'p-5'}`}>
                 {/* Header Area - Now contained */}
-                <div className="flex items-center mb-6 px-2 pt-2 shrink-0">
+                <div className={`flex items-center shrink-0 ${isMobile ? 'mb-3 px-1 pt-1' : 'mb-6 px-2 pt-2'}`}>
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2.5">
                             <div className="p-1.5 rounded-lg bg-[var(--verse-bg)] text-[var(--accent)] border border-[var(--accent)]/10">
@@ -72,10 +72,10 @@ const KanbanColumn = ({
                             {...provided.droppableProps}
                             ref={provided.innerRef}
                             className={`
-                                flex-1 min-h-[150px] custom-scrollbar
+                                flex-1 custom-scrollbar
                                 ${isMobile
-                                    ? 'flex flex-row gap-4 overflow-x-auto overflow-y-hidden pb-2'
-                                    : 'flex flex-col space-y-4 overflow-y-auto'
+                                    ? 'flex flex-row gap-3 overflow-x-auto overflow-y-hidden pb-3 px-1 min-h-[100px]'
+                                    : 'flex flex-col space-y-4 overflow-y-auto min-h-[150px]'
                                 }
                             `}
                         >

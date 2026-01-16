@@ -22,18 +22,18 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
         switch (displayStatus) {
             case 'offline':
                 return pendingChangesCount > 0
-                    ? `Offline • ${pendingChangesCount} pending`
+                    ? 'Offline • Pending changes'
                     : 'Offline';
             case 'syncing':
                 return 'Syncing...';
             case 'synced':
                 return pendingChangesCount > 0
-                    ? `${pendingChangesCount} ${pendingChangesCount === 1 ? 'change' : 'changes'} to sync`
+                    ? 'Unsynced changes'
                     : 'Up to date';
             case 'conflict':
                 return 'Conflict detected';
             case 'needs_push':
-                return `${pendingChangesCount} ${pendingChangesCount === 1 ? 'change' : 'changes'} to sync`;
+                return 'Unsynced changes';
             case 'needs_pull':
                 return 'Update available';
             case 'error':
@@ -182,14 +182,14 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
         >
             <span className="nav-icon" style={{ position: 'relative' }}>
                 {getStatusIcon()}
-                {(displayStatus === 'conflict' || pendingChangesCount > 0) && displayStatus !== 'syncing' && (
+                {(displayStatus === 'conflict') && displayStatus !== 'syncing' && (
                     <span
                         className="nav-badge"
                         style={{
                             position: 'absolute',
                             top: '-4px',
                             right: '-8px',
-                            background: displayStatus === 'conflict' ? 'var(--danger)' : 'var(--warning)',
+                            background: 'var(--danger)',
                             color: 'white',
                             fontSize: '0.6rem',
                             fontWeight: 700,
@@ -199,7 +199,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                             textAlign: 'center',
                         }}
                     >
-                        {displayStatus === 'conflict' ? '!' : pendingChangesCount}
+                        !
                     </span>
                 )}
             </span>
@@ -213,7 +213,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                 maxWidth: '70px',
                 opacity: 0.8
             }}>
-                {displayStatus === 'syncing' ? 'Syncing' : (pendingChangesCount > 0 ? `${pendingChangesCount} to sync` : (displayStatus === 'offline' ? 'Offline' : (isAuthenticated ? 'Up to date' : 'Sign In')))}
+                {displayStatus === 'syncing' ? 'Syncing' : (pendingChangesCount > 0 ? 'Unsynced' : (displayStatus === 'offline' ? 'Offline' : (isAuthenticated ? 'Up to date' : 'Sign In')))}
             </span>
         </button>
     );

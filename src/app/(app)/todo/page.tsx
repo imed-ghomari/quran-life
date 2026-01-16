@@ -111,8 +111,10 @@ export default function TodoPage() {
 
     const partTasks = useMemo(() => {
         const parts: QuranPart[] = [1, 2, 3, 4];
-        return parts.map(p => ({ part: p, mindmap: partMindmaps[p] }));
-    }, [partMindmaps]);
+        return parts
+            .filter(p => activePart === 5 || p === activePart)
+            .map(p => ({ part: p, mindmap: partMindmaps[p] }));
+    }, [partMindmaps, activePart]);
 
     const suspendedAnchors = getSuspendedAnchors();
 
@@ -536,6 +538,11 @@ export default function TodoPage() {
                         s.kanbanColumns = cols;
                         saveSettings(s);
                         setSettingsVersion(v => v + 1);
+                        
+                        // Mark as pending change for sync engine
+                        import('@/lib/syncEngine').then(({ markPendingChanges }) => {
+                            markPendingChanges();
+                        });
                     }}
                     onFixConfirm={handleFixConfirm}
                     onSimilarityDecision={handleSimilarityDecision}

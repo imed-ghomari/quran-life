@@ -128,10 +128,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", handleVisibility);
 
     const handleInitialOnboarding = async () => {
-      await ensureCacheLoaded();
-      const settings = getSettings();
-      if (!settings.isOnboardingComplete) {
-        setShowOnboarding(true);
+      // Check if user is authenticated before showing onboarding
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        await ensureCacheLoaded();
+        const settings = getSettings();
+        if (!settings.isOnboardingComplete) {
+          setShowOnboarding(true);
+        }
       }
     };
     handleInitialOnboarding();

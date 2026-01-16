@@ -8,7 +8,7 @@ import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
 import SplitsModal from './SplitsModal';
-import { Check, PenTool, Download } from 'lucide-react';
+import { Check, PenTool, Download, Search } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { QuranPart } from '@/lib/types';
@@ -103,6 +103,7 @@ export default function TodoKanban({
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
     const [isMobile, setIsMobile] = useState(false);
     const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>('all');
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Splits Modal State
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
@@ -114,10 +115,31 @@ export default function TodoKanban({
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    const getItemSearchText = (item: KanbanItem) => {
+        if (item.type === 'surah') return `${item.data.surah.id} ${item.data.surah.name} ${item.data.surah.arabicName || ''}`;
+        if (item.type === 'part') return `Part ${item.data.part} الجزء ${item.data.part}`;
+        if (item.type === 'suspended') {
+            const surah = getSurah(item.data.surahId);
+            return `${surah?.name || ''} ${surah?.arabicName || ''} ${item.data.label}`;
+        }
+        if (item.type === 'similarity') {
+            return `${item.data.surah.name} ${item.data.surah.arabicName || ''} Similarity`;
+        }
+        return '';
+    };
+
     const filteredItem = (item: KanbanItem) => {
-        if (filter === 'all') return true;
-        if (filter === 'maintenance') return item.type === 'suspended' || item.type === 'similarity';
-        if (filter === 'construction') return item.type === 'part' || item.type === 'surah';
+        let matchesFilter = true;
+        if (filter === 'maintenance') matchesFilter = item.type === 'suspended' || item.type === 'similarity';
+        if (filter === 'construction') matchesFilter = item.type === 'part' || item.type === 'surah';
+        
+        if (!matchesFilter) return false;
+
+        if (searchQuery.trim()) {
+            const searchText = getItemSearchText(item).toLowerCase();
+            return searchText.includes(searchQuery.toLowerCase());
+        }
+
         return true;
     };
 
@@ -177,10 +199,36 @@ export default function TodoKanban({
             }
         });
 
+        // Auto-sort logic
+        const sortItems = (items: KanbanItem[]) => {
+            return items.sort((a, b) => {
+                // 1. Sort by Type Priority (Suspended > Similarity > Part > Surah)
+                const typePriority: Record<string, number> = {
+                    'suspended': 0,
+                    'similarity': 1,
+                    'part': 2,
+                    'surah': 3
+                };
+                const pA = typePriority[a.type] ?? 99;
+                const pB = typePriority[b.type] ?? 99;
+                if (pA !== pB) return pA - pB;
+
+                // 2. Sort by ID Number (Surah ID or Part Number)
+                const getNumber = (item: KanbanItem) => {
+                    if (item.type === 'surah') return item.data.surah.id;
+                    if (item.type === 'part') return item.data.part;
+                    if (item.type === 'suspended') return item.data.surahId;
+                    if (item.type === 'similarity') return item.data.surah.id;
+                    return 999;
+                };
+                return getNumber(a) - getNumber(b);
+            });
+        };
+
         setColumns({
-            'backlog': { id: 'backlog', title: 'Backlog', items: newCols['backlog'] },
-            'in-progress': { id: 'in-progress', title: 'In Progress', items: newCols['in-progress'] },
-            'complete': { id: 'complete', title: 'Complete', items: newCols['complete'] },
+            'backlog': { id: 'backlog', title: 'Backlog', items: sortItems(newCols['backlog']) },
+            'in-progress': { id: 'in-progress', title: 'In Progress', items: sortItems(newCols['in-progress']) },
+            'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
         });
 
     }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]);
@@ -316,7 +364,7 @@ export default function TodoKanban({
             return (
                 <div className="flex flex-col gap-6">
                     <div className="bg-[var(--background-secondary)] p-4 rounded-lg">
-                        <h3 className="font-bold text-lg mb-2">{surah?.name} - {issue.label}</h3>
+                        <h3 className="font-bold text-lg mb-2">{surah ? `${surah.id}. ${surah.name}` : `Surah ${issue.surahId}`} - {issue.label}</h3>
                         <p className="text-right font-arabic text-xl leading-loose">{chunkVerses}</p>
                     </div>
 
@@ -336,7 +384,7 @@ export default function TodoKanban({
             const group = data;
             return (
                 <div className="flex flex-col gap-6">
-                    <h3 className="font-bold text-lg">{group.surah.name} Similarity Checks</h3>
+                    <h3 className="font-bold text-lg">{group.surah.id}. {group.surah.name} Similarity Checks</h3>
 
                     {group.items.map((item: any) => {
                         const abs = item.err.absoluteAyah!;
@@ -359,7 +407,7 @@ export default function TodoKanban({
                                             const msurah = getSurah(mref.surahId);
                                             return (
                                                 <div key={i} className="bg-[var(--background-secondary)] p-2 rounded text-sm">
-                                                    {msurah?.name} {mref.ayahId}
+                                                    {msurah?.id}. {msurah?.name} {mref.ayahId}
                                                 </div>
                                             );
                                         })}
@@ -387,7 +435,7 @@ export default function TodoKanban({
             return (
                 <div className="flex flex-col gap-6">
                     <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-lg">{isSurah ? `Surah ${data.surah.name}` : `Part ${id}`}</h3>
+                        <h3 className="font-bold text-lg">{isSurah ? `Surah ${data.surah.id}. ${data.surah.name}` : `Part ${id}`}</h3>
                         <span className={`status-badge ${mindmap?.isComplete ? 'learned' : 'partial'}`}>
                             {mindmap?.isComplete ? 'Complete' : 'Incomplete'}
                         </span>
@@ -453,10 +501,13 @@ export default function TodoKanban({
         if (!splitsModalItem || splitsModalItem.type !== 'surah') return null;
         const surahId = splitsModalItem.data.surah.id;
         const surahMeta = SURAHS.find(s => s.id === surahId);
+        const mindmap = splitsModalItem.data.mindmap;
         return {
             surahId,
             verseCount: surahMeta?.verseCount || 1,
-            mindmapImageUrl: splitsModalItem.data.mindmap?.imageUrl || null
+            mindmapImageUrl: mindmap?.imageUrl || null,
+            mindmapImageUrlDark: mindmap?.imageUrlDark || null,
+            snapshot: mindmap?.tldrawSnapshot || null
         };
     };
 
@@ -464,61 +515,76 @@ export default function TodoKanban({
 
     return (
         <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
-            {/* Header Area - Sticky on mobile */}
+            {/* Header Area - Compact on mobile */}
             <div className={`
-                flex items-center justify-between px-8 pt-8 pb-4 shrink-0 bg-[var(--background)]
-                ${isMobile ? 'sticky top-0 z-20' : ''}
+                flex items-center justify-between shrink-0 bg-[var(--background)] gap-3
+                ${isMobile ? 'flex-col items-stretch px-4 pt-4 pb-2' : 'px-8 pt-8 pb-4'}
             `}>
                 {/* Title (Left) - Hidden on mobile */}
                 {!isMobile && (
                     <h1 className="text-2xl font-bold tracking-tight">Todo</h1>
                 )}
 
-                {/* Filters - Full width on mobile */}
-                <div
-                    className={isMobile ? 'w-full' : ''}
-                    style={{
-                        display: 'flex',
-                        background: 'var(--background)',
-                        borderRadius: '8px',
-                        padding: '3px',
-                        border: '1px solid var(--border)',
-                        flex: isMobile ? 1 : 'unset'
-                    }}
-                >
-                    {[
-                        { id: 'all', label: 'ALL ITEMS' },
-                        { id: 'maintenance', label: 'REVIEW FIXES' },
-                        { id: 'construction', label: 'STUDY PROGRESS' }
-                    ].map((f) => (
-                        <button
-                            key={f.id}
-                            onClick={() => setFilter(f.id as any)}
-                            style={{
-                                padding: '4px 10px',
-                                fontSize: '0.65rem',
-                                fontWeight: 700,
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: filter === f.id ? 'var(--accent)' : 'transparent',
-                                color: filter === f.id ? 'white' : 'var(--foreground-secondary)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                boxShadow: filter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-                                flex: isMobile ? 1 : 'unset'
-                            }}
-                        >
-                            {f.label}
-                        </button>
-                    ))}
+                {/* Right Side: Search + Filters */}
+                <div className={`${isMobile ? 'flex flex-col gap-2 w-full' : 'flex items-center gap-3'}`}>
+                    {/* Search Bar */}
+                    <div 
+                        className={`relative flex items-center ${isMobile ? 'w-full h-8' : 'min-w-[200px]'} rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 focus-within:border-[var(--accent)] transition-colors`}
+                    >
+                        <Search className="text-[var(--foreground-secondary)] opacity-50 shrink-0 mr-2" size={isMobile ? 12 : 14} />
+                        <input 
+                            type="text"
+                            placeholder="Search cards..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none placeholder:text-[var(--foreground-secondary)]/50 text-[var(--foreground)]"
+                            style={{ fontSize: isMobile ? '11px' : '0.75rem', padding: isMobile ? '2px 0' : '4px 0' }}
+                        />
+                    </div>
+
+                    {/* Filters - Full width on mobile */}
+                    <div
+                        className={isMobile ? 'w-full' : ''}
+                        style={{
+                            display: 'flex',
+                            background: 'var(--background)',
+                            borderRadius: '8px',
+                            padding: isMobile ? '2px' : '3px',
+                            border: '1px solid var(--border)',
+                            flex: isMobile ? 1 : 'unset'
+                        }}
+                    >
+                        {[
+                            { id: 'all', label: 'ALL ITEMS' },
+                            { id: 'maintenance', label: 'REVIEW FIXES' },
+                            { id: 'construction', label: 'STUDY PROGRESS' }
+                        ].map((f) => (
+                            <button
+                                key={f.id}
+                                onClick={() => setFilter(f.id as any)}
+                                style={{
+                                    padding: isMobile ? '3px 8px' : '4px 10px',
+                                    fontSize: isMobile ? '10px' : '0.65rem',
+                                    fontWeight: 700,
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: filter === f.id ? 'var(--accent)' : 'transparent',
+                                    color: filter === f.id ? 'white' : 'var(--foreground-secondary)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    boxShadow: filter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    flex: isMobile ? 1 : 'unset'
+                                }}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            {/* Gap between header and board - smaller on mobile but enough to clear fixed header */}
-            <div className={isMobile ? 'mt-[60px]' : 'mt-12'} />
-
             <DragDropContext onDragEnd={onDragEnd}>
-                <div className={`flex gap-8 px-8 pb-8 h-full overflow-x-auto ${isMobile ? 'flex-col overflow-y-auto pt-4' : 'flex-row'}`}>
+                <div className={`flex gap-8 px-8 pb-8 flex-1 overflow-x-auto ${isMobile ? 'flex-col overflow-y-auto px-4 pt-2' : 'flex-row'}`}>
                     {Object.values(columns).map(col => (
                         <KanbanColumn
                             key={col.id}
@@ -556,6 +622,9 @@ export default function TodoKanban({
                     verseCount={splitsData.verseCount}
                     builderState={getBuilderState(splitsData.surahId)}
                     mindmapImageUrl={splitsData.mindmapImageUrl}
+                    mindmapImageUrlDark={splitsData.mindmapImageUrlDark}
+                    snapshot={splitsData.snapshot}
+                    isDark={isDark}
                     onAddBreak={(val) => onAddBreak(splitsData.surahId, val)}
                     onRemoveBreak={(val) => onRemoveBreak(splitsData.surahId, val)}
                     onSave={() => onSaveAnchors(splitsData.surahId, splitsData.verseCount)}
