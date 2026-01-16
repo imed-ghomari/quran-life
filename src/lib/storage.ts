@@ -4,7 +4,7 @@
 
 import { SURAHS } from './quranData';
 import { QuranPart } from './types';
-import { get, set, createStore } from 'idb-keyval';
+import { get, set, createStore, clear } from 'idb-keyval';
 import { appLogger } from './logger';
 
 // ========================================
@@ -221,6 +221,7 @@ export interface AppSettings {
     updatedAt?: string;
     isOnboardingComplete?: boolean;
     kanbanColumns: Record<string, string[]>; // colId -> listOfItemIds
+    userId?: string; // Owner of these settings
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -236,6 +237,25 @@ const DEFAULT_SETTINGS: AppSettings = {
         'complete': []
     }
 };
+
+export async function clearAllData(): Promise<void> {
+    // 1. Clear LocalStorage
+    if (typeof window !== 'undefined') {
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('quran-app-')) {
+                localStorage.removeItem(key);
+            }
+        });
+    }
+
+    // 2. Clear IndexedDB
+    if (customStore) {
+        await clear(customStore);
+    }
+    
+    // 3. Clear Memory Cache
+    Object.keys(storageCache).forEach(key => delete storageCache[key]);
+}
 
 export function getSettings(): AppSettings {
     const cached = storageCache[STORAGE_KEYS.SETTINGS];

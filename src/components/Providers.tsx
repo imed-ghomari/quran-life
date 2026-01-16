@@ -134,8 +134,27 @@ export function Providers({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
+        // Ensure cache is loaded
+        const { ensureCacheLoaded, getSettings, updateSetting, clearAllData } = await import('@/lib/storage');
         await ensureCacheLoaded();
+        
         const settings = getSettings();
+
+        // Security Check: If the stored data belongs to a different user, WIPE IT.
+        // This prevents User B from seeing User A's data on the same device.
+        if (settings.userId && settings.userId !== session.user.id) {
+          console.warn('[Security] User mismatch detected. Clearing local data...');
+          await clearAllData();
+          // Reload to ensure fresh state
+          window.location.reload();
+          return;
+        }
+
+        // Bind data to current user if not bound
+        if (!settings.userId) {
+          updateSetting('userId', session.user.id);
+        }
+
         if (!settings.isOnboardingComplete) {
           setShowOnboarding(true);
         }
