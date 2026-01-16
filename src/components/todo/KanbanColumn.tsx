@@ -44,60 +44,54 @@ const KanbanColumn = ({
     getDocLink
 }: KanbanColumnProps) => {
     return (
-        <div className={`
-            flex flex-col flex-1 min-w-[320px] transition-all duration-300
-            ${isMobile ? 'min-h-[120px] mb-2' : 'max-w-[420px] h-full'}
-        `}>
-            {/* Structural Containment Background */}
-            <div className={`flex flex-col h-full bg-[var(--foreground)]/[0.02] dark:bg-black/20 rounded-2xl border border-[var(--border)] shadow-sm ${isMobile ? 'p-3' : 'p-5'}`}>
-                {/* Header Area - Now contained */}
-                <div className={`flex items-center shrink-0 ${isMobile ? 'mb-3 px-1 pt-1' : 'mb-6 px-2 pt-2'}`}>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-[var(--verse-bg)] text-[var(--accent)] border border-[var(--accent)]/10">
-                                {getColumnIcon(id)}
-                            </div>
-                            <h3 className="text-[15px] font-bold tracking-tight text-[var(--foreground)]">{title}</h3>
-                        </div>
-                        <span className="px-2 py-0.5 rounded-full bg-[var(--verse-bg)] text-[10px] font-bold text-[var(--accent)] border border-[var(--accent)]/10">
-                            {items.length}
-                        </span>
-                    </div>
+        <div 
+            className={`
+                roadmap-column h-full flex flex-col max-h-full !rounded-[14px]
+                ${isMobile ? 'min-w-[70vw] snap-center !p-3' : '!p-4'}
+            `}
+        >
+            {/* Header Area */}
+            <div className="column-header !mb-3 !pb-2">
+                {/* Icon with subtle styling matching roadmap theme */}
+                <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                    id === 'complete' ? 'text-[var(--success)] bg-[var(--success)]/10' : 
+                    id === 'in-progress' ? 'text-amber-500 bg-amber-500/10' : 
+                    'text-[var(--foreground-secondary)] bg-[var(--foreground)]/5'
+                }`}>
+                    {getColumnIcon(id)}
                 </div>
-
-                {/* Cards Area - Horizontal scroll on mobile, vertical on desktop */}
-                <Droppable droppableId={id} direction={isMobile ? 'horizontal' : 'vertical'}>
-                    {(provided) => (
-                        <div
-                            {...provided.droppableProps}
-                            ref={provided.innerRef}
-                            className={`
-                                flex-1 custom-scrollbar
-                                ${isMobile
-                                    ? 'flex flex-row gap-3 overflow-x-auto overflow-y-hidden pb-3 px-1 min-h-[100px]'
-                                    : 'flex flex-col space-y-4 overflow-y-auto min-h-[150px]'
-                                }
-                            `}
-                        >
-                            {items.map((item, index) => (
-                                <KanbanCard
-                                    key={item.id}
-                                    item={item}
-                                    index={index}
-                                    isMobile={isMobile}
-                                    hasMindmap={getHasMindmap(item)}
-                                    docLink={getDocLink(item)}
-                                    onEditMindmap={() => onEditMindmap(item)}
-                                    onImportMindmap={() => onImportMindmap(item)}
-                                    onDeleteMindmap={() => onDeleteMindmap(item)}
-                                    onChangeSplits={() => onChangeSplits(item)}
-                                />
-                            ))}
-                            {provided.placeholder}
-                        </div>
-                    )}
-                </Droppable>
+                <h3>{title}</h3>
+                <span className="ml-auto text-xs font-medium text-[var(--foreground-secondary)] bg-[var(--background)] px-2 py-0.5 rounded-full border border-[var(--border)]">
+                    {items.length}
+                </span>
             </div>
+
+            {/* Cards Area */}
+            <Droppable droppableId={id} direction="vertical">
+                {(provided) => (
+                    <div
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className="column-content flex-1 min-h-[100px] overflow-y-auto custom-scrollbar pr-1 pb-24"
+                    >
+                        {items.map((item, index) => (
+                            <KanbanCard
+                                key={item.id}
+                                item={item}
+                                index={index}
+                                isMobile={isMobile}
+                                hasMindmap={getHasMindmap(item)}
+                                docLink={getDocLink(item)}
+                                onEditMindmap={() => onEditMindmap(item)}
+                                onImportMindmap={() => onImportMindmap(item)}
+                                onDeleteMindmap={() => onDeleteMindmap(item)}
+                                onChangeSplits={() => onChangeSplits(item)}
+                            />
+                        ))}
+                        {provided.placeholder}
+                    </div>
+                )}
+            </Droppable>
         </div>
     );
 };

@@ -1639,7 +1639,14 @@ input:focus {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
-    align-items: start;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .today-grid .card {
+    height: 100%;
+    overflow: hidden;
   }
 
   .settings-grid {
@@ -1687,8 +1694,12 @@ input:focus {
 
   .review-section-content,
   .daily-section-content {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column;
     padding-top: 1rem;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   /* Center the nav on desktop or keep it as is, but improved */
@@ -1744,6 +1755,22 @@ input:focus {
     max-width: 100%;
     width: auto;
     margin: 0;
+  }
+
+  .page-container.fixed-layout {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+
+  .page-container.fixed-layout .content-wrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 1rem; /* Small bottom padding for aesthetics */
   }
 
   .has-sync-bar {

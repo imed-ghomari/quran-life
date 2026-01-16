@@ -41,11 +41,11 @@ const KanbanCard = ({
     };
 
     // Responsive Spacing Config - Tighter for Mobile
-    const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-6';
-    const borderRadius = isMobile ? '!rounded-[12px]' : '!rounded-2xl';
-    const verticalGap = isMobile ? 'space-y-0.5' : 'space-y-3';
-    const minWidth = isMobile ? 'min-w-[240px]' : '';
-    const footerPad = isMobile ? 'pt-1.5' : 'pt-5';
+    // const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-5';
+    // const borderRadius = isMobile ? '!rounded-[12px]' : '!rounded-2xl';
+    // const verticalGap = isMobile ? 'space-y-0.5' : 'space-y-3';
+    // const minWidth = isMobile ? 'min-w-[240px]' : '';
+    // const footerPad = isMobile ? 'pt-1.5' : 'pt-5';
 
     // Determine card type for menu
     const cardType = item.type; // 'surah' | 'part' | 'suspended' | 'similarity'
@@ -58,38 +58,31 @@ const KanbanCard = ({
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
                     className={`
-                        card group relative cursor-pointer transition-all duration-200 ease-out ${padding}
-                        ${borderRadius} !mb-0 border border-[var(--border)] bg-[var(--background-secondary)]
-                        dark:shadow-lg dark:shadow-black/20
-                        hover:border-[var(--accent)] hover:shadow-xl hover:shadow-black/5
-                        ${minWidth} ${isMobile ? 'flex-shrink-0' : ''}
-                        ${snapshot.isDragging ? 'z-50 shadow-2xl scale-[1.02] bg-[var(--background-secondary)] !border-[var(--accent)]' : ''}
-                        ${item.status === 'in-progress' ? 'border-l-2 !border-l-[var(--accent)]' : ''}
+                        roadmap-card group relative cursor-pointer !rounded-[14px]
+                        ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
                         ${item.status === 'complete' ? 'opacity-80' : ''}
                     `}
                     style={{
                         ...provided.draggableProps.style,
                     }}
                 >
-                    <div className={`flex flex-col ${verticalGap}`}>
-                        {renderCardZones({
-                            item,
-                            hasMindmap,
-                            cardType,
-                            menuOpen,
-                            setMenuOpen,
-                            menuButtonRef,
-                            handleMenuClick,
-                            isMobile,
-                            onEditMindmap,
-                            onImportMindmap,
-                            onDeleteMindmap,
-                            onChangeSplits,
-                            onCardAction,
-                            footerPad,
-                            docLink
-                        })}
-                    </div>
+                    {renderCardZones({
+                        item,
+                        hasMindmap,
+                        cardType,
+                        menuOpen,
+                        setMenuOpen,
+                        menuButtonRef,
+                        handleMenuClick,
+                        isMobile,
+                        onEditMindmap,
+                        onImportMindmap,
+                        onDeleteMindmap,
+                        onChangeSplits,
+                        onCardAction,
+                        footerPad: 'pt-3',
+                        docLink
+                    })}
                 </div>
             )}
         </Draggable>
@@ -131,7 +124,7 @@ function renderCardZones({
     footerPad,
     docLink
 }: RenderZoneProps) {
-    let zone1 = { label: "TASK", color: "bg-blue-400" };
+    let zone1 = { label: "TASK", color: "var(--accent)" };
     let zone2 = { english: "", arabic: "" };
     let zone3 = "";
     let zone4Meta = "";
@@ -183,64 +176,28 @@ function renderCardZones({
         }
     }
 
-    // Adjust font sizes for mobile density
-    const titleSize = isMobile ? 'text-[14px]' : 'text-lg'; // Smaller title on mobile
-    const descSize = isMobile ? 'text-[10px]' : 'text-sm';
-    const arabicSize = isMobile ? 'text-[12px]' : 'text-[17px]';
-    const metaSize = isMobile ? 'text-[9px]' : 'text-[11px]';
-
     // Handlers for specific card types
     const handleFixIssue = () => onCardAction?.('fix', item);
     const handleResolve = () => onCardAction?.('resolve', item);
 
     return (
         <>
-            {/* EYEBROW */}
-            <div className="flex">
+            {/* Header: Pill + Menu */}
+            <div className="flex justify-between items-start mb-2.5">
                 <span
-                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.1em] opacity-60"
+                    className="status-pill"
                     style={{
-                        backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 92%)`,
-                        color: zone1.color
+                        backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 90%)`,
+                        color: zone1.color,
+                        fontSize: '0.65rem',
+                        padding: '0.2rem 0.6rem'
                     }}
                 >
                     {zone1.label}
                 </span>
-            </div>
 
-            {/* TITLE AREA */}
-            <div className={`flex items-center justify-between gap-3 ${isMobile ? '-mt-0.5' : ''}`}>
-                <div className="flex items-center gap-2">
-                    <h4 className={`${titleSize} font-bold text-[var(--foreground)] tracking-tight`}>
-                        {zone2.english}
-                    </h4>
-                    {/* Brain icon logic: show only if mindmap exists AND is relevant type */}
-                    {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
-                        <Brain size={isMobile ? 12 : 16} className="text-[var(--accent)] opacity-70" />
-                    )}
-                </div>
-                <span className={`${arabicSize} font-arabic text-[var(--foreground)] opacity-80`}>
-                    {zone2.arabic}
-                </span>
-            </div>
-
-            {/* DESCRIPTION */}
-            {zone3 && (
-                <div className={isMobile ? 'py-0.5' : 'py-2'}>
-                    <p className={`${descSize} text-[var(--foreground-secondary)] leading-relaxed line-clamp-2`}>
-                        {zone3}
-                    </p>
-                </div>
-            )}
-
-            {/* FOOTER */}
-            <div className={`border-t border-[var(--border)] ${footerPad} flex items-center justify-between`}>
-                <div className={`${metaSize} font-medium text-[var(--foreground-secondary)] opacity-80`}>
-                    {zone4Meta}
-                </div>
-
-                {/* Menu Trigger Available for ALL Cards Now */}
-                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                {/* Menu Trigger */}
+                <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
                     <CardMenuTrigger
                         buttonRef={menuButtonRef}
                         onClick={handleMenuClick}
@@ -262,6 +219,32 @@ function renderCardZones({
                     />
                 </div>
             </div>
+
+            {/* Title Area */}
+            <div className="mb-2">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <h4 className="text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
+                            {zone2.english}
+                        </h4>
+                        {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
+                            <Brain size={14} className="text-[var(--accent)] opacity-80" />
+                        )}
+                    </div>
+                    {zone2.arabic && (
+                        <div className="text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 whitespace-nowrap">
+                            {zone2.arabic}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Description */}
+            {zone3 && (
+                <p className="text-xs text-[var(--foreground-secondary)] line-clamp-2 mb-3 leading-relaxed">
+                    {zone3}
+                </p>
+            )}
         </>
     );
 }

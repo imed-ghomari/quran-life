@@ -186,11 +186,11 @@ export default function CardActionMenu({
             return (
                 <div
                     ref={menuRef}
-                    className="fixed z-[9999] min-w-[220px] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden"
+                    className="fixed z-[9999] min-w-[220px] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-lg ring-1 ring-black/5 overflow-hidden"
                     style={{ top: position.top, left: position.left }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="py-1.5">
+                    <div className="py-1">
                         {menuItems.map((item, idx) => {
                             if (item.type === 'divider') {
                                 return <div key={idx} className="h-px bg-[var(--border)] my-1.5 mx-3" />;

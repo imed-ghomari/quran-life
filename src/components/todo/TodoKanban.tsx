@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import KanbanColumn from './KanbanColumn';
 import SlideOver from '../SlideOver';
+import '../LandingPage/RoadmapSection.css'; // Import shared styles
 import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
@@ -496,6 +497,20 @@ export default function TodoKanban({
         }
     };
 
+    // Search shortcut
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     // Get surah data for splits modal
     const getSplitsModalData = () => {
         if (!splitsModalItem || splitsModalItem.type !== 'surah') return null;
@@ -529,17 +544,24 @@ export default function TodoKanban({
                 <div className={`${isMobile ? 'flex flex-col gap-2 w-full' : 'flex items-center gap-3'}`}>
                     {/* Search Bar */}
                     <div 
-                        className={`relative flex items-center ${isMobile ? 'w-full h-8' : 'min-w-[200px]'} rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 focus-within:border-[var(--accent)] transition-colors`}
+                        className={`relative flex items-center ${isMobile ? 'w-full h-9' : 'min-w-[200px] h-auto'} rounded-md border border-[var(--border)] bg-[var(--background-secondary)] md:bg-[rgba(0,0,0,0.05)] md:dark:bg-[rgba(255,255,255,0.05)] px-2 focus-within:border-[var(--accent)] transition-colors`}
                     >
-                        <Search className="text-[var(--foreground-secondary)] opacity-50 shrink-0 mr-2" size={isMobile ? 12 : 14} />
+                        <Search className="text-[var(--foreground-secondary)] opacity-50 shrink-0 mr-2" size={isMobile ? 14 : 12} />
                         <input 
+                            ref={searchInputRef}
                             type="text"
-                            placeholder="Search cards..."
+                            placeholder="Search..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none placeholder:text-[var(--foreground-secondary)]/50 text-[var(--foreground)]"
-                            style={{ fontSize: isMobile ? '11px' : '0.75rem', padding: isMobile ? '2px 0' : '4px 0' }}
+                            className="w-full bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none placeholder:text-[var(--foreground-secondary)]/70 text-[var(--foreground)]"
+                            style={{ fontSize: isMobile ? '12px' : '0.75rem', padding: '4px 0' }}
                         />
+                        {!isMobile && (
+                            <div className="flex items-center gap-0.5 ml-2 text-[10px] text-[var(--foreground-secondary)] opacity-50 border border-[var(--border)] rounded px-1 bg-[var(--background)]">
+                                <span className="text-xs">⌘</span>
+                                <span>K</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Filters - Full width on mobile */}
@@ -549,7 +571,7 @@ export default function TodoKanban({
                             display: 'flex',
                             background: 'var(--background)',
                             borderRadius: '8px',
-                            padding: isMobile ? '2px' : '3px',
+                            padding: isMobile ? '1px' : '3px',
                             border: '1px solid var(--border)',
                             flex: isMobile ? 1 : 'unset'
                         }}
@@ -563,8 +585,8 @@ export default function TodoKanban({
                                 key={f.id}
                                 onClick={() => setFilter(f.id as any)}
                                 style={{
-                                    padding: isMobile ? '3px 8px' : '4px 10px',
-                                    fontSize: isMobile ? '10px' : '0.65rem',
+                                    padding: isMobile ? '2px 6px' : '4px 10px',
+                                    fontSize: isMobile ? '9px' : '0.65rem',
                                     fontWeight: 700,
                                     borderRadius: '6px',
                                     border: 'none',
@@ -584,7 +606,15 @@ export default function TodoKanban({
             </div>
 
             <DragDropContext onDragEnd={onDragEnd}>
-                <div className={`flex gap-8 px-8 pb-8 flex-1 overflow-x-auto ${isMobile ? 'flex-col overflow-y-auto px-4 pt-2' : 'flex-row'}`}>
+                <div 
+                    className={`
+                        flex-1 min-h-0 px-4 pb-2 md:px-8
+                        ${isMobile 
+                    ? 'flex flex-row overflow-x-auto gap-4 snap-x snap-mandatory !mt-2' 
+                    : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
+                }
+                    `}
+                >
                     {Object.values(columns).map(col => (
                         <KanbanColumn
                             key={col.id}

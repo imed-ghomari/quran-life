@@ -29,9 +29,9 @@ export default function Home() {
         checkUser();
     }, [supabase, router]);
 
-    const handleGetStarted = () => {
-        // Navigate to auth page - owner detection and Polar checkout happens there
-        router.push('/auth');
+    const handleGetStarted = (cycle: 'monthly' | 'yearly') => {
+        // Navigate to auth page with billing cycle
+        router.push(`/auth?cycle=${cycle}`);
     };
 
     if (loading) {

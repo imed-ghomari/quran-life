@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Brain,
   Repeat,
@@ -11,15 +11,18 @@ import {
   Sparkles
 } from 'lucide-react';
 import './LandingPage.css';
+import RoadmapSection from './RoadmapSection';
 
 interface LandingPageProps {
   /** * Callback function triggered when the user clicks the 
    * "Buy Premium" button.
    */
-  onBuy: () => void;
+  onBuy: (cycle: 'monthly' | 'yearly') => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
+
   return (
     <div className="landing-wrapper">
       {/* --- Navigation --- */}
@@ -33,7 +36,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <a href="#features" className="btn btn-secondary" style={{ marginRight: '10px' }}>
               Features
             </a>
-            <button className="btn btn-primary" onClick={onBuy}>
+            <button className="btn btn-primary" onClick={() => onBuy(billingCycle)}>
               Get Started
             </button>
           </div>
@@ -53,12 +56,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 to help you memorize and retain the Quran forever—without the struggle.
               </p>
               <div className="cta-group delay-200 animate-entry">
-                <button className="btn btn-primary" onClick={onBuy}>
+                <button className="btn btn-primary" onClick={() => onBuy(billingCycle)}>
                   Start Your Journey
                   <ArrowRight size={18} />
-                </button>
-                <button className="btn btn-secondary">
-                  View Demo
                 </button>
               </div>
             </div>
@@ -134,6 +134,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               <p style={{ color: 'var(--foreground-secondary)' }}>
                 One plan. Everything you need to master the Quran.
               </p>
+              
+              {/* Billing Toggle */}
+              <div className="billing-toggle-container">
+                <div className="billing-toggle">
+                  <button 
+                    className={`toggle-option ${billingCycle === 'monthly' ? 'active' : ''}`}
+                    onClick={() => setBillingCycle('monthly')}
+                  >
+                    Monthly
+                  </button>
+                  <button 
+                    className={`toggle-option ${billingCycle === 'yearly' ? 'active' : ''}`}
+                    onClick={() => setBillingCycle('yearly')}
+                  >
+                    Yearly
+                    <span className="save-badge">Save 20%</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="pricing-grid single-plan">
@@ -141,7 +160,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               <div className="price-card premium">
                 <div className="badge">Complete Access</div>
                 <h3>Hafidh Pro</h3>
-                <div className="price">$10<span>/mo</span></div>
+                
+                {billingCycle === 'monthly' ? (
+                  <div className="price">$10<span>/mo</span></div>
+                ) : (
+                  <div className="price">$96<span>/yr</span></div>
+                )}
+                
                 <p style={{ color: 'var(--foreground-secondary)' }}>
                   Unlock the full power of visual learning.
                 </p>
@@ -157,7 +182,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 {/* CRITICAL: Button calls the onBuy prop */}
                 <button
                   className="btn btn-primary btn-full btn-lg"
-                  onClick={onBuy}
+                  onClick={() => onBuy(billingCycle)}
                   aria-label="Purchase Premium Subscription"
                 >
                   Get Full Access Now
@@ -167,6 +192,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             </div>
           </div>
         </section>
+
+        {/* --- Roadmap Section --- */}
+        <RoadmapSection />
       </main>
 
       {/* --- Footer --- */}

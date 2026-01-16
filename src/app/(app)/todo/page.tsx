@@ -520,7 +520,7 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <div className="h-[calc(100vh-100px)] w-full overflow-hidden mt-4">
+            <div className="h-[calc(100vh-50px)] w-full overflow-hidden mt-4">
                 <TodoKanban
                     suspendedAnchors={suspendedAnchors}
                     similarityGroups={groupedSimilarity}

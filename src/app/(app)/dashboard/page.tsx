@@ -757,7 +757,7 @@ export default function TodayPage() {
                     onClose={() => setActivePartEditor(null)}
                 />
             )}
-            <h1 className="hidden md:block text-2xl font-bold mb-4">Today</h1>
+            <h1 className="hidden md:block text-2xl font-bold mb-2">Today</h1>
             <audio ref={audioRef} onEnded={handleAudioEnded} onPlay={handleAudioPlay} preload="auto" />
 
             <div className="today-grid">
@@ -796,8 +796,6 @@ export default function TodayPage() {
                                                 padding: '0.75rem',
                                                 background: 'var(--verse-bg)',
                                                 borderRadius: 10,
-                                                height: '320px',
-                                                overflowY: 'auto',
                                                 display: 'flex',
                                                 flexDirection: 'column',
                                                 gap: 10,
@@ -1024,7 +1022,7 @@ export default function TodayPage() {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="read-view" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+                                        <div className="read-view">
                                             <h3 className="text-sm font-semibold text-foreground mb-[0.35rem]">Read mode</h3>
                                             {todaysPortion.map((v, idx) => {
                                                 const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;

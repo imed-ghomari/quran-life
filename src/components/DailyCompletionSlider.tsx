@@ -17,10 +17,12 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart);
         const totalVerses = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
         const totalWords = surahsInPart.reduce((acc, s) => acc + (SURAH_WORD_COUNTS[s.id] || 0), 0);
+        const wordsPerDay = Math.ceil(totalWords / days);
 
         return {
             versesPerDay: Math.ceil(totalVerses / days),
-            wordsPerDay: Math.ceil(totalWords / days)
+            wordsPerDay: wordsPerDay,
+            minutesPerDay: Math.ceil(wordsPerDay / 70) // ~70 wpm reading speed
         };
     }, [activePart, days]);
 
@@ -60,37 +62,48 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
 
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '1rem',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '0.75rem',
                 width: '100%'
             }}>
                 <div style={{
                     background: 'var(--verse-bg)',
-                    padding: '1.25rem',
+                    padding: '1rem',
                     borderRadius: '16px',
                     textAlign: 'center',
                     border: '1px solid var(--border)',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                 }}>
-                    <span style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent)', display: 'block', lineHeight: 1 }}>{stats.versesPerDay}</span>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground-secondary)', marginTop: '4px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Verses / Day</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)', display: 'block', lineHeight: 1 }}>{stats.versesPerDay}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--foreground-secondary)', marginTop: '4px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Verses</span>
                 </div>
                 <div style={{
                     background: 'var(--verse-bg)',
-                    padding: '1.25rem',
+                    padding: '1rem',
                     borderRadius: '16px',
                     textAlign: 'center',
                     border: '1px solid var(--border)',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                 }}>
-                    <span style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent)', display: 'block', lineHeight: 1 }}>{stats.wordsPerDay}</span>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground-secondary)', marginTop: '4px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Words / Day</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)', display: 'block', lineHeight: 1 }}>{stats.wordsPerDay}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--foreground-secondary)', marginTop: '4px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Words</span>
+                </div>
+                <div style={{
+                    background: 'var(--verse-bg)',
+                    padding: '1rem',
+                    borderRadius: '16px',
+                    textAlign: 'center',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                }}>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)', display: 'block', lineHeight: 1 }}>{stats.minutesPerDay}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--foreground-secondary)', marginTop: '4px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Mins</span>
                 </div>
             </div>
 
             <div style={{
                 background: 'var(--background)',
-                padding: '1rem',
+                padding: '0.75rem',
                 borderRadius: '16px',
                 textAlign: 'center',
                 border: '1px solid var(--border)',
@@ -99,8 +112,8 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
                 flexDirection: 'column',
                 gap: '2px'
             }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--foreground-secondary)' }}>Full Cycle Duration</span>
-                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--foreground)' }}>{days} <span style={{ fontSize: '0.9rem', color: 'var(--foreground-secondary)' }}>days</span></span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--foreground-secondary)' }}>Full Cycle Duration</span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--foreground)' }}>{days} <span style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)' }}>days</span></span>
             </div>
 
             <style jsx>{`

@@ -29,7 +29,11 @@ function AuthContent() {
 
     // Owner email from env - owner bypasses Polar checkout
     const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
-    const POLAR_PRODUCT_ID = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID || 'your_product_id';
+    
+    const cycle = searchParams?.get('cycle') || 'monthly';
+    const PRODUCT_ID_MONTHLY = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_MONTHLY || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID || 'your_product_id';
+    const PRODUCT_ID_YEARLY = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_YEARLY || PRODUCT_ID_MONTHLY;
+    const selectedProductId = cycle === 'yearly' ? PRODUCT_ID_YEARLY : PRODUCT_ID_MONTHLY;
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -90,7 +94,7 @@ function AuthContent() {
 
         // If not owner and not paid, they must go to checkout
         // (Even if it's a sign-in, they might have skipped checkout before)
-        const checkoutUrl = `/api/polar/checkout?product_id=${POLAR_PRODUCT_ID}`;
+        const checkoutUrl = `/api/polar/checkout?product_id=${selectedProductId}`;
         window.location.href = checkoutUrl;
     };
 
