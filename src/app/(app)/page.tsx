@@ -20,8 +20,30 @@ export default function Home() {
     useEffect(() => {
         const checkUser = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                router.push('/dashboard');
+            const user = session?.user;
+
+            if (user) {
+                // Check owner bypass
+                const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+                if (isOwner) {
+                    router.push('/dashboard');
+                    return;
+                }
+
+                // Check purchase status
+                const { data: purchase } = await supabase
+                    .from('purchases')
+                    .select('id')
+                    .eq('email', user.email)
+                    .eq('status', 'completed')
+                    .single();
+
+                if (purchase) {
+                    router.push('/dashboard');
+                } else {
+                    // Logged in but not paid - stay on landing page
+                    setLoading(false);
+                }
             } else {
                 setLoading(false);
             }

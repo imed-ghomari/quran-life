@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Polar } from '@polar-sh/sdk';
 import {
     isValidUUID,
     badRequest,
@@ -27,23 +28,17 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const productId = searchParams.get('product_id');
-    const priceId = searchParams.get('price_id');
+    // price_id is optional and might not be needed if using separate products
+    // const priceId = searchParams.get('price_id');
 
     // Input Validation & Sanitization
     if (!isValidUUID(productId)) {
         return addSecurityHeaders(badRequest('Invalid or missing product_id'));
     }
 
-    if (priceId && !isValidUUID(priceId)) {
-        return addSecurityHeaders(badRequest('Invalid price_id'));
-    }
-
     try {
-        // Create checkout session with Polar
+        // Create checkout session with Polar SDK
         const isSandbox = process.env.POLAR_SANDBOX === 'true';
-        const polarApiUrl = isSandbox
-            ? 'https://sandbox-api.polar.sh/v1/checkouts/custom/'
-            : 'https://api.polar.sh/v1/checkouts/custom/';
         
         const accessToken = isSandbox 
             ? process.env.POLAR_SANDBOX_ACCESS_TOKEN 
@@ -54,51 +49,32 @@ export async function GET(request: NextRequest) {
             return addSecurityHeaders(internalError('Payment configuration error'));
         }
 
-        const response = await fetch(polarApiUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                product_id: productId,
-                product_price_id: priceId || undefined,
-                success_url: process.env.POLAR_SUCCESS_URL,
-            }),
+        const polar = new Polar({
+            accessToken,
+            server: isSandbox ? 'sandbox' : 'production',
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('[Checkout] Polar API error:', {
-                status: response.status,
-                error: errorData,
-                ip: getClientIP(request),
-            });
-
-            // Return appropriate error based on Polar response
-            if (response.status >= 500) {
-                return addSecurityHeaders(serviceUnavailable('Payment service temporarily unavailable'));
-            }
-
-            return addSecurityHeaders(
-                badRequest('Failed to create checkout session',
-                    process.env.NODE_ENV !== 'production' ? errorData : undefined
-                )
-            );
-        }
-
-        const checkoutData = await response.json();
+        const checkout = await polar.checkouts.create({
+            products: [productId],
+            successUrl: process.env.POLAR_SUCCESS_URL,
+        });
 
         // Redirect to Polar checkout page with security headers
-        const redirectResponse = NextResponse.redirect(checkoutData.url);
+        const redirectResponse = NextResponse.redirect(checkout.url);
         addRateLimitHeaders(redirectResponse, `${getClientIP(request)}:/api/polar/checkout`, RATE_LIMIT_AUTH);
         return addSecurityHeaders(redirectResponse);
 
     } catch (error) {
-        console.error('[Checkout] Unexpected error:', {
+        console.error('[Checkout] Error:', {
             error: error instanceof Error ? error.message : error,
             ip: getClientIP(request),
         });
-        return addSecurityHeaders(internalError('Failed to process checkout request'));
+
+        // Handle specific Polar SDK errors if possible, otherwise generic error
+        return addSecurityHeaders(
+            badRequest('Failed to create checkout session', 
+                process.env.NODE_ENV !== 'production' ? { error: String(error) } : undefined
+            )
+        );
     }
 }

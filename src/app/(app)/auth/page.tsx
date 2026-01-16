@@ -17,22 +17,57 @@ function AuthContent() {
     const [authError, setAuthError] = useState<string | null>(null);
     const checkoutId = searchParams?.get('checkout_id');
 
+    // Owner email from env - owner bypasses Polar checkout
+    const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
+
     useEffect(() => {
         const checkUser = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                router.push('/dashboard');
+            const user = session?.user;
+            
+            if (user) {
+                // Check if user is the owner
+                const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+
+                if (isOwner) {
+                    router.push('/dashboard');
+                    return;
+                }
+
+                // Check if user has already paid
+                const { data: purchase } = await supabase
+                    .from('purchases')
+                    .select('id')
+                    .eq('email', user.email)
+                    .eq('status', 'completed')
+                    .single();
+
+                if (purchase) {
+                    router.push('/dashboard');
+                } else {
+                    // User is logged in but hasn't paid. 
+                    // We stay on this page to allow them to proceed to checkout (via handleAuth or new UI)
+                    // or maybe we should auto-redirect to checkout?
+                    // For now, let's just NOT redirect to dashboard to avoid the loop.
+                    console.log('User logged in but not paid. staying on auth page.');
+                }
             }
         };
         checkUser();
-    }, [supabase, router]);
+    }, [supabase, router, OWNER_EMAIL]);
 
-    // Owner email from env - owner bypasses Polar checkout
-    const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
     
     const cycle = searchParams?.get('cycle') || 'monthly';
-    const PRODUCT_ID_MONTHLY = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_MONTHLY || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID || 'your_product_id';
-    const PRODUCT_ID_YEARLY = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_YEARLY || PRODUCT_ID_MONTHLY;
+    const isSandbox = process.env.NEXT_PUBLIC_POLAR_SANDBOX === 'true';
+
+    const PRODUCT_ID_MONTHLY = isSandbox 
+        ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_MONTHLY
+        : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_MONTHLY || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID);
+        
+    const PRODUCT_ID_YEARLY = isSandbox
+        ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_YEARLY
+        : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_YEARLY || PRODUCT_ID_MONTHLY);
+
     const selectedProductId = cycle === 'yearly' ? PRODUCT_ID_YEARLY : PRODUCT_ID_MONTHLY;
 
     const handleAuth = async (e: React.FormEvent) => {
