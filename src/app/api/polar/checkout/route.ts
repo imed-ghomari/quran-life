@@ -44,11 +44,20 @@ export async function GET(request: NextRequest) {
         const polarApiUrl = isSandbox
             ? 'https://sandbox-api.polar.sh/v1/checkouts/custom/'
             : 'https://api.polar.sh/v1/checkouts/custom/';
+        
+        const accessToken = isSandbox 
+            ? process.env.POLAR_SANDBOX_ACCESS_TOKEN 
+            : process.env.POLAR_ACCESS_TOKEN;
+
+        if (!accessToken) {
+            console.error('[Checkout] Missing Polar Access Token');
+            return addSecurityHeaders(internalError('Payment configuration error'));
+        }
 
         const response = await fetch(polarApiUrl, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.POLAR_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({

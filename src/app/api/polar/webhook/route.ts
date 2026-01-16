@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { validateEvent } from '@polar-sh/sdk/webhooks';
 import {
     unauthorized,
@@ -45,6 +46,16 @@ export async function POST(request: NextRequest) {
 
         // Validate webhook signature
         let payload;
+        const isSandbox = process.env.POLAR_SANDBOX === 'true';
+        const webhookSecret = isSandbox 
+            ? process.env.POLAR_SANDBOX_WEBHOOK_SECRET 
+            : process.env.POLAR_WEBHOOK_SECRET;
+
+        if (!webhookSecret) {
+            console.error(`[Webhook ${requestId}] Missing Polar Webhook Secret`);
+            return addSecurityHeaders(internalError('Webhook configuration error'));
+        }
+
         try {
             payload = validateEvent(
                 body,
@@ -53,7 +64,7 @@ export async function POST(request: NextRequest) {
                     'webhook-signature': webhookSignature,
                     'webhook-timestamp': webhookTimestamp,
                 },
-                process.env.POLAR_WEBHOOK_SECRET || ''
+                webhookSecret
             );
         } catch (err) {
             console.error(`[Webhook ${requestId}] Signature verification failed:`,
@@ -67,24 +78,43 @@ export async function POST(request: NextRequest) {
 
         // Handle checkout.completed event
         if (event === 'checkout.completed' || event === 'order.created') {
-            const { customer_email, customer_id, checkout_id, product_id } = data;
+            const parsedData = data as any;
+            
+            // Check for Supabase Service Role Key explicitly
+            if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+                console.error(`[Webhook ${requestId}] Missing SUPABASE_SERVICE_ROLE_KEY`);
+                return addSecurityHeaders(internalError('Server Configuration Error: Missing SUPABASE_SERVICE_ROLE_KEY'));
+            }
+            
+            // Extract purchase details based on event type
+            const customerEmail = parsedData.customer_email || parsedData.customer?.email;
+            const checkoutId = parsedData.checkout_id || parsedData.id; // For checkout.completed, id is checkout_id
+            const customerId = parsedData.customer_id;
+            const productId = parsedData.product_id;
 
-            if (!customer_email || typeof customer_email !== 'string') {
-                console.error(`[Webhook ${requestId}] No customer email in payload`);
+            console.log(`[Webhook ${requestId}] Processing ${event}`, {
+                email: customerEmail,
+                checkoutId,
+                customerId,
+                productId
+            });
+
+            if (!customerEmail || typeof customerEmail !== 'string') {
+                console.error(`[Webhook ${requestId}] No customer email in payload`, parsedData);
                 return addSecurityHeaders(badRequest('Missing customer email in webhook payload'));
             }
 
             // Store purchase information in Supabase
-            const supabase = await createClient();
+            const supabase = createAdminClient();
 
             // Insert purchase record
             const { error: purchaseError } = await supabase
                 .from('purchases')
                 .insert({
-                    email: customer_email,
-                    polar_checkout_id: checkout_id,
-                    polar_customer_id: customer_id,
-                    polar_product_id: product_id,
+                    email: customerEmail.toLowerCase(),
+                    polar_checkout_id: checkoutId,
+                    polar_customer_id: customerId,
+                    polar_product_id: productId,
                     purchased_at: new Date().toISOString(),
                     status: 'completed'
                 });
@@ -94,8 +124,10 @@ export async function POST(request: NextRequest) {
                 // Don't fail the webhook - log and continue
                 // Polar will retry if we return error, which could cause duplicates
             } else {
-                console.log(`[Webhook ${requestId}] ✅ Purchase recorded for ${customer_email}`);
+                console.log(`[Webhook ${requestId}] ✅ Purchase recorded for ${customerEmail}`);
             }
+        } else {
+            console.log(`[Webhook ${requestId}] ℹ️ Skipping event type: ${event}`);
         }
 
         return addSecurityHeaders(successResponse({ received: true }));
