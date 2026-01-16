@@ -182,7 +182,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
         >
             <span className="nav-icon" style={{ position: 'relative' }}>
                 {getStatusIcon()}
-                {(displayStatus === 'conflict') && displayStatus !== 'syncing' && (
+                {(displayStatus === 'conflict') && (
                     <span
                         className="nav-badge"
                         style={{
