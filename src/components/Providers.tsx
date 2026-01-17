@@ -140,14 +140,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
         
         const settings = getSettings();
 
-        // Security Check: If the stored data belongs to a different user, WIPE IT.
-        // This prevents User B from seeing User A's data on the same device.
+        // Security Check 1: Explicit User Mismatch
+        // If the stored data belongs to a different user, WIPE IT.
         if (settings.userId && settings.userId !== session.user.id) {
           console.warn('[Security] User mismatch detected. Clearing local data...');
           await clearAllData();
-          // Reload to ensure fresh state
           window.location.reload();
           return;
+        }
+
+        // Security Check 2: Fresh User vs Stale Data (The "Clean Slate" Fix)
+        // If the user account was created recently (< 10 mins ago) but we found existing local data
+        // that is NOT tagged with a user ID, it means this is a new user inheriting old data from the device.
+        // We must wipe it to ensure they get the onboarding flow.
+        const userCreatedAt = new Date(session.user.created_at || Date.now()).getTime();
+        const now = Date.now();
+        const isNewUser = (now - userCreatedAt) < 10 * 60 * 1000; // 10 minutes buffer
+
+        if (isNewUser && !settings.userId && settings.updatedAt !== "1970-01-01T00:00:00.000Z") {
+             console.warn('[Onboarding] New user detected with stale local data. Clearing for fresh start...');
+             await clearAllData();
+             window.location.reload();
+             return;
         }
 
         // Bind data to current user if not bound
