@@ -154,17 +154,43 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // that is NOT tagged with a user ID, it means this is a new user inheriting old data from the device.
         // We must wipe it to ensure they get the onboarding flow.
         const userCreatedAt = new Date(session.user.created_at || Date.now()).getTime();
-        const now = Date.now();
-        const isNewUser = (now - userCreatedAt) < 10 * 60 * 1000; // 10 minutes buffer
+         const now = Date.now();
+         const isNewUser = (now - userCreatedAt) < 60 * 60 * 1000; // 1 hour buffer (increased from 10m to catch more cases)
+ 
+         // Case 1: Legacy Stale Data (No User ID)
+         if (isNewUser && !settings.userId && settings.updatedAt !== "1970-01-01T00:00:00.000Z") {
+              console.warn('[Onboarding] New user detected with stale local data. Clearing for fresh start...');
+              await clearAllData();
+              window.location.reload();
+              return;
+         }
 
-        if (isNewUser && !settings.userId && settings.updatedAt !== "1970-01-01T00:00:00.000Z") {
-             console.warn('[Onboarding] New user detected with stale local data. Clearing for fresh start...');
-             await clearAllData();
+         // Case 2: Dirty State with Incomplete Onboarding
+         // If a new user has data (learned verses, skipped surahs) but hasn't finished onboarding,
+         // this implies stale data or a broken state. We must reset it so they get a clean slate.
+         // We ignore this for old users (> 1hr) to avoid wiping data for existing users who might have incomplete onboarding flag.
+         const hasDirtyData = Object.keys(settings.learnedVerses || {}).length > 0 || (settings.skippedSurahs || []).length > 0;
+         if (isNewUser && !settings.isOnboardingComplete && hasDirtyData) {
+             console.warn('[Onboarding] New user has dirty data but incomplete onboarding. Resetting to defaults...');
+             // We can't use clearAllData() because it wipes userId and causes a reload loop if we aren't careful.
+             // Instead, we explicitly reset settings to default but keep userId.
+             const { DEFAULT_SETTINGS, saveSettings, clearSecondaryStorage } = await import('@/lib/storage');
+             
+             const cleanSettings = {
+                 ...DEFAULT_SETTINGS,
+                 userId: session.user.id,
+                 updatedAt: new Date().toISOString()
+             };
+             
+             await saveSettings(cleanSettings);
+             await clearSecondaryStorage(); // New helper to clear cycle start, progress, etc.
+             
+             // Reload to reflect changes
              window.location.reload();
              return;
-        }
-
-        // Bind data to current user if not bound
+         }
+ 
+         // Bind data to current user if not bound
         if (!settings.userId) {
           updateSetting('userId', session.user.id);
         }

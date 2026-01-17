@@ -89,8 +89,10 @@ export async function POST(request: NextRequest) {
             // Extract purchase details based on event type
             const customerEmail = parsedData.customer_email || parsedData.customer?.email;
             const checkoutId = parsedData.checkout_id || parsedData.id; // For checkout.completed, id is checkout_id
-            const customerId = parsedData.customer_id;
-            const productId = parsedData.product_id;
+            
+            // Enhanced extraction for IDs
+            const customerId = parsedData.customer_id || parsedData.customer?.id;
+            const productId = parsedData.product_id || parsedData.product?.id || parsedData.product_price?.product_id;
 
             console.log(`[Webhook ${requestId}] Processing ${event}`, {
                 email: customerEmail,

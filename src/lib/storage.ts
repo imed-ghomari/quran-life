@@ -224,7 +224,7 @@ export interface AppSettings {
     userId?: string; // Owner of these settings
 }
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
     completionDays: 30,
     activePart: 4,
     learnedVerses: {},
@@ -237,6 +237,36 @@ const DEFAULT_SETTINGS: AppSettings = {
         'complete': []
     }
 };
+
+export async function clearSecondaryStorage(): Promise<void> {
+    // Clears everything EXCEPT settings
+    if (typeof window !== 'undefined') {
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('quran-app-') && key !== STORAGE_KEYS.SETTINGS) {
+                localStorage.removeItem(key);
+            }
+        });
+    }
+
+    if (customStore) {
+        // We want to clear specific keys from IDB, but clear() wipes everything.
+        // So we iterate keys and delete ones that are NOT settings.
+        // Actually, for IDB, we store large objects.
+        const keys = await import('idb-keyval').then(m => m.keys(customStore));
+        for (const key of keys) {
+            if (key !== STORAGE_KEYS.SETTINGS) {
+                await import('idb-keyval').then(m => m.del(key, customStore));
+            }
+        }
+    }
+    
+    // Clear Memory Cache (except settings)
+    Object.keys(storageCache).forEach(key => {
+        if (key !== STORAGE_KEYS.SETTINGS) {
+            delete storageCache[key];
+        }
+    });
+}
 
 export async function clearAllData(): Promise<void> {
     // 1. Clear LocalStorage
