@@ -8,6 +8,7 @@ import { SyncProvider, useSyncState } from "@/hooks/useSyncState";
 import OnboardingModal from "./OnboardingModal";
 import { getSettings, ensureCacheLoaded } from "@/lib/storage";
 import { initializeSyncEngine, setOnlineStatus, setAuthStatus } from "@/lib/syncEngine";
+import { ThemeProvider } from "./ThemeProvider";
 
 export const OnlineStatusContext = createContext(true);
 
@@ -214,10 +215,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <>
       <OnlineStatusContext.Provider value={isOnline}>
         <SyncProvider>
-          {children}
-          {/* Conflict modal commented out - using LWW strategy instead */}
-          {/* <SyncConflictHandler /> */}
-          {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
+          <ThemeProvider>
+            {children}
+            {/* Conflict modal commented out - using LWW strategy instead */}
+            {/* <SyncConflictHandler /> */}
+            {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
+          </ThemeProvider>
         </SyncProvider>
       </OnlineStatusContext.Provider>
     </>

@@ -1023,7 +1023,6 @@ export default function TodayPage() {
                                         </div>
                                     ) : (
                                         <div className="read-view">
-                                            <h3 className="text-sm font-semibold text-foreground mb-[0.35rem]">Read mode</h3>
                                             {todaysPortion.map((v, idx) => {
                                                 const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;
                                                 const isNewSurah = !prevVerse || prevVerse.surahId !== v.surahId;

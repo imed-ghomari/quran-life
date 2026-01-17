@@ -541,6 +541,77 @@ article.prose pre {
   }
 }
 
+/* Manual Theme Overrides */
+:root[data-theme="dark"] {
+  --background: #0f1113;
+  --background-secondary: #171a1d;
+  --foreground: #e1e1e1;
+  --foreground-secondary: #949494;
+  --accent: #7a9eb1;
+  --accent-light: #9bbbcb;
+  --accent-hover: #5b8fb9;
+  --border: #24282c;
+  --success: #7e997a;
+  --success-bg: rgba(126, 153, 122, 0.15);
+  --warning: #cc954e;
+  --danger: #b07c7c;
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --verse-bg: rgba(122, 158, 177, 0.08);
+  --input-bg: #1e2226;
+
+  /* Chart Colors (Dark Mode Adapted) */
+  --chart-skipped: #1e293b;
+  --chart-not-created: #475569;
+  --chart-not-learned: #e11d48;
+  --chart-new: #a855f7;
+  --chart-medium: #2563eb;
+  --chart-strong: #0891b2;
+  --chart-mastered: #059669;
+}
+
+:root[data-theme="dark"] .dark-mode-only {
+  display: block;
+}
+
+:root[data-theme="dark"] .light-mode-only {
+  display: none;
+}
+
+:root[data-theme="light"] {
+  --background: #fdfdfd;
+  --background-secondary: #ffffff;
+  --foreground: #2d2d2d;
+  --foreground-secondary: #717171;
+  --accent: #5b8fb9;
+  --accent-light: #7a9eb1;
+  --accent-hover: #4a7496;
+  --border: #ececec;
+  --success: #7e997a;
+  --success-bg: rgba(126, 153, 122, 0.1);
+  --warning: #cc954e;
+  --danger: #b07c7c;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  --verse-bg: rgba(91, 143, 185, 0.04);
+  --input-bg: #ffffff;
+
+  /* Chart Colors (Enhanced) */
+  --chart-skipped: #e2e8f0;
+  --chart-not-created: #94a3b8;
+  --chart-not-learned: #f87171;
+  --chart-new: #8b5cf6;
+  --chart-medium: #3b82f6;
+  --chart-strong: #0ea5e9;
+  --chart-mastered: #10b981;
+}
+
+:root[data-theme="light"] .dark-mode-only {
+  display: none;
+}
+
+:root[data-theme="light"] .light-mode-only {
+  display: block;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -574,6 +645,26 @@ body {
   padding-bottom: 80px;
   width: 100%;
   overflow-x: hidden;
+}
+
+.page-container.fixed-layout {
+  height: 100vh;
+  height: 100dvh;
+  min-height: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 80px;
+}
+
+.page-container.fixed-layout .content-wrapper {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  max-width: 100%;
 }
 
 .has-sync-bar {

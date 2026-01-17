@@ -22,12 +22,12 @@ export default function AppShell({ children }: AppShellProps) {
     } catch (e) { }
 
     const isAuthOrHome = pathname === '/' || pathname === '/auth';
-    const isDashboard = pathname === '/dashboard';
+    const isFixedLayout = pathname === '/dashboard' || pathname === '/todo';
 
     return (
         <div className="app-shell">
             <Navigation />
-            <div className={`page-container ${!isAuthOrHome ? 'has-sync-bar' : ''} ${isDashboard ? 'fixed-layout' : ''}`}>
+            <div className={`page-container ${!isAuthOrHome ? 'has-sync-bar' : ''} ${isFixedLayout ? 'fixed-layout' : ''}`}>
                 <MobileSyncBar />
                 {children}
             </div>

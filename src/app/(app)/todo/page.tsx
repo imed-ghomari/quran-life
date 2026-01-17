@@ -459,7 +459,7 @@ export default function TodoPage() {
     };
 
     return (
-        <div className="content-wrapper" style={{ padding: '1rem', margin: '0 auto' }}>
+        <div className="content-wrapper">
             {/* Surah Mindmap Editor */}
             {activeMindmapEditor && (
                 <MindmapEditor
@@ -520,7 +520,7 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <div className="h-[calc(100vh-50px)] w-full overflow-hidden mt-4">
+            <div className="flex-1 w-full overflow-hidden mt-4">
                 <TodoKanban
                     suspendedAnchors={suspendedAnchors}
                     similarityGroups={groupedSimilarity}

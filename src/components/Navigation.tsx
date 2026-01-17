@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useRouter as usePagesRouter } from 'next/router';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import SyncStatus from './SyncStatus';
+import ThemeToggle from './ThemeToggle';
 import {
     getSettings,
     getMindMaps,
@@ -134,6 +135,7 @@ export default function Navigation() {
 
             {/* Sync Status - Desktop only */}
             <div className="hide-mobile sync-nav-wrapper">
+                <ThemeToggle variant="desktop" />
                 <SyncStatus variant="desktop" />
             </div>
         </nav>

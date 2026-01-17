@@ -103,17 +103,36 @@ export default function TodoKanban({
 
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
     const [isMobile, setIsMobile] = useState(false);
+    const [isTablet, setIsTablet] = useState(false);
+    // const [isDragging, setIsDragging] = useState(false); // Removed to avoid re-renders
     const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>('all');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Refs for stable access in callbacks
+    const isMobileRef = useRef(false);
+    const isTabletRef = useRef(false);
 
     // Splits Modal State
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
 
+    // Auto-scroll refs
+    const containerRef = useRef<HTMLDivElement>(null);
+    const scrollDirection = useRef(0); // -1 left, 0 none, 1 right
+    const scrollLoop = useRef<number | null>(null);
+
     useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
+        const checkResponsive = () => {
+            const width = window.innerWidth;
+            const mobile = width < 768;
+            const tablet = width >= 768 && width < 1100;
+            setIsMobile(mobile);
+            setIsTablet(tablet);
+            isMobileRef.current = mobile;
+            isTabletRef.current = tablet;
+        };
+        checkResponsive();
+        window.addEventListener('resize', checkResponsive);
+        return () => window.removeEventListener('resize', checkResponsive);
     }, []);
 
     const getItemSearchText = (item: KanbanItem) => {
@@ -251,7 +270,72 @@ export default function TodoKanban({
         }
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
+    const startScrollLoop = useCallback(() => {
+        if (scrollLoop.current) return;
+        
+        const step = () => {
+            if (scrollDirection.current !== 0 && containerRef.current) {
+                containerRef.current.scrollLeft += scrollDirection.current * 8; // speed
+                scrollLoop.current = requestAnimationFrame(step);
+            } else {
+                scrollLoop.current = null;
+            }
+        };
+        scrollLoop.current = requestAnimationFrame(step);
+    }, []);
+
+    const stopScrollLoop = useCallback(() => {
+        if (scrollLoop.current) {
+            cancelAnimationFrame(scrollLoop.current);
+            scrollLoop.current = null;
+        }
+        scrollDirection.current = 0;
+    }, []);
+
+    const handleMove = useCallback((e: MouseEvent | TouchEvent) => {
+        if (!isMobileRef.current && !isTabletRef.current) return;
+        
+        let clientX;
+        if ('touches' in e) {
+            if (e.touches.length === 0) return;
+            clientX = e.touches[0].clientX;
+        } else {
+            clientX = (e as MouseEvent).clientX;
+        }
+
+        const threshold = 60;
+        const width = window.innerWidth;
+
+        if (clientX < threshold) {
+            scrollDirection.current = -1;
+            startScrollLoop();
+        } else if (clientX > width - threshold) {
+            scrollDirection.current = 1;
+            startScrollLoop();
+        } else {
+            scrollDirection.current = 0;
+            stopScrollLoop();
+        }
+    }, [startScrollLoop, stopScrollLoop]);
+
+    const onDragStart = useCallback(() => {
+        // Manually toggle classes to avoid re-render
+        if (containerRef.current) {
+            containerRef.current.classList.remove('snap-x', 'snap-mandatory');
+        }
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('touchmove', handleMove, { passive: false });
+    }, [handleMove]);
+
     const onDragEnd = useCallback((result: DropResult) => {
+        // Manually toggle classes back
+        if (containerRef.current) {
+            containerRef.current.classList.add('snap-x', 'snap-mandatory');
+        }
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('touchmove', handleMove);
+        stopScrollLoop();
+
         const { source, destination } = result;
 
         if (!destination) return;
@@ -277,7 +361,10 @@ export default function TodoKanban({
                 Object.values(newColsMap).forEach(col => {
                     state[col.id] = col.items.map(i => i.id);
                 });
-                onKanbanStateChange(state);
+                // Wrap in timeout to prevent "Cannot update a component while rendering a different component"
+                setTimeout(() => {
+                    onKanbanStateChange(state);
+                }, 0);
             }
 
             if (destination.droppableId === 'complete') {
@@ -604,13 +691,14 @@ export default function TodoKanban({
                     </div>
                 </div>
             </div>
-
-            <DragDropContext onDragEnd={onDragEnd}>
+            
+            <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
                 <div 
+                    ref={containerRef}
                     className={`
                         flex-1 min-h-0 px-4 pb-2 md:px-8
-                        ${isMobile 
-                    ? 'flex flex-row overflow-x-auto gap-4 snap-x snap-mandatory !mt-2' 
+                        ${(isMobile || isTablet)
+                    ? `flex flex-row overflow-x-auto gap-4 snap-x snap-mandatory !mt-2` 
                     : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
                 }
                     `}
@@ -622,6 +710,7 @@ export default function TodoKanban({
                             title={col.title}
                             items={col.items.filter(filteredItem)}
                             isMobile={isMobile}
+                            isTablet={isTablet}
                             onCardClick={(item) => setActiveItem(item)}
                             onEditMindmap={handleCardEditMindmap}
                             onImportMindmap={handleCardImportMindmap}

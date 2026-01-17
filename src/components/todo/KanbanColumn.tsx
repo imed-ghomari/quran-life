@@ -11,6 +11,7 @@ interface KanbanColumnProps {
     title: string;
     items: KanbanItem[];
     isMobile: boolean;
+    isTablet?: boolean;
     onCardClick: (item: KanbanItem) => void;
     // New props for card actions
     onEditMindmap: (item: KanbanItem) => void;
@@ -35,6 +36,7 @@ const KanbanColumn = ({
     title,
     items,
     isMobile,
+    isTablet,
     onCardClick,
     onEditMindmap,
     onImportMindmap,
@@ -47,7 +49,7 @@ const KanbanColumn = ({
         <div 
             className={`
                 roadmap-column h-full flex flex-col max-h-full !rounded-[14px]
-                ${isMobile ? 'min-w-[70vw] snap-center !p-3' : '!p-4'}
+                ${isMobile ? 'min-w-[70vw] snap-center !p-3' : (isTablet ? 'min-w-[350px] snap-center !p-4' : '!p-4')}
             `}
         >
             {/* Header Area */}

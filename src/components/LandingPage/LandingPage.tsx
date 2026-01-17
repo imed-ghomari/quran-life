@@ -33,7 +33,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="nav-actions">
-            <a href="#features" className="btn btn-secondary" style={{ marginRight: '10px' }}>
+            <a href="#features" className="btn btn-secondary nav-features-btn" style={{ marginRight: '10px' }}>
               Features
             </a>
             <button className="btn btn-primary" onClick={() => onBuy(billingCycle)}>

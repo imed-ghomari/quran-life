@@ -92,7 +92,12 @@
 }
 
 @media (max-width: 768px) {
+  .roadmap-section {
+    padding: 3rem 0;
+  }
+
   .roadmap-grid {
     grid-template-columns: 1fr;
+    margin-top: 2rem;
   }
 }
