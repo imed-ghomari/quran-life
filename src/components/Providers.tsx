@@ -167,12 +167,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
          }
 
          // Case 2: Dirty State with Incomplete Onboarding
-         // If a new user has data (learned verses, skipped surahs) but hasn't finished onboarding,
+         // If a user has data (learned verses, skipped surahs) but hasn't finished onboarding,
          // this implies stale data or a broken state. We must reset it so they get a clean slate.
-         // We ignore this for old users (> 1hr) to avoid wiping data for existing users who might have incomplete onboarding flag.
+         // We do this for ALL users (new or old) because incomplete onboarding implies invalid state.
          const hasDirtyData = Object.keys(settings.learnedVerses || {}).length > 0 || (settings.skippedSurahs || []).length > 0;
-         if (isNewUser && !settings.isOnboardingComplete && hasDirtyData) {
-             console.warn('[Onboarding] New user has dirty data but incomplete onboarding. Resetting to defaults...');
+         if (!settings.isOnboardingComplete && hasDirtyData) {
+             console.warn('[Onboarding] Incomplete onboarding with dirty settings. Resetting to defaults...');
              // We can't use clearAllData() because it wipes userId and causes a reload loop if we aren't careful.
              // Instead, we explicitly reset settings to default but keep userId.
              const { DEFAULT_SETTINGS, saveSettings, clearSecondaryStorage } = await import('@/lib/storage');
@@ -189,6 +189,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
              // Reload to reflect changes
              window.location.reload();
              return;
+         }
+
+         // Ensure secondary storage (mindmaps, etc) is clean if onboarding is not complete
+         // This handles the case where settings are clean (empty learnedVerses) but artifacts remain.
+         if (!settings.isOnboardingComplete) {
+             const { clearSecondaryStorage } = await import('@/lib/storage');
+             await clearSecondaryStorage();
          }
  
          // Bind data to current user if not bound

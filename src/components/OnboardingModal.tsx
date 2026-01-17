@@ -37,18 +37,27 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
     if (!settings) return null;
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (step < 4) {
             setStep(step + 1);
         } else {
             // Save final settings
+            if (!settings) return;
+            
             const finalSettings = {
-                ...getSettings(),
+                ...settings,
                 activePart: selectedPart,
                 completionDays: days,
                 isOnboardingComplete: true,
+                updatedAt: new Date().toISOString()
             };
-            saveSettings(finalSettings);
+            
+            await saveSettings(finalSettings);
+            
+            // Sync mindmaps with newly learned surahs
+            const { syncMemoryNodesWithLearned } = await import('@/lib/storage');
+            syncMemoryNodesWithLearned();
+            
             onComplete();
         }
     };
@@ -58,14 +67,35 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     };
 
     const toggleSurah = (surahId: number) => {
-        toggleSurahLearned(surahId);
-        // Refresh settings from storage to update UI
-        setSettings({ ...getSettings() });
+        if (!settings) return;
+
+        const newSettings = { 
+            ...settings, 
+            learnedVerses: JSON.parse(JSON.stringify(settings.learnedVerses)) 
+        };
+        const surah = SURAHS.find(s => s.id === surahId);
+        if (!surah) return;
+
+        const surahKey = surahId.toString();
+        const currentLearned = newSettings.learnedVerses[surahKey] || [];
+        const isLearned = currentLearned.length === surah.verseCount;
+
+        if (isLearned) {
+            delete newSettings.learnedVerses[surahKey];
+        } else {
+            newSettings.learnedVerses[surahKey] = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
+        }
+        
+        setSettings(newSettings);
     };
 
     const isSurahLearned = (surahId: number) => {
-        const status = getSurahLearnedStatus(surahId);
-        return status.learned === status.total && status.total > 0;
+        if (!settings) return false;
+        const surah = SURAHS.find(s => s.id === surahId);
+        if (!surah) return false;
+
+        const learnedCount = settings.learnedVerses[surahId.toString()]?.length || 0;
+        return learnedCount === surah.verseCount && surah.verseCount > 0;
     };
 
     const filteredSurahs = SURAHS.filter(s => selectedPart === 5 || s.part === selectedPart);
