@@ -82,9 +82,8 @@ async function loadIntoCache() {
         const val = await get(key, customStore);
         // ONLY update cache if it hasn't been written to already during startup
         // This prevents overwriting a fast user action with slow DB load
-        if (storageCache[key] === undefined) {
-            // Mark as null if missing in DB to distinguish "loaded-but-empty" from "not-loaded"
-            storageCache[key] = val === undefined ? null : val;
+        if (val !== undefined && storageCache[key] === undefined) {
+            storageCache[key] = val;
         }
     }
 }
@@ -99,14 +98,6 @@ export async function ensureCacheLoaded() {
     return;
 }
 
-function getFromCache<T>(key: string, defaultValue: T): T {
-    const val = storageCache[key];
-    // undefined = not loaded yet (use default)
-    // null = loaded but missing in DB (use default)
-    if (val === undefined || val === null) return defaultValue;
-    return val;
-}
-
 if (typeof window !== 'undefined') {
     ensureCacheLoaded().then(() => {
         // Dispatch event to notify listeners that initial load is complete
@@ -117,7 +108,11 @@ if (typeof window !== 'undefined') {
     });
 }
 
-
+function getFromCache<T>(key: string, defaultValue: T): T {
+    if (typeof window === 'undefined') return defaultValue;
+    const cached = storageCache[key];
+    return cached !== undefined ? cached : defaultValue;
+}
 
 // (Moved to top)
 
@@ -618,11 +613,11 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     const settings = getSettings();
     const currentNodes = getMemoryNodes();
 
-    // Safety check: verify cache is actually loaded for memory nodes
-    // storageCache[KEYS.MEMORY_NODES] will be undefined if not loaded, null/array if loaded.
-    if (storageCache[STORAGE_KEYS.MEMORY_NODES] === undefined && !forceFullReset) {
-         console.warn('Sync cancelled: Memory nodes cache not ready.');
-         return;
+    // Safety check: if storage cache is empty and we aren't forcing a full reset,
+    // we should NOT proceed, as we might accidentally wipe all progress.
+    if (!forceFullReset && currentNodes.length === 0 && Object.keys(settings.learnedVerses).length > 0) {
+        console.warn('Sync cancelled: Memory nodes cache is empty but learned verses exist. Potential race condition.');
+        return;
     }
 
     const newNodes: MemoryNode[] = [];
