@@ -142,7 +142,7 @@ if (storageChannel) {
 
 // (Moved to top)
 
-function saveToCacheAndStore(key: string, value: any) {
+function saveToCacheAndStore(key: string, value: any): Promise<void> {
     storageCache[key] = value;
 
     // Human readable key name
@@ -171,11 +171,26 @@ function saveToCacheAndStore(key: string, value: any) {
     }
 
     if (typeof window !== 'undefined' && customStore) {
-        set(key, value, customStore)
+        // Notify other tabs via BroadcastChannel
+        storageChannel?.postMessage({ key, value });
+
+        // Also update localStorage for fallback sync awareness across tabs
+        try {
+            const stringified = JSON.stringify(value);
+            if (stringified.length < 500000) {
+                localStorage.setItem(key, stringified);
+            } else {
+                localStorage.setItem(key, JSON.stringify({ _isLargeData: true, timestamp: new Date().toISOString() }));
+                console.log(`Key ${key} is large (${(stringified.length / 1024).toFixed(1)} KB), skipping localStorage.`);
+            }
+        } catch (e) {
+            console.warn(`Failed to save ${key} to localStorage (likely size limit):`, e);
+        }
+
+        return set(key, value, customStore)
             .then(() => {
                 appLogger.addLog(`${keyName} saved successfully`, 'success');
                 // Dispatch a storage event manually so the page.tsx useEffect catches it
-                // This works even in the same tab for our custom listener
                 window.dispatchEvent(new StorageEvent('storage', {
                     key: key,
                     newValue: JSON.stringify(value),
@@ -184,28 +199,10 @@ function saveToCacheAndStore(key: string, value: any) {
             .catch(err => {
                 appLogger.addLog(`Failed to save ${keyName}`, 'error');
                 console.error(`Failed to persist ${key}:`, err);
+                throw err;
             });
-
-        // Notify other tabs via BroadcastChannel
-        storageChannel?.postMessage({ key, value });
-
-        // Also update localStorage for fallback sync awareness across tabs
-        // IMPORTANT: We only use localStorage for small metadata or sync signals.
-        // Putting massive JSONs here causes QuotaExceededError and slows down the browser.
-        try {
-            const stringified = JSON.stringify(value);
-            // Limit to 500KB per key in localStorage to be safe (total limit is ~5MB)
-            if (stringified.length < 500000) {
-                localStorage.setItem(key, stringified);
-            } else {
-                // If data is large, we store a marker to let other tabs know they should check IndexedDB
-                localStorage.setItem(key, JSON.stringify({ _isLargeData: true, timestamp: new Date().toISOString() }));
-                console.log(`Key ${key} is large (${(stringified.length / 1024).toFixed(1)} KB), skipping localStorage.`);
-            }
-        } catch (e) {
-            console.warn(`Failed to save ${key} to localStorage (likely size limit):`, e);
-        }
     }
+    return Promise.resolve();
 }
 
 // ========================================
@@ -293,15 +290,15 @@ export function getSettings(): AppSettings {
     return getFromCache(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
 }
 
-export function saveSettings(settings: AppSettings): void {
+export async function saveSettings(settings: AppSettings): Promise<void> {
     settings.updatedAt = new Date().toISOString();
-    saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings);
+    await saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings);
 }
 
-export function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
+export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> {
     const settings = getSettings();
     settings[key] = value;
-    saveSettings(settings);
+    await saveSettings(settings);
 }
 
 export function isSurahSkipped(surahId: number): boolean {
