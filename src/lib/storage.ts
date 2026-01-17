@@ -75,6 +75,7 @@ if (typeof window !== 'undefined') {
  * This ensures the UI remains snappy while data is safely stored in IndexedDB.
  */
 const storageCache: { [key: string]: any } = {};
+let isCacheReady = false;
 
 async function loadIntoCache() {
     if (typeof window === 'undefined' || !customStore) return;
@@ -86,6 +87,7 @@ async function loadIntoCache() {
             storageCache[key] = val;
         }
     }
+    isCacheReady = true;
 }
 
 // Start loading cache
@@ -613,12 +615,15 @@ export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): voi
     const settings = getSettings();
     const currentNodes = getMemoryNodes();
 
-    // Safety check: if storage cache is empty and we aren't forcing a full reset,
-    // we should NOT proceed, as we might accidentally wipe all progress.
-    if (!forceFullReset && currentNodes.length === 0 && Object.keys(settings.learnedVerses).length > 0) {
-        console.warn('Sync cancelled: Memory nodes cache is empty but learned verses exist. Potential race condition.');
+    // Safety check: if cache isn't ready, we shouldn't be syncing as we might miss existing data.
+    if (!isCacheReady && !forceFullReset) {
+        console.warn('Sync cancelled: Storage cache not ready. Potential race condition.');
         return;
     }
+
+    // Previous safety check removed:
+    // If cache IS ready, and currentNodes is empty, it means the user genuinely has no nodes.
+    // We should proceed to create them from settings.learnedVerses.
 
     const newNodes: MemoryNode[] = [];
     const mindmaps = getMindMaps();

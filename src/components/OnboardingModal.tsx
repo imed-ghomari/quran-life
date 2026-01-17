@@ -58,8 +58,8 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
             const { clearSecondaryStorage, syncMemoryNodesWithLearned } = await import('@/lib/storage');
             await clearSecondaryStorage();
 
-            // Sync mindmaps with newly learned surahs
-            syncMemoryNodesWithLearned();
+            // Sync mindmaps with newly learned surahs (force reset to ensure initial nodes creation)
+            syncMemoryNodesWithLearned(true);
             
             onComplete();
         }
