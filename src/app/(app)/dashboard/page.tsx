@@ -591,6 +591,28 @@ export default function TodayPage() {
         }
     }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses]);
 
+    // Auto-scroll revealed section
+    useEffect(() => {
+        if (!targetBoxRef.current) return;
+
+        // Try to find the "next" blurred chunk
+        const nextBlur = targetBoxRef.current.querySelector('.next-blur') as HTMLElement;
+        if (nextBlur) {
+            nextBlur.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        // Fallback: If no next blur (end of verse or finished), scroll to the active verse's last visible part
+        const activeVerse = targetBoxRef.current.querySelector('.active-verse') as HTMLElement;
+        if (activeVerse) {
+            // Find the last text node or element in the active verse
+            activeVerse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            // Last resort: scroll to bottom
+            targetBoxRef.current.scrollTop = targetBoxRef.current.scrollHeight;
+        }
+    }, [revealedChunks, currentVerseInReview]);
+
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -793,7 +815,7 @@ export default function TodayPage() {
                                     </p>
 
                                     {reviewContent.type === 'verse' && (
-                                        <div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '60vh' }}>
                                             {/* Context */}
                                             {reviewContent.contextVerses && reviewContent.contextVerses.length > 0 && (
                                                 <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
@@ -802,14 +824,17 @@ export default function TodayPage() {
                                             )}
 
                                             {/* Target as grouped paragraph */}
-                                            <div ref={targetBoxRef} className="target-box" style={{
+                                            <div ref={targetBoxRef} className="target-box custom-scrollbar" style={{
                                                 padding: '0.75rem',
                                                 background: 'var(--verse-bg)',
                                                 borderRadius: 10,
                                                 display: 'flex',
                                                 flexDirection: 'column',
                                                 gap: 10,
-                                                position: 'relative'
+                                                position: 'relative',
+                                                flex: 1,
+                                                overflowY: 'auto',
+                                                minHeight: 0
                                             }}>
                                                 <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
                                                     {reviewContent.verses?.map((v, idx) => {
@@ -825,7 +850,7 @@ export default function TodayPage() {
                                                         const remainingHidden = showAll ? '' : (isCurrent ? chunks.slice(revealedChunks + 1).join(' ') : v.text);
 
                                                         return (
-                                                            <span key={v.ayahId} className="grouped-verse-block">
+                                                            <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
                                                                 <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
                                                                 <span className="grouped-verse-text arabic-text">
                                                                     {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
@@ -840,11 +865,11 @@ export default function TodayPage() {
 
                                             {/* Controls */}
                                             {!showGrading ? (
-                                                <button className="btn btn-primary btn-full" style={{ marginTop: '0.75rem', padding: '0.65rem' }} onClick={handleRevealNext} title="Shortcut: Arrow Right">
+                                                <button className="btn btn-primary btn-full" style={{ marginTop: '0.75rem', padding: '0.65rem', flexShrink: 0 }} onClick={handleRevealNext} title="Shortcut: Arrow Right">
                                                     {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
                                                 </button>
                                             ) : (
-                                                <div className="review-buttons" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                <div className="review-buttons" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, flexShrink: 0 }}>
                                                     <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">
                                                         <span style={{ fontSize: '0.85rem' }}>Not sure</span>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Today</span>

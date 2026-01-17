@@ -270,12 +270,16 @@ export default function TodoKanban({
         }
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
+    // Custom auto-scroll logic
     const startScrollLoop = useCallback(() => {
         if (scrollLoop.current) return;
         
         const step = () => {
             if (scrollDirection.current !== 0 && containerRef.current) {
                 containerRef.current.scrollLeft += scrollDirection.current * 8; // speed
+                // Dispatch a scroll event to ensure dnd library updates its internal state
+                // This helps when programmatically scrolling
+                containerRef.current.dispatchEvent(new Event('scroll', { bubbles: true }));
                 scrollLoop.current = requestAnimationFrame(step);
             } else {
                 scrollLoop.current = null;
@@ -327,10 +331,34 @@ export default function TodoKanban({
         window.addEventListener('touchmove', handleMove, { passive: false });
     }, [handleMove]);
 
+    // Check if dragging over a column on mobile to handle scroll/snap issues
+    const checkDropTarget = useCallback((x: number) => {
+        if (!containerRef.current) return;
+        
+        // Find which column is under the cursor
+        const columns = containerRef.current.querySelectorAll('.roadmap-column');
+        columns.forEach((col) => {
+            const rect = col.getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right) {
+                // If we are over this column, scroll it into view if needed
+                // But specifically for dnd, we just need to ensure the dnd library sees it
+            }
+        });
+    }, []);
+
     const onDragEnd = useCallback((result: DropResult) => {
         // Manually toggle classes back
         if (containerRef.current) {
             containerRef.current.classList.add('snap-x', 'snap-mandatory');
+            
+            // Snap to the nearest column after drop
+            const { destination } = result;
+            if (destination && (isMobileRef.current || isTabletRef.current)) {
+                 const destCol = document.getElementById(destination.droppableId);
+                 if (destCol) {
+                     destCol.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                 }
+            }
         }
         window.removeEventListener('mousemove', handleMove);
         window.removeEventListener('touchmove', handleMove);
@@ -695,10 +723,11 @@ export default function TodoKanban({
             <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
                 <div 
                     ref={containerRef}
+                    style={{ position: 'relative' }}
                     className={`
                         flex-1 min-h-0 px-4 pb-2 md:px-8
                         ${(isMobile || isTablet)
-                    ? `flex flex-row overflow-x-auto gap-4 snap-x snap-mandatory !mt-2` 
+                    ? `flex flex-row overflow-auto gap-4 snap-x snap-mandatory !mt-2 items-stretch` 
                     : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
                 }
                     `}
