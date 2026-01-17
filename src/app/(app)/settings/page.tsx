@@ -6,7 +6,7 @@ import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { OnlineStatusContext } from '@/components/Providers';
-import { getSurahsByPart, getSurah, parseQuranJson } from '@/lib/quranData';
+import { getSurahsByPart, getSurah, parseQuranJson, getQuranVerses } from '@/lib/quranData';
 import {
     AppSettings,
     getSettings,
@@ -256,10 +256,7 @@ export default function SettingsPage() {
     }, [version]);
 
     useEffect(() => {
-        fetch('/qpc-hafs-word-by-word.json')
-            .then(res => res.json())
-            .then(data => setVerses(parseQuranJson(data as Record<string, any>)))
-            .catch(() => setVerses([]));
+        getQuranVerses().then(setVerses).catch(() => setVerses([]));
     }, []);
 
     const activePartSurahs = useMemo(() => getSurahsByPart(settings.activePart), [settings.activePart]);
@@ -756,13 +753,13 @@ export default function SettingsPage() {
                             {sectionsExpanded.surahStatus && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                                     <button className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
-                                        <span className="hide-mobile">All Learned</span><span className="show-mobile">Learned</span>
+                                        All Learned
                                     </button>
                                     <button className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
-                                        <span className="hide-mobile">All New</span><span className="show-mobile">New</span>
+                                        All New
                                     </button>
                                     <button className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
-                                        <span className="hide-mobile">All Skipped</span><span className="show-mobile">Skipped</span>
+                                        All Skipped
                                     </button>
                                 </div>
                             )}
@@ -1590,8 +1587,7 @@ export default function SettingsPage() {
                                                                                     value={existing.note || ''}
                                                                                     onClick={(e) => e.stopPropagation()}
                                                                                     onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
-                                                                                    className="maturity-select"
-                                                                                    style={{ width: '100%', minWidth: '150px' }}
+                                                                                    style={{ minWidth: '150px' }}
                                                                                 />
                                                                             </td>
                                                                         </tr>

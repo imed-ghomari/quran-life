@@ -183,6 +183,69 @@ export function getSurah(surahId: number): Surah | undefined {
     return SURAHS.find(s => s.id === surahId);
 }
 
+// Global cache for parsed verses
+let cachedVerses: Verse[] | null = null;
+let versesLoadingPromise: Promise<Verse[]> | null = null;
+
+/**
+ * Get all verses, caching the result to avoid repeated parsing
+ */
+export async function getQuranVerses(): Promise<Verse[]> {
+    if (cachedVerses) return cachedVerses;
+    if (versesLoadingPromise) return versesLoadingPromise;
+
+    versesLoadingPromise = (async () => {
+        // Try sessionStorage first (Client side only)
+        if (typeof window !== 'undefined') {
+             try {
+                const cached = sessionStorage.getItem('quran_verses_cache_v2');
+                if (cached) {
+                    cachedVerses = JSON.parse(cached);
+                    return cachedVerses!;
+                }
+            } catch (e) {
+                console.warn('Failed to load verses from sessionStorage', e);
+            }
+        }
+
+        try {
+            const res = await fetch('/qpc-hafs-word-by-word.json');
+            const data = await res.json();
+            cachedVerses = parseQuranJson(data as Record<string, any>);
+            
+            // Save to sessionStorage
+            if (typeof window !== 'undefined') {
+                 try {
+                    sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses));
+                } catch (e) {
+                    console.warn('Failed to cache verses in sessionStorage', e);
+                }
+            }
+            return cachedVerses;
+        } catch (err) {
+             console.error('Failed to load verses', err);
+             
+             // Fallback to Cache API (for offline support)
+             if (typeof window !== 'undefined' && 'caches' in window) {
+                 try {
+                     const cachedRes = await caches.match('/qpc-hafs-word-by-word.json');
+                     if (cachedRes) {
+                         const data = await cachedRes.json();
+                         cachedVerses = parseQuranJson(data as Record<string, any>);
+                         return cachedVerses;
+                     }
+                 } catch (e) {
+                     console.warn('Failed to recover from cache', e);
+                 }
+             }
+             
+             return [];
+        }
+    })();
+
+    return versesLoadingPromise;
+}
+
 /**
  * Get surahs by part
  */

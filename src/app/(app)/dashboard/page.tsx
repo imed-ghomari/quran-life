@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
-import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { parseQuranJson, getSurah, getSurahsByPart, getQuranVerses } from '@/lib/quranData';
 import { Verse, getAudioPath } from '@/lib/types';
 import {
     CheckCircle,
@@ -67,6 +67,7 @@ import { optimizeWeights } from '../../actions';
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
+import { useTheme } from '@/components/ThemeProvider';
 
 type PlaybackSpeed = 0.75 | 1 | 1.25 | 1.5 | 2;
 
@@ -98,16 +99,25 @@ export default function TodayPage() {
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
 
     // Theme detection
+    const { theme } = useTheme();
     const [isDark, setIsDark] = useState(false);
+
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const mq = window.matchMedia('(prefers-color-scheme: dark)');
-            setIsDark(mq.matches);
-            const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-            mq.addEventListener('change', handler);
-            return () => mq.removeEventListener('change', handler);
+        if (theme === 'dark') {
+            setIsDark(true);
+        } else if (theme === 'light') {
+            setIsDark(false);
+        } else {
+            // System
+            if (typeof window !== 'undefined') {
+                const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                setIsDark(mq.matches);
+                const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
+                mq.addEventListener('change', handler);
+                return () => mq.removeEventListener('change', handler);
+            }
         }
-    }, []);
+    }, [theme]);
 
     // Mindmap Editor States
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
@@ -764,7 +774,7 @@ export default function TodayPage() {
                 {/* Reviews Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, reviewExpanded: !s.reviewExpanded }))}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(dueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">{dueNodes.length - currentReviewIndex}</span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(dueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{dueNodes.length - currentReviewIndex}</span>}</div>
                         <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                     </div>
 
@@ -834,12 +844,12 @@ export default function TodayPage() {
                                                     {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
                                                 </button>
                                             ) : (
-                                                <div className="review-buttons" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                                                    <button className="review-btn postpone" style={{ padding: '0.65rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">
+                                                <div className="review-buttons" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                    <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">
                                                         <span style={{ fontSize: '0.85rem' }}>Not sure</span>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Today</span>
                                                     </button>
-                                                    <button className="review-btn not-remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)} title="Shortcut: Arrow Down">
+                                                    <button className="review-btn not-remembered" style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)} title="Shortcut: Arrow Down">
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                             Next: {(() => {
@@ -849,7 +859,7 @@ export default function TodayPage() {
                                                             })()}
                                                         </span>
                                                     </button>
-                                                    <button className="review-btn remembered" style={{ padding: '0.65rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right">
+                                                    <button className="review-btn remembered" style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right">
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                             Next: {(() => {
@@ -944,10 +954,10 @@ export default function TodayPage() {
                                                         </button>
                                                     </div>
 
-                                                    <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                                                        <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
-                                                        <button className="review-btn not-remembered" onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={20} /> Forgot</button>
-                                                        <button className="review-btn remembered" onClick={() => handleGrade(true)} title="Shortcut: Arrow Right"><Check size={20} /> Remembered</button>
+                                                    <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                        <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone} title="Shortcut: Arrow Left">Not sure</button>
+                                                        <button className="review-btn not-remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(false)} title="Shortcut: Arrow Down"><X size={20} /> Forgot</button>
+                                                        <button className="review-btn remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(true)} title="Shortcut: Arrow Right"><Check size={20} /> Remembered</button>
                                                     </div>
                                                 </div>
                                             )}
@@ -962,7 +972,7 @@ export default function TodayPage() {
                 {/* Daily Portion Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, dailyExpanded: !s.dailyExpanded }))}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete ? <span className="px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">✓</span> : <span className="status-badge partial show-mobile" style={{ background: 'transparent', padding: 0, color: 'var(--warning)', display: 'flex', alignItems: 'center' }}><AlertCircle size={18} /></span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete ? <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">✓</span> : <span className="status-badge partial show-mobile" style={{ background: 'transparent', padding: 0, color: 'var(--warning)', display: 'flex', alignItems: 'center' }}><AlertCircle size={18} /></span>}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             {!listeningComplete && (
                                 <div className="toggle-wrapper" onClick={(e) => { e.stopPropagation(); setReadOnlyMode(!readOnlyMode); }} style={{ cursor: 'pointer' }}>

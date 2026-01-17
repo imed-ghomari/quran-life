@@ -3,8 +3,15 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-foreground: var(--foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
   --color-accent: var(--accent);
   --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 }
 
 /* Documentation Layout */
@@ -581,7 +588,7 @@ article.prose pre {
   --background: #fdfdfd;
   --background-secondary: #ffffff;
   --foreground: #2d2d2d;
-  --foreground-secondary: #717171;
+  --foreground-secondary: #5a5a5a;
   --accent: #5b8fb9;
   --accent-light: #7a9eb1;
   --accent-hover: #4a7496;

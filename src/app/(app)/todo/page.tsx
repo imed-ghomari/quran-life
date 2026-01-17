@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Image from 'next/image';
-import { SURAHS, getSurah, getSurahsByPart, parseQuranJson } from '@/lib/quranData';
+import { SURAHS, getSurah, getSurahsByPart, parseQuranJson, getQuranVerses } from '@/lib/quranData';
 import {
     getMindMaps,
     getMindMap,
@@ -87,9 +87,8 @@ export default function TodoPage() {
     }, [settingsVersion]);
 
     useEffect(() => {
-        fetch('/qpc-hafs-word-by-word.json')
-            .then(res => res.json())
-            .then(data => setVerses(parseQuranJson(data as Record<string, any>)))
+        getQuranVerses()
+            .then(setVerses)
             .catch(() => setVerses([]));
     }, []);
 

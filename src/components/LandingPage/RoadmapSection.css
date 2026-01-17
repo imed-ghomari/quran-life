@@ -20,6 +20,11 @@
   border: 1px solid var(--border);
 }
 
+/* Light mode override for column background to restore grey contrast */
+:root:not([data-theme="dark"]) .roadmap-column {
+  background-color: #f4f6f8;
+}
+
 .column-header {
   display: flex;
   align-items: center;

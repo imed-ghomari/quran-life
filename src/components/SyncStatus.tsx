@@ -119,46 +119,30 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
             >
                 <ThemeToggle variant="mobile" />
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            color: getStatusColor(),
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                        }}
-                    >
-                        {getStatusIcon()}
-                        <span>{getStatusText()}</span>
-                    </div>
-
-                    <button
-                        onClick={handleClick}
-                        disabled={!isClickable}
-                        className="sync-btn"
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.35rem',
-                            padding: '0.3rem 0.6rem',
-                            borderRadius: '8px',
-                            border: '1px solid var(--border)',
-                            background: displayStatus === 'conflict' ? 'var(--danger)' : 'var(--background)',
-                            color: displayStatus === 'conflict' ? 'white' : 'var(--foreground)',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            cursor: isClickable ? 'pointer' : 'not-allowed',
-                            opacity: isClickable ? 1 : 0.5,
-                            transition: 'all 0.2s ease',
-                        }}
-                    >
-                        <RefreshCw size={12} className={displayStatus === 'syncing' ? 'sync-spinning' : ''} />
-                        <span>{displayStatus === 'conflict' ? 'Resolve' : 'Sync'}</span>
-                    </button>
-                </div>
+                <button
+                    onClick={handleClick}
+                    disabled={!isClickable}
+                    className="sync-btn"
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        background: displayStatus === 'conflict' ? 'var(--danger)' : 'var(--background)',
+                        color: displayStatus === 'conflict' ? 'white' : getStatusColor(),
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: isClickable ? 'pointer' : 'default',
+                        opacity: isClickable ? 1 : 0.7,
+                        transition: 'all 0.2s ease',
+                    }}
+                >
+                    {getStatusIcon()}
+                    <span>{getStatusText()}</span>
+                </button>
             </div>
         );
     }

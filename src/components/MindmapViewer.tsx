@@ -40,6 +40,17 @@ export default function MindmapViewer({
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [fetchedSnapshot, setFetchedSnapshot] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [editor, setEditor] = useState<any>(null);
+
+    useEffect(() => {
+        if (editor?.user?.updateUserPreferences) {
+            try {
+                editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
+            } catch (e) {
+                console.warn('Failed to update theme', e);
+            }
+        }
+    }, [editor, isDark]);
 
     useEffect(() => {
         if (templateUrl) {
@@ -89,6 +100,7 @@ export default function MindmapViewer({
     }), []);
 
     const handleMount = useCallback((editor: any) => {
+        setEditor(editor);
         const activeSnapshot = fetchedSnapshot || snapshot;
         if (activeSnapshot) {
             try {
@@ -99,6 +111,16 @@ export default function MindmapViewer({
                 }
                 editor.updateInstanceState({ isReadonly: true });
                 editor.setCurrentTool('hand');
+                
+                // Set initial dark mode state
+                if (editor.user?.updateUserPreferences) {
+                    try {
+                        editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
+                    } catch (e) {
+                        console.warn('Failed to set initial theme', e);
+                    }
+                }
+
                 setTimeout(() => {
                     editor.zoomToFit();
                 }, 100);
@@ -106,7 +128,7 @@ export default function MindmapViewer({
                 console.warn('Failed to load snapshot in viewer', e);
             }
         }
-    }, [snapshot, fetchedSnapshot]);
+    }, [snapshot, fetchedSnapshot, isDark]);
 
     const renderContent = (isFS: boolean) => {
         const activeSnapshot = fetchedSnapshot || snapshot;
@@ -125,7 +147,7 @@ export default function MindmapViewer({
                     <div style={{ width: '100%', height: '100%', pointerEvents: isFS ? 'auto' : 'none' }}>
                         <Tldraw
                             onMount={handleMount}
-                            inferDarkMode={true}
+                            inferDarkMode={false}
                             components={components}
                         />
                     </div>
