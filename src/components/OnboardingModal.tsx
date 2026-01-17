@@ -54,8 +54,11 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
             
             await saveSettings(finalSettings);
             
+            // Ensure we clear old artifacts (mindmaps, daily pointers) that might conflict with new settings
+            const { clearSecondaryStorage, syncMemoryNodesWithLearned } = await import('@/lib/storage');
+            await clearSecondaryStorage();
+
             // Sync mindmaps with newly learned surahs
-            const { syncMemoryNodesWithLearned } = await import('@/lib/storage');
             syncMemoryNodesWithLearned();
             
             onComplete();

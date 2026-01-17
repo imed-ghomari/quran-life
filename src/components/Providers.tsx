@@ -27,6 +27,30 @@ export const OnlineStatusContext = createContext(true);
 //   );
 // }
 
+function OnboardingSyncCleanup() {
+  const { status } = useSyncState();
+  
+  useEffect(() => {
+    if (status === 'synced') {
+      const checkAndClean = async () => {
+        const { getSettings, clearSecondaryStorage } = await import('@/lib/storage');
+        const settings = getSettings();
+        
+        // If we synced but onboarding is still incomplete, it means we might have pulled 
+        // artifacts (mindmaps) from a previous incomplete session or race condition.
+        // We must ensure the user has a clean slate for onboarding.
+        if (!settings.isOnboardingComplete) {
+             appLogger.addLog('[Onboarding] Sync finished but onboarding incomplete. Clearing secondary storage...', 'info');
+             await clearSecondaryStorage();
+        }
+      };
+      checkAndClean();
+    }
+  }, [status]);
+  
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -223,6 +247,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <OnlineStatusContext.Provider value={isOnline}>
         <SyncProvider>
           <ThemeProvider>
+            <OnboardingSyncCleanup />
             {children}
             {/* Conflict modal commented out - using LWW strategy instead */}
             {/* <SyncConflictHandler /> */}
