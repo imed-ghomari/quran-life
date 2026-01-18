@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../ThemeProvider';
 import {
   Brain,
   Repeat,
@@ -8,7 +9,10 @@ import {
   Zap,
   Layers,
   BookOpen,
-  Sparkles
+  Sparkles,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
