@@ -71,7 +71,7 @@ export default function TableOfContents() {
     }, [pathname]);
 
     return (
-        <aside className="docs-toc custom-scrollbar">
+        <aside className="custom-scrollbar" style={{ height: '100%' }}>
             {headings.length > 0 && (
                 <>
                     <div style={{ 

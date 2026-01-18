@@ -10,7 +10,7 @@ interface SearchResult {
     excerpt: string;
 }
 
-export default function DocsSearch() {
+export default function DocsSearch({ className }: { className?: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
@@ -121,7 +121,7 @@ export default function DocsSearch() {
             {/* Search Trigger Button */}
             <button
                 onClick={() => setIsOpen(true)}
-                className="docs-search-trigger"
+                className={`docs-search-trigger ${className || ''}`}
                 aria-label="Search documentation"
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
