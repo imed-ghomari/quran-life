@@ -13,7 +13,7 @@
   /* Spacing & Type */
   --radius-lg: 24px;
   --radius-md: 12px;
-  --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-main: var(--font-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --max-width: 1200px;
   
   /* Specific accent variants for Landing Page */
@@ -112,14 +112,22 @@
 }
 
 .nav-theme-btn {
-  padding: 0.5rem;
-  border-radius: 50%;
-  min-width: auto;
-  width: 40px;
-  height: 40px;
+  padding: 0 !important;
+  border-radius: var(--radius-md) !important;
+  min-width: auto !important;
+  width: 44px !important; /* Slightly wider */
+  height: 44px !important; /* Slightly taller */
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important; /* Ensure icon visibility */
+  background: var(--background) !important; /* Ensure background is set */
+}
+
+.nav-theme-btn:hover {
+  background-color: var(--landing-bg-secondary);
+  border-color: var(--foreground-secondary);
 }
 
 .logo {
@@ -435,11 +443,12 @@
 
   .logo {
     font-size: 1.1rem;
+    gap: 0.35rem; /* Tighter logo gap */
   }
 
   .logo svg {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
 
   .nav-features-btn {
@@ -447,8 +456,17 @@
   }
 
   .nav-content .btn {
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    padding: 0.6rem 1rem; /* Reduced padding */
+    font-size: 0.9rem;
+    height: 40px; /* Match theme button height */
+    min-height: 40px;
+    white-space: nowrap; /* Prevent wrapping */
+  }
+  
+  /* Override nav theme button size for mobile */
+  .nav-theme-btn {
+    width: 40px;
+    height: 40px;
   }
 
   /* Hero Section */

@@ -587,7 +587,7 @@ export default function TodoKanban({
                 <div className={`${isMobile ? 'flex flex-col gap-2 w-full' : 'flex items-center gap-3'}`}>
                     {/* Search Bar - Styled like DocsSearch */}
                     <div 
-                        className={`docs-search-trigger ${isMobile ? '!w-full !h-9 !justify-start !px-2' : ''}`}
+                        className={`docs-search-trigger ${isMobile ? '!w-full !h-9 !justify-start !px-2' : ''} todo-search-bar !border-transparent`}
                         onClick={() => searchInputRef.current?.focus()}
                         style={!isMobile ? { cursor: 'text' } : undefined}
                     >
@@ -599,7 +599,7 @@ export default function TodoKanban({
                                 placeholder="Search..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none placeholder:text-[var(--foreground-secondary)] text-[var(--foreground)]"
+                                className="w-full !bg-transparent !border-none !outline-none !ring-0 !focus:ring-0 !focus:outline-none placeholder:text-[var(--foreground-secondary)] text-[var(--foreground)] !p-0 !m-0 !shadow-none"
                                 style={{ 
                                     padding: 0,
                                     fontSize: '0.75rem',
@@ -668,7 +668,7 @@ export default function TodoKanban({
                         flex-1 min-h-0 px-4 pb-2 md:px-0
                         ${isMobile
                     ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
-                    : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
+                    : 'grid grid-cols-3 gap-6 !mt-4 !grid-rows-[minmax(0,1fr)]'
                 }
                     `}
                 >

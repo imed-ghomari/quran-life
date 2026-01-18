@@ -649,7 +649,7 @@ body {
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-outfit), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--background);
   color: var(--foreground);
   line-height: 1.6;
@@ -2511,18 +2511,20 @@ input:focus {
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .card,
   :root:not([data-theme="dark"]) .modern-card,
-  :root:not([data-theme="dark"]) .roadmap-card,
   :root:not([data-theme="dark"]) .docs-main,
   :root:not([data-theme="dark"]) aside.card,
   :root:not([data-theme="dark"]) div.card,
   :root:not([data-theme="dark"]) .kanban-column {
     background-color: #f4f6f8 !important;
   }
+  
+  :root:not([data-theme="dark"]) .roadmap-card {
+    background-color: #ffffff !important;
+  }
 }
 
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .modern-card,
-:root[data-theme="light"] .roadmap-card,
 :root[data-theme="light"] .docs-main,
 :root[data-theme="light"] aside.card,
 :root[data-theme="light"] div.card,
@@ -2530,24 +2532,46 @@ input:focus {
   background-color: #f4f6f8 !important;
 }
 
-:root[data-theme="light"] .kanban-card {
+:root[data-theme="light"] .kanban-card,
+:root[data-theme="light"] .roadmap-card {
   background-color: #ffffff !important;
 }
 
 /* Dark Mode Kanban Overrides */
-:root[data-theme="dark"] .kanban-column {
-  background-color: var(--background) !important;
+:root[data-theme="dark"] .kanban-column,
+:root[data-theme="dark"] .roadmap-column {
+  background-color: var(--background-secondary) !important;
 }
 
 /* Desktop Left Toolbar */
 @media (min-width: 768px) {
   @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) .bottom-nav {
+    :root:not([data-theme="dark"]) .bottom-nav,
+    :root:not([data-theme="dark"]) .docs-search-trigger.todo-search-bar {
       background-color: #f4f6f8 !important;
     }
   }
 
-  :root[data-theme="light"] .bottom-nav {
+  :root[data-theme="light"] .bottom-nav,
+  :root[data-theme="light"] .docs-search-trigger.todo-search-bar {
     background-color: #f4f6f8 !important;
+  }
+}
+
+/* Todo Search Bar Base & Dark Mode */
+.docs-search-trigger.todo-search-bar {
+  background-color: var(--background-secondary) !important;
+  border-color: transparent !important;
+}
+
+/* System Dark Mode Support for Kanban & Search Bar */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .kanban-column,
+  :root:not([data-theme="light"]) .roadmap-column {
+    background-color: var(--background-secondary) !important;
+  }
+  
+  :root:not([data-theme="light"]) .docs-search-trigger.todo-search-bar {
+    background-color: var(--background-secondary) !important;
   }
 }

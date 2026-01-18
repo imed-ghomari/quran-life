@@ -1,10 +1,17 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { Outfit } from 'next/font/google';
 import './globals.css';
 import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import ErrorBoundary from '@/components/ErrorBoundary';
+
+const outfit = Outfit({ 
+    subsets: ['latin'],
+    variable: '--font-outfit',
+    display: 'swap',
+});
 
 export const metadata: Metadata = {
     title: 'Quran Life',
@@ -35,7 +42,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="ar" dir="ltr">
+        <html lang="ar" dir="ltr" className={outfit.variable}>
             <body>
                 <Script id="register-sw" strategy="afterInteractive">
                     {`

@@ -35,11 +35,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
   };
 
   const getThemeIcon = () => {
+    // Larger size for mobile visibility
+    const size = 22; 
     switch (theme) {
-      case 'light': return <Sun size={20} />;
-      case 'dark': return <Moon size={20} />;
-      case 'system': return <Monitor size={20} />;
-      default: return <Sun size={20} />;
+      case 'light': return <Sun size={size} />;
+      case 'dark': return <Moon size={size} />;
+      case 'system': return <Monitor size={size} />;
+      default: return <Sun size={size} />;
     }
   };
 
