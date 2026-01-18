@@ -124,7 +124,7 @@ export default function DocsSearch() {
                 className="docs-search-trigger"
                 aria-label="Search documentation"
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '250px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Search size={14} className="docs-search-icon" />
                     <span className="docs-search-text">Search...</span>
                 </div>
