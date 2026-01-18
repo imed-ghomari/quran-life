@@ -5,19 +5,20 @@ import './RoadmapSection.css';
 const RoadmapSection: React.FC = () => {
   const roadmapItems = {
     planned: [
-      { id: 1, title: 'Mobile App (iOS/Android)', tag: 'Planned' },
-      { id: 2, title: 'Community Features', tag: 'Planned' },
-      { id: 3, title: 'Teacher/Student Mode', tag: 'Planned' },
+      { id: 1, title: 'Validation of Mindmaps & Methodology', tag: 'Planned' },
+      { id: 2, title: 'Localization & Translation', tag: 'Planned' },
+      { id: 3, title: 'More Choice of Reciters', tag: 'Planned' },
     ],
     inProgress: [
-      { id: 4, title: 'Advanced Analytics Dashboard', tag: 'In Progress' },
-      { id: 5, title: 'Dark Mode Polish', tag: 'In Progress' },
-      { id: 6, title: 'Voice Input for Memorization', tag: 'In Progress' },
+      { id: 4, title: 'Completing Mindmaps (Part 1, 2, 3)', tag: 'In Progress' },
+      { id: 5, title: 'UI Polishing & Enhancements', tag: 'In Progress' },
     ],
     completed: [
-      { id: 7, title: 'Visual Mindmapping Engine', tag: 'Live' },
+      { id: 7, title: 'Completed Part 4 Mindmaps', tag: 'Live' },
       { id: 8, title: 'Spaced Repetition Algorithm', tag: 'Live' },
-      { id: 9, title: 'Mutashabihat Detection', tag: 'Live' },
+      { id: 9, title: 'Similar Verse Support', tag: 'Live' },
+      { id: 10, title: 'Documentation Available', tag: 'Live' },
+      { id: 11, title: 'Offline Support', tag: 'Live' },
     ]
   };
 

@@ -10,6 +10,7 @@ interface CardActionMenuProps {
     // Context Flags
     hasMindmap: boolean;
     cardType: 'surah' | 'part' | 'suspended' | 'similarity';
+    isProcessing?: boolean;
 
     // State
     isOpen: boolean;
@@ -98,7 +99,7 @@ export default function CardActionMenu({
                 label: hasMindmap ? 'Edit Mindmap' : 'Create Mindmap',
                 icon: <PenTool size={18} />,
                 onClick: onEditMindmap,
-                disabled: false
+                disabled: isProcessing
             });
 
             if (!hasMindmap) {
@@ -106,7 +107,7 @@ export default function CardActionMenu({
                     label: 'Import Template',
                     icon: <Download size={18} />,
                     onClick: onImportMindmap,
-                    disabled: false
+                    disabled: isProcessing
                 });
             }
 
@@ -115,7 +116,7 @@ export default function CardActionMenu({
                     label: 'Change Splits',
                     icon: <SplitSquareHorizontal size={18} />,
                     onClick: onChangeSplits,
-                    disabled: false
+                    disabled: isProcessing
                 });
             }
 
@@ -135,7 +136,7 @@ export default function CardActionMenu({
                     label: 'Delete Mindmap',
                     icon: <Trash2 size={18} />,
                     onClick: onDeleteMindmap,
-                    disabled: false,
+                    disabled: isProcessing,
                     danger: true
                 });
             }
@@ -147,13 +148,13 @@ export default function CardActionMenu({
                 label: 'Jump to Issue',
                 icon: <AlertTriangle size={18} />,
                 onClick: onEditMindmap, // Reuse edit mindmap to jump (context aware in KanbanCard)
-                disabled: false
+                disabled: isProcessing
             });
             items.push({
                 label: 'Complete & Fix',
                 icon: <Check size={18} />,
                 onClick: onFixIssue,
-                disabled: false
+                disabled: isProcessing
             });
         }
 
@@ -163,13 +164,13 @@ export default function CardActionMenu({
                 label: 'Resolve Conflict',
                 icon: <Search size={18} />,
                 onClick: onResolveSimilarity,
-                disabled: false
+                disabled: isProcessing
             });
             items.push({
                 label: 'View Context',
                 icon: <FileText size={18} />,
                 onClick: onResolveSimilarity, // Can map to same for now, or new View handler
-                disabled: false
+                disabled: isProcessing
             });
         }
 

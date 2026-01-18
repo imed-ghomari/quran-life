@@ -6,6 +6,7 @@ import { KanbanItem } from './types';
 import { Brain } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
 import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
+import ConfirmationModal from './ConfirmationModal';
 
 interface KanbanCardProps {
     item: KanbanItem;
@@ -33,11 +34,30 @@ const KanbanCard = ({
     onCardAction
 }: KanbanCardProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
 
     const handleMenuClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         setMenuOpen(prev => !prev);
+    };
+
+    const handleDeleteClick = () => {
+        setMenuOpen(false);
+        setShowDeleteConfirm(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        setIsDeleting(true);
+        // Simulate network delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 800));
+        onDeleteMindmap();
+        // Check if component is still mounted before setting state? 
+        // In most cases, if the card moves, this component unmounts and these updates are ignored.
+        // If it stays, we reset.
+        setIsDeleting(false);
+        setShowDeleteConfirm(false);
     };
 
     // Responsive Spacing Config - Tighter for Mobile
@@ -51,42 +71,55 @@ const KanbanCard = ({
     const cardType = item.type; // 'surah' | 'part' | 'suspended' | 'similarity'
 
     return (
-        <Draggable draggableId={item.id} index={index}>
-            {(provided, snapshot) => (
-                <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                    className={`
-                        roadmap-card group relative cursor-pointer !rounded-[14px]
-                        ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
-                        ${item.status === 'complete' ? 'opacity-80' : ''}
-                        ${isMobile ? 'min-w-[85vw] snap-center' : ''}
-                    `}
-                    style={{
-                        ...provided.draggableProps.style,
-                    }}
-                >
-                    {renderCardZones({
-                        item,
-                        hasMindmap,
-                        cardType,
-                        menuOpen,
-                        setMenuOpen,
-                        menuButtonRef,
-                        handleMenuClick,
-                        isMobile,
-                        onEditMindmap,
-                        onImportMindmap,
-                        onDeleteMindmap,
-                        onChangeSplits,
-                        onCardAction,
-                        footerPad: 'pt-3',
-                        docLink
-                    })}
-                </div>
-            )}
-        </Draggable>
+        <>
+            <Draggable draggableId={item.id} index={index}>
+                {(provided, snapshot) => (
+                    <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className={`
+                            roadmap-card group relative cursor-pointer !rounded-[14px]
+                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
+                            ${item.status === 'complete' ? 'opacity-80' : ''}
+                            ${isMobile ? 'min-w-[42vw] snap-center' : ''}
+                        `}
+                        style={{
+                            ...provided.draggableProps.style,
+                        }}
+                    >
+                        {renderCardZones({
+                            item,
+                            hasMindmap,
+                            cardType,
+                            menuOpen,
+                            setMenuOpen,
+                            menuButtonRef,
+                            handleMenuClick,
+                            isMobile,
+                            onEditMindmap,
+                            onImportMindmap,
+                            onDeleteMindmap: handleDeleteClick,
+                            onChangeSplits,
+                            onCardAction,
+                            footerPad: 'pt-3',
+                            docLink
+                        })}
+                    </div>
+                )}
+            </Draggable>
+
+            <ConfirmationModal
+                isOpen={showDeleteConfirm}
+                title="Delete Mindmap?"
+                message="Are you sure you want to delete this mindmap? This action cannot be undone and you will lose all progress on this map."
+                confirmLabel="Delete"
+                isDestructive
+                isProcessing={isDeleting}
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setShowDeleteConfirm(false)}
+            />
+        </>
     );
 };
 

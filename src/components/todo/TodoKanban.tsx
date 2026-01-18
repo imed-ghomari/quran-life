@@ -118,8 +118,7 @@ export default function TodoKanban({
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
-    const scrollDirection = useRef(0); // -1 left, 0 none, 1 right
-    const scrollLoop = useRef<number | null>(null);
+    // Removed custom scroll refs as per request
 
     useEffect(() => {
         const checkResponsive = () => {
@@ -271,80 +270,11 @@ export default function TodoKanban({
         }
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
-    // Custom auto-scroll logic
-    const startScrollLoop = useCallback(() => {
-        if (scrollLoop.current) return;
-        
-        const step = () => {
-            if (scrollDirection.current !== 0 && containerRef.current) {
-                containerRef.current.scrollLeft += scrollDirection.current * 8; // speed
-                // Dispatch a scroll event to ensure dnd library updates its internal state
-                // This helps when programmatically scrolling
-                containerRef.current.dispatchEvent(new Event('scroll', { bubbles: true }));
-                scrollLoop.current = requestAnimationFrame(step);
-            } else {
-                scrollLoop.current = null;
-            }
-        };
-        scrollLoop.current = requestAnimationFrame(step);
-    }, []);
-
-    const stopScrollLoop = useCallback(() => {
-        if (scrollLoop.current) {
-            cancelAnimationFrame(scrollLoop.current);
-            scrollLoop.current = null;
-        }
-        scrollDirection.current = 0;
-    }, []);
-
-    const handleMove = useCallback((e: MouseEvent | TouchEvent) => {
-        if (!isMobileRef.current && !isTabletRef.current) return;
-        
-        let clientX;
-        if ('touches' in e) {
-            if (e.touches.length === 0) return;
-            clientX = e.touches[0].clientX;
-        } else {
-            clientX = (e as MouseEvent).clientX;
-        }
-
-        const threshold = 60;
-        const width = window.innerWidth;
-
-        if (clientX < threshold) {
-            scrollDirection.current = -1;
-            startScrollLoop();
-        } else if (clientX > width - threshold) {
-            scrollDirection.current = 1;
-            startScrollLoop();
-        } else {
-            scrollDirection.current = 0;
-            stopScrollLoop();
-        }
-    }, [startScrollLoop, stopScrollLoop]);
-
     const onDragStart = useCallback(() => {
         // Manually toggle classes to avoid re-render
         if (containerRef.current) {
             containerRef.current.classList.remove('snap-x', 'snap-mandatory');
         }
-        window.addEventListener('mousemove', handleMove);
-        window.addEventListener('touchmove', handleMove, { passive: false });
-    }, [handleMove]);
-
-    // Check if dragging over a column on mobile to handle scroll/snap issues
-    const checkDropTarget = useCallback((x: number) => {
-        if (!containerRef.current) return;
-        
-        // Find which column is under the cursor
-        const columns = containerRef.current.querySelectorAll('.roadmap-column');
-        columns.forEach((col) => {
-            const rect = col.getBoundingClientRect();
-            if (x >= rect.left && x <= rect.right) {
-                // If we are over this column, scroll it into view if needed
-                // But specifically for dnd, we just need to ensure the dnd library sees it
-            }
-        });
     }, []);
 
     const onDragEnd = useCallback((result: DropResult) => {
@@ -361,9 +291,6 @@ export default function TodoKanban({
                  }
             }
         }
-        window.removeEventListener('mousemove', handleMove);
-        window.removeEventListener('touchmove', handleMove);
-        stopScrollLoop();
 
         const { source, destination } = result;
 
