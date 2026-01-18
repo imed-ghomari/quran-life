@@ -53,6 +53,11 @@
 /* --- 2. Global Resets & Utilities --- */
 /* Core resets are handled by globals.css */
 
+.landing-wrapper {
+  --landing-nav-height: 80px;
+  padding-top: var(--landing-nav-height);
+}
+
 .container {
   width: 90%;
   max-width: var(--max-width);
@@ -89,8 +94,10 @@
 
 /* Navigation */
 .nav {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   background: var(--glass-bg);
   backdrop-filter: var(--blur);
@@ -436,6 +443,10 @@
 }
 
 @media (max-width: 768px) {
+  .landing-wrapper {
+    --landing-nav-height: 64px;
+  }
+
   /* Navigation */
   .nav {
     padding: 0.75rem 0;

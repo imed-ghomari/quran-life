@@ -576,7 +576,7 @@ export default function SettingsPage() {
                     {sectionsExpanded.backupRestore && (
                         <>
                             <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
-                                Secure your progress by exporting a local JSON file. You can import this file later to restore your data or transfer it to another device. An account is required to access the app, but local backups ensure you own your data.
+                                Export a JSON backup of your progress. Import it later to restore or move to another device.
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <button
