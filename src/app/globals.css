@@ -2497,3 +2497,33 @@ input:focus {
     font-size: 1.25rem !important;
   }
 }
+
+/* ========================================
+   User Requested Color Sync (Light Mode)
+   ======================================== */
+
+/* Cards (Global) - Statistics, Settings, Today */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .card,
+  :root:not([data-theme="dark"]) .modern-card {
+    background-color: #f4f6f8 !important;
+  }
+}
+
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .modern-card {
+  background-color: #f4f6f8 !important;
+}
+
+/* Desktop Left Toolbar */
+@media (min-width: 768px) {
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .bottom-nav {
+      background-color: #f4f6f8 !important;
+    }
+  }
+
+  :root[data-theme="light"] .bottom-nav {
+    background-color: #f4f6f8 !important;
+  }
+}
