@@ -2,20 +2,9 @@
 
 /* --- 1. Design System & Variables --- */
 :root {
-  /* Core Palette */
-  --background: #fdfdfd;
-  --background-secondary: #f4f6f8;
-  --foreground: #2d2d2d;
-  --foreground-secondary: #717171;
-
-  --accent: #5b8fb9;
-  --accent-hover: #4a7496;
-  --accent-light: rgba(91, 143, 185, 0.1);
-
-  --border: #ececec;
-  --success: #7e997a;
-
-  /* Glassmorphism & Effects */
+  /* Landing Page Specific Variables */
+  
+  /* Glassmorphism Defaults (Light) */
   --glass-bg: rgba(253, 253, 253, 0.75);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
@@ -24,42 +13,45 @@
   /* Spacing & Type */
   --radius-lg: 24px;
   --radius-md: 12px;
-  --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --max-width: 1200px;
+  
+  /* Specific accent variants for Landing Page */
+  --landing-accent-light: rgba(91, 143, 185, 0.1);
+  
+  /* Secondary Background for Landing Page */
+  --landing-bg-secondary: var(--background-secondary);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #121212;
-    --background-secondary: #1a1a1a;
-    --foreground: #f1f1f1;
-    --foreground-secondary: #a0a0a0;
-
-    --accent: #6ca5d4;
-    --accent-hover: #5b8fb9;
-    --accent-light: rgba(108, 165, 212, 0.15);
-
-    --border: #333333;
-
+    /* Dark Mode Defaults (System) */
     --glass-bg: rgba(28, 28, 28, 0.65);
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --landing-accent-light: rgba(108, 165, 212, 0.15);
   }
 }
 
-/* --- 2. Global Resets & Utilities --- */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+[data-theme="dark"] {
+  /* Dark Mode Overrides (Explicit) */
+  --glass-bg: rgba(28, 28, 28, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  --landing-accent-light: rgba(108, 165, 212, 0.15);
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-main);
-  line-height: 1.6;
+[data-theme="light"] {
+  /* Light Mode Overrides (Explicit) */
+  --glass-bg: rgba(253, 253, 253, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --landing-accent-light: rgba(91, 143, 185, 0.1);
+  --landing-bg-secondary: #f4f6f8;
 }
+
+/* --- 2. Global Resets & Utilities --- */
+/* Core resets are handled by globals.css */
 
 .container {
   width: 90%;
@@ -113,6 +105,23 @@ body {
   align-items: center;
 }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-theme-btn {
+  padding: 0.5rem;
+  border-radius: 50%;
+  min-width: auto;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .logo {
   font-weight: 700;
   font-size: 1.25rem;
@@ -139,7 +148,7 @@ body {
   transform: translateX(-50%);
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, var(--accent-light) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--landing-accent-light) 0%, transparent 70%);
   z-index: -1;
   filter: blur(60px);
 }
@@ -204,7 +213,7 @@ body {
 
 .btn-secondary:hover {
   border-color: var(--foreground-secondary);
-  background-color: var(--background-secondary);
+  background-color: var(--landing-bg-secondary);
 }
 
 .btn-lg {
@@ -215,7 +224,7 @@ body {
 /* Features Grid */
 .features {
   padding: 6rem 0;
-  background-color: var(--background-secondary);
+  background-color: var(--landing-bg-secondary);
 }
 
 .section-header {
@@ -227,6 +236,13 @@ body {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 1rem;
+}
+
+.section-header p {
+  color: var(--foreground-secondary);
+  font-size: 1.1rem;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .grid {
@@ -253,7 +269,7 @@ body {
 .icon-wrapper {
   width: 50px;
   height: 50px;
-  background-color: var(--accent-light);
+  background-color: var(--landing-accent-light);
   color: var(--accent);
   border-radius: 12px;
   display: flex;
@@ -276,7 +292,7 @@ body {
 .note-box {
   margin-top: auto;
   /* Pushes to bottom of card */
-  background-color: var(--background-secondary);
+  background-color: var(--landing-bg-secondary);
   border: 1px solid var(--border);
   padding: 1rem;
   border-radius: var(--radius-md);
@@ -318,9 +334,13 @@ body {
   text-align: center;
 }
 
+.price-card p {
+  color: var(--foreground-secondary);
+}
+
 .price-card.premium {
   border: 2px solid var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-light), var(--glass-shadow);
+  box-shadow: 0 0 0 4px var(--landing-accent-light), var(--glass-shadow);
 }
 
 .badge {
@@ -392,6 +412,19 @@ body {
   text-align: center;
   color: var(--foreground-secondary);
   font-size: 0.9rem;
+}
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.footer-logo span {
+  font-weight: bold;
+  color: var(--foreground);
 }
 
 @media (max-width: 768px) {

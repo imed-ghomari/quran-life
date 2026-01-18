@@ -56,12 +56,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <button 
               className="btn btn-secondary nav-theme-btn" 
               onClick={cycleTheme}
-              style={{ marginRight: '10px', padding: '0.5rem', borderRadius: '50%', minWidth: 'auto', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               aria-label="Toggle Theme"
             >
               {getThemeIcon()}
             </button>
-            <a href="#features" className="btn btn-secondary nav-features-btn" style={{ marginRight: '10px' }}>
+            <a href="#features" className="btn btn-secondary nav-features-btn">
               Features
             </a>
             <button className="btn btn-primary" onClick={() => onBuy(billingCycle)}>
@@ -98,7 +97,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
           <div className="container">
             <div className="section-header">
               <h2 className="section-title">Designed for Retention</h2>
-              <p style={{ color: 'var(--foreground-secondary)' }}>
+              <p>
                 Tools built specifically to solve the &quot;forgetting curve&quot; of Hifdh.
               </p>
             </div>
@@ -159,7 +158,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
           <div className="container">
             <div className="section-header">
               <h2 className="section-title">Invest in your Akhirah</h2>
-              <p style={{ color: 'var(--foreground-secondary)' }}>
+              <p>
                 One plan. Everything you need to master the Quran.
               </p>
               
@@ -194,7 +193,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   <div className="price">$96<span>/yr</span></div>
                 )}
                 
-                <p style={{ color: 'var(--foreground-secondary)' }}>
+                <p>
                   Unlock the full power of visual learning.
                 </p>
 
@@ -227,9 +226,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       {/* --- Footer --- */}
       <footer className="footer">
         <div className="container">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <div className="footer-logo">
             <Layers size={20} color="var(--accent)" />
-            <span style={{ fontWeight: 'bold', color: 'var(--foreground)' }}>Quran Life</span>
+            <span>Quran Life</span>
           </div>
           <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>
         </div>

@@ -14,21 +14,10 @@
 }
 
 .roadmap-column {
-  background: var(--background-secondary);
+  background: var(--landing-bg-secondary);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   border: 1px solid var(--border);
-}
-
-/* Light mode override for column background to restore grey contrast */
-:root[data-theme="light"] .roadmap-column {
-  background-color: #f4f6f8;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .roadmap-column {
-    background-color: #f4f6f8;
-  }
 }
 
 .column-header {
