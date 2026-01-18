@@ -48,7 +48,7 @@ const KanbanColumn = ({
     return (
         <div 
             className={`
-                roadmap-column flex flex-col !rounded-[14px]
+                kanban-column roadmap-column flex flex-col !rounded-[14px]
                 ${isMobile 
                     ? `w-full flex-1 min-h-0 !p-3` 
                     : 'h-full max-h-full !p-4'

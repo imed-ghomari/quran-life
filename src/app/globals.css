@@ -2505,14 +2505,33 @@ input:focus {
 /* Cards (Global) - Statistics, Settings, Today */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .card,
-  :root:not([data-theme="dark"]) .modern-card {
+  :root:not([data-theme="dark"]) .modern-card,
+  :root:not([data-theme="dark"]) .roadmap-card,
+  :root:not([data-theme="dark"]) .docs-main,
+  :root:not([data-theme="dark"]) aside.card,
+  :root:not([data-theme="dark"]) div.card,
+  :root:not([data-theme="dark"]) .kanban-column {
     background-color: #f4f6f8 !important;
   }
 }
 
 :root[data-theme="light"] .card,
-:root[data-theme="light"] .modern-card {
+:root[data-theme="light"] .modern-card,
+:root[data-theme="light"] .roadmap-card,
+:root[data-theme="light"] .docs-main,
+:root[data-theme="light"] aside.card,
+:root[data-theme="light"] div.card,
+:root[data-theme="light"] .kanban-column {
   background-color: #f4f6f8 !important;
+}
+
+:root[data-theme="light"] .kanban-card {
+  background-color: #ffffff !important;
+}
+
+/* Dark Mode Kanban Overrides */
+:root[data-theme="dark"] .kanban-column {
+  background-color: var(--background) !important;
 }
 
 /* Desktop Left Toolbar */
