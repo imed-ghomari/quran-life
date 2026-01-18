@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { DragDropContext, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
+import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import KanbanColumn from './KanbanColumn';
 import SlideOver from '../SlideOver';
 import '../LandingPage/RoadmapSection.css'; // Import shared styles
@@ -720,7 +721,12 @@ export default function TodoKanban({
                 </div>
             </div>
             
-            <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
+            <DragDropContext 
+                onDragEnd={onDragEnd} 
+                onDragStart={onDragStart}
+                sensors={[useMouseSensor, useKeyboardSensor, useCustomTouchSensor]}
+                enableDefaultSensors={false}
+            >
                 <div 
                     ref={containerRef}
                     style={{ position: 'relative' }}

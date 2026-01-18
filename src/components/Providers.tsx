@@ -125,8 +125,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
       const { createClient } = await import('@/utils/supabase/client');
       const supabase = createClient();
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         setAuthStatus(!!session?.user);
+        
+        if (event === 'SIGNED_OUT') {
+           // Security: Clear all local data on logout to prevent leakage to other accounts
+           appLogger.addLog('User signed out. Clearing local data...', 'info');
+           const { clearAllData } = await import('@/lib/storage');
+           await clearAllData();
+           window.location.reload();
+           return;
+        }
+
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           // Automatic sync on load/sign-in
           if (session?.user) {
@@ -172,6 +182,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
           await clearAllData();
           window.location.reload();
           return;
+        }
+
+        // Security Check 1.5: Anonymous Dirty Data Protection
+        // If we find data that has NO owner (userId is undefined), but we are logged in,
+        // and that data is not empty/default, we must assume it belongs to a previous session/user.
+        // To guarantee isolation, we wipe it and let the Cloud Sync restore the correct data for the current user.
+        // Exception: If the data is effectively empty (clean slate), we can safely adopt it.
+        const isDirtyState = Object.keys(settings.learnedVerses || {}).length > 0 || (settings.skippedSurahs || []).length > 0;
+        if (!settings.userId && isDirtyState) {
+             console.warn('[Security] Anonymous dirty data detected. Clearing to ensure isolation...');
+             await clearAllData();
+             window.location.reload();
+             return;
         }
 
         // Security Check 2: Fresh User vs Stale Data (The "Clean Slate" Fix)

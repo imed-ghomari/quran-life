@@ -485,10 +485,30 @@ export default function SettingsPage() {
                                             <button
                                                 className="btn btn-secondary"
                                                 onClick={async () => {
-                                                    if (window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) {
-                                                        await supabase.auth.signOut();
-                                                        router.push('/');
+                                                    // Check for unsaved changes before signing out
+                                                    const { getPendingChangesCount, commitTask } = await import('@/lib/syncEngine');
+                                                    const pending = getPendingChangesCount();
+                                                    
+                                                    if (pending > 0) {
+                                                        const confirmSync = window.confirm(
+                                                            `You have ${pending} unsaved changes. We will attempt to save them before signing out.\n\nClick OK to Sync & Sign Out.\nClick Cancel to abort.`
+                                                        );
+                                                        if (!confirmSync) return;
+
+                                                        // Attempt sync
+                                                        const { success } = await commitTask('logout');
+                                                        if (!success) {
+                                                            const force = window.confirm(
+                                                                "Sync failed! You are offline or experiencing errors.\n\nSigning out now will permanently DELETE these unsaved changes from this device.\n\nAre you sure you want to sign out anyway?"
+                                                            );
+                                                            if (!force) return;
+                                                        }
+                                                    } else {
+                                                        if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
                                                     }
+
+                                                    await supabase.auth.signOut();
+                                                    router.push('/');
                                                 }}
                                                 style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
                                             >
