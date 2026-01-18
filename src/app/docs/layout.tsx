@@ -107,7 +107,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 {/* Desktop Table of Contents */}
-                <aside className="hidden xl:flex flex-col gap-4 h-full" style={{ width: '280px', flexShrink: 0 }}>
+                <aside className="hidden lg:flex flex-col gap-4 h-full" style={{ width: '280px', flexShrink: 0 }}>
                     <DocsSearch className="!w-full !max-w-none !justify-start px-4 py-2 !h-10 !bg-[var(--background-secondary)] !border-[var(--border)] !rounded-[16px] hover:!shadow-none transition-all flex-shrink-0" />
                     <div className="card modern-card custom-scrollbar !mb-0" style={{ 
                         border: '1px solid var(--border)',
