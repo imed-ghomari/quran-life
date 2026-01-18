@@ -52,8 +52,8 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
     return (
         <div className="docs-container" style={{ backgroundColor: 'var(--landing-bg-secondary)' }}>
             {/* Top Navigation / Breadcrumbs Bar */}
-            <header className="docs-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
+            <header className="docs-header" style={{ borderBottom: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, width: '280px' }}>
                     <div className="md:hidden">
                         <MobileDocsNav items={sidebarItems} />
                     </div>
@@ -63,6 +63,10 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                     <div className="hidden md:block">
                         <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Documentation</h1>
                     </div>
+                </div>
+
+                <div className="hidden md:flex flex-1 justify-center px-4">
+                     <DocsSearch className="!w-full max-w-2xl !justify-start px-4 py-2 !h-10 !bg-[var(--background)] !border-[var(--border)] !rounded-[var(--radius-md)] hover:!shadow-sm transition-all" />
                 </div>
                 
                 <div className="md:hidden" style={{ marginLeft: '1rem' }}>
@@ -81,7 +85,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 margin: '0 auto'
             }}>
                 {/* Desktop Sidebar */}
-                <aside className="roadmap-card custom-scrollbar hidden md:block" style={{ 
+                <aside className="roadmap-card !rounded-[14px] custom-scrollbar hidden md:block" style={{ 
                     width: '280px', 
                     border: '1px solid var(--border)',
                     height: '100%',
@@ -95,14 +99,9 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
 
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col gap-6 min-w-0 h-full overflow-hidden">
-                    {/* Search Bar - Desktop */}
-                    <div className="hidden md:block w-full">
-                        <DocsSearch className="!w-full !justify-start px-4 py-3 !h-auto !bg-[var(--background)] !border-[var(--border)] !rounded-[var(--radius-md)] hover:!shadow-sm transition-all" />
-                    </div>
-
                     {/* Content */}
-                    <main className="docs-main custom-scrollbar roadmap-card flex-1 !border-[var(--border)]" style={{ 
-                        height: 'auto', 
+                    <main className="docs-main custom-scrollbar roadmap-card !rounded-[14px] flex-1 !border-[var(--border)]" style={{ 
+                        height: '100%', 
                         overflowY: 'auto',
                         padding: '0',
                         background: 'var(--background)'
@@ -117,7 +116,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 {/* Table of Contents Sidebar */}
-                <div className="hidden xl:block roadmap-card custom-scrollbar" style={{ 
+                <div className="hidden xl:block roadmap-card !rounded-[14px] custom-scrollbar" style={{ 
                     width: '280px', 
                     border: '1px solid var(--border)',
                     height: '100%',
