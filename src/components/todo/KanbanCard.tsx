@@ -61,6 +61,7 @@ const KanbanCard = ({
                         roadmap-card group relative cursor-pointer !rounded-[14px]
                         ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
                         ${item.status === 'complete' ? 'opacity-80' : ''}
+                        ${isMobile ? 'min-w-[85vw] snap-center' : ''}
                     `}
                     style={{
                         ...provided.draggableProps.style,

@@ -50,11 +50,11 @@ const KanbanColumn = ({
             className={`
                 roadmap-column flex flex-col !rounded-[14px]
                 ${isMobile || isTablet 
-                    ? `w-full !p-3 ${isTablet ? '!p-4' : ''}` 
+                    ? `w-full flex-1 min-h-0 !p-3 ${isTablet ? '!p-4' : ''}` 
                     : 'h-full max-h-full !p-4'
                 }
             `}
-            style={isMobile || isTablet ? { height: 'max-content' } : undefined}
+            style={isMobile || isTablet ? { height: 'auto' } : undefined}
         >
             {/* Header Area */}
             <div 
@@ -85,7 +85,7 @@ const KanbanColumn = ({
             {/* Cards Area */}
             <Droppable 
                 droppableId={id} 
-                direction="vertical"
+                direction={isMobile || isTablet ? "horizontal" : "vertical"}
                 ignoreContainerClipping={isMobile || isTablet}
             >
                 {(provided) => (
@@ -93,8 +93,11 @@ const KanbanColumn = ({
                         {...provided.droppableProps}
                         ref={provided.innerRef}
                         className={`
-                            column-content min-h-[100px] pr-1 pb-24 relative
-                            ${isMobile || isTablet ? '' : 'flex-1 overflow-y-auto custom-scrollbar'}
+                            column-content min-h-[100px] relative
+                            ${isMobile || isTablet 
+                                ? 'flex flex-row gap-3 overflow-x-auto pb-2 snap-x snap-mandatory' 
+                                : 'flex-1 overflow-y-auto custom-scrollbar pr-1 pb-24'
+                            }
                         `}
                     >
                         {items.map((item, index) => (
