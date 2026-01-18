@@ -50,40 +50,18 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
     const sidebarItems = getSidebarData(contentDir);
 
     return (
-        <div className="docs-container">
-            {/* Top Navigation / Breadcrumbs Bar */}
-            <header className="docs-header" style={{ 
-                borderBottom: 'none',
-                display: 'flex',
-                gap: '1.5rem',
-                padding: '0 1.5rem',
-                maxWidth: '100%',
-                margin: '0 auto',
-                width: '100%',
-                alignItems: 'center'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, width: '280px', flexShrink: 0 }}>
-                    <div className="md:hidden">
-                        <MobileDocsNav items={sidebarItems} />
-                    </div>
-                    <div className="md:hidden">
-                        <DocsBreadcrumbs />
-                    </div>
-                    <div className="hidden md:block">
-                        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Documentation</h1>
-                    </div>
+        <div className="content-wrapper !max-w-full h-full flex flex-col">
+            {/* Mobile Header */}
+            <div className="flex items-center justify-between mb-4 shrink-0 md:hidden">
+                <div className="flex items-center gap-3">
+                    <MobileDocsNav items={sidebarItems} />
+                    <DocsBreadcrumbs />
                 </div>
+                <DocsSearch />
+            </div>
 
-                <div className="hidden md:flex flex-1 items-center min-w-0 h-full">
-                     <DocsSearch className="!w-full !max-w-none !justify-start px-4 py-2 !h-10 !bg-[var(--background-secondary)] !border-[var(--border)] !rounded-[16px] hover:!shadow-none transition-all" />
-                </div>
-                
-                <div className="hidden xl:block" style={{ width: '280px', flexShrink: 0 }} />
-
-                <div className="md:hidden" style={{ marginLeft: 'auto' }}>
-                    <DocsSearch />
-                </div>
-            </header>
+            {/* Desktop Title */}
+            <h1 className="hidden md:block text-2xl font-bold mb-6 flex-shrink-0">Documentation</h1>
 
             <div style={{ 
                 display: 'flex', 
@@ -91,27 +69,29 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 overflow: 'hidden', 
                 position: 'relative',
                 gap: '1.5rem',
-                padding: '1.5rem',
                 maxWidth: '100%',
-                margin: '0 auto'
+                margin: '0 auto',
+                width: '100%'
             }}>
                 {/* Desktop Sidebar */}
-                <aside className="card modern-card custom-scrollbar hidden md:block" style={{ 
+                <aside className="card modern-card custom-scrollbar hidden md:block !mb-0" style={{ 
                     width: '280px', 
                     border: '1px solid var(--border)',
                     height: '100%',
                     padding: '0',
-                    borderRadius: '16px'
+                    borderRadius: '16px',
+                    overflowY: 'auto',
+                    flexShrink: 0
                 }}>
-                    <nav style={{ padding: '1.5rem 1rem' }}>
+                    <div style={{ padding: '1.5rem' }}>
                         <SidebarNav items={sidebarItems} />
-                    </nav>
+                    </div>
                 </aside>
 
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
                     {/* Content */}
-                    <main className="docs-main custom-scrollbar card modern-card flex-1 !border-[var(--border)]" style={{ 
+                    <main className="docs-main custom-scrollbar card modern-card flex-1 !border-[var(--border)] !mb-0" style={{ 
                         height: '100%', 
                         overflowY: 'auto',
                         padding: '0',
@@ -126,20 +106,19 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                     </main>
                 </div>
 
-                {/* Table of Contents Sidebar */}
-                <div className="hidden xl:block card modern-card custom-scrollbar" style={{ 
-                    width: '280px', 
-                    border: '1px solid var(--border)',
-                    height: '100%',
-                    padding: '0',
-                    borderRadius: '16px'
-                }}>
-                    <div style={{ padding: '2rem 1.5rem' }}>
-                        <TableOfContents />
+                {/* Desktop Table of Contents */}
+                <aside className="hidden xl:flex flex-col gap-4 h-full" style={{ width: '280px', flexShrink: 0 }}>
+                    <DocsSearch className="!w-full !max-w-none !justify-start px-4 py-2 !h-10 !bg-[var(--background-secondary)] !border-[var(--border)] !rounded-[16px] hover:!shadow-none transition-all flex-shrink-0" />
+                    <div className="card modern-card custom-scrollbar !mb-0" style={{ 
+                        border: '1px solid var(--border)',
+                        flex: 1,
+                        padding: '1.5rem',
+                        borderRadius: '16px',
+                        overflowY: 'auto'
+                    }}>
+                         <TableOfContents />
                     </div>
-                </div>
-
-                <BackToTop />
+                </aside>
             </div>
         </div>
     );

@@ -409,100 +409,100 @@ export default function StatisticsPage() {
     }, [activePart, memoryNodes, showBacklog, timeRange]);
 
     return (
-        <div className="statistics-container" style={{ width: '100%', paddingBottom: '2rem', maxWidth: '100%' }}>
-            <div className="stats-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', width: '100%' }}>
-                <div>
-                    <h1 className="hide-mobile" style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div className="hide-mobile" style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
-                        {activePart === 5 ? 'All Quran' : `Part ${activePart}`}
+        <div className="content-wrapper">
+            <h1 className="hidden md:block text-2xl font-bold mb-6">Progress Statistics</h1>
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="stats-header md:hidden" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div>
+                        {/* Mobile Title Placeholder if needed */}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     </div>
                 </div>
-            </div>
 
-            <div className="stats-grid-main">
-                <ProgressBarSection
-                    title="Part Mindmaps"
-                    icon={<MapIcon size={20} />}
-                    stats={partMindmapStats}
-                />
+                <div className="stats-grid-main">
+                    <ProgressBarSection
+                        title="Part Mindmaps"
+                        icon={<MapIcon size={20} />}
+                        stats={partMindmapStats}
+                    />
 
-                <ProgressBarSection
-                    title="Surah Mindmaps"
-                    icon={<MapPinned size={20} />}
-                    stats={surahMindmapStats}
-                />
+                    <ProgressBarSection
+                        title="Surah Mindmaps"
+                        icon={<MapPinned size={20} />}
+                        stats={surahMindmapStats}
+                    />
 
-                <ProgressBarSection
-                    title="Verse Chunks"
-                    icon={<RotateCcw size={20} />}
-                    stats={verseChunkStats}
-                    headerSuffix={
-                        <div style={{ display: 'flex', background: 'var(--background)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border)' }}>
-                            <button
-                                onClick={() => setVerseChunkMode('chunks')}
-                                style={{
-                                    padding: '4px 10px',
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    background: verseChunkMode === 'chunks' ? 'var(--accent)' : 'transparent',
-                                    color: verseChunkMode === 'chunks' ? 'white' : 'var(--foreground-secondary)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    boxShadow: verseChunkMode === 'chunks' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
-                                }}
-                            >
-                                CHUNKS
-                            </button>
-                            <button
-                                onClick={() => setVerseChunkMode('surahs')}
-                                style={{
-                                    padding: '4px 10px',
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    background: verseChunkMode === 'surahs' ? 'var(--accent)' : 'transparent',
-                                    color: verseChunkMode === 'surahs' ? 'white' : 'var(--foreground-secondary)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    boxShadow: verseChunkMode === 'surahs' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
-                                }}
-                            >
-                                SURAHS
-                            </button>
-                        </div>
-                    }
-                />
+                    <ProgressBarSection
+                        title="Verse Chunks"
+                        icon={<RotateCcw size={20} />}
+                        stats={verseChunkStats}
+                        headerSuffix={
+                            <div style={{ display: 'flex', background: 'var(--background)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border)' }}>
+                                <button
+                                    onClick={() => setVerseChunkMode('chunks')}
+                                    style={{
+                                        padding: '4px 10px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        background: verseChunkMode === 'chunks' ? 'var(--accent)' : 'transparent',
+                                        color: verseChunkMode === 'chunks' ? 'white' : 'var(--foreground-secondary)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        boxShadow: verseChunkMode === 'chunks' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >
+                                    CHUNKS
+                                </button>
+                                <button
+                                    onClick={() => setVerseChunkMode('surahs')}
+                                    style={{
+                                        padding: '4px 10px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        background: verseChunkMode === 'surahs' ? 'var(--accent)' : 'transparent',
+                                        color: verseChunkMode === 'surahs' ? 'white' : 'var(--foreground-secondary)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        boxShadow: verseChunkMode === 'surahs' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >
+                                    SURAHS
+                                </button>
+                            </div>
+                        }
+                    />
 
-                <ProgressBarSection
-                    title="Similar Verses Coverage"
-                    icon={<BookCopy size={20} />}
-                    stats={mutashabihatStats}
-                />
+                    <ProgressBarSection
+                        title="Similar Verses Coverage"
+                        icon={<BookCopy size={20} />}
+                        stats={mutashabihatStats}
+                    />
 
-                <ProgressBarSection
-                    title="Daily Portion"
-                    icon={<Repeat size={20} />}
-                    stats={dailyPortionStats}
-                    headerSuffix={
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
-                            <Repeat size={14} />
-                            <span>{dailyPortionStats.completions} cycles</span>
-                        </div>
-                    }
-                />
+                    <ProgressBarSection
+                        title="Daily Portion"
+                        icon={<Repeat size={20} />}
+                        stats={dailyPortionStats}
+                        headerSuffix={
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                <Repeat size={14} />
+                                <span>{dailyPortionStats.completions} cycles</span>
+                            </div>
+                        }
+                    />
 
-                <FutureDueSection
-                    stats={futureDueStats}
-                    showBacklog={showBacklog}
-                    setShowBacklog={setShowBacklog}
-                    timeRange={timeRange}
-                    setTimeRange={setTimeRange}
-                />
+                    <FutureDueSection
+                        stats={futureDueStats}
+                        showBacklog={showBacklog}
+                        setShowBacklog={setShowBacklog}
+                        timeRange={timeRange}
+                        setTimeRange={setTimeRange}
+                    />
+                </div>
             </div>
 
         </div>
@@ -517,7 +517,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
     return (
-        <div className="card modern-card" style={{ width: '100%', padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)' }}>
+        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
@@ -731,7 +731,7 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
 
 function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode }) {
     return (
-        <div className="card modern-card" style={{ width: '100%', padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--background-secondary)', display: 'flex', flexDirection: 'column' }}>
+        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>{icon}</div>

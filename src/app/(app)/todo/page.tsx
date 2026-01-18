@@ -519,7 +519,7 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <div className="flex-1 w-full overflow-hidden mt-4">
+            <div className="content-wrapper !max-w-full h-full flex flex-col">
                 <TodoKanban
                     suspendedAnchors={suspendedAnchors}
                     similarityGroups={groupedSimilarity}

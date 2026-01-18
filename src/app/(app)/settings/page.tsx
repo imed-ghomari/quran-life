@@ -410,18 +410,18 @@ export default function SettingsPage() {
     }, [mutashabihatSurahs, selectedMutSurah]);
 
     return (
-        <div className="content-wrapper" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem' }}>
-            <h1 className="hide-mobile">Settings</h1>
+        <div className="content-wrapper">
+            <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
 
-            <div className="settings-grid" style={{ gap: '0.85rem' }}>
-                <div className="card modern-card" style={{
-                    padding: sectionsExpanded.cloudSync ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
-                    background: 'var(--background-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px'
-                }}>
-                    <div className="section-title"
-                        onClick={() => setSectionsExpanded(s => ({ ...s, cloudSync: !s.cloudSync }))}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="settings-grid">
+                    <div className="card modern-card" style={{
+                        background: 'var(--background-secondary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '16px'
+                    }}>
+                        <div className="section-title"
+                            onClick={() => setSectionsExpanded(s => ({ ...s, cloudSync: !s.cloudSync }))}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -558,7 +558,6 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="card modern-card" style={{
-                    padding: sectionsExpanded.backupRestore ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
                     background: 'var(--background-secondary)',
                     border: '1px solid var(--border)',
                     borderRadius: '16px'
@@ -637,7 +636,6 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="card modern-card" style={{
-                    padding: sectionsExpanded.schedule ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
                     background: 'var(--background-secondary)',
                     border: '1px solid var(--border)',
                     borderRadius: '16px'
@@ -675,7 +673,6 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="card modern-card" style={{
-                    padding: sectionsExpanded.activePart ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
                     background: 'var(--background-secondary)',
                     border: '1px solid var(--border)',
                     borderRadius: '16px'
@@ -857,9 +854,8 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            <div style={{ marginTop: '0.85rem' }}>
+            <div style={{ marginTop: '1.5rem' }}>
                 <div className="card modern-card" style={{
-                    padding: sectionsExpanded.mutashabihat ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
                     background: 'var(--background-secondary)',
                     border: '1px solid var(--border)',
                     borderRadius: '16px'
@@ -1713,8 +1709,7 @@ export default function SettingsPage() {
                     </div>
                 )}
             </div>
-
-
+        </div>
 
             {/* Similar Verses Slide-over Detail View */}
             {activeMutSlideOver && (() => {

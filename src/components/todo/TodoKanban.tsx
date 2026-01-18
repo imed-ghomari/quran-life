@@ -573,38 +573,45 @@ export default function TodoKanban({
 
     return (
         <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
-            {/* Header Area - Compact on mobile */}
+            {/* Header Area */}
             <div className={`
-                flex items-center justify-between shrink-0 bg-[var(--background)] gap-3
-                ${isMobile ? 'flex-col items-stretch px-4 pt-4 pb-2' : 'px-8 pt-8 pb-4'}
+                flex shrink-0 bg-[var(--background)] gap-4
+                ${isMobile ? 'flex-col items-stretch px-4 pt-4 pb-2' : 'flex-row items-center justify-between px-0 pt-0 pb-6'}
             `}>
-                {/* Title (Left) - Hidden on mobile */}
+                {/* Title - Desktop only */}
                 {!isMobile && (
-                    <h1 className="text-2xl font-bold tracking-tight">Todo</h1>
+                    <h1 className="text-2xl font-bold m-0">Todo</h1>
                 )}
 
                 {/* Right Side: Search + Filters */}
                 <div className={`${isMobile ? 'flex flex-col gap-2 w-full' : 'flex items-center gap-3'}`}>
-                    {/* Search Bar */}
+                    {/* Search Bar - Styled like DocsSearch */}
                     <div 
-                        className={`relative flex items-center ${isMobile ? 'w-full h-9' : 'min-w-[200px] h-auto'} rounded-md border border-[var(--border)] bg-[var(--background-secondary)] md:bg-[rgba(0,0,0,0.05)] md:dark:bg-[rgba(255,255,255,0.05)] px-2 focus-within:border-[var(--accent)] transition-colors`}
+                        className={`docs-search-trigger ${isMobile ? '!w-full !h-9 !justify-start !px-2' : ''}`}
+                        onClick={() => searchInputRef.current?.focus()}
+                        style={!isMobile ? { cursor: 'text' } : undefined}
                     >
-                        <Search className="text-[var(--foreground-secondary)] opacity-50 shrink-0 mr-2" size={isMobile ? 14 : 12} />
-                        <input 
-                            ref={searchInputRef}
-                            type="text"
-                            placeholder="Search..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none placeholder:text-[var(--foreground-secondary)]/70 text-[var(--foreground)]"
-                            style={{ fontSize: isMobile ? '12px' : '0.75rem', padding: '4px 0' }}
-                        />
-                        {!isMobile && (
-                            <div className="flex items-center gap-0.5 ml-2 text-[10px] text-[var(--foreground-secondary)] opacity-50 border border-[var(--border)] rounded px-1 bg-[var(--background)]">
-                                <span className="text-xs">⌘</span>
-                                <span>K</span>
-                            </div>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                            <Search className="docs-search-icon" size={14} />
+                            <input 
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none placeholder:text-[var(--foreground-secondary)] text-[var(--foreground)]"
+                                style={{ 
+                                    padding: 0,
+                                    fontSize: '0.75rem',
+                                    height: 'auto',
+                                    lineHeight: 'normal'
+                                }}
+                            />
+                        </div>
+                        <div className="docs-search-shortcut">
+                            <span>⌘</span>
+                            <span>K</span>
+                        </div>
                     </div>
 
                     {/* Filters - Full width on mobile */}
@@ -658,7 +665,7 @@ export default function TodoKanban({
                     ref={containerRef}
                     style={{ position: 'relative' }}
                     className={`
-                        flex-1 min-h-0 px-4 pb-2 md:px-8
+                        flex-1 min-h-0 px-4 pb-2 md:px-0
                         ${isMobile
                     ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
                     : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'

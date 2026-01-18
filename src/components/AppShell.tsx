@@ -22,7 +22,7 @@ export default function AppShell({ children }: AppShellProps) {
     } catch (e) { }
 
     const isAuthOrHome = pathname === '/' || pathname === '/auth';
-    const isFixedLayout = pathname === '/dashboard' || pathname === '/todo';
+    const isFixedLayout = pathname === '/dashboard' || pathname === '/todo' || pathname === '/statistics' || pathname === '/settings' || pathname?.startsWith('/docs');
 
     return (
         <div className="app-shell">
