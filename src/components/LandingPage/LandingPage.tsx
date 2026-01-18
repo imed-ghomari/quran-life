@@ -22,6 +22,22 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
+  const { theme, setTheme } = useTheme();
+
+  const cycleTheme = () => {
+    if (theme === 'system') setTheme('light');
+    else if (theme === 'light') setTheme('dark');
+    else setTheme('system');
+  };
+
+  const getThemeIcon = () => {
+    switch (theme) {
+      case 'light': return <Sun size={20} />;
+      case 'dark': return <Moon size={20} />;
+      case 'system': return <Monitor size={20} />;
+      default: return <Sun size={20} />;
+    }
+  };
 
   return (
     <div className="landing-wrapper">
@@ -33,6 +49,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="nav-actions">
+            <button 
+              className="btn btn-secondary nav-theme-btn" 
+              onClick={cycleTheme}
+              style={{ marginRight: '10px', padding: '0.5rem', borderRadius: '50%', minWidth: 'auto', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              aria-label="Toggle Theme"
+            >
+              {getThemeIcon()}
+            </button>
             <a href="#features" className="btn btn-secondary nav-features-btn" style={{ marginRight: '10px' }}>
               Features
             </a>
@@ -159,7 +183,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               {/* Premium Tier */}
               <div className="price-card premium">
                 <div className="badge">Complete Access</div>
-                <h3>Hafidh Pro</h3>
                 
                 {billingCycle === 'monthly' ? (
                   <div className="price">$10<span>/mo</span></div>
@@ -174,7 +197,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <ul className="features-list">
                   <li><Check size={20} className="check-icon" /> Unlimited Visual Mindmaps</li>
                   <li><Check size={20} className="check-icon" /> Advanced Spaced Repetition System</li>
-                  <li><Check size={20} className="check-icon" /> <strong>Mutashabihat (Similar Verses) Tool</strong></li>
+                  <li><Check size={20} className="check-icon" /> Mutashabihat (Similar Verses) Tool</li>
                   <li><Check size={20} className="check-icon" /> Cross-device Cloud Sync</li>
                   <li><Check size={20} className="check-icon" /> Offline Access</li>
                 </ul>
@@ -187,7 +210,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 >
                   Get Full Access Now
                 </button>
-                <p className="guarantee">30-day money-back guarantee</p>
+                <p className="guarantee">1 week trial</p>
               </div>
             </div>
           </div>
