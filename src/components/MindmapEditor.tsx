@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import Spinner from '@/components/ui/Spinner';
 import { appLogger } from '@/lib/logger';
 import {
     Tldraw,
@@ -501,5 +502,9 @@ function MindmapEditorInner(props: MindmapEditorProps) {
 
 export default dynamic(() => Promise.resolve(MindmapEditorInner), {
     ssr: false,
-    loading: () => <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'white' }}>Loading Editor (Dynamic)...</div>
+    loading: () => (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Spinner size={32} text="Loading Editor..." />
+        </div>
+    )
 });

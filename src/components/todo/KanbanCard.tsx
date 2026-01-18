@@ -6,7 +6,6 @@ import { KanbanItem } from './types';
 import { Brain } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
 import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
-import ConfirmationModal from './ConfirmationModal';
 
 interface KanbanCardProps {
     item: KanbanItem;
@@ -34,7 +33,6 @@ const KanbanCard = ({
     onCardAction
 }: KanbanCardProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -43,21 +41,22 @@ const KanbanCard = ({
         setMenuOpen(prev => !prev);
     };
 
-    const handleDeleteClick = () => {
+    const handleDeleteClick = async () => {
         setMenuOpen(false);
-        setShowDeleteConfirm(true);
-    };
-
-    const handleConfirmDelete = async () => {
-        setIsDeleting(true);
-        // Simulate network delay for better UX
-        await new Promise(resolve => setTimeout(resolve, 800));
-        onDeleteMindmap();
-        // Check if component is still mounted before setting state? 
-        // In most cases, if the card moves, this component unmounts and these updates are ignored.
-        // If it stays, we reset.
-        setIsDeleting(false);
-        setShowDeleteConfirm(false);
+        
+        if (window.confirm("Are you sure you want to delete this mindmap? This action cannot be undone and you will lose all progress on this map.")) {
+            setIsDeleting(true);
+            try {
+                // Simulate network delay for better UX if needed, or just await the prop
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await onDeleteMindmap();
+            } catch (e) {
+                console.error("Delete failed", e);
+            } finally {
+                // Only reset if component is still mounted (React handles this mostly, but good practice)
+                setIsDeleting(false);
+            }
+        }
     };
 
     // Responsive Spacing Config - Tighter for Mobile
@@ -108,17 +107,6 @@ const KanbanCard = ({
                     </div>
                 )}
             </Draggable>
-
-            <ConfirmationModal
-                isOpen={showDeleteConfirm}
-                title="Delete Mindmap?"
-                message="Are you sure you want to delete this mindmap? This action cannot be undone and you will lose all progress on this map."
-                confirmLabel="Delete"
-                isDestructive
-                isProcessing={isDeleting}
-                onConfirm={handleConfirmDelete}
-                onCancel={() => setShowDeleteConfirm(false)}
-            />
         </>
     );
 };

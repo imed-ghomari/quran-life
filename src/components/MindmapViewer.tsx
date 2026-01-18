@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
-import type { TldrawProps } from 'tldraw';
+import Spinner from '@/components/ui/Spinner';
+import 'tldraw/tldraw.css';
 
 // Only load tldraw on the client
 const Tldraw = dynamic(
@@ -15,8 +16,6 @@ const Tldraw = dynamic(
     },
     { ssr: false }
 );
-
-import 'tldraw/tldraw.css';
 
 interface MindmapViewerProps {
     snapshot?: any;
@@ -84,7 +83,6 @@ export default function MindmapViewer({
 
     const displayUrl = isDark ? (imageUrlDark || imageUrl) : imageUrl;
     const hasImage = !!displayUrl;
-    const hasSnapshot = !!snapshot;
 
     const components = useMemo(() => ({
         Toolbar: null,
@@ -96,185 +94,126 @@ export default function MindmapViewer({
         DebugMenu: null,
         DebugPanel: null,
         SharePanel: null,
-        TopPanel: null,
+        HelpMenu: null,
+        Minimap: null,
+        ZoomMenu: null,
+        StylePanel: null,
+        PageMenuTrigger: null,
+        Menu: null,
     }), []);
 
     const handleMount = useCallback((editor: any) => {
         setEditor(editor);
-        const activeSnapshot = fetchedSnapshot || snapshot;
-        if (activeSnapshot) {
-            try {
-                if (typeof editor.loadSnapshot === 'function') {
-                    editor.loadSnapshot(activeSnapshot);
-                } else {
-                    editor.store.loadSnapshot(activeSnapshot);
-                }
-                editor.updateInstanceState({ isReadonly: true });
-                editor.setCurrentTool('hand');
-                
-                // Set initial dark mode state
-                if (editor.user?.updateUserPreferences) {
-                    try {
-                        editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
-                    } catch (e) {
-                        console.warn('Failed to set initial theme', e);
-                    }
-                }
+        editor.updateInstanceState({ isReadonly: true });
+        // Disable camera movement and other interactions
+        // editor.setCameraOptions({ isLocked: true });
+    }, []);
 
-                setTimeout(() => {
-                    editor.zoomToFit();
-                }, 100);
-            } catch (e) {
-                console.warn('Failed to load snapshot in viewer', e);
-            }
-        }
-    }, [snapshot, fetchedSnapshot, isDark]);
+    // If we have an image URL, show that initially for performance
+    // Only switch to Tldraw if user wants to interact or if it's the only option?
+    // For now, let's keep the hybrid approach: Image -> Click -> Fullscreen Tldraw
+    // OR just use Tldraw inline if no image.
 
-    const renderContent = (isFS: boolean) => {
-        const activeSnapshot = fetchedSnapshot || snapshot;
+    // If no snapshot and no template, return nothing or placeholder
+    if (!snapshot && !templateUrl && !hasImage) return null;
 
-        if (isLoading) {
-            return (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>
-                    Loading official mindmap...
-                </div>
-            );
-        }
+    if (isLoading) {
+        return (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spinner text="Loading official mindmap..." />
+            </div>
+        );
+    }
 
-        if (activeSnapshot) {
-            return (
-                <div style={{ width: '100%', height: '100%', position: 'relative', background: isDark ? '#1e1e1e' : '#f5f5f5' }}>
-                    <div style={{ width: '100%', height: '100%', pointerEvents: isFS ? 'auto' : 'none' }}>
-                        <Tldraw
-                            onMount={handleMount}
-                            inferDarkMode={false}
-                            components={components}
-                        />
-                    </div>
-                    {!isFS && (
-                        <>
-                            {/* Overlay to catch clicks but let scrolls pass through to page */}
-                            <div
-                                onClick={() => setIsFullScreen(true)}
-                                style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    zIndex: 10,
-                                    cursor: 'pointer'
-                                }}
-                            />
-                            <button
-                                onClick={() => setIsFullScreen(true)}
-                                style={{
-                                    position: 'absolute',
-                                    bottom: '12px',
-                                    left: '12px', // Moved to left to avoid watermark
-                                    background: 'rgba(0,0,0,0.6)',
-                                    color: 'white',
-                                    padding: '6px 10px',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.75rem',
-                                    zIndex: 100,
-                                    backdropFilter: 'blur(4px)'
-                                }}
-                            >
-                                <Maximize2 size={14} /> Full Screen
-                            </button>
-                        </>
-                    )}
-                </div>
-            );
-        }
+    const activeSnapshot = fetchedSnapshot || snapshot;
 
+    // Inline view
+    const renderInline = () => {
         if (hasImage) {
             return (
-                <div
-                    style={{ width: '100%', height: '100%', position: 'relative', cursor: 'pointer', background: isDark ? '#1e1e1e' : '#f5f5f5' }}
+                <div 
+                    className="relative w-full h-full group cursor-pointer overflow-hidden rounded-xl bg-[var(--background-secondary)]"
                     onClick={() => setIsFullScreen(true)}
+                    style={{ minHeight: height }}
                 >
                     <Image
                         src={displayUrl!}
-                        alt={title || "Mindmap preview"}
+                        alt={title || "Mindmap"}
                         fill
-                        style={{
-                            objectFit: 'contain',
-                            filter: isDark && !imageUrlDark && imageUrl ? 'invert(0.9) hue-rotate(180deg)' : 'none'
-                        }}
+                        className="object-contain p-4 transition-transform duration-300 group-hover:scale-[1.02]"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        priority={false}
                     />
-                    {!isFS && (
-                        <div style={{
-                            position: 'absolute',
-                            bottom: '12px',
-                            left: '12px', // Moved to left to avoid common watermark areas
-                            background: 'rgba(0,0,0,0.6)',
-                            color: 'white',
-                            padding: '6px 10px',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            backdropFilter: 'blur(4px)'
-                        }}>
-                            <Maximize2 size={14} /> Tap to Zoom
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300 flex items-center justify-center">
+                        <div className="bg-white/90 dark:bg-gray-800/90 p-3 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0 backdrop-blur-sm">
+                            <Maximize2 size={20} className="text-[var(--accent)]" />
                         </div>
-                    )}
+                    </div>
                 </div>
             );
         }
 
-        return (
-            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--background-secondary)', border: '1px dashed var(--border)', borderRadius: '8px' }}>
-                <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>No mindmap content available</p>
-            </div>
-        );
+        // If no image, render Tldraw inline (might be heavy)
+        if (activeSnapshot) {
+            return (
+                <div className="w-full h-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] relative" style={{ minHeight: height }}>
+                    <div className="absolute top-3 right-3 z-10">
+                         <button 
+                            onClick={() => setIsFullScreen(true)}
+                            className="p-2 bg-[var(--background)] hover:bg-[var(--background-secondary)] border border-[var(--border)] rounded-lg shadow-sm transition-colors"
+                            title="Full Screen"
+                        >
+                            <Maximize2 size={18} className="text-[var(--foreground)]" />
+                        </button>
+                    </div>
+                    <Tldraw
+                        snapshot={activeSnapshot}
+                        components={components}
+                        onMount={handleMount}
+                        hideUi
+                    />
+                </div>
+            );
+        }
+
+        return null;
     };
 
     return (
         <>
-            <div style={{
-                position: 'relative',
-                width: '100%',
-                height: typeof height === 'number' ? `${height}px` : height,
-                borderRadius: '8px',
-                overflow: 'hidden',
-                border: '1px solid var(--border)'
-            }}>
-                {renderContent(false)}
-            </div>
+            {renderInline()}
 
             {isFullScreen && createPortal(
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 2147483647, // Maximum z-index to ensure it's on top of everything including sidebar
-                    background: 'var(--background)',
-                    display: 'flex',
-                    flexDirection: 'column'
-                }}>
-                    <div style={{
-                        height: '50px',
-                        borderBottom: '1px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0 1rem'
-                    }}>
-                        <span style={{ fontWeight: 600 }}>{title || 'Mindmap Preview'}</span>
-                        <button
+                <div className="fixed inset-0 z-[9999] bg-[var(--background)] flex flex-col animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--background)] shadow-sm">
+                        <h3 className="font-bold text-lg text-[var(--foreground)]">{title || "Mindmap Viewer"}</h3>
+                        <button 
                             onClick={() => setIsFullScreen(false)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--foreground)' }}
+                            className="p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
                         >
-                            <X size={24} />
+                            <X size={24} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <div style={{ flex: 1, position: 'relative' }}>
-                        {renderContent(true)}
+                    <div className="flex-1 relative bg-[var(--background-secondary)]">
+                        {activeSnapshot ? (
+                            <Tldraw
+                                snapshot={activeSnapshot}
+                                components={components}
+                                onMount={handleMount}
+                            />
+                        ) : (
+                             <div className="flex items-center justify-center h-full text-[var(--foreground-secondary)]">
+                                <div className="text-center">
+                                    <p className="mb-2">Map data not available</p>
+                                    <button 
+                                        onClick={() => setIsFullScreen(false)}
+                                        className="text-[var(--accent)] hover:underline"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>,
                 document.body

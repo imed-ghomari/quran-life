@@ -6,7 +6,7 @@ import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { OnlineStatusContext } from '@/components/Providers';
-import { getSurahsByPart, getSurah, parseQuranJson, getQuranVerses } from '@/lib/quranData';
+import { getSurahsByPart, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     AppSettings,
     getSettings,
@@ -17,7 +17,6 @@ import {
     getSurahLearnedStatus,
     setGroupMaturity,
     setSurahMaturity,
-    getMaturityLevel,
     setNodeMaturity,
     getMutashabihatDecisions,
     setMutashabihatDecision,
@@ -46,9 +45,7 @@ import { QuranPart } from '@/lib/types';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
     Upload,
-    ShieldCheck,
     Database,
-    Settings,
     Brain,
     Plus,
     ChevronDown,
@@ -156,15 +153,6 @@ export default function SettingsPage() {
         }
     }, [user]);
 
-    const handleSync = async () => {
-        setIsSyncing(true);
-        const result = await syncWithCloud();
-        setSyncResult(result);
-        setIsSyncing(false);
-        if (result.status === 'success') {
-            setVersion(v => v + 1); // Refresh UI with merged data
-        }
-    };
     const [version, setVersion] = useState(0);
     const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>(getMutashabihatDecisions());
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
@@ -437,7 +425,9 @@ export default function SettingsPage() {
                             <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Database size={18} />
                             </div>
-                            <span>User Account</span>
+                            <div className="flex flex-col">
+                                <span>User Account</span>
+                            </div>
                         </div>
                         <ChevronDown size={20} style={{ transform: sectionsExpanded.cloudSync ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
