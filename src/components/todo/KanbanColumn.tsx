@@ -49,20 +49,20 @@ const KanbanColumn = ({
         <div 
             className={`
                 roadmap-column flex flex-col !rounded-[14px]
-                ${isMobile || isTablet 
-                    ? `w-full flex-1 min-h-0 !p-3 ${isTablet ? '!p-4' : ''}` 
+                ${isMobile 
+                    ? `w-full flex-1 min-h-0 !p-3` 
                     : 'h-full max-h-full !p-4'
                 }
             `}
-            style={isMobile || isTablet ? { height: 'auto' } : undefined}
+            style={isMobile ? { height: 'auto' } : undefined}
         >
             {/* Header Area */}
             <div 
                 className={`
                     column-header !mb-3 !pb-2 
-                    ${isMobile || isTablet ? 'sticky top-0 z-10 bg-[var(--background-secondary)] !-mt-3 !pt-3 !-mx-3 !px-3 border-b border-[var(--border)]' : ''}
+                    ${isMobile ? 'sticky top-0 z-10 bg-[var(--background-secondary)] !-mt-3 !pt-3 !-mx-3 !px-3 border-b border-[var(--border)]' : ''}
                 `}
-                style={isMobile || isTablet ? {
+                style={isMobile ? {
                     backgroundColor: 'var(--background-secondary)', 
                     // Add explicit light mode override here if CSS variable isn't resolving correctly in sticky context, 
                     // but the class usually handles it.
@@ -85,8 +85,8 @@ const KanbanColumn = ({
             {/* Cards Area */}
             <Droppable 
                 droppableId={id} 
-                direction={isMobile || isTablet ? "horizontal" : "vertical"}
-                ignoreContainerClipping={isMobile || isTablet}
+                direction={isMobile ? "horizontal" : "vertical"}
+                ignoreContainerClipping={isMobile}
             >
                 {(provided) => (
                     <div
@@ -94,7 +94,7 @@ const KanbanColumn = ({
                         ref={provided.innerRef}
                         className={`
                             column-content min-h-[100px] relative
-                            ${isMobile || isTablet 
+                            ${isMobile 
                                 ? '!flex !flex-row gap-3 overflow-x-auto pb-2 snap-x snap-mandatory overscroll-x-contain !overflow-y-hidden' 
                                 : 'flex-1 overflow-y-auto custom-scrollbar pr-1 pb-24'
                             }

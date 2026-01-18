@@ -32,6 +32,7 @@ export default function CardActionMenu({
     isMobile,
     hasMindmap,
     cardType,
+    isProcessing,
     isOpen,
     onClose,
     anchorRef,

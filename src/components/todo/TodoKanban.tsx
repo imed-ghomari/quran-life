@@ -284,7 +284,7 @@ export default function TodoKanban({
             
             // Snap to the nearest column after drop
             const { destination } = result;
-            if (destination && (isMobileRef.current || isTabletRef.current)) {
+            if (destination && isMobileRef.current) {
                  const destCol = document.getElementById(destination.droppableId);
                  if (destCol) {
                      destCol.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -659,7 +659,7 @@ export default function TodoKanban({
                     style={{ position: 'relative' }}
                     className={`
                         flex-1 min-h-0 px-4 pb-2 md:px-8
-                        ${(isMobile || isTablet)
+                        ${isMobile
                     ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
                     : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
                 }
