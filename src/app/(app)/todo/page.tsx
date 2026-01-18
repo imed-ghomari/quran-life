@@ -519,8 +519,7 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <h1 className="hidden md:block text-2xl font-bold mb-4">Roadmap</h1>
-            <div className="flex-1 w-full overflow-hidden mt-0">
+            <div className="flex-1 w-full overflow-hidden mt-4">
                 <TodoKanban
                     suspendedAnchors={suspendedAnchors}
                     similarityGroups={groupedSimilarity}

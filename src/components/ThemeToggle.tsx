@@ -5,11 +5,9 @@ import { useTheme } from './ThemeProvider';
 
 interface ThemeToggleProps {
     variant: 'mobile' | 'desktop';
-    className?: string;
-    style?: React.CSSProperties;
 }
 
-export default function ThemeToggle({ variant, className, style }: ThemeToggleProps) {
+export default function ThemeToggle({ variant }: ThemeToggleProps) {
     const { theme, setTheme } = useTheme();
 
     const cycleTheme = () => {
@@ -38,7 +36,7 @@ export default function ThemeToggle({ variant, className, style }: ThemeTogglePr
         return (
             <button
                 onClick={cycleTheme}
-                className={`theme-toggle-mobile ${className || ''}`}
+                className="theme-toggle-mobile"
                 aria-label="Toggle theme"
                 style={{
                     background: 'transparent',
@@ -49,8 +47,7 @@ export default function ThemeToggle({ variant, className, style }: ThemeTogglePr
                     alignItems: 'center',
                     cursor: 'pointer',
                     borderRadius: '8px',
-                    marginRight: 'auto', // Default behavior
-                    ...style // Override with provided styles
+                    marginRight: 'auto' // Push everything else to the right
                 }}
             >
                 {getIcon()}
@@ -62,7 +59,7 @@ export default function ThemeToggle({ variant, className, style }: ThemeTogglePr
     return (
         <button
             onClick={cycleTheme}
-            className={`theme-toggle-desktop nav-item ${className || ''}`}
+            className="theme-toggle-desktop nav-item"
             title={`Theme: ${getLabel()}`}
             style={{
                 display: 'flex',
@@ -77,8 +74,7 @@ export default function ThemeToggle({ variant, className, style }: ThemeTogglePr
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 borderRadius: '12px',
-                marginBottom: '0.25rem',
-                ...style
+                marginBottom: '0.25rem'
             }}
         >
             <span className="nav-icon">

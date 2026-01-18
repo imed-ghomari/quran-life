@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
-import ThemeToggle from '../ThemeToggle';
 
 interface LandingPageProps {
   /** * Callback function triggered when the user clicks the 
@@ -34,10 +33,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="nav-actions">
-            <ThemeToggle 
-              variant="mobile" 
-              style={{ marginRight: '1rem', color: 'var(--foreground)' }} 
-            />
             <a href="#features" className="btn btn-secondary nav-features-btn" style={{ marginRight: '10px' }}>
               Features
             </a>
