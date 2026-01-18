@@ -733,7 +733,7 @@ export default function TodoKanban({
                     className={`
                         flex-1 min-h-0 px-4 pb-2 md:px-8
                         ${(isMobile || isTablet)
-                    ? `flex flex-row overflow-auto gap-4 snap-x snap-mandatory !mt-2 items-stretch` 
+                    ? `flex flex-col gap-4 !mt-2 overflow-y-auto` 
                     : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
                 }
                     `}

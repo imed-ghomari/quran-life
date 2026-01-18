@@ -50,11 +50,11 @@ const KanbanColumn = ({
             className={`
                 roadmap-column flex flex-col !rounded-[14px]
                 ${isMobile || isTablet 
-                    ? `min-w-[70vw] snap-center !p-3 ${isTablet ? 'min-w-[350px] !p-4' : ''}` 
+                    ? `w-full !p-3 ${isTablet ? '!p-4' : ''}` 
                     : 'h-full max-h-full !p-4'
                 }
             `}
-            style={isMobile || isTablet ? { height: 'max-content', minHeight: '100%' } : undefined}
+            style={isMobile || isTablet ? { height: 'max-content' } : undefined}
         >
             {/* Header Area */}
             <div 
