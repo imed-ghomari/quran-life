@@ -789,7 +789,7 @@ export default function TodayPage() {
                     onClose={() => setActivePartEditor(null)}
                 />
             )}
-            <h1 className="hidden md:block text-2xl font-bold mb-2">Today</h1>
+            <h1 className="hidden md:block text-2xl font-bold mb-4">Today</h1>
             <audio ref={audioRef} onEnded={handleAudioEnded} onPlay={handleAudioPlay} preload="auto" />
 
             <div className="today-grid">

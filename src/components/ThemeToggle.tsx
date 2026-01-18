@@ -5,9 +5,11 @@ import { useTheme } from './ThemeProvider';
 
 interface ThemeToggleProps {
     variant: 'mobile' | 'desktop';
+    className?: string;
+    style?: React.CSSProperties;
 }
 
-export default function ThemeToggle({ variant }: ThemeToggleProps) {
+export default function ThemeToggle({ variant, className, style }: ThemeToggleProps) {
     const { theme, setTheme } = useTheme();
 
     const cycleTheme = () => {
@@ -36,7 +38,7 @@ export default function ThemeToggle({ variant }: ThemeToggleProps) {
         return (
             <button
                 onClick={cycleTheme}
-                className="theme-toggle-mobile"
+                className={`theme-toggle-mobile ${className || ''}`}
                 aria-label="Toggle theme"
                 style={{
                     background: 'transparent',
@@ -47,7 +49,8 @@ export default function ThemeToggle({ variant }: ThemeToggleProps) {
                     alignItems: 'center',
                     cursor: 'pointer',
                     borderRadius: '8px',
-                    marginRight: 'auto' // Push everything else to the right
+                    marginRight: 'auto', // Default behavior
+                    ...style // Override with provided styles
                 }}
             >
                 {getIcon()}
@@ -59,7 +62,7 @@ export default function ThemeToggle({ variant }: ThemeToggleProps) {
     return (
         <button
             onClick={cycleTheme}
-            className="theme-toggle-desktop nav-item"
+            className={`theme-toggle-desktop nav-item ${className || ''}`}
             title={`Theme: ${getLabel()}`}
             style={{
                 display: 'flex',
@@ -74,7 +77,8 @@ export default function ThemeToggle({ variant }: ThemeToggleProps) {
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 borderRadius: '12px',
-                marginBottom: '0.25rem'
+                marginBottom: '0.25rem',
+                ...style
             }}
         >
             <span className="nav-icon">

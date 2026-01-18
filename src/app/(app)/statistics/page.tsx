@@ -411,8 +411,10 @@ export default function StatisticsPage() {
     return (
         <div className="statistics-container" style={{ width: '100%', paddingBottom: '2rem', maxWidth: '100%' }}>
             <div className="stats-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', width: '100%' }}>
-                <div>
-                    <h1 className="hide-mobile" style={{ marginBottom: '0.25rem' }}>Progress Statistics</h1>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <h1 className="hidden md:block text-2xl font-bold mb-4">Progress Statistics</h1>
+                    
+                    {/* Part Selector - Desktop */}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div className="hide-mobile" style={{ padding: '0.5rem 0.75rem', background: 'var(--verse-bg)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>

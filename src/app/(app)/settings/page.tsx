@@ -411,7 +411,7 @@ export default function SettingsPage() {
 
     return (
         <div className="content-wrapper" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem' }}>
-            <h1 className="hide-mobile">Settings</h1>
+            <h1 className="hidden md:block text-2xl font-bold mb-4">Settings</h1>
 
             <div className="settings-grid" style={{ gap: '0.85rem' }}>
                 <div className="card modern-card" style={{
