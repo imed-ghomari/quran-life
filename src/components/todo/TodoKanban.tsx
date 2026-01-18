@@ -658,10 +658,10 @@ export default function TodoKanban({
                     ref={containerRef}
                     style={{ position: 'relative' }}
                     className={`
-                        flex-1 min-h-0 px-5 pb-2 md:px-8
+                        flex-1 min-h-0 px-4 pb-2 md:px-8
                         ${isMobile
                     ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
-                    : 'grid grid-cols-3 gap-4 !mt-4 !grid-rows-[minmax(0,1fr)]'
+                    : 'roadmap-grid !mt-4 !grid-rows-[minmax(0,1fr)]'
                 }
                     `}
                 >
