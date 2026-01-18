@@ -95,7 +95,7 @@ const KanbanColumn = ({
                         className={`
                             column-content min-h-[100px] relative
                             ${isMobile || isTablet 
-                                ? 'flex flex-row gap-3 overflow-x-auto pb-2 snap-x snap-mandatory' 
+                                ? '!flex !flex-row gap-3 overflow-x-auto pb-2 snap-x snap-mandatory overscroll-x-contain !overflow-y-hidden' 
                                 : 'flex-1 overflow-y-auto custom-scrollbar pr-1 pb-24'
                             }
                         `}

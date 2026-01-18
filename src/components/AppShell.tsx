@@ -27,8 +27,8 @@ export default function AppShell({ children }: AppShellProps) {
     return (
         <div className="app-shell">
             <Navigation />
+            <MobileSyncBar />
             <div className={`page-container ${!isAuthOrHome ? 'has-sync-bar' : ''} ${isFixedLayout ? 'fixed-layout' : ''}`}>
-                <MobileSyncBar />
                 {children}
             </div>
         </div>
