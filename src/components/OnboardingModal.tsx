@@ -10,7 +10,8 @@ import {
     Target,
     Info,
     ExternalLink,
-    Star
+    Star,
+    EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
 import DailyCompletionSlider from './DailyCompletionSlider';
@@ -38,7 +39,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     if (!settings) return null;
 
     const handleNext = async () => {
-        if (step < 4) {
+        if (step < 5) {
             setStep(step + 1);
         } else {
             // Save final settings
@@ -92,6 +93,20 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         setSettings(newSettings);
     };
 
+    const toggleSkippedSurah = (surahId: number) => {
+        if (!settings) return;
+        const currentSkipped = new Set(settings.skippedSurahs || []);
+        if (currentSkipped.has(surahId)) {
+            currentSkipped.delete(surahId);
+        } else {
+            currentSkipped.add(surahId);
+        }
+        setSettings({
+            ...settings,
+            skippedSurahs: Array.from(currentSkipped).sort((a, b) => a - b)
+        });
+    };
+
     const isSurahLearned = (surahId: number) => {
         if (!settings) return false;
         const surah = SURAHS.find(s => s.id === surahId);
@@ -141,7 +156,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         top: 0,
                         height: '100%',
                         background: 'var(--accent)',
-                        width: `${((step + 1) / 5) * 100}%`,
+                        width: `${((step + 1) / 6) * 100}%`,
                         transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     }} />
                 </div>
@@ -279,6 +294,70 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                     )}
 
                     {step === 3 && (
+                        <div className="step-content animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
+                                    <EyeOff size={28} />
+                                </div>
+                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Skip Common Surahs</h2>
+                            </div>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+                                You can skip Surahs you already know well. Skipping them means they won&apos;t appear in your daily review queue, allowing you to focus on what you&apos;re currently memorizing.
+                            </p>
+                            <div style={{
+                                flex: 1,
+                                overflowY: 'auto',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                gap: '0.75rem',
+                                padding: '0.5rem',
+                            }}>
+                                {[1, 32, 67, 112, 113, 114].map(id => {
+                                    const surah = SURAHS.find(s => s.id === id);
+                                    if (!surah) return null;
+                                    const isSkipped = settings.skippedSurahs?.includes(id);
+                                    
+                                    return (
+                                        <button
+                                            key={id}
+                                            onClick={() => toggleSkippedSurah(id)}
+                                            style={{
+                                                padding: '1rem',
+                                                borderRadius: '16px',
+                                                border: `2px solid ${isSkipped ? 'var(--foreground-secondary)' : 'var(--border)'}`,
+                                                background: isSkipped ? 'var(--background-secondary)' : 'var(--background)',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                opacity: isSkipped ? 0.7 : 1,
+                                            }}
+                                        >
+                                            <div style={{ 
+                                                width: '24px', 
+                                                height: '24px', 
+                                                borderRadius: '50%', 
+                                                border: `2px solid ${isSkipped ? 'var(--foreground-secondary)' : 'var(--border)'}`,
+                                                background: isSkipped ? 'var(--foreground-secondary)' : 'transparent',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginBottom: '0.25rem'
+                                            }}>
+                                                {isSkipped && <EyeOff size={14} color="var(--background)" />}
+                                            </div>
+                                            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{surah.name}</span>
+                                            <span style={{ fontFamily: 'Amiri, serif', color: 'var(--foreground-secondary)' }}>{surah.arabicName}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 5 && (
                         <div className="step-content animate-fade-in">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                                 <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
@@ -418,7 +497,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             boxShadow: '0 4px 12px rgba(91, 143, 185, 0.3)',
                         }}
                     >
-                        {step === 4 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
+                        {step === 5 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
                     </button>
                 </div>
             </div>
