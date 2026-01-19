@@ -250,8 +250,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           updateSetting('userId', session.user.id);
         }
 
-        if (!settings.isOnboardingComplete) {
+        if (!settings.isOnboardingComplete && isNewUser) {
+          appLogger.addLog('[Onboarding] New user detected, starting onboarding flow', 'info');
           setShowOnboarding(true);
+        } else if (!settings.isOnboardingComplete && !isNewUser) {
+          appLogger.addLog('[Onboarding] Existing user with incomplete local onboarding - skipping to allow sync', 'info');
         }
       }
     };
@@ -281,4 +284,3 @@ export function Providers({ children }: { children: React.ReactNode }) {
     </>
   );
 }
-

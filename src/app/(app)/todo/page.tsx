@@ -35,6 +35,7 @@ import TodoKanban from '@/components/todo/TodoKanban';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders'; // Import type if needed for state definition
 import { appLogger } from '@/lib/logger';
 import Link from 'next/link';
+import { useTheme } from '@/components/ThemeProvider';
 
 export default function TodoPage() {
     const [mindmaps, setMindmaps] = useState(getMindMaps());
@@ -45,16 +46,18 @@ export default function TodoPage() {
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
 
     // Theme detection
-    const [isDark, setIsDark] = useState(false);
+    const { theme } = useTheme();
+    const [systemIsDark, setSystemIsDark] = useState(false);
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');
-            setIsDark(mq.matches);
-            const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
+            setSystemIsDark(mq.matches);
+            const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
             mq.addEventListener('change', handler);
             return () => mq.removeEventListener('change', handler);
         }
     }, []);
+    const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
 
     // Mindmap Editor State (for Surah and Part mindmaps)
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);

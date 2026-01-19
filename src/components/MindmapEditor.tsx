@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
 import { appLogger } from '@/lib/logger';
+import { useTheme } from '@/components/ThemeProvider';
 import {
     Tldraw,
     DefaultDashStyle,
@@ -181,6 +182,7 @@ interface MindmapEditorProps {
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
     const editorRef = useRef<any>(null);
+    const { theme } = useTheme();
 
     useEffect(() => {
         try {
@@ -235,6 +237,12 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             editorInstance.setCurrentTool('lasso-select');
         }
     }, [initialSnapshot]);
+
+    useEffect(() => {
+        if (!editor) return;
+        const colorScheme = theme === 'system' ? 'system' : theme;
+        editor.user.updateUserPreferences({ colorScheme });
+    }, [editor, theme]);
 
     useEffect(() => {
         if (!editor) return;
@@ -482,7 +490,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             <div className="tldraw-container" style={{ position: 'absolute', top: '50px', left: 0, right: 0, bottom: 0, background: '#f8f9fa' }}>
                 <Tldraw
                     onMount={handleMount}
-                    inferDarkMode={true}
                     tools={[LassoSelectTool]}
                     overrides={uiOverrides}
                     components={components}

@@ -25,6 +25,8 @@ interface MindmapViewerProps {
     isDark: boolean;
     title?: string;
     height?: string | number;
+    className?: string;
+    style?: React.CSSProperties;
 }
 
 export default function MindmapViewer({
@@ -34,7 +36,9 @@ export default function MindmapViewer({
     imageUrlDark,
     isDark,
     title,
-    height = '400px'
+    height = '400px',
+    className,
+    style
 }: MindmapViewerProps) {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [fetchedSnapshot, setFetchedSnapshot] = useState<any>(null);
@@ -55,13 +59,28 @@ export default function MindmapViewer({
         if (templateUrl) {
             setIsLoading(true);
             fetch(templateUrl)
-                .then(res => res.json())
+                .then(res => {
+                    if (!res.ok) {
+                        // If 404, just return null so we stop loading
+                        if (res.status === 404) {
+                            return null;
+                        }
+                        throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
+                    }
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        throw new Error("Received non-JSON response");
+                    }
+                    return res.json();
+                })
                 .then(data => {
-                    setFetchedSnapshot(data);
+                    if (data) {
+                        setFetchedSnapshot(data);
+                    }
                     setIsLoading(false);
                 })
                 .catch(err => {
-                    console.error('Failed to fetch template mindmap:', err);
+                    console.warn('Could not load mindmap template:', err.message);
                     setIsLoading(false);
                 });
         }
@@ -107,6 +126,14 @@ export default function MindmapViewer({
         editor.updateInstanceState({ isReadonly: true });
         // Disable camera movement and other interactions
         // editor.setCameraOptions({ isLocked: true });
+
+        // Zoom to fit content immediately after mount
+        editor.zoomToFit({ duration: 0 });
+        
+        // Do it again after a short delay to ensure all shapes are loaded and bounds are correct
+        setTimeout(() => {
+            editor.zoomToFit({ duration: 0 });
+        }, 500);
     }, []);
 
     // If we have an image URL, show that initially for performance
@@ -132,9 +159,9 @@ export default function MindmapViewer({
         if (hasImage) {
             return (
                 <div 
-                    className="relative w-full h-full group cursor-pointer overflow-hidden rounded-xl bg-[var(--background-secondary)]"
+                    className={`relative w-full h-full group cursor-pointer overflow-hidden rounded-xl bg-[var(--background-secondary)] ${className || ''}`}
                     onClick={() => setIsFullScreen(true)}
-                    style={{ minHeight: height }}
+                    style={{ minHeight: height, ...style }}
                 >
                     <Image
                         src={displayUrl!}
@@ -155,8 +182,40 @@ export default function MindmapViewer({
 
         // If no image, render Tldraw inline (might be heavy)
         if (activeSnapshot) {
+            // We need a specific key for Tldraw to force re-render/re-mount when toggling fullscreen
+            // but for inline view, we just want it to be reliable.
+            // Using a separate handleMount for inline to ensure zoom happens correctly there too.
+            const handleInlineMount = (editor: any) => {
+                setEditor(editor);
+                editor.updateInstanceState({ isReadonly: true });
+                
+                // Aggressive Zoom-to-Fit strategy
+                const fit = () => {
+                    try {
+                        // Check if we have shapes
+                        const shapes = editor.getCurrentPageShapes();
+                        if (shapes.length > 0) {
+                            editor.zoomToFit({ duration: 0 });
+                        }
+                    } catch (e) {
+                        console.warn('Zoom to fit failed', e);
+                    }
+                };
+
+                // Immediate
+                fit();
+                
+                // Staggered retries to handle layout/rendering delays
+                setTimeout(fit, 100);
+                setTimeout(fit, 300);
+                setTimeout(fit, 600);
+            };
+
             return (
-                <div className="w-full h-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] relative" style={{ minHeight: height }}>
+                <div 
+                    className={`w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] relative ${className || ''}`} 
+                    style={{ height: height, minHeight: height, ...style }}
+                >
                     <div className="absolute top-3 right-3 z-10">
                          <button 
                             onClick={() => setIsFullScreen(true)}
@@ -166,12 +225,15 @@ export default function MindmapViewer({
                             <Maximize2 size={18} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <Tldraw
-                        snapshot={activeSnapshot}
-                        components={components}
-                        onMount={handleMount}
-                        hideUi
-                    />
+                    <div className="absolute inset-0 w-full h-full">
+                        <Tldraw
+                            key="inline-preview"
+                            snapshot={activeSnapshot}
+                            components={components}
+                            onMount={handleInlineMount}
+                            hideUi
+                        />
+                    </div>
                 </div>
             );
         }

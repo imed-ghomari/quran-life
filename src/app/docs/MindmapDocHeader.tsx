@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { getMindMap, getPartMindMap } from '@/lib/storage';
 import MindmapViewer from '@/components/MindmapViewer';
 import { QuranPart } from '@/lib/types';
+import { useTheme } from '@/components/ThemeProvider';
 
 interface MindmapDocHeaderProps {
     slug: string;
@@ -11,15 +12,18 @@ interface MindmapDocHeaderProps {
 
 export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
     const [mindmapData, setMindmapData] = useState<any>(null);
-    const [isDark, setIsDark] = useState(false);
+    const { theme } = useTheme();
+    const [systemIsDark, setSystemIsDark] = useState(false);
 
     useEffect(() => {
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
-        setIsDark(mq.matches);
-        const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
+        setSystemIsDark(mq.matches);
+        const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
         mq.addEventListener('change', handler);
         return () => mq.removeEventListener('change', handler);
     }, []);
+
+    const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
 
     useEffect(() => {
         if (slug.startsWith('mindmaps/surah-')) {
@@ -57,16 +61,15 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
     }
 
     return (
-        <div style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
-            <MindmapViewer
-                snapshot={mindmapData.data?.tldrawSnapshot}
-                templateUrl={mindmapData.templateUrl}
-                imageUrl={mindmapData.data?.imageUrl}
-                imageUrlDark={mindmapData.data?.imageUrlDark}
-                isDark={isDark}
-                title={mindmapData.type === 'surah' ? `Surah ${mindmapData.id} Mindmap` : `Part ${mindmapData.id} Mindmap`}
-                height={400}
-            />
-        </div>
+        <MindmapViewer
+            snapshot={mindmapData.data?.tldrawSnapshot}
+            templateUrl={mindmapData.templateUrl}
+            imageUrl={mindmapData.data?.imageUrl}
+            imageUrlDark={mindmapData.data?.imageUrlDark}
+            isDark={isDark}
+            title={mindmapData.type === 'surah' ? `Surah ${mindmapData.id} Mindmap` : `Part ${mindmapData.id} Mindmap`}
+            height={400}
+            style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}
+        />
     );
 }
