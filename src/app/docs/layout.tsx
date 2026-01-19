@@ -8,6 +8,7 @@ import DocsSearch from './DocsSearch';
 import DocsBreadcrumbs from './DocsBreadcrumbs';
 import BackToTop from './BackToTop';
 import SearchHighlight from './SearchHighlight';
+import { ScrollOnNavigate } from './ScrollOnNavigate';
 
 function getSidebarData(dirPath: string, baseRoute = '/docs'): SidebarItem[] {
     const metaPath = path.join(dirPath, '_meta.json');
@@ -51,8 +52,9 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
 
     return (
         <div className="content-wrapper !max-w-full h-full flex flex-col">
+            <ScrollOnNavigate />
             {/* Mobile Header */}
-            <div className="flex items-center justify-between mb-4 shrink-0 md:hidden">
+            <div className="flex items-center justify-between mb-4 shrink-0 md:hidden px-5 pt-5">
                 <div className="flex items-center gap-3">
                     <MobileDocsNav items={sidebarItems} />
                     <DocsBreadcrumbs />
@@ -97,7 +99,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                         padding: '0',
                         borderRadius: '16px'
                     }}>
-                        <article className="docs-content">
+                        <article className="docs-content p-5 md:p-6">
                             <Suspense fallback={null}>
                                 <SearchHighlight />
                             </Suspense>

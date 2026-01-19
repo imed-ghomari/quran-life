@@ -43,7 +43,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
-            <body>
+            <body suppressHydrationWarning={true}>
                 <Script id="register-sw" strategy="afterInteractive">
                     {`
                         if ('serviceWorker' in navigator) {

@@ -24,6 +24,8 @@ import {
     isSurahSkipped,
     MutashabihatDecision,
     getMemoryNodes,
+    DEFAULT_SETTINGS,
+    AppSettings
 } from '@/lib/storage';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { QuranPart } from '@/lib/types';
@@ -103,7 +105,7 @@ export default function TodoPage() {
         const learnedSurahIds = new Set(Object.keys(settings.learnedVerses || {}).map(Number));
         const eligible = SURAHS.filter(s =>
             (activePart === 5 || s.part === activePart) &&
-            !isSurahSkipped(s.id) &&
+            !isSurahSkipped(s.id, settings) &&
             learnedSurahIds.has(s.id)
         );
         return eligible

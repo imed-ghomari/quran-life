@@ -576,7 +576,7 @@ export default function TodoKanban({
             {/* Header Area */}
             <div className={`
                 flex shrink-0 bg-[var(--background)] gap-4
-                ${isMobile ? 'flex-col items-stretch px-4 pt-4 pb-2' : 'flex-row items-center justify-between px-0 pt-0 pb-6'}
+                ${isMobile ? 'flex-col items-stretch px-5 pt-5 pb-2' : 'flex-row items-center justify-between px-0 pt-0 pb-6'}
             `}>
                 {/* Title - Desktop only */}
                 {!isMobile && (
@@ -666,7 +666,7 @@ export default function TodoKanban({
                     ref={containerRef}
                     style={{ position: 'relative' }}
                     className={`
-                        flex-1 min-h-0 px-4 pb-2 md:px-0
+                        flex-1 min-h-0 px-5 pb-2 md:px-0
                         ${isMobile
                     ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
                     : 'grid grid-cols-3 gap-6 !mt-4 !grid-rows-[minmax(0,1fr)]'

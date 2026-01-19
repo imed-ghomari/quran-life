@@ -24,18 +24,9 @@ import { SURAHS } from '@/lib/quranData';
 export default function Navigation() {
     let pathname = usePathname();
 
-    // Fallback for Pages Router (Nextra)
-    try {
-        const pagesRouter = usePagesRouter();
-        if (!pathname && pagesRouter) {
-            pathname = pagesRouter.pathname;
-        }
-    } catch (e) { }
-
     const [pendingCount, setPendingCount] = useState(0);
     const [todayReviews, setTodayReviews] = useState(0);
     const [isPortionComplete, setIsPortionComplete] = useState(false);
-    const settings = useMemo(() => getSettings(), []);
 
     useEffect(() => {
         const compute = () => {
@@ -115,6 +106,7 @@ export default function Navigation() {
                 const isActive = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
                 return (
                     <Link
+                        suppressHydrationWarning={true}
                         key={item.href}
                         href={item.href}
                         className={`nav-item ${isActive ? 'active' : ''}`}

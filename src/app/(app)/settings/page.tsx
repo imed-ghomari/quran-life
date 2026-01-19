@@ -100,8 +100,22 @@ export default function SettingsPage() {
     const router = useRouter();
     const isOnline = useContext(OnlineStatusContext);
     const [user, setUser] = useState<User | null>(null);
-    const [settings, setSettings] = useState<AppSettings>(getSettings());
+    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [isSyncing, setIsSyncing] = useState(false);
+
+    useEffect(() => {
+        // Initial load from cache/storage
+        setSettings(getSettings());
+
+        // Listen for storage updates
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'quran-app-settings' || !e.key) {
+                setSettings(getSettings());
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, []);
     const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
     const renderMobileView = () => {
@@ -117,7 +131,7 @@ export default function SettingsPage() {
                         <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Account & Data</h1>
                     </div>
                     
-                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                             <Database size={18} /> User Account
                         </h2>
@@ -197,6 +211,7 @@ export default function SettingsPage() {
                                 ) : (
                                     <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                         <input
+                                            suppressHydrationWarning={true}
                                             type="email"
                                             placeholder="Email"
                                             value={email}
@@ -214,6 +229,7 @@ export default function SettingsPage() {
                                         />
                                         {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
                                         <button
+                                            suppressHydrationWarning={true}
                                             type="submit"
                                             className="btn btn-primary"
                                             disabled={isSyncing}
@@ -233,7 +249,7 @@ export default function SettingsPage() {
                             </div>
                     </div>
 
-                    <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                          <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                             <Download size={18} /> Local Backup
                         </h2>
@@ -326,6 +342,7 @@ export default function SettingsPage() {
                                 { id: 5, name: "All Quran" }
                             ].map(p => (
                                 <button
+                                    suppressHydrationWarning={true}
                                     key={p.id}
                                     className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
                                     onClick={() => handleActivePart(p.id as QuranPart)}
@@ -370,13 +387,13 @@ export default function SettingsPage() {
                             <Check size={18} /> Surah Status
                         </h2>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-                                <button className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
+                                <button suppressHydrationWarning={true} className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
                                     All Learned
                                 </button>
-                                <button className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
+                                <button suppressHydrationWarning={true} className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
                                     All New
                                 </button>
-                                <button className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
+                                <button suppressHydrationWarning={true} className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
                                     All Skipped
                                 </button>
                             </div>
@@ -446,7 +463,7 @@ export default function SettingsPage() {
                             </div>
                     </div>
 
-                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                             <Activity size={18} /> Knowledge Tracking
                         </h2>
@@ -544,7 +561,7 @@ export default function SettingsPage() {
                                 </div>
                     </div>
                     
-                    <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                             <Brain size={18} /> Similar Verse Coverage
                         </h2>

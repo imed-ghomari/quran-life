@@ -30,6 +30,7 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
         <div className="daily-completion-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ position: 'relative', width: '100%', padding: '10px 0' }}>
                 <input
+                    suppressHydrationWarning={true}
                     type="range"
                     min="7"
                     max="120"

@@ -779,6 +779,23 @@ h3 {
   box-shadow: var(--card-shadow);
 }
 
+@media (max-width: 768px) {
+  .card {
+    margin-bottom: 1rem;
+  }
+  
+  .content-wrapper {
+    padding: 0 !important;
+  }
+
+  /* Standardized inner container padding for mobile (p-5 = 1.25rem) */
+  .today-grid,
+  .settings-grid,
+  .stats-grid-main {
+    padding: 1.25rem;
+  }
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;

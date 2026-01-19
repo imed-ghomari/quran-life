@@ -13,6 +13,8 @@ import {
     getListeningCycles,
     getNodeStability,
     getNodeDueDate,
+    DEFAULT_SETTINGS,
+    type AppSettings,
 } from '@/lib/storage';
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 import { getListeningProgress } from '@/lib/storage';
@@ -38,29 +40,28 @@ interface StatSegment {
 export default function StatisticsPage() {
     const [version, setVersion] = useState(0);
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
-    const settings = useMemo(() => {
-        version; // satisfy linter
-        return getSettings();
-    }, [version]);
+    
+    // Hydration-safe state initialization
+    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+    const [mindmaps, setMindmaps] = useState<ReturnType<typeof getMindMaps>>({});
+    const [partMindmaps, setPartMindmaps] = useState<ReturnType<typeof getPartMindMaps>>({});
+    const [memoryNodes, setMemoryNodes] = useState<ReturnType<typeof getMemoryNodes>>([]);
+
     const activePart = settings.activePart;
+
+    useEffect(() => {
+        // Initial load and updates on version change
+        setSettings(getSettings());
+        setMindmaps(getMindMaps());
+        setPartMindmaps(getPartMindMaps());
+        setMemoryNodes(getMemoryNodes());
+    }, [version]);
 
     useEffect(() => {
         const interval = setInterval(() => setVersion(v => v + 1), 2000);
         return () => clearInterval(interval);
     }, []);
 
-    const mindmaps = useMemo(() => {
-        version; // satisfy linter
-        return getMindMaps();
-    }, [version]);
-    const partMindmaps = useMemo(() => {
-        version; // satisfy linter
-        return getPartMindMaps();
-    }, [version]);
-    const memoryNodes = useMemo(() => {
-        version; // satisfy linter
-        return getMemoryNodes();
-    }, [version]);
     const skippedSurahs = useMemo(() => new Set(settings.skippedSurahs || []), [settings.skippedSurahs]);
 
     // 1. Part Mindmaps Data (Always Global)

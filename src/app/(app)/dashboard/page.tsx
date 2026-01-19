@@ -59,6 +59,8 @@ import {
     getOptimizationMeta,
     saveOptimizationMeta,
     saveCustomWeights,
+    DEFAULT_SETTINGS,
+    AppSettings
 } from '@/lib/storage';
 import { reviewCard, getSchedulingPreview } from '@/lib/fsrs';
 import { syncWithCloud } from '@/lib/sync';
@@ -95,6 +97,7 @@ export default function TodayPage() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
     const [settingsVersion, setSettingsVersion] = useState(0);
+    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
 
@@ -1044,7 +1047,7 @@ export default function TodayPage() {
                                 <>
                                     <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
                                         <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                                            {getSettings().activePart === 5 ? 'All Quran' : `Part ${getSettings().activePart}`}
+                                            {settings.activePart === 5 ? 'All Quran' : `Part ${settings.activePart}`}
                                         </p>
                                     </div>
 

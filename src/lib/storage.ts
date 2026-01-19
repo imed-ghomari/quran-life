@@ -301,8 +301,8 @@ export async function updateSetting<K extends keyof AppSettings>(key: K, value: 
     await saveSettings(settings);
 }
 
-export function isSurahSkipped(surahId: number): boolean {
-    const settings = getSettings();
+export function isSurahSkipped(surahId: number, settingsOverride?: AppSettings): boolean {
+    const settings = settingsOverride || getSettings();
     return settings.skippedSurahs?.includes(surahId) || false;
 }
 

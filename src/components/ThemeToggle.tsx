@@ -58,6 +58,7 @@ export default function ThemeToggle({ variant }: ThemeToggleProps) {
     // Desktop
     return (
         <button
+            suppressHydrationWarning={true}
             onClick={cycleTheme}
             className="theme-toggle-desktop nav-item"
             title={`Theme: ${getLabel()}`}
