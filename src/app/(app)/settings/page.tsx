@@ -49,6 +49,8 @@ import {
     Brain,
     Plus,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Map,
     Book,
     Activity,
@@ -101,6 +103,610 @@ export default function SettingsPage() {
     const [settings, setSettings] = useState<AppSettings>(getSettings());
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+
+    const renderMobileView = () => {
+        if (!isMobile) return null;
+
+        if (activeMobilePage === 'account') {
+             return (
+                 <div className="content-wrapper">
+                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem'}}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center'}}>
+                            <ChevronLeft size={28} />
+                        </button>
+                        <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Account & Data</h1>
+                    </div>
+                    
+                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <Database size={18} /> User Account
+                        </h2>
+                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                {user
+                                    ? `Signed in as ${user.email}. Your data is synced manually.`
+                                    : "Sign in to sync your progress across devices."}
+                            </p>
+
+                            <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
+                                {!isOnline && (
+                                    <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}>
+                                        <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Offline</div>
+                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                                            Cloud sync and authentication are paused. Keep using the app; changes will sync when online.
+                                        </div>
+                                    </div>
+                                )}
+
+                                {user ? (
+                                    <>
+                                        <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--background)', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
+                                                <span style={{
+                                                    color: isSyncing ? 'var(--accent)' : (syncResult?.status === 'error' ? '#ef4444' : '#10b981'),
+                                                    fontWeight: 600
+                                                }}>
+                                                    {isSyncing ? 'Syncing...' : (syncResult?.message || 'Ready')}
+                                                </span>
+                                            </div>
+                                            {settings.lastSyncedAt && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Synced:</span>
+                                                    <span style={{ color: 'var(--foreground-secondary)' }}>
+                                                        {new Date(settings.lastSyncedAt).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={async () => {
+                                                    // Check for unsaved changes before signing out
+                                                    const { getPendingChangesCount, commitTask } = await import('@/lib/syncEngine');
+                                                    const pending = getPendingChangesCount();
+                                                    
+                                                    if (pending > 0) {
+                                                        const confirmSync = window.confirm(
+                                                            `You have ${pending} unsaved changes. We will attempt to save them before signing out.\n\nClick OK to Sync & Sign Out.\nClick Cancel to abort.`
+                                                        );
+                                                        if (!confirmSync) return;
+
+                                                        // Attempt sync
+                                                        const { success } = await commitTask('logout');
+                                                        if (!success) {
+                                                            const force = window.confirm(
+                                                                "Sync failed! You are offline or experiencing errors.\n\nSigning out now will permanently DELETE these unsaved changes from this device.\n\nAre you sure you want to sign out anyway?"
+                                                            );
+                                                            if (!force) return;
+                                                        }
+                                                    } else {
+                                                        if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
+                                                    }
+
+                                                    await supabase.auth.signOut();
+                                                    router.push('/');
+                                                }}
+                                                style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
+                                            >
+                                                Sign Out
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <input
+                                            type="email"
+                                            placeholder="Email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                        />
+                                        <input
+                                            type="password"
+                                            placeholder="Password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            required
+                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                        />
+                                        {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
+                                        <button
+                                            type="submit"
+                                            className="btn btn-primary"
+                                            disabled={isSyncing}
+                                            style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
+                                        >
+                                            {isSyncing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsSignUp(!isSignUp)}
+                                            style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }}
+                                        >
+                                            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
+                    </div>
+
+                    <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                         <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <Download size={18} /> Local Backup
+                        </h2>
+                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                Export a JSON backup of your progress. Import it later to restore or move to another device.
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleExport}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem',
+                                        fontSize: '0.9rem',
+                                        height: 'auto',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px'
+                                    }}
+                                >
+                                    <Download size={20} style={{ color: 'var(--accent)' }} />
+                                    <span>Export Data</span>
+                                </button>
+                                <label
+                                    className="btn btn-secondary"
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        height: 'auto',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px'
+                                    }}
+                                >
+                                    <Upload size={20} style={{ color: 'var(--accent)' }} />
+                                    <span>Import Data</span>
+                                    <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                                </label>
+                            </div>
+                    </div>
+                 </div>
+             );
+        }
+        
+        if (activeMobilePage === 'plan') {
+             return (
+                 <div className="content-wrapper">
+                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem'}}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center'}}>
+                            <ChevronLeft size={28} />
+                        </button>
+                        <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Memorization Plan</h1>
+                    </div>
+
+                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <Clock size={18} /> Completion Schedule
+                        </h2>
+                            <DailyCompletionSlider
+                                days={settings.completionDays || 30}
+                                onChange={handleCompletionDays}
+                                activePart={settings.activePart}
+                            />
+                    </div>
+
+                    <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <PauseCircle size={18} /> Active Part
+                        </h2>
+                        <div className="part-selector" style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                            gap: '0.75rem'
+                        }}>
+                            {[
+                                { id: 1, name: "Sab'ut-Tiwal" },
+                                { id: 2, name: "Al-Mi'un" },
+                                { id: 3, name: "Al-Mathani" },
+                                { id: 4, name: "Al-Mufassal" },
+                                { id: 5, name: "All Quran" }
+                            ].map(p => (
+                                <button
+                                    key={p.id}
+                                    className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
+                                    onClick={() => handleActivePart(p.id as QuranPart)}
+                                    style={{
+                                        padding: '1.25rem 0.75rem',
+                                        borderRadius: '16px',
+                                        border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
+                                        background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        textAlign: 'center',
+                                        gap: '0.25rem'
+                                    }}
+                                >
+                                    <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>
+                                        {p.id === 5 ? '∞' : p.id}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                 </div>
+             );
+        }
+
+        if (activeMobilePage === 'tracking') {
+             return (
+                 <div className="content-wrapper">
+                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem'}}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center'}}>
+                            <ChevronLeft size={28} />
+                        </button>
+                        <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Progress Tracking</h1>
+                    </div>
+
+                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <Check size={18} /> Surah Status
+                        </h2>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <button className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
+                                    All Learned
+                                </button>
+                                <button className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
+                                    All New
+                                </button>
+                                <button className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
+                                    All Skipped
+                                </button>
+                            </div>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                Manage learned and skipped surahs for the active part. <br />
+                                <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>Tap a surah to cycle between: <b>Not Learned (Red)</b> → <b>Learned (Green)</b> → <b>Skipped (Grey)</b></span>
+                            </p>
+                            <div className="surah-pills-container" style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: '0.6rem',
+                                marginTop: '0.5rem'
+                            }}>
+                                {activePartSurahs.map(s => {
+                                    const { learned, total } = getSurahLearnedStatus(s.id);
+                                    const skipped = isSurahSkipped(s.id);
+                                    const isLearned = learned === total;
+
+                                    let statusColor = 'var(--danger)'; // Not Learned (Red)
+                                    if (isLearned) {
+                                        statusColor = '#22c55e'; // Learned (Green)
+                                    } else if (skipped) {
+                                        statusColor = '#94a3b8'; // Skipped (Grey)
+                                    }
+
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            onClick={() => handleCycleStatus(s.id)}
+                                            className="surah-pill"
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                padding: '0.5rem 0.8rem',
+                                                borderRadius: '24px',
+                                                border: `1px solid ${statusColor}`,
+                                                background: `${statusColor}15`, // Translucent background
+                                                color: statusColor,
+                                                fontSize: '0.85rem',
+                                                fontWeight: 500,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                outline: 'none'
+                                            }}
+                                            title={`${s.name} - Tap to cycle status`}
+                                        >
+                                            <span style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                background: statusColor,
+                                                color: 'white',
+                                                fontSize: '0.7rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginRight: '0.5rem',
+                                                flexShrink: 0
+                                            }}>
+                                                {s.id}
+                                            </span>
+                                            <span style={{ marginRight: '0.4rem' }}>{s.arabicName}</span>
+                                            <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{s.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                    </div>
+
+                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <Activity size={18} /> Knowledge Tracking
+                        </h2>
+                                <div className="knowledge-groups-mobile">
+                                    {/* MINDMAPS MOBILE GROUP */}
+                                    <div className="mobile-group-item">
+                                        <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <Map size={20} />
+                                                <span style={{ fontWeight: 600 }}>Mindmaps</span>
+                                            </div>
+                                            <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                        </div>
+                                        {expandedGroups['mindmaps'] && (
+                                            <div className="mobile-subgroup-list">
+                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                    id: 'mindmaps-part',
+                                                    title: 'Part Mindmaps',
+                                                    type: 'part_mindmap',
+                                                    nodes: memoryNodes.filter(n => n.type === 'part_mindmap')
+                                                })}>
+                                                    <span>Part Mindmaps</span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'part_mindmap').length}</span>
+                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                    </div>
+                                                </div>
+                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                    id: 'mindmaps-surah',
+                                                    title: 'Surah Mindmaps',
+                                                    type: 'mindmap',
+                                                    nodes: memoryNodes.filter(n => n.type === 'mindmap')
+                                                })}>
+                                                    <span>Surah Mindmaps</span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'mindmap').length}</span>
+                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* VERSES MOBILE GROUP */}
+                                    <div className="mobile-group-item">
+                                        <div className="mobile-group-header" onClick={() => toggleGroup('verses')}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <Book size={20} />
+                                                <span style={{ fontWeight: 600 }}>Verses</span>
+                                            </div>
+                                            <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                        </div>
+                                        {expandedGroups['verses'] && (
+                                            <div className="mobile-subgroup-list">
+                                                {/* Issue #10: Filter by active part */}
+                                                {(() => {
+                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
+                                                        .filter(surahId => {
+                                                            const surah = getSurah(surahId!);
+                                                            if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
+                                                            if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                            return true;
+                                                        })
+                                                        .sort((a, b) => (a || 0) - (b || 0));
+
+                                                    if (filteredSurahs.length === 0) {
+                                                        return (
+                                                            <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes in Part {settings.activePart}</div>
+                                                        );
+                                                    }
+
+                                                    return filteredSurahs.map(surahId => {
+                                                        const surah = getSurah(surahId!);
+                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                        return (
+                                                            <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                                id: `verse-surah-${surahId}`,
+                                                                title: `${surah?.id}. ${surah?.name}`,
+                                                                type: 'verse',
+                                                                nodes: surahNodes,
+                                                                surahId
+                                                            })}>
+                                                                <span>{surah?.name}</span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span className="status-badge">{surahNodes.length}</span>
+                                                                    <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                    </div>
+                    
+                    <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <Brain size={18} /> Similar Verse Coverage
+                        </h2>
+                        <div className="knowledge-groups-mobile">
+                            {mutashabihatSurahs.map(({ surah, count }) => {
+                                const isOpen = expandedSurahs[surah.id] ?? false;
+
+                                // Calculate surah group data
+                                const surahMutsMap: Record<string, {
+                                    phraseId: string,
+                                    ayahIds: number[],
+                                    entry: any,
+                                    absRefs: number[]
+                                }> = {};
+
+                                getAllMutashabihatRefs().filter(abs => {
+                                    const ref = absoluteToSurahAyah(abs);
+                                    return ref.surahId === surah.id;
+                                }).forEach(abs => {
+                                    const muts = getMutashabihatForAbsolute(abs);
+                                    const ref = absoluteToSurahAyah(abs);
+                                    muts.forEach(m => {
+                                        if (!surahMutsMap[m.phraseId]) {
+                                            surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [] };
+                                        }
+                                        if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
+                                            surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
+                                            surahMutsMap[m.phraseId].absRefs.push(abs);
+                                        }
+                                    });
+                                });
+
+                                const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+
+                                return (
+                                    <div key={surah.id} className="mobile-group-item">
+                                        <div className="mobile-group-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <span style={{
+                                                    width: '24px', height: '24px', borderRadius: '6px',
+                                                    background: 'var(--accent)', color: 'white',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '0.75rem', fontWeight: 700
+                                                }}>{surah.id}</span>
+                                                <span style={{ fontWeight: 600 }}>{surah.name}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span className="status-badge" style={{ background: 'var(--accent-light)', color: 'white' }}>{count}</span>
+                                                <ChevronDown size={20} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                            </div>
+                                        </div>
+                                        {isOpen && (
+                                            <div className="mobile-subgroup-list">
+                                                {groups.map(group => {
+                                                    const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
+                                                    const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                    const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                    const isConfirmed = !!existing.confirmedAt;
+
+                                                    return (
+                                                        <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
+                                                            id: decisionKey,
+                                                            title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
+                                                            surahId: surah.id,
+                                                            phraseId: group.phraseId,
+                                                            group,
+                                                            representativeAbs
+                                                        })}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>
+                                                                    {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                                                    {group.entry.matches.length - 1} matches
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                {isConfirmed && <Check size={16} style={{ color: '#22c55e' }} />}
+                                                                <span className={`status-badge ${existing.status !== 'pending' ? 'active' : ''}`} style={{
+                                                                    fontSize: '0.65rem',
+                                                                    background: existing.status === 'pending' ? 'var(--border)' : 'var(--accent)',
+                                                                    color: 'white'
+                                                                }}>
+                                                                    {MUT_STATES.find(s => s.value === existing.status)?.label.split(' ')[0]}
+                                                                </span>
+                                                                <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                 </div>
+             );
+        }
+
+        return (
+             <div className="content-wrapper">
+                <h1 className="text-2xl font-bold mb-6">Settings</h1>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                    <button onClick={() => setActiveMobilePage('account')} className="modern-card" style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '1.25rem', background: 'var(--background-secondary)',
+                        border: '1px solid var(--border)', borderRadius: '16px',
+                        cursor: 'pointer', textAlign: 'left', width: '100%'
+                    }}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                            <div style={{background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                <Database size={24} />
+                            </div>
+                            <div>
+                                <div style={{fontWeight: 700, fontSize: '1.1rem'}}>Account & Data</div>
+                                <div style={{fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px'}}>Sync, Backup, Import</div>
+                            </div>
+                        </div>
+                        <ChevronRight size={24} style={{color: 'var(--foreground-secondary)'}} />
+                    </button>
+
+                    <button onClick={() => setActiveMobilePage('plan')} className="modern-card" style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '1.25rem', background: 'var(--background-secondary)',
+                        border: '1px solid var(--border)', borderRadius: '16px',
+                        cursor: 'pointer', textAlign: 'left', width: '100%'
+                    }}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                            <div style={{background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                <Clock size={24} />
+                            </div>
+                            <div>
+                                <div style={{fontWeight: 700, fontSize: '1.1rem'}}>Memorization Plan</div>
+                                <div style={{fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px'}}>Schedule, Active Part</div>
+                            </div>
+                        </div>
+                        <ChevronRight size={24} style={{color: 'var(--foreground-secondary)'}} />
+                    </button>
+
+                    <button onClick={() => setActiveMobilePage('tracking')} className="modern-card" style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '1.25rem', background: 'var(--background-secondary)',
+                        border: '1px solid var(--border)', borderRadius: '16px',
+                        cursor: 'pointer', textAlign: 'left', width: '100%'
+                    }}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                            <div style={{background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                <Activity size={24} />
+                            </div>
+                            <div>
+                                <div style={{fontWeight: 700, fontSize: '1.1rem'}}>Progress Tracking</div>
+                                <div style={{fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px'}}>Status, Knowledge, Similar Verses</div>
+                            </div>
+                        </div>
+                        <ChevronRight size={24} style={{color: 'var(--foreground-secondary)'}} />
+                    </button>
+                </div>
+             </div>
+        );
+    };
 
     useEffect(() => {
         const getUser = async () => {
@@ -186,6 +792,8 @@ export default function SettingsPage() {
         };
         representativeAbs: number;
     } | null>(null);
+
+    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | null>(null);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -431,6 +1039,10 @@ export default function SettingsPage() {
             setSelectedMutSurah(mutashabihatSurahs[0]?.surah.id ?? null);
         }
     }, [mutashabihatSurahs, selectedMutSurah]);
+
+    if (isMobile) {
+        return renderMobileView();
+    }
 
     return (
         <div className="content-wrapper">
