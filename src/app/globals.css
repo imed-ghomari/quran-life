@@ -2552,9 +2552,18 @@ input:focus {
 
 /* Mobile sync bar positioning */
 .sync-status-mobile {
-  position: sticky;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--border);
+  position: fixed;
   top: 0;
-  z-index: 40;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 100;
 }
 
 /* Nextra Documentation Heading Overrides */
@@ -2597,7 +2606,9 @@ input:focus {
 :root[data-theme="light"] .docs-main,
 :root[data-theme="light"] aside.card,
 :root[data-theme="light"] div.card,
-:root[data-theme="light"] .kanban-column {
+:root[data-theme="light"] .kanban-column,
+:root[data-theme="light"] .bottom-nav,
+:root[data-theme="light"] .sync-status-mobile {
   background-color: #f4f6f8 !important;
 }
 
@@ -2615,13 +2626,11 @@ input:focus {
 /* Desktop Left Toolbar */
 @media (min-width: 768px) {
   @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) .bottom-nav,
     :root:not([data-theme="dark"]) .docs-search-trigger.todo-search-bar {
       background-color: #f4f6f8 !important;
     }
   }
 
-  :root[data-theme="light"] .bottom-nav,
   :root[data-theme="light"] .docs-search-trigger.todo-search-bar {
     background-color: #f4f6f8 !important;
   }

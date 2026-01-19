@@ -102,20 +102,6 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
         return (
             <div
                 className="sync-status-mobile"
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.5rem 1rem',
-                    background: 'var(--background-secondary)',
-                    borderBottom: '1px solid var(--border)',
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    width: '100%',
-                    zIndex: 100,
-                }}
             >
                 <ThemeToggle variant="mobile" />
 

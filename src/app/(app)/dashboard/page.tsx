@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import MindmapViewer from '@/components/MindmapViewer';
+import AudioPlayer from '@/components/AudioPlayer';
 import { QuranPart } from '@/lib/types';
 import {
     getSettings,
@@ -91,9 +92,8 @@ export default function TodayPage() {
     const [currentVerseInReview, setCurrentVerseInReview] = useState(0);
     const [showGrading, setShowGrading] = useState(false);
     const [todaysPortion, setTodaysPortion] = useState<Verse[]>([]);
-    const [isPlaying, setIsPlaying] = useState(false);
     const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
-    const [speed, setSpeed] = useState<PlaybackSpeed>(1);
+    const [highlightedWordIndex, setHighlightedWordIndex] = useState<number>(-1);
     const [isLoaded, setIsLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
     const [settingsVersion, setSettingsVersion] = useState(0);
@@ -104,6 +104,21 @@ export default function TodayPage() {
     // Theme detection
     const { theme } = useTheme();
     const [isDark, setIsDark] = useState(false);
+
+    const verseContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (highlightedWordIndex !== -1 && verseContainerRef.current) {
+            const wordEl = document.getElementById(`word-${highlightedWordIndex}`);
+            if (wordEl) {
+                const container = verseContainerRef.current;
+                const offsetTop = wordEl.offsetTop;
+                const containerHeight = container.clientHeight;
+                const scrollTop = offsetTop - (containerHeight / 2) + (wordEl.clientHeight / 2);
+                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+            }
+        }
+    }, [highlightedWordIndex]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -247,7 +262,6 @@ export default function TodayPage() {
         return () => clearTimeout(timer);
     }, [addToast]);
 
-    const audioRef = useRef<HTMLAudioElement>(null);
     const targetBoxRef = useRef<HTMLDivElement>(null);
 
     // Load data
@@ -394,71 +408,6 @@ export default function TodayPage() {
     //     const settings = getSettings();
     //     saveListeningProgress(settings.activePart, currentVerseIndex);
     // }, [currentVerseIndex]);
-
-    // Audio setup
-    useEffect(() => {
-        if (audioRef.current && todaysPortion.length > 0 && currentVerseIndex < todaysPortion.length) {
-            const verse = todaysPortion[currentVerseIndex];
-            // Only update src if it changed to prevent loop glitch
-            const newSrc = getAudioPath(verse.surahId, verse.ayahId);
-            const urlPath = new URL(newSrc, 'http://localhost').pathname; // hack for relative path check
-            if (!audioRef.current.src.includes(urlPath)) {
-                audioRef.current.src = newSrc;
-                // Force reset playback rate when source changes
-                audioRef.current.playbackRate = speed;
-                if (isPlaying) {
-                    audioRef.current.play().catch(() => setIsPlaying(false));
-                }
-            } else {
-                // Ensure speed is updated even if src didn't change (e.g. user toggled speed mid-verse)
-                audioRef.current.playbackRate = speed;
-            }
-        }
-    }, [currentVerseIndex, todaysPortion, isPlaying, speed]);
-
-    // Keep playback rate in sync when speed changes (even mid-verse)
-    useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.playbackRate = speed;
-        }
-    }, [speed]);
-
-    // Ensure speed persists on play
-    const handleAudioPlay = () => {
-        if (audioRef.current) audioRef.current.playbackRate = speed;
-    };
-
-    // Pause audio when switching to Read mode
-    useEffect(() => {
-        if (readOnlyMode && isPlaying) {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                setIsPlaying(false);
-            }
-        }
-    }, [readOnlyMode, isPlaying]);
-
-
-    const handleAudioEnded = () => {
-        if (currentVerseIndex < todaysPortion.length - 1) {
-            setCurrentVerseIndex(prev => prev + 1);
-        } else {
-            setIsPlaying(false);
-        }
-    };
-
-    const togglePlay = () => {
-        if (audioRef.current) {
-            if (isPlaying) audioRef.current.pause();
-            else audioRef.current.play().catch(console.error);
-            setIsPlaying(!isPlaying);
-        }
-    };
-
-    const cycleSpeed = () => {
-        const speeds: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2];
-        setSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length]);
-    };
 
     // Grade review
     const handleGrade = useCallback((remembered: boolean) => {
@@ -831,8 +780,7 @@ export default function TodayPage() {
                 />
             )}
             <h1 className="hidden md:block text-2xl font-bold mb-6">Today</h1>
-            <audio ref={audioRef} onEnded={handleAudioEnded} onPlay={handleAudioPlay} preload="auto" />
-
+            
             <div className="today-grid">
                 {/* Reviews Col */}
                 <div className="card">
@@ -1045,25 +993,27 @@ export default function TodayPage() {
                                 <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
                             ) : (
                                 <>
-                                    <div className="content-wrapper" style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                                            {settings.activePart === 5 ? 'All Quran' : `Part ${settings.activePart}`}
-                                        </p>
-                                    </div>
-
                                     {!readOnlyMode ? (
-                                        <div className="audio-player">
-                                            <h3 className="section-subtitle" style={{ marginBottom: '0.35rem' }}>Audio mode</h3>
-                                            <div className="progress-bar" style={{ marginBottom: '0.75rem' }}>
-                                                <div className="progress-fill" style={{ width: `${((currentVerseIndex + 1) / todaysPortion.length) * 100}%` }} />
+                                        <div className="audio-mode-section" style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <div className="mb-2" style={{ flexShrink: 0 }}>
+                                                <AudioPlayer
+                                                    verses={todaysPortion}
+                                                    currentVerseIndex={currentVerseIndex}
+                                                    onVerseChange={setCurrentVerseIndex}
+                                                    onWordIndexChange={setHighlightedWordIndex}
+                                                />
                                             </div>
-                                            <div className="player-controls">
-                                                <button className="player-btn" onClick={() => setCurrentVerseIndex(Math.max(0, currentVerseIndex - 1))}><SkipBack size={20} /></button>
-                                                <button className="player-btn main" onClick={togglePlay}>{isPlaying ? <Pause size={24} /> : <Play size={24} />}</button>
-                                                <button className="player-btn" onClick={() => setCurrentVerseIndex(Math.min(todaysPortion.length - 1, currentVerseIndex + 1))}><SkipForward size={20} /></button>
-                                                <button className="player-btn speed-btn" onClick={cycleSpeed}>{speed}x</button>
-                                            </div>
-                                            <div className="verse-item" style={{ marginTop: '1rem' }}>
+
+                                            <div 
+                                                ref={verseContainerRef}
+                                                className="verse-item p-4 border rounded-xl bg-[var(--background-secondary)]" 
+                                                style={{ 
+                                                    marginTop: '0.5rem', 
+                                                    overflowY: 'auto', 
+                                                    height: '22vh',
+                                                    position: 'relative'
+                                                }}
+                                            >
                                                 {todaysPortion[currentVerseIndex] && (
                                                     <>
                                                         <div className="verse-ref">
@@ -1077,11 +1027,23 @@ export default function TodayPage() {
                                                                 </div>
                                                             )
                                                         ) : (
-                                                            <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
-                                                                أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
-                                                            </div>
+                                                            currentVerseIndex === 0 && (
+                                                                <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                                                    أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
+                                                                </div>
+                                                            )
                                                         )}
-                                                        <div className="arabic-text">{todaysPortion[currentVerseIndex].text}</div>
+                                                        <div className="arabic-text">
+                                                            {todaysPortion[currentVerseIndex].text.split(' ').map((word, i) => (
+                                                                <span key={i} id={`word-${i}`} style={{ 
+                                                                    backgroundColor: i === highlightedWordIndex ? 'color-mix(in srgb, var(--accent), transparent 85%)' : 'transparent',
+                                                                    borderRadius: '4px',
+                                                                    transition: 'background-color 0.2s'
+                                                                }}>
+                                                                    {word} {' '}
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     </>
                                                 )}
                                             </div>
@@ -1115,7 +1077,7 @@ export default function TodayPage() {
                                         </div>
                                     )}
 
-                                    <button className="btn btn-success btn-full" style={{ marginTop: '1.5rem' }} onClick={handleCompleteListening}><Check size={20} /> Complete</button>
+                                    <button className="btn btn-success btn-full" style={{ marginTop: '1rem' }} onClick={handleCompleteListening}><Check size={20} /> Complete</button>
                                 </>
                             )}
                         </div>
