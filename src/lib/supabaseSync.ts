@@ -50,14 +50,18 @@ export async function uploadSupabaseBackup(backupData: BackupData) {
   const leanData = JSON.parse(JSON.stringify(backupData));
   if (leanData.mindmaps) {
     Object.values(leanData.mindmaps).forEach((mm: any) => {
-      mm.imageUrl = null;
-      mm.imageUrlDark = null;
+      if (mm && typeof mm === 'object') {
+        mm.imageUrl = null;
+        mm.imageUrlDark = null;
+      }
     });
   }
   if (leanData.partMindmaps) {
     Object.values(leanData.partMindmaps).forEach((pmm: any) => {
-      pmm.imageUrl = null;
-      pmm.imageUrlDark = null;
+      if (pmm && typeof pmm === 'object') {
+        pmm.imageUrl = null;
+        pmm.imageUrlDark = null;
+      }
     });
   }
 

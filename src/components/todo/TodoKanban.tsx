@@ -633,6 +633,7 @@ export default function TodoKanban({
                         ].map((f) => (
                             <button
                                 key={f.id}
+                                suppressHydrationWarning={true}
                                 onClick={() => setFilter(f.id as any)}
                                 style={{
                                     padding: isMobile ? '2px 6px' : '4px 10px',

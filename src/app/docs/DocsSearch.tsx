@@ -168,6 +168,7 @@ export default function DocsSearch({ className }: { className?: string }) {
                             <Search size={20} style={{ color: 'var(--accent)' }} />
                             <input
                                 autoFocus
+                                suppressHydrationWarning={true}
                                 type="text"
                                 placeholder="Search all documentation..."
                                 value={query}

@@ -1,0 +1,126 @@
+## Error Type
+Console Error
+
+## Error Message
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/todo" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html
+                          lang="ar"
+                          dir="ltr"
+                          className="outfit_9f4f9187-module__4LtYgq__variable"
+-                         suppresshydrationwarning="true"
+-                         data-lt-installed="true"
+                        >
+                          ...
+                            <div className="app-shell">
+                              <Navigation>
+                                <nav className="bottom-nav">
+                                  <LinkComponent>
+                                  <LinkComponent>
+                                  <LinkComponent>
+                                  <LinkComponent>
+                                  <LinkComponent>
+                                  <div className="hide-mobil...">
+                                    <ThemeToggle>
+                                    <SyncStatus variant="desktop">
+                                      <button
+                                        onClick={function handleClick}
+                                        disabled={true}
+                                        className="sync-status-desktop nav-item"
+                                        title="Sign in to sync"
+                                        style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"2px",padding:"0.65rem 0....", ...}}
+-                                       jf-ext-button-ct="sign in"
+                                      >
+                              <MobileSyncBar>
+                              ...
+                                <div className={"\n      ..."}>
+                                  <h1>
+                                  <div className="flex items...">
+                                    <div className="docs-searc..." onClick={function onClick} style={{cursor:"text"}}>
+                                      <div style={{display:"flex", ...}}>
+                                        <Search>
+                                        <input
+                                          ref={{current:null}}
+                                          type="text"
+                                          placeholder="Search..."
+                                          value=""
+                                          onChange={function onChange}
+                                          className="w-full !bg-transparent !border-none !outline-none !ring-0 !focus:..."
+                                          style={{padding:0,fontSize:"0.75rem",height:"auto",lineHeight:"normal"}}
+-                                         jf-ext-cache-id="0"
+                                        >
+                                      ...
+                                    <div className="" style={{display:"flex", ...}}>
+                                      <button
+                                        onClick={function onClick}
+                                        style={{padding:"4px 10px",fontSize:"0.65rem",fontWeight:700,borderRadius:"6px",border:"none", ...}}
+-                                       jf-ext-button-ct="all items"
+                                      >
++                                       ALL ITEMS
+                                      <button
+                                        onClick={function onClick}
+                                        style={{padding:"4px 10px",fontSize:"0.65rem",fontWeight:700,borderRadius:"6px",border:"none", ...}}
+-                                       jf-ext-button-ct="review fixes"
+                                      >
++                                       REVIEW FIXES
+                                      <button
+                                        onClick={function onClick}
+                                        style={{padding:"4px 10px",fontSize:"0.65rem",fontWeight:700,borderRadius:"6px",border:"none", ...}}
+-                                       jf-ext-button-ct="study progress"
+                                      >
++                                       STUDY PROGRESS
+                  ...
+
+
+
+    at createConsoleError (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_f3530cac._.js:2199:71)
+    at handleConsoleError (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_f3530cac._.js:2980:54)
+    at console.error (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_f3530cac._.js:3124:57)
+    at <unknown> (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:3469:25)
+    at runWithFiberInDEV (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:965:74)
+    at emitPendingHydrationWarnings (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:3468:13)
+    at completeWork (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6897:102)
+    at runWithFiberInDEV (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:965:131)
+    at completeUnitOfWork (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9627:23)
+    at performUnitOfWork (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9564:28)
+    at workLoopConcurrentByScheduler (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9558:58)
+    at renderRootConcurrent (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9541:71)
+    at performWorkOnRoot (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9068:150)
+    at performWorkOnRootViaSchedulerTask (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10230:9)
+    at MessagePort.performWorkUntilDeadline (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/node_modules_next_dist_compiled_a0e4c7b4._.js:2647:64)
+    at button (<anonymous>:null:null)
+    at SyncStatus (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/_fc2cba34._.js:5642:214)
+    at Navigation (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/_fc2cba34._.js:6156:223)
+    at AppShell (file:///Users/imedgh/Desktop/temp_quran life/quran-life/.next/dev/static/chunks/_fc2cba34._.js:6285:215)
+    at RootLayout (about://React/Server/file:///Users/imedgh/Desktop/temp_quran%20life/quran-life/.next/dev/server/chunks/ssr/%5Broot-of-the-server%5D__fe662801._.js?1:223:286)
+
+Next.js version: 16.1.2 (Turbopack)

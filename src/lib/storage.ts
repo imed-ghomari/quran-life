@@ -1553,9 +1553,12 @@ export function importBackup(data: BackupData): void {
         const current = getMindMaps();
         const incoming = data.mindmaps;
         Object.keys(incoming).forEach(id => {
-            if (!incoming[id].imageUrl && current[id]?.imageUrl) {
-                incoming[id].imageUrl = current[id].imageUrl;
-                incoming[id].imageUrlDark = current[id].imageUrlDark;
+            // Protect against malformed boolean values in map
+            if (incoming[id] && typeof incoming[id] === 'object') {
+                if (!incoming[id].imageUrl && current[id]?.imageUrl) {
+                    incoming[id].imageUrl = current[id].imageUrl;
+                    incoming[id].imageUrlDark = current[id].imageUrlDark;
+                }
             }
         });
         saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, incoming);
@@ -1565,9 +1568,12 @@ export function importBackup(data: BackupData): void {
         const incoming = data.partMindmaps;
         Object.keys(incoming).forEach(id => {
             const pId = id as any;
-            if (!incoming[pId].imageUrl && current[pId]?.imageUrl) {
-                incoming[pId].imageUrl = current[pId].imageUrl;
-                incoming[pId].imageUrlDark = current[pId].imageUrlDark;
+            // Protect against malformed boolean values in map
+            if (incoming[pId] && typeof incoming[pId] === 'object') {
+                if (!incoming[pId].imageUrl && current[pId]?.imageUrl) {
+                    incoming[pId].imageUrl = current[pId].imageUrl;
+                    incoming[pId].imageUrlDark = current[pId].imageUrlDark;
+                }
             }
         });
         saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, incoming);

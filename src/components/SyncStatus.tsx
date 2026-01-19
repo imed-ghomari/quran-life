@@ -122,6 +122,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                 <button
                     onClick={handleClick}
                     disabled={!isClickable}
+                    suppressHydrationWarning={true}
                     className="sync-btn"
                     style={{
                         display: 'flex',
@@ -152,6 +153,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
         <button
             onClick={handleClick}
             disabled={!isClickable}
+            suppressHydrationWarning={true}
             className="sync-status-desktop nav-item"
             title={getStatusText()}
             style={{

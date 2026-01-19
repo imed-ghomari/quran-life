@@ -188,23 +188,23 @@ export default function CardActionMenu({
             return (
                 <div
                     ref={menuRef}
-                    className="fixed z-[9999] min-w-[220px] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-lg ring-1 ring-black/5 overflow-hidden"
+                    className="fixed z-[9999] min-w-[200px] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-xl ring-1 ring-black/5 overflow-hidden animate-in fade-in zoom-in-95 duration-100"
                     style={{ top: position.top, left: position.left }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="py-1">
+                    <div className="p-1.5">
                         {menuItems.map((item, idx) => {
                             if (item.type === 'divider') {
-                                return <div key={idx} className="h-px bg-[var(--border)] my-1.5 mx-3" />;
+                                return <div key={idx} className="h-px bg-[var(--border)] my-1 mx-1" />;
                             }
 
                             const className = `
-                                w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-left transition-colors
+                                w-full flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-medium text-left rounded-md transition-colors
                                 ${item.disabled
                                     ? 'text-[var(--foreground-secondary)] opacity-50 cursor-not-allowed'
                                     : item.danger
-                                        ? 'text-red-500 hover:bg-red-500/5 active:bg-red-500/10'
-                                        : 'text-[var(--foreground)] hover:bg-[var(--background-secondary)] active:bg-[var(--background-secondary)]/80'}
+                                        ? 'text-red-500 hover:bg-red-500/10 active:bg-red-500/15'
+                                        : 'text-[var(--foreground)] hover:bg-[var(--foreground)]/5 active:bg-[var(--foreground)]/10'}
                             `;
 
                             if (item.isLink) {
@@ -231,31 +231,32 @@ export default function CardActionMenu({
         // Mobile Bottom Sheet
         return (
             <div className="fixed inset-0 z-[9999] flex items-end" onClick={onClose}>
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200" />
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200" />
 
                 <div
                     ref={menuRef}
-                    className="relative w-full bg-[var(--background)] rounded-t-[20px] p-5 pb-8 animate-in slide-in-from-bottom duration-300"
+                    className="relative w-full bg-[var(--background)] rounded-t-[24px] p-4 pb-8 animate-in slide-in-from-bottom duration-300 shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                     style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
                 >
-                    <div className="flex justify-center mb-6">
-                        <div className="w-12 h-1.5 bg-[var(--foreground-secondary)]/20 rounded-full" />
+                    {/* Handle */}
+                    <div className="flex justify-center mb-6 pt-2">
+                        <div className="w-10 h-1 bg-[var(--foreground-secondary)]/20 rounded-full" />
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1">
                         {menuItems.map((item, idx) => {
                             if (item.type === 'divider') {
                                 return <div key={idx} className="h-px bg-[var(--border)] my-2" />;
                             }
 
                             const className = `
-                                w-full flex items-center gap-4 px-4 py-4 text-[15px] font-medium text-left rounded-xl transition-all active:scale-[0.98]
+                                w-full flex items-center gap-4 px-4 py-3.5 text-[16px] font-medium text-left rounded-xl transition-all active:scale-[0.99]
                                 ${item.disabled
-                                    ? 'text-[var(--foreground-secondary)] opacity-50 bg-[var(--background-secondary)]/30'
+                                    ? 'text-[var(--foreground-secondary)] opacity-50'
                                     : item.danger
-                                        ? 'text-red-500 bg-red-500/10 active:bg-red-500/20'
-                                        : 'text-[var(--foreground)] bg-[var(--background-secondary)] active:bg-[var(--background-secondary)]/80'}
+                                        ? 'text-red-500 active:bg-red-500/10'
+                                        : 'text-[var(--foreground)] active:bg-[var(--foreground)]/5'}
                             `;
 
                             if (item.isLink) {
@@ -275,13 +276,6 @@ export default function CardActionMenu({
                             );
                         })}
                     </div>
-
-                    <button
-                        onClick={onClose}
-                        className="w-full mt-4 py-4 text-[15px] font-semibold text-[var(--foreground)] bg-transparent border border-[var(--border)] rounded-xl active:bg-[var(--background-secondary)]"
-                    >
-                        Cancel
-                    </button>
                 </div>
             </div>
         );
