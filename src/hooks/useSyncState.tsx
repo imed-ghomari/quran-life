@@ -60,6 +60,33 @@ export function useSyncState(): SyncContextValue {
     return context;
 }
 
+export function getSyncStatusText(status: SyncStatus, pendingChangesCount: number, isAuthenticated: boolean, isOnline: boolean): string {
+    const displayStatus: SyncStatus = !isOnline ? 'offline' : status;
+    
+    switch (displayStatus) {
+        case 'offline':
+            return pendingChangesCount > 0
+                ? 'Offline • Pending changes'
+                : 'Offline';
+        case 'syncing':
+            return 'Syncing...';
+        case 'synced':
+            return pendingChangesCount > 0
+                ? 'Unsynced changes'
+                : 'Up to date';
+        case 'conflict':
+            return 'Conflict detected';
+        case 'needs_push':
+            return 'Unsynced changes';
+        case 'needs_pull':
+            return 'Update available';
+        case 'error':
+            return 'Sync failed';
+        default:
+            return isAuthenticated ? 'Up to date' : 'Sign in to sync';
+    }
+}
+
 // ========================================
 // Provider - Now uses syncEngine observables
 // ========================================

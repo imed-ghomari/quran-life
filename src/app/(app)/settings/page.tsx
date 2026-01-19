@@ -6,9 +6,11 @@ import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { OnlineStatusContext } from '@/components/Providers';
+import { useSyncState, getSyncStatusText } from '@/hooks/useSyncState';
 import { getSurahsByPart, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     AppSettings,
+    DEFAULT_SETTINGS,
     getSettings,
     updateSetting,
     toggleSurahLearned,
@@ -101,7 +103,9 @@ export default function SettingsPage() {
     const isOnline = useContext(OnlineStatusContext);
     const [user, setUser] = useState<User | null>(null);
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-    const [isSyncing, setIsSyncing] = useState(false);
+    const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+    const { status: syncStatus, pendingChangesCount, isAuthenticated } = useSyncState();
+    const syncStatusText = getSyncStatusText(syncStatus, pendingChangesCount, isAuthenticated, isOnline);
 
     useEffect(() => {
         // Initial load from cache/storage
@@ -157,10 +161,10 @@ export default function SettingsPage() {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                                 <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
                                                 <span style={{
-                                                    color: isSyncing ? 'var(--accent)' : (syncResult?.status === 'error' ? '#ef4444' : '#10b981'),
+                                                    color: syncStatus === 'syncing' ? 'var(--accent)' : (syncStatus === 'error' || syncStatus === 'conflict' ? '#ef4444' : (syncStatus === 'synced' ? '#10b981' : (syncStatus === 'needs_push' || syncStatus === 'needs_pull' ? '#eab308' : 'var(--foreground-secondary)'))),
                                                     fontWeight: 600
                                                 }}>
-                                                    {isSyncing ? 'Syncing...' : (syncResult?.message || 'Ready')}
+                                                    {syncStatusText}
                                                 </span>
                                             </div>
                                             {settings.lastSyncedAt && (
@@ -232,10 +236,10 @@ export default function SettingsPage() {
                                             suppressHydrationWarning={true}
                                             type="submit"
                                             className="btn btn-primary"
-                                            disabled={isSyncing}
+                                            disabled={isAuthProcessing}
                                             style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
                                         >
-                                            {isSyncing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+                                            {isAuthProcessing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
                                         </button>
                                         <button
                                             type="button"
@@ -665,7 +669,7 @@ export default function SettingsPage() {
 
         return (
              <div className="content-wrapper">
-                <h1 className="text-2xl font-bold mb-6">Settings</h1>
+                {/* <h1 className="text-2xl font-bold mb-6">Settings</h1> */}
                 <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                     <button onClick={() => setActiveMobilePage('account')} className="modern-card" style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -747,7 +751,7 @@ export default function SettingsPage() {
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setAuthError(null);
-        setIsSyncing(true);
+        setIsAuthProcessing(true);
 
         const { error } = isSignUp
             ? await supabase.auth.signUp({
@@ -764,7 +768,7 @@ export default function SettingsPage() {
         } else if (isSignUp) {
             setAuthError('Check your email for the confirmation link!');
         }
-        setIsSyncing(false);
+        setIsAuthProcessing(false);
     };
 
     // Auto-sync removed as per user request
@@ -1117,10 +1121,10 @@ export default function SettingsPage() {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                                 <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
                                                 <span style={{
-                                                    color: isSyncing ? 'var(--accent)' : (syncResult?.status === 'error' ? '#ef4444' : '#10b981'),
+                                                    color: syncStatus === 'syncing' ? 'var(--accent)' : (syncStatus === 'error' || syncStatus === 'conflict' ? '#ef4444' : (syncStatus === 'synced' ? '#10b981' : (syncStatus === 'needs_push' || syncStatus === 'needs_pull' ? '#eab308' : 'var(--foreground-secondary)'))),
                                                     fontWeight: 600
                                                 }}>
-                                                    {isSyncing ? 'Syncing...' : (syncResult?.message || 'Ready')}
+                                                    {syncStatusText}
                                                 </span>
                                             </div>
                                             {settings.lastSyncedAt && (
@@ -1190,10 +1194,10 @@ export default function SettingsPage() {
                                         <button
                                             type="submit"
                                             className="btn btn-primary"
-                                            disabled={isSyncing}
+                                            disabled={isAuthProcessing}
                                             style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
                                         >
-                                            {isSyncing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+                                            {isAuthProcessing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
                                         </button>
                                         <button
                                             type="button"

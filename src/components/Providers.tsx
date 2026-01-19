@@ -55,6 +55,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const syncInProgress = useRef(false);
+  const initialSyncDone = useRef(false);
 
   // Initialize sync engine and connect online status
   useEffect(() => {
@@ -140,7 +141,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           // Automatic sync on load/sign-in
           if (session?.user) {
+            // Prevent re-syncing on just session refresh if we already did it
+            if (event === 'SIGNED_IN' && initialSyncDone.current) {
+                appLogger.addLog('Session refresh detected, skipping sync', 'info');
+                return;
+            }
+
             performSync();
+            initialSyncDone.current = true;
           }
         }
       });
@@ -148,19 +156,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
     setupAuth();
 
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        // Dispatch storage event to trigger refresh across components
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'quran-app-visibility-refresh',
-          newValue: Date.now().toString(),
-        }));
-      }
-    };
+    // Visibility change handler removed per user request to prevent auto-sync/refresh on tab activation
+    // const handleVisibility = () => {
+    //   if (document.visibilityState === 'visible') {
+    //     // Dispatch storage event to trigger refresh across components
+    //     window.dispatchEvent(new StorageEvent('storage', {
+    //       key: 'quran-app-visibility-refresh',
+    //       newValue: Date.now().toString(),
+    //     }));
+    //   }
+    // };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    document.addEventListener("visibilitychange", handleVisibility);
+    // document.addEventListener("visibilitychange", handleVisibility);
 
     const handleInitialOnboarding = async () => {
       // Check if user is authenticated before showing onboarding
@@ -264,7 +273,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       if (authSubscription) authSubscription.unsubscribe();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      // document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 
