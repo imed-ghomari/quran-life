@@ -1040,12 +1040,10 @@ export default function SettingsPage() {
         }
     }, [mutashabihatSurahs, selectedMutSurah]);
 
-    if (isMobile) {
-        return renderMobileView();
-    }
-
     return (
-        <div className="content-wrapper">
+        <>
+            {isMobile ? renderMobileView() : (
+                <div className="content-wrapper">
             <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -2351,8 +2349,10 @@ export default function SettingsPage() {
                 )}
             </div>
         </div>
+                </div>
+            )}
 
-            {/* Similar Verses Slide-over Detail View */}
+            {/* Similar Verses Slide-over Detail View */ }
             {activeMutSlideOver && (() => {
                 const decisionKey = activeMutSlideOver.id;
                 const existing = decisions[decisionKey] || { status: 'pending', note: '' };
@@ -2852,6 +2852,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 }
