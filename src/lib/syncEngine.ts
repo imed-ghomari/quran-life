@@ -11,6 +11,7 @@ import { observable, observe } from '@legendapp/state';
 import { configureObservablePersistence, persistObservable } from '@legendapp/state/persist';
 import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
 import { appLogger } from './logger';
+import { audioSettings$ } from './audioStore';
 
 // ========================================
 // Types
@@ -274,6 +275,11 @@ export async function initializeSyncEngine(): Promise<void> {
         syncState$.status.set('needs_push');
         hasPendingChanges = true;
     }
+
+    // Watch for audio settings changes to trigger sync
+    audioSettings$.onChange(() => {
+        markPendingChanges();
+    });
 
     // Check auth and sync if authenticated
     try {

@@ -32,6 +32,9 @@ function formatName(slug) {
     // Remove 'Hafs' (case insensitive)
     formatted = formatted.replace(/\sHafs$/i, '').replace(/\sHafs\s/i, ' ');
     
+    // Remove '(Words)' (case insensitive)
+    formatted = formatted.replace(/\s\(Words\)$/i, '').replace(/\(Words\)$/i, '');
+    
     return formatted.trim();
 }
 

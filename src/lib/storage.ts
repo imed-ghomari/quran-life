@@ -6,6 +6,7 @@ import { SURAHS } from './quranData';
 import { QuranPart } from './types';
 import { get, set, createStore, clear } from 'idb-keyval';
 import { appLogger } from './logger';
+import { audioSettings$, AudioSettings } from './audioStore';
 
 // ========================================
 // Storage Engine Migration & Helpers
@@ -30,6 +31,7 @@ const STORAGE_KEYS = {
     // FSRS v6 keys
     FSRS_REVIEW_LOGS: 'quran-app-fsrs-review-logs',
     FSRS_OPTIMIZATION_META: 'quran-app-fsrs-optimization-meta',
+    AUDIO_SETTINGS: 'quran-app-audio-settings',
 };
 
 const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
@@ -1512,6 +1514,15 @@ function isNodeSuspended(node: MemoryNode, issues: AnchorIssue[]): boolean {
     return false;
 }
 
+export function getAudioSettings(): AudioSettings | undefined {
+    return audioSettings$.get();
+}
+
+export function saveAudioSettings(settings: AudioSettings): void {
+    settings.updatedAt = new Date().toISOString();
+    audioSettings$.set(settings);
+}
+
 export interface BackupData {
     settings?: AppSettings;
     memoryNodes?: MemoryNode[];
@@ -1522,6 +1533,7 @@ export interface BackupData {
     reviewErrors?: ReviewError[];
     mutashabihatDecisions?: Record<string, MutashabihatDecision>;
     customMutashabihat?: CustomMutashabih[];
+    audioSettings?: AudioSettings;
     cycleStart?: string;
     listeningComplete?: string | null;
     lastResolvedFor?: string;
@@ -1539,6 +1551,7 @@ export function exportBackup(): BackupData {
         reviewErrors: getReviewErrors(),
         mutashabihatDecisions: getMutashabihatDecisions(),
         customMutashabihat: getCustomMutashabihat(),
+        audioSettings: getAudioSettings(),
         cycleStart: getCycleStart(),
         listeningComplete: getFromCache(STORAGE_KEYS.LISTENING_COMPLETE, null),
         lastResolvedFor: getFromCache(STORAGE_KEYS.LAST_RESOLVED_FOR, undefined),
@@ -1592,6 +1605,9 @@ export function importBackup(data: BackupData): void {
     }
     if (data.customMutashabihat) {
         saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, data.customMutashabihat);
+    }
+    if (data.audioSettings) {
+        audioSettings$.set(data.audioSettings);
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);

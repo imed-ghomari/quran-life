@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { PlaybackSpeed, getAudioPath, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
+import { getAudioSettings, saveAudioSettings } from '@/lib/storage';
 import { ChevronDown, Loader2, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
 
 interface AudioPlayerProps {
@@ -36,6 +37,7 @@ export default function AudioPlayer({
     const [useFallback, setUseFallback] = useState(false);
     const [verseEndTime, setVerseEndTime] = useState<number | null>(null);
     const [activeSegments, setActiveSegments] = useState<number[][] | null>(null);
+    const [showIsti3atah, setShowIsti3atah] = useState(false);
     
     // Progress
     const [progress, setProgress] = useState(0);
@@ -45,15 +47,53 @@ export default function AudioPlayer({
     const totalVerses = verses.length;
     const verseProgress = ((currentVerseIndex + 1) / totalVerses) * 100;
 
+    // Manage Isti'aatha visibility
+    useEffect(() => {
+        if (isPlaying && currentVerseIndex === 0 && currentVerse && currentVerse.ayahId !== 1) {
+            setShowIsti3atah(true);
+            const timer = setTimeout(() => {
+                setShowIsti3atah(false);
+            }, 3000); // Show for 3 seconds
+            return () => clearTimeout(timer);
+        } else if (!isPlaying) {
+             // Optional logic
+        }
+    }, [isPlaying, currentVerseIndex, currentVerse]);
+
+    // Hide Isti'aatha on verse change
+    useEffect(() => {
+        if (currentVerseIndex !== 0) {
+            setShowIsti3atah(false);
+        }
+    }, [currentVerseIndex]);
+
     // Initialize Reciters
     useEffect(() => {
         getReciters().then(list => {
             setReciters(list);
-            const savedId = localStorage.getItem('selected_reciter_id');
+            
+            // Try to load from synced settings first, then localStorage
+            const settings = getAudioSettings();
+            let savedId = settings?.selectedReciterId;
+            
+            if (!savedId) {
+                savedId = localStorage.getItem('selected_reciter_id') || undefined;
+            }
+            
             const defaultReciter = list.find(r => r.id === savedId) || list[0];
             setSelectedReciter(defaultReciter);
+
+            // Restore playback position if available and applicable
+            if (settings?.playbackState && verses.length > 0) {
+                const { surahId, ayahId } = settings.playbackState;
+                // Find if this verse exists in current portion
+                const index = verses.findIndex(v => v.surahId === surahId && v.ayahId === ayahId);
+                if (index !== -1 && index !== currentVerseIndex) {
+                    onVerseChange(index);
+                }
+            }
         });
-    }, []);
+    }, [verses]); // Add verses dependency to ensure we can find the index
 
     // Load Recitation Data when Reciter or Surah changes
     useEffect(() => {
@@ -127,11 +167,31 @@ export default function AudioPlayer({
     // Handle Play/Pause effect
     useEffect(() => {
         if (audioRef.current) {
-            if (isPlaying) audioRef.current.play().catch(console.error);
-            else audioRef.current.pause();
+            if (isPlaying) {
+                audioRef.current.play().catch(console.error);
+            } else {
+                audioRef.current.pause();
+                
+                // Save playback state when paused
+                if (selectedReciter && currentVerse) {
+                    const currentSettings = getAudioSettings() || {
+                        selectedReciterId: selectedReciter.id,
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    saveAudioSettings({
+                        ...currentSettings,
+                        playbackState: {
+                            surahId: currentVerse.surahId,
+                            ayahId: currentVerse.ayahId,
+                            timestamp: audioRef.current.currentTime
+                        }
+                    });
+                }
+            }
         }
         onPlayStateChange?.(isPlaying);
-    }, [isPlaying, onPlayStateChange]);
+    }, [isPlaying, onPlayStateChange, selectedReciter, currentVerse]);
 
 
     const handleTimeUpdate = useCallback(() => {
@@ -185,6 +245,18 @@ export default function AudioPlayer({
         if (reciter) {
             setSelectedReciter(reciter);
             localStorage.setItem('selected_reciter_id', id);
+            
+            // Save to synced settings
+            const currentSettings = getAudioSettings() || {
+                selectedReciterId: id,
+                updatedAt: new Date().toISOString()
+            };
+            
+            saveAudioSettings({
+                ...currentSettings,
+                selectedReciterId: id
+            });
+            
             setIsPlaying(false); // Stop on change
         }
     };
@@ -241,6 +313,11 @@ export default function AudioPlayer({
                 </div>
                 <div className="progress-info">
                     <span>Verse {currentVerseIndex + 1} of {totalVerses}</span>
+                    {showIsti3atah && (
+                        <span className="text-xs text-gray-500 animate-pulse">
+                            (Isti'aatha)
+                        </span>
+                    )}
                     <span>{formatTime(elapsedTime)}</span>
                 </div>
             </div>

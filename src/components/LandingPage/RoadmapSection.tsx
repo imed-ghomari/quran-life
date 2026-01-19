@@ -7,7 +7,6 @@ const RoadmapSection: React.FC = () => {
     planned: [
       { id: 1, title: 'Validation of Mindmaps & Methodology', tag: 'Planned' },
       { id: 2, title: 'Localization & Translation', tag: 'Planned' },
-      { id: 3, title: 'More Choice of Reciters', tag: 'Planned' },
       { id: 12, title: 'Completing Mindmaps (Part 1, 2, 3)', tag: 'Planned' },
       { id: 13, title: 'Better Design for Mindmaps', tag: 'Planned' },
       { id: 14, title: 'Community Platform (Discord)', tag: 'Planned' },
@@ -21,6 +20,7 @@ const RoadmapSection: React.FC = () => {
       { id: 8, title: 'Spaced Repetition Algorithm', tag: 'Live' },
       { id: 9, title: 'Similar Verse Support', tag: 'Live' },
       { id: 11, title: 'Offline Support', tag: 'Live' },
+      { id: 3, title: 'More Choice of Reciters', tag: 'Live' },
     ]
   };
 

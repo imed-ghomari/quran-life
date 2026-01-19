@@ -387,6 +387,10 @@ function applyGranularItem(target: BackupData, source: BackupData, itemId: strin
     if (target.mutashabihatDecisions && source.mutashabihatDecisions && source.mutashabihatDecisions[key]) {
       target.mutashabihatDecisions[key] = source.mutashabihatDecisions[key];
     }
+  } else if (itemId === 'audio-settings') {
+    if (source.audioSettings) {
+      target.audioSettings = source.audioSettings;
+    }
   }
 }
 
@@ -910,6 +914,36 @@ function mergeBackups(local: BackupData, remote: BackupData): { mergedData: Back
     if (remote.listeningComplete !== local.listeningComplete) {
       merged.listeningComplete = remote.listeningComplete;
       hasChanges = true;
+    }
+  }
+
+  // 11. Audio Settings (LWW)
+  if (remote.audioSettings || local.audioSettings) {
+    const lAudio = local.audioSettings;
+    const rAudio = remote.audioSettings;
+    
+    if (!lAudio) {
+      merged.audioSettings = rAudio;
+      hasChanges = true;
+    } else if (!rAudio) {
+      merged.audioSettings = lAudio;
+      // Local exists, remote doesn't - keep local
+    } else {
+      // Both exist, compare timestamps
+      const lTime = lAudio.updatedAt || '';
+      const rTime = rAudio.updatedAt || '';
+      
+      if (rTime > lTime) {
+        merged.audioSettings = rAudio;
+        hasChanges = true;
+      } else {
+        merged.audioSettings = lAudio;
+        if (lTime > rTime || JSON.stringify(lAudio) !== JSON.stringify(rAudio)) {
+          // Flag as changes if we're keeping local but it differs (so we push back)
+          // Actually syncWithCloud handles push if localTime > remoteTime overall,
+          // but specifically flagging hasChanges ensures we save the merged result locally.
+        }
+      }
     }
   }
 
