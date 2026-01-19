@@ -203,18 +203,53 @@ export default function SettingsPage() {
         mutashabihat: true,
     });
 
-    useEffect(() => {
-        if (typeof window !== 'undefined' && window.innerWidth < 768) {
-            setSectionsExpanded({
-                cloudSync: false,
-                backupRestore: false,
-                schedule: false,
-                activePart: false,
-                surahStatus: false,
-                mutashabihat: false,
-            });
-            setShowDebugNodes(false);
+    const toggleSection = (key: keyof typeof sectionsExpanded) => {
+        // Disable folding on desktop
+        if (window.innerWidth < 768) {
+            setSectionsExpanded(s => ({ ...s, [key]: !s[key] }));
         }
+    };
+
+    useEffect(() => {
+        const handleResize = () => {
+             if (window.innerWidth >= 768) {
+                 setSectionsExpanded({
+                    cloudSync: true,
+                    backupRestore: true,
+                    schedule: true,
+                    activePart: true,
+                    surahStatus: true,
+                    mutashabihat: true,
+                 });
+                 setShowDebugNodes(true);
+             }
+        };
+
+        if (typeof window !== 'undefined') {
+            if (window.innerWidth < 768) {
+                setSectionsExpanded({
+                    cloudSync: false,
+                    backupRestore: false,
+                    schedule: false,
+                    activePart: false,
+                    surahStatus: false,
+                    mutashabihat: false,
+                });
+                setShowDebugNodes(false);
+            } else {
+                 setSectionsExpanded({
+                    cloudSync: true,
+                    backupRestore: true,
+                    schedule: true,
+                    activePart: true,
+                    surahStatus: true,
+                    mutashabihat: true,
+                 });
+            }
+        }
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     const toggleGroup = (groupId: string) => {
@@ -409,7 +444,7 @@ export default function SettingsPage() {
                         borderRadius: '16px'
                     }}>
                         <div className="section-title"
-                            onClick={() => setSectionsExpanded(s => ({ ...s, cloudSync: !s.cloudSync }))}
+                        onClick={() => toggleSection('cloudSync')}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -553,7 +588,7 @@ export default function SettingsPage() {
                     borderRadius: '16px'
                 }}>
                     <div className="section-title"
-                        onClick={() => setSectionsExpanded(s => ({ ...s, backupRestore: !s.backupRestore }))}
+                        onClick={() => toggleSection('backupRestore')}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -631,7 +666,7 @@ export default function SettingsPage() {
                     borderRadius: '16px'
                 }}>
                     <div className="section-title"
-                        onClick={() => setSectionsExpanded(s => ({ ...s, schedule: !s.schedule }))}
+                        onClick={() => toggleSection('schedule')}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -668,7 +703,7 @@ export default function SettingsPage() {
                     borderRadius: '16px'
                 }}>
                     <div className="section-title"
-                        onClick={() => setSectionsExpanded(s => ({ ...s, activePart: !s.activePart }))}
+                        onClick={() => toggleSection('activePart')}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -738,7 +773,7 @@ export default function SettingsPage() {
                     borderRadius: '16px'
                 }}>
                     <div className="section-title"
-                        onClick={() => setSectionsExpanded(s => ({ ...s, surahStatus: !s.surahStatus }))}
+                        onClick={() => toggleSection('surahStatus')}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -851,7 +886,11 @@ export default function SettingsPage() {
                     borderRadius: '16px'
                 }}>
                     <div className="section-title"
-                        onClick={() => setShowDebugNodes(!showDebugNodes)}
+                        onClick={() => {
+                            if (window.innerWidth < 768) {
+                                setShowDebugNodes(!showDebugNodes);
+                            }
+                        }}
                         style={{
                             color: 'var(--accent)',
                             fontWeight: 700,
@@ -1298,7 +1337,7 @@ export default function SettingsPage() {
                 padding: sectionsExpanded.mutashabihat ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem'
             }}>
                 <div className="section-title mut-header"
-                    onClick={() => setSectionsExpanded(s => ({ ...s, mutashabihat: !s.mutashabihat }))}
+                    onClick={() => toggleSection('mutashabihat')}
                     style={{
                         color: 'var(--accent)',
                         fontWeight: 700,

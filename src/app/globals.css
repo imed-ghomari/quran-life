@@ -719,6 +719,41 @@ h1 {
   h1 {
     font-size: 1.25rem;
   }
+
+  /* Fix mobile scrolling for fixed-layout pages */
+  .page-container.fixed-layout {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .page-container.fixed-layout .content-wrapper {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    max-height: none !important;
+  }
+
+  /* Mobile Review Section: Natural Scrolling */
+  .review-verse-container {
+    display: flex;
+    flex-direction: column;
+    max-height: none;
+  }
+
+  .review-target-box {
+    padding: 0.75rem;
+    background: var(--verse-bg);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    flex: none;
+    overflow-y: visible;
+    min-height: 0;
+  }
 }
 
 h2 {
@@ -1749,6 +1784,23 @@ input:focus {
 }
 
 @media (min-width: 768px) {
+  .review-verse-container {
+    max-height: 60vh;
+  }
+
+  .review-target-box {
+    padding: 0.75rem;
+    background: var(--verse-bg);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
   .content-wrapper {
     max-width: 100%;
     margin: 0 auto;

@@ -123,10 +123,48 @@ export default function TodayPage() {
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
 
+    const toggleSection = (section: 'review' | 'daily') => {
+        setViewState(prev => {
+            const isMobile = window.innerWidth < 768;
+            
+            // Disable folding on desktop
+            if (!isMobile) return prev;
+
+            if (section === 'review') {
+                const newState = !prev.reviewExpanded;
+                if (isMobile && newState) {
+                    return { reviewExpanded: true, dailyExpanded: false };
+                }
+                return { ...prev, reviewExpanded: newState };
+            } else {
+                const newState = !prev.dailyExpanded;
+                if (isMobile && newState) {
+                    return { dailyExpanded: true, reviewExpanded: false };
+                }
+                return { ...prev, dailyExpanded: newState };
+            }
+        });
+    };
+
     useEffect(() => {
-        if (typeof window !== 'undefined' && window.innerWidth < 768) {
-            setViewState({ reviewExpanded: false, dailyExpanded: false });
+        const handleResize = () => {
+            if (window.innerWidth >= 768) {
+                setViewState({ reviewExpanded: true, dailyExpanded: true });
+            }
+        };
+
+        if (typeof window !== 'undefined') {
+            if (window.innerWidth < 768) {
+                // Initial state for mobile
+                setViewState({ reviewExpanded: false, dailyExpanded: false });
+            } else {
+                // Initial state for desktop
+                setViewState({ reviewExpanded: true, dailyExpanded: true });
+            }
         }
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     const [zoomImage, setZoomImage] = useState<string | null>(null);
@@ -795,7 +833,7 @@ export default function TodayPage() {
             <div className="today-grid">
                 {/* Reviews Col */}
                 <div className="card">
-                    <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, reviewExpanded: !s.reviewExpanded }))}>
+                    <div className="collapsible-header" onClick={() => toggleSection('review')}>
                         <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(dueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{dueNodes.length - currentReviewIndex}</span>}</div>
                         <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                     </div>
@@ -815,7 +853,7 @@ export default function TodayPage() {
                                     </p>
 
                                     {reviewContent.type === 'verse' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '60vh' }}>
+                                        <div className="review-verse-container">
                                             {/* Context */}
                                             {reviewContent.contextVerses && reviewContent.contextVerses.length > 0 && (
                                                 <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
@@ -824,18 +862,7 @@ export default function TodayPage() {
                                             )}
 
                                             {/* Target as grouped paragraph */}
-                                            <div ref={targetBoxRef} className="target-box custom-scrollbar" style={{
-                                                padding: '0.75rem',
-                                                background: 'var(--verse-bg)',
-                                                borderRadius: 10,
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: 10,
-                                                position: 'relative',
-                                                flex: 1,
-                                                overflowY: 'auto',
-                                                minHeight: 0
-                                            }}>
+                                            <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box">
                                                 <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
                                                     {reviewContent.verses?.map((v, idx) => {
                                                         const chunks = verseChunkMap[idx] || [];
@@ -996,7 +1023,7 @@ export default function TodayPage() {
 
                 {/* Daily Portion Col */}
                 <div className="card">
-                    <div className="collapsible-header" onClick={() => setViewState(s => ({ ...s, dailyExpanded: !s.dailyExpanded }))}>
+                    <div className="collapsible-header" onClick={() => toggleSection('daily')}>
                         <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete ? <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">✓</span> : <span className="status-badge partial show-mobile" style={{ background: 'transparent', padding: 0, color: 'var(--warning)', display: 'flex', alignItems: 'center' }}><AlertCircle size={18} /></span>}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             {!listeningComplete && (
