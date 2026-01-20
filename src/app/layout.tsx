@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { Outfit } from 'next/font/google';
 import './globals.css';
@@ -13,19 +13,24 @@ const outfit = Outfit({
     display: 'swap',
 });
 
-export const metadata: Metadata = {
-    title: 'Quran Life',
-    description: 'Complete your learned Quran portions in manageable daily readings',
-    viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
-    manifest: '/manifest.json',
-    icons: {
-        icon: '/icon.svg',
-        apple: '/icon.svg',
-    },
+export const viewport: Viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
     themeColor: [
         { media: '(prefers-color-scheme: light)', color: '#ffffff' },
         { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
     ],
+};
+
+export const metadata: Metadata = {
+    title: 'Quran Life',
+    description: 'Complete your learned Quran portions in manageable daily readings',
+    manifest: '/manifest.json',
+    icons: {
+        icon: '/logo.png',
+        apple: '/logo.png',
+    },
     appleWebApp: {
         capable: true,
         statusBarStyle: 'default',

@@ -21,6 +21,10 @@
   
   /* Secondary Background for Landing Page */
   --landing-bg-secondary: var(--background-secondary);
+  
+  /* Hero & Nav Colors */
+  --nav-bg: rgba(253, 253, 253, 0.85);
+  --hero-overlay-bg: rgba(255, 255, 255, 0.7); /* White overlay for light mode readability */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +34,9 @@
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     --landing-accent-light: rgba(108, 165, 212, 0.15);
+    
+    --nav-bg: rgba(20, 20, 20, 0.7);
+    --hero-overlay-bg: rgba(0, 0, 0, 0.6); /* Dark overlay for dark mode readability */
   }
 }
 
@@ -39,6 +46,9 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   --landing-accent-light: rgba(108, 165, 212, 0.15);
+  
+  --nav-bg: rgba(20, 20, 20, 0.7);
+  --hero-overlay-bg: rgba(0, 0, 0, 0.6);
 }
 
 [data-theme="light"] {
@@ -48,6 +58,9 @@
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
   --landing-accent-light: rgba(91, 143, 185, 0.1);
   --landing-bg-secondary: #f4f6f8;
+  
+  --nav-bg: rgba(253, 253, 253, 0.85);
+  --hero-overlay-bg: rgba(255, 255, 255, 0.7);
 }
 
 /* --- 2. Global Resets & Utilities --- */
@@ -55,7 +68,7 @@
 
 .landing-wrapper {
   --landing-nav-height: 80px;
-  padding-top: var(--landing-nav-height);
+  /* Removed padding-top so hero extends behind nav */
 }
 
 .container {
@@ -99,9 +112,10 @@
   left: 0;
   right: 0;
   z-index: 100;
-  background: var(--glass-bg);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
+  /* More transparent background to let hero image show through at top */
+  background: var(--nav-bg); 
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
   padding: 1rem 0;
 }
@@ -152,20 +166,50 @@
   text-align: center;
   overflow: hidden;
   position: relative;
+  isolation: isolate; /* Creates a stacking context so z-index: -1 stays within this section */
 }
 
-/* Background Abstract Glow */
-.hero::before {
+/* Hero Background Image */
+.hero-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  /* User: Place your image at /public/quran-bg.jpg */
+  background-image: url('/quran-bg.jpg?v=1'); 
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  
+  /* The Blur Effect */
+  filter: blur(3px);
+  
+  /* Fade out at the bottom to blend with next section */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
+  
+  /* Fallback gradient if image is missing */
+  background-color: var(--background); 
+}
+
+/* Overlay for text readability */
+.hero-bg::after {
   content: '';
   position: absolute;
-  top: -20%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, var(--landing-accent-light) 0%, transparent 70%);
-  z-index: -1;
-  filter: blur(60px);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--hero-overlay-bg);
+  z-index: 1;
+}
+
+/* Ensure content is readable and above background */
+.hero .container {
+  position: relative;
+  z-index: 2;
 }
 
 .hero-title {
@@ -487,7 +531,7 @@
 
   /* Hero Section */
   .hero {
-    padding: 4rem 0 3rem;
+    padding: 8rem 0 4rem; /* Increased top padding to clear fixed navbar */
   }
 
   .hero-title {

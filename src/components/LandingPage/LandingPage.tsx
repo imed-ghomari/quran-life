@@ -54,7 +54,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       <nav className="nav">
         <div className="container nav-content">
           <div className="logo">
-            <BookOpen size={28} strokeWidth={2.5} />
+            <img src="/logo.png" width={28} height={28} alt="Quran Life Logo" />
             <span>Quran Life</span>
           </div>
           <div className="nav-actions">
@@ -78,6 +78,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       <main>
         {/* --- Hero Section --- */}
         <section className="hero">
+          <div className="hero-bg" />
           <div className="container">
             <div className="animate-entry">
               <h1 className="hero-title">
@@ -266,7 +267,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       <footer className="footer">
         <div className="container">
           <div className="footer-logo">
-            <img src="/icon.svg" width={20} height={20} alt="Quran Life Logo" />
+            <img src="/logo.png?v=3" width={20} height={20} alt="Quran Life Logo" />
             <span>Quran Life</span>
           </div>
           <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>
