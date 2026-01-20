@@ -560,15 +560,15 @@ export function getDueNodes(): MemoryNode[] {
             return true;
         })
         .filter(n => !isNodeSuspended(n, suspended))
-        // Issue #2: Filter out incomplete or image-less mindmaps
+        // Issue #2: Filter out incomplete mindmaps (allow missing images, UI handles it)
         .filter(n => {
             if (n.type === 'mindmap' && n.surahId) {
                 const mm = mindmaps[n.surahId];
-                return mm?.isComplete && mm?.imageUrl;
+                return mm?.isComplete;
             }
             if (n.type === 'part_mindmap' && n.partId) {
                 const pmm = partMindmaps[n.partId];
-                return pmm?.isComplete && pmm?.imageUrl;
+                return pmm?.isComplete;
             }
             return true;
         })
@@ -578,9 +578,9 @@ export function getDueNodes(): MemoryNode[] {
                 const { learned, total } = getSurahLearnedStatus(n.surahId);
                 const isLearned = learned === total;
 
-                // Mindmap must be complete and have an image
+                // Mindmap must be complete
                 const mm = mindmaps[n.surahId];
-                const isMindmapComplete = mm?.isComplete && mm?.imageUrl;
+                const isMindmapComplete = mm?.isComplete;
 
                 return isLearned && isMindmapComplete;
             }
