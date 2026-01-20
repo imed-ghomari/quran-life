@@ -33,15 +33,14 @@ function OnboardingSyncCleanup() {
   useEffect(() => {
     if (status === 'synced') {
       const checkAndClean = async () => {
-        const { getSettings, clearSecondaryStorage } = await import('@/lib/storage');
+        const { getSettings, clearSecondaryStorage, DEFAULT_SETTINGS } = await import('@/lib/storage');
         const settings = getSettings();
-        
-        // If we synced but onboarding is still incomplete, it means we might have pulled 
-        // artifacts (mindmaps) from a previous incomplete session or race condition.
-        // We must ensure the user has a clean slate for onboarding.
-        if (!settings.isOnboardingComplete) {
-             appLogger.addLog('[Onboarding] Sync finished but onboarding incomplete. Clearing secondary storage...', 'info');
-             await clearSecondaryStorage();
+        const hasDefaultUpdatedAt = !settings.updatedAt || settings.updatedAt === DEFAULT_SETTINGS.updatedAt;
+        const hasProgress = Object.keys(settings.learnedVerses || {}).length > 0 || (settings.skippedSurahs || []).length > 0;
+        const shouldClean = !settings.isOnboardingComplete && !settings.userId && hasDefaultUpdatedAt && !hasProgress;
+        if (shouldClean) {
+          appLogger.addLog('[Onboarding] Sync finished with empty onboarding state. Clearing secondary storage...', 'info');
+          await clearSecondaryStorage();
         }
       };
       checkAndClean();
