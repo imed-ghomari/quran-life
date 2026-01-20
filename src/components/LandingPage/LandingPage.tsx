@@ -266,7 +266,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       <footer className="footer">
         <div className="container">
           <div className="footer-logo">
-            <Layers size={20} color="var(--accent)" />
+            <img src="/icon.svg" width={20} height={20} alt="Quran Life Logo" />
             <span>Quran Life</span>
           </div>
           <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>

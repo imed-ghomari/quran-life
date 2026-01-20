@@ -79,8 +79,8 @@ define(['./workbox-e43f5367'], (function (workbox) { 'use strict';
         '/',
         '/manifest.json',
         '/qpc-hafs-word-by-word.json',
-        '/icon.png',
-        '/favicon.png'
+        '/icon.svg',
+        '/favicon.svg'
       ]);
     })());
   });

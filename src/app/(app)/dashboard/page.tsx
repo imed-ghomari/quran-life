@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
+import Spinner from '@/components/ui/Spinner';
 import { parseQuranJson, getSurah, getSurahsByPart, getQuranVerses } from '@/lib/quranData';
 import { Verse, getAudioPath } from '@/lib/types';
 import {
