@@ -653,7 +653,7 @@ export default function TodayPage() {
         }
     }, [revealedChunks, currentVerseInReview, showGrading]);
 
-    if (!isLoaded) return <div className="content-wrapper"><div className="loading">Loading...</div></div>;
+    if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
 
     const handleMindmapIncomplete = (surahId: number) => {
         if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;

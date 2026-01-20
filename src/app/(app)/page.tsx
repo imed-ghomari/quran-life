@@ -65,9 +65,7 @@ export default function Home() {
                 justifyContent: 'center',
                 background: 'var(--background)'
             }}>
-                <div className="status-badge learned" style={{ padding: '1rem 2rem', fontSize: '1.2rem' }}>
-                    Loading Quran Life...
-                </div>
+                <Spinner text="Loading Quran Life..." />
             </div>
         );
     }

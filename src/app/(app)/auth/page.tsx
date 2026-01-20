@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Mail, ArrowRight, Loader2, CheckCircle, Lock } from 'lucide-react';
 import { Suspense } from 'react';
+import Spinner from '@/components/ui/Spinner';
 
 function AuthContent() {
     const supabase = createClient();
@@ -315,7 +316,7 @@ function AuthContent() {
 
 export default function AuthPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div className="flex h-screen w-full items-center justify-center"><Spinner text="Loading..." /></div>}>
             <AuthContent />
         </Suspense>
     );

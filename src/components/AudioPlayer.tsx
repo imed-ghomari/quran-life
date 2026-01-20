@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { PlaybackSpeed, getAudioPath, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
 import { getAudioSettings, saveAudioSettings } from '@/lib/storage';
-import { ChevronDown, Loader2, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronDown, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import Spinner from '@/components/ui/Spinner';
 
 interface AudioPlayerProps {
     verses: Verse[];
@@ -300,7 +301,7 @@ export default function AudioPlayer({
                         <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                 </select>
-                {isLoadingReciter && <Loader2 className="animate-spin w-4 h-4 text-gray-500" />}
+                {isLoadingReciter && <Spinner size={16} />}
             </div>
 
             {/* Progress bar */}
