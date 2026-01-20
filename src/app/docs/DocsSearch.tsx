@@ -42,7 +42,11 @@ export default function DocsSearch({ className }: { className?: string }) {
         try {
             const response = await fetch(`/api/docs/search?q=${encodeURIComponent(searchQuery)}`);
             const data = await response.json();
-            setResults(data.results || []);
+            if (data.success && data.data?.results) {
+                setResults(data.data.results);
+            } else {
+                setResults([]);
+            }
         } catch (error) {
             console.error('Search failed:', error);
         } finally {

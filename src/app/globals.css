@@ -2532,6 +2532,10 @@ input:focus {
 }
 
 /* Sync button hover effect */
+.sync-btn-normal {
+  background: var(--background);
+}
+
 .sync-btn:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--verse-bg) !important;
@@ -2592,7 +2596,11 @@ input:focus {
   :root:not([data-theme="dark"]) .docs-main,
   :root:not([data-theme="dark"]) aside.card,
   :root:not([data-theme="dark"]) div.card,
-  :root:not([data-theme="dark"]) .kanban-column {
+  :root:not([data-theme="dark"]) .kanban-column,
+  :root:not([data-theme="dark"]) .bottom-nav,
+  :root:not([data-theme="dark"]) .sync-status-mobile,
+  :root:not([data-theme="dark"]) .sync-btn-normal,
+  :root:not([data-theme="dark"]) .sync-status-desktop {
     background-color: #f4f6f8 !important;
   }
   
@@ -2608,7 +2616,9 @@ input:focus {
 :root[data-theme="light"] div.card,
 :root[data-theme="light"] .kanban-column,
 :root[data-theme="light"] .bottom-nav,
-:root[data-theme="light"] .sync-status-mobile {
+:root[data-theme="light"] .sync-status-mobile,
+:root[data-theme="light"] .sync-btn-normal,
+:root[data-theme="light"] .sync-status-desktop {
   background-color: #f4f6f8 !important;
 }
 

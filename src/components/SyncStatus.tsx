@@ -109,7 +109,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                     onClick={handleClick}
                     disabled={!isClickable}
                     suppressHydrationWarning={true}
-                    className="sync-btn"
+                    className={`sync-btn ${displayStatus === 'conflict' ? 'sync-btn-conflict' : 'sync-btn-normal'}`}
                     style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -118,7 +118,7 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
                         padding: '0.4rem 0.8rem',
                         borderRadius: '8px',
                         border: '1px solid var(--border)',
-                        background: displayStatus === 'conflict' ? 'var(--danger)' : 'var(--background)',
+                        background: displayStatus === 'conflict' ? 'var(--danger)' : undefined,
                         color: displayStatus === 'conflict' ? 'white' : getStatusColor(),
                         fontSize: '0.75rem',
                         fontWeight: 600,
