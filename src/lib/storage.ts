@@ -572,11 +572,17 @@ export function getDueNodes(): MemoryNode[] {
             }
             return true;
         })
-        // Filter verse nodes: only include if surah is fully learned
+        // Filter verse nodes: only include if surah is fully learned AND has a completed mindmap
         .filter(n => {
             if (n.type === 'verse' && n.surahId) {
                 const { learned, total } = getSurahLearnedStatus(n.surahId);
-                return learned === total;
+                const isLearned = learned === total;
+
+                // Mindmap must be complete and have an image
+                const mm = mindmaps[n.surahId];
+                const isMindmapComplete = mm?.isComplete && mm?.imageUrl;
+
+                return isLearned && isMindmapComplete;
             }
             return true;
         })
