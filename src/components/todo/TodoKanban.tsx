@@ -526,6 +526,8 @@ export default function TodoKanban({
                                         verseCount={data.surah.verseCount}
                                         builderState={getBuilderState(id)}
                                         mindmapImageUrl={mindmap?.imageUrl || null}
+                                        mindmapImageUrlDark={mindmap?.imageUrlDark || null}
+                                        isDark={isDark}
                                         onAddBreak={(val) => onAddBreak(id, val)}
                                         onRemoveBreak={(val) => onRemoveBreak(id, val)}
                                         onSave={() => onSaveAnchors(id, data.surah.verseCount)}

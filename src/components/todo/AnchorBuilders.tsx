@@ -11,6 +11,8 @@ export function MobileAnchorBuilder({
     verseCount,
     builderState,
     mindmapImageUrl,
+    mindmapImageUrlDark,
+    isDark,
     onAddBreak,
     onRemoveBreak,
     onSave,
@@ -20,6 +22,8 @@ export function MobileAnchorBuilder({
     verseCount: number;
     builderState: AnchorBuilderState;
     mindmapImageUrl?: string | null;
+    mindmapImageUrlDark?: string | null;
+    isDark?: boolean;
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
     onSave: () => void;
@@ -30,6 +34,7 @@ export function MobileAnchorBuilder({
     const [isEditing, setIsEditing] = useState(false);
     const [showFullMindmap, setShowFullMindmap] = useState(false);
     const [zoomLevel, setZoomLevel] = useState(1);
+    const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
 
     // Height of one "verse unit" in pixels
     const VERSE_HEIGHT = 50;
@@ -72,14 +77,14 @@ export function MobileAnchorBuilder({
     const boundaries = Array.from(new Set([1, ...breaks.map(b => b + 1), verseCount + 1])).sort((a, b) => a - b);
 
     // Full Screen Mindmap Overlay
-    if (showFullMindmap && mindmapImageUrl) {
+    if (showFullMindmap && displayUrl) {
         return (
             <div
                 style={{
                     position: 'fixed',
                     inset: 0,
                     zIndex: 100,
-                    background: 'rgba(0,0,0,0.95)',
+                    background: 'var(--background)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -87,30 +92,30 @@ export function MobileAnchorBuilder({
                 }}
                 onClick={() => setShowFullMindmap(false)}
             >
-                <div style={{ position: 'absolute', top: 20, right: 20, color: 'white', zIndex: 101, display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <div style={{ position: 'absolute', top: 20, right: 20, color: 'var(--foreground)', zIndex: 101, display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <button
                         onClick={(e) => { e.stopPropagation(); setZoomLevel(z => Math.max(0.5, z - 0.25)); }}
-                        style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '50%', width: '40px', height: '40px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                     >
                         <Minus size={24} />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); setZoomLevel(z => Math.min(3, z + 0.25)); }}
-                        style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '50%', width: '40px', height: '40px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                     >
                         <Plus size={24} />
                     </button>
                     <button
                         onClick={() => setShowFullMindmap(false)}
-                        style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', marginLeft: '0.5rem' }}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--foreground)', cursor: 'pointer', marginLeft: '0.5rem' }}
                     >
                         <X size={32} />
                     </button>
                 </div>
                 <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                    {mindmapImageUrl && (
+                    {displayUrl && (
                         <Image
-                            src={mindmapImageUrl}
+                            src={displayUrl}
                             alt="Full Mindmap"
                             fill
                             style={{
@@ -123,7 +128,7 @@ export function MobileAnchorBuilder({
                         />
                     )}
                 </div>
-                <span style={{ position: 'absolute', bottom: 30, color: 'white', background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: '20px' }}>
+                <span style={{ position: 'absolute', bottom: 30, color: 'var(--foreground)', background: 'var(--background-secondary)', border: '1px solid var(--border)', padding: '8px 16px', borderRadius: '20px' }}>
                     Tap anywhere to close • Zoom: {Math.round(zoomLevel * 100)}%
                 </span>
             </div>
@@ -151,20 +156,20 @@ export function MobileAnchorBuilder({
                     flexDirection: 'column',
                     gap: '1rem'
                 }}>
-                    {mindmapImageUrl && (
+                    {displayUrl && (
                         <div
                             style={{
                                 height: '150px',
                                 borderRadius: '8px',
                                 overflow: 'hidden',
-                                background: '#000',
+                                background: 'var(--background-secondary)',
                                 position: 'relative',
                                 cursor: 'pointer'
                             }}
                             onClick={() => setShowFullMindmap(true)}
                         >
                             <Image
-                                src={mindmapImageUrl}
+                                src={displayUrl}
                                 alt="Mindmap Preview"
                                 fill
                                 style={{ objectFit: 'contain' }}
@@ -173,8 +178,9 @@ export function MobileAnchorBuilder({
                                 position: 'absolute',
                                 bottom: 8,
                                 right: 8,
-                                background: 'rgba(0,0,0,0.6)',
-                                color: 'white',
+                                background: 'var(--background)',
+                                color: 'var(--foreground)',
+                                border: '1px solid var(--border)',
                                 padding: '4px 8px',
                                 borderRadius: '4px',
                                 fontSize: '0.75rem',
@@ -288,11 +294,11 @@ export function MobileAnchorBuilder({
             </div>
 
             {/* Sticky Mindmap Preview (Small) */}
-            {mindmapImageUrl && (
+            {displayUrl && (
                 <div
                     style={{
                         height: '80px',
-                        background: '#000',
+                        background: 'var(--background-secondary)',
                         position: 'relative',
                         zIndex: 30,
                         flexShrink: 0,
@@ -301,13 +307,13 @@ export function MobileAnchorBuilder({
                     onClick={() => setShowFullMindmap(true)}
                 >
                     <Image
-                        src={mindmapImageUrl}
+                        src={displayUrl}
                         alt="Mindmap Preview"
                         fill
                         style={{ objectFit: 'contain', opacity: 0.8 }}
                     />
-                    <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
-                        <ImageIcon size={10} color="white" />
+                    <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'var(--background)', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: '4px' }}>
+                        <ImageIcon size={10} color="var(--foreground)" />
                     </div>
                 </div>
             )}

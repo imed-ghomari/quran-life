@@ -124,6 +124,7 @@ export default function MindmapViewer({
     const handleMount = useCallback((editor: any) => {
         setEditor(editor);
         editor.updateInstanceState({ isReadonly: true });
+        editor.setCurrentTool('hand');
         // Disable camera movement and other interactions
         // editor.setCameraOptions({ isLocked: true });
 
@@ -188,6 +189,7 @@ export default function MindmapViewer({
             const handleInlineMount = (editor: any) => {
                 setEditor(editor);
                 editor.updateInstanceState({ isReadonly: true });
+                editor.setCurrentTool('hand');
                 
                 // Aggressive Zoom-to-Fit strategy
                 const fit = () => {
@@ -263,8 +265,19 @@ export default function MindmapViewer({
                                 components={components}
                                 onMount={handleMount}
                             />
+                        ) : hasImage ? (
+                            <div className="absolute inset-0">
+                                <Image
+                                    src={displayUrl!}
+                                    alt={title || "Mindmap"}
+                                    fill
+                                    className="object-contain p-6"
+                                    sizes="100vw"
+                                    priority={false}
+                                />
+                            </div>
                         ) : (
-                             <div className="flex items-center justify-center h-full text-[var(--foreground-secondary)]">
+                            <div className="flex items-center justify-center h-full text-[var(--foreground-secondary)]">
                                 <div className="text-center">
                                     <p className="mb-2">Map data not available</p>
                                     <button 

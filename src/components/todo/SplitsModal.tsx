@@ -91,6 +91,8 @@ export default function SplitsModal({
                                     verseCount={verseCount}
                                     builderState={builderState}
                                     mindmapImageUrl={mindmapImageUrl || null}
+                                    mindmapImageUrlDark={mindmapImageUrlDark || null}
+                                    isDark={isDark}
                                     onAddBreak={onAddBreak}
                                     onRemoveBreak={onRemoveBreak}
                                     onSave={() => { onSave(); onClose(); }}
