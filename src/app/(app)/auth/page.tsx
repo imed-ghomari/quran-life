@@ -121,6 +121,14 @@ function AuthContent() {
             .eq('status', 'completed')
             .single();
 
+        // Trigger sync immediately after login to ensure data is pulled
+        try {
+            const { commitTask } = await import('@/lib/syncEngine');
+            await commitTask('login');
+        } catch (syncError) {
+            console.warn('Login sync trigger failed:', syncError);
+        }
+
         if (purchase) {
             // User has already paid, go to dashboard
             router.push('/dashboard');

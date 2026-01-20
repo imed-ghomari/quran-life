@@ -335,8 +335,13 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         };
     }, [editor]);
 
-    const handleClose = async () => {
-        const editorInst = editorRef.current || editor;
+    // Track last save time to avoid too frequent saves
+    const lastSaveTime = useRef<number>(Date.now());
+    const isDirty = useRef<boolean>(false);
+    const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const saveContent = useCallback(async (withImages: boolean = false) => {
+        const editorInst = editorRef.current;
         if (editorInst && onSave) {
             try {
                 // Force store snapshot to ensure we get schema and full store
@@ -344,46 +349,48 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
                 // Debug: Check snapshot content size
                 const storeKeys = Object.keys(snapshot?.store || {});
-                const hasSchema = !!snapshot?.schema;
-                appLogger.addLog(`[Editor] Saving Snapshot. Items: ${storeKeys.length}. Schema: ${hasSchema}`, 'info');
-
+                
                 if (storeKeys.length === 0) {
-                    appLogger.addLog(`[Editor] Warning: Snapshot store appears empty.`, 'error');
+                    // Skip saving empty state if we haven't drawn anything
+                    return;
                 }
 
-                // Export images for preview (both light and dark)
+                // Export images only if requested (e.g. on close)
                 let lightBlob: Blob | undefined;
                 let darkBlob: Blob | undefined;
-                try {
-                    const shapeIds = Array.from(editor.getCurrentPageShapeIds());
-                    if (shapeIds.length > 0) {
-                        // Use lower pixelRatio and potentially smaller format to save space
-                        // Light mode version
-                        const lightResult = await editor.toImage(shapeIds, {
-                            format: 'png',
-                            quality: 0.8, // Slightly lower quality
-                            pixelRatio: 1, // Reduced from 2 to save 4x space
-                            padding: 10,
-                            theme: 'light'
-                        });
-                        if (lightResult && lightResult.blob) {
-                            lightBlob = lightResult.blob;
-                        }
+                
+                if (withImages) {
+                    try {
+                        const shapeIds = Array.from(editorInst.getCurrentPageShapeIds() as Set<string>);
+                        if (shapeIds.length > 0) {
+                            // Use lower pixelRatio and potentially smaller format to save space
+                            // Light mode version
+                            const lightResult = await editorInst.toImage(shapeIds, {
+                                format: 'png',
+                                quality: 0.8, // Slightly lower quality
+                                pixelRatio: 1, // Reduced from 2 to save 4x space
+                                padding: 10,
+                                theme: 'light'
+                            });
+                            if (lightResult && lightResult.blob) {
+                                lightBlob = lightResult.blob;
+                            }
 
-                        // Dark mode version
-                        const darkResult = await editor.toImage(shapeIds, {
-                            format: 'png',
-                            quality: 0.8,
-                            pixelRatio: 1,
-                            padding: 10,
-                            theme: 'dark'
-                        });
-                        if (darkResult && darkResult.blob) {
-                            darkBlob = darkResult.blob;
+                            // Dark mode version
+                            const darkResult = await editorInst.toImage(shapeIds, {
+                                format: 'png',
+                                quality: 0.8,
+                                pixelRatio: 1,
+                                padding: 10,
+                                theme: 'dark'
+                            });
+                            if (darkResult && darkResult.blob) {
+                                darkBlob = darkResult.blob;
+                            }
                         }
+                    } catch (imgError) {
+                        console.warn("Failed to generate preview images", imgError);
                     }
-                } catch (imgError) {
-                    console.warn("Failed to generate preview images", imgError);
                 }
 
                 // Sanitize snapshot: remove non-document records to save space
@@ -400,13 +407,81 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     sanitizedSnapshot.store = filteredStore;
                 }
 
-                await onSave(sanitizedSnapshot, { light: lightBlob, dark: darkBlob });
+                await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined);
+                isDirty.current = false;
+                lastSaveTime.current = Date.now();
+                
+                if (!withImages) {
+                    // appLogger.addLog('[Editor] Auto-saved successfully', 'info');
+                }
             } catch (e) {
                 console.error("Save failed", e);
             }
         }
+    }, [onSave]);
+
+    const handleClose = async () => {
+        // Clear any pending auto-save
+        if (autoSaveTimer.current) {
+            clearTimeout(autoSaveTimer.current);
+        }
+        // Save with images on close
+        await saveContent(true);
         onClose();
     };
+
+    // Auto-save logic
+    useEffect(() => {
+        if (!editor) return;
+
+        const handleChange = () => {
+            isDirty.current = true;
+            
+            // Clear existing timer
+            if (autoSaveTimer.current) {
+                clearTimeout(autoSaveTimer.current);
+            }
+
+            // Set new timer for auto-save (debounce 2s)
+            autoSaveTimer.current = setTimeout(() => {
+                if (isDirty.current) {
+                    saveContent(false); // Auto-save without images
+                }
+            }, 2000);
+        };
+
+        // Listen to store changes
+        const cleanup = editor.store.listen((entry: any) => {
+            if (entry.source === 'user') {
+                handleChange();
+            }
+        }, { scope: 'document', source: 'user' });
+
+        return () => {
+            cleanup();
+            if (autoSaveTimer.current) {
+                clearTimeout(autoSaveTimer.current);
+            }
+        };
+    }, [editor, saveContent]);
+
+    // Handle beforeunload to warn/save
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirty.current) {
+                // Try to trigger a save (async, might not complete)
+                saveContent(false);
+                
+                // Show confirmation dialog
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [saveContent]);
 
     const uiOverrides = useMemo(() => ({
         tools(editorInst: any, tools: any) {
