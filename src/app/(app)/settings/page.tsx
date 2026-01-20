@@ -1095,7 +1095,7 @@ export default function SettingsPage() {
                                 <span>User Account</span>
                             </div>
                         </div>
-                        <ChevronDown size={20} style={{ transform: sectionsExpanded.cloudSync ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.cloudSync ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     {sectionsExpanded.cloudSync && (
                         <>
@@ -1237,7 +1237,7 @@ export default function SettingsPage() {
                             </div>
                             <span>Local Backup & Import</span>
                         </div>
-                        <ChevronDown size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     {sectionsExpanded.backupRestore && (
                         <>
@@ -1315,7 +1315,7 @@ export default function SettingsPage() {
                             </div>
                             <span>Completion Schedule</span>
                         </div>
-                        <ChevronDown size={20} style={{ transform: sectionsExpanded.schedule ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.schedule ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     {sectionsExpanded.schedule && (
                         <>
@@ -1352,7 +1352,7 @@ export default function SettingsPage() {
                             </div>
                             <span>Active Part</span>
                         </div>
-                        <ChevronDown size={20} style={{ transform: sectionsExpanded.activePart ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.activePart ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     {sectionsExpanded.activePart && (
                         <div className="part-selector" style={{
@@ -1436,7 +1436,7 @@ export default function SettingsPage() {
                                     </button>
                                 </div>
                             )}
-                            <ChevronDown size={20} style={{ transform: sectionsExpanded.surahStatus ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.surahStatus ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </div>
                     </div>
                     {sectionsExpanded.surahStatus && (
@@ -1538,7 +1538,7 @@ export default function SettingsPage() {
                             </div>
                             <span>Knowledge Tracking</span>
                         </div>
-                        <ChevronDown size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        <ChevronDown className="md:hidden" size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
 
                     {showDebugNodes && (
@@ -2018,7 +2018,7 @@ export default function SettingsPage() {
                                     </button>
                                 </div>
                             )}
-                            <ChevronDown size={20} style={{ transform: sectionsExpanded.mutashabihat ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.mutashabihat ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </div>
                     </div>
                 </div>

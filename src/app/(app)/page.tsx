@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import LandingPage from '@/components/LandingPage/LandingPage';
+import Spinner from '@/components/ui/Spinner';
 import { useEffect, useState } from 'react';
 
 // Owner bypass - set this in your .env.local: NEXT_PUBLIC_OWNER_EMAIL=your@email.com
