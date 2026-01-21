@@ -562,7 +562,15 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 <span style={{ fontSize: '0.8rem', color: '#666' }}>Auto-saves on close</span>
             </div>
 
-            <div className="tldraw-container" style={{ position: 'absolute', top: '50px', left: 0, right: 0, bottom: 0, background: '#f8f9fa' }}>
+            <div className="tldraw-container" style={{ 
+                position: 'absolute', 
+                top: '50px', 
+                left: 0, 
+                right: 0, 
+                bottom: 0, 
+                background: '#f8f9fa',
+                overscrollBehaviorX: 'none' // Prevent browser back navigation gesture
+            }}>
                 <Tldraw
                     onMount={handleMount}
                     tools={[LassoSelectTool]}

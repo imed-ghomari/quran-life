@@ -258,7 +258,7 @@ export default function MindmapViewer({
                             <X size={24} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <div className="flex-1 relative bg-[var(--background-secondary)]">
+                    <div className="flex-1 relative bg-[var(--background-secondary)]" style={{ overscrollBehaviorX: 'none' }}>
                         {activeSnapshot ? (
                             <Tldraw
                                 snapshot={activeSnapshot}
