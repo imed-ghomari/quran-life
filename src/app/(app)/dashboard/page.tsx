@@ -680,7 +680,7 @@ export default function TodayPage() {
         // syncWithCloud().catch(console.error);
     };
 
-    const handleMindmapEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
+    const handleMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activeMindmapEditor) return;
         const { surahId } = activeMindmapEditor;
 
@@ -693,7 +693,9 @@ export default function TodayPage() {
                 tldrawSnapshot: snapshot
             });
             setSettingsVersion(v => v + 1);
-            setActiveMindmapEditor(null);
+            if (shouldClose) {
+                setActiveMindmapEditor(null);
+            }
             // (REMOVED: Automatic sync)
             // syncWithCloud().catch(console.error);
         };
@@ -719,9 +721,9 @@ export default function TodayPage() {
         } else {
             save(null, null);
         }
-    };
+    }, [activeMindmapEditor]);
 
-    const handlePartMindmapEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
+    const handlePartMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
@@ -734,7 +736,9 @@ export default function TodayPage() {
                 tldrawSnapshot: snapshot
             });
             setSettingsVersion(v => v + 1);
-            setActivePartEditor(null);
+            if (shouldClose) {
+                setActivePartEditor(null);
+            }
             // (REMOVED: Automatic sync)
             // syncWithCloud().catch(console.error);
         };
@@ -760,7 +764,7 @@ export default function TodayPage() {
         } else {
             save(null, null);
         }
-    };
+    }, [activePartEditor]);
 
     return (
         <div className="content-wrapper">

@@ -174,11 +174,17 @@ function saveToCacheAndStore(key: string, value: any): Promise<void> {
 
     if (typeof window !== 'undefined' && customStore) {
         // Notify other tabs via BroadcastChannel
-        storageChannel?.postMessage({ key, value });
+        try {
+            storageChannel?.postMessage({ key, value });
+        } catch (e) {
+            // Ignore DataCloneError or other messaging errors for large payloads
+            console.warn(`[Storage] Failed to broadcast ${key} (likely too large)`, e);
+        }
 
         // Also update localStorage for fallback sync awareness across tabs
+        let stringified = '';
         try {
-            const stringified = JSON.stringify(value);
+            stringified = JSON.stringify(value);
             if (stringified.length < 500000) {
                 localStorage.setItem(key, stringified);
             } else {
@@ -193,10 +199,19 @@ function saveToCacheAndStore(key: string, value: any): Promise<void> {
             .then(() => {
                 appLogger.addLog(`${keyName} saved successfully`, 'success');
                 // Dispatch a storage event manually so the page.tsx useEffect catches it
-                window.dispatchEvent(new StorageEvent('storage', {
-                    key: key,
-                    newValue: JSON.stringify(value),
-                }));
+                // We reuse the stringified value if available to avoid double serialization
+                try {
+                    const payload = stringified || JSON.stringify(value);
+                    // Avoid dispatching huge events that might freeze listeners
+                    if (payload.length < 2000000) { // 2MB safety limit for events
+                        window.dispatchEvent(new StorageEvent('storage', {
+                            key: key,
+                            newValue: payload,
+                        }));
+                    }
+                } catch (e) {
+                    console.warn(`[Storage] Skipped dispatching event for ${key}`, e);
+                }
             })
             .catch(err => {
                 appLogger.addLog(`Failed to save ${keyName}`, 'error');

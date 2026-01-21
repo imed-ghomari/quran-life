@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { SURAHS, getSurah, getSurahsByPart, parseQuranJson, getQuranVerses } from '@/lib/quranData';
 import {
@@ -380,7 +380,7 @@ export default function TodoPage() {
         setSettingsVersion(v => v + 1);
     };
 
-    const handleEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
+    const handleEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activeMindmapEditor) return;
         const { surahId } = activeMindmapEditor;
 
@@ -395,7 +395,9 @@ export default function TodoPage() {
             saveMindMap(updated);
             setMindmaps(prev => ({ ...prev, [surahId]: updated }));
             setSettingsVersion(v => v + 1);
-            setActiveMindmapEditor(null);
+            if (shouldClose) {
+                setActiveMindmapEditor(null);
+            }
             // syncWithCloud().catch(console.error);
         };
 
@@ -419,9 +421,9 @@ export default function TodoPage() {
         } else {
             save(null, null);
         }
-    };
+    }, [activeMindmapEditor]);
 
-    const handlePartEditorSave = async (snapshot: any, images?: { light?: Blob, dark?: Blob }) => {
+    const handlePartEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
@@ -436,13 +438,14 @@ export default function TodoPage() {
             savePartMindMap(updated);
             setPartMindmaps(prev => ({ ...prev, [partId]: updated }));
             setSettingsVersion(v => v + 1);
-            setActivePartEditor(null);
+            if (shouldClose) {
+                setActivePartEditor(null);
+            }
             // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {
             const blobs = images;
-
             const processBlob = (blob: Blob | undefined): Promise<string | null> => {
                 if (!blob) return Promise.resolve(null);
                 return new Promise((resolve) => {
@@ -460,7 +463,7 @@ export default function TodoPage() {
         } else {
             save(null, null);
         }
-    };
+    }, [activePartEditor]);
 
     return (
         <div className="content-wrapper">

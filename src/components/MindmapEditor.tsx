@@ -173,7 +173,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 interface MindmapEditorProps {
     initialSnapshot?: any;
-    onSave?: (snapshot: any, images?: { light?: Blob, dark?: Blob }) => Promise<void>;
+    onSave?: (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose?: boolean) => Promise<void>;
     onClose: () => void;
     title?: string;
     docLink?: string | null;
@@ -339,8 +339,19 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
     const lastSaveTime = useRef<number>(Date.now());
     const isDirty = useRef<boolean>(false);
     const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+    const maxWaitTimer = useRef<NodeJS.Timeout | null>(null);
 
     const saveContent = useCallback(async (withImages: boolean = false) => {
+        // Clear timers to prevent double save
+        if (autoSaveTimer.current) {
+            clearTimeout(autoSaveTimer.current);
+            autoSaveTimer.current = null;
+        }
+        if (maxWaitTimer.current) {
+            clearTimeout(maxWaitTimer.current);
+            maxWaitTimer.current = null;
+        }
+
         const editorInst = editorRef.current;
         if (editorInst && onSave) {
             try {
@@ -395,19 +406,25 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
                 // Sanitize snapshot: remove non-document records to save space
                 // (camera, pointer, transient state etc)
+                // Optimized for performance: avoid Object.entries and filtering if possible
                 const sanitizedSnapshot = { ...snapshot };
                 if (sanitizedSnapshot.store) {
-                    const documentTypes = ['shape', 'asset', 'binding', 'page'];
-                    const filteredStore: any = {};
-                    Object.entries(sanitizedSnapshot.store).forEach(([id, record]: [string, any]) => {
-                        if (documentTypes.some(type => id.startsWith(type + ':'))) {
-                            filteredStore[id] = record;
+                    const sanitizedStore: any = {};
+                    // Direct iteration is faster than Object.entries().filter()
+                    for (const key in sanitizedSnapshot.store) {
+                         if (
+                            key.startsWith('shape:') || 
+                            key.startsWith('asset:') || 
+                            key.startsWith('binding:') || 
+                            key.startsWith('page:')
+                        ) {
+                            sanitizedStore[key] = sanitizedSnapshot.store[key];
                         }
-                    });
-                    sanitizedSnapshot.store = filteredStore;
+                    }
+                    sanitizedSnapshot.store = sanitizedStore;
                 }
 
-                await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined);
+                await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined, withImages);
                 isDirty.current = false;
                 lastSaveTime.current = Date.now();
                 
@@ -425,6 +442,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         if (autoSaveTimer.current) {
             clearTimeout(autoSaveTimer.current);
         }
+        if (maxWaitTimer.current) {
+            clearTimeout(maxWaitTimer.current);
+        }
         // Save with images on close
         await saveContent(true);
         onClose();
@@ -437,17 +457,26 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         const handleChange = () => {
             isDirty.current = true;
             
-            // Clear existing timer
+            // Clear existing debounce timer
             if (autoSaveTimer.current) {
                 clearTimeout(autoSaveTimer.current);
             }
 
-            // Set new timer for auto-save (debounce 2s)
+            // Set new debounce timer (2s)
             autoSaveTimer.current = setTimeout(() => {
                 if (isDirty.current) {
                     saveContent(false); // Auto-save without images
                 }
             }, 2000);
+
+            // Throttle: Ensure we save at least every 10 seconds if continuously editing
+            if (!maxWaitTimer.current) {
+                maxWaitTimer.current = setTimeout(() => {
+                    if (isDirty.current) {
+                        saveContent(false);
+                    }
+                }, 10000);
+            }
         };
 
         // Listen to store changes
@@ -461,6 +490,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             cleanup();
             if (autoSaveTimer.current) {
                 clearTimeout(autoSaveTimer.current);
+            }
+            if (maxWaitTimer.current) {
+                clearTimeout(maxWaitTimer.current);
             }
         };
     }, [editor, saveContent]);
