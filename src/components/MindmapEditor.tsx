@@ -240,11 +240,15 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
     useEffect(() => {
         // Prevent browser back gesture globally while editor is open
-        const originalOverscroll = document.body.style.overscrollBehaviorX;
+        const originalBodyOverscroll = document.body.style.overscrollBehaviorX;
+        const originalHtmlOverscroll = document.documentElement.style.overscrollBehaviorX;
+        
         document.body.style.overscrollBehaviorX = 'none';
+        document.documentElement.style.overscrollBehaviorX = 'none';
         
         return () => {
-            document.body.style.overscrollBehaviorX = originalOverscroll;
+            document.body.style.overscrollBehaviorX = originalBodyOverscroll;
+            document.documentElement.style.overscrollBehaviorX = originalHtmlOverscroll;
         };
     }, []);
 
