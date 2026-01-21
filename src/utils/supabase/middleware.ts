@@ -33,12 +33,26 @@ export async function updateSession(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => url.pathname.startsWith(route))
 
   try {
+    // Helper to timeout a promise
+    const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue?: T): Promise<T> => {
+        return Promise.race([
+            promise,
+            new Promise<T>((resolve, reject) => 
+                setTimeout(() => {
+                    if (fallbackValue !== undefined) resolve(fallbackValue);
+                    else reject(new Error('Timeout'));
+                }, ms)
+            )
+        ]);
+    };
+
     // This will refresh the session if it's expired
     // We try-catch this to be lenient when offline/network fails
+    // Add 4s timeout to avoid 504 Gateway Timeout
     const {
       data: { user },
       error
-    } = await supabase.auth.getUser()
+    } = await withTimeout(supabase.auth.getUser(), 4000, { data: { user: null }, error: { message: 'Auth Timeout', name: 'TimeoutError' } } as any);
 
     // If user is NOT logged in (and we're sure) and tries to access a protected route
     if (!user && !error && isProtectedRoute) {
@@ -77,14 +91,22 @@ export async function updateSession(request: NextRequest) {
         // Check if user has a completed purchase
         // We also want to be lenient here if offline
         try {
-          const { data: purchase, error } = await supabase
+          // Add 3s timeout for purchase check. If DB is slow (syncing), don't block user with 504.
+          const { data: purchase, error } = await withTimeout(
+            supabase
             .from('purchases')
             .select('id')
             .eq('email', user.email)
             .eq('status', 'completed')
-            .single()
+            .single(),
+            3000,
+            { data: { id: 'fallback' }, error: null } as any // Fallback: pretend they have purchase on timeout
+          );
 
-          if (error || !purchase) {
+          // If we used fallback (id === 'fallback'), we skip the check
+          const isTimeoutFallback = purchase?.id === 'fallback';
+
+          if (!isTimeoutFallback && (error || !purchase)) {
             // Only redirect if we effectively CONFIRMED they have no purchase.
             // If it's a network error (e.g. timeout), 'error' will be present.
             // We shouldn't block access if DB is unreachable but they have a session.
