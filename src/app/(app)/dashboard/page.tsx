@@ -654,8 +654,7 @@ export default function TodayPage() {
         }
     }, [revealedChunks, currentVerseInReview, showGrading]);
 
-    if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
-
+    // Move isLoaded check to AFTER all hooks
     const handleMindmapIncomplete = (surahId: number) => {
         if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
@@ -664,8 +663,6 @@ export default function TodayPage() {
         saveMindMap(updated);
         setSettingsVersion(v => v + 1);
         addToast('success', 'Mindmap marked as incomplete', getSurah(surahId)?.name);
-        // (REMOVED: Automatic sync)
-        // syncWithCloud().catch(console.error);
     };
 
     const handlePartMindmapIncomplete = (partId: QuranPart) => {
@@ -676,8 +673,6 @@ export default function TodayPage() {
         savePartMindMap(updated);
         setSettingsVersion(v => v + 1);
         addToast('success', 'Part mindmap marked as incomplete', `Part ${partId}`);
-        // (REMOVED: Automatic sync)
-        // syncWithCloud().catch(console.error);
     };
 
     const handleMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
@@ -696,14 +691,10 @@ export default function TodayPage() {
             if (shouldClose) {
                 setActiveMindmapEditor(null);
             }
-            // (REMOVED: Automatic sync)
-            // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {
             const blobs = images;
-            const urls: { light: string | null, dark: string | null } = { light: null, dark: null };
-
             const processBlob = (blob: Blob | undefined): Promise<string | null> => {
                 if (!blob) return Promise.resolve(null);
                 return new Promise((resolve) => {
@@ -739,14 +730,10 @@ export default function TodayPage() {
             if (shouldClose) {
                 setActivePartEditor(null);
             }
-            // (REMOVED: Automatic sync)
-            // syncWithCloud().catch(console.error);
         };
 
         if (images && (images.light || images.dark)) {
             const blobs = images;
-            const urls: { light: string | null, dark: string | null } = { light: null, dark: null };
-
             const processBlob = (blob: Blob | undefined): Promise<string | null> => {
                 if (!blob) return Promise.resolve(null);
                 return new Promise((resolve) => {
@@ -765,6 +752,8 @@ export default function TodayPage() {
             save(null, null);
         }
     }, [activePartEditor]);
+
+    if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
 
     return (
         <div className="content-wrapper">

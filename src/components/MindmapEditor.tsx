@@ -239,6 +239,16 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
     }, [initialSnapshot]);
 
     useEffect(() => {
+        // Prevent browser back gesture globally while editor is open
+        const originalOverscroll = document.body.style.overscrollBehaviorX;
+        document.body.style.overscrollBehaviorX = 'none';
+        
+        return () => {
+            document.body.style.overscrollBehaviorX = originalOverscroll;
+        };
+    }, []);
+
+    useEffect(() => {
         if (!editor) return;
         const colorScheme = theme === 'system' ? 'system' : theme;
         editor.user.updateUserPreferences({ colorScheme });

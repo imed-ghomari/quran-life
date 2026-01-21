@@ -38,6 +38,15 @@ const nextConfig = {
                 ]
             },
             {
+                source: '/((?!_next|favicon.ico).*)',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'public, max-age=0, must-revalidate'
+                    }
+                ]
+            },
+            {
                 source: '/api/:path*',
                 headers: [
                     { key: 'Access-Control-Allow-Credentials', value: 'true' },
