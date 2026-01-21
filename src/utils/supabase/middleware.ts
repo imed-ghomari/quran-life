@@ -34,9 +34,9 @@ export async function updateSession(request: NextRequest) {
 
   try {
     // Helper to timeout a promise
-    const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue?: T): Promise<T> => {
+    const withTimeout = <T>(promise: PromiseLike<T>, ms: number, fallbackValue?: T): Promise<T> => {
         return Promise.race([
-            promise,
+            promise as Promise<T>,
             new Promise<T>((resolve, reject) => 
                 setTimeout(() => {
                     if (fallbackValue !== undefined) resolve(fallbackValue);
