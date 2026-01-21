@@ -144,12 +144,15 @@ if (storageChannel) {
 
 // (Moved to top)
 
-function saveToCacheAndStore(key: string, value: any): Promise<void> {
+function saveToCacheAndStore(key: string, value: any, options?: { skipSyncTrigger?: boolean }): Promise<void> {
     storageCache[key] = value;
 
     // Human readable key name
     const keyName = key.replace('quran-app-', '').replace(/-/g, ' ');
-    appLogger.addLog(`Saving ${keyName}...`, 'info');
+    // Only log if not skipping sync trigger (avoids spam during full import)
+    if (!options?.skipSyncTrigger) {
+        appLogger.addLog(`Saving ${keyName}...`, 'info');
+    }
 
     // Update last modified timestamp (except for the timestamp itself)
     if (key !== STORAGE_KEYS.LAST_MODIFIED) {
@@ -159,16 +162,18 @@ function saveToCacheAndStore(key: string, value: any): Promise<void> {
             set(STORAGE_KEYS.LAST_MODIFIED, now, customStore).catch(() => { });
             localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, JSON.stringify(now));
 
-            // Increment pending changes count
-            const currentCount = parseInt(localStorage.getItem('quran-app-pending-count') || '0');
-            localStorage.setItem('quran-app-pending-count', (currentCount + 1).toString());
+            if (!options?.skipSyncTrigger) {
+                // Increment pending changes count
+                const currentCount = parseInt(localStorage.getItem('quran-app-pending-count') || '0');
+                localStorage.setItem('quran-app-pending-count', (currentCount + 1).toString());
 
-            // Notify sync engine of pending changes
-            import('./syncEngine').then(({ markPendingChanges }) => {
-                markPendingChanges();
-            }).catch(() => {
-                // Sync engine not yet loaded, changes tracked via localStorage count
-            });
+                // Notify sync engine of pending changes
+                import('./syncEngine').then(({ markPendingChanges }) => {
+                    markPendingChanges();
+                }).catch(() => {
+                    // Sync engine not yet loaded, changes tracked via localStorage count
+                });
+            }
         }
     }
 
@@ -307,9 +312,9 @@ export function getSettings(): AppSettings {
     return getFromCache(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
 }
 
-export async function saveSettings(settings: AppSettings): Promise<void> {
+export async function saveSettings(settings: AppSettings, options?: { skipSyncTrigger?: boolean }): Promise<void> {
     settings.updatedAt = new Date().toISOString();
-    await saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings);
+    await saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings, options);
 }
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> {
@@ -539,7 +544,7 @@ export function getMemoryNodes(): MemoryNode[] {
     return getFromCache(STORAGE_KEYS.MEMORY_NODES, []);
 }
 
-export function saveMemoryNodes(nodes: MemoryNode[]): void {
+export function saveMemoryNodes(nodes: MemoryNode[], options?: { skipSyncTrigger?: boolean }): void {
     // Deduplicate by ID before saving to prevent high counter issues
     const uniqueMap = new Map();
     nodes.forEach(n => {
@@ -553,7 +558,7 @@ export function saveMemoryNodes(nodes: MemoryNode[]): void {
             }
         }
     });
-    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, Array.from(uniqueMap.values()));
+    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, Array.from(uniqueMap.values()), options);
 }
 
 export function getDueNodes(): MemoryNode[] {
@@ -1580,9 +1585,9 @@ export function exportBackup(): BackupData {
     };
 }
 
-export function importBackup(data: BackupData): void {
-    if (data.settings) saveSettings(data.settings);
-    if (data.memoryNodes) saveMemoryNodes(data.memoryNodes);
+export function importBackup(data: BackupData, options?: { skipSyncTrigger?: boolean }): void {
+    if (data.settings) saveSettings(data.settings, options);
+    if (data.memoryNodes) saveMemoryNodes(data.memoryNodes, options);
     if (data.mindmaps) {
         const current = getMindMaps();
         const incoming = data.mindmaps;
@@ -1595,7 +1600,7 @@ export function importBackup(data: BackupData): void {
                 }
             }
         });
-        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, incoming);
+        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, incoming, options);
     }
     if (data.partMindmaps) {
         const current = getPartMindMaps();
@@ -1610,32 +1615,32 @@ export function importBackup(data: BackupData): void {
                 }
             }
         });
-        saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, incoming);
+        saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, incoming, options);
     }
     if (data.listeningStats) {
-        saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats);
+        saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats, options);
     }
     if (data.listeningProgress) {
-        saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, data.listeningProgress);
+        saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, data.listeningProgress, options);
     }
     if (data.reviewErrors) {
-        saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, data.reviewErrors);
+        saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, data.reviewErrors, options);
     }
     if (data.mutashabihatDecisions) {
-        saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, data.mutashabihatDecisions);
+        saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, data.mutashabihatDecisions, options);
     }
     if (data.customMutashabihat) {
-        saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, data.customMutashabihat);
+        saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, data.customMutashabihat, options);
     }
     if (data.audioSettings) {
         audioSettings$.set(data.audioSettings);
     }
-    if (data.cycleStart) setCycleStart(data.cycleStart);
-    if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete);
-    if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor);
+    if (data.cycleStart) setCycleStart(data.cycleStart); // setCycleStart calls saveToCacheAndStore, need to update it too if I want full coverage
+    if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete, options);
+    if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor, options);
 
     // Finally, update the last modified timestamp to match the imported backup's time
     if (data.exportedAt) {
-        saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt);
+        saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt, options);
     }
 }

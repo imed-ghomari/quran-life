@@ -342,7 +342,7 @@ export async function resolveConflict(
     resultData.lastResolvedFor = baselineExportedAt;
 
     // Save locally
-    importBackup(resultData);
+    importBackup(resultData, { skipSyncTrigger: true });
     // Push to cloud
     await uploadSupabaseBackup(resultData);
 
@@ -422,7 +422,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
         ...(remoteData.settings || {}),
         lastSyncedAt: new Date().toISOString()
       } as any;
-      importBackup(remoteData);
+      importBackup(remoteData, { skipSyncTrigger: true });
       return { status: 'success', message: 'Resolution adopted from cloud' };
     }
 
@@ -447,7 +447,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
         lastSyncedAt: new Date().toISOString()
       } as any;
 
-      importBackup(mergedData);
+      importBackup(mergedData, { skipSyncTrigger: true });
       // Update remote storage
       await uploadSupabaseBackup(mergedData);
       appLogger.addLog('Sync complete: Data merged and uploaded', 'success');
@@ -458,7 +458,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
     const settings = { ...(localData.settings || {}) } as any;
     settings.lastSyncedAt = new Date().toISOString();
     // We don't want to reload the page if nothing changed, so we just save the setting
-    saveSettings(settings);
+    saveSettings(settings, { skipSyncTrigger: true });
 
     appLogger.addLog('Sync complete: Already in sync', 'success');
     return { status: 'no_change', message: 'Already in sync' };
