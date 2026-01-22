@@ -1002,8 +1002,8 @@ export default function SettingsPage() {
         setVersion(v => v + 1);
     };
 
-    const handleExport = () => {
-        const data = exportBackup();
+    const handleExport = async () => {
+        const data = await exportBackup();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1017,11 +1017,11 @@ export default function SettingsPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target?.result as string);
                 if (confirm('Importing will overwrite current progress. Continue?')) {
-                    importBackup(data);
+                    await importBackup(data);
                     setVersion(v => v + 1);
                     alert('Successfully imported!');
                 }

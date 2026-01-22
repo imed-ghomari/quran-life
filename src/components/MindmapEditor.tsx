@@ -428,7 +428,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     for (const key in sanitizedSnapshot.store) {
                          if (
                             key.startsWith('shape:') || 
-                            key.startsWith('asset:') || 
+                            // key.startsWith('asset:') || // Disable assets
                             key.startsWith('binding:') || 
                             key.startsWith('page:')
                         ) {

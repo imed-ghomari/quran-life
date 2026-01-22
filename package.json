@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/generate-search-index.js && next dev",
+    "build": "node scripts/generate-search-index.js && next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -12,12 +12,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@automerge/automerge": "^3.2.1",
-    "@automerge/automerge-repo": "^2.5.1",
-    "@automerge/automerge-repo-network-broadcastchannel": "^2.5.1",
-    "@automerge/automerge-repo-network-websocket": "^2.5.1",
-    "@automerge/automerge-repo-react-hooks": "^2.5.1",
-    "@automerge/automerge-repo-storage-indexeddb": "^2.5.1",
     "@hello-pangea/dnd": "^18.0.1",
     "@legendapp/state": "^2.1.15",
     "@open-spaced-repetition/binding": "^0.1.2",
@@ -50,6 +44,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/node": "^20.14.12",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

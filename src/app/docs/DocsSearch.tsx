@@ -1,21 +1,36 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, FileText, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-
-interface SearchResult {
-    title: string;
-    href: string;
-    excerpt: string;
-}
+import { performSearch, SearchDocument, SearchResult } from '@/lib/searchClient';
 
 export default function DocsSearch({ className }: { className?: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [searchIndex, setSearchIndex] = useState<SearchDocument[] | null>(null);
     const router = useRouter();
+    const indexLoaded = useRef(false);
+
+    // Load search index on first open or mount (lazy load to save bandwidth if needed, 
+    // but small enough to load on mount or first interaction)
+    const loadIndex = async () => {
+        if (indexLoaded.current) return;
+        try {
+            const res = await fetch('/search-index.json');
+            if (res.ok) {
+                const data = await res.json();
+                setSearchIndex(data);
+                indexLoaded.current = true;
+            } else {
+                console.error('Failed to load search index');
+            }
+        } catch (e) {
+            console.error('Error loading search index:', e);
+        }
+    };
 
     // Toggle search modal with Cmd+K or Ctrl+K
     useEffect(() => {
@@ -32,6 +47,13 @@ export default function DocsSearch({ className }: { className?: string }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // Load index when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            loadIndex();
+        }
+    }, [isOpen]);
+
     const handleSearch = useCallback(async (searchQuery: string) => {
         if (!searchQuery.trim()) {
             setResults([]);
@@ -40,19 +62,34 @@ export default function DocsSearch({ className }: { className?: string }) {
 
         setIsSearching(true);
         try {
-            const response = await fetch(`/api/docs/search?q=${encodeURIComponent(searchQuery)}`);
-            const data = await response.json();
-            if (data.success && data.data?.results) {
-                setResults(data.data.results);
-            } else {
-                setResults([]);
+            if (!searchIndex && !indexLoaded.current) {
+                await loadIndex();
+            }
+            
+            // Wait a bit for index to set if it was just loaded
+            // But since we await loadIndex(), if it updates state, we might need to access the ref or wait for re-render
+            // Actually, we can pass the data directly if we modify loadIndex to return it.
+            // For now, let's assume if indexLoaded is true, searchIndex might be in next render cycle if we just set it.
+            // Better to return data from loadIndex.
+            
+            let docs = searchIndex;
+            if (!docs) {
+                 const res = await fetch('/search-index.json');
+                 docs = await res.json();
+                 setSearchIndex(docs);
+                 indexLoaded.current = true;
+            }
+
+            if (docs) {
+                const searchResults = performSearch(docs, searchQuery);
+                setResults(searchResults.slice(0, 10)); // Limit to 10
             }
         } catch (error) {
             console.error('Search failed:', error);
         } finally {
             setIsSearching(false);
         }
-    }, []);
+    }, [searchIndex]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

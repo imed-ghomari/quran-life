@@ -1,5 +1,14 @@
-import { BackupData, exportBackup, importBackup, saveSettings, getMindMaps, getPartMindMaps, getMemoryNodes, getMutashabihatDecisions, getReviewErrors, getCustomMutashabihat, getNodeLastReview } from './storage';
-import { fetchSupabaseBackup, uploadSupabaseBackup } from './supabaseSync';
+import { BackupData, MindMap, PartMindMap, exportBackup, importBackup, saveSettings, getMindMaps, getPartMindMaps, getMemoryNodes, getMutashabihatDecisions, getReviewErrors, getCustomMutashabihat, getNodeLastReview } from './storage';
+import { 
+  fetchSupabaseBackup, 
+  uploadSupabaseBackup, 
+  fetchRemoteMindMapsMeta, 
+  downloadMindMapFile, 
+  uploadMindMapFile, 
+  upsertMindMapMeta,
+  RemoteMindMapMeta 
+} from './supabaseSync';
+import { createClient } from '@/utils/supabase/client';
 import { appLogger } from './logger';
 import { SURAHS } from './quranData';
 
@@ -342,8 +351,16 @@ export async function resolveConflict(
     resultData.lastResolvedFor = baselineExportedAt;
 
     // Save locally
-    importBackup(resultData, { skipSyncTrigger: true });
+    await importBackup(resultData, { skipSyncTrigger: true });
+    
     // Push to cloud
+    // Need to upload mindmaps separately now
+    const { data: { session } } = await createClient().auth.getSession();
+    if (session?.user) {
+        const metas = await fetchRemoteMindMapsMeta();
+        await uploadChangedMindmaps(resultData, metas, session.user.id);
+    }
+    
     await uploadSupabaseBackup(resultData);
 
     appLogger.addLog('Conflict resolved and synced', 'success');
@@ -394,6 +411,107 @@ function applyGranularItem(target: BackupData, source: BackupData, itemId: strin
   }
 }
 
+// ========================================
+// Mindmap Sync Helpers
+// ========================================
+
+async function hydrateRemoteMindmaps(remoteData: BackupData): Promise<void> {
+  const metas = await fetchRemoteMindMapsMeta();
+  if (!metas.length) return;
+
+  // Initialize if missing
+  if (!remoteData.mindmaps) remoteData.mindmaps = {};
+  if (!remoteData.partMindmaps) remoteData.partMindmaps = {};
+
+  for (const meta of metas) {
+    if (meta.type === 'surah') {
+      const existing = remoteData.mindmaps[meta.resource_id];
+      // If missing or missing snapshot (lean), download
+      if (!existing || !existing.tldrawSnapshot) {
+        const content = await downloadMindMapFile(meta.storage_path);
+        if (content) {
+          remoteData.mindmaps[meta.resource_id] = {
+            ...content,
+            updatedAt: meta.updated_at, // Trust DB timestamp
+            isComplete: meta.is_complete
+          };
+        }
+      }
+    } else if (meta.type === 'part') {
+      const existing = remoteData.partMindmaps[meta.resource_id];
+      if (!existing || !existing.tldrawSnapshot) {
+        const content = await downloadMindMapFile(meta.storage_path);
+        if (content) {
+           remoteData.partMindmaps[meta.resource_id] = {
+            ...content,
+            updatedAt: meta.updated_at,
+            isComplete: meta.is_complete
+          };
+        }
+      }
+    }
+  }
+}
+
+async function uploadChangedMindmaps(mergedData: BackupData, remoteMetas: RemoteMindMapMeta[], userId: string) {
+    // Check Surah Mindmaps
+    if (mergedData.mindmaps) {
+        for (const [idStr, map] of Object.entries(mergedData.mindmaps)) {
+            const id = parseInt(idStr);
+            const meta = remoteMetas.find(m => m.type === 'surah' && m.resource_id === id);
+            
+            // Upload if:
+            // 1. No remote meta (new)
+            // 2. Local is newer than remote meta
+            // 3. (Optional) Hash check? For now rely on timestamp
+            
+            const remoteTime = meta ? new Date(meta.updated_at).getTime() : 0;
+            const localTime = new Date(map.updatedAt || 0).getTime();
+            
+            if (!meta || localTime > remoteTime) {
+                appLogger.addLog(`Uploading mindmap for Surah ${id}...`, 'info');
+                const path = await uploadMindMapFile(userId, 'surah', id, map);
+                if (path) {
+                    await upsertMindMapMeta({
+                        user_id: userId,
+                        type: 'surah',
+                        resource_id: id,
+                        is_complete: map.isComplete,
+                        updated_at: map.updatedAt,
+                        storage_path: path
+                    });
+                }
+            }
+        }
+    }
+
+    // Check Part Mindmaps
+    if (mergedData.partMindmaps) {
+        for (const [idStr, map] of Object.entries(mergedData.partMindmaps)) {
+            const id = parseInt(idStr);
+            const meta = remoteMetas.find(m => m.type === 'part' && m.resource_id === id);
+            
+            const remoteTime = meta ? new Date(meta.updated_at).getTime() : 0;
+            const localTime = new Date(map.updatedAt || 0).getTime();
+            
+            if (!meta || localTime > remoteTime) {
+                appLogger.addLog(`Uploading mindmap for Part ${id}...`, 'info');
+                const path = await uploadMindMapFile(userId, 'part', id, map);
+                if (path) {
+                    await upsertMindMapMeta({
+                        user_id: userId,
+                        type: 'part',
+                        resource_id: id,
+                        is_complete: map.isComplete,
+                        updated_at: map.updatedAt,
+                        storage_path: path
+                    });
+                }
+            }
+        }
+    }
+}
+
 /**
  * Orchestrates the sync process:
  * 1. Pull remote data from Supabase
@@ -404,12 +522,27 @@ function applyGranularItem(target: BackupData, source: BackupData, itemId: strin
 export async function syncWithCloud(): Promise<SyncResult> {
   try {
     appLogger.addLog('Starting cloud sync...', 'info');
-    const localData = exportBackup();
+
+    // Get User ID for storage operations
+    const { data: { session } } = await createClient().auth.getSession();
+    if (!session?.user) return { status: 'error', message: 'Not authenticated' };
+    const userId = session.user.id;
+
+    const localData = await exportBackup();
     const { data: remoteData } = await fetchSupabaseBackup();
+
+    // HYDRATE remote mindmaps from Storage
+    if (remoteData) {
+        await hydrateRemoteMindmaps(remoteData);
+    }
 
     if (!remoteData) {
       // No remote data, push local data as the first backup
       appLogger.addLog('No remote data found. Creating initial backup...', 'info');
+      
+      // Upload mindmaps first
+      await uploadChangedMindmaps(localData, [], userId);
+      
       await uploadSupabaseBackup(localData);
       appLogger.addLog('Initial backup created successfully', 'success');
       return { status: 'success', message: 'Initial backup created on Supabase' };
@@ -422,7 +555,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
         ...(remoteData.settings || {}),
         lastSyncedAt: new Date().toISOString()
       } as any;
-      importBackup(remoteData, { skipSyncTrigger: true });
+      await importBackup(remoteData, { skipSyncTrigger: true });
       return { status: 'success', message: 'Resolution adopted from cloud' };
     }
 
@@ -436,7 +569,7 @@ export async function syncWithCloud(): Promise<SyncResult> {
 
     // MERGE AGAIN with latest local state right before saving
     // this prevents losing changes made while the fetch was in flight
-    const latestLocal = exportBackup();
+    const latestLocal = await exportBackup();
     const { mergedData, hasChanges: mergedHasChanges } = mergeBackups(latestLocal, remoteData);
 
     if (mergedHasChanges || localData.exportedAt !== latestLocal.exportedAt) {
@@ -447,9 +580,13 @@ export async function syncWithCloud(): Promise<SyncResult> {
         lastSyncedAt: new Date().toISOString()
       } as any;
 
-      importBackup(mergedData, { skipSyncTrigger: true });
+      await importBackup(mergedData, { skipSyncTrigger: true });
+      
       // Update remote storage
+      const metas = await fetchRemoteMindMapsMeta();
+      await uploadChangedMindmaps(mergedData, metas, userId);
       await uploadSupabaseBackup(mergedData);
+      
       appLogger.addLog('Sync complete: Data merged and uploaded', 'success');
       return { status: 'success', message: 'Sync complete: data merged' };
     }

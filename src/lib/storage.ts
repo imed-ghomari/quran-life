@@ -15,8 +15,12 @@ import { audioSettings$, AudioSettings } from './audioStore';
 const STORAGE_KEYS = {
     SETTINGS: 'quran-app-settings',
     MEMORY_NODES: 'quran-app-memory-nodes',
-    MINDMAPS: 'quran-app-mindmaps',
+    // Legacy keys - kept for migration
+    MINDMAPS: 'quran-app-mindmaps', 
     PART_MINDMAPS: 'quran-app-part-mindmaps',
+    // New Split Keys
+    MINDMAPS_INDEX: 'quran-app-mindmaps-index',
+    PART_MINDMAPS_INDEX: 'quran-app-part-mindmaps-index',
     LISTENING_PROGRESS: 'quran-app-listening-progress',
     LISTENING_STATS: 'quran-app-listening-stats',
     CYCLE_START: 'quran-app-cycle-start',
@@ -67,9 +71,66 @@ async function migrateFromLocalStorage() {
     console.log('Successfully migrated data from localStorage to IndexedDB');
 }
 
+async function migrateToSplitKeys() {
+    if (typeof window === 'undefined' || !customStore) return;
+    
+    const migrationFlag = 'quran-app-migrated-to-split-keys';
+    if (localStorage.getItem(migrationFlag)) return;
+
+    appLogger.addLog('Migrating mindmaps to split keys...', 'info');
+
+    // Migrate Surah Mindmaps
+    try {
+        const oldMaps = await get<{ [key: string]: MindMap }>(STORAGE_KEYS.MINDMAPS, customStore);
+        if (oldMaps) {
+            const index: { [key: string]: Omit<MindMap, 'tldrawSnapshot'> } = {};
+            
+            for (const [id, map] of Object.entries(oldMaps)) {
+                // Save full data to split key
+                await set(`quran-app-mindmap-${id}`, map, customStore);
+                
+                // Add to index (excluding snapshot)
+                const { tldrawSnapshot, ...metadata } = map;
+                index[id] = metadata;
+            }
+            
+            await set(STORAGE_KEYS.MINDMAPS_INDEX, index, customStore);
+            // Optional: Delete old key? keeping for safety for now, or delete to save space
+            // await del(STORAGE_KEYS.MINDMAPS, customStore); 
+        }
+    } catch (e) {
+        console.error('Failed to migrate surah mindmaps', e);
+        appLogger.addLog('Failed to migrate surah mindmaps', 'error');
+    }
+
+    // Migrate Part Mindmaps
+    try {
+        const oldPartMaps = await get<{ [key: string]: PartMindMap }>(STORAGE_KEYS.PART_MINDMAPS, customStore);
+        if (oldPartMaps) {
+            const index: { [key: string]: Omit<PartMindMap, 'tldrawSnapshot'> } = {};
+            
+            for (const [id, map] of Object.entries(oldPartMaps)) {
+                await set(`quran-app-part-mindmap-${id}`, map, customStore);
+                const { tldrawSnapshot, ...metadata } = map;
+                index[id] = metadata;
+            }
+            
+            await set(STORAGE_KEYS.PART_MINDMAPS_INDEX, index, customStore);
+        }
+    } catch (e) {
+        console.error('Failed to migrate part mindmaps', e);
+        appLogger.addLog('Failed to migrate part mindmaps', 'error');
+    }
+
+    localStorage.setItem(migrationFlag, 'true');
+    appLogger.addLog('Successfully migrated mindmaps to split keys', 'success');
+}
+
 // Initial migration trigger
 if (typeof window !== 'undefined') {
-    migrateFromLocalStorage();
+    migrateFromLocalStorage().then(() => {
+        migrateToSplitKeys();
+    });
 }
 
 /**
@@ -835,7 +896,7 @@ export interface MindMap {
 }
 
 export function getMindMaps(): { [surahId: string]: MindMap } {
-    return getFromCache(STORAGE_KEYS.MINDMAPS, {});
+    return getFromCache(STORAGE_KEYS.MINDMAPS_INDEX, {});
 }
 
 export function getMindMap(surahId: number): MindMap {
@@ -843,11 +904,32 @@ export function getMindMap(surahId: number): MindMap {
     return maps[surahId] || { surahId, imageUrl: null, anchors: [], isComplete: false };
 }
 
-export function saveMindMap(mindmap: MindMap): void {
+export async function getMindMapFull(surahId: number): Promise<MindMap> {
+    const metadata = getMindMap(surahId);
+    if (typeof window !== 'undefined' && customStore) {
+        try {
+            const full = await get<MindMap>(`quran-app-mindmap-${surahId}`, customStore);
+            if (full) return full;
+        } catch (e) {
+            console.warn(`Failed to load full mindmap for ${surahId}`, e);
+        }
+    }
+    return metadata;
+}
+
+export async function saveMindMap(mindmap: MindMap): Promise<void> {
     const maps = getMindMaps();
     mindmap.updatedAt = new Date().toISOString();
-    maps[mindmap.surahId] = mindmap;
-    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, maps);
+    
+    // 1. Save full data to split key
+    if (typeof window !== 'undefined' && customStore) {
+        await set(`quran-app-mindmap-${mindmap.surahId}`, mindmap, customStore);
+    }
+
+    // 2. Update Index with metadata
+    const { tldrawSnapshot, ...metadata } = mindmap;
+    maps[mindmap.surahId] = metadata; // Use metadata for index
+    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS_INDEX, maps);
 
     // Create/update memory node for mindmap if complete, otherwise handle "Lapse" or removal
     const nodes = getMemoryNodes();
@@ -919,7 +1001,7 @@ export interface PartMindMap {
 }
 
 export function getPartMindMaps(): { [partId: string]: PartMindMap } {
-    return getFromCache(STORAGE_KEYS.PART_MINDMAPS, {});
+    return getFromCache(STORAGE_KEYS.PART_MINDMAPS_INDEX, {});
 }
 
 export function getPartMindMap(partId: QuranPart): PartMindMap {
@@ -927,11 +1009,32 @@ export function getPartMindMap(partId: QuranPart): PartMindMap {
     return maps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
 }
 
-export function savePartMindMap(mindmap: PartMindMap): void {
+export async function getPartMindMapFull(partId: QuranPart): Promise<PartMindMap> {
+    const metadata = getPartMindMap(partId);
+    if (typeof window !== 'undefined' && customStore) {
+        try {
+            const full = await get<PartMindMap>(`quran-app-part-mindmap-${partId}`, customStore);
+            if (full) return full;
+        } catch (e) {
+            console.warn(`Failed to load full part mindmap for ${partId}`, e);
+        }
+    }
+    return metadata;
+}
+
+export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
     const maps = getPartMindMaps();
     mindmap.updatedAt = new Date().toISOString();
-    maps[mindmap.partId] = mindmap;
-    saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, maps);
+    
+    // 1. Save full data
+    if (typeof window !== 'undefined' && customStore) {
+        await set(`quran-app-part-mindmap-${mindmap.partId}`, mindmap, customStore);
+    }
+
+    // 2. Update index
+    const { tldrawSnapshot, ...metadata } = mindmap;
+    maps[mindmap.partId] = metadata;
+    saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS_INDEX, maps);
 
     // Create/update memory node for part mindmap if complete, otherwise handle "Lapse" or removal
     const nodes = getMemoryNodes();
@@ -1519,7 +1622,7 @@ function pruneSurahArtifacts(surahId: number): void {
     const maps = getMindMaps();
     if (maps[surahId]) {
         delete maps[surahId];
-        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, maps);
+        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS_INDEX, maps);
     }
 
     // Remove review errors
@@ -1566,12 +1669,10 @@ export interface BackupData {
     exportedAt: string;
 }
 
-export function exportBackup(): BackupData {
-    return {
+export async function exportBackup(): Promise<BackupData> {
+    const data: Partial<BackupData> = {
         settings: getSettings(),
         memoryNodes: getMemoryNodes(),
-        mindmaps: getMindMaps(),
-        partMindmaps: getPartMindMaps(),
         listeningStats: getListeningStats(),
         listeningProgress: getFromCache(STORAGE_KEYS.LISTENING_PROGRESS, {}),
         reviewErrors: getReviewErrors(),
@@ -1583,40 +1684,81 @@ export function exportBackup(): BackupData {
         lastResolvedFor: getFromCache(STORAGE_KEYS.LAST_RESOLVED_FOR, undefined),
         exportedAt: getFromCache(STORAGE_KEYS.LAST_MODIFIED, new Date().toISOString()),
     };
+
+    // Gather full mindmaps
+    const mindmaps: Record<string, MindMap> = {};
+    const mindmapsIndex = getMindMaps();
+    if (typeof window !== 'undefined' && customStore) {
+        for (const id of Object.keys(mindmapsIndex)) {
+            try {
+                const full = await get<MindMap>(`quran-app-mindmap-${id}`, customStore);
+                if (full) mindmaps[id] = full;
+                else mindmaps[id] = mindmapsIndex[id];
+            } catch (e) {
+                mindmaps[id] = mindmapsIndex[id];
+            }
+        }
+    } else {
+        Object.assign(mindmaps, mindmapsIndex);
+    }
+    data.mindmaps = mindmaps;
+
+    // Gather full part mindmaps
+    const partMindmaps: Record<string, PartMindMap> = {};
+    const partMindmapsIndex = getPartMindMaps();
+    if (typeof window !== 'undefined' && customStore) {
+        for (const id of Object.keys(partMindmapsIndex)) {
+            try {
+                const full = await get<PartMindMap>(`quran-app-part-mindmap-${id}`, customStore);
+                if (full) partMindmaps[id] = full;
+                else partMindmaps[id] = partMindmapsIndex[id];
+            } catch (e) {
+                partMindmaps[id] = partMindmapsIndex[id];
+            }
+        }
+    } else {
+        Object.assign(partMindmaps, partMindmapsIndex);
+    }
+    data.partMindmaps = partMindmaps;
+
+    return data as BackupData;
 }
 
-export function importBackup(data: BackupData, options?: { skipSyncTrigger?: boolean }): void {
+export async function importBackup(data: BackupData, options?: { skipSyncTrigger?: boolean }): Promise<void> {
     if (data.settings) saveSettings(data.settings, options);
     if (data.memoryNodes) saveMemoryNodes(data.memoryNodes, options);
+    
     if (data.mindmaps) {
         const current = getMindMaps();
         const incoming = data.mindmaps;
-        Object.keys(incoming).forEach(id => {
+        for (const id of Object.keys(incoming)) {
             // Protect against malformed boolean values in map
             if (incoming[id] && typeof incoming[id] === 'object') {
                 if (!incoming[id].imageUrl && current[id]?.imageUrl) {
                     incoming[id].imageUrl = current[id].imageUrl;
                     incoming[id].imageUrlDark = current[id].imageUrlDark;
                 }
+                // Save using new split logic
+                await saveMindMap(incoming[id]);
             }
-        });
-        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS, incoming, options);
+        }
     }
+
     if (data.partMindmaps) {
         const current = getPartMindMaps();
         const incoming = data.partMindmaps;
-        Object.keys(incoming).forEach(id => {
+        for (const id of Object.keys(incoming)) {
             const pId = id as any;
-            // Protect against malformed boolean values in map
             if (incoming[pId] && typeof incoming[pId] === 'object') {
                 if (!incoming[pId].imageUrl && current[pId]?.imageUrl) {
                     incoming[pId].imageUrl = current[pId].imageUrl;
                     incoming[pId].imageUrlDark = current[pId].imageUrlDark;
                 }
+                await savePartMindMap(incoming[pId]);
             }
-        });
-        saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS, incoming, options);
+        }
     }
+
     if (data.listeningStats) {
         saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats, options);
     }
@@ -1635,7 +1777,7 @@ export function importBackup(data: BackupData, options?: { skipSyncTrigger?: boo
     if (data.audioSettings) {
         audioSettings$.set(data.audioSettings);
     }
-    if (data.cycleStart) setCycleStart(data.cycleStart); // setCycleStart calls saveToCacheAndStore, need to update it too if I want full coverage
+    if (data.cycleStart) setCycleStart(data.cycleStart);
     if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete, options);
     if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor, options);
 
