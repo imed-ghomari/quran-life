@@ -423,14 +423,14 @@ async function hydrateRemoteMindmaps(remoteData: BackupData): Promise<void> {
   if (!remoteData.mindmaps) remoteData.mindmaps = {};
   if (!remoteData.partMindmaps) remoteData.partMindmaps = {};
 
-  for (const meta of metas) {
+  const promises = metas.map(async (meta) => {
     if (meta.type === 'surah') {
-      const existing = remoteData.mindmaps[meta.resource_id];
+      const existing = remoteData.mindmaps![meta.resource_id];
       // If missing or missing snapshot (lean), download
       if (!existing || !existing.tldrawSnapshot) {
         const content = await downloadMindMapFile(meta.storage_path);
         if (content) {
-          remoteData.mindmaps[meta.resource_id] = {
+          remoteData.mindmaps![meta.resource_id] = {
             ...content,
             updatedAt: meta.updated_at, // Trust DB timestamp
             isComplete: meta.is_complete
@@ -438,11 +438,11 @@ async function hydrateRemoteMindmaps(remoteData: BackupData): Promise<void> {
         }
       }
     } else if (meta.type === 'part') {
-      const existing = remoteData.partMindmaps[meta.resource_id];
+      const existing = remoteData.partMindmaps![meta.resource_id];
       if (!existing || !existing.tldrawSnapshot) {
         const content = await downloadMindMapFile(meta.storage_path);
         if (content) {
-           remoteData.partMindmaps[meta.resource_id] = {
+           remoteData.partMindmaps![meta.resource_id] = {
             ...content,
             updatedAt: meta.updated_at,
             isComplete: meta.is_complete
@@ -450,20 +450,19 @@ async function hydrateRemoteMindmaps(remoteData: BackupData): Promise<void> {
         }
       }
     }
-  }
+  });
+
+  await Promise.all(promises);
 }
 
 async function uploadChangedMindmaps(mergedData: BackupData, remoteMetas: RemoteMindMapMeta[], userId: string) {
+    const promises: Promise<void>[] = [];
+
     // Check Surah Mindmaps
     if (mergedData.mindmaps) {
-        for (const [idStr, map] of Object.entries(mergedData.mindmaps)) {
+        const surahPromises = Object.entries(mergedData.mindmaps).map(async ([idStr, map]) => {
             const id = parseInt(idStr);
             const meta = remoteMetas.find(m => m.type === 'surah' && m.resource_id === id);
-            
-            // Upload if:
-            // 1. No remote meta (new)
-            // 2. Local is newer than remote meta
-            // 3. (Optional) Hash check? For now rely on timestamp
             
             const remoteTime = meta ? new Date(meta.updated_at).getTime() : 0;
             const localTime = new Date(map.updatedAt || 0).getTime();
@@ -482,12 +481,13 @@ async function uploadChangedMindmaps(mergedData: BackupData, remoteMetas: Remote
                     });
                 }
             }
-        }
+        });
+        promises.push(...surahPromises);
     }
 
     // Check Part Mindmaps
     if (mergedData.partMindmaps) {
-        for (const [idStr, map] of Object.entries(mergedData.partMindmaps)) {
+        const partPromises = Object.entries(mergedData.partMindmaps).map(async ([idStr, map]) => {
             const id = parseInt(idStr);
             const meta = remoteMetas.find(m => m.type === 'part' && m.resource_id === id);
             
@@ -508,8 +508,11 @@ async function uploadChangedMindmaps(mergedData: BackupData, remoteMetas: Remote
                     });
                 }
             }
-        }
+        });
+        promises.push(...partPromises);
     }
+
+    await Promise.all(promises);
 }
 
 /**

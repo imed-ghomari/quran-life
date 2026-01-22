@@ -132,16 +132,47 @@ export async function uploadSupabaseBackup(backupData: BackupData) {
   try {
       // 1. Upload Settings
       if (backupData.settings) {
+          // Separate true audio settings from general app settings
+          const { 
+              completionDays, 
+              activePart, 
+              skippedSurahs, 
+              kanbanColumns, 
+              reviewErrors, 
+              mutashabihatDecisions,
+              customMutashabihat,
+              portionPointers,
+              learnedVerses,
+              audioSettings, // Explicitly look for nested audioSettings if structure changed
+              ...rest 
+          } = backupData.settings as any;
+
+          // Extract clean audio settings
+          // If audioSettings is present (from merge), use it. 
+          // Otherwise check if 'rest' contains the fields.
+          const cleanAudioSettings = {
+             selectedReciterId: (audioSettings || rest).selectedReciterId,
+             playbackState: (audioSettings || rest).playbackState,
+             updatedAt: (audioSettings || rest).updatedAt
+          };
+
           const { error } = await supabase
             .from('settings')
             .upsert({
                 user_id: user.id,
-                learned_verses: backupData.settings.learnedVerses || {},
-                audio_settings: {
-                    // Store other settings in audio_settings or add columns?
-                    // Using audio_settings as a catch-all JSONB for now to avoid schema change
-                    ...backupData.settings
-                }
+                learned_verses: learnedVerses || {},
+                // Normalized columns
+                completion_days: completionDays,
+                active_part: activePart,
+                skipped_surahs: skippedSurahs,
+                kanban_columns: kanbanColumns,
+                review_errors: reviewErrors,
+                mutashabihat_decisions: mutashabihatDecisions,
+                custom_mutashabihat: customMutashabihat,
+                portion_pointers: portionPointers,
+                
+                // ONLY save clean audio settings, discarding garbage in 'rest'
+                audio_settings: cleanAudioSettings
             }, { onConflict: 'user_id' });
             
           if (error) console.error('Error uploading settings:', error);

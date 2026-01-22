@@ -205,7 +205,7 @@ if (storageChannel) {
 
 // (Moved to top)
 
-function saveToCacheAndStore(key: string, value: any, options?: { skipSyncTrigger?: boolean }): Promise<void> {
+function saveToCacheAndStore(key: string, value: any, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
     storageCache[key] = value;
 
     // Human readable key name
@@ -263,20 +263,22 @@ function saveToCacheAndStore(key: string, value: any, options?: { skipSyncTrigge
 
         return set(key, value, customStore)
             .then(() => {
-                appLogger.addLog(`${keyName} saved successfully`, 'success');
-                // Dispatch a storage event manually so the page.tsx useEffect catches it
-                // We reuse the stringified value if available to avoid double serialization
-                try {
-                    const payload = stringified || JSON.stringify(value);
-                    // Avoid dispatching huge events that might freeze listeners
-                    if (payload.length < 2000000) { // 2MB safety limit for events
-                        window.dispatchEvent(new StorageEvent('storage', {
-                            key: key,
-                            newValue: payload,
-                        }));
+                // appLogger.addLog(`${keyName} saved successfully`, 'success'); // Reduce spam
+                
+                if (!options?.suppressEvent) {
+                    // Dispatch a storage event manually so the page.tsx useEffect catches it
+                    try {
+                        const payload = stringified || JSON.stringify(value);
+                        // Avoid dispatching huge events that might freeze listeners
+                        if (payload.length < 2000000) { // 2MB safety limit for events
+                            window.dispatchEvent(new StorageEvent('storage', {
+                                key: key,
+                                newValue: payload,
+                            }));
+                        }
+                    } catch (e) {
+                        console.warn(`[Storage] Skipped dispatching event for ${key}`, e);
                     }
-                } catch (e) {
-                    console.warn(`[Storage] Skipped dispatching event for ${key}`, e);
                 }
             })
             .catch(err => {
@@ -373,7 +375,7 @@ export function getSettings(): AppSettings {
     return getFromCache(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
 }
 
-export async function saveSettings(settings: AppSettings, options?: { skipSyncTrigger?: boolean }): Promise<void> {
+export async function saveSettings(settings: AppSettings, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
     settings.updatedAt = new Date().toISOString();
     await saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings, options);
 }
@@ -605,7 +607,7 @@ export function getMemoryNodes(): MemoryNode[] {
     return getFromCache(STORAGE_KEYS.MEMORY_NODES, []);
 }
 
-export function saveMemoryNodes(nodes: MemoryNode[], options?: { skipSyncTrigger?: boolean }): void {
+export function saveMemoryNodes(nodes: MemoryNode[], options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): void {
     // Deduplicate by ID before saving to prevent high counter issues
     const uniqueMap = new Map();
     nodes.forEach(n => {
@@ -917,7 +919,7 @@ export async function getMindMapFull(surahId: number): Promise<MindMap> {
     return metadata;
 }
 
-export async function saveMindMap(mindmap: MindMap): Promise<void> {
+export async function saveMindMap(mindmap: MindMap, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
     const maps = getMindMaps();
     mindmap.updatedAt = new Date().toISOString();
     
@@ -929,7 +931,7 @@ export async function saveMindMap(mindmap: MindMap): Promise<void> {
     // 2. Update Index with metadata
     const { tldrawSnapshot, ...metadata } = mindmap;
     maps[mindmap.surahId] = metadata; // Use metadata for index
-    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS_INDEX, maps);
+    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS_INDEX, maps, options);
 
     // Create/update memory node for mindmap if complete, otherwise handle "Lapse" or removal
     const nodes = getMemoryNodes();
@@ -940,7 +942,7 @@ export async function saveMindMap(mindmap: MindMap): Promise<void> {
         // Explicit deletion: remove the review node entirely
         if (nodeIdx !== -1) {
             appLogger.addLog(`Surah ${mindmap.surahId} mindmap deleted. Review node removed.`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
         }
         return;
     }
@@ -954,7 +956,7 @@ export async function saveMindMap(mindmap: MindMap): Promise<void> {
                 scheduler: createNewScheduler(),
             });
             appLogger.addLog(`Review node created for Surah ${mindmap.surahId} mindmap`, 'info');
-            saveMemoryNodes(nodes);
+            saveMemoryNodes(nodes, options);
         } else {
             // Reactivation: If node exists but was suspended (e.g. cleared due date), set to today
             const node = nodes[nodeIdx];
@@ -962,7 +964,7 @@ export async function saveMindMap(mindmap: MindMap): Promise<void> {
             if (!dueDate || dueDate === '') {
                 node.scheduler = setNodeDueDate(node.scheduler, new Date().toISOString().split('T')[0]);
                 appLogger.addLog(`Surah ${mindmap.surahId} mindmap reactivated. Due date set to today.`, 'info');
-                saveMemoryNodes(nodes);
+                saveMemoryNodes(nodes, options);
             }
         }
     } else if (nodeIdx !== -1) {
@@ -976,11 +978,11 @@ export async function saveMindMap(mindmap: MindMap): Promise<void> {
             node.scheduler = createSuspendedScheduler(node.scheduler);
             const newStability = getNodeStability(node.scheduler);
             appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: stability ${oldStability}d -> ${newStability}d, suspended.`, 'warning');
-            saveMemoryNodes(nodes);
+            saveMemoryNodes(nodes, options);
         } else {
             // Never reviewed: just remove it until it's complete again
             appLogger.addLog(`Surah ${mindmap.surahId} mindmap removed (never reviewed)`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
         }
     }
 }
@@ -1022,7 +1024,7 @@ export async function getPartMindMapFull(partId: QuranPart): Promise<PartMindMap
     return metadata;
 }
 
-export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
+export async function savePartMindMap(mindmap: PartMindMap, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
     const maps = getPartMindMaps();
     mindmap.updatedAt = new Date().toISOString();
     
@@ -1034,7 +1036,7 @@ export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
     // 2. Update index
     const { tldrawSnapshot, ...metadata } = mindmap;
     maps[mindmap.partId] = metadata;
-    saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS_INDEX, maps);
+    saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS_INDEX, maps, options);
 
     // Create/update memory node for part mindmap if complete, otherwise handle "Lapse" or removal
     const nodes = getMemoryNodes();
@@ -1045,7 +1047,7 @@ export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
         // Explicit deletion: remove the review node entirely
         if (nodeIdx !== -1) {
             appLogger.addLog(`Part ${mindmap.partId} mindmap deleted. Review node removed.`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
         }
         return;
     }
@@ -1059,7 +1061,7 @@ export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
                 scheduler: createNewScheduler(),
             });
             appLogger.addLog(`Review node created for Part ${mindmap.partId} mindmap`, 'info');
-            saveMemoryNodes(nodes);
+            saveMemoryNodes(nodes, options);
         } else {
             // Reactivation
             const node = nodes[nodeIdx];
@@ -1067,7 +1069,7 @@ export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
             if (!dueDate || dueDate === '') {
                 node.scheduler = setNodeDueDate(node.scheduler, new Date().toISOString().split('T')[0]);
                 appLogger.addLog(`Part ${mindmap.partId} mindmap reactivated. Due date set to today.`, 'info');
-                saveMemoryNodes(nodes);
+                saveMemoryNodes(nodes, options);
             }
         }
     } else if (nodeIdx !== -1) {
@@ -1081,11 +1083,11 @@ export async function savePartMindMap(mindmap: PartMindMap): Promise<void> {
             node.scheduler = createSuspendedScheduler(node.scheduler);
             const newStability = getNodeStability(node.scheduler);
             appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: stability ${oldStability}d -> ${newStability}d, suspended.`, 'warning');
-            saveMemoryNodes(nodes);
+            saveMemoryNodes(nodes, options);
         } else {
             // Never reviewed: just remove it until it's complete again
             appLogger.addLog(`Part ${mindmap.partId} mindmap removed (never reviewed)`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId));
+            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
         }
     }
 }
@@ -1725,64 +1727,91 @@ export async function exportBackup(): Promise<BackupData> {
 }
 
 export async function importBackup(data: BackupData, options?: { skipSyncTrigger?: boolean }): Promise<void> {
-    if (data.settings) saveSettings(data.settings, options);
-    if (data.memoryNodes) saveMemoryNodes(data.memoryNodes, options);
+    appLogger.addLog('Importing backup...', 'info');
+    
+    // Batch import: Suppress individual events to prevent UI flickering/flashing
+    // We will dispatch ONE event at the end.
+    const saveOptions = { ...options, suppressEvent: true };
+
+    if (data.settings) await saveSettings(data.settings, saveOptions);
+    if (data.memoryNodes) saveMemoryNodes(data.memoryNodes, saveOptions);
     
     if (data.mindmaps) {
         const current = getMindMaps();
         const incoming = data.mindmaps;
-        for (const id of Object.keys(incoming)) {
+        
+        // Parallel save for mindmaps (much faster)
+        const promises = Object.keys(incoming).map(async (id) => {
             // Protect against malformed boolean values in map
-            if (incoming[id] && typeof incoming[id] === 'object') {
+             if (incoming[id] && typeof incoming[id] === 'object') {
                 if (!incoming[id].imageUrl && current[id]?.imageUrl) {
                     incoming[id].imageUrl = current[id].imageUrl;
                     incoming[id].imageUrlDark = current[id].imageUrlDark;
                 }
-                // Save using new split logic
-                await saveMindMap(incoming[id]);
+                // Save using new split logic with suppressed events
+                await saveMindMap(incoming[id], saveOptions);
             }
-        }
+        });
+        await Promise.all(promises);
     }
 
     if (data.partMindmaps) {
         const current = getPartMindMaps();
         const incoming = data.partMindmaps;
-        for (const id of Object.keys(incoming)) {
-            const pId = id as any;
-            if (incoming[pId] && typeof incoming[pId] === 'object') {
+        const promises = Object.keys(incoming).map(async (id) => {
+             const pId = id as any;
+             if (incoming[pId] && typeof incoming[pId] === 'object') {
                 if (!incoming[pId].imageUrl && current[pId]?.imageUrl) {
                     incoming[pId].imageUrl = current[pId].imageUrl;
                     incoming[pId].imageUrlDark = current[pId].imageUrlDark;
                 }
-                await savePartMindMap(incoming[pId]);
+                await savePartMindMap(incoming[pId], saveOptions);
             }
-        }
+        });
+        await Promise.all(promises);
     }
 
     if (data.listeningStats) {
-        saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats, options);
+        saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats, saveOptions);
     }
     if (data.listeningProgress) {
-        saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, data.listeningProgress, options);
+        saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, data.listeningProgress, saveOptions);
     }
     if (data.reviewErrors) {
-        saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, data.reviewErrors, options);
+        saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, data.reviewErrors, saveOptions);
     }
     if (data.mutashabihatDecisions) {
-        saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, data.mutashabihatDecisions, options);
+        saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, data.mutashabihatDecisions, saveOptions);
     }
     if (data.customMutashabihat) {
-        saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, data.customMutashabihat, options);
+        saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, data.customMutashabihat, saveOptions);
     }
     if (data.audioSettings) {
         audioSettings$.set(data.audioSettings);
     }
     if (data.cycleStart) setCycleStart(data.cycleStart);
-    if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete, options);
-    if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor, options);
+    if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete, saveOptions);
+    if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor, saveOptions);
 
     // Finally, update the last modified timestamp to match the imported backup's time
     if (data.exportedAt) {
-        saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt, options);
+        saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt, saveOptions);
+    }
+
+    appLogger.addLog('Backup imported successfully', 'success');
+
+    // Dispatch Global Refresh Event
+    // We trigger 'settings' update as a proxy for "everything changed" because most components listen to it
+    // or we can dispatch multiple specific events if needed, but a single reload trigger is better.
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new StorageEvent('storage', {
+            key: STORAGE_KEYS.SETTINGS, 
+            newValue: JSON.stringify(data.settings || getSettings()),
+        }));
+        // Also trigger mindmaps index update explicitly as it's critical
+        window.dispatchEvent(new StorageEvent('storage', {
+            key: STORAGE_KEYS.MINDMAPS_INDEX, 
+            newValue: JSON.stringify(data.mindmaps ? getMindMaps() : {}),
+        }));
     }
 }
