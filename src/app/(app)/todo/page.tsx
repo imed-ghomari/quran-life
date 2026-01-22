@@ -187,12 +187,12 @@ export default function TodoPage() {
 
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
         const existing = currentMindmap || mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const imageUrl = currentMindmap?.imageUrl || existing.imageUrl || null;
         const tldrawSnapshot = currentMindmap?.tldrawSnapshot || existing.tldrawSnapshot;
 
         const updated = {
             ...existing,
-            imageUrl,
+            imageUrl: undefined, // Clear images to save storage
+            imageUrlDark: undefined,
             tldrawSnapshot,
             isComplete: forceState !== undefined ? forceState : !existing.isComplete
         };
@@ -312,8 +312,8 @@ export default function TodoPage() {
             const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
             const updated = {
                 ...existing,
-                imageUrl: lightUrl || existing.imageUrl,
-                imageUrlDark: darkUrl || existing.imageUrlDark,
+                imageUrl: lightUrl || undefined,
+                imageUrlDark: darkUrl || undefined,
                 tldrawSnapshot: snapshot
             };
             await saveMindMap(surahId, updated);
@@ -352,8 +352,8 @@ export default function TodoPage() {
             const existing = partMindmapsMap[partId] || { partId, imageUrl: null, description: '', isComplete: false };
             const updated = {
                 ...existing,
-                imageUrl: lightUrl || existing.imageUrl,
-                imageUrlDark: darkUrl || existing.imageUrlDark,
+                imageUrl: lightUrl || undefined,
+                imageUrlDark: darkUrl || undefined,
                 tldrawSnapshot: snapshot
             };
             await savePartMindMap(partId, updated);

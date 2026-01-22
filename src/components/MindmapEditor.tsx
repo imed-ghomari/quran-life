@@ -380,12 +380,12 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     return;
                 }
 
-                // Export images only if requested (e.g. on close)
-                let lightBlob: Blob | undefined;
-                let darkBlob: Blob | undefined;
-                
-                if (withImages) {
-                    try {
+                // Export images only if requested (currently disabled to save storage)
+        let lightBlob: Blob | undefined;
+        let darkBlob: Blob | undefined;
+        
+        if (withImages && false) { // Force disabled
+            try {
                         const shapeIds = Array.from(editorInst.getCurrentPageShapeIds() as Set<string>);
                         if (shapeIds.length > 0) {
                             // Use lower pixelRatio and potentially smaller format to save space
@@ -459,8 +459,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         if (maxWaitTimer.current) {
             clearTimeout(maxWaitTimer.current);
         }
-        // Save with images on close
-        await saveContent(true);
+        // Save without images on close to minimize storage
+        await saveContent(false);
         onClose();
     };
 

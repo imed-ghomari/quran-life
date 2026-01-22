@@ -100,8 +100,9 @@ export default function MindmapViewer({
         };
     }, [isFullScreen]);
 
+    const activeSnapshot = fetchedSnapshot || snapshot;
     const displayUrl = isDark ? (imageUrlDark || imageUrl) : imageUrl;
-    const hasImage = !!displayUrl;
+    const hasImage = !!displayUrl && !activeSnapshot;
 
     const components = useMemo(() => ({
         Toolbar: null,
@@ -152,8 +153,6 @@ export default function MindmapViewer({
             </div>
         );
     }
-
-    const activeSnapshot = fetchedSnapshot || snapshot;
 
     // Inline view
     const renderInline = () => {

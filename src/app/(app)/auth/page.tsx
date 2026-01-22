@@ -33,13 +33,13 @@ function AuthContent() {
     const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
 
     // Use db.useQuery to check for purchases in InstantDB
-    const { data: purchaseData, isLoading: isPurchaseLoading, error: purchaseError } = db.useQuery(user?.email ? {
+    const { data: purchaseData, isLoading: isPurchaseLoading, error: purchaseError } = db.useQuery({
         purchases: {
             $: {
-                where: { email: user.email, status: 'completed' }
+                where: { email: user?.email || '', status: 'completed' }
             }
         }
-    } : null);
+    });
 
     console.log('Purchase data state:', { 
         hasUser: !!user, 

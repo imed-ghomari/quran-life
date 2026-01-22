@@ -696,8 +696,8 @@ export default function TodayPage() {
             const newMindMap = {
                 ...existing,
                 surahId,
-                imageUrl: lightUrl || existing?.imageUrl || undefined,
-                imageUrlDark: darkUrl || existing?.imageUrlDark || undefined,
+                imageUrl: lightUrl || undefined, // Set to undefined to remove from InstantDB if no new image
+                imageUrlDark: darkUrl || undefined,
                 tldrawSnapshot: snapshot,
                 isComplete: true // If we are editing and saving, we assume it's part of completion flow or just an update
             };
@@ -737,8 +737,8 @@ export default function TodayPage() {
             const newMindMap = {
                 ...existing,
                 partId,
-                imageUrl: lightUrl || existing?.imageUrl || undefined,
-                imageUrlDark: darkUrl || existing?.imageUrlDark || undefined,
+                imageUrl: lightUrl || undefined,
+                imageUrlDark: darkUrl || undefined,
                 tldrawSnapshot: snapshot,
                 isComplete: true
             };

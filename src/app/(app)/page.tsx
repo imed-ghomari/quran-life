@@ -16,13 +16,13 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
 
     // Use db.useQuery to check for purchases in InstantDB
-    const { data: purchaseData, isLoading: isPurchaseLoading } = db.useQuery(user?.email ? {
+    const { data: purchaseData, isLoading: isPurchaseLoading } = db.useQuery({
         purchases: {
             $: {
-                where: { email: user.email, status: 'completed' }
+                where: { email: user?.email || '', status: 'completed' }
             }
         }
-    } : null);
+    });
 
     useEffect(() => {
         console.log('Home auth state:', { user: !!user, isAuthLoading, isPurchaseLoading, loading });
