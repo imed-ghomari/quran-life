@@ -1,45 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
-import { createClient } from '@/utils/supabase/client';
-import { User } from '@supabase/supabase-js';
+import React, { useEffect, useMemo, useState, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import { OnlineStatusContext } from '@/components/Providers';
-import { useSyncState, getSyncStatusText } from '@/hooks/useSyncState';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
-import {
-    AppSettings,
-    DEFAULT_SETTINGS,
-    getSettings,
-    updateSetting,
-    toggleSurahSkipped,
-    setGroupMaturity,
-    setSurahMaturity,
-    setNodeMaturity,
-    getMutashabihatDecisions,
-    setMutashabihatDecision,
-    saveCustomMutashabih,
-    getCustomMutashabihat,
-    CustomMutashabih,
-    exportBackup,
-    importBackup,
-    MutashabihatDecision,
-    resetMutashabihatDecisions,
-    saveReviewErrors,
-    removeReviewError,
-    findAnchorForRange,
-    getListeningProgress,
-    saveListeningProgress,
-    postponeNode,
-    getPortionPointer,
-    getNodeStability,
-    getNodeDifficulty,
-    getNodeReps,
-    getNodeDueDate,
-    clearAllData,
-} from '@/lib/storage';
-import { getSchedulingPreview, createPresetState, getRetrievability, formatRecallChance } from '@/lib/fsrs';
-import { QuranPart } from '@/lib/types';
+import { QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
+import { db } from '@/lib/instant'; 
+import { useInstantSettings, useInstantNodes, useInstantMutashabihat } from '@/hooks/useInstantData'; 
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
     Upload,
@@ -49,7 +16,7 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
-    Map,
+    Map as MapIcon,
     Book,
     Activity,
     X,
@@ -58,11 +25,12 @@ import {
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
-import { MemoryNode, getMemoryNodes } from '@/lib/storage';
 
-interface SyncResult {
-    success: boolean;
-    message: string;
+interface MutashabihatDecision {
+    id: string; // absoluteAyah or absoluteAyah-phraseId
+    status: 'confirmed' | 'ignored' | 'pending' | 'solved_mindmap' | 'solved_note';
+    confirmedAt?: string;
+    notes?: string;
 }
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
@@ -100,32 +68,160 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 }
 
 export default function SettingsPage() {
-    const supabase = createClient();
     const router = useRouter();
     const isOnline = useContext(OnlineStatusContext);
-    const [user, setUser] = useState<User | null>(null);
-    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-    const [isAuthProcessing, setIsAuthProcessing] = useState(false);
-    const { status: syncStatus, pendingChangesCount, isAuthenticated } = useSyncState();
-    const syncStatusText = getSyncStatusText(syncStatus, pendingChangesCount, isAuthenticated, isOnline);
+    const { user } = db.useAuth();
+    const { settings, saveSettings } = useInstantSettings();
+    const { nodes: instantNodes } = useInstantNodes();
+    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
+
+    const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>({});
+    const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
+    const [expandedMutItems, setExpandedMutItems] = useState<Record<string, boolean>>({});
+    const [selectedMutSurah, setSelectedMutSurah] = useState<number | null>(null);
+    const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
+    const [showDebugNodes, setShowDebugNodes] = useState(true);
+    const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+    const [isMobile, setIsMobile] = useState(false);
+    const [activeSlideOverGroup, setActiveSlideOverGroup] = useState<{
+        id: string;
+        title: string;
+        type: 'verse_segment' | 'mindmap' | 'part_mindmap';
+        nodes: MemoryNode[];
+        surahId?: number;
+    } | null>(null);
+
+    const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
+        id: string;
+        title: string;
+        surahId: number;
+        phraseId: string;
+        group: {
+            phraseId: string;
+            ayahIds: number[];
+            entry: any;
+            absRefs: number[];
+        };
+        representativeAbs: number;
+    } | null>(null);
+
+    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | null>(null);
+
+    // Sync instant decisions to local state for easier lookups
+    useEffect(() => {
+        const decisionsMap: Record<string, MutashabihatDecision> = {};
+        instantDecisions.forEach(d => {
+            decisionsMap[d.phraseId] = d as any;
+        });
+        setDecisions(decisionsMap);
+    }, [instantDecisions]);
+
+    // Sync instant nodes to local state
+    useEffect(() => {
+        setMemoryNodes(instantNodes);
+    }, [instantNodes]);
 
     useEffect(() => {
-        // Initial load from cache/storage
-        setSettings(getSettings());
-
-        // Listen for storage updates
-        const handleStorage = (e: StorageEvent) => {
-            if (e.key === 'quran-app-settings' || !e.key) {
-                setSettings(getSettings());
-            }
-        };
-        window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
     }, []);
-    const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+
+    const [sectionsExpanded, setSectionsExpanded] = useState({
+        cloudSync: true,
+        backupRestore: true,
+        schedule: true,
+        activePart: true,
+        surahStatus: true,
+        mutashabihat: true,
+    });
+
+    const toggleSection = (key: keyof typeof sectionsExpanded) => {
+        // Disable folding on desktop
+        if (window.innerWidth < 768) {
+            setSectionsExpanded(s => ({ ...s, [key]: !s[key] }));
+        }
+    };
+
+    useEffect(() => {
+        const handleResize = () => {
+             if (window.innerWidth >= 768) {
+                 setSectionsExpanded({
+                    cloudSync: true,
+                    backupRestore: true,
+                    schedule: true,
+                    activePart: true,
+                    surahStatus: true,
+                    mutashabihat: true,
+                 });
+                 setShowDebugNodes(true);
+             }
+        };
+
+        if (typeof window !== 'undefined') {
+            if (window.innerWidth < 768) {
+                setSectionsExpanded({
+                    cloudSync: false,
+                    backupRestore: false,
+                    schedule: false,
+                    activePart: false,
+                    surahStatus: false,
+                    mutashabihat: false,
+                });
+                setShowDebugNodes(false);
+            } else {
+                 setSectionsExpanded({
+                    cloudSync: true,
+                    backupRestore: true,
+                    schedule: true,
+                    activePart: true,
+                    surahStatus: true,
+                    mutashabihat: true,
+                 });
+            }
+        }
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // InstantDB Auth State
+    const [email, setEmail] = useState('');
+    const [code, setCode] = useState('');
+    const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
+    const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+    const [authError, setAuthError] = useState<string | null>(null);
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setAuthError(null);
+        setIsAuthProcessing(true);
+
+        try {
+            if (authStep === 'email') {
+                await db.auth.sendMagicCode({ email });
+                setAuthStep('code');
+            } else {
+                await db.auth.signInWithMagicCode({ email, code });
+            }
+        } catch (err: any) {
+            setAuthError(err.body?.message || err.message || 'An error occurred');
+        } finally {
+            setIsAuthProcessing(false);
+        }
+    };
+
+    useEffect(() => {
+        // Initial load handled by hook
+        // setSettings(getSettings());
+        
+        }, []);
 
     const renderMobileView = () => {
-        if (!isMobile) return null;
 
         if (activeMobilePage === 'account') {
              return (
@@ -143,7 +239,7 @@ export default function SettingsPage() {
                         </h2>
                             <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
                                 {user
-                                    ? `Signed in as ${user.email}. Your data is synced manually.`
+                                    ? `Signed in as ${user.email}. Your data is synced automatically.`
                                     : "Sign in to sync your progress across devices."}
                             </p>
 
@@ -159,53 +255,17 @@ export default function SettingsPage() {
 
                                 {user ? (
                                     <>
-                                        <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--background)', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                                <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
-                                                <span style={{
-                                                    color: syncStatus === 'syncing' ? 'var(--accent)' : (syncStatus === 'error' || syncStatus === 'conflict' ? '#ef4444' : (syncStatus === 'synced' ? '#10b981' : (syncStatus === 'needs_push' || syncStatus === 'needs_pull' ? '#eab308' : 'var(--foreground-secondary)'))),
-                                                    fontWeight: 600
-                                                }}>
-                                                    {syncStatusText}
-                                                </span>
-                                            </div>
-                                            {settings.lastSyncedAt && (
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Synced:</span>
-                                                    <span style={{ color: 'var(--foreground-secondary)' }}>
-                                                        {new Date(settings.lastSyncedAt).toLocaleString()}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
+
 
                                         <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                             <button
                                                 className="btn btn-secondary"
                                                 onClick={async () => {
-                                                    // Check for unsaved changes before signing out
-                                                    const { getPendingChangesCount, commitTask } = await import('@/lib/syncEngine');
-                                                    const pending = getPendingChangesCount();
+                                                    // InstantDB handles sync automatically
+                                                    if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
                                                     
-                                                    if (pending > 0) {
-                                                        const confirmSync = window.confirm(
-                                                            `You have ${pending} unsaved changes. We will attempt to save them before signing out.\n\nClick OK to Sync & Sign Out.\nClick Cancel to abort.`
-                                                        );
-                                                        if (!confirmSync) return;
-
-                                                        // Attempt sync
-                                                        const { success } = await commitTask('logout');
-                                                        if (!success) {
-                                                            const force = window.confirm(
-                                                                "Sync failed! You are offline or experiencing errors.\n\nSigning out now will permanently DELETE these unsaved changes from this device.\n\nAre you sure you want to sign out anyway?"
-                                                            );
-                                                            if (!force) return;
-                                                        }
-                                                    } else {
-                                                        if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
-                                                    }
-
-                                                    await supabase.auth.signOut();
+                                                    // Sign out from InstantDB (it clears local storage token)
+                                                    db.auth.signOut();
                                                     router.push('/');
                                                 }}
                                                 style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
@@ -216,23 +276,26 @@ export default function SettingsPage() {
                                     </>
                                 ) : (
                                     <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        <input
-                                            suppressHydrationWarning={true}
-                                            type="email"
-                                            placeholder="Email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            required
-                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                        />
-                                        <input
-                                            type="password"
-                                            placeholder="Password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            required
-                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                        />
+                                        {authStep === 'email' ? (
+                                            <input
+                                                suppressHydrationWarning={true}
+                                                type="email"
+                                                placeholder="Enter your email"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                required
+                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                            />
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                placeholder="Enter verification code"
+                                                value={code}
+                                                onChange={(e) => setCode(e.target.value)}
+                                                required
+                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                            />
+                                        )}
                                         {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
                                         <button
                                             suppressHydrationWarning={true}
@@ -241,14 +304,7 @@ export default function SettingsPage() {
                                             disabled={isAuthProcessing}
                                             style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
                                         >
-                                            {isAuthProcessing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsSignUp(!isSignUp)}
-                                            style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }}
-                                        >
-                                            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                                            {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
                                         </button>
                                     </form>
                                 )}
@@ -506,7 +562,7 @@ export default function SettingsPage() {
                                     <div className="mobile-group-item">
                                         <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <Map size={20} />
+                                                <MapIcon size={20} />
                                                 <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                             </div>
                                             <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
@@ -628,6 +684,33 @@ export default function SettingsPage() {
                                             surahMutsMap[m.phraseId].absRefs.push(abs);
                                         }
                                     });
+                                });
+
+                                // Add custom mutashabihat
+                                instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
+                                    const phraseId = `custom-${c.id}`;
+                                    const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
+                                    const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
+                                    
+                                    if (!surahMutsMap[phraseId]) {
+                                        surahMutsMap[phraseId] = {
+                                            phraseId,
+                                            ayahIds: [c.ayahId],
+                                            absRefs: [abs],
+                                            entry: {
+                                                phraseId,
+                                                matches: [abs, targetAbs],
+                                                meta: {
+                                                    sourceAbs: abs,
+                                                    sourceRange: [0, 0],
+                                                    matches: [
+                                                        { absolute: abs, wordRange: [0, 0] },
+                                                        { absolute: targetAbs, wordRange: [0, 0] }
+                                                    ]
+                                                }
+                                            }
+                                        };
+                                    }
                                 });
 
                                 const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
@@ -761,273 +844,194 @@ export default function SettingsPage() {
         );
     };
 
-    useEffect(() => {
-        const getUser = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setUser(session?.user ?? null);
-        };
-        getUser();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-        });
-
-        return () => subscription.unsubscribe();
-    }, [supabase]);
-
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [isSignUp, setIsSignUp] = useState(false);
-    const [authError, setAuthError] = useState<string | null>(null);
-
-    const handleAuth = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setAuthError(null);
-        setIsAuthProcessing(true);
-
-        const { error } = isSignUp
-            ? await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    emailRedirectTo: `${window.location.origin}/auth/callback`,
-                }
-            })
-            : await supabase.auth.signInWithPassword({ email, password });
-
-        if (error) {
-            setAuthError(error.message);
-        } else if (isSignUp) {
-            setAuthError('Check your email for the confirmation link!');
-        }
-        setIsAuthProcessing(false);
-    };
-
-    // Auto-sync removed as per user request
-    const hasAutoSynced = useRef(false);
-    useEffect(() => {
-        if (user && !hasAutoSynced.current) {
-            // handleSync();
-            hasAutoSynced.current = true;
-        }
-    }, [user]);
-
-    const [version, setVersion] = useState(0);
-    const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>(getMutashabihatDecisions());
-    const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
-    const [expandedMutItems, setExpandedMutItems] = useState<Record<string, boolean>>({});
-    const [selectedMutSurah, setSelectedMutSurah] = useState<number | null>(null);
-    const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
-    const [showDebugNodes, setShowDebugNodes] = useState(true);
-    const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
-    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-    const [isMobile, setIsMobile] = useState(false);
-    const [activeSlideOverGroup, setActiveSlideOverGroup] = useState<{
-        id: string;
-        title: string;
-        type: 'verse_segment' | 'mindmap' | 'part_mindmap';
-        nodes: MemoryNode[];
-        surahId?: number;
-    } | null>(null);
-
-    const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
-        id: string;
-        title: string;
-        surahId: number;
-        phraseId: string;
-        group: {
-            phraseId: string;
-            ayahIds: number[];
-            entry: any;
-            absRefs: number[];
-        };
-        representativeAbs: number;
-    } | null>(null);
-
-    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | null>(null);
-
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-
-    const [sectionsExpanded, setSectionsExpanded] = useState({
-        cloudSync: true,
-        backupRestore: true,
-        schedule: true,
-        activePart: true,
-        surahStatus: true,
-        mutashabihat: true,
-    });
-
-    const toggleSection = (key: keyof typeof sectionsExpanded) => {
-        // Disable folding on desktop
-        if (window.innerWidth < 768) {
-            setSectionsExpanded(s => ({ ...s, [key]: !s[key] }));
-        }
-    };
-
-    useEffect(() => {
-        const handleResize = () => {
-             if (window.innerWidth >= 768) {
-                 setSectionsExpanded({
-                    cloudSync: true,
-                    backupRestore: true,
-                    schedule: true,
-                    activePart: true,
-                    surahStatus: true,
-                    mutashabihat: true,
-                 });
-                 setShowDebugNodes(true);
-             }
-        };
-
-        if (typeof window !== 'undefined') {
-            if (window.innerWidth < 768) {
-                setSectionsExpanded({
-                    cloudSync: false,
-                    backupRestore: false,
-                    schedule: false,
-                    activePart: false,
-                    surahStatus: false,
-                    mutashabihat: false,
-                });
-                setShowDebugNodes(false);
-            } else {
-                 setSectionsExpanded({
-                    cloudSync: true,
-                    backupRestore: true,
-                    schedule: true,
-                    activePart: true,
-                    surahStatus: true,
-                    mutashabihat: true,
-                 });
-            }
-        }
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     const toggleGroup = (groupId: string) => {
         setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
     };
 
-    const handleGroupMaturityReset = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number, surahName?: string) => {
+    const getMaturityState = (level: 'reset' | 'medium' | 'strong' | 'mastered') => {
+        const now = new Date().toISOString();
+        switch (level) {
+            case 'reset':
+                return {
+                    due: now,
+                    stability: 0,
+                    difficulty: 0,
+                    elapsed_days: 0,
+                    scheduled_days: 0,
+                    reps: 0,
+                    lapses: 0,
+                    state: 'New',
+                    last_review: now
+                };
+            case 'medium':
+                return {
+                    due: new Date(Date.now() + 14 * 86400000).toISOString(),
+                    stability: 14,
+                    difficulty: 5,
+                    reps: 3,
+                    state: 'Review',
+                    scheduled_days: 14,
+                    last_review: now
+                };
+            case 'strong':
+                return {
+                    due: new Date(Date.now() + 30 * 86400000).toISOString(),
+                    stability: 30,
+                    difficulty: 5,
+                    reps: 5,
+                    state: 'Review',
+                    scheduled_days: 30,
+                    last_review: now
+                };
+            case 'mastered':
+                return {
+                    due: new Date(Date.now() + 90 * 86400000).toISOString(),
+                    stability: 90,
+                    difficulty: 5,
+                    reps: 8,
+                    state: 'Review',
+                    scheduled_days: 90,
+                    last_review: now
+                };
+        }
+    };
+
+    const handleNodeMaturityReset = async (nodeId: string, level: 'reset' | 'medium' | 'strong' | 'mastered') => {
+        const node = instantNodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        const newState = getMaturityState(level);
+        await db.transact(db.tx.memoryNodes[nodeId].update({
+            scheduler: { ...node.scheduler, ...newState }
+        }));
+    };
+
+    const handleGroupMaturityReset = async (type: 'verse_segment' | 'mindmap' | 'part_mindmap' | 'verse', level: 'reset' | 'medium' | 'strong' | 'mastered', surahId?: number, surahName?: string) => {
         let typeLabel = '';
         if (surahName) {
             typeLabel = `all Verses for ${surahName}`;
         } else {
-            typeLabel = type === 'verse_segment' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
+            typeLabel = type === 'verse_segment' || type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
         }
 
-        if (!window.confirm(`Are you sure you want to reset the maturity of ${typeLabel}?`)) return;
-        setGroupMaturity(type, 'reset', surahId);
-        setVersion(v => v + 1);
+        if (!window.confirm(`Are you sure you want to set the maturity of ${typeLabel} to ${level}?`)) return;
+
+        const targetType = type === 'verse' ? 'verse_segment' : type;
+        const newState = getMaturityState(level);
+
+        const nodesToUpdate = instantNodes.filter(node => {
+            if (node.type !== targetType) return false;
+            if (surahId && node.surahId !== surahId) return false;
+            return true;
+        });
+
+        if (nodesToUpdate.length === 0) {
+            alert("No nodes found to update.");
+            return;
+        }
+
+        const transactions = nodesToUpdate.map(node => 
+            db.tx.memoryNodes[node.id].update({
+                scheduler: { ...node.scheduler, ...newState }
+            })
+        );
+
+        await db.transact(transactions);
     };
-
-    useEffect(() => {
-        setMemoryNodes(getMemoryNodes());
-    }, [version]);
-
-    useEffect(() => {
-        setSettings(getSettings());
-        setDecisions(getMutashabihatDecisions());
-    }, [version]);
 
     useEffect(() => {
         getQuranVerses().then(setVerses).catch(() => setVerses([]));
     }, []);
 
     const handleCompletionDays = (days: number) => {
-        updateSetting('completionDays', Math.max(5, Math.min(120, days)));
-        setVersion(v => v + 1);
+        saveSettings({ completionDays: Math.max(5, Math.min(120, days)) });
     };
 
     const handleActivePart = (part: QuranPart) => {
-        updateSetting('activePart', part);
-        setVersion(v => v + 1);
+        saveSettings({ activePart: part });
     };
 
-    const handleResetMutashabihat = () => {
-        const partName = settings.activePart === 5 ? 'the whole Quran' : `Part ${settings.activePart}`;
+    const handleResetMutashabihat = async () => {
+        const partName = settings?.activePart === 5 ? 'the whole Quran' : `Part ${settings?.activePart}`;
         const msg = `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`;
         if (!window.confirm(msg)) return;
 
-        const absoluteAyat = getAllMutashabihatRefs().filter(abs => {
+        const absoluteAyat = getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
             const ref = absoluteToSurahAyah(abs);
             const surah = getSurah(ref.surahId);
-            return surah && (settings.activePart === 5 || surah.part === settings.activePart);
+            return surah && (settings?.activePart === 5 || surah.part === settings?.activePart);
         });
-        resetMutashabihatDecisions(absoluteAyat);
-        setVersion(v => v + 1);
+
+        const ayahSet = new Set(absoluteAyat.map(String));
+        const decisionsToDelete = instantDecisions.filter(d => {
+            const abs = d.phraseId.split('-')[0];
+            return ayahSet.has(abs);
+        });
+
+        if (decisionsToDelete.length > 0) {
+            await db.transact(decisionsToDelete.map(d => db.tx.mutashabihatDecisions[d.id].delete()));
+        }
     };
 
     const [surahToSkipId, setSurahToSkipId] = useState<number | ''>('');
 
     const handleAddSkippedSurah = () => {
         if (!surahToSkipId) return;
-        toggleSurahSkipped(Number(surahToSkipId));
+        const currentSkipped = settings?.skippedSurahs || [];
+        if (!currentSkipped.includes(Number(surahToSkipId))) {
+             saveSettings({ skippedSurahs: [...currentSkipped, Number(surahToSkipId)] });
+        }
         setSurahToSkipId('');
-        setVersion(v => v + 1);
     };
 
     const handleRemoveSkippedSurah = (id: number) => {
-        toggleSurahSkipped(id);
-        setVersion(v => v + 1);
+        const currentSkipped = settings?.skippedSurahs || [];
+        saveSettings({ skippedSurahs: currentSkipped.filter(s => s !== id) });
     };
 
-    const handleDecisionUpdate = async (absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
-        if (phraseId.startsWith('custom-')) {
-            const customId = phraseId.replace('custom-', '');
-            const allCustoms = getCustomMutashabihat();
-            const mut = allCustoms.find((m: CustomMutashabih) => m.id === customId);
-            if (mut) {
-                mut.status = update.status;
-                mut.notes = update.notes;
-                await saveCustomMutashabih(mut);
-            }
-        }
-
-        const key = `${absoluteAyah}-${phraseId}`;
+    const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id: _ignored, ...updateWithoutId } = update;
-        await setMutashabihatDecision({ id: key, ...updateWithoutId });
-        setVersion(v => v + 1);
+        await updateInstantDecision(phraseId, updateWithoutId);
     };
 
-    const handleAddCustomMutashabih = async (mut: CustomMutashabih) => {
-        await saveCustomMutashabih(mut);
-
-        // Also save to decisions for consistency and immediate UI update
+    const handleAddCustomMutashabih = async (mut: any) => {
         const [s1, a1] = mut.verseId.split(':').map(Number);
-        const abs1 = surahAyahToAbsolute(s1, a1);
         const [s2, a2] = mut.targetVerseId.split(':').map(Number);
-        const abs2 = surahAyahToAbsolute(s2, a2);
 
-        const isSolved = mut.status !== 'pending' && mut.status !== 'ignored';
-        const decision = {
-            status: mut.status,
+        const customItem = {
+            id: mut.id || crypto.randomUUID(),
+            verseId: mut.verseId,
+            targetVerseId: mut.targetVerseId,
+            surahId: s1,
+            ayahId: a1,
+            targetSurahId: s2,
+            targetAyahId: a2,
             notes: mut.notes,
-            confirmedAt: isSolved ? new Date().toISOString() : undefined
+            status: mut.status,
+            createdAt: new Date().toISOString()
         };
-        await setMutashabihatDecision({ id: `${abs1}-custom-${mut.id}`, ...decision } as MutashabihatDecision);
-        await setMutashabihatDecision({ id: `${abs2}-custom-${mut.id}`, ...decision } as MutashabihatDecision);
 
-        setVersion(v => v + 1);
+        await updateInstantCustom(customItem);
     };
 
     const handleExport = async () => {
-        const data = await exportBackup();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        // Use hook data for export
+        const exportData = {
+            version: 1,
+            timestamp: new Date().toISOString(),
+            settings,
+            memoryNodes: instantNodes,
+            decisions: instantDecisions,
+            exportedAt: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `quran-app-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `quran-app-instantdb-backup-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -1038,11 +1042,11 @@ export default function SettingsPage() {
         const reader = new FileReader();
         reader.onload = async (event) => {
             try {
-                const data = JSON.parse(event.target?.result as string);
+                JSON.parse(event.target?.result as string);
                 if (confirm('Importing will overwrite current progress. Continue?')) {
-                    await importBackup(data);
-                    setVersion(v => v + 1);
-                    alert('Successfully imported!');
+                    // Implementation for InstantDB import would involve bulk transactions
+                    // For now, let's warn that it's not fully implemented for InstantDB
+                    alert("Import for InstantDB is not yet fully implemented. Please use cloud sync.");
                 }
             } catch (err) {
                 alert('Invalid backup file');
@@ -1052,9 +1056,15 @@ export default function SettingsPage() {
     };
 
     const handleReset = async () => {
-        if (confirm('WARNING: This will delete ALL your data, including progress, settings, and mindmaps. This action cannot be undone.\n\nAre you sure you want to reset all data?')) {
+        if (confirm('WARNING: This will delete ALL your data in the cloud. This action cannot be undone.\n\nAre you sure you want to reset all data?')) {
             if (confirm('Double check: Are you absolutely sure? All data will be lost forever.')) {
-                await clearAllData();
+                // Clear all entities for this user
+                const txs = [
+                    ...instantNodes.map(n => db.tx.memoryNodes[n.id].delete()),
+                    ...instantDecisions.map(d => db.tx.mutashabihatDecisions[d.id].delete())
+                    // Add other entities here
+                ];
+                if (txs.length > 0) await db.transact(txs);
                 window.location.reload();
             }
         }
@@ -1062,18 +1072,20 @@ export default function SettingsPage() {
 
     const mutashabihatBySurah = useMemo(() => {
         const map: Record<number, number> = {};
-        getAllMutashabihatRefs().forEach(abs => {
+        
+        // Static dataset
+        getAllMutashabihatRefs(instantCustomMutashabihat).forEach(abs => {
             const ref = absoluteToSurahAyah(abs);
             const surah = getSurah(ref.surahId);
             if (!surah || (settings.activePart !== 5 && surah.part !== settings.activePart)) return;
 
-            // Count total mutashabihat groups (entries) for this surah
-            const entries = getMutashabihatForAbsolute(abs);
+            const entries = getMutashabihatForAbsolute(abs, instantCustomMutashabihat);
             if (!map[ref.surahId]) map[ref.surahId] = 0;
             map[ref.surahId] += entries.length;
         });
+
         return map;
-    }, [settings.activePart]);
+    }, [settings.activePart, instantCustomMutashabihat]);
 
     const mutashabihatSurahs = useMemo(() => {
         return getSurahsByPart(settings.activePart)
@@ -1129,7 +1141,7 @@ export default function SettingsPage() {
                         <>
                             <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
                                 {user
-                                    ? `Signed in as ${user.email}. Your data is synced manually.`
+                                    ? `Signed in as ${user.email}. Your data is synced automatically.`
                                     : "Sign in to sync your progress across devices."}
                             </p>
 
@@ -1145,53 +1157,17 @@ export default function SettingsPage() {
 
                                 {user ? (
                                     <>
-                                        <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--background)', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                                <span style={{ color: 'var(--foreground-secondary)' }}>Status:</span>
-                                                <span style={{
-                                                    color: syncStatus === 'syncing' ? 'var(--accent)' : (syncStatus === 'error' || syncStatus === 'conflict' ? '#ef4444' : (syncStatus === 'synced' ? '#10b981' : (syncStatus === 'needs_push' || syncStatus === 'needs_pull' ? '#eab308' : 'var(--foreground-secondary)'))),
-                                                    fontWeight: 600
-                                                }}>
-                                                    {syncStatusText}
-                                                </span>
-                                            </div>
-                                            {settings.lastSyncedAt && (
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Synced:</span>
-                                                    <span style={{ color: 'var(--foreground-secondary)' }}>
-                                                        {new Date(settings.lastSyncedAt).toLocaleString()}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
+
 
                                         <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                             <button
                                                 className="btn btn-secondary"
                                                 onClick={async () => {
-                                                    // Check for unsaved changes before signing out
-                                                    const { getPendingChangesCount, commitTask } = await import('@/lib/syncEngine');
-                                                    const pending = getPendingChangesCount();
+                                                    // InstantDB handles sync automatically
+                                                    if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
                                                     
-                                                    if (pending > 0) {
-                                                        const confirmSync = window.confirm(
-                                                            `You have ${pending} unsaved changes. We will attempt to save them before signing out.\n\nClick OK to Sync & Sign Out.\nClick Cancel to abort.`
-                                                        );
-                                                        if (!confirmSync) return;
-
-                                                        // Attempt sync
-                                                        const { success } = await commitTask('logout');
-                                                        if (!success) {
-                                                            const force = window.confirm(
-                                                                "Sync failed! You are offline or experiencing errors.\n\nSigning out now will permanently DELETE these unsaved changes from this device.\n\nAre you sure you want to sign out anyway?"
-                                                            );
-                                                            if (!force) return;
-                                                        }
-                                                    } else {
-                                                        if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
-                                                    }
-
-                                                    await supabase.auth.signOut();
+                                                    // Sign out from InstantDB (it clears local storage token)
+                                                    db.auth.signOut();
                                                     router.push('/');
                                                 }}
                                                 style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
@@ -1202,22 +1178,25 @@ export default function SettingsPage() {
                                     </>
                                 ) : (
                                     <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        <input
-                                            type="email"
-                                            placeholder="Email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            required
-                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                        />
-                                        <input
-                                            type="password"
-                                            placeholder="Password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            required
-                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                        />
+                                        {authStep === 'email' ? (
+                                            <input
+                                                type="email"
+                                                placeholder="Enter your email"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                required
+                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                            />
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                placeholder="Enter verification code"
+                                                value={code}
+                                                onChange={(e) => setCode(e.target.value)}
+                                                required
+                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                            />
+                                        )}
                                         {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
                                         <button
                                             type="submit"
@@ -1225,14 +1204,7 @@ export default function SettingsPage() {
                                             disabled={isAuthProcessing}
                                             style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
                                         >
-                                            {isAuthProcessing ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsSignUp(!isSignUp)}
-                                            style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }}
-                                        >
-                                            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                                            {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
                                         </button>
                                     </form>
                                 )}
@@ -1607,7 +1579,7 @@ export default function SettingsPage() {
                                     <div className="mobile-group-item">
                                         <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <Map size={20} />
+                                                <MapIcon size={20} />
                                                 <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                             </div>
                                             <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
@@ -1714,20 +1686,18 @@ export default function SettingsPage() {
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                             <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
-                                                            <Map size={16} /> Mindmaps
+                                                            <MapIcon size={16} /> Mindmaps
                                                         </div>
                                                         <select
                                                             className="maturity-select"
                                                             style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                             value=""
                                                             onClick={(e) => e.stopPropagation()}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
+                                                            onChange={async (e) => {
+                                                                const val = e.target.value as any;
                                                                 if (!val) return;
-                                                                if (val === 'reset' && !window.confirm('Are you sure you want to reset the maturity of ALL Mindmaps?')) return;
-                                                                setGroupMaturity('mindmap', val as any);
-                                                                setGroupMaturity('part_mindmap', val as any);
-                                                                setMemoryNodes(getMemoryNodes());
+                                                                await handleGroupMaturityReset('mindmap', val);
+                                                                await handleGroupMaturityReset('part_mindmap', val);
                                                             }}
                                                         >
                                                             <option value="">Set Group...</option>
@@ -1754,13 +1724,10 @@ export default function SettingsPage() {
                                                                     style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                                     value=""
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
+                                                                    onChange={async (e) => {
+                                                                        const val = e.target.value as any;
                                                                         if (!val) return;
-                                                                        if (val === 'reset' && !window.confirm('Reset all part mindmaps maturity?')) return;
-                                                                        handleGroupMaturityReset('part_mindmap'); // existing func resets to 'reset'
-                                                                        if (val !== 'reset') setGroupMaturity('part_mindmap', val as any);
-                                                                        setMemoryNodes(getMemoryNodes());
+                                                                        await handleGroupMaturityReset('part_mindmap', val);
                                                                     }}
                                                                 >
                                                                     <option value="">Set Subgroup...</option>
@@ -1783,10 +1750,9 @@ export default function SettingsPage() {
                                                                         <td>
                                                                             <select
                                                                                 value=""
-                                                                                onChange={(e) => {
+                                                                                onChange={async (e) => {
                                                                                     if (!e.target.value) return;
-                                                                                    setNodeMaturity(node.id, e.target.value as any);
-                                                                                    setMemoryNodes(getMemoryNodes());
+                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
                                                                                 }}
                                                                                 className="maturity-select"
                                                                             >
@@ -1821,13 +1787,10 @@ export default function SettingsPage() {
                                                                     style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                                     value=""
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
+                                                                    onChange={async (e) => {
+                                                                        const val = e.target.value as any;
                                                                         if (!val) return;
-                                                                        if (val === 'reset' && !window.confirm('Reset all surah mindmaps maturity?')) return;
-                                                                        handleGroupMaturityReset('mindmap');
-                                                                        if (val !== 'reset') setGroupMaturity('mindmap', val as any);
-                                                                        setMemoryNodes(getMemoryNodes());
+                                                                        await handleGroupMaturityReset('mindmap', val);
                                                                     }}
                                                                 >
                                                                     <option value="">Set Subgroup...</option>
@@ -1850,11 +1813,10 @@ export default function SettingsPage() {
                                                                         <td>
                                                                             <select
                                                                                 value=""
-                                                                                onChange={(e) => {
-                                                                                    if (!e.target.value) return;
-                                                                                    setNodeMaturity(node.id, e.target.value as any);
-                                                                                    setMemoryNodes(getMemoryNodes());
-                                                                                }}
+                                                                                onChange={async (e) => {
+                                                                                        if (!e.target.value) return;
+                                                                                        await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                    }}
                                                                                 className="maturity-select"
                                                                             >
                                                                                 <option value="">Set To...</option>
@@ -1890,12 +1852,10 @@ export default function SettingsPage() {
                                                             style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                             value=""
                                                             onClick={(e) => e.stopPropagation()}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
+                                                            onChange={async (e) => {
+                                                                const val = e.target.value as any;
                                                                 if (!val) return;
-                                                                if (val === 'reset' && !window.confirm('Are you sure you want to reset the maturity of ALL verses?')) return;
-                                                                setGroupMaturity('verse', val as any);
-                                                                setMemoryNodes(getMemoryNodes());
+                                                                await handleGroupMaturityReset('verse', val);
                                                             }}
                                                         >
                                                             <option value="">Set Group...</option>
@@ -1950,18 +1910,10 @@ export default function SettingsPage() {
                                                                                     style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                                                     value=""
                                                                                     onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={(e) => {
-                                                                                        const val = e.target.value;
+                                                                                    onChange={async (e) => {
+                                                                                        const val = e.target.value as any;
                                                                                         if (!val) return;
-                                                                                        if (val === 'reset') {
-                                                                                            if (window.confirm(`Reset maturity for all verses in ${surah?.name}?`)) {
-                                                                                                setSurahMaturity(surahId!, 'reset');
-                                                                                                setMemoryNodes(getMemoryNodes());
-                                                                                            }
-                                                                                        } else {
-                                                                                            setSurahMaturity(surahId!, val as any);
-                                                                                            setMemoryNodes(getMemoryNodes());
-                                                                                        }
+                                                                                        await handleGroupMaturityReset('verse', val, surahId!, surah?.name);
                                                                                         e.target.value = '';
                                                                                     }}
                                                                                 >
@@ -1980,10 +1932,9 @@ export default function SettingsPage() {
                                                                             <td>
                                                                                 <select
                                                                                     value=""
-                                                                                    onChange={(e) => {
-                                                                                        setNodeMaturity(node.id, e.target.value as any);
-                                                                                        setMemoryNodes(getMemoryNodes());
-                                                                                    }}
+                                                                                    onChange={async (e) => {
+                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                }}
                                                                                     className="maturity-select"
                                                                                 >
                                                                                     <option value="">Set To...</option>
@@ -2095,11 +2046,11 @@ export default function SettingsPage() {
                                         absRefs: number[]
                                     }> = {};
 
-                                    getAllMutashabihatRefs().filter(abs => {
+                                    getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
                                         const ref = absoluteToSurahAyah(abs);
                                         return ref.surahId === surah.id;
                                     }).forEach(abs => {
-                                        const muts = getMutashabihatForAbsolute(abs);
+                                        const muts = getMutashabihatForAbsolute(abs, instantCustomMutashabihat);
                                         const ref = absoluteToSurahAyah(abs);
                                         muts.forEach(m => {
                                             if (!surahMutsMap[m.phraseId]) {
@@ -2235,6 +2186,33 @@ export default function SettingsPage() {
                                                             });
                                                         });
 
+                                                        // Add custom mutashabihat
+                                                        instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
+                                                            const phraseId = `custom-${c.id}`;
+                                                            const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
+                                                            const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
+                                                            
+                                                            if (!surahMutsMap[phraseId]) {
+                                                                surahMutsMap[phraseId] = {
+                                                                    phraseId,
+                                                                    ayahIds: [c.ayahId],
+                                                                    absRefs: [abs],
+                                                                    entry: {
+                                                                        phraseId,
+                                                                        matches: [abs, targetAbs],
+                                                                        meta: {
+                                                                            sourceAbs: abs,
+                                                                            sourceRange: [0, 0],
+                                                                            matches: [
+                                                                                { absolute: abs, wordRange: [0, 0] },
+                                                                                { absolute: targetAbs, wordRange: [0, 0] }
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                };
+                                                            }
+                                                        });
+
                                                         return Object.values(surahMutsMap)
                                                             .sort((a, b) => {
                                                                 const aMin = Math.min(...a.ayahIds);
@@ -2284,7 +2262,7 @@ export default function SettingsPage() {
                                                                                 <select
                                                                                     value={existing.status}
                                                                                     onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, group.phraseId)}
+                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
                                                                                     className="maturity-select"
                                                                                     style={{
                                                                                         borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
@@ -2302,7 +2280,7 @@ export default function SettingsPage() {
                                                                                         handleDecisionUpdate(representativeAbs, {
                                                                                             ...existing,
                                                                                             confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                                                        }, group.phraseId);
+                                                                                        }, decisionKey);
                                                                                     }}
                                                                                     title={isConfirmed ? "Resolved" : "Not Resolved"}
                                                                                     style={{ minWidth: '100px' }}
@@ -2316,7 +2294,7 @@ export default function SettingsPage() {
                                                                                     placeholder="Add note..."
                                                                                     value={existing.notes || ''}
                                                                                     onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, group.phraseId)}
+                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
                                                                                     style={{ minWidth: '150px' }}
                                                                                 />
                                                                             </td>
@@ -2455,7 +2433,7 @@ export default function SettingsPage() {
                                         <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
                                         <select
                                             value={existing.status}
-                                            onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, status: e.target.value as any }, activeMutSlideOver.phraseId)}
+                                            onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, status: e.target.value as any }, activeMutSlideOver.id)}
                                             className="maturity-select"
                                             style={{ width: '100%', padding: '8px' }}
                                         >
@@ -2469,7 +2447,7 @@ export default function SettingsPage() {
                                                 handleDecisionUpdate(activeMutSlideOver.representativeAbs, {
                                                     ...existing,
                                                     confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                }, activeMutSlideOver.phraseId);
+                                                }, activeMutSlideOver.id);
                                             }}
                                             style={{ height: '38px', minWidth: '100px' }}
                                         >
@@ -2483,7 +2461,7 @@ export default function SettingsPage() {
                                     <textarea
                                         placeholder="Add your distinction notes here..."
                                         value={existing.notes || ''}
-                                        onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, notes: e.target.value }, activeMutSlideOver.phraseId)}
+                                        onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, notes: e.target.value }, activeMutSlideOver.id)}
                                         style={{
                                             width: '100%',
                                             minHeight: '80px',
@@ -2808,7 +2786,7 @@ export default function SettingsPage() {
                         <div className="slide-over-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                 <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                                    {activeSlideOverGroup.type === 'verse_segment' ? <Book size={18} /> : <Map size={18} />}
+                                    {activeSlideOverGroup.type === 'verse_segment' ? <Book size={18} /> : <MapIcon size={18} />}
                                 </div>
                                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{activeSlideOverGroup.title}</h3>
                             </div>
@@ -2824,26 +2802,25 @@ export default function SettingsPage() {
                                     className="maturity-select"
                                     style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.85rem' }}
                                     value=""
-                                    onChange={(e) => {
-                                        const val = e.target.value;
+                                    onChange={async (e) => {
+                                        const val = e.target.value as any;
                                         if (!val) return;
-                                        if (val === 'reset' && !window.confirm(`Reset all nodes in ${activeSlideOverGroup.title}?`)) return;
 
                                         if (activeSlideOverGroup.type === 'verse_segment' && activeSlideOverGroup.surahId) {
-                                            setSurahMaturity(activeSlideOverGroup.surahId, val as any);
+                                            await handleGroupMaturityReset('verse', val, activeSlideOverGroup.surahId, activeSlideOverGroup.title);
                                         } else {
-                                            setGroupMaturity(activeSlideOverGroup.type as any, val as any);
+                                            await handleGroupMaturityReset(activeSlideOverGroup.type as any, val);
                                         }
-
-                                        const updated = getMemoryNodes();
-                                        setMemoryNodes(updated);
-                                        setActiveSlideOverGroup(prev => prev ? {
-                                            ...prev,
-                                            nodes: updated.filter(n => {
+                                        
+                                        // Update local state to reflect changes
+                                        setActiveSlideOverGroup(prev => {
+                                            if (!prev) return null;
+                                            const updatedNodes = instantNodes.filter(n => {
                                                 if (prev.type === 'verse_segment') return n.type === 'verse_segment' && n.surahId === prev.surahId;
                                                 return n.type === prev.type;
-                                            })
-                                        } : null);
+                                            });
+                                            return { ...prev, nodes: updatedNodes };
+                                        });
                                     }}
                                 >
                                     <option value="">Set Subgroup...</option>
@@ -2872,20 +2849,20 @@ export default function SettingsPage() {
                                                     </div>
                                                     <select
                                                         value=""
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
+                                                        onChange={async (e) => {
+                                                            const val = e.target.value as any;
                                                             if (!val) return;
-                                                            setNodeMaturity(node.id, val as any);
-                                                            const updated = getMemoryNodes();
-                                                            setMemoryNodes(updated);
+                                                            await handleNodeMaturityReset(node.id, val);
+                                                            
                                                             // Update local nodes in slideover
-                                                            setActiveSlideOverGroup(prev => prev ? {
-                                                                ...prev,
-                                                                nodes: updated.filter(n => {
+                                                            setActiveSlideOverGroup(prev => {
+                                                                if (!prev) return null;
+                                                                const updatedNodes = instantNodes.filter(n => {
                                                                     if (prev.type === 'verse_segment') return n.type === 'verse_segment' && n.surahId === prev.surahId;
                                                                     return n.type === prev.type;
-                                                                })
-                                                            } : null);
+                                                                });
+                                                                return { ...prev, nodes: updatedNodes };
+                                                            });
                                                         }}
                                                         className="maturity-select"
                                                         style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}

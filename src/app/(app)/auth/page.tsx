@@ -1,19 +1,19 @@
 'use client';
 
-import { createClient } from '@/utils/supabase/client';
+import { db } from '@/lib/instant';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Mail, ArrowRight, Loader2, CheckCircle, Lock } from 'lucide-react';
+import { Mail, ArrowRight, Loader2, CheckCircle, Lock, Hash } from 'lucide-react';
 import { Suspense } from 'react';
 import Spinner from '@/components/ui/Spinner';
 
 function AuthContent() {
-    const supabase = createClient();
+    const { user, isLoading: isAuthLoading } = db.useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [isSignUp, setIsSignUp] = useState(false);
+    const [code, setCode] = useState('');
+    const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
     const [authLoading, setAuthLoading] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
     const checkoutId = searchParams?.get('checkout_id');
@@ -21,43 +21,26 @@ function AuthContent() {
     // Owner email from env - owner bypasses Polar checkout
     const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
 
-    useEffect(() => {
-        const checkUser = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            const user = session?.user;
-            
-            if (user) {
-                // Check if user is the owner
-                const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
-
-                if (isOwner) {
-                    router.push('/dashboard');
-                    return;
-                }
-
-                // Check if user has already paid
-                const { data: purchase } = await supabase
-                    .from('purchases')
-                    .select('id')
-                    .eq('email', user.email)
-                    .eq('status', 'completed')
-                    .single();
-
-                if (purchase) {
-                    router.push('/dashboard');
-                } else {
-                    // User is logged in but hasn't paid. 
-                    // We stay on this page to allow them to proceed to checkout (via handleAuth or new UI)
-                    // or maybe we should auto-redirect to checkout?
-                    // For now, let's just NOT redirect to dashboard to avoid the loop.
-                    console.log('User logged in but not paid. staying on auth page.');
-                }
+    // Use db.useQuery to check for purchases in InstantDB
+    const { data: purchaseData, isLoading: isPurchaseLoading } = db.useQuery(user?.email ? {
+        purchases: {
+            $: {
+                where: { email: user.email, status: 'completed' }
             }
-        };
-        checkUser();
-    }, [supabase, router, OWNER_EMAIL]);
+        }
+    } : null);
 
-    
+    useEffect(() => {
+        if (user && !isPurchaseLoading) {
+            const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+            const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
+
+            if (isOwner || hasPurchase) {
+                router.push('/dashboard');
+            }
+        }
+    }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAIL]);
+
     const cycle = searchParams?.get('cycle') || 'monthly';
     const isSandbox = process.env.NEXT_PUBLIC_POLAR_SANDBOX === 'true';
 
@@ -76,71 +59,85 @@ function AuthContent() {
         setAuthError(null);
         setAuthLoading(true);
 
-        const { error } = isSignUp
-            ? await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    emailRedirectTo: `${window.location.origin}/auth/callback`,
-                }
-            })
-            : await supabase.auth.signInWithPassword({ email, password });
-
-        setAuthLoading(false);
-
-        if (error) {
-            console.error('Auth error:', error.message);
-            setAuthError(error.message);
-            return;
-        }
-
-        // Get user after auth
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-
-        if (!user) {
-            if (isSignUp) {
-                setAuthError('Check your email for the confirmation link!');
-            }
-            return;
-        }
-
-        // Check if user is the owner (by email) - bypass Polar checkout
-        const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
-
-        if (isOwner) {
-            // Owner goes directly to dashboard
-            router.push('/dashboard');
-            return;
-        }
-
-        // Check if user has already paid
-        const { data: purchase } = await supabase
-            .from('purchases')
-            .select('id')
-            .eq('email', user.email)
-            .eq('status', 'completed')
-            .single();
-
-        // Trigger sync immediately after login to ensure data is pulled
         try {
-            const { commitTask } = await import('@/lib/syncEngine');
-            await commitTask('login');
-        } catch (syncError) {
-            console.warn('Login sync trigger failed:', syncError);
+            if (authStep === 'email') {
+                await db.auth.sendMagicCode({ email });
+                setAuthStep('code');
+            } else {
+                await db.auth.signInWithMagicCode({ email, code });
+                // Redirect logic will be handled by useEffect when user state changes
+            }
+        } catch (err: any) {
+            console.error('Auth error:', err);
+            setAuthError(err.body?.message || err.message || 'An error occurred during authentication');
+        } finally {
+            setAuthLoading(false);
         }
+    };
 
-        if (purchase) {
-            // User has already paid, go to dashboard
-            router.push('/dashboard');
-            return;
-        }
-
-        // If not owner and not paid, they must go to checkout
-        // (Even if it's a sign-in, they might have skipped checkout before)
+    const handleProceedToCheckout = () => {
         const checkoutUrl = `/api/polar/checkout?product_id=${selectedProductId}`;
         window.location.href = checkoutUrl;
     };
+
+    if (isAuthLoading) return <Spinner />;
+
+    // If logged in but no purchase found and not owner, show checkout option
+    if (user && !isPurchaseLoading) {
+        const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+        const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
+        
+        if (!isOwner && !hasPurchase) {
+            return (
+                <div style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem',
+                    background: 'var(--background)'
+                }}>
+                    <div style={{
+                        width: '100%',
+                        maxWidth: '400px',
+                        background: 'var(--background)',
+                        borderRadius: '24px',
+                        padding: '2.5rem',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+                        border: '1px solid var(--border)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '60px',
+                            height: '60px',
+                            background: 'var(--accent-light)',
+                            color: 'var(--accent)',
+                            borderRadius: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.5rem'
+                        }}>
+                            <CheckCircle size={32} />
+                        </div>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                            Account Created
+                        </h2>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '2rem' }}>
+                            Signed in as {user.email}. One final step to access Quran Life!
+                        </p>
+                        <button
+                            onClick={handleProceedToCheckout}
+                            className="btn btn-primary"
+                            style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 600 }}
+                        >
+                            Proceed to Checkout
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+    }
 
     return (
         <div style={{
@@ -177,7 +174,7 @@ function AuthContent() {
                                 Payment Successful!
                             </p>
                             <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                                Set up your account to access Quran Life
+                                Sign in to your account to access Quran Life
                             </p>
                         </div>
                     </div>
@@ -195,79 +192,88 @@ function AuthContent() {
                         justifyContent: 'center',
                         margin: '0 auto 1.5rem'
                     }}>
-                        <Lock size={32} />
+                        {authStep === 'email' ? <Mail size={32} /> : <Hash size={32} />}
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                        {isSignUp ? 'Create Account' : 'Sign in to Quran Life'}
+                        {authStep === 'email' ? 'Sign in to Quran Life' : 'Check your email'}
                     </h2>
-                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                        {isSignUp
-                            ? 'Start your memorization journey today.'
-                            : 'Welcome back to your daily review.'}
+                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem' }}>
+                        {authStep === 'email' 
+                            ? "We'll send you a magic link to sign in instantly."
+                            : `We sent a code to ${email}. Enter it below to continue.`}
                     </p>
                 </div>
 
-                <form onSubmit={handleAuth}>
-                    <div style={{ marginBottom: '1rem' }}>
-                        <label style={{
-                            display: 'block',
-                            fontSize: '0.85rem',
-                            fontWeight: 600,
-                            marginBottom: '0.5rem',
-                            color: 'var(--foreground)'
-                        }}>
-                            Email Address
-                        </label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            required
-                            style={{
-                                width: '100%',
-                                padding: '0.875rem 1rem',
-                                borderRadius: '12px',
-                                border: '1px solid var(--border)',
-                                background: 'var(--background-secondary)',
-                                color: 'var(--foreground)',
-                                fontSize: '1rem',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{
-                            display: 'block',
-                            fontSize: '0.85rem',
-                            fontWeight: 600,
-                            marginBottom: '0.5rem',
-                            color: 'var(--foreground)'
-                        }}>
-                            Password
-                        </label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                            style={{
-                                width: '100%',
-                                padding: '0.875rem 1rem',
-                                borderRadius: '12px',
-                                border: '1px solid var(--border)',
-                                background: 'var(--background-secondary)',
-                                color: 'var(--foreground)',
-                                fontSize: '1rem',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
+                <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {authStep === 'email' ? (
+                        <div style={{ position: 'relative' }}>
+                            <Mail size={18} style={{
+                                position: 'absolute',
+                                left: '1rem',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: 'var(--foreground-secondary)'
+                            }} />
+                            <input
+                                type="email"
+                                placeholder="name@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                style={{
+                                    width: '100%',
+                                    padding: '0.85rem 1rem 0.85rem 2.75rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background-secondary)',
+                                    fontSize: '1rem',
+                                    color: 'var(--foreground)',
+                                    outline: 'none',
+                                    transition: 'border-color 0.2s'
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div style={{ position: 'relative' }}>
+                            <Hash size={18} style={{
+                                position: 'absolute',
+                                left: '1rem',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: 'var(--foreground-secondary)'
+                            }} />
+                            <input
+                                type="text"
+                                placeholder="Enter 6-digit code"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                required
+                                autoFocus
+                                style={{
+                                    width: '100%',
+                                    padding: '0.85rem 1rem 0.85rem 2.75rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background-secondary)',
+                                    fontSize: '1rem',
+                                    color: 'var(--foreground)',
+                                    outline: 'none',
+                                    transition: 'border-color 0.2s'
+                                }}
+                            />
+                        </div>
+                    )}
 
                     {authError && (
-                        <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginBottom: '1rem' }}>
+                        <p style={{
+                            color: '#ef4444',
+                            fontSize: '0.85rem',
+                            textAlign: 'center',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            padding: '0.5rem',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(239, 68, 68, 0.2)'
+                        }}>
                             {authError}
                         </p>
                     )}
@@ -278,37 +284,56 @@ function AuthContent() {
                         className="btn btn-primary"
                         style={{
                             width: '100%',
+                            padding: '0.85rem',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
                             justifyContent: 'center',
-                            padding: '1rem',
+                            gap: '0.5rem',
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            cursor: authLoading ? 'not-allowed' : 'pointer',
                             opacity: authLoading ? 0.7 : 1
                         }}
                     >
                         {authLoading ? (
-                            <Loader2 className="animate-spin" size={20} />
+                            <Loader2 size={20} className="animate-spin" />
                         ) : (
                             <>
-                                {isSignUp ? 'Sign Up' : 'Continue'}
+                                {authStep === 'email' ? 'Send Magic Link' : 'Verify Code'}
                                 <ArrowRight size={18} />
                             </>
                         )}
                     </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setIsSignUp(!isSignUp)}
-                        style={{
-                            width: '100%',
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--accent)',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            marginTop: '1rem'
-                        }}
-                    >
-                        {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-                    </button>
+                    
+                    {authStep === 'code' && (
+                        <button
+                            type="button"
+                            onClick={() => setAuthStep('email')}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--foreground-secondary)',
+                                fontSize: '0.85rem',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                            }}
+                        >
+                            Use a different email
+                        </button>
+                    )}
                 </form>
+
+                <div style={{
+                    marginTop: '2rem',
+                    paddingTop: '1.5rem',
+                    borderTop: '1px solid var(--border)',
+                    textAlign: 'center'
+                }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
+                        By continuing, you agree to our Terms of Service and Privacy Policy.
+                    </p>
+                </div>
             </div>
         </div>
     );
@@ -316,7 +341,7 @@ function AuthContent() {
 
 export default function AuthPage() {
     return (
-        <Suspense fallback={<div className="flex h-screen w-full items-center justify-center"><Spinner text="Loading..." /></div>}>
+        <Suspense fallback={<Spinner />}>
             <AuthContent />
         </Suspense>
     );

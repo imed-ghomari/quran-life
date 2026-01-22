@@ -1,6 +1,5 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import { FSRSBindingItem, FSRSBindingReview, computeParameters } from '@open-spaced-repetition/binding'
 
 interface ReviewLogInput {
@@ -11,14 +10,7 @@ interface ReviewLogInput {
 }
 
 export async function optimizeWeights(logs: ReviewLogInput[]) {
-    // 1. Auth check
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-        throw new Error('Unauthorized')
-    }
-
-    // 2. Transform logs to FSRSBinding items
+    // 1. Transform logs to FSRSBinding items
     // Group by nodeId
     const groups: Record<string, ReviewLogInput[]> = {};
     for (const log of logs) {
@@ -40,25 +32,12 @@ export async function optimizeWeights(logs: ReviewLogInput[]) {
         trainSet.push(new FSRSBindingItem(reviews));
     }
 
-    // 3. Compute Parameters
+    // 2. Compute Parameters
     try {
         // Run optimization
         const parameters = await computeParameters(trainSet, { enableShortTerm: true });
-
-        // 4. Save to Supabase Profile
-        // We attempt to save to 'fsrs_weights' column.
-        const { error } = await supabase
-            .from('profiles')
-            .update({ fsrs_weights: parameters })
-            .eq('id', user.id);
-
-        if (error) {
-            console.error('Failed to update weights in DB:', error);
-            // We return success: false but also the weights so the user can use them locally at least?
-            // Actually if DB fails, maybe we just return the weights.
-            return { success: false, error: error.message, weights: parameters };
-        }
-
+        
+        // Return weights to client, client will handle saving to InstantDB
         return { success: true, weights: parameters };
     } catch (e: any) {
         console.error('Optimization failed:', e);

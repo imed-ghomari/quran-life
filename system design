@@ -64,13 +64,12 @@
 ---
 
 ## 6. Cloud Sync & Persistence (NEW)
-- **Engine**: Supabase Auth + Database.
-- **Strategy**: "Latest Wins" based on timestamps.
-- **Conflict Resolution**:
-  - `AppSettings` includes `updatedAt` ISO string.
-  - Global `LAST_MODIFIED` timestamp in IndexedDB/LocalStorage tracks any local change.
-  - `mergeBackups` compares `updatedAt` for settings instead of simple union to allow deletions (e.g. marking a surah as "new").
-- **Auto-Sync**: Triggers on tab focus/visibility change to keep multiple devices in sync.
+- **Engine**: InstantDB (Graph-based, Real-time).
+- **Strategy**: Automatic synchronization and conflict resolution (LWW).
+- **Logic**:
+  - Direct database access from client via `db.useQuery` and `db.transact`.
+  - No manual timestamp tracking or backup merging required; InstantDB handles data consistency.
+  - Magic Link authentication for secure access.
 
 ---
 

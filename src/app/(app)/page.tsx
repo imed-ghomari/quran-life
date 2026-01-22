@@ -1,6 +1,6 @@
 'use client';
 
-import { createClient } from '@/utils/supabase/client';
+import { db } from '@/lib/instant';
 import { useRouter } from 'next/navigation';
 import LandingPage from '@/components/LandingPage/LandingPage';
 import Spinner from '@/components/ui/Spinner';
@@ -10,54 +10,47 @@ import { useEffect, useState } from 'react';
 // This allows you to bypass payment and go directly to auth
 const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
 
-// Your Polar Product ID - get this from your Polar dashboard
-const POLAR_PRODUCT_ID = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID || 'your_product_id';
-
 export default function Home() {
-    const supabase = createClient();
+    const { user, isLoading: isAuthLoading } = db.useAuth();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
 
+    // Use db.useQuery to check for purchases in InstantDB
+    const { data: purchaseData, isLoading: isPurchaseLoading } = db.useQuery(user?.email ? {
+        purchases: {
+            $: {
+                where: { email: user.email, status: 'completed' }
+            }
+        }
+    } : null);
+
     useEffect(() => {
-        const checkUser = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            const user = session?.user;
+        if (isAuthLoading) return;
 
-            if (user) {
-                // Check owner bypass
-                const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
-                if (isOwner) {
-                    router.push('/dashboard');
-                    return;
-                }
+        if (user) {
+            if (isPurchaseLoading) return;
 
-                // Check purchase status
-                const { data: purchase } = await supabase
-                    .from('purchases')
-                    .select('id')
-                    .eq('email', user.email)
-                    .eq('status', 'completed')
-                    .single();
+            // Check owner bypass
+            const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+            const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
 
-                if (purchase) {
-                    router.push('/dashboard');
-                } else {
-                    // Logged in but not paid - stay on landing page
-                    setLoading(false);
-                }
+            if (isOwner || hasPurchase) {
+                router.push('/dashboard');
             } else {
+                // Logged in but not paid - stay on landing page
                 setLoading(false);
             }
-        };
-        checkUser();
-    }, [supabase, router]);
+        } else {
+            setLoading(false);
+        }
+    }, [user, isAuthLoading, isPurchaseLoading, purchaseData, router]);
 
     const handleGetStarted = (cycle: 'monthly' | 'yearly') => {
         // Navigate to auth page with billing cycle
         router.push(`/auth?cycle=${cycle}`);
     };
 
-    if (loading) {
+    if (loading || isAuthLoading) {
         return (
             <div style={{
                 height: '100vh',

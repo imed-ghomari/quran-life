@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { db } from '@/lib/instant-admin';
 
 /**
  * Polar Success Handler
@@ -11,19 +11,24 @@ export async function GET(request: NextRequest) {
     const checkoutId = searchParams.get('checkout_id');
 
     // Wait for the webhook to process (optional but helpful for UX)
-    // We can poll Supabase for a few seconds if needed
-    const supabase = await createClient();
+    // We poll InstantDB for a few seconds
     
     // Simple wait loop (max 5 seconds)
     if (checkoutId) {
         for (let i = 0; i < 5; i++) {
-            const { data } = await supabase
-                .from('purchases')
-                .select('id')
-                .eq('polar_checkout_id', checkoutId)
-                .single();
-            
-            if (data) break;
+            try {
+                const result = await db.query({
+                    purchases: {
+                        $: {
+                            where: { polar_checkout_id: checkoutId }
+                        }
+                    }
+                });
+                
+                if (result.purchases && result.purchases.length > 0) break;
+            } catch (err) {
+                console.error('Error polling InstantDB for purchase:', err);
+            }
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }

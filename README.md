@@ -26,10 +26,11 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - **Similarity checks**: Warnings for verse chunks with any failures involving mutashabihat. Not necessarily suspended; used for proactive checking.
   - Empty sections auto-collapse.
 - **Settings**: Completion schedule, active part, learned/skipped surahs, surah maturity adjustment, mutashabihat decisions registry (editable notes).
-  - **Cloud Sync**: Supabase integration with timestamp-based conflict resolution (Latest Wins).
+  - **Cloud Sync**: InstantDB integration with real-time graph-based synchronization and automatic conflict resolution.
 
 ## Key behaviors
-- **Sync Conflict Resolution**: Uses `updatedAt` timestamps on settings and a global `LAST_MODIFIED` tracker to ensure cross-tab and cross-device consistency.
+- **Sync Conflict Resolution**: Powered by InstantDB's real-time sync engine, providing seamless data consistency across devices without manual timestamp tracking.
+- **Authentication**: Secure Magic Link authentication via InstantDB.
 - **Mobile Optimization**: Responsive design with bottom navigation, optimized modal sizes, and top-right toast notifications to avoid interaction overlaps.
 - **Sequential Transitions**: Automatic Bismillah display/audio when transitioning between surahs in the Daily Portion.
 - Skipped surahs are removed from Today (audio/read) and due reviews; mindmap artifacts pruned.

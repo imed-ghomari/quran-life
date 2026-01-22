@@ -73,7 +73,18 @@ export interface MemoryNode {
     createdAt?: string;
 }
 
+export interface AudioSettings {
+    selectedReciterId: string;
+    playbackState?: {
+        surahId: number;
+        ayahId: number;
+        timestamp: number;
+    };
+    updatedAt: string;
+}
+
 export interface AppSettings {
+    id?: string;
     completionDays: number;
     activePart: QuranPart;
     learnedVerses: { [surahId: string]: number[] };
@@ -82,6 +93,7 @@ export interface AppSettings {
     updatedAt?: string;
     isOnboardingComplete?: boolean;
     kanbanColumns?: Record<string, string[]>;
+    audioSettings?: AudioSettings;
     userId?: string;
     lastSyncedAt?: string;
 }
@@ -103,6 +115,10 @@ export interface MindMap {
     anchors: Anchor[]; // Assuming VerseAnchor is a typo and should be Anchor based on existing Anchor interface
     isComplete: boolean;
     tldrawSnapshot?: any; // JSON snapshot of the whiteboard state
+    updatedAt?: string;
+    storagePath?: string;
+    _isRemote?: boolean;
+    deletedAt?: string;
 }
 
 export interface PartMindMap {
@@ -112,6 +128,10 @@ export interface PartMindMap {
     description: string;
     isComplete: boolean;
     tldrawSnapshot?: any;
+    updatedAt?: string;
+    storagePath?: string;
+    _isRemote?: boolean;
+    deletedAt?: string;
 }
 
 // Transition (optional, for continuity issues)
@@ -190,6 +210,30 @@ export function getAudioPath(surahId: number, ayahId: number): string {
     return `/audio/${surahStr}${ayahStr}.mp3`;
 }
 
+// MemoryNode Utility Helpers
+export function getNodeStability(node: MemoryNode): number {
+    return (node.scheduler as any).stability || 0;
+}
+
+export function getNodeDifficulty(node: MemoryNode): number {
+    return (node.scheduler as any).difficulty || 0;
+}
+
+export function getNodeReps(node: MemoryNode): number {
+    return (node.scheduler as any).reps || (node.scheduler as any).repetition || 0;
+}
+
+export function getNodeDueDate(node: MemoryNode): string | null {
+    return (node.scheduler as any).due || (node.scheduler as any).dueDate || null;
+}
+
+export function hasNodeBeenReviewed(scheduler: any): boolean {
+    if (!scheduler) return false;
+    if ('reps' in scheduler) return scheduler.reps > 0;
+    if ('repetition' in scheduler) return scheduler.repetition > 0;
+    return false;
+}
+
 // VerseSegment ID helper
 export function createSegmentId(surahId: number, startVerse: number, endVerse: number): string {
     return `${surahId}-${startVerse}-${endVerse}`;
@@ -199,4 +243,80 @@ export function createSegmentId(surahId: number, startVerse: number, endVerse: n
 export function parseSegmentId(id: string): { surahId: number; startVerse: number; endVerse: number } {
     const [surahId, startVerse, endVerse] = id.split('-').map(Number);
     return { surahId, startVerse, endVerse };
+}
+
+// Helper for Maturity Updates
+export function getMaturityState(level: 'reset' | 'medium' | 'strong' | 'mastered'): Partial<FSRSState> {
+    const now = new Date().toISOString();
+    switch (level) {
+        case 'reset':
+             return {
+                due: now,
+                stability: 0,
+                difficulty: 0,
+                elapsed_days: 0,
+                scheduled_days: 0,
+                reps: 0,
+                lapses: 0,
+                state: 'New',
+                last_review: now
+            };
+        case 'medium':
+            return {
+                due: new Date(Date.now() + 14 * 86400000).toISOString(),
+                stability: 14,
+                difficulty: 5,
+                reps: 3,
+                state: 'Review',
+                scheduled_days: 14,
+                last_review: now
+            };
+        case 'strong':
+             return {
+                due: new Date(Date.now() + 30 * 86400000).toISOString(),
+                stability: 30,
+                difficulty: 5,
+                reps: 5,
+                state: 'Review',
+                scheduled_days: 30,
+                last_review: now
+            };
+        case 'mastered':
+             return {
+                due: new Date(Date.now() + 90 * 86400000).toISOString(),
+                stability: 90,
+                difficulty: 5,
+                reps: 8,
+                state: 'Review',
+                scheduled_days: 90,
+                last_review: now
+            };
+    }
+    return {};
+}
+
+// Mutashabihat Types
+export interface MutashabihatDecision {
+    id: string; // absoluteAyah or absoluteAyah-phraseId
+    phraseId: string;
+    status: 'confirmed' | 'ignored' | 'pending' | 'solved_mindmap' | 'solved_note';
+    confirmedAt?: string;
+    notes?: string;
+    userId?: string;
+    timestamp?: string;
+}
+
+export interface CustomMutashabih {
+    id: string;
+    verseId: string; // surah:ayah
+    phrase?: string;
+    targetVerseId: string;
+    surahId: number;
+    ayahId: number;
+    targetSurahId: number;
+    targetAyahId: number;
+    notes?: string;
+    createdAt: string;
+    status?: 'confirmed' | 'ignored' | 'pending' | 'solved_mindmap' | 'solved_note';
+    userId?: string;
 }

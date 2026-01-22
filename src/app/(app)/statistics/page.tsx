@@ -1,24 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SURAHS } from '@/lib/quranData';
 import {
-    getSettings,
-    getSurahLearnedStatus,
-    getMindMaps,
-    getPartMindMaps,
-    getMemoryNodes,
-    getMutashabihatDecisions,
-    getPortionPointer,
-    getListeningCycles,
-    getNodeStability,
-    getNodeDueDate,
-    DEFAULT_SETTINGS,
-    type AppSettings,
-} from '@/lib/storage';
-import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
-import { getListeningProgress } from '@/lib/storage';
+    useInstantSettings,
+    useInstantMindMaps,
+    useInstantNodes,
+    useInstantListeningProgress,
+    useInstantMutashabihat,
+} from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { getNodeStability, getNodeDueDate } from '@/lib/types'; 
+
+import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
@@ -38,31 +32,26 @@ interface StatSegment {
 }
 
 export default function StatisticsPage() {
-    const [version, setVersion] = useState(0);
+    const { settings, isLoading: settingsLoading } = useInstantSettings();
+    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
+    const { nodes: memoryNodes, isLoading: nodesLoading } = useInstantNodes();
+    const { progress: listeningProgress, isLoading: progressLoading } = useInstantListeningProgress();
+    const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useInstantMutashabihat();
+    
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
     
-    // Hydration-safe state initialization
-    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-    const [mindmaps, setMindmaps] = useState<ReturnType<typeof getMindMaps>>({});
-    const [partMindmaps, setPartMindmaps] = useState<ReturnType<typeof getPartMindMaps>>({});
-    const [memoryNodes, setMemoryNodes] = useState<ReturnType<typeof getMemoryNodes>>([]);
+    const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading;
 
-    const activePart = settings.activePart;
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+            </div>
+        );
+    }
 
-    useEffect(() => {
-        // Initial load and updates on version change
-        setSettings(getSettings());
-        setMindmaps(getMindMaps());
-        setPartMindmaps(getPartMindMaps());
-        setMemoryNodes(getMemoryNodes());
-    }, [version]);
-
-    useEffect(() => {
-        const interval = setInterval(() => setVersion(v => v + 1), 2000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const skippedSurahs = useMemo(() => new Set(settings.skippedSurahs || []), [settings.skippedSurahs]);
+    const activePart = settings?.activePart || 1;
+    const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
 
     // 1. Part Mindmaps Data (Always Global)
     const partMindmapStats = useMemo(() => {
@@ -74,11 +63,11 @@ export default function StatisticsPage() {
         let learnedMastered = 0;
 
         [1, 2, 3, 4].forEach(p => {
-            const pmm = partMindmaps[p];
+            const pmm = partMindMaps.find(m => m.partId === p);
             if (pmm) {
                 if (pmm.isComplete) {
                     const node = memoryNodes.find(n => n.id === `part-mindmap-${p}`);
-                    const maturity = node ? getMaturity(getNodeStability(node.scheduler)) : 'new';
+                    const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                     if (maturity === 'mastered') learnedMastered++;
                     else if (maturity === 'strong') learnedStrong++;
                     else if (maturity === 'medium') learnedMedium++;
@@ -102,13 +91,12 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [partMindmaps, memoryNodes]);
+    }, [partMindMaps, memoryNodes]);
 
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
         const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
-        const settings = getSettings();
-        const learnedVerses = settings.learnedVerses || {};
+        const learnedVerses = settings?.learnedVerses || {};
         let skipped = 0;
         let notCreated = 0;
         let notLearned = 0;
@@ -122,11 +110,11 @@ export default function StatisticsPage() {
             if (skippedSurahs.has(s.id) || !isLearned) {
                 skipped++;
             } else {
-                const mm = mindmaps[s.id];
+                const mm = mindmaps.find(m => m.surahId === s.id);
                 if (mm) {
                     if (mm.isComplete) {
                         const node = memoryNodes.find(n => n.id === `mindmap-${s.id}`);
-                        const maturity = node ? getMaturity(getNodeStability(node.scheduler)) : 'new';
+                        const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                         if (maturity === 'mastered') learnedMastered++;
                         else if (maturity === 'strong') learnedStrong++;
                         else if (maturity === 'medium') learnedMedium++;
@@ -154,7 +142,7 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, mindmaps, memoryNodes, skippedSurahs]);
+    }, [activePart, settings?.learnedVerses, mindmaps, memoryNodes, skippedSurahs]);
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
@@ -171,16 +159,17 @@ export default function StatisticsPage() {
                 if (skippedSurahs.has(s.id)) {
                     skipped++;
                 } else {
-                    const { learned, total } = getSurahLearnedStatus(s.id);
+                    const learnedVerses = settings?.learnedVerses[s.id] || [];
+                    const learned = learnedVerses.length;
                     if (learned === 0) {
                         notLearned++;
                     } else {
                         // If it has any learned verses, we look at the maturity of its nodes
-                        const nodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === s.id);
+                        const nodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === s.id);
                         if (nodes.length === 0) {
                             learnedNew++; // Learned but nodes not synced yet
                         } else {
-                            const avgInterval = nodes.reduce((acc, n) => acc + getNodeStability(n.scheduler), 0) / nodes.length;
+                            const avgInterval = nodes.reduce((acc, n) => acc + getNodeStability(n), 0) / nodes.length;
                             const maturity = getMaturity(avgInterval);
                             if (maturity === 'mastered') learnedMastered++;
                             else if (maturity === 'strong') learnedStrong++;
@@ -195,7 +184,7 @@ export default function StatisticsPage() {
                 if (skippedSurahs.has(s.id)) {
                     skipped += totalChunks;
                 } else {
-                    const learnedVerses = settings.learnedVerses[s.id] || [];
+                    const learnedVerses = settings?.learnedVerses[s.id] || [];
 
                     // Logic to calculate chunks directly from learnedVerses to avoid sync issues
                     const sortedVerses = [...learnedVerses].sort((a, b) => a - b);
@@ -213,7 +202,7 @@ export default function StatisticsPage() {
                             if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
                                 const nodeId = `verse-${s.id}-${segmentStart}-${segmentEnd}`;
                                 const node = memoryNodes.find(n => n.id === nodeId);
-                                chunkMaturities.push(node ? getMaturity(getNodeStability(node.scheduler)) : 'new');
+                                chunkMaturities.push(node ? getMaturity(getNodeStability(node)) : 'new');
                                 learnedChunksCount++;
 
                                 if (i < sortedVerses.length) {
@@ -250,18 +239,17 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, memoryNodes, skippedSurahs, verseChunkMode, settings.learnedVerses]);
+    }, [activePart, memoryNodes, skippedSurahs, verseChunkMode, settings?.learnedVerses]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
-        const progress = getListeningProgress(activePart);
-        const portionPointer = getPortionPointer(activePart);
-        const cycles = getListeningCycles(activePart);
+        const partProgress = listeningProgress.find(p => p.partId === activePart);
+        const progress = partProgress?.lastVerseIndex || 0;
+        const cycles = partProgress?.cycles || 0;
 
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
-        const totalVersesInPart = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
-
-        const learnedVerseCount = Math.min(totalVersesInPart, portionPointer + (progress.currentVerseIndex || 0));
+        
+        const learnedVerseCount = progress;
 
         // Calculate surah counts
         let completedSurahs = 0;
@@ -282,14 +270,9 @@ export default function StatisticsPage() {
                 { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
             ]
         };
-    }, [activePart, skippedSurahs]);
+    }, [activePart, skippedSurahs, listeningProgress]);
 
     // 5. Mutashabihat Coverage Data
-    const mutashabihatDecisions = useMemo(() => {
-        version;
-        return getMutashabihatDecisions();
-    }, [version]);
-
     const mutashabihatStats = useMemo(() => {
         const allRefs = getAllMutashabihatRefs();
         const targetRefs = allRefs.filter(abs => {
@@ -307,12 +290,13 @@ export default function StatisticsPage() {
         let pending = 0;
 
         targetRefs.forEach(abs => {
-            const decisions = Object.entries(mutashabihatDecisions).filter(([key]) => key.startsWith(`${abs}-`) || key === abs.toString());
+            // Find decisions for this absolute ayah
+            const verseDecisions = mutashabihatDecisions.filter(d => d.phraseId.startsWith(`${abs}-`) || d.phraseId === abs.toString());
 
-            if (decisions.length > 0) {
-                const anySolvedMindmap = decisions.some(([_, d]) => d.status === 'solved_mindmap');
-                const anySolvedNote = decisions.some(([_, d]) => d.status === 'solved_note');
-                const anyIgnored = decisions.some(([_, d]) => d.status === 'ignored');
+            if (verseDecisions.length > 0) {
+                const anySolvedMindmap = verseDecisions.some(d => d.status === 'solved_mindmap');
+                const anySolvedNote = verseDecisions.some(d => d.status === 'solved_note');
+                const anyIgnored = verseDecisions.some(d => d.status === 'ignored');
 
                 if (anySolvedMindmap) solvedMindmap++;
                 else if (anySolvedNote) solvedNote++;
@@ -351,7 +335,9 @@ export default function StatisticsPage() {
         let dueTomorrow = 0;
 
         nodes.forEach(node => {
-            const dueDate = new Date(getNodeDueDate(node.scheduler));
+            const dueStr = getNodeDueDate(node);
+            if (!dueStr) return;
+            const dueDate = new Date(dueStr);
             dueDate.setHours(0, 0, 0, 0);
 
             const diffTime = dueDate.getTime() - today.getTime();

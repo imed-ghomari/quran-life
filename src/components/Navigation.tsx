@@ -8,86 +8,90 @@ import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-reac
 import SyncStatus from './SyncStatus';
 import ThemeToggle from './ThemeToggle';
 import {
-    getSettings,
-    getMindMaps,
-    getPartMindMaps,
-    getSuspendedAnchors,
-    getMutashabihatDecisions,
-    getReviewErrors,
-    isSurahSkipped,
-    getDueNodes,
-    getListeningCompletedToday,
-} from '@/lib/storage';
-import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+    useInstantSettings,
+    useInstantNodes,
+    useInstantMindMaps,
+    useInstantMutashabihat,
+    useInstantReviewErrors,
+    useInstantListeningStats
+} from '@/hooks/useInstantData';
+import { getMutashabihatForAbsolute, absoluteToSurahAyah, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 
 export default function Navigation() {
     let pathname = usePathname();
+    const { settings } = useInstantSettings();
+    const { nodes } = useInstantNodes();
+    const { mindmaps, partMindMaps } = useInstantMindMaps();
+    const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
+    const { errors } = useInstantReviewErrors();
+    const { stats } = useInstantListeningStats();
 
     const [pendingCount, setPendingCount] = useState(0);
     const [todayReviews, setTodayReviews] = useState(0);
     const [isPortionComplete, setIsPortionComplete] = useState(false);
 
     useEffect(() => {
-        const compute = () => {
-            const activePart = getSettings().activePart;
-            const mindmaps = getMindMaps();
-            const partMindmaps = getPartMindMaps();
-            const decisions = getMutashabihatDecisions();
-            const errors = getReviewErrors().filter(e => e.absoluteAyah);
-            const suspended = getSuspendedAnchors();
+        if (!settings) return;
 
-            const surahsInPart = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !isSurahSkipped(s.id));
+        const activePart = settings.activePart;
+        const skippedSurahs = new Set(settings.skippedSurahs || []);
 
-            const incompleteSurahMaps = surahsInPart.filter(s => {
-                const mm = mindmaps[s.id];
-                return !mm || !mm.imageUrl || !mm.isComplete;
+        const surahsInPart = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !skippedSurahs.has(s.id));
+
+        const incompleteSurahMaps = surahsInPart.filter(s => {
+            const mm = (mindmaps as any[]).find(m => m.surahId === s.id);
+            return !mm || !mm.imageUrl || !mm.isComplete;
+        }).length;
+
+        let incompletePartMaps = 0;
+        if (activePart === 5) {
+            incompletePartMaps = [1, 2, 3, 4].filter(p => {
+                const pmm = (partMindMaps as any[]).find(m => m.partId === p);
+                return !pmm || !pmm.imageUrl || !pmm.isComplete;
             }).length;
-
-            let incompletePartMaps = 0;
-            if (activePart === 5) {
-                incompletePartMaps = [1, 2, 3, 4].filter(p => {
-                    const map = partMindmaps[p];
-                    const hasContent = !!map?.imageUrl || !!map?.tldrawSnapshot;
-                    return !map || !hasContent || !map.isComplete;
-                }).length;
-            } else {
-                const partMap = partMindmaps[activePart];
-                const hasContent = !!partMap?.imageUrl || !!partMap?.tldrawSnapshot;
-                incompletePartMaps = partMap && hasContent && partMap.isComplete ? 0 : 1;
+        } else {
+            const pmm = (partMindMaps as any[]).find(m => m.partId === activePart);
+            if (!pmm || !pmm.imageUrl || !pmm.isComplete) {
+                incompletePartMaps = 1;
             }
+        }
 
-            const suspendedInPart = suspended.filter(issue => {
-                const surahMeta = SURAHS.find(s => s.id === issue.surahId);
-                return activePart === 5 || surahMeta?.part === activePart;
-            }).length;
+        // Count pending mutashabihat
+        let pendingMuts = 0;
+        const mutsMap = new Map();
+        decisions.forEach(d => mutsMap.set(d.id, d));
 
-            const similarityChecks = errors.filter(err => {
-                const abs = err.absoluteAyah!;
-                const muts = getMutashabihatForAbsolute(abs);
-                if (!muts.length) return false;
-                if (decisions[abs]) return false;
-                const ref = absoluteToSurahAyah(abs);
-                const surahMeta = SURAHS.find(s => s.id === ref.surahId);
-                return activePart === 5 || surahMeta?.part === activePart;
-            }).length;
+        surahsInPart.forEach(s => {
+            for (let a = 1; a <= s.verseCount; a++) {
+                const abs = surahAyahToAbsolute(s.id, a);
+                const muts = getMutashabihatForAbsolute(abs, customMutashabihat);
+                muts.forEach(m => {
+                    const d = mutsMap.get(`${abs}-${m.phraseId}`);
+                    if (!d || d.status === 'pending') {
+                        pendingMuts++;
+                    }
+                });
+            }
+        });
 
-            const due = getDueNodes().length;
-            const listeningComplete = getListeningCompletedToday();
+        const activeErrors = errors.filter(e => e.absoluteAyah).length;
 
-            setPendingCount(incompleteSurahMaps + incompletePartMaps + suspendedInPart + similarityChecks);
-            setTodayReviews(due);
-            setIsPortionComplete(listeningComplete);
-        };
+        setPendingCount(incompleteSurahMaps + incompletePartMaps + pendingMuts + activeErrors);
 
-        compute();
-        const interval = setInterval(compute, 2000);
-        window.addEventListener('storage', compute);
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('storage', compute);
-        };
-    }, []);
+        // Today's reviews
+        const today = new Date().toISOString().split('T')[0];
+        const dueToday = nodes.filter(n => {
+            const due = (n.scheduler as any).due;
+            return due && due.split('T')[0] <= today;
+        }).length;
+        setTodayReviews(dueToday);
+
+        // Portion complete
+        const todayStat = stats.find(s => s.date === today);
+        setIsPortionComplete(!!todayStat?.isComplete);
+
+    }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, stats]);
 
     const navItems = [
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayReviews, status: !isPortionComplete },

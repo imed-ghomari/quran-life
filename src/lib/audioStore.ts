@@ -16,7 +16,7 @@ export const audioSettings$ = observable<AudioSettings | undefined>(undefined);
 
 if (typeof window !== 'undefined') {
     persistObservable(audioSettings$, {
-        local: 'quran-app-audio-settings', // Matches the key used in storage.ts
+        local: 'quran-app-audio-settings', 
         pluginLocal: ObservablePersistLocalStorage,
     });
 }

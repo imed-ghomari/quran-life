@@ -6,24 +6,18 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
-import { parseQuranJson, getSurah, getSurahsByPart, getQuranVerses } from '@/lib/quranData';
-import { Verse, getAudioPath } from '@/lib/types';
+import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { Verse, QuranPart, MemoryNode, AppSettings } from '@/lib/types';
 import {
     CheckCircle,
-    Play,
-    Pause,
-    SkipBack,
-    SkipForward,
     BookOpen,
     EyeOff,
     ChevronDown,
     X,
     Check,
     Brain,
-    Info,
     ZoomIn,
     ZoomOut,
-    Maximize2,
     Move,
     PenTool,
     RotateCcw,
@@ -32,48 +26,24 @@ import {
 import dynamic from 'next/dynamic';
 import MindmapViewer from '@/components/MindmapViewer';
 import AudioPlayer from '@/components/AudioPlayer';
-import { QuranPart } from '@/lib/types';
 import {
-    getSettings,
-    getDueNodes,
-    updateMemoryNode,
-    getMindMap,
-    getPartMindMap,
-    getMindMaps,
-    getPartMindMaps,
-    saveMindMap,
-    savePartMindMap,
-    MemoryNode,
-    markListeningComplete,
-    getListeningCompletedToday,
-    getCurrentDayInCycle,
-    saveReviewError,
-    removeReviewError,
-    isSurahSkipped,
-    findAnchorForRange,
-    getListeningProgress,
-    saveListeningProgress,
-    postponeNode,
-    getPortionPointer,
-    saveReviewLog,
-    getCustomWeights,
-    getReviewLogs,
-    getOptimizationMeta,
-    saveOptimizationMeta,
-    saveCustomWeights,
-    DEFAULT_SETTINGS,
-    AppSettings
-} from '@/lib/storage';
+    useInstantSettings,
+    useInstantNodes,
+    useInstantReviewLogs,
+    useInstantReviewErrors,
+    useInstantMindMaps,
+    useInstantOptimization,
+    useInstantListeningStats,
+    useInstantListeningProgress,
+} from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview } from '@/lib/fsrs';
-import { syncWithCloud } from '@/lib/sync';
 import { optimizeWeights } from '../../actions';
-
-// Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
-const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
 import { useTheme } from '@/components/ThemeProvider';
 
-type PlaybackSpeed = 0.75 | 1 | 1.25 | 1.5 | 2;
+// Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
+const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+
 
 function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
     const words = text.split(/\s+/);
@@ -86,8 +56,15 @@ function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
 }
 
 export default function TodayPage() {
+    const { settings, isLoading: settingsLoading } = useInstantSettings();
+    const { dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
+    const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
+    const { saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
+    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
+    const { stats: listeningStats, saveStats: saveListeningStats } = useInstantListeningStats();
+    const { progress: listeningProgress, saveProgress: saveListeningProgress } = useInstantListeningProgress();
+
     const [allVerses, setAllVerses] = useState<Verse[]>([]);
-    const [dueNodes, setDueNodes] = useState<MemoryNode[]>([]);
     const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
     const [revealedChunks, setRevealedChunks] = useState(0);
     const [currentVerseInReview, setCurrentVerseInReview] = useState(0);
@@ -95,12 +72,19 @@ export default function TodayPage() {
     const [todaysPortion, setTodaysPortion] = useState<Verse[]>([]);
     const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
     const [highlightedWordIndex, setHighlightedWordIndex] = useState<number>(-1);
-    const [isLoaded, setIsLoaded] = useState(false);
+    const [isVersesLoaded, setIsVersesLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
-    const [settingsVersion, setSettingsVersion] = useState(0);
-    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
+
+    // Local helper to find anchor for range using InstantDB mindmaps
+    const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
+        const mindmap = mindmaps.find(m => m.surahId === surahId);
+        if (!mindmap || !mindmap.anchors) return undefined;
+        return (mindmap.anchors as any[]).find(a => a.startVerse === start && a.endVerse === end);
+    }, [mindmaps]);
+
+    const isLoaded = isVersesLoaded && !settingsLoading && !nodesLoading;
 
     // Theme detection
     const { theme } = useTheme();
@@ -207,33 +191,20 @@ export default function TodayPage() {
     }, []);
 
     // FSRS Optimization Check
+    const { meta: optimizationMeta, weights: customWeights, saveMeta: saveOptimizationMeta, saveWeights: saveCustomWeights } = useInstantOptimization();
+
     useEffect(() => {
         const checkOptimization = async () => {
-            const logs = getReviewLogs();
-            const meta = getOptimizationMeta();
-            const count = logs.length;
+            const count = reviewLogs.length;
 
             // Optimization triggers when over 400 new review logs (since last optimization)
             // Minimum 400 logs total required for first optimization
-            if (count >= (meta.logCountAtLastOptimization || 0) + 400) {
-                // Determine toast type - assuming 'info' is not standard, use 'success' or just message?
-                // addToast signature: (type: 'success' | 'error' | 'postpone', message: string, info?: string)
-                // We'll use 'postpone' implies generic info maybe? or just misuse success.
-                // Let's add 'info' type to ToastItem/addToast if needed, but assuming existing types.
-                // Existing types: 'success' | 'error' | 'postpone'. 
-                // I'll use 'success' for now as it's positive progress.
+            if (count >= (optimizationMeta.logCountAtLastOptimization || 0) + 400) {
                 addToast('success', 'Optimizing FSRS...', 'Analyzing your review history...');
 
                 try {
-                    // Logs need to be mapped to ReviewLogInput format if they don't match exactly
-                    // ReviewLogEntry in storage has: rating, elapsed_days, review (string)
-                    // actions.ts expects: nodeId, rating, elapsed_days, review
-                    // storage.ts ReviewLogEntry has nodeId? 
-                    // Let's assume it does. I should have checked ReviewLogEntry definition.
-                    // If not, I'll need to fix this.
-
                     // Map logs to match ReviewLogInput interface
-                    const formattedLogs = logs.map(log => ({
+                    const formattedLogs = reviewLogs.map(log => ({
                         nodeId: log.nodeId,
                         rating: log.rating === 'Good' ? 3 : 1, // Map string rating to FSRS number
                         elapsed_days: log.elapsed_days,
@@ -245,7 +216,7 @@ export default function TodayPage() {
                     if (result.success && result.weights) {
                         saveCustomWeights(result.weights);
                         saveOptimizationMeta({
-                            ...meta,
+                            ...optimizationMeta,
                             logCountAtLastOptimization: count,
                             lastOptimizedAt: new Date().toISOString()
                         });
@@ -261,7 +232,7 @@ export default function TodayPage() {
 
         const timer = setTimeout(checkOptimization, 5000); // 5s delay to not block initial render/data load
         return () => clearTimeout(timer);
-    }, [addToast]);
+    }, [addToast, reviewLogs, optimizationMeta, saveCustomWeights, saveOptimizationMeta]);
 
     const targetBoxRef = useRef<HTMLDivElement>(null);
 
@@ -272,7 +243,7 @@ export default function TodayPage() {
             const cached = sessionStorage.getItem('quran_verses_cache_v2');
             if (cached) {
                 setAllVerses(JSON.parse(cached));
-                setIsLoaded(true);
+                setIsVersesLoaded(true);
                 return;
             }
 
@@ -281,7 +252,7 @@ export default function TodayPage() {
                 const data = await response.json() as Record<string, any>;
                 const verses = parseQuranJson(data);
                 setAllVerses(verses);
-                setIsLoaded(true);
+                setIsVersesLoaded(true);
 
                 try {
                     sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
@@ -296,7 +267,7 @@ export default function TodayPage() {
                             const data = await cachedRes.json() as Record<string, any>;
                             const verses = parseQuranJson(data);
                             setAllVerses(verses);
-                            setIsLoaded(true);
+                            setIsVersesLoaded(true);
                             return;
                         }
                     }
@@ -304,7 +275,7 @@ export default function TodayPage() {
                     console.warn('Failed to load verses from cache', e);
                 }
                 setAllVerses([]);
-                setIsLoaded(true);
+                setIsVersesLoaded(true);
             }
         }
         load();
@@ -312,18 +283,7 @@ export default function TodayPage() {
 
     // Settings sync
     useEffect(() => {
-        const handleStorage = (e: StorageEvent) => {
-            if (e.key?.includes('quran-app')) {
-                // Force immediate refresh of settings version
-                setSettingsVersion(v => v + 1);
-            }
-        };
-        window.addEventListener('storage', handleStorage);
-        const interval = setInterval(() => setSettingsVersion(v => v + 1), 2500);
-        return () => {
-            window.removeEventListener('storage', handleStorage);
-            clearInterval(interval);
-        };
+        // InstantDB handles real-time updates via hooks, so we don't need manual polling or storage event listeners here
     }, []);
 
     // Reload due nodes
@@ -332,18 +292,21 @@ export default function TodayPage() {
 
         // Only refresh due nodes list if we aren't in the middle of a review session
         // This prevents "skipping" cards when background sync happens
-        if (dueNodes.length === 0 || currentReviewIndex === 0) {
-            const settings = getSettings();
-            setDueNodes(getDueNodes());
-        }
-        setListeningComplete(getListeningCompletedToday());
-    }, [settingsVersion, isLoaded, dueNodes.length, currentReviewIndex]);
+        // if (dueNodes.length === 0 || currentReviewIndex === 0) {
+        //     // In InstantDB, dueNodes are already synced and filtered in the hook
+        // }
+        // setListeningComplete(getListeningCompletedToday());
+    }, [isLoaded, dueNodes.length, currentReviewIndex]);
 
     // Calculate today's portion (preserve per-part listening progress)
     const portionData = useMemo(() => {
-        if (allVerses.length === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
-        const settings = getSettings();
-        const surahsInPart = getSurahsByPart(settings.activePart).filter(s => !isSurahSkipped(s.id));
+        if (allVerses.length === 0 || !settings) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
+        
+        const isSurahSkipped = (surahId: number, settings: AppSettings) => {
+            return settings.skippedSurahs?.includes(surahId) || false;
+        };
+
+        const surahsInPart = getSurahsByPart(settings.activePart).filter(s => !isSurahSkipped(s.id, settings));
         if (surahsInPart.length === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
         // Flatten verses - optimized filter
@@ -354,7 +317,10 @@ export default function TodayPage() {
         if (totalVerses === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
         const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
-        const startIdx = getPortionPointer(settings.activePart);
+        
+        // Use InstantDB listening progress
+        const partProgress = listeningProgress.find(p => p.partId === settings.activePart);
+        const startIdx = partProgress?.lastVerseIndex || 0;
         let endIdx = startIdx + versesPerDay;
 
         // Intelligent Division: Merge short trailing surah segments
@@ -392,11 +358,17 @@ export default function TodayPage() {
             portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
         }
 
-        const saved = getListeningProgress(settings.activePart);
-        const startVerseIndex = portion.length > 0 ? Math.min(saved.currentVerseIndex, portion.length - 1) : 0;
+        // Check if completed today based on updatedAt
+        if (partProgress?.updatedAt) {
+            const lastUpdate = new Date(partProgress.updatedAt);
+            const now = new Date();
+            if (lastUpdate.toDateString() === now.toDateString()) {
+                setListeningComplete(true);
+            }
+        }
 
-        return { portion, startVerseIndex, versesPerDay, totalVerses };
-    }, [allVerses]);
+        return { portion, startVerseIndex: 0, versesPerDay, totalVerses };
+    }, [allVerses, settings, listeningProgress]);
 
     useEffect(() => {
         setTodaysPortion(portionData.portion);
@@ -424,17 +396,17 @@ export default function TodayPage() {
         });
 
         // Use FSRS algorithm
-        const customWeights = getCustomWeights();
-        const result = reviewCard(node.scheduler as any, remembered, node.id, customWeights);
+        const customWeightsFromInstant = customWeights;
+        const result = reviewCard(node.scheduler as any, remembered, node.id, customWeightsFromInstant);
 
         // Save updated node with new FSRS state
-        updateMemoryNode({ ...node, scheduler: result.newState });
+        updateInstantNode({ ...node, scheduler: result.newState });
 
         // Save review log for optimization
-        saveReviewLog(result.log);
+        saveInstantReviewLog(result.log);
 
         if (!remembered) {
-            saveReviewError({
+            saveInstantReviewError({
                 id: errorId!,
                 timestamp: new Date().toISOString(),
                 nodeId: node.id,
@@ -444,8 +416,8 @@ export default function TodayPage() {
                 startVerse: node.startVerse,
                 endVerse: node.endVerse,
                 grade: 1, // For compatibility with existing error tracking
-                anchorLabel: findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)?.label,
-                anchorId: findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)?.id,
+                anchorLabel: (node.startVerse !== undefined && node.endVerse !== undefined) ? findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)?.label : undefined,
+                anchorId: (node.startVerse !== undefined && node.endVerse !== undefined) ? findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)?.id : undefined,
                 absoluteAyah: node.startVerse && node.surahId ? surahAyahToAbsolute(node.surahId, node.startVerse) : undefined,
             });
         }
@@ -463,9 +435,9 @@ export default function TodayPage() {
             setCurrentVerseInReview(0);
             setShowGrading(false);
         } else {
-            setDueNodes([]); // Done
+            // All done for now
         }
-    }, [dueNodes, currentReviewIndex, addToast]);
+    }, [dueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
 
     const handlePostpone = useCallback(() => {
         const node = dueNodes[currentReviewIndex];
@@ -476,7 +448,18 @@ export default function TodayPage() {
             index: currentReviewIndex,
         });
 
-        updateMemoryNode(postponeNode(node));
+        // Postpone by 1 day
+        const scheduler = node.scheduler as any;
+        const due = new Date(scheduler.due || scheduler.dueDate || new Date());
+        due.setDate(due.getDate() + 1);
+        
+        updateInstantNode({
+            ...node,
+            scheduler: {
+                ...scheduler,
+                due: due.toISOString()
+            }
+        });
 
         const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
             node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
@@ -490,15 +473,15 @@ export default function TodayPage() {
             setCurrentVerseInReview(0);
             setShowGrading(false);
         } else {
-            setDueNodes([]);
+            // All done for now
         }
-    }, [dueNodes, currentReviewIndex, addToast]);
+    }, [dueNodes, currentReviewIndex, addToast, updateInstantNode]);
 
     const handleUndo = () => {
         if (!lastGrading) return;
-        updateMemoryNode(lastGrading.node);
+        updateInstantNode(lastGrading.node);
         if (lastGrading.errorId) {
-            removeReviewError(lastGrading.errorId);
+            removeInstantReviewError(lastGrading.errorId);
         }
         setCurrentReviewIndex(lastGrading.index);
         setRevealedChunks(0);
@@ -515,10 +498,37 @@ export default function TodayPage() {
     }, [toasts]);
 
     const handleCompleteListening = () => {
-        const settings = getSettings();
-        markListeningComplete(settings.activePart, portionData.versesPerDay, portionData.totalVerses);
+        if (!settings) return;
+        
+        // Use InstantDB listening progress
+        const partProgress = listeningProgress.find(p => p.partId === settings.activePart);
+        const current = partProgress?.lastVerseIndex || 0;
+        const totalInPart = portionData.totalVerses;
+        
+        let next = current + portionData.versesPerDay;
+        let cycles = partProgress?.cycles || 0;
+
+        // If we reach or exceed the end of the part, increment cycles and wrap around
+        if (next >= totalInPart) {
+            next = next % totalInPart;
+            cycles += 1;
+        }
+        
+        saveListeningProgress(settings.activePart, next, cycles);
+        
+        // Update stats for each surah in the portion
+        const surahsInPortion = new Set(todaysPortion.map(v => v.surahId));
+        surahsInPortion.forEach(surahId => {
+            const existing = listeningStats.find(s => s.surahId === surahId);
+            saveListeningStats(surahId, {
+                ...existing,
+                surahId,
+                totalMinutes: (existing?.totalMinutes || 0) + 5, // Assume 5 mins per portion per surah for now
+                lastListened: new Date().toISOString()
+            });
+        });
+
         setListeningComplete(true);
-        setSettingsVersion(v => v + 1);
     };
 
     // Get content
@@ -527,11 +537,11 @@ export default function TodayPage() {
         const node = dueNodes[currentReviewIndex];
 
         if (node.type === 'part_mindmap') {
-            const pm = getPartMindMap(node.partId as any);
+            const pm = partMindMaps.find(m => m.partId === node.partId);
             return { type: 'part_mindmap', partId: node.partId, mindmap: pm };
         } else if (node.type === 'mindmap') {
             const s = getSurah(node.surahId!);
-            const m = getMindMap(node.surahId!);
+            const m = mindmaps.find(mm => mm.surahId === node.surahId);
             return { type: 'mindmap', surah: s, mindmap: m };
         } else {
             const s = getSurah(node.surahId!);
@@ -658,21 +668,23 @@ export default function TodayPage() {
     const handleMindmapIncomplete = (surahId: number) => {
         if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
-        const mm = getMindMap(surahId);
-        const updated = { ...mm, isComplete: false };
-        saveMindMap(updated);
-        setSettingsVersion(v => v + 1);
-        addToast('success', 'Mindmap marked as incomplete', getSurah(surahId)?.name);
+        const mm = mindmaps.find(m => m.surahId === surahId);
+        if (mm) {
+            const updated = { ...mm, isComplete: false };
+            saveMindMap(surahId, updated);
+            addToast('success', 'Mindmap marked as incomplete', getSurah(surahId)?.name);
+        }
     };
 
     const handlePartMindmapIncomplete = (partId: QuranPart) => {
         if (!window.confirm("Are you sure you want to mark this part mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
-        const mm = getPartMindMap(partId);
-        const updated = { ...mm, isComplete: false };
-        savePartMindMap(updated);
-        setSettingsVersion(v => v + 1);
-        addToast('success', 'Part mindmap marked as incomplete', `Part ${partId}`);
+        const mm = partMindMaps.find(m => m.partId === partId);
+        if (mm) {
+            const updated = { ...mm, isComplete: false };
+            savePartMindMap(partId, updated);
+            addToast('success', 'Part mindmap marked as incomplete', `Part ${partId}`);
+        }
     };
 
     const handleMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
@@ -680,14 +692,16 @@ export default function TodayPage() {
         const { surahId } = activeMindmapEditor;
 
         const save = (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = getMindMap(surahId);
-            saveMindMap({
+            const existing = mindmaps.find(m => m.surahId === surahId);
+            const newMindMap = {
                 ...existing,
-                imageUrl: lightUrl || existing.imageUrl,
-                imageUrlDark: darkUrl || existing.imageUrlDark,
-                tldrawSnapshot: snapshot
-            });
-            setSettingsVersion(v => v + 1);
+                surahId,
+                imageUrl: lightUrl || existing?.imageUrl || undefined,
+                imageUrlDark: darkUrl || existing?.imageUrlDark || undefined,
+                tldrawSnapshot: snapshot,
+                isComplete: true // If we are editing and saving, we assume it's part of completion flow or just an update
+            };
+            saveMindMap(surahId, newMindMap);
             if (shouldClose) {
                 setActiveMindmapEditor(null);
             }
@@ -712,21 +726,23 @@ export default function TodayPage() {
         } else {
             save(null, null);
         }
-    }, [activeMindmapEditor]);
+    }, [activeMindmapEditor, mindmaps, saveMindMap]);
 
     const handlePartMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
         const save = (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = getPartMindMap(partId);
-            savePartMindMap({
+            const existing = partMindMaps.find(m => m.partId === partId);
+            const newMindMap = {
                 ...existing,
-                imageUrl: lightUrl || existing.imageUrl,
-                imageUrlDark: darkUrl || existing.imageUrlDark,
-                tldrawSnapshot: snapshot
-            });
-            setSettingsVersion(v => v + 1);
+                partId,
+                imageUrl: lightUrl || existing?.imageUrl || undefined,
+                imageUrlDark: darkUrl || existing?.imageUrlDark || undefined,
+                tldrawSnapshot: snapshot,
+                isComplete: true
+            };
+            savePartMindMap(partId, newMindMap);
             if (shouldClose) {
                 setActivePartEditor(null);
             }
@@ -751,7 +767,7 @@ export default function TodayPage() {
         } else {
             save(null, null);
         }
-    }, [activePartEditor]);
+    }, [activePartEditor, partMindMaps, savePartMindMap]);
 
     if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
 
@@ -850,7 +866,6 @@ export default function TodayPage() {
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                             Next: {(() => {
-                                                                const customWeights = getCustomWeights();
                                                                 const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
                                                                 return preview.again;
                                                             })()}
@@ -860,7 +875,6 @@ export default function TodayPage() {
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                             Next: {(() => {
-                                                                const customWeights = getCustomWeights();
                                                                 const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
                                                                 return preview.good;
                                                             })()}

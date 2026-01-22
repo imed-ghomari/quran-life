@@ -1,64 +1,53 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import Image from 'next/image';
-import { SURAHS, getSurah, getSurahsByPart, parseQuranJson, getQuranVerses } from '@/lib/quranData';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
-    getSettings,
-    saveSettings,
-    getReviewErrors,
-    getSuspendedAnchors,
-    clearAnchorIssues,
-    getMutashabihatDecisions,
-    setMutashabihatDecision,
-    getCustomMutashabihat,
-    saveCustomMutashabih,
-    hasNodeBeenReviewed,
-    CustomMutashabih,
-    isSurahSkipped,
-    MutashabihatDecision,
-    getMemoryNodes,
-    DEFAULT_SETTINGS,
-    AppSettings
-} from '@/lib/storage';
-import { db } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { MindMap, PartMindMap } from '@/lib/types';
+    useInstantSettings,
+    useInstantNodes,
+    useInstantMindMaps,
+    useInstantMutashabihat,
+    useInstantReviewErrors
+} from '@/hooks/useInstantData';
+import { MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart } from '@/lib/types';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { QuranPart } from '@/lib/types';
-import { ChevronDown, Brain, Map, MapPinned, AlertTriangle, ShieldAlert, SplitSquareHorizontal, Check, ImageIcon, ChevronRight, X, AlertCircle, Download, Upload, MoreVertical, FileText, Settings2, PenTool, Trash2, Plus, Minus, Info } from 'lucide-react';
+import { X } from 'lucide-react';
 import MindmapEditor from '@/components/MindmapEditor';
 import MindmapViewer from '@/components/MindmapViewer';
 import TodoKanban from '@/components/todo/TodoKanban';
-import { AnchorBuilderState } from '@/components/todo/AnchorBuilders'; // Import type if needed for state definition
+import { AnchorBuilderState } from '@/components/todo/AnchorBuilders'; 
 import { appLogger } from '@/lib/logger';
-import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
 
 export default function TodoPage() {
-    const mindmapsList = useLiveQuery(() => db.mindmaps.toArray()) || [];
-    const partMindmapsList = useLiveQuery(() => db.partMindmaps.toArray()) || [];
+    const { settings, saveSettings } = useInstantSettings();
+    const { nodes } = useInstantNodes();
+    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap } = useInstantMindMaps();
+    const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
+    const { errors } = useInstantReviewErrors();
 
     const mindmaps = useMemo(() => {
         const acc: Record<number, MindMap> = {};
-        mindmapsList.forEach(doc => {
-            acc[doc.surahId] = doc.data;
+        mindmapsList.forEach(mm => {
+            acc[mm.surahId] = mm as unknown as MindMap;
         });
         return acc;
     }, [mindmapsList]);
 
-    const partMindmaps = useMemo(() => {
+    const partMindmapsMap = useMemo(() => {
         const acc: Record<number, PartMindMap> = {};
-        partMindmapsList.forEach(doc => {
-            acc[doc.partId] = doc.data;
+        partMindmapsList.forEach(pmm => {
+            acc[pmm.partId] = pmm as unknown as PartMindMap;
         });
         return acc;
     }, [partMindmapsList]);
 
-    const [settingsVersion, setSettingsVersion] = useState(0);
     const [anchorBuilders, setAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
-    const [decisions, setDecisions] = useState<Record<string, any>>(getMutashabihatDecisions());
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
+
+    const hasReviewedChunks = useCallback((surahId: number) => {
+        return nodes.some(n => n.type === 'verse_segment' && n.surahId === surahId && hasNodeBeenReviewed(n.scheduler));
+    }, [nodes]);
 
     // Theme detection
     const { theme } = useTheme();
@@ -74,35 +63,10 @@ export default function TodoPage() {
     }, []);
     const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
 
-    // Mindmap Editor State (for Surah and Part mindmaps)
+    // Mindmap Editor State
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
-
     const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
-
-
-    const hasReviewedChunks = (surahId: number) => {
-        const nodes = getMemoryNodes();
-        return nodes.some(n => n.type === 'verse_segment' && n.surahId === surahId && hasNodeBeenReviewed(n.scheduler));
-    };
-
-    const settings = getSettings();
-
-    useEffect(() => {
-        const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === null || e.key.startsWith('quran-app-')) {
-                setSettingsVersion(v => v + 1);
-            }
-        };
-        window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
-    }, []);
-
-    useEffect(() => {
-        // setMindmaps(getMindMaps()); // Dexie handles this via useLiveQuery
-        // setPartMindmaps(getPartMindMaps()); // Dexie handles this via useLiveQuery
-        setDecisions(getMutashabihatDecisions());
-    }, [settingsVersion]);
 
     useEffect(() => {
         getQuranVerses()
@@ -110,7 +74,13 @@ export default function TodoPage() {
             .catch(() => setVerses([]));
     }, []);
 
-
+    const decisionsMap = useMemo(() => {
+        const acc: Record<string, any> = {};
+        decisions.forEach(d => {
+            acc[d.id] = d;
+        });
+        return acc;
+    }, [decisions]);
 
     const activePart = settings.activePart;
 
@@ -118,7 +88,6 @@ export default function TodoPage() {
         const learnedSurahIds = new Set(Object.keys(settings.learnedVerses || {}).map(Number));
         const eligible = SURAHS.filter(s =>
             (activePart === 5 || s.part === activePart) &&
-            !isSurahSkipped(s.id, settings) &&
             learnedSurahIds.has(s.id)
         );
         return eligible
@@ -130,33 +99,29 @@ export default function TodoPage() {
         const parts: QuranPart[] = [1, 2, 3, 4];
         return parts
             .filter(p => activePart === 5 || p === activePart)
-            .map(p => ({ part: p, mindmap: partMindmaps[p] }));
-    }, [partMindmaps, activePart]);
+            .map(p => ({ part: p, mindmap: partMindmapsMap[p] }));
+    }, [partMindmapsMap, activePart]);
 
-    const suspendedAnchors = getSuspendedAnchors();
+    const similarityItems = useMemo(() => {
+        return errors
+            .filter(e => e.type === 'similarity' && e.absoluteAyah)
+            .map(err => {
+                const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
+                return { err, muts };
+            })
+            .filter(entry => {
+                const absolute = entry.err.absoluteAyah!;
+                const verseDecision = decisionsMap[absolute.toString()];
+                if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
 
-    const reviewErrors = getReviewErrors().filter(e => e.absoluteAyah);
-    const similarityItems = reviewErrors
-        .map(err => {
-            const absolute = err.absoluteAyah!;
-            const muts = getMutashabihatForAbsolute(absolute);
-            return { err, muts };
-        })
-        .filter(entry => entry.muts.length > 0)
-        .filter(entry => {
-            const absolute = entry.err.absoluteAyah!;
-            // Check if generic verse decision exists and is confirmed or ignored
-            const verseDecision = decisions[absolute.toString()];
-            if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
+                const anyPhraseConfirmed = entry.muts.some((m: any) => {
+                    const phraseDecision = decisionsMap[`${absolute}-${m.phraseId}`];
+                    return !!phraseDecision?.confirmedAt;
+                });
 
-            // Check if any specific phrase decisions are confirmed
-            const anyPhraseConfirmed = entry.muts.some((m: any) => {
-                const phraseDecision = decisions[`${absolute}-${m.phraseId}`];
-                return !!phraseDecision?.confirmedAt;
+                return !anyPhraseConfirmed;
             });
-
-            return !anyPhraseConfirmed;
-        });
+    }, [errors, decisionsMap, customMutashabihat]);
 
     const groupedSimilarity = useMemo(() => {
         const groups: Record<number, typeof similarityItems> = {};
@@ -172,23 +137,6 @@ export default function TodoPage() {
         })).filter(g => g.surah);
     }, [similarityItems]);
 
-
-    const handleSurahImageUpdate = (surahId: number, file: File | null) => {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const imageUrl = reader.result as string;
-            const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-            const updated = { ...existing, imageUrl, isComplete: !!imageUrl && existing.isComplete };
-            await db.mindmaps.put({
-                surahId,
-                data: updated,
-                updatedAt: new Date().toISOString()
-            });
-            setSettingsVersion(v => v + 1);
-        };
-        reader.readAsDataURL(file);
-    };
 
     const getBuilderState = (surahId: number) => {
         if (anchorBuilders[surahId]) return anchorBuilders[surahId];
@@ -234,19 +182,11 @@ export default function TodoPage() {
             endVerse: a.end,
             label: a.label,
         }));
-        await db.mindmaps.put({
-            surahId,
-            data: { ...existing, anchors: newAnchors },
-            updatedAt: new Date().toISOString()
-        });
-        setSettingsVersion(v => v + 1);
+        await saveMindMap(surahId, { ...existing, anchors: newAnchors });
     };
 
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
-        // Use current state as base if available
-        // Otherwise read from live query
         const existing = currentMindmap || mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        // Ensure we preserve the image if it exists in either source
         const imageUrl = currentMindmap?.imageUrl || existing.imageUrl || null;
         const tldrawSnapshot = currentMindmap?.tldrawSnapshot || existing.tldrawSnapshot;
 
@@ -257,21 +197,10 @@ export default function TodoPage() {
             isComplete: forceState !== undefined ? forceState : !existing.isComplete
         };
 
-        await db.mindmaps.put({
-            surahId,
-            data: updated,
-            updatedAt: new Date().toISOString()
-        });
-
-        // Dexie will auto-update the mindmaps state via useLiveQuery
-        setSettingsVersion(v => v + 1);
+        await saveMindMap(surahId, updated);
     };
 
     const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
-        // Implementation follows "Working on a Copy" pattern:
-        // We fetch official templates from /assets/premade-mindmaps/ but save them to the user's 
-        // local storage. This allows users to modify their copy while the documentation 
-        // remains linked to the original official template.
         try {
             const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
             if (!response.ok) {
@@ -327,30 +256,19 @@ export default function TodoPage() {
                     anchors: importedAnchors.length > 0 ? importedAnchors : (existing.anchors || []),
                     isComplete: true
                 };
-                await db.mindmaps.put({
-                    surahId: id,
-                    data: updated,
-                    updatedAt: new Date().toISOString()
-                });
-                // setMindmaps removed
+                await saveMindMap(id, updated);
             } else {
                 const pId = id as QuranPart;
-                const existing = partMindmaps[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
+                const existing = partMindmapsMap[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
                     ...data,
                     partId: pId,
                     isComplete: true
                 };
-                await db.partMindmaps.put({
-                    partId: pId,
-                    data: updated,
-                    updatedAt: new Date().toISOString()
-                });
-                // setPartMindmaps removed
+                await savePartMindMap(pId, updated);
             }
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
-            setSettingsVersion(v => v + 1);
             alert(`Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`);
         } catch (error) {
             console.error('Import failed:', error);
@@ -358,65 +276,32 @@ export default function TodoPage() {
         }
     };
 
-    const handlePartMindmapUpdate = (part: QuranPart, file: File | null) => {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const imageUrl = reader.result as string;
-            const existing = partMindmaps[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
-            const updated = { ...existing, imageUrl, isComplete: !!imageUrl && existing.isComplete };
-            await db.partMindmaps.put({
-                partId: part,
-                data: updated,
-                updatedAt: new Date().toISOString()
-            });
-            setSettingsVersion(v => v + 1);
-        };
-        reader.readAsDataURL(file);
-    };
-
     const handlePartComplete = async (part: QuranPart, forceState?: boolean) => {
-        // Read directly from live query
-        const existing = partMindmaps[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
-
+        const existing = partMindmapsMap[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
         const updated = { ...existing, isComplete: forceState !== undefined ? forceState : !existing.isComplete };
-        await db.partMindmaps.put({
-            partId: part,
-            data: updated,
-            updatedAt: new Date().toISOString()
-        });
-
-        // Update local state to reflect change immediately (Dexie does this)
-        setSettingsVersion(v => v + 1);
+        await savePartMindMap(part, updated);
     };
 
-    const handleFixConfirm = (surahId: number, anchorId: string) => {
-        // We assume the user has already edited the mindmap if needed.
-        // This function just resolves the specific issue.
-        clearAnchorIssues(surahId, anchorId);
-        setSettingsVersion(v => v + 1);
+    const handleFixConfirm = (_surahId: number, _anchorId: string) => {
+        // No-op for now as clearAnchorIssues was a no-op
     };
 
-    const handleSimilarityDecision = (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm: boolean = true) => {
+    const handleSimilarityDecision = async (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm: boolean = true) => {
         if (phraseId?.startsWith('custom-')) {
             const customId = phraseId.replace('custom-', '');
-            const allCustoms = getCustomMutashabihat();
-            const mut = allCustoms.find((m: CustomMutashabih) => m.id === customId);
+            const mut = customMutashabihat.find((m: any) => m.id === customId);
             if (mut) {
-                mut.status = status;
-                saveCustomMutashabih(mut);
+                await saveCustom({ ...mut, status });
             }
         }
 
         const key = phraseId ? `${absoluteAyah}-${phraseId}` : absoluteAyah.toString();
-        const existing = decisions[key] || { status: 'pending', note: '' };
-        setMutashabihatDecision({
-            id: key,
+        const existing = decisions.find(d => d.phraseId === key) || { status: 'pending', note: '' };
+        await saveDecision(key, {
             ...existing,
             status,
             confirmedAt: confirm ? new Date().toISOString() : existing.confirmedAt
         });
-        setSettingsVersion(v => v + 1);
     };
 
     const handleEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
@@ -431,13 +316,7 @@ export default function TodoPage() {
                 imageUrlDark: darkUrl || existing.imageUrlDark,
                 tldrawSnapshot: snapshot
             };
-            await db.mindmaps.put({
-                surahId,
-                data: updated,
-                updatedAt: new Date().toISOString()
-            });
-            // setMindmaps... removed
-            setSettingsVersion(v => v + 1);
+            await saveMindMap(surahId, updated);
             if (shouldClose) {
                 setActiveMindmapEditor(null);
             }
@@ -463,27 +342,21 @@ export default function TodoPage() {
         } else {
             await save(null, null);
         }
-    }, [activeMindmapEditor, mindmaps]);
+    }, [activeMindmapEditor, mindmaps, saveMindMap]);
 
     const handlePartEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
         const save = async (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = partMindmaps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
+            const existing = partMindmapsMap[partId] || { partId, imageUrl: null, description: '', isComplete: false };
             const updated = {
                 ...existing,
                 imageUrl: lightUrl || existing.imageUrl,
                 imageUrlDark: darkUrl || existing.imageUrlDark,
                 tldrawSnapshot: snapshot
             };
-            await db.partMindmaps.put({
-                partId,
-                data: updated,
-                updatedAt: new Date().toISOString()
-            });
-            // setPartMindmaps... removed
-            setSettingsVersion(v => v + 1);
+            await savePartMindMap(partId, updated);
             if (shouldClose) {
                 setActivePartEditor(null);
             }
@@ -508,7 +381,7 @@ export default function TodoPage() {
         } else {
             await save(null, null);
         }
-    }, [activePartEditor, partMindmaps]);
+    }, [activePartEditor, partMindmapsMap, savePartMindMap]);
 
     return (
         <div className="content-wrapper">
@@ -574,22 +447,19 @@ export default function TodoPage() {
             {/* Kanban Board Replacement */}
             <div className="content-wrapper !max-w-full h-full flex flex-col">
                 <TodoKanban
-                    suspendedAnchors={suspendedAnchors}
+                    suspendedAnchors={[]}
                     similarityGroups={groupedSimilarity}
                     partTasks={partTasks}
                     surahTasks={surahTasks}
                     verses={verses}
-                    decisions={decisions}
                     mindmaps={mindmaps}
-                    partMindmaps={partMindmaps}
                     isDark={isDark}
                     // Persisted State
                     kanbanState={settings.kanbanColumns}
                     onKanbanStateChange={(cols) => {
-                        const s = getSettings();
-                        s.kanbanColumns = cols;
-                        saveSettings(s);
-                        setSettingsVersion(v => v + 1);
+                        saveSettings({
+                            kanbanColumns: cols
+                        });
                     }}
                     onFixConfirm={handleFixConfirm}
                     onSimilarityDecision={handleSimilarityDecision}
@@ -603,29 +473,17 @@ export default function TodoPage() {
                             setActiveMindmapEditor({ surahId: id, snapshot });
                         }
                     }}
-                    onViewMindmap={(data) => setActiveMindmapPreview(data)}
                     onDeleteMindmap={async (type, id) => {
                         if (type === 'surah') {
                             const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
                             const updated = { ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false };
-                            await db.mindmaps.put({
-                                surahId: id,
-                                data: updated,
-                                updatedAt: new Date().toISOString()
-                            });
-                            // setMindmaps removed
+                            await saveMindMap(id, updated);
                         } else {
                             const pId = id as QuranPart;
-                            const existing = partMindmaps[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
+                            const existing = partMindmapsMap[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
                             const updated = { ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false };
-                            await db.partMindmaps.put({
-                                partId: pId,
-                                data: updated,
-                                updatedAt: new Date().toISOString()
-                            });
-                            // setPartMindmaps removed
+                            await savePartMindMap(pId, updated);
                         }
-                        setSettingsVersion(v => v + 1);
                     }}
                     getBuilderState={getBuilderState}
                     onAddBreak={(sid, val) => handleAddBreak(sid, val)}

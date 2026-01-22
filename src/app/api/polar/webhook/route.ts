@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { db } from '@/lib/instant-admin';
 import { validateEvent } from '@polar-sh/sdk/webhooks';
 import {
     unauthorized,
@@ -14,7 +13,7 @@ import {
 /**
  * Polar Webhook Handler
  * Handles post-checkout events from Polar
- * Verifies payment and updates user status in Supabase
+ * Verifies payment and updates user status in InstantDB
  * 
  * Security:
  * - Webhook signature verification
@@ -80,12 +79,6 @@ export async function POST(request: NextRequest) {
         if (event === 'checkout.completed' || event === 'order.created') {
             const parsedData = data as any;
             
-            // Check for Supabase Service Role Key explicitly
-            if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-                console.error(`[Webhook ${requestId}] Missing SUPABASE_SERVICE_ROLE_KEY`);
-                return addSecurityHeaders(internalError('Server Configuration Error: Missing SUPABASE_SERVICE_ROLE_KEY'));
-            }
-            
             // Extract purchase details based on event type
             const customerEmail = parsedData.customer_email || parsedData.customer?.email;
             const checkoutId = parsedData.checkout_id || parsedData.id; // For checkout.completed, id is checkout_id
@@ -106,27 +99,23 @@ export async function POST(request: NextRequest) {
                 return addSecurityHeaders(badRequest('Missing customer email in webhook payload'));
             }
 
-            // Store purchase information in Supabase
-            const supabase = createAdminClient();
-
-            // Insert purchase record
-            const { error: purchaseError } = await supabase
-                .from('purchases')
-                .insert({
-                    email: customerEmail.toLowerCase(),
-                    polar_checkout_id: checkoutId,
-                    polar_customer_id: customerId,
-                    polar_product_id: productId,
-                    purchased_at: new Date().toISOString(),
-                    status: 'completed'
-                });
-
-            if (purchaseError) {
-                console.error(`[Webhook ${requestId}] Failed to store purchase:`, purchaseError);
-                // Don't fail the webhook - log and continue
-                // Polar will retry if we return error, which could cause duplicates
-            } else {
+            // Store purchase information in InstantDB
+            try {
+                const purchaseId = crypto.randomUUID();
+                await db.transact(
+                    db.tx.purchases[purchaseId].update({
+                        email: customerEmail.toLowerCase(),
+                        polar_checkout_id: checkoutId || '',
+                        polar_customer_id: customerId || '',
+                        polar_product_id: productId || '',
+                        purchased_at: new Date().toISOString(),
+                        status: 'completed'
+                    })
+                );
                 console.log(`[Webhook ${requestId}] ✅ Purchase recorded for ${customerEmail}`);
+            } catch (err) {
+                console.error(`[Webhook ${requestId}] Failed to store purchase in InstantDB:`, err);
+                // Don't fail the webhook - log and continue
             }
         } else {
             console.log(`[Webhook ${requestId}] ℹ️ Skipping event type: ${event}`);

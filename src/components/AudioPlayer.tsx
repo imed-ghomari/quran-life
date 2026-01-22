@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { PlaybackSpeed, getAudioPath, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
-import { getAudioSettings, saveAudioSettings } from '@/lib/storage';
+import { useInstantSettings } from '@/hooks/useInstantData';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -24,6 +24,7 @@ export default function AudioPlayer({
     onPlayStateChange,
     onWordIndexChange
 }: AudioPlayerProps) {
+    const { settings, saveSettings } = useInstantSettings();
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);
@@ -74,8 +75,8 @@ export default function AudioPlayer({
             setReciters(list);
             
             // Try to load from synced settings first, then localStorage
-            const settings = getAudioSettings();
-            let savedId = settings?.selectedReciterId;
+            const audioSettings = settings?.audioSettings;
+            let savedId = audioSettings?.selectedReciterId;
             
             if (!savedId) {
                 savedId = localStorage.getItem('selected_reciter_id') || undefined;
@@ -85,8 +86,8 @@ export default function AudioPlayer({
             setSelectedReciter(defaultReciter);
 
             // Restore playback position if available and applicable
-            if (settings?.playbackState && verses.length > 0) {
-                const { surahId, ayahId } = settings.playbackState;
+            if (audioSettings?.playbackState && verses.length > 0) {
+                const { surahId, ayahId } = audioSettings.playbackState;
                 // Find if this verse exists in current portion
                 const index = verses.findIndex(v => v.surahId === surahId && v.ayahId === ayahId);
                 if (index !== -1 && index !== currentVerseIndex) {
@@ -94,7 +95,7 @@ export default function AudioPlayer({
                 }
             }
         });
-    }, [verses]); // Add verses dependency to ensure we can find the index
+    }, [verses, settings?.audioSettings]); // Add verses and audioSettings dependency
 
     // Load Recitation Data when Reciter or Surah changes
     useEffect(() => {
@@ -175,17 +176,15 @@ export default function AudioPlayer({
                 
                 // Save playback state when paused
                 if (selectedReciter && currentVerse) {
-                    const currentSettings = getAudioSettings() || {
-                        selectedReciterId: selectedReciter.id,
-                        updatedAt: new Date().toISOString()
-                    };
-                    
-                    saveAudioSettings({
-                        ...currentSettings,
-                        playbackState: {
-                            surahId: currentVerse.surahId,
-                            ayahId: currentVerse.ayahId,
-                            timestamp: audioRef.current.currentTime
+                    saveSettings({
+                        audioSettings: {
+                            selectedReciterId: selectedReciter.id,
+                            updatedAt: new Date().toISOString(),
+                            playbackState: {
+                                surahId: currentVerse.surahId,
+                                ayahId: currentVerse.ayahId,
+                                timestamp: audioRef.current.currentTime
+                            }
                         }
                     });
                 }
@@ -248,14 +247,11 @@ export default function AudioPlayer({
             localStorage.setItem('selected_reciter_id', id);
             
             // Save to synced settings
-            const currentSettings = getAudioSettings() || {
-                selectedReciterId: id,
-                updatedAt: new Date().toISOString()
-            };
-            
-            saveAudioSettings({
-                ...currentSettings,
-                selectedReciterId: id
+            saveSettings({
+                audioSettings: {
+                    selectedReciterId: id,
+                    updatedAt: new Date().toISOString()
+                }
             });
             
             setIsPlaying(false); // Stop on change

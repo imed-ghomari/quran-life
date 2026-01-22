@@ -15,9 +15,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import DailyCompletionSlider from './DailyCompletionSlider';
-import { AppSettings, getSettings, saveSettings, toggleSurahLearned, getSurahLearnedStatus } from '@/lib/storage';
+import { useInstantSettings, useInstantNodes } from '@/hooks/useInstantData';
+import { db } from '@/lib/instant';
 import { SURAHS } from '@/lib/quranData';
-import { PART_NAMES, QuranPart } from '@/lib/types';
+import { PART_NAMES, QuranPart, getMaturityState } from '@/lib/types';
+import { createNewFSRSState } from '@/lib/fsrs';
 
 interface OnboardingModalProps {
     onComplete: () => void;
@@ -25,43 +27,68 @@ interface OnboardingModalProps {
 
 export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const [step, setStep] = useState(0);
-    const [settings, setSettings] = useState<AppSettings | null>(null);
+    const { settings, user } = useInstantSettings();
+    const { nodes } = useInstantNodes();
     const [selectedPart, setSelectedPart] = useState<QuranPart>(4);
     const [days, setDays] = useState(30);
+    const [localSkipped, setLocalSkipped] = useState<number[]>([]);
 
     useEffect(() => {
-        const currentSettings = getSettings();
-        setSettings(currentSettings);
-        setSelectedPart(currentSettings.activePart || 4);
-        setDays(currentSettings.completionDays || 30);
-    }, []);
+        if (settings) {
+            setSelectedPart(settings.activePart || 4);
+            setDays(settings.completionDays || 30);
+            setLocalSkipped(settings.skippedSurahs || []);
+        }
+    }, [settings]);
 
-    if (!settings) return null;
+    if (!settings || !user) return null;
 
     const handleNext = async () => {
         if (step < 4) {
             setStep(step + 1);
         } else {
             // Save final settings
-            if (!settings) return;
+            const settingsId = settings.id || crypto.randomUUID();
             
-            const finalSettings = {
-                ...settings,
-                activePart: selectedPart,
-                completionDays: days,
-                isOnboardingComplete: true,
-                updatedAt: new Date().toISOString()
-            };
-            
-            await saveSettings(finalSettings);
-            
-            // Ensure we clear old artifacts (mindmaps, daily pointers) that might conflict with new settings
-            const { clearSecondaryStorage, syncMemoryNodesWithLearned } = await import('@/lib/storage');
-            await clearSecondaryStorage();
+            const transactions = [
+                db.tx.settings[settingsId].update({
+                    activePart: selectedPart,
+                    completionDays: days,
+                    isOnboardingComplete: true,
+                    skippedSurahs: localSkipped,
+                    userId: user.id
+                }) as any
+            ];
 
-            // Sync mindmaps with newly learned surahs
-            syncMemoryNodesWithLearned();
+            // Sync memory nodes for skipped surahs
+            for (const surahId of localSkipped) {
+                const surah = SURAHS.find(s => s.id === surahId);
+                if (!surah) continue;
+
+                for (let i = 1; i <= surah.verseCount; i++) {
+                    const nodeId = `verse-${surahId}-${i}-${i}`;
+                    if (!nodes.some(n => n.id === nodeId)) {
+                        const maturity = getMaturityState('mastered');
+                        transactions.push(
+                            db.tx.memoryNodes[crypto.randomUUID()].update({
+                                id: nodeId, // InstantDB uses the key as ID, but we can store it too
+                                type: 'verse_segment',
+                                surahId: surahId,
+                                startVerse: i,
+                                endVerse: i,
+                                scheduler: {
+                                    ...createNewFSRSState(),
+                                    ...maturity
+                                },
+                                createdAt: new Date().toISOString(),
+                                userId: user.id
+                            }) as any
+                        );
+                    }
+                }
+            }
             
+            await db.transact(transactions);
             onComplete();
         }
     };
@@ -71,16 +98,14 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     };
 
     const toggleSkippedSurah = (surahId: number) => {
-        if (!settings) return;
-        const currentSkipped = new Set(settings.skippedSurahs || []);
-        if (currentSkipped.has(surahId)) {
-            currentSkipped.delete(surahId);
-        } else {
-            currentSkipped.add(surahId);
-        }
-        setSettings({
-            ...settings,
-            skippedSurahs: Array.from(currentSkipped).sort((a, b) => a - b)
+        setLocalSkipped(prev => {
+            const current = new Set(prev);
+            if (current.has(surahId)) {
+                current.delete(surahId);
+            } else {
+                current.add(surahId);
+            }
+            return Array.from(current).sort((a, b) => a - b);
         });
     };
 
@@ -232,7 +257,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 {[1, 32, 67, 112, 113, 114].map(id => {
                                     const surah = SURAHS.find(s => s.id === id);
                                     if (!surah) return null;
-                                    const isSkipped = settings.skippedSurahs?.includes(id);
+                                    const isSkipped = localSkipped.includes(id);
                                     
                                     return (
                                         <button
@@ -315,7 +340,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                     <div>
                                         <h3 style={{ margin: '0 0 0.25rem 0' }}>Synchronize</h3>
                                         <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--foreground-secondary)' }}>
-                                            Log in with Supabase to sync your progress across devices and keep your data safe.
+                                            Log in with your email to sync your progress across devices and keep your data safe.
                                         </p>
                                     </div>
                                 </div>
@@ -414,7 +439,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             boxShadow: '0 4px 12px rgba(91, 143, 185, 0.3)',
                         }}
                     >
-                        {step === 3 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
+                        {step === 4 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
                     </button>
                 </div>
             </div>

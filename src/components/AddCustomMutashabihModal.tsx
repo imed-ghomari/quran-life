@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SURAHS } from '@/lib/quranData';
-import { CustomMutashabih, MutashabihatDecision } from '@/lib/storage';
+import { CustomMutashabih, MutashabihatDecision } from '@/lib/types';
 import { X } from 'lucide-react';
 
 interface Props {
@@ -42,12 +42,16 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
     const handleSave = () => {
         const newMut: CustomMutashabih = {
             id: Math.random().toString(36).substring(2, 11),
-            verse1: { surahId: surah1, ayahId: ayah1 },
-            verse2: { surahId: surah2, ayahId: ayah2 },
+            verseId: `${surah1}:${ayah1}`,
+            targetVerseId: `${surah2}:${ayah2}`,
+            surahId: surah1,
+            ayahId: ayah1,
+            targetSurahId: surah2,
+            targetAyahId: ayah2,
+            phrase: '',
             status,
-            note,
+            notes: note,
             createdAt: new Date().toISOString(),
-            isCustom: true,
         };
         onSave(newMut);
         onClose();

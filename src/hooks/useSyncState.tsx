@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { useDexieSync } from './useDexieSync';
-import { createClient } from '@/utils/supabase/client';
+import { db } from '@/lib/instant';
+import { useInstantSettings } from './useInstantData';
 
 // ========================================
 // Types
@@ -84,52 +84,45 @@ export function getSyncStatusText(status: SyncStatus, pendingChangesCount: numbe
 }
 
 // ========================================
-// Provider - Uses Dexie Sync
+// Provider - Uses InstantDB
 // ========================================
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
-    const { isSyncing, lastSyncedAt, error, syncNow } = useDexieSync();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const { settings, isLoading, error, user } = useInstantSettings();
+    const [isOnline, setIsOnline] = useState(true);
 
-    // Check auth status
     useEffect(() => {
-        const checkAuth = async () => {
-            const supabase = createClient();
-            const { data: { session } } = await supabase.auth.getSession();
-            setIsAuthenticated(!!session);
-            
-            const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-                setIsAuthenticated(!!session);
-            });
-            return () => subscription.unsubscribe();
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
         };
-        checkAuth();
     }, []);
 
-    const status: SyncStatus = isSyncing ? 'syncing' : error ? 'error' : 'synced';
+    const status: SyncStatus = !isOnline ? 'offline' : isLoading ? 'syncing' : error ? 'error' : 'synced';
 
     const triggerSync = useCallback(async () => {
-        await syncNow();
-    }, [syncNow]);
+        // InstantDB handles sync automatically
+    }, []);
 
     const resolveConflict = useCallback(async () => {
-        // LWW is automatic
-        await syncNow();
-    }, [syncNow]);
+        // InstantDB handles conflicts (LWW)
+    }, []);
 
     const dismissError = useCallback(() => {
-        // Error state is managed by useDexieSync, clearing it requires a re-sync or just ignoring it
-        // For now, re-trigger sync might clear error if successful
-        syncNow();
-    }, [syncNow]);
+        // Errors from InstantDB usually resolve themselves or on retry
+    }, []);
 
     const value: SyncContextValue = {
         status,
-        pendingChangesCount: 0, // TODO: Implement pending count if needed
-        lastSyncedAt: lastSyncedAt ? lastSyncedAt.toISOString() : null,
+        pendingChangesCount: 0, 
+        lastSyncedAt: settings?.lastSyncedAt || null,
         conflict: null,
-        errorMessage: error,
-        isAuthenticated,
+        errorMessage: error?.message || null,
+        isAuthenticated: !!user,
         triggerSync,
         resolveConflict,
         dismissError

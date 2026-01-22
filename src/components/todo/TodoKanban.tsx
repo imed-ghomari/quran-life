@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import KanbanColumn from './KanbanColumn';
@@ -13,8 +13,7 @@ import SplitsModal from './SplitsModal';
 import { Check, PenTool, Download, Search } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { QuranPart } from '@/lib/types';
-import { MutashabihatDecision } from '@/lib/storage';
+import { QuranPart, MutashabihatDecision } from '@/lib/types';
 
 // Helper to highlight logic
 function HighlightedVerse({ text, range }: { text: string; range?: [number, number] }) {
@@ -43,9 +42,7 @@ interface TodoKanbanProps {
 
     // Data & State
     verses: any[];
-    decisions: any;
     mindmaps: any;
-    partMindmaps: any;
     isDark: boolean;
 
     // Callbacks
@@ -55,7 +52,6 @@ interface TodoKanbanProps {
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
     onImportPremade: (type: 'surah' | 'part', id: number) => void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
-    onViewMindmap: (data: any) => void;
     onDeleteMindmap?: (type: 'surah' | 'part', id: number) => void;
 
     // Anchor Builder Props
@@ -76,9 +72,7 @@ export default function TodoKanban({
     partTasks,
     surahTasks,
     verses,
-    decisions,
     mindmaps,
-    partMindmaps,
     isDark,
     onFixConfirm,
     onSimilarityDecision,
@@ -86,7 +80,6 @@ export default function TodoKanban({
     onSurahComplete,
     onImportPremade,
     onEditMindmap,
-    onViewMindmap,
     onDeleteMindmap,
     getBuilderState,
     onAddBreak,

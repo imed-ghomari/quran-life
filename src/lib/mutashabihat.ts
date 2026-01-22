@@ -3,7 +3,7 @@
 import phrasesRaw from '../../Mutashabihat ul Quran/phrases.json';
 import phraseVersesRaw from '../../Mutashabihat ul Quran/phrase_verses.json';
 import { SURAHS } from './quranData';
-import { getCustomMutashabihat } from './storage';
+import { CustomMutashabih } from './types';
 
 /**
  * Metadata for a specific phrase match in a verse
@@ -32,7 +32,11 @@ export interface SimilarityEntry {
     isCustom?: boolean;
 }
 
-const phrases = phrasesRaw as Record<string, any>;
+const phrases = phrasesRaw as unknown as Record<string, {
+    source: { key: string; from: number; to: number };
+    ayah: Record<string, number[] | number[][]>;
+    count: number;
+}>;
 const phraseVerses = phraseVersesRaw as Record<string, number[]>;
 
 const flatEntries: FlatEntry[] = [];
@@ -70,10 +74,10 @@ function init() {
         const sourceAbs = keyToAbsolute(data.source.key);
         const sourceRange: [number, number] = [data.source.from, data.source.to];
 
-        const matches: MatchMeta[] = Object.entries(data.ayah).map(([key, ranges]: [string, any]) => {
+        const matches: MatchMeta[] = Object.entries(data.ayah).map(([key, ranges]) => {
             const abs = keyToAbsolute(key);
             // Default to the first range if multiple exist for the same verse
-            const range = Array.isArray(ranges[0]) ? ranges[0] : ranges;
+            const range = Array.isArray(ranges[0]) ? ranges[0] : (ranges as [number, number]);
             return {
                 absolute: abs,
                 wordRange: [range[0], range[1]] as [number, number]
@@ -124,7 +128,7 @@ export function hasMutashabihForAbsolute(absoluteAyah: number): boolean {
     return ayahSet.has(absoluteAyah);
 }
 
-export function getMutashabihatForAbsolute(absoluteAyah: number): SimilarityEntry[] {
+export function getMutashabihatForAbsolute(absoluteAyah: number, customMutashabihat: CustomMutashabih[] = []): SimilarityEntry[] {
     const indices = ayahToEntryMap[absoluteAyah] || [];
     const official = indices.map(idx => {
         const entry = flatEntries[idx];
@@ -138,16 +142,19 @@ export function getMutashabihatForAbsolute(absoluteAyah: number): SimilarityEntr
     });
 
     // Add custom ones
-    const customs = getCustomMutashabihat();
-    const customEntries: SimilarityEntry[] = customs
-        .filter(c => {
-            const abs1 = surahAyahToAbsolute(c.verse1.surahId, c.verse1.ayahId);
-            const abs2 = surahAyahToAbsolute(c.verse2.surahId, c.verse2.ayahId);
+    const customEntries: SimilarityEntry[] = customMutashabihat
+        .filter((c: CustomMutashabih) => {
+            const [s1, a1] = c.verseId.split(':').map(Number);
+            const [s2, a2] = c.targetVerseId.split(':').map(Number);
+            const abs1 = surahAyahToAbsolute(s1, a1);
+            const abs2 = surahAyahToAbsolute(s2, a2);
             return abs1 === absoluteAyah || abs2 === absoluteAyah;
         })
-        .map(c => {
-             const abs1 = surahAyahToAbsolute(c.verse1.surahId, c.verse1.ayahId);
-             const abs2 = surahAyahToAbsolute(c.verse2.surahId, c.verse2.ayahId);
+        .map((c: CustomMutashabih) => {
+            const [s1, a1] = c.verseId.split(':').map(Number);
+            const [s2, a2] = c.targetVerseId.split(':').map(Number);
+             const abs1 = surahAyahToAbsolute(s1, a1);
+             const abs2 = surahAyahToAbsolute(s2, a2);
              return {
                  phraseId: `custom-${c.id}`,
                  sources: [abs1],
@@ -155,12 +162,12 @@ export function getMutashabihatForAbsolute(absoluteAyah: number): SimilarityEntr
                  meta: { 
                      phraseId: `custom-${c.id}`,
                      sourceAbs: abs1,
-                     sourceRange: [0, 0],
-                     matches: [{ absolute: abs2, wordRange: [0, 0] }],
+                     sourceRange: [0, 0] as [number, number],
+                     matches: [{ absolute: abs2, wordRange: [0, 0] as [number, number] }],
                      totalCount: 2,
                      isCustom: true,
                      customId: c.id
-                 } as any,
+                 },
                  isCustom: true
              };
          });
@@ -168,13 +175,16 @@ export function getMutashabihatForAbsolute(absoluteAyah: number): SimilarityEntr
     return [...official, ...customEntries];
 }
 
-export function getAllMutashabihatRefs(): number[] {
+export function getAllMutashabihatRefs(customMutashabihat: CustomMutashabih[] = []): number[] {
     const officialRefs = Array.from(ayahSet.values());
-    const customs = getCustomMutashabihat();
-    const customRefs = customs.flatMap(c => [
-        surahAyahToAbsolute(c.verse1.surahId, c.verse1.ayahId),
-        surahAyahToAbsolute(c.verse2.surahId, c.verse2.ayahId)
-    ]);
+    const customRefs = customMutashabihat.flatMap((c: CustomMutashabih) => {
+        const [s1, a1] = c.verseId.split(':').map(Number);
+        const [s2, a2] = c.targetVerseId.split(':').map(Number);
+        return [
+            surahAyahToAbsolute(s1, a1),
+            surahAyahToAbsolute(s2, a2)
+        ];
+    });
     return Array.from(new Set([...officialRefs, ...customRefs])).sort((a, b) => a - b);
 }
 
