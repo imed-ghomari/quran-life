@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { OnlineStatusContext } from '@/components/Providers';
 import { useSyncState, getSyncStatusText } from '@/hooks/useSyncState';
-import { getSurahsByPart, getSurah, getQuranVerses } from '@/lib/quranData';
+import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
     AppSettings,
     DEFAULT_SETTINGS,
@@ -28,7 +28,6 @@ import {
     exportBackup,
     importBackup,
     MutashabihatDecision,
-    bulkSetSurahStatus,
     resetMutashabihatDecisions,
     saveReviewError,
     removeReviewError,
@@ -41,6 +40,7 @@ import {
     getNodeDifficulty,
     getNodeReps,
     getNodeDueDate,
+    clearAllData,
 } from '@/lib/storage';
 import { getSchedulingPreview, createPresetState, getRetrievability, formatRecallChance } from '@/lib/fsrs';
 import { QuranPart } from '@/lib/types';
@@ -56,7 +56,8 @@ import {
     Map,
     Book,
     Activity,
-    X
+    X,
+    Trash2
 } from 'lucide-react';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
@@ -255,10 +256,10 @@ export default function SettingsPage() {
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                          <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                            <Download size={18} /> Local Backup
+                            <Download size={18} /> Backup, Import & Reset
                         </h2>
                             <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                Export a JSON backup of your progress. Import it later to restore or move to another device.
+                                Manage your data: Export backup, import from file, or reset all data.
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <button
@@ -302,6 +303,28 @@ export default function SettingsPage() {
                                     <span>Import Data</span>
                                     <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
                                 </label>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleReset}
+                                    style={{
+                                        gridColumn: 'span 2',
+                                        display: 'flex',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem',
+                                        fontSize: '0.9rem',
+                                        height: 'auto',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px',
+                                        color: '#ef4444'
+                                    }}
+                                >
+                                    <Trash2 size={20} />
+                                    <span>Reset All Data</span>
+                                </button>
                             </div>
                     </div>
                  </div>
@@ -390,17 +413,6 @@ export default function SettingsPage() {
                         <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                             <Check size={18} /> Surah Status
                         </h2>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-                                <button suppressHydrationWarning={true} className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
-                                    All Learned
-                                </button>
-                                <button suppressHydrationWarning={true} className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
-                                    All New
-                                </button>
-                                <button suppressHydrationWarning={true} className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
-                                    All Skipped
-                                </button>
-                            </div>
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                                 Manage learned and skipped surahs for the active part. <br />
                                 <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>Tap a surah to cycle between: <b>Not Learned (Red)</b> → <b>Learned (Green)</b> → <b>Skipped (Grey)</b></span>
@@ -923,16 +935,6 @@ export default function SettingsPage() {
         setVersion(v => v + 1);
     };
 
-    const handleBulkStatus = (status: 'learned' | 'new' | 'skipped') => {
-        const partName = settings.activePart === 5 ? 'the whole Quran' : `Part ${settings.activePart}`;
-        const msg = `Are you sure you want to mark ALL surahs in ${partName} as ${status.toUpperCase()}? This will override their current individual statuses.`;
-        if (!window.confirm(msg)) return;
-
-        const surahIds = activePartSurahs.map(s => s.id);
-        bulkSetSurahStatus(surahIds, status);
-        setVersion(v => v + 1);
-    };
-
     const handleResetMutashabihat = () => {
         const partName = settings.activePart === 5 ? 'the whole Quran' : `Part ${settings.activePart}`;
         const msg = `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`;
@@ -947,22 +949,17 @@ export default function SettingsPage() {
         setVersion(v => v + 1);
     };
 
-    const handleCycleStatus = (surahId: number) => {
-        const { learned, total } = getSurahLearnedStatus(surahId);
-        const skipped = isSurahSkipped(surahId);
-        const isLearned = learned === total;
+    const [surahToSkipId, setSurahToSkipId] = useState<number | ''>('');
 
-        if (!isLearned && !skipped) {
-            // State: Not Learned -> Set to Learned
-            toggleSurahLearned(surahId);
-        } else if (isLearned && !skipped) {
-            // State: Learned -> Set to Skipped
-            toggleSurahLearned(surahId); // Unlearn first
-            toggleSurahSkipped(surahId); // Then skip
-        } else {
-            // State: Skipped -> Set to Not Learned
-            toggleSurahSkipped(surahId); // Unskip
-        }
+    const handleAddSkippedSurah = () => {
+        if (!surahToSkipId) return;
+        toggleSurahSkipped(Number(surahToSkipId));
+        setSurahToSkipId('');
+        setVersion(v => v + 1);
+    };
+
+    const handleRemoveSkippedSurah = (id: number) => {
+        toggleSurahSkipped(id);
         setVersion(v => v + 1);
     };
 
@@ -1030,6 +1027,15 @@ export default function SettingsPage() {
             }
         };
         reader.readAsText(file);
+    };
+
+    const handleReset = async () => {
+        if (confirm('WARNING: This will delete ALL your data, including progress, settings, and mindmaps. This action cannot be undone.\n\nAre you sure you want to reset all data?')) {
+            if (confirm('Double check: Are you absolutely sure? All data will be lost forever.')) {
+                await clearAllData();
+                window.location.reload();
+            }
+        }
     };
 
     const mutashabihatBySurah = useMemo(() => {
@@ -1235,14 +1241,14 @@ export default function SettingsPage() {
                             <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Download size={18} />
                             </div>
-                            <span>Local Backup & Import</span>
+                            <span>Backup, Import & Reset</span>
                         </div>
                         <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
                     {sectionsExpanded.backupRestore && (
                         <>
                             <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
-                                Export a JSON backup of your progress. Import it later to restore or move to another device.
+                                Manage your data: Export backup, import from file, or reset all data.
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <button
@@ -1286,6 +1292,28 @@ export default function SettingsPage() {
                                     <span>Import Data</span>
                                     <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
                                 </label>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleReset}
+                                    style={{
+                                        gridColumn: 'span 2',
+                                        display: 'flex',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem',
+                                        fontSize: '0.9rem',
+                                        height: 'auto',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px',
+                                        color: '#ef4444'
+                                    }}
+                                >
+                                    <Trash2 size={20} />
+                                    <span>Reset All Data</span>
+                                </button>
                             </div>
                         </>
                     )}
@@ -1420,88 +1448,92 @@ export default function SettingsPage() {
                             <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Check size={18} />
                             </div>
-                            <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Surah Status</span>
+                            <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Skipped Surah</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            {sectionsExpanded.surahStatus && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    <button className="bulk-btn learned" onClick={(e) => { e.stopPropagation(); handleBulkStatus('learned'); }} title="Mark all as Learned" style={{ fontSize: '0.8rem' }}>
-                                        All Learned
-                                    </button>
-                                    <button className="bulk-btn new" onClick={(e) => { e.stopPropagation(); handleBulkStatus('new'); }} title="Mark all as New" style={{ fontSize: '0.8rem' }}>
-                                        All New
-                                    </button>
-                                    <button className="bulk-btn skipped" onClick={(e) => { e.stopPropagation(); handleBulkStatus('skipped'); }} title="Mark all as Skipped" style={{ fontSize: '0.8rem' }}>
-                                        All Skipped
-                                    </button>
-                                </div>
-                            )}
                             <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.surahStatus ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </div>
                     </div>
                     {sectionsExpanded.surahStatus && (
                         <>
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                Manage learned and skipped surahs for the active part. <br />
-                                <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>Tap a surah to cycle between: <b>Not Learned (Red)</b> → <b>Learned (Green)</b> → <b>Skipped (Grey)</b></span>
+                                Manage surahs you want to skip from the daily review queue.
                             </p>
-                            <div className="surah-pills-container" style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '0.6rem',
-                                marginTop: '0.5rem'
-                            }}>
-                                {activePartSurahs.map(s => {
-                                    const { learned, total } = getSurahLearnedStatus(s.id);
-                                    const skipped = isSurahSkipped(s.id);
-                                    const isLearned = learned === total;
+                            
+                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <select
+                                    value={surahToSkipId}
+                                    onChange={(e) => setSurahToSkipId(e.target.value ? Number(e.target.value) : '')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '0.75rem',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--background)',
+                                        color: 'var(--foreground)',
+                                        fontSize: '0.9rem',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    <option value="">Select a surah to skip...</option>
+                                    {SURAHS.map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.id}. {s.name} ({s.arabicName})
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={handleAddSkippedSurah}
+                                    disabled={!surahToSkipId}
+                                    style={{
+                                        padding: '0 1.25rem',
+                                        borderRadius: '12px',
+                                        background: surahToSkipId ? 'var(--accent)' : 'var(--border)',
+                                        color: 'white',
+                                        fontWeight: 600,
+                                        border: 'none',
+                                        cursor: surahToSkipId ? 'pointer' : 'not-allowed',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Add
+                                </button>
+                            </div>
 
-                                    let statusColor = 'var(--danger)'; // Not Learned (Red)
-                                    if (isLearned) {
-                                        statusColor = '#22c55e'; // Learned (Green)
-                                    } else if (skipped) {
-                                        statusColor = '#94a3b8'; // Skipped (Grey)
-                                    }
-
+                            <div className="skipped-surahs-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {(!settings.skippedSurahs || settings.skippedSurahs.length === 0) && (
+                                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', fontStyle: 'italic', width: '100%' }}>No surahs skipped.</p>
+                                )}
+                                {settings.skippedSurahs?.map(id => {
+                                    const s = SURAHS.find(surah => surah.id === id);
+                                    if (!s) return null;
                                     return (
-                                        <button
-                                            key={s.id}
-                                            onClick={() => handleCycleStatus(s.id)}
-                                            className="surah-pill"
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                padding: '0.5rem 0.8rem',
-                                                borderRadius: '24px',
-                                                border: `1px solid ${statusColor}`,
-                                                background: `${statusColor}15`, // Translucent background
-                                                color: statusColor,
-                                                fontSize: '0.85rem',
-                                                fontWeight: 500,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s ease',
-                                                outline: 'none'
-                                            }}
-                                            title={`${s.name} - Tap to cycle status`}
-                                        >
-                                            <span style={{
-                                                width: '20px',
-                                                height: '20px',
-                                                borderRadius: '50%',
-                                                background: statusColor,
-                                                color: 'white',
-                                                fontSize: '0.7rem',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                marginRight: '0.5rem',
-                                                flexShrink: 0
-                                            }}>
-                                                {s.id}
-                                            </span>
-                                            <span style={{ marginRight: '0.4rem' }}>{s.arabicName}</span>
-                                            <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{s.name}</span>
-                                        </button>
+                                        <div key={id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            padding: '0.5rem 0.75rem',
+                                            background: 'var(--background)',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '20px',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            <span>{s.id}. {s.name}</span>
+                                            <button
+                                                onClick={() => handleRemoveSkippedSurah(id)}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    color: 'var(--foreground-secondary)',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center'
+                                                }}
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
                                     );
                                 })}
                             </div>

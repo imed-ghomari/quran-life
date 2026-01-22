@@ -39,7 +39,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     if (!settings) return null;
 
     const handleNext = async () => {
-        if (step < 5) {
+        if (step < 4) {
             setStep(step + 1);
         } else {
             // Save final settings
@@ -70,29 +70,6 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (step > 0) setStep(step - 1);
     };
 
-    const toggleSurah = (surahId: number) => {
-        if (!settings) return;
-
-        const newSettings = { 
-            ...settings, 
-            learnedVerses: JSON.parse(JSON.stringify(settings.learnedVerses)) 
-        };
-        const surah = SURAHS.find(s => s.id === surahId);
-        if (!surah) return;
-
-        const surahKey = surahId.toString();
-        const currentLearned = newSettings.learnedVerses[surahKey] || [];
-        const isLearned = currentLearned.length === surah.verseCount;
-
-        if (isLearned) {
-            delete newSettings.learnedVerses[surahKey];
-        } else {
-            newSettings.learnedVerses[surahKey] = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
-        }
-        
-        setSettings(newSettings);
-    };
-
     const toggleSkippedSurah = (surahId: number) => {
         if (!settings) return;
         const currentSkipped = new Set(settings.skippedSurahs || []);
@@ -105,15 +82,6 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
             ...settings,
             skippedSurahs: Array.from(currentSkipped).sort((a, b) => a - b)
         });
-    };
-
-    const isSurahLearned = (surahId: number) => {
-        if (!settings) return false;
-        const surah = SURAHS.find(s => s.id === surahId);
-        if (!surah) return false;
-
-        const learnedCount = settings.learnedVerses[surahId.toString()]?.length || 0;
-        return learnedCount === surah.verseCount && surah.verseCount > 0;
     };
 
     const filteredSurahs = SURAHS.filter(s => selectedPart === 5 || s.part === selectedPart);
@@ -156,7 +124,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         top: 0,
                         height: '100%',
                         background: 'var(--accent)',
-                        width: `${((step + 1) / 6) * 100}%`,
+                        width: `${((step + 1) / 5) * 100}%`,
                         transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     }} />
                 </div>
@@ -244,57 +212,6 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
                     {step === 2 && (
                         <div className="step-content animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                                <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
-                                    <BookOpen size={28} />
-                                </div>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Mark Your Progress</h2>
-                            </div>
-                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', lineHeight: 1.6 }}>
-                                Mark the Surahs you have already memorized/learned in <b>{PART_NAMES[selectedPart].english}</b>.
-                            </p>
-                            <div style={{
-                                flex: 1,
-                                overflowY: 'auto',
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-                                gap: '0.5rem',
-                                padding: '0.5rem',
-                                background: 'var(--background)',
-                                borderRadius: '16px',
-                                border: '1px solid var(--border)',
-                            }}>
-                                {filteredSurahs.map(surah => {
-                                    const learned = isSurahLearned(surah.id);
-                                    return (
-                                        <button
-                                            key={surah.id}
-                                            onClick={() => toggleSurah(surah.id)}
-                                            style={{
-                                                padding: '0.75rem',
-                                                borderRadius: '12px',
-                                                border: `1px solid ${learned ? 'var(--success)' : 'var(--border)'}`,
-                                                background: learned ? 'var(--success-bg)' : 'var(--background-secondary)',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '0.25rem',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s ease',
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: learned ? 'var(--success)' : 'var(--foreground)' }}>{surah.name}</span>
-                                            <span style={{ fontSize: '0.85rem', fontFamily: 'Amiri, serif', color: learned ? 'var(--success)' : 'var(--foreground-secondary)' }}>{surah.arabicName}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {step === 3 && (
-                        <div className="step-content animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                                 <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
                                     <EyeOff size={28} />
@@ -357,7 +274,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         </div>
                     )}
 
-                    {step === 5 && (
+                    {step === 4 && (
                         <div className="step-content animate-fade-in">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                                 <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
@@ -406,7 +323,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         </div>
                     )}
 
-                    {step === 4 && (
+                    {step === 3 && (
                         <div className="step-content animate-fade-in" style={{ textAlign: 'center' }}>
                             <div style={{ marginBottom: '2rem' }}>
                                 <div style={{
@@ -497,7 +414,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             boxShadow: '0 4px 12px rgba(91, 143, 185, 0.3)',
                         }}
                     >
-                        {step === 5 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
+                        {step === 3 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
                     </button>
                 </div>
             </div>
