@@ -192,11 +192,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Security Check 1.5: Anonymous Dirty Data Protection
-        // If we find data that has NO owner (userId is undefined), but we are logged in,
-        // and that data is not empty/default, we must assume it belongs to a previous session/user.
-        // To guarantee isolation, we wipe it and let the Cloud Sync restore the correct data for the current user.
-        // Exception: If the data is effectively empty (clean slate), we can safely adopt it.
+        // Security Check 1.5: Anonymous Dirty Data Protection - DISABLED
+        // This check was causing double reloads and data loss when syncing or migrating data that temporarily lost its userId.
+        // We now rely on the "Bind data" step below to claim anonymous data for the logged-in user.
+        /*
         const isDirtyState = Object.keys(settings.learnedVerses || {}).length > 0 || (settings.skippedSurahs || []).length > 0;
         if (!settings.userId && isDirtyState) {
              console.warn('[Security] Anonymous dirty data detected. Clearing to ensure isolation...');
@@ -204,6 +203,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
              window.location.reload();
              return;
         }
+        */
 
         // Security Check 2: Fresh User vs Stale Data (The "Clean Slate" Fix)
         // If the user account was created recently (< 10 mins ago) but we found existing local data

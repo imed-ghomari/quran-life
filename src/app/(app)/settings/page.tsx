@@ -550,35 +550,37 @@ export default function SettingsPage() {
                                             <div className="mobile-subgroup-list">
                                                 {/* Issue #10: Filter by active part */}
                                                 {(() => {
-                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
-                                                        .filter(surahId => {
-                                                            const surah = getSurah(surahId!);
-                                                            if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
-                                                            if (settings.skippedSurahs?.includes(surahId!)) return false;
-                                                            return true;
-                                                        })
-                                                        .sort((a, b) => (a || 0) - (b || 0));
+                                                    // Get all eligible surahs for the current active part
+                                                    const eligibleSurahs = SURAHS.filter(s => 
+                                                        (settings.activePart === 5 || s.part === settings.activePart) &&
+                                                        !settings.skippedSurahs?.includes(s.id)
+                                                    ).sort((a, b) => a.id - b.id);
 
-                                                    if (filteredSurahs.length === 0) {
+                                                    if (eligibleSurahs.length === 0) {
                                                         return (
-                                                            <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes in Part {settings.activePart}</div>
+                                                            <div className="empty-state" style={{ padding: '1rem' }}>No surahs in Part {settings.activePart}</div>
                                                         );
                                                     }
 
-                                                    return filteredSurahs.map(surahId => {
-                                                        const surah = getSurah(surahId!);
+                                                    return eligibleSurahs.map(surah => {
+                                                        const surahId = surah.id;
                                                         const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                        
+                                                        // Always show the surah group, even if no nodes exist yet (0 items)
+                                                        // This allows users to set maturity for the whole group before starting reviews
                                                         return (
                                                             <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                                 id: `verse-surah-${surahId}`,
-                                                                title: `${surah?.id}. ${surah?.name}`,
+                                                                title: `${surah.id}. ${surah.name}`,
                                                                 type: 'verse',
                                                                 nodes: surahNodes,
                                                                 surahId
                                                             })}>
-                                                                <span>{surah?.name}</span>
+                                                                <span>{surah.name}</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{surahNodes.length}</span>
+                                                                    <span className={`status-badge ${surahNodes.length === 0 ? 'neutral' : ''}`}>
+                                                                        {surahNodes.length}
+                                                                    </span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
