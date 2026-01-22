@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { useRouter as usePagesRouter } from 'next/router';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 import ThemeToggle from './ThemeToggle';
@@ -15,11 +14,11 @@ import {
     useInstantReviewErrors,
     useInstantListeningStats
 } from '@/hooks/useInstantData';
-import { getMutashabihatForAbsolute, absoluteToSurahAyah, surahAyahToAbsolute } from '@/lib/mutashabihat';
+import { getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 
-export default function Navigation() {
-    let pathname = usePathname();
+function NavigationContent() {
+    const pathname = usePathname();
     const { settings } = useInstantSettings();
     const { nodes } = useInstantNodes();
     const { mindmaps, partMindMaps } = useInstantMindMaps();
@@ -101,39 +100,38 @@ export default function Navigation() {
         { href: '/settings', icon: Settings, label: 'Settings' },
     ];
 
-    if (pathname === '/' || pathname === '/auth') return null;
-
     return (
         <nav className="bottom-nav">
-            {navItems.map(item => {
+            {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
+                const isActive = pathname === item.href || (item.href === '/docs' && pathname?.startsWith('/docs'));
                 return (
                     <Link
-                        suppressHydrationWarning={true}
                         key={item.href}
                         href={item.href}
                         className={`nav-item ${isActive ? 'active' : ''}`}
                     >
-                        <span className="nav-icon">
-                            <Icon size={24} />
-                            {item.badge !== undefined && item.badge > 0 ? (
-                                <span className="nav-badge">{item.badge}</span>
-                            ) : null}
-                            {item.status && (
-                                <span className="nav-status-dot"></span>
+                        <div className="nav-icon">
+                            <Icon size={22} />
+                            {item.badge !== undefined && item.badge > 0 && (
+                                <span className={`badge ${item.status ? 'status-alert' : ''}`}>
+                                    {item.badge}
+                                </span>
                             )}
-                        </span>
-                        <span>{item.label}</span>
+                        </div>
+                        <span className="nav-label">{item.label}</span>
                     </Link>
                 );
             })}
-
-            {/* Sync Status - Desktop only */}
-            <div className="hide-mobile sync-nav-wrapper">
-                <ThemeToggle variant="desktop" />
-                <SyncStatus variant="desktop" />
-            </div>
         </nav>
     );
+}
+
+export default function Navigation() {
+    const pathname = usePathname();
+    const isAuthOrHome = pathname === '/' || pathname === '/auth';
+
+    if (isAuthOrHome) return null;
+
+    return <NavigationContent />;
 }
