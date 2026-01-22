@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { syncWithCloud, SyncResult } from '@/lib/sync';
 import { OnlineStatusContext } from '@/components/Providers';
 import { useSyncState, getSyncStatusText } from '@/hooks/useSyncState';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
@@ -26,7 +25,7 @@ import {
     importBackup,
     MutashabihatDecision,
     resetMutashabihatDecisions,
-    saveReviewError,
+    saveReviewErrors,
     removeReviewError,
     findAnchorForRange,
     getListeningProgress,
@@ -60,6 +59,11 @@ import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { MemoryNode, getMemoryNodes } from '@/lib/storage';
+
+interface SyncResult {
+    success: boolean;
+    message: string;
+}
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'pending', label: 'Pending Review' },
@@ -512,24 +516,24 @@ export default function SettingsPage() {
                                                 <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                     id: 'mindmaps-part',
                                                     title: 'Part Mindmaps',
-                                                    type: 'part_mindmap',
-                                                    nodes: memoryNodes.filter(n => n.type === 'part_mindmap')
+                                                    type: 'part_mindmap' as any as any,
+                                                    nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
                                                 })}>
                                                     <span>Part Mindmaps</span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'part_mindmap').length}</span>
+                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
                                                         <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                     </div>
                                                 </div>
                                                 <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                     id: 'mindmaps-surah',
                                                     title: 'Surah Mindmaps',
-                                                    type: 'mindmap',
-                                                    nodes: memoryNodes.filter(n => n.type === 'mindmap')
+                                                    type: 'mindmap' as any as any,
+                                                    nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
                                                 })}>
                                                     <span>Surah Mindmaps</span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'mindmap').length}</span>
+                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
                                                         <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                     </div>
                                                 </div>
@@ -564,7 +568,7 @@ export default function SettingsPage() {
 
                                                     return eligibleSurahs.map(surah => {
                                                         const surahId = surah.id;
-                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
                                                         
                                                         // Always show the surah group, even if no nodes exist yet (0 items)
                                                         // This allows users to set maturity for the whole group before starting reviews
@@ -572,7 +576,7 @@ export default function SettingsPage() {
                                                             <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                                 id: `verse-surah-${surahId}`,
                                                                 title: `${surah.id}. ${surah.name}`,
-                                                                type: 'verse',
+                                                                type: 'verse_segment',
                                                                 nodes: surahNodes,
                                                                 surahId
                                                             })}>
@@ -650,7 +654,7 @@ export default function SettingsPage() {
                                                 {groups.map(group => {
                                                     const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
                                                     const decisionKey = `${representativeAbs}-${group.phraseId}`;
-                                                    const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                    const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                                                     const isConfirmed = !!existing.confirmedAt;
 
                                                     return (
@@ -823,7 +827,7 @@ export default function SettingsPage() {
     const [activeSlideOverGroup, setActiveSlideOverGroup] = useState<{
         id: string;
         title: string;
-        type: 'verse' | 'mindmap' | 'part_mindmap';
+        type: 'verse_segment' | 'mindmap' | 'part_mindmap';
         nodes: MemoryNode[];
         surahId?: number;
     } | null>(null);
@@ -913,12 +917,12 @@ export default function SettingsPage() {
         setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
     };
 
-    const handleGroupMaturityReset = (type: 'verse' | 'mindmap' | 'part_mindmap', surahId?: number, surahName?: string) => {
+    const handleGroupMaturityReset = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number, surahName?: string) => {
         let typeLabel = '';
         if (surahName) {
             typeLabel = `all Verses for ${surahName}`;
         } else {
-            typeLabel = type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
+            typeLabel = type === 'verse_segment' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
         }
 
         if (!window.confirm(`Are you sure you want to reset the maturity of ${typeLabel}?`)) return;
@@ -977,38 +981,42 @@ export default function SettingsPage() {
         setVersion(v => v + 1);
     };
 
-    const handleDecisionUpdate = (absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
+    const handleDecisionUpdate = async (absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
         if (phraseId.startsWith('custom-')) {
             const customId = phraseId.replace('custom-', '');
             const allCustoms = getCustomMutashabihat();
             const mut = allCustoms.find((m: CustomMutashabih) => m.id === customId);
             if (mut) {
                 mut.status = update.status;
-                mut.note = update.note;
-                saveCustomMutashabih(mut);
+                mut.notes = update.notes;
+                await saveCustomMutashabih(mut);
             }
         }
 
         const key = `${absoluteAyah}-${phraseId}`;
-        setMutashabihatDecision(key as any, update);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id: _ignored, ...updateWithoutId } = update;
+        await setMutashabihatDecision({ id: key, ...updateWithoutId });
         setVersion(v => v + 1);
     };
 
-    const handleAddCustomMutashabih = (mut: CustomMutashabih) => {
-        saveCustomMutashabih(mut);
+    const handleAddCustomMutashabih = async (mut: CustomMutashabih) => {
+        await saveCustomMutashabih(mut);
 
         // Also save to decisions for consistency and immediate UI update
-        const abs1 = surahAyahToAbsolute(mut.verse1.surahId, mut.verse1.ayahId);
-        const abs2 = surahAyahToAbsolute(mut.verse2.surahId, mut.verse2.ayahId);
+        const [s1, a1] = mut.verseId.split(':').map(Number);
+        const abs1 = surahAyahToAbsolute(s1, a1);
+        const [s2, a2] = mut.targetVerseId.split(':').map(Number);
+        const abs2 = surahAyahToAbsolute(s2, a2);
 
         const isSolved = mut.status !== 'pending' && mut.status !== 'ignored';
         const decision = {
             status: mut.status,
-            note: mut.note,
+            notes: mut.notes,
             confirmedAt: isSolved ? new Date().toISOString() : undefined
         };
-        setMutashabihatDecision(`${abs1}-custom-${mut.id}` as any, decision);
-        setMutashabihatDecision(`${abs2}-custom-${mut.id}` as any, decision);
+        await setMutashabihatDecision({ id: `${abs1}-custom-${mut.id}`, ...decision } as MutashabihatDecision);
+        await setMutashabihatDecision({ id: `${abs2}-custom-${mut.id}`, ...decision } as MutashabihatDecision);
 
         setVersion(v => v + 1);
     };
@@ -1609,24 +1617,24 @@ export default function SettingsPage() {
                                                 <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                     id: 'mindmaps-part',
                                                     title: 'Part Mindmaps',
-                                                    type: 'part_mindmap',
-                                                    nodes: memoryNodes.filter(n => n.type === 'part_mindmap')
+                                                    type: 'part_mindmap' as any,
+                                                    nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
                                                 })}>
                                                     <span>Part Mindmaps</span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'part_mindmap').length}</span>
+                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
                                                         <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                     </div>
                                                 </div>
                                                 <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                     id: 'mindmaps-surah',
                                                     title: 'Surah Mindmaps',
-                                                    type: 'mindmap',
-                                                    nodes: memoryNodes.filter(n => n.type === 'mindmap')
+                                                    type: 'mindmap' as any,
+                                                    nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
                                                 })}>
                                                     <span>Surah Mindmaps</span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => n.type === 'mindmap').length}</span>
+                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
                                                         <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                     </div>
                                                 </div>
@@ -1647,7 +1655,7 @@ export default function SettingsPage() {
                                             <div className="mobile-subgroup-list">
                                                 {/* Issue #10: Filter by active part */}
                                                 {(() => {
-                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
+                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
                                                         .filter(surahId => {
                                                             const surah = getSurah(surahId!);
                                                             if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
@@ -1664,12 +1672,12 @@ export default function SettingsPage() {
 
                                                     return filteredSurahs.map(surahId => {
                                                         const surah = getSurah(surahId!);
-                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse' && n.surahId === surahId);
+                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
                                                         return (
                                                             <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                                 id: `verse-surah-${surahId}`,
                                                                 title: `${surah?.id}. ${surah?.name}`,
-                                                                type: 'verse',
+                                                                type: 'verse_segment',
                                                                 nodes: surahNodes,
                                                                 surahId
                                                             })}>
@@ -1765,9 +1773,9 @@ export default function SettingsPage() {
                                                         </td>
                                                     </tr>
                                                     {expandedGroups['mindmaps-part'] && (
-                                                        memoryNodes.filter(n => n.type === 'part_mindmap').length > 0 ? (
+                                                        memoryNodes.filter(n => (n as any).type === 'part_mindmap').length > 0 ? (
                                                             memoryNodes
-                                                                .filter(n => n.type === 'part_mindmap')
+                                                                .filter(n => (n as any).type === 'part_mindmap')
                                                                 .sort((a, b) => (a.partId || 0) - (b.partId || 0))
                                                                 .map(node => (
                                                                     <tr key={node.id} className="node-row">
@@ -1789,10 +1797,10 @@ export default function SettingsPage() {
                                                                                 <option value="mastered">Mastered</option>
                                                                             </select>
                                                                         </td>
-                                                                        <td>{getNodeStability(node.scheduler)}d</td>
-                                                                        <td>{getNodeDifficulty(node.scheduler)}</td>
-                                                                        <td>{getNodeReps(node.scheduler)}</td>
-                                                                        <td className={getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node.scheduler)}</td>
+                                                                        <td>{getNodeStability(node)}d</td>
+                                                                        <td>{getNodeDifficulty(node)}</td>
+                                                                        <td>{getNodeReps(node)}</td>
+                                                                        <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
                                                                     </tr>
                                                                 ))
                                                         ) : (
@@ -1832,9 +1840,9 @@ export default function SettingsPage() {
                                                         </td>
                                                     </tr>
                                                     {expandedGroups['mindmaps-surah'] && (
-                                                        memoryNodes.filter(n => n.type === 'mindmap').length > 0 ? (
+                                                        memoryNodes.filter(n => (n as any).type === 'mindmap').length > 0 ? (
                                                             memoryNodes
-                                                                .filter(n => n.type === 'mindmap')
+                                                                .filter(n => (n as any).type === 'mindmap')
                                                                 .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
                                                                 .map(node => (
                                                                     <tr key={node.id} className="node-row">
@@ -1856,10 +1864,10 @@ export default function SettingsPage() {
                                                                                 <option value="mastered">Mastered</option>
                                                                             </select>
                                                                         </td>
-                                                                        <td>{getNodeStability(node.scheduler)}d</td>
-                                                                        <td>{getNodeDifficulty(node.scheduler)}</td>
-                                                                        <td>{getNodeReps(node.scheduler)}</td>
-                                                                        <td className={getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node.scheduler)}</td>
+                                                                        <td>{getNodeStability(node)}d</td>
+                                                                        <td>{getNodeDifficulty(node)}</td>
+                                                                        <td>{getNodeReps(node)}</td>
+                                                                        <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
                                                                     </tr>
                                                                 ))
                                                         ) : (
@@ -1903,7 +1911,7 @@ export default function SettingsPage() {
                                                 <>
                                                     {/* Issue #10: Filter by active part, show only learned surahs */}
                                                     {(() => {
-                                                        const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse').map(n => n.surahId)))
+                                                        const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
                                                             .filter(surahId => {
                                                                 const surah = getSurah(surahId!);
                                                                 // Filter by active part (show all if part 5)
@@ -1924,7 +1932,7 @@ export default function SettingsPage() {
                                                             const surah = getSurah(surahId!);
                                                             const surahKey = `verse-surah-${surahId}`;
                                                             const surahNodes = memoryNodes
-                                                                .filter(n => n.type === 'verse' && n.surahId === surahId)
+                                                                .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
                                                                 .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
 
                                                             return (
@@ -1985,10 +1993,10 @@ export default function SettingsPage() {
                                                                                     <option value="mastered">Mastered</option>
                                                                                 </select>
                                                                             </td>
-                                                                            <td>{getNodeStability(node.scheduler)}d</td>
-                                                                            <td>{getNodeDifficulty(node.scheduler)}</td>
-                                                                            <td>{getNodeReps(node.scheduler)}</td>
-                                                                            <td className={getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node.scheduler)}</td>
+                                                                            <td>{getNodeStability(node)}d</td>
+                                                                            <td>{getNodeDifficulty(node)}</td>
+                                                                            <td>{getNodeReps(node)}</td>
+                                                                            <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
                                                                         </tr>
                                                                     ))}
                                                                 </React.Fragment>
@@ -2128,7 +2136,7 @@ export default function SettingsPage() {
                                                     {groups.map(group => {
                                                         const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
                                                         const decisionKey = `${representativeAbs}-${group.phraseId}`;
-                                                        const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                        const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                                                         const isConfirmed = !!existing.confirmedAt;
 
                                                         return (
@@ -2238,7 +2246,7 @@ export default function SettingsPage() {
                                                                 // Use the first abs that has a decision, or the first one in the list
                                                                 const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
                                                                 const decisionKey = `${representativeAbs}-${group.phraseId}`;
-                                                                const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                                                                const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                                                                 const isConfirmed = !!existing.confirmedAt;
                                                                 const isDetailExpanded = expandedMutItems[decisionKey] || false;
 
@@ -2306,9 +2314,9 @@ export default function SettingsPage() {
                                                                                 <input
                                                                                     type="text"
                                                                                     placeholder="Add note..."
-                                                                                    value={existing.note || ''}
+                                                                                    value={existing.notes || ''}
                                                                                     onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, note: e.target.value }, group.phraseId)}
+                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, group.phraseId)}
                                                                                     style={{ minWidth: '150px' }}
                                                                                 />
                                                                             </td>
@@ -2422,7 +2430,7 @@ export default function SettingsPage() {
             {/* Similar Verses Slide-over Detail View */ }
             {activeMutSlideOver && (() => {
                 const decisionKey = activeMutSlideOver.id;
-                const existing = decisions[decisionKey] || { status: 'pending', note: '' };
+                const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                 const isConfirmed = !!existing.confirmedAt;
                 const group = activeMutSlideOver.group;
 
@@ -2474,8 +2482,8 @@ export default function SettingsPage() {
                                     <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Notes</label>
                                     <textarea
                                         placeholder="Add your distinction notes here..."
-                                        value={existing.note || ''}
-                                        onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, note: e.target.value }, activeMutSlideOver.phraseId)}
+                                        value={existing.notes || ''}
+                                        onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, notes: e.target.value }, activeMutSlideOver.phraseId)}
                                         style={{
                                             width: '100%',
                                             minHeight: '80px',
@@ -2800,7 +2808,7 @@ export default function SettingsPage() {
                         <div className="slide-over-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                 <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                                    {activeSlideOverGroup.type === 'verse' ? <Book size={18} /> : <Map size={18} />}
+                                    {activeSlideOverGroup.type === 'verse_segment' ? <Book size={18} /> : <Map size={18} />}
                                 </div>
                                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{activeSlideOverGroup.title}</h3>
                             </div>
@@ -2821,7 +2829,7 @@ export default function SettingsPage() {
                                         if (!val) return;
                                         if (val === 'reset' && !window.confirm(`Reset all nodes in ${activeSlideOverGroup.title}?`)) return;
 
-                                        if (activeSlideOverGroup.type === 'verse' && activeSlideOverGroup.surahId) {
+                                        if (activeSlideOverGroup.type === 'verse_segment' && activeSlideOverGroup.surahId) {
                                             setSurahMaturity(activeSlideOverGroup.surahId, val as any);
                                         } else {
                                             setGroupMaturity(activeSlideOverGroup.type as any, val as any);
@@ -2832,7 +2840,7 @@ export default function SettingsPage() {
                                         setActiveSlideOverGroup(prev => prev ? {
                                             ...prev,
                                             nodes: updated.filter(n => {
-                                                if (prev.type === 'verse') return n.type === 'verse' && n.surahId === prev.surahId;
+                                                if (prev.type === 'verse_segment') return n.type === 'verse_segment' && n.surahId === prev.surahId;
                                                 return n.type === prev.type;
                                             })
                                         } : null);
@@ -2850,7 +2858,7 @@ export default function SettingsPage() {
                                 {activeSlideOverGroup.nodes.length > 0 ? (
                                     activeSlideOverGroup.nodes
                                         .sort((a, b) => {
-                                            if (activeSlideOverGroup.type === 'verse') return (a.startVerse || 0) - (b.startVerse || 0);
+                                            if (activeSlideOverGroup.type === 'verse_segment') return (a.startVerse || 0) - (b.startVerse || 0);
                                             if (activeSlideOverGroup.type === 'mindmap') return (a.surahId || 0) - (b.surahId || 0);
                                             return (a.partId || 0) - (b.partId || 0);
                                         })
@@ -2858,7 +2866,7 @@ export default function SettingsPage() {
                                             <div key={node.id} className="mobile-node-card">
                                                 <div className="node-card-main">
                                                     <div className="node-target">
-                                                        {activeSlideOverGroup.type === 'verse' ? `Ayat ${node.startVerse}-${node.endVerse}` :
+                                                        {activeSlideOverGroup.type === 'verse_segment' ? `Ayat ${node.startVerse}-${node.endVerse}` :
                                                             activeSlideOverGroup.type === 'mindmap' ? `${node.surahId}. ${getSurah(node.surahId!)?.name}` :
                                                                 `Part ${node.partId}`}
                                                     </div>
@@ -2874,7 +2882,7 @@ export default function SettingsPage() {
                                                             setActiveSlideOverGroup(prev => prev ? {
                                                                 ...prev,
                                                                 nodes: updated.filter(n => {
-                                                                    if (prev.type === 'verse') return n.type === 'verse' && n.surahId === prev.surahId;
+                                                                    if (prev.type === 'verse_segment') return n.type === 'verse_segment' && n.surahId === prev.surahId;
                                                                     return n.type === prev.type;
                                                                 })
                                                             } : null);
@@ -2892,20 +2900,20 @@ export default function SettingsPage() {
                                                 <div className="node-card-details">
                                                     <div className="stat-item">
                                                         <span className="stat-label">Interval</span>
-                                                        <span className="stat-value">{getNodeStability(node.scheduler)}d</span>
+                                                        <span className="stat-value">{getNodeStability(node)}d</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Difficulty</span>
-                                                        <span className="stat-value">{getNodeDifficulty(node.scheduler)}</span>
+                                                        <span className="stat-value">{getNodeDifficulty(node)}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Reps</span>
-                                                        <span className="stat-value">{getNodeReps(node.scheduler)}</span>
+                                                        <span className="stat-value">{getNodeReps(node)}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Next</span>
-                                                        <span className={`stat-value ${getNodeDueDate(node.scheduler) <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
-                                                            {getNodeDueDate(node.scheduler)}
+                                                        <span className={`stat-value ${(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
+                                                            {getNodeDueDate(node)}
                                                         </span>
                                                     </div>
                                                 </div>

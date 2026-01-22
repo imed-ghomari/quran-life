@@ -1,26 +1,22 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { getSettings } from '@/lib/storage';
-import {
-    syncState$,
-    commitTask,
-    dismissError as dismissSyncError,
-    SyncStatus
-} from '@/lib/syncEngine';
+import { useDexieSync } from './useDexieSync';
+import { createClient } from '@/utils/supabase/client';
 
 // ========================================
 // Types
 // ========================================
 
-export type { SyncStatus } from '@/lib/syncEngine';
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'offline' | 'conflict' | 'needs_push' | 'needs_pull';
 
 export interface ChangeDetail {
-    category: string;           // e.g., "Mindmaps", "Memory Nodes", "Settings"
-    description: string;        // Human-readable description
-    count: number;              // Number of items changed
-    items?: string[];           // Optional: specific item names for collapsible details
-    itemIds: string[];          // UNIQUE IDs for granular merging
+    category: string;
+    description: string;
+    count: number;
+    items?: string[];
+    itemIds: string[];
 }
 
 export interface ConflictInfo {
@@ -88,98 +84,60 @@ export function getSyncStatusText(status: SyncStatus, pendingChangesCount: numbe
 }
 
 // ========================================
-// Provider - Now uses syncEngine observables
+// Provider - Uses Dexie Sync
 // ========================================
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
-    const [state, setState] = useState<SyncState>({
-        status: 'idle',
-        pendingChangesCount: 0,
-        lastSyncedAt: null,
-        conflict: null, // Conflict modal disabled - using LWW
-        errorMessage: null,
-        isAuthenticated: false,
-    });
+    const { isSyncing, lastSyncedAt, error, syncNow } = useDexieSync();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-    // Subscribe to sync engine state changes
+    // Check auth status
     useEffect(() => {
-        // Initial state from sync engine
-        const updateFromEngine = () => {
-            const engineState = syncState$.get();
-            setState(prev => ({
-                ...prev,
-                status: engineState.status,
-                pendingChangesCount: engineState.pendingChangesCount,
-                lastSyncedAt: engineState.lastSyncedAt,
-                errorMessage: engineState.errorMessage,
-                isAuthenticated: engineState.isAuthenticated,
-                conflict: null, // Conflict modal disabled
-            }));
+        const checkAuth = async () => {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            setIsAuthenticated(!!session);
+            
+            const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                setIsAuthenticated(!!session);
+            });
+            return () => subscription.unsubscribe();
         };
-
-        // Subscribe to changes
-        const unsubscribe = syncState$.onChange(updateFromEngine);
-
-        // Initial load
-        updateFromEngine();
-
-        // Also load from settings for lastSyncedAt if not in engine
-        const settings = getSettings();
-        if (settings.lastSyncedAt) {
-            setState(prev => ({
-                ...prev,
-                lastSyncedAt: prev.lastSyncedAt || settings.lastSyncedAt || null,
-            }));
-        }
-
-        return () => {
-            unsubscribe();
-        };
+        checkAuth();
     }, []);
 
-    // Listen for storage changes to stay in sync with storage.ts
-    useEffect(() => {
-        const handleStorageChange = (e?: StorageEvent) => {
-            if (e && e.key && !e.key.startsWith('quran-app')) return;
-
-            // Get actual count from localStorage if available
-            const pendingCountStr = localStorage.getItem('quran-app-pending-count');
-            const actualCount = pendingCountStr ? parseInt(pendingCountStr) : 0;
-
-            setState(prev => ({
-                ...prev,
-                pendingChangesCount: actualCount,
-            }));
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-        handleStorageChange();
-
-        return () => window.removeEventListener('storage', handleStorageChange);
-    }, []);
+    const status: SyncStatus = isSyncing ? 'syncing' : error ? 'error' : 'synced';
 
     const triggerSync = useCallback(async () => {
-        // Use new sync engine's commitTask
-        await commitTask('manual');
-    }, []);
+        await syncNow();
+    }, [syncNow]);
 
-    // Conflict resolution simplified - always use LWW (local wins)
-    const resolveConflict = useCallback(async (
-        choice: 'local' | 'remote' | 'manual',
-        manualChoices?: Record<string, 'local' | 'remote'>
-    ) => {
-        // Since we disabled conflict modal, this will just sync local
-        await commitTask('conflict-resolve');
-    }, []);
+    const resolveConflict = useCallback(async () => {
+        // LWW is automatic
+        await syncNow();
+    }, [syncNow]);
 
     const dismissError = useCallback(() => {
-        dismissSyncError();
-    }, []);
+        // Error state is managed by useDexieSync, clearing it requires a re-sync or just ignoring it
+        // For now, re-trigger sync might clear error if successful
+        syncNow();
+    }, [syncNow]);
+
+    const value: SyncContextValue = {
+        status,
+        pendingChangesCount: 0, // TODO: Implement pending count if needed
+        lastSyncedAt: lastSyncedAt ? lastSyncedAt.toISOString() : null,
+        conflict: null,
+        errorMessage: error,
+        isAuthenticated,
+        triggerSync,
+        resolveConflict,
+        dismissError
+    };
 
     return (
-        <SyncContext.Provider value={{ ...state, triggerSync, resolveConflict, dismissError }}>
+        <SyncContext.Provider value={value}>
             {children}
         </SyncContext.Provider>
     );
 }
-

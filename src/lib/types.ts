@@ -2,6 +2,8 @@
 // Core Types for Phased Qur'an Learning System
 // ========================================
 
+import { FSRSState } from './fsrs';
+
 // Traditional Qur'anic Part Classifications
 export type QuranPart = 1 | 2 | 3 | 4 | 5; // 5 = All Quran
 
@@ -56,15 +58,32 @@ export interface SM2State {
 }
 
 // MemoryNode types
-export type MemoryNodeType = 'verse_segment' | 'transition';
+export type MemoryNodeType = 'verse_segment' | 'transition' | 'mindmap' | 'part_mindmap';
 
-// MemoryNode (ONLY thing scheduled by SM-2)
+// MemoryNode (ONLY thing scheduled by SM-2/FSRS)
 export interface MemoryNode {
     id: string;
     type: MemoryNodeType;
-    targetId: string;      // VerseSegment.id or Transition.id
-    scheduler: SM2State;
-    createdAt: string;
+    surahId?: number; // Optional context
+    partId?: QuranPart; // Optional context
+    startVerse?: number; // Optional context
+    endVerse?: number; // Optional context
+    targetId?: string;      // Legacy: VerseSegment.id or Transition.id
+    scheduler: SM2State | FSRSState;
+    createdAt?: string;
+}
+
+export interface AppSettings {
+    completionDays: number;
+    activePart: QuranPart;
+    learnedVerses: { [surahId: string]: number[] };
+    skippedSurahs?: number[];
+    theme?: 'light' | 'dark' | 'system';
+    updatedAt?: string;
+    isOnboardingComplete?: boolean;
+    kanbanColumns?: Record<string, string[]>;
+    userId?: string;
+    lastSyncedAt?: string;
 }
 
 // Anchor (maps meaning to verse ranges)
@@ -80,6 +99,7 @@ export interface Anchor {
 export interface MindMap {
     surahId: number;
     imageUrl: string | null;  // Uploaded screenshot
+    imageUrlDark?: string | null; // Dark mode screenshot
     anchors: Anchor[]; // Assuming VerseAnchor is a typo and should be Anchor based on existing Anchor interface
     isComplete: boolean;
     tldrawSnapshot?: any; // JSON snapshot of the whiteboard state
@@ -88,6 +108,7 @@ export interface MindMap {
 export interface PartMindMap {
     partId: QuranPart; // 1 | 2 | 3 | 4
     imageUrl: string | null;
+    imageUrlDark?: string | null;
     description: string;
     isComplete: boolean;
     tldrawSnapshot?: any;

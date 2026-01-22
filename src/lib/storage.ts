@@ -1,26 +1,24 @@
 // ========================================
-// Storage Service - With Part Mindmaps & Review Errors
+// Storage Service - Dexie Backed
 // ========================================
 
 import { SURAHS } from './quranData';
-import { QuranPart } from './types';
-import { get, set, createStore, clear } from 'idb-keyval';
+import { QuranPart, MindMap, PartMindMap, MemoryNode, AppSettings, Anchor, MemoryNodeType } from './types';
+import { db } from './db';
 import { appLogger } from './logger';
 import { audioSettings$, AudioSettings } from './audioStore';
+import { FSRSState } from './fsrs';
 
 // ========================================
-// Storage Engine Migration & Helpers
+// Constants & Keys
 // ========================================
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
     SETTINGS: 'quran-app-settings',
     MEMORY_NODES: 'quran-app-memory-nodes',
-    // Legacy keys - kept for migration
-    MINDMAPS: 'quran-app-mindmaps', 
+    MINDMAPS: 'quran-app-mindmaps',
     PART_MINDMAPS: 'quran-app-part-mindmaps',
-    // New Split Keys
-    MINDMAPS_INDEX: 'quran-app-mindmaps-index',
-    PART_MINDMAPS_INDEX: 'quran-app-part-mindmaps-index',
+    // Generic Keys
     LISTENING_PROGRESS: 'quran-app-listening-progress',
     LISTENING_STATS: 'quran-app-listening-stats',
     CYCLE_START: 'quran-app-cycle-start',
@@ -32,286 +30,23 @@ const STORAGE_KEYS = {
     LAST_MODIFIED: 'quran-app-last-modified',
     PORTION_POINTERS: 'quran-app-portion-pointers',
     LAST_RESOLVED_FOR: 'quran-app-last-resolved-for',
-    // FSRS v6 keys
     FSRS_REVIEW_LOGS: 'quran-app-fsrs-review-logs',
     FSRS_OPTIMIZATION_META: 'quran-app-fsrs-optimization-meta',
     AUDIO_SETTINGS: 'quran-app-audio-settings',
 };
 
-const STORAGE_KEYS_VALUES = Object.values(STORAGE_KEYS);
-
-
-
-const customStore = typeof window !== 'undefined' ? createStore('quran-app-db', 'quran-app-store') : undefined;
-
-/**
- * Migration helper to move data from localStorage to IndexedDB once.
- */
-async function migrateFromLocalStorage() {
-    if (typeof window === 'undefined' || !customStore) return;
-
-    const migrationFlag = 'quran-app-migrated-to-idb';
-    if (localStorage.getItem(migrationFlag)) return;
-
-    appLogger.addLog('Migrating data from localStorage to IndexedDB...', 'info');
-    for (const key of Object.values(STORAGE_KEYS)) {
-        const value = localStorage.getItem(key);
-        if (value) {
-            try {
-                await set(key, JSON.parse(value), customStore);
-            } catch (e) {
-                appLogger.addLog(`Migration failed for key ${key}`, 'error');
-                console.error(`Migration failed for key ${key}:`, e);
-            }
-        }
-    }
-
-    localStorage.setItem(migrationFlag, 'true');
-    appLogger.addLog('Successfully migrated data to IndexedDB', 'success');
-    console.log('Successfully migrated data from localStorage to IndexedDB');
-}
-
-async function migrateToSplitKeys() {
-    if (typeof window === 'undefined' || !customStore) return;
-    
-    const migrationFlag = 'quran-app-migrated-to-split-keys';
-    if (localStorage.getItem(migrationFlag)) return;
-
-    appLogger.addLog('Migrating mindmaps to split keys...', 'info');
-
-    // Migrate Surah Mindmaps
-    try {
-        const oldMaps = await get<{ [key: string]: MindMap }>(STORAGE_KEYS.MINDMAPS, customStore);
-        if (oldMaps) {
-            const index: { [key: string]: Omit<MindMap, 'tldrawSnapshot'> } = {};
-            
-            for (const [id, map] of Object.entries(oldMaps)) {
-                // Save full data to split key
-                await set(`quran-app-mindmap-${id}`, map, customStore);
-                
-                // Add to index (excluding snapshot)
-                const { tldrawSnapshot, ...metadata } = map;
-                index[id] = metadata;
-            }
-            
-            await set(STORAGE_KEYS.MINDMAPS_INDEX, index, customStore);
-            // Optional: Delete old key? keeping for safety for now, or delete to save space
-            // await del(STORAGE_KEYS.MINDMAPS, customStore); 
-        }
-    } catch (e) {
-        console.error('Failed to migrate surah mindmaps', e);
-        appLogger.addLog('Failed to migrate surah mindmaps', 'error');
-    }
-
-    // Migrate Part Mindmaps
-    try {
-        const oldPartMaps = await get<{ [key: string]: PartMindMap }>(STORAGE_KEYS.PART_MINDMAPS, customStore);
-        if (oldPartMaps) {
-            const index: { [key: string]: Omit<PartMindMap, 'tldrawSnapshot'> } = {};
-            
-            for (const [id, map] of Object.entries(oldPartMaps)) {
-                await set(`quran-app-part-mindmap-${id}`, map, customStore);
-                const { tldrawSnapshot, ...metadata } = map;
-                index[id] = metadata;
-            }
-            
-            await set(STORAGE_KEYS.PART_MINDMAPS_INDEX, index, customStore);
-        }
-    } catch (e) {
-        console.error('Failed to migrate part mindmaps', e);
-        appLogger.addLog('Failed to migrate part mindmaps', 'error');
-    }
-
-    localStorage.setItem(migrationFlag, 'true');
-    appLogger.addLog('Successfully migrated mindmaps to split keys', 'success');
-}
-
-// Initial migration trigger
-if (typeof window !== 'undefined') {
-    migrateFromLocalStorage().then(() => {
-        migrateToSplitKeys();
-    });
-}
-
-/**
- * Global cache to keep synchronous access for existing UI while persisting asynchronously.
- * This ensures the UI remains snappy while data is safely stored in IndexedDB.
- */
-const storageCache: { [key: string]: any } = {};
-
-async function loadIntoCache() {
-    if (typeof window === 'undefined' || !customStore) return;
-    for (const key of Object.values(STORAGE_KEYS)) {
-        const val = await get(key, customStore);
-        // ONLY update cache if it hasn't been written to already during startup
-        // This prevents overwriting a fast user action with slow DB load
-        if (val !== undefined && storageCache[key] === undefined) {
-            storageCache[key] = val;
-        }
-    }
-}
-
-// Start loading cache
-let cacheLoadingPromise: Promise<void> | null = null;
-export async function ensureCacheLoaded() {
-    if (typeof window === 'undefined' || !customStore) return;
-    if (cacheLoadingPromise) return cacheLoadingPromise;
-    cacheLoadingPromise = loadIntoCache();
-    await cacheLoadingPromise;
-    return;
-}
-
-if (typeof window !== 'undefined') {
-    ensureCacheLoaded().then(() => {
-        // Dispatch event to notify listeners that initial load is complete
-        window.dispatchEvent(new StorageEvent('storage', {
-            key: 'quran-app-settings', // generic key to trigger updates
-            newValue: JSON.stringify(storageCache[STORAGE_KEYS.SETTINGS])
-        }));
-    });
-}
-
-function getFromCache<T>(key: string, defaultValue: T): T {
-    if (typeof window === 'undefined') return defaultValue;
-    const cached = storageCache[key];
-    return cached !== undefined ? cached : defaultValue;
-}
-
-// (Moved to top)
-
 // ========================================
-// Cross-tab Synchronization
+// Types
 // ========================================
 
-const storageChannel = typeof window !== 'undefined' ? new BroadcastChannel('quran_app_storage_sync') : null;
-
-if (storageChannel) {
-    storageChannel.onmessage = (event) => {
-        const { key, value } = event.data;
-        if (STORAGE_KEYS_VALUES.includes(key)) {
-            storageCache[key] = value;
-            // PERSIST TO IndexedDB immediately so reload doesn't lose it
-            if (customStore) {
-                set(key, value, customStore).catch(err => console.error(`Sync persistence failed for ${key}:`, err));
-            }
-            // Dispatch a storage event manually so the page.tsx useEffect catches it
-            window.dispatchEvent(new StorageEvent('storage', {
-                key: key,
-                newValue: JSON.stringify(value),
-            }));
-        }
-    };
-}
-
-// (Moved to top)
-
-function saveToCacheAndStore(key: string, value: any, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
-    storageCache[key] = value;
-
-    // Human readable key name
-    const keyName = key.replace('quran-app-', '').replace(/-/g, ' ');
-    // Only log if not skipping sync trigger (avoids spam during full import)
-    if (!options?.skipSyncTrigger) {
-        appLogger.addLog(`Saving ${keyName}...`, 'info');
-    }
-
-    // Update last modified timestamp (except for the timestamp itself)
-    if (key !== STORAGE_KEYS.LAST_MODIFIED) {
-        const now = new Date().toISOString();
-        storageCache[STORAGE_KEYS.LAST_MODIFIED] = now;
-        if (typeof window !== 'undefined' && customStore) {
-            set(STORAGE_KEYS.LAST_MODIFIED, now, customStore).catch(() => { });
-            localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, JSON.stringify(now));
-
-            if (!options?.skipSyncTrigger) {
-                // Increment pending changes count
-                const currentCount = parseInt(localStorage.getItem('quran-app-pending-count') || '0');
-                localStorage.setItem('quran-app-pending-count', (currentCount + 1).toString());
-
-                // Notify sync engine of pending changes
-                import('./syncEngine').then(({ markPendingChanges }) => {
-                    markPendingChanges();
-                }).catch(() => {
-                    // Sync engine not yet loaded, changes tracked via localStorage count
-                });
-            }
-        }
-    }
-
-    if (typeof window !== 'undefined' && customStore) {
-        // Notify other tabs via BroadcastChannel
-        try {
-            storageChannel?.postMessage({ key, value });
-        } catch (e) {
-            // Ignore DataCloneError or other messaging errors for large payloads
-            console.warn(`[Storage] Failed to broadcast ${key} (likely too large)`, e);
-        }
-
-        // Also update localStorage for fallback sync awareness across tabs
-        let stringified = '';
-        try {
-            stringified = JSON.stringify(value);
-            if (stringified.length < 500000) {
-                localStorage.setItem(key, stringified);
-            } else {
-                localStorage.setItem(key, JSON.stringify({ _isLargeData: true, timestamp: new Date().toISOString() }));
-                console.log(`Key ${key} is large (${(stringified.length / 1024).toFixed(1)} KB), skipping localStorage.`);
-            }
-        } catch (e) {
-            console.warn(`Failed to save ${key} to localStorage (likely size limit):`, e);
-        }
-
-        return set(key, value, customStore)
-            .then(() => {
-                // appLogger.addLog(`${keyName} saved successfully`, 'success'); // Reduce spam
-                
-                if (!options?.suppressEvent) {
-                    // Dispatch a storage event manually so the page.tsx useEffect catches it
-                    try {
-                        const payload = stringified || JSON.stringify(value);
-                        // Avoid dispatching huge events that might freeze listeners
-                        if (payload.length < 2000000) { // 2MB safety limit for events
-                            window.dispatchEvent(new StorageEvent('storage', {
-                                key: key,
-                                newValue: payload,
-                            }));
-                        }
-                    } catch (e) {
-                        console.warn(`[Storage] Skipped dispatching event for ${key}`, e);
-                    }
-                }
-            })
-            .catch(err => {
-                appLogger.addLog(`Failed to save ${keyName}`, 'error');
-                console.error(`Failed to persist ${key}:`, err);
-                throw err;
-            });
-    }
-    return Promise.resolve();
-}
-
-// ========================================
-// Settings
-// ========================================
-
-export interface AppSettings {
-    completionDays: number;
-    activePart: QuranPart;
-    learnedVerses: { [surahId: string]: number[] };
-    skippedSurahs?: number[];
-    lastSyncedAt?: string;
-    updatedAt?: string;
-    isOnboardingComplete?: boolean;
-    kanbanColumns: Record<string, string[]>; // colId -> listOfItemIds
-    userId?: string; // Owner of these settings
-}
+export type { AppSettings, MemoryNode }; // Re-export from types
 
 export const DEFAULT_SETTINGS: AppSettings = {
     completionDays: 30,
     activePart: 4,
     learnedVerses: {},
     skippedSurahs: [],
-    updatedAt: "1970-01-01T00:00:00.000Z", // Use EPOCH to ensure cloud always wins over uninitialized local
+    updatedAt: "1970-01-01T00:00:00.000Z",
     isOnboardingComplete: false,
     kanbanColumns: {
         'backlog': [],
@@ -320,929 +55,338 @@ export const DEFAULT_SETTINGS: AppSettings = {
     }
 };
 
-export async function clearSecondaryStorage(): Promise<void> {
-    // Clears everything EXCEPT settings
-    if (typeof window !== 'undefined') {
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('quran-app-') && key !== STORAGE_KEYS.SETTINGS) {
-                localStorage.removeItem(key);
-            }
-        });
-    }
+// ========================================
+// Cache Layer
+// ========================================
 
-    if (customStore) {
-        // We want to clear specific keys from IDB, but clear() wipes everything.
-        // So we iterate keys and delete ones that are NOT settings.
-        // Actually, for IDB, we store large objects.
-        const keys = await import('idb-keyval').then(m => m.keys(customStore));
-        for (const key of keys) {
-            if (key !== STORAGE_KEYS.SETTINGS) {
-                await import('idb-keyval').then(m => m.del(key, customStore));
-            }
-        }
-    }
-    
-    // Clear Memory Cache (except settings)
-    Object.keys(storageCache).forEach(key => {
-        if (key !== STORAGE_KEYS.SETTINGS) {
-            delete storageCache[key];
-        }
-    });
+const storageCache: { [key: string]: any } = {};
+
+let cacheLoadingPromise: Promise<void> | null = null;
+
+export async function ensureCacheLoaded() {
+    if (typeof window === 'undefined') return;
+    if (cacheLoadingPromise) return cacheLoadingPromise;
+    cacheLoadingPromise = loadIntoCache();
+    await cacheLoadingPromise;
 }
 
-export async function clearAllData(): Promise<void> {
-    // 1. Clear LocalStorage
-    if (typeof window !== 'undefined') {
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('quran-app-')) {
-                localStorage.removeItem(key);
-            }
-        });
-    }
+async function loadIntoCache() {
+    try {
+        // 1. Settings
+        const settingsDoc = await db.settings.get('main');
+        if (settingsDoc) {
+            storageCache[STORAGE_KEYS.SETTINGS] = settingsDoc.data;
+        }
 
-    // 2. Clear IndexedDB
-    if (customStore) {
-        await clear(customStore);
+        // 2. Memory Nodes
+        const nodes = await db.memoryNodes.toArray();
+        if (nodes.length > 0) {
+            storageCache[STORAGE_KEYS.MEMORY_NODES] = nodes.map(n => n.data);
+        }
+
+        // 3. Mindmaps
+        const mindmaps = await db.mindmaps.toArray();
+        const mindmapMap: Record<string, MindMap> = {};
+        mindmaps.forEach(m => mindmapMap[m.surahId] = m.data);
+        storageCache[STORAGE_KEYS.MINDMAPS] = mindmapMap;
+
+        // 4. Part Mindmaps
+        const partMindmaps = await db.partMindmaps.toArray();
+        const partMindmapMap: Record<string, PartMindMap> = {};
+        partMindmaps.forEach(m => partMindmapMap[m.partId] = m.data);
+        storageCache[STORAGE_KEYS.PART_MINDMAPS] = partMindmapMap;
+
+        // 5. Generic Key-Values
+        const keyvals = await db.keyval.toArray();
+        keyvals.forEach(kv => {
+            storageCache[kv.key] = kv.value;
+        });
+
+    } catch (err) {
+        console.error('Failed to load cache from Dexie:', err);
+        appLogger.addLog('Failed to load cache from DB', 'error');
     }
-    
-    // 3. Clear Memory Cache
-    Object.keys(storageCache).forEach(key => delete storageCache[key]);
 }
+
+function getFromCache<T>(key: string, defaultValue: T): T {
+    if (typeof window === 'undefined') return defaultValue;
+    const cached = storageCache[key];
+    return cached !== undefined ? cached : defaultValue;
+}
+
+// ========================================
+// Persistence Helpers
+// ========================================
+
+async function persistGeneric(key: string, value: any) {
+    storageCache[key] = value;
+    await db.keyval.put({ key, value });
+    dispatchStorageEvent(key, value);
+}
+
+function dispatchStorageEvent(key: string, value: any) {
+    if (typeof window === 'undefined') return;
+    try {
+        window.dispatchEvent(new StorageEvent('storage', {
+            key,
+            newValue: JSON.stringify(value)
+        }));
+    } catch (e) {
+        console.warn('Failed to dispatch storage event', e);
+    }
+}
+
+export function updateSettingsCache(newSettings: AppSettings) {
+    storageCache[STORAGE_KEYS.SETTINGS] = newSettings;
+    dispatchStorageEvent(STORAGE_KEYS.SETTINGS, newSettings);
+}
+
+export function updateMemoryNodesCache(newNodes: MemoryNode[]) {
+    storageCache[STORAGE_KEYS.MEMORY_NODES] = newNodes;
+    dispatchStorageEvent(STORAGE_KEYS.MEMORY_NODES, newNodes);
+}
+
+// ========================================
+// Settings
+// ========================================
 
 export function getSettings(): AppSettings {
-    const cached = storageCache[STORAGE_KEYS.SETTINGS];
-    if (cached) return cached;
     return getFromCache(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
 }
 
-export async function saveSettings(settings: AppSettings, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
-    settings.updatedAt = new Date().toISOString();
-    await saveToCacheAndStore(STORAGE_KEYS.SETTINGS, settings, options);
-}
-
-export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> {
-    const settings = getSettings();
-    settings[key] = value;
-    await saveSettings(settings);
-}
-
-export function isSurahSkipped(surahId: number, settingsOverride?: AppSettings): boolean {
-    const settings = settingsOverride || getSettings();
-    return settings.skippedSurahs?.includes(surahId) || false;
-}
-
-export function toggleSurahSkipped(surahId: number): void {
-    const settings = getSettings();
-    const current = new Set(settings.skippedSurahs || []);
-    if (current.has(surahId)) {
-        current.delete(surahId);
-        appLogger.addLog(`Surah ${surahId} restored (unskipped)`, 'success');
-    } else {
-        current.add(surahId);
-        appLogger.addLog(`Surah ${surahId} skipped`, 'warning');
-        // Note: We no longer remove learned data or prune artifacts here.
-        // Artifacts are preserved but hidden by UI filters.
-    }
-    settings.skippedSurahs = Array.from(current).sort((a, b) => a - b);
-    saveSettings(settings);
-}
-
-// ========================================
-// Learned Verses Helpers
-// ========================================
-
-export function isVerseLearned(surahId: number, ayahId: number): boolean {
-    const settings = getSettings();
-    return settings.learnedVerses[surahId]?.includes(ayahId) || false;
-}
-
-export function toggleVerseLearned(surahId: number, ayahId: number): void {
-    const settings = getSettings();
-    const surahKey = surahId.toString();
-    const current = settings.learnedVerses[surahKey] || [];
-
-    if (current.includes(ayahId)) {
-        settings.learnedVerses[surahKey] = current.filter(v => v !== ayahId);
-        if (settings.learnedVerses[surahKey].length === 0) {
-            delete settings.learnedVerses[surahKey];
-        }
-    } else {
-        settings.learnedVerses[surahKey] = [...current, ayahId].sort((a, b) => a - b);
-    }
-
-    saveSettings(settings);
-    syncMemoryNodesWithLearned();
-}
-
-export function toggleSurahLearned(surahId: number): void {
-    const settings = getSettings();
-    const surah = SURAHS.find(s => s.id === surahId);
-    if (!surah) return;
-
-    const surahKey = surahId.toString();
-    const current = settings.learnedVerses[surahKey] || [];
-
-    if (current.length === surah.verseCount) {
-        delete settings.learnedVerses[surahKey];
-        appLogger.addLog(`Surah ${surahId} marked as NOT learned`, 'warning');
-    } else {
-        settings.learnedVerses[surahKey] = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
-        appLogger.addLog(`Surah ${surahId} marked as learned`, 'success');
-    }
-
-    saveSettings(settings);
-    syncMemoryNodesWithLearned();
-}
-
-export function getSurahLearnedStatus(surahId: number): { learned: number; total: number } {
-    const settings = getSettings();
-    const surah = SURAHS.find(s => s.id === surahId);
-    if (!surah) return { learned: 0, total: 0 };
-
-    // Use string key for consistent lookup as JSON keys are always strings
-    const learned = settings.learnedVerses[surahId.toString()]?.length || 0;
-    return { learned, total: surah.verseCount };
-}
-
-export function getTotalLearnedVerses(): number {
-    const settings = getSettings();
-    return Object.values(settings.learnedVerses).reduce((sum, verses) => sum + verses.length, 0);
-}
-
-export function getLearnedVersesInPart(part: QuranPart): { surahId: number; ayahId: number }[] {
-    const settings = getSettings();
-    const result: { surahId: number; ayahId: number }[] = [];
-
-    SURAHS.filter(s => part === 5 || s.part === part).forEach(surah => {
-        const verses = settings.learnedVerses[surah.id] || [];
-        verses.forEach(ayahId => {
-            result.push({ surahId: surah.id, ayahId });
-        });
+export async function saveSettings(settings: AppSettings) {
+    const updated = { ...settings, updatedAt: new Date().toISOString() };
+    storageCache[STORAGE_KEYS.SETTINGS] = updated;
+    
+    await db.settings.put({
+        key: 'main',
+        data: updated,
+        updatedAt: updated.updatedAt
     });
+    
+    dispatchStorageEvent(STORAGE_KEYS.SETTINGS, updated);
+}
 
-    return result;
+export function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
+    const settings = getSettings();
+    const newSettings = { ...settings, [key]: value };
+    saveSettings(newSettings);
+}
+
+export function toggleSurahSkipped(surahId: number) {
+    const settings = getSettings();
+    const skipped = new Set(settings.skippedSurahs || []);
+    if (skipped.has(surahId)) {
+        skipped.delete(surahId);
+    } else {
+        skipped.add(surahId);
+    }
+    updateSetting('skippedSurahs', Array.from(skipped));
 }
 
 // ========================================
-// Memory Nodes (SM-2 / FSRS)
+// Memory Nodes
 // ========================================
-
-import {
-    type ReviewLogEntry,
-    type OptimizationMeta,
-    createPresetState,
-    unsuspendCard,
-    migrateSM2ToFSRS,
-    isSM2State,
-    FSRSCardState,
-    createNewFSRSState,
-    FSRSState
-} from './fsrs';
-
-// Legacy SM-2 state (for migration)
-export interface SM2State {
-    interval: number;
-    repetition: number;
-    easeFactor: number;
-    dueDate: string;
-    lastReview: string;
-    relearningStep?: number;
-    preSuspensionInterval?: number;
-}
-
-// Unified scheduler type - supports both formats during migration
-export type SchedulerState = SM2State | FSRSState;
-
-export interface MemoryNode {
-    id: string;
-    type: 'verse' | 'mindmap' | 'part_mindmap';
-    surahId?: number;
-    partId?: QuranPart;
-    startVerse?: number;
-    endVerse?: number;
-    scheduler: SchedulerState;
-}
-
-
-// Helper to get due date from either scheduler type
-export function getNodeDueDate(scheduler: SchedulerState): string {
-    if ('due' in scheduler) {
-        return scheduler.due; // FSRS
-    }
-    return scheduler.dueDate; // SM-2
-}
-
-// Helper to set due date for either scheduler type
-export function setNodeDueDate(scheduler: SchedulerState, dueDate: string): SchedulerState {
-    if ('due' in scheduler) {
-        return { ...scheduler, due: dueDate }; // FSRS
-    }
-    return { ...scheduler, dueDate }; // SM-2
-}
-
-// Helper to get last review from either scheduler type
-export function getNodeLastReview(scheduler: SchedulerState): string {
-    if ('last_review' in scheduler) {
-        return scheduler.last_review; // FSRS
-    }
-    return scheduler.lastReview; // SM-2
-}
-
-// Helper to get stability/interval for maturity calculations
-export function getNodeStability(scheduler: SchedulerState): number {
-    if ('stability' in scheduler) {
-        return scheduler.stability; // FSRS
-    }
-    return scheduler.interval; // SM-2
-}
-
-// Helper to get repetition count
-export function getNodeReps(scheduler: SchedulerState): number {
-    if ('reps' in scheduler) {
-        return scheduler.reps; // FSRS
-    }
-    return scheduler.repetition; // SM-2
-}
-
-// Helper to get difficulty/ease (formatted as string)
-export function getNodeDifficulty(scheduler: SchedulerState): string {
-    if ('difficulty' in scheduler) {
-        return `D: ${scheduler.difficulty}`; // FSRS (1-10)
-    }
-    return `E: ${scheduler.easeFactor}`; // SM-2 (1.3-2.5)
-}
-
-// Helper to check if node has been reviewed
-export function hasNodeBeenReviewed(scheduler: SchedulerState): boolean {
-    if ('reps' in scheduler) {
-        return scheduler.reps > 0 || !!scheduler.last_review; // FSRS
-    }
-    return scheduler.repetition > 0 || !!scheduler.lastReview; // SM-2
-}
-
-// Helper to create a suspended state (for mindmap incomplete)
-function createSuspendedScheduler(scheduler: SchedulerState): SchedulerState {
-    if ('stability' in scheduler) {
-        // FSRS: reduce stability by 40%, clear due date
-        const newStability = Math.max(1, Math.round(scheduler.stability * 0.6));
-        return {
-            ...scheduler,
-            stability: newStability,
-            due: '', // Suspended
-        };
-    }
-    // SM-2: reduce interval by 40%, reduce ease factor
-    const sm2 = scheduler as SM2State;
-    const newInterval = Math.max(1, Math.round(sm2.interval * 0.6));
-    const newEase = Math.max(1.3, Math.round((sm2.easeFactor - 0.15) * 100) / 100);
-    return {
-        ...sm2,
-        interval: newInterval,
-        easeFactor: newEase,
-        dueDate: '', // Suspended
-    };
-}
 
 export function getMemoryNodes(): MemoryNode[] {
     return getFromCache(STORAGE_KEYS.MEMORY_NODES, []);
 }
 
-export function saveMemoryNodes(nodes: MemoryNode[], options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): void {
-    // Deduplicate by ID before saving to prevent high counter issues
-    const uniqueMap = new Map();
-    nodes.forEach(n => {
-        if (!uniqueMap.has(n.id)) {
-            uniqueMap.set(n.id, n);
-        } else {
-            // If duplicate found, keep the one with more progress (lastReview)
-            const existing = uniqueMap.get(n.id);
-            if ((getNodeLastReview(n.scheduler) || '') > (getNodeLastReview(existing.scheduler) || '')) {
-                uniqueMap.set(n.id, n);
-            }
-        }
-    });
-    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, Array.from(uniqueMap.values()), options);
-}
-
-export function getDueNodes(): MemoryNode[] {
-    const today = new Date().toISOString().split('T')[0];
-    const settings = getSettings();
-    const skips = new Set(settings.skippedSurahs || []);
-    const learnedSurahIds = new Set(Object.keys(settings.learnedVerses).map(id => parseInt(id)));
-    const suspended = getSuspendedAnchors();
-    const mindmaps = getMindMaps();
-    const partMindmaps = getPartMindMaps();
-
-    return getMemoryNodes()
-        .filter(n => getNodeDueDate(n.scheduler) <= today)
-        // Filter out skipped surahs
-        .filter(n => !n.surahId || !skips.has(n.surahId))
-        // Filter out nodes for surahs that are not marked as learned
-        .filter(n => {
-            if (n.surahId && !learnedSurahIds.has(n.surahId)) return false;
-            return true;
-        })
-        .filter(n => !isNodeSuspended(n, suspended))
-        // Issue #2: Filter out incomplete mindmaps (allow missing images, UI handles it)
-        .filter(n => {
-            if (n.type === 'mindmap' && n.surahId) {
-                const mm = mindmaps[n.surahId];
-                return mm?.isComplete;
-            }
-            if (n.type === 'part_mindmap' && n.partId) {
-                const pmm = partMindmaps[n.partId];
-                return pmm?.isComplete;
-            }
-            return true;
-        })
-        // Filter verse nodes: only include if surah is fully learned AND has a completed mindmap
-        .filter(n => {
-            if (n.type === 'verse' && n.surahId) {
-                const { learned, total } = getSurahLearnedStatus(n.surahId);
-                const isLearned = learned === total;
-
-                // Mindmap must be complete
-                const mm = mindmaps[n.surahId];
-                const isMindmapComplete = mm?.isComplete;
-
-                return isLearned && isMindmapComplete;
-            }
-            return true;
-        })
-        .sort((a, b) => {
-            const priority: Record<string, number> = { 'part_mindmap': 0, 'mindmap': 1, 'verse': 2 };
-            const pA = priority[a.type] ?? 99;
-            const pB = priority[b.type] ?? 99;
-            return pA - pB;
-        });
-}
-
-export function updateMemoryNode(node: MemoryNode): void {
-    const nodes = getMemoryNodes();
-    const index = nodes.findIndex(n => n.id === node.id);
-    if (index >= 0) {
-        nodes[index] = node;
-    } else {
-        nodes.push(node);
-    }
-    saveMemoryNodes(nodes);
-}
-
-function createNewScheduler(staggerDays: number = 0): FSRSState {
-    const state = createNewFSRSState();
-    if (staggerDays > 0) {
-        // Simple stagger: just push due date
-        const due = new Date(state.due);
-        due.setDate(due.getDate() + staggerDays);
-        state.due = due.toISOString().split('T')[0];
-    }
-    return state;
-}
-
-// Sync memory nodes with learned verses - create nodes for learned verses
-export function syncMemoryNodesWithLearned(forceFullReset: boolean = false): void {
-    const settings = getSettings();
-    const currentNodes = getMemoryNodes();
-
-    // Safety check: if storage cache is empty and we aren't forcing a full reset,
-    // we should NOT proceed, as we might accidentally wipe all progress.
-    if (!forceFullReset && currentNodes.length === 0 && Object.keys(settings.learnedVerses).length > 0) {
-        console.warn('Sync cancelled: Memory nodes cache is empty but learned verses exist. Potential race condition.');
-        return;
-    }
-
-    const newNodes: MemoryNode[] = [];
-    const mindmaps = getMindMaps();
-    const partMindmaps = getPartMindMaps();
-    const skips = new Set(settings.skippedSurahs || []);
-
-    // Track which nodes from currentNodes we have already "accounted for"
-    // to ensure we don't duplicate them and can preserve inactive ones.
-    const accountedForIds = new Set<string>();
-
-    // 1. Sync / Preserve Mindmap Nodes
-    Object.values(mindmaps).forEach(mm => {
-        if (mm.isComplete && !skips.has(mm.surahId)) {
-            const nodeId = `mindmap-${mm.surahId}`;
-            const existing = currentNodes.find(n => n.id === nodeId);
-            newNodes.push({
-                id: nodeId,
-                type: 'mindmap',
-                surahId: mm.surahId,
-                scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
-            });
-            accountedForIds.add(nodeId);
-        }
-    });
-
-    // 2. Sync / Preserve Part Mindmap Nodes
-    Object.values(partMindmaps).forEach(pmm => {
-        if (pmm.isComplete) {
-            const nodeId = `part-mindmap-${pmm.partId}`;
-            const existing = currentNodes.find(n => n.id === nodeId);
-            newNodes.push({
-                id: nodeId,
-                type: 'part_mindmap',
-                partId: pmm.partId,
-                scheduler: (existing && !forceFullReset) ? existing.scheduler : createNewScheduler(),
-            });
-            accountedForIds.add(nodeId);
-        }
-    });
-
-    // 3. Group verses into segments and Sync
-    Object.entries(settings.learnedVerses).forEach(([surahIdStr, verses]) => {
-        const surahId = parseInt(surahIdStr);
-        if (verses.length === 0 || skips.has(surahId)) return;
-
-        // Check for Mindmap Anchors
-        const mindmap = mindmaps[surahId];
-        const hasAnchors = mindmap?.anchors && mindmap.anchors.length > 0;
-
-        if (hasAnchors) {
-            // Use Anchors for segmentation
-            mindmap.anchors.forEach(anchor => {
-                // Check if any learned verse falls within this anchor
-                const hasLearnedVerses = verses.some(v => v >= anchor.startVerse && v <= anchor.endVerse);
-
-                if (hasLearnedVerses) {
-                    const nodeId = `verse-${surahId}-${anchor.startVerse}-${anchor.endVerse}`;
-                    const existing = currentNodes.find(n => n.id === nodeId);
-
-                    const scheduler = (existing && !forceFullReset)
-                        ? existing.scheduler
-                        : createNewScheduler();
-
-                    newNodes.push({
-                        id: nodeId,
-                        type: 'verse',
-                        surahId,
-                        startVerse: anchor.startVerse,
-                        endVerse: anchor.endVerse,
-                        scheduler,
-                    });
-                    accountedForIds.add(nodeId);
-                }
-            });
-        } else {
-            // Default: Create segments of 5 verses
-            const sortedVerses = [...verses].sort((a, b) => a - b);
-            let segmentStart = sortedVerses[0];
-            let segmentEnd = segmentStart;
-
-            let newSegmentsForThisSurah = 0;
-
-            for (let i = 1; i <= sortedVerses.length; i++) {
-                const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
-                const segmentSize = segmentEnd - segmentStart + 1;
-
-                if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
-                    // Create node for this segment if it doesn't exist
-                    const nodeId = `verse-${surahId}-${segmentStart}-${segmentEnd}`;
-                    const existing = currentNodes.find(n => n.id === nodeId);
-
-                    // Use Staggered Genesis: Spreads new reviews over a 7-day period to avoid avalanches
-                    const scheduler = (existing && !forceFullReset)
-                        ? existing.scheduler
-                        : createNewScheduler(Math.floor(newSegmentsForThisSurah / 10)); // ~10 clusters per day
-
-                    newNodes.push({
-                        id: nodeId,
-                        type: 'verse',
-                        surahId,
-                        startVerse: segmentStart,
-                        endVerse: segmentEnd,
-                        scheduler,
-                    });
-                    accountedForIds.add(nodeId);
-
-                    if (!existing) newSegmentsForThisSurah++;
-
-                    if (i < sortedVerses.length) {
-                        segmentStart = sortedVerses[i];
-                        segmentEnd = segmentStart;
-                    }
-                } else {
-                    segmentEnd = sortedVerses[i];
-                }
-            }
-        }
-    });
-
-    // 4. PRESERVATION: Add all nodes from currentNodes that were NOT accounted for
-    // This ensures that when a surah is unlearned or skipped, its memory progress is preserved in storage.
-    currentNodes.forEach(node => {
-        if (!accountedForIds.has(node.id)) {
-            newNodes.push(node);
-        }
-    });
-
-    // Orphan Pruning is now explicit: we only prune if we want to.
-    // For now, we prefer preservation over pruning to avoid data loss.
-    const addedCount = newNodes.length - currentNodes.length;
-    if (addedCount !== 0) {
-        appLogger.addLog(`Memory nodes updated: ${newNodes.length} total (${addedCount > 0 ? '+' : ''}${addedCount})`, 'info');
-    }
-    saveMemoryNodes(newNodes);
-}
-
-// SM-2 Algorithm
-// SM-2 function removed (replaced by FSRS)
-
-import { buryCard } from './fsrs';
-
-export function postponeNode(node: MemoryNode): MemoryNode {
-    // Check if FSRS or SM-2
-    if (!isSM2State(node.scheduler)) {
-        // FSRS
-        return {
-            ...node,
-            scheduler: buryCard(node.scheduler as any)
-        };
-    }
-
-    // Legacy SM-2 fallback (just increment due date)
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    return {
-        ...node,
-        scheduler: {
-            ...node.scheduler,
-            dueDate: tomorrow.toISOString().split('T')[0],
-            lastReview: new Date().toISOString().split('T')[0],
-        }
-    };
-}
-
-// ========================================
-// Mindmaps (per surah)
-// ========================================
-
-export interface Anchor {
-    id: string;
-    startVerse: number;
-    endVerse: number;
-    label: string;
-}
-
-export interface MindMap {
-    surahId: number;
-    imageUrl: string | null;
-    imageUrlDark?: string | null;
-    anchors: Anchor[];
-    isComplete: boolean;
-    tldrawSnapshot?: any;
-    updatedAt?: string;
-    deletedAt?: string;
-}
-
-export function getMindMaps(): { [surahId: string]: MindMap } {
-    return getFromCache(STORAGE_KEYS.MINDMAPS_INDEX, {});
-}
-
-export function getMindMap(surahId: number): MindMap {
-    const maps = getMindMaps();
-    return maps[surahId] || { surahId, imageUrl: null, anchors: [], isComplete: false };
-}
-
-export async function getMindMapFull(surahId: number): Promise<MindMap> {
-    const metadata = getMindMap(surahId);
-    if (typeof window !== 'undefined' && customStore) {
-        try {
-            const full = await get<MindMap>(`quran-app-mindmap-${surahId}`, customStore);
-            if (full) return full;
-        } catch (e) {
-            console.warn(`Failed to load full mindmap for ${surahId}`, e);
-        }
-    }
-    return metadata;
-}
-
-export async function saveMindMap(mindmap: MindMap, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
-    const maps = getMindMaps();
-    mindmap.updatedAt = new Date().toISOString();
+export async function saveMemoryNodes(nodes: MemoryNode[]) {
+    storageCache[STORAGE_KEYS.MEMORY_NODES] = nodes;
     
-    // 1. Save full data to split key
-    if (typeof window !== 'undefined' && customStore) {
-        await set(`quran-app-mindmap-${mindmap.surahId}`, mindmap, customStore);
-    }
-
-    // 2. Update Index with metadata
-    const { tldrawSnapshot, ...metadata } = mindmap;
-    maps[mindmap.surahId] = metadata; // Use metadata for index
-    saveToCacheAndStore(STORAGE_KEYS.MINDMAPS_INDEX, maps, options);
-
-    // Create/update memory node for mindmap if complete, otherwise handle "Lapse" or removal
-    const nodes = getMemoryNodes();
-    const nodeId = `mindmap-${mindmap.surahId}`;
-    const nodeIdx = nodes.findIndex(n => n.id === nodeId);
-
-    if (mindmap.deletedAt) {
-        // Explicit deletion: remove the review node entirely
-        if (nodeIdx !== -1) {
-            appLogger.addLog(`Surah ${mindmap.surahId} mindmap deleted. Review node removed.`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
-        }
-        return;
-    }
-
-    if (mindmap.isComplete) {
-        if (nodeIdx === -1) {
-            nodes.push({
-                id: nodeId,
-                type: 'mindmap',
-                surahId: mindmap.surahId,
-                scheduler: createNewScheduler(),
-            });
-            appLogger.addLog(`Review node created for Surah ${mindmap.surahId} mindmap`, 'info');
-            saveMemoryNodes(nodes, options);
-        } else {
-            // Reactivation: If node exists but was suspended (e.g. cleared due date), set to today
-            const node = nodes[nodeIdx];
-            const dueDate = getNodeDueDate(node.scheduler);
-            if (!dueDate || dueDate === '') {
-                node.scheduler = setNodeDueDate(node.scheduler, new Date().toISOString().split('T')[0]);
-                appLogger.addLog(`Surah ${mindmap.surahId} mindmap reactivated. Due date set to today.`, 'info');
-                saveMemoryNodes(nodes, options);
-            }
-        }
-    } else if (nodeIdx !== -1) {
-        const node = nodes[nodeIdx];
-        // Distinguish between a node that has been reviewed and one that is new
-        const hasBeenReviewed = hasNodeBeenReviewed(node.scheduler);
-
-        if (hasBeenReviewed) {
-            // "Lapse" approach: reduce strength but don't reset to zero
-            const oldStability = getNodeStability(node.scheduler);
-            node.scheduler = createSuspendedScheduler(node.scheduler);
-            const newStability = getNodeStability(node.scheduler);
-            appLogger.addLog(`Surah ${mindmap.surahId} mindmap marked incomplete. Lapse applied: stability ${oldStability}d -> ${newStability}d, suspended.`, 'warning');
-            saveMemoryNodes(nodes, options);
-        } else {
-            // Never reviewed: just remove it until it's complete again
-            appLogger.addLog(`Surah ${mindmap.surahId} mindmap removed (never reviewed)`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
-        }
-    }
-}
-
-// ========================================
-// Part Mindmaps (inter-surah connections)
-// ========================================
-
-export interface PartMindMap {
-    partId: QuranPart;
-    imageUrl: string | null;
-    imageUrlDark?: string | null;
-    description: string;
-    isComplete: boolean;
-    tldrawSnapshot?: any;
-    updatedAt?: string;
-    deletedAt?: string;
-}
-
-export function getPartMindMaps(): { [partId: string]: PartMindMap } {
-    return getFromCache(STORAGE_KEYS.PART_MINDMAPS_INDEX, {});
-}
-
-export function getPartMindMap(partId: QuranPart): PartMindMap {
-    const maps = getPartMindMaps();
-    return maps[partId] || { partId, imageUrl: null, description: '', isComplete: false };
-}
-
-export async function getPartMindMapFull(partId: QuranPart): Promise<PartMindMap> {
-    const metadata = getPartMindMap(partId);
-    if (typeof window !== 'undefined' && customStore) {
-        try {
-            const full = await get<PartMindMap>(`quran-app-part-mindmap-${partId}`, customStore);
-            if (full) return full;
-        } catch (e) {
-            console.warn(`Failed to load full part mindmap for ${partId}`, e);
-        }
-    }
-    return metadata;
-}
-
-export async function savePartMindMap(mindmap: PartMindMap, options?: { skipSyncTrigger?: boolean; suppressEvent?: boolean }): Promise<void> {
-    const maps = getPartMindMaps();
-    mindmap.updatedAt = new Date().toISOString();
+    // Bulk put to Dexie
+    const docs = nodes.map(n => ({
+        id: n.id,
+        data: n,
+        updatedAt: new Date().toISOString()
+    }));
+    await db.memoryNodes.bulkPut(docs);
     
-    // 1. Save full data
-    if (typeof window !== 'undefined' && customStore) {
-        await set(`quran-app-part-mindmap-${mindmap.partId}`, mindmap, customStore);
+    dispatchStorageEvent(STORAGE_KEYS.MEMORY_NODES, nodes);
+}
+
+// Helper for Maturity Updates
+function getMaturityState(level: 'reset' | 'medium' | 'strong' | 'mastered'): Partial<FSRSState> {
+    const now = new Date().toISOString();
+    switch (level) {
+        case 'reset':
+             return {
+                due: now,
+                stability: 0,
+                difficulty: 0,
+                elapsed_days: 0,
+                scheduled_days: 0,
+                reps: 0,
+                lapses: 0,
+                state: 'New',
+                last_review: now
+            };
+        case 'medium':
+            return {
+                due: new Date(Date.now() + 14 * 86400000).toISOString(),
+                stability: 14,
+                difficulty: 5,
+                reps: 3,
+                state: 'Review',
+                scheduled_days: 14,
+                last_review: now
+            };
+        case 'strong':
+             return {
+                due: new Date(Date.now() + 30 * 86400000).toISOString(),
+                stability: 30,
+                difficulty: 5,
+                reps: 5,
+                state: 'Review',
+                scheduled_days: 30,
+                last_review: now
+            };
+        case 'mastered':
+             return {
+                due: new Date(Date.now() + 90 * 86400000).toISOString(),
+                stability: 90,
+                difficulty: 5,
+                reps: 8,
+                state: 'Review',
+                scheduled_days: 90,
+                last_review: now
+            };
     }
+    return {};
+}
 
-    // 2. Update index
-    const { tldrawSnapshot, ...metadata } = mindmap;
-    maps[mindmap.partId] = metadata;
-    saveToCacheAndStore(STORAGE_KEYS.PART_MINDMAPS_INDEX, maps, options);
-
-    // Create/update memory node for part mindmap if complete, otherwise handle "Lapse" or removal
+export async function setGroupMaturity(type: MemoryNodeType | 'verse' | 'mindmap', level: 'reset' | 'medium' | 'strong' | 'mastered', surahId?: number) {
     const nodes = getMemoryNodes();
-    const nodeId = `part-mindmap-${mindmap.partId}`;
-    const nodeIdx = nodes.findIndex(n => n.id === nodeId);
+    // 'verse' maps to 'verse_segment' in MemoryNodeType usually, but let's handle 'verse' string from UI
+    const targetType = type === 'verse' ? 'verse_segment' : type;
 
-    if (mindmap.deletedAt) {
-        // Explicit deletion: remove the review node entirely
-        if (nodeIdx !== -1) {
-            appLogger.addLog(`Part ${mindmap.partId} mindmap deleted. Review node removed.`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
+    const updatedNodes = nodes.map(node => {
+        if (node.type === targetType) {
+            if (surahId && node.surahId !== surahId) return node;
+            const newState = getMaturityState(level);
+            return { ...node, scheduler: { ...node.scheduler, ...newState } as any };
         }
-        return;
-    }
+        return node;
+    });
+    await saveMemoryNodes(updatedNodes);
+}
 
-    if (mindmap.isComplete) {
-        if (nodeIdx === -1) {
-            nodes.push({
-                id: nodeId,
-                type: 'part_mindmap',
-                partId: mindmap.partId,
-                scheduler: createNewScheduler(),
-            });
-            appLogger.addLog(`Review node created for Part ${mindmap.partId} mindmap`, 'info');
-            saveMemoryNodes(nodes, options);
-        } else {
-            // Reactivation
-            const node = nodes[nodeIdx];
-            const dueDate = getNodeDueDate(node.scheduler);
-            if (!dueDate || dueDate === '') {
-                node.scheduler = setNodeDueDate(node.scheduler, new Date().toISOString().split('T')[0]);
-                appLogger.addLog(`Part ${mindmap.partId} mindmap reactivated. Due date set to today.`, 'info');
-                saveMemoryNodes(nodes, options);
-            }
+export async function setSurahMaturity(surahId: number, level: 'reset' | 'medium' | 'strong' | 'mastered') {
+    // Affects all nodes for this surah
+    const nodes = getMemoryNodes();
+    const updatedNodes = nodes.map(node => {
+        if (node.surahId === surahId) {
+            const newState = getMaturityState(level);
+            return { ...node, scheduler: { ...node.scheduler, ...newState } as any };
         }
-    } else if (nodeIdx !== -1) {
-        const node = nodes[nodeIdx];
-        // Distinguish between a node that has been reviewed and one that is new
-        const hasBeenReviewed = hasNodeBeenReviewed(node.scheduler);
+        return node;
+    });
+    await saveMemoryNodes(updatedNodes);
+}
 
-        if (hasBeenReviewed) {
-            // "Lapse" approach: reduce strength but don't reset to zero
-            const oldStability = getNodeStability(node.scheduler);
-            node.scheduler = createSuspendedScheduler(node.scheduler);
-            const newStability = getNodeStability(node.scheduler);
-            appLogger.addLog(`Part ${mindmap.partId} mindmap marked incomplete. Lapse applied: stability ${oldStability}d -> ${newStability}d, suspended.`, 'warning');
-            saveMemoryNodes(nodes, options);
-        } else {
-            // Never reviewed: just remove it until it's complete again
-            appLogger.addLog(`Part ${mindmap.partId} mindmap removed (never reviewed)`, 'info');
-            saveMemoryNodes(nodes.filter(n => n.id !== nodeId), options);
+export async function setNodeMaturity(nodeId: string, level: 'reset' | 'medium' | 'strong' | 'mastered') {
+    const nodes = getMemoryNodes();
+    const updatedNodes = nodes.map(node => {
+        if (node.id === nodeId) {
+            const newState = getMaturityState(level);
+            return { ...node, scheduler: { ...node.scheduler, ...newState } as any };
         }
-    }
+        return node;
+    });
+    await saveMemoryNodes(updatedNodes);
+}
+
+export async function postponeNode(nodeId: string, days: number = 1) {
+    const nodes = getMemoryNodes();
+    const updatedNodes = nodes.map(node => {
+        if (node.id === nodeId) {
+             const now = new Date();
+             const newDue = new Date(now.getTime() + days * 86400000).toISOString();
+             return { 
+                 ...node, 
+                 scheduler: { 
+                     ...node.scheduler, 
+                     due: newDue,
+                     scheduled_days: (node.scheduler as any).scheduled_days ? (node.scheduler as any).scheduled_days + days : days 
+                 } 
+             };
+        }
+        return node;
+    });
+    await saveMemoryNodes(updatedNodes);
 }
 
 // ========================================
-// Listening Stats
+// Mindmaps (Legacy / Helper Access)
 // ========================================
 
-export interface ListeningStats {
-    surahId: number;
-    totalMinutes: number;
-    lastListened: string;
+export function getMindMaps(): Record<string, MindMap> {
+    return getFromCache(STORAGE_KEYS.MINDMAPS, {});
 }
 
-export interface ListeningProgress {
-    partId: QuranPart;
-    currentVerseIndex: number;
-    portionPointer: number;
-    cycles: number;
-    updatedAt: string;
+export function getMindMap(surahId: number): MindMap | null {
+    const maps = getMindMaps();
+    return maps[surahId] || null;
 }
 
-export function getListeningProgress(partId: QuranPart): ListeningProgress {
-    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    const existing = map[partId];
-    if (existing) return existing;
+export async function saveMindMap(surahId: number, mindmap: MindMap) {
+    const maps = getMindMaps();
+    maps[surahId] = mindmap;
+    storageCache[STORAGE_KEYS.MINDMAPS] = maps;
 
-    // Fallback/Migration: check old separate keys
-    const pointers = getFromCache<Record<string, number>>(STORAGE_KEYS.PORTION_POINTERS, {});
-    const cyclesMap = getFromCache<Record<string, number>>(STORAGE_KEYS.LISTENING_CYCLES, {});
+    await db.mindmaps.put({
+        surahId,
+        data: mindmap,
+        updatedAt: new Date().toISOString()
+    });
+    
+    dispatchStorageEvent(STORAGE_KEYS.MINDMAPS, maps);
+}
 
-    return {
+export async function deleteMindMap(surahId: number) {
+    const maps = getMindMaps();
+    delete maps[surahId];
+    storageCache[STORAGE_KEYS.MINDMAPS] = maps;
+
+    await db.mindmaps.delete(surahId);
+    
+    dispatchStorageEvent(STORAGE_KEYS.MINDMAPS, maps);
+}
+
+// ========================================
+// Part Mindmaps
+// ========================================
+
+export function getPartMindMaps(): Record<string, PartMindMap> {
+    return getFromCache(STORAGE_KEYS.PART_MINDMAPS, {});
+}
+
+export async function savePartMindMap(partId: QuranPart, mindmap: PartMindMap) {
+    const maps = getPartMindMaps();
+    maps[partId] = mindmap;
+    storageCache[STORAGE_KEYS.PART_MINDMAPS] = maps;
+
+    await db.partMindmaps.put({
         partId,
-        currentVerseIndex: 0,
-        portionPointer: pointers[partId] || 0,
-        cycles: cyclesMap[partId] || 0,
+        data: mindmap,
         updatedAt: new Date().toISOString()
-    };
-}
+    });
 
-export function saveListeningProgress(partId: QuranPart, currentVerseIndex: number): void {
-    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    const existing = getListeningProgress(partId);
-
-    map[partId] = {
-        ...existing,
-        currentVerseIndex,
-        updatedAt: new Date().toISOString()
-    };
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
-}
-
-export function getListeningStats(): { [surahId: string]: ListeningStats } {
-    return getFromCache(STORAGE_KEYS.LISTENING_STATS, {});
-}
-
-export function getListeningStatsForSurah(surahId: number): ListeningStats {
-    const stats = getListeningStats();
-    return stats[surahId] || { surahId, totalMinutes: 0, lastListened: '' };
-}
-
-export function addListeningTime(surahId: number, minutes: number): void {
-    const stats = getListeningStats();
-    const current = stats[surahId] || { surahId, totalMinutes: 0, lastListened: '' };
-    current.totalMinutes += minutes;
-    current.lastListened = new Date().toISOString();
-    stats[surahId] = current;
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, stats);
+    dispatchStorageEvent(STORAGE_KEYS.PART_MINDMAPS, maps);
 }
 
 // ========================================
-// Listening Complete Tracking
+// Generic / Specific Helpers
 // ========================================
 
-export function getListeningCompletedToday(): boolean {
-    const stored = getFromCache<string | null>(STORAGE_KEYS.LISTENING_COMPLETE, null);
-    if (!stored) return false;
-    const today = new Date().toISOString().split('T')[0];
-    return stored === today;
-}
-
-export function getPortionPointer(partId: QuranPart): number {
-    return getListeningProgress(partId).portionPointer;
-}
-
-export function savePortionPointer(partId: QuranPart, index: number): void {
-    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    const existing = getListeningProgress(partId);
-
-    map[partId] = {
-        ...existing,
-        portionPointer: index,
-        updatedAt: new Date().toISOString()
-    };
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
-}
-
-export function getListeningCycles(partId: QuranPart): number {
-    return getListeningProgress(partId).cycles;
-}
-
-export function saveListeningCycles(partId: QuranPart, count: number): void {
-    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    const existing = getListeningProgress(partId);
-
-    map[partId] = {
-        ...existing,
-        cycles: count,
-        updatedAt: new Date().toISOString()
-    };
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
-}
-
-export function markListeningComplete(partId: QuranPart, versesPerDay: number, totalVerses: number): void {
-    const today = new Date().toISOString().split('T')[0];
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, today);
-
-    const map = getFromCache<Record<string, ListeningProgress>>(STORAGE_KEYS.LISTENING_PROGRESS, {});
-    const existing = getListeningProgress(partId);
-
-    let nextPointer = existing.portionPointer + versesPerDay;
-    let nextCycles = existing.cycles;
-
-    if (nextPointer >= totalVerses) {
-        nextPointer = nextPointer % totalVerses;
-        nextCycles += 1;
-    }
-
-    map[partId] = {
-        ...existing,
-        currentVerseIndex: 0,
-        portionPointer: nextPointer,
-        cycles: nextCycles,
-        updatedAt: new Date().toISOString()
-    };
-
-    saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, map);
-}
-
-// ========================================
-// Review Errors Tracking
-// ========================================
-
+// Review Errors
 export interface ReviewError {
-    id: string;
+    verseId: string;
     timestamp: string;
-    nodeId: string;
-    nodeType: 'verse' | 'mindmap' | 'part_mindmap';
+    count: number;
     surahId?: number;
-    partId?: QuranPart;
-    startVerse?: number;
-    endVerse?: number;
-    grade: number;
-    anchorLabel?: string;
-    anchorId?: string;
+    ayahId?: number;
     absoluteAyah?: number;
 }
 
@@ -1250,568 +394,228 @@ export function getReviewErrors(): ReviewError[] {
     return getFromCache(STORAGE_KEYS.REVIEW_ERRORS, []);
 }
 
-export function saveReviewError(error: ReviewError): void {
+export async function saveReviewErrors(errors: ReviewError[]) {
+    await persistGeneric(STORAGE_KEYS.REVIEW_ERRORS, errors);
+}
+
+export async function addReviewError(error: ReviewError) {
     const errors = getReviewErrors();
-    errors.push(error);
-    // Keep only last 100 errors
-    const trimmed = errors.slice(-100);
-    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, trimmed);
-}
-
-export function removeReviewError(id: string): void {
-    const errors = getReviewErrors();
-    const remaining = errors.filter(e => e.id !== id);
-    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, remaining);
-}
-
-export function getErrorsByAnchor(): { label: string; count: number; surahId?: number; anchorId?: string; startVerse?: number; endVerse?: number }[] {
-    const errors = getReviewErrors();
-    const mindmaps = getMindMaps();
-    const anchorCounts: { [key: string]: { label: string; count: number; surahId?: number; anchorId?: string; startVerse?: number; endVerse?: number } } = {};
-
-    errors.filter(e => e.grade < 3).forEach(error => {
-        if (error.surahId && error.startVerse && error.endVerse) {
-            const mindmap = mindmaps[error.surahId];
-            if (mindmap) {
-                const anchor = mindmap.anchors.find(a =>
-                    a.startVerse <= error.startVerse! && a.endVerse >= error.endVerse!
-                );
-                if (anchor) {
-                    const key = `${error.surahId}-${anchor.id}`;
-                    if (!anchorCounts[key]) {
-                        anchorCounts[key] = { label: anchor.label, count: 0, surahId: error.surahId, anchorId: anchor.id, startVerse: anchor.startVerse, endVerse: anchor.endVerse };
-                    }
-                    anchorCounts[key].count++;
-                }
-            }
-        }
-    });
-
-    return Object.values(anchorCounts).sort((a, b) => b.count - a.count);
-}
-
-// ========================================
-// FSRS Review Logs (for optimization)
-// ========================================
-
-
-
-export function getReviewLogs(): ReviewLogEntry[] {
-    return getFromCache(STORAGE_KEYS.FSRS_REVIEW_LOGS, []);
-}
-
-export function saveReviewLog(log: ReviewLogEntry): void {
-    const logs = getReviewLogs();
-    logs.push(log);
-    // Keep last 2000 logs for optimization (allows multiple optimization cycles)
-    const trimmed = logs.slice(-2000);
-    saveToCacheAndStore(STORAGE_KEYS.FSRS_REVIEW_LOGS, trimmed);
-}
-
-export function getReviewLogCount(): number {
-    return getReviewLogs().length;
-}
-
-export function clearReviewLogs(): void {
-    saveToCacheAndStore(STORAGE_KEYS.FSRS_REVIEW_LOGS, []);
-}
-
-// ========================================
-// FSRS Optimization Metadata
-// ========================================
-
-const DEFAULT_OPTIMIZATION_META: OptimizationMeta = {
-    lastOptimizedAt: null,
-    logCountAtLastOptimization: 0,
-    customWeights: null,
-};
-
-export function getOptimizationMeta(): OptimizationMeta {
-    return getFromCache(STORAGE_KEYS.FSRS_OPTIMIZATION_META, DEFAULT_OPTIMIZATION_META);
-}
-
-export function saveOptimizationMeta(meta: OptimizationMeta): void {
-    saveToCacheAndStore(STORAGE_KEYS.FSRS_OPTIMIZATION_META, meta);
-}
-
-export function getCustomWeights(): number[] | undefined {
-    return getOptimizationMeta().customWeights || undefined;
-}
-
-export function saveCustomWeights(weights: number[]): void {
-    const meta = getOptimizationMeta();
-    meta.customWeights = weights;
-    saveOptimizationMeta(meta);
-}
-
-// ========================================
-// Cycle Management
-// ========================================
-
-export function getCycleStart(): string {
-    let stored = getFromCache<string | null>(STORAGE_KEYS.CYCLE_START, null);
-    if (!stored) {
-        stored = new Date().toISOString().split('T')[0];
-        saveToCacheAndStore(STORAGE_KEYS.CYCLE_START, stored);
-    }
-    return stored;
-}
-
-export function setCycleStart(date: string): void {
-    saveToCacheAndStore(STORAGE_KEYS.CYCLE_START, date);
-}
-
-export function getCurrentDayInCycle(): number {
-    const start = new Date(getCycleStart());
-    const today = new Date();
-    const diff = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const settings = getSettings();
-    return diff % settings.completionDays;
-}
-
-// ========================================
-// Backup & Restore
-// ========================================
-
-// Maturity Levels
-export type MaturityLevel = 'reset' | 'medium' | 'strong' | 'mastered';
-
-export function getMaturityLevel(interval: number): MaturityLevel {
-    if (interval <= 3) return 'reset';
-    if (interval <= 14) return 'medium';
-    if (interval <= 45) return 'strong';
-    return 'mastered';
-}
-
-export function setNodeMaturity(nodeId: string, level: MaturityLevel): void {
-    const nodes = getMemoryNodes();
-    const index = nodes.findIndex(n => n.id === nodeId);
-    if (index === -1) return;
-
-    const node = nodes[index];
-
-    // Use FSRS preset logic
-    node.scheduler = createPresetState(level);
-
-    // If existing node had ID or other props, scheduler is just the state
-    // FSRSState has: due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review
-    // MemoryNode.scheduler is union. createPresetState returns FSRSState.
-    // So this assignment is valid.
-
-    saveMemoryNodes(nodes);
-}
-
-export function setSurahMaturity(surahId: number, level: MaturityLevel): void {
-    const nodes = getMemoryNodes();
-    const now = new Date();
-
-    const updatedNodes = nodes.map(node => {
-        if (node.surahId !== surahId || (node.type !== 'verse' && node.type !== 'mindmap')) {
-            return node;
-        }
-
-        // Use FSRS preset
-        return {
-            ...node,
-            scheduler: createPresetState(level)
-        };
-    });
-
-    saveMemoryNodes(updatedNodes);
-}
-
-export function setGroupMaturity(type: 'verse' | 'mindmap' | 'part_mindmap', level: MaturityLevel, surahId?: number): void {
-    const nodes = getMemoryNodes();
-    const now = new Date();
-
-    const updatedNodes = nodes.map(node => {
-        if (node.type !== type) {
-            return node;
-        }
-
-        // Filter by surahId if provided
-        if (surahId !== undefined && node.surahId !== surahId) {
-            return node;
-        }
-
-        // Use FSRS preset
-        return {
-            ...node,
-            scheduler: createPresetState(level)
-        };
-    });
-
-    saveMemoryNodes(updatedNodes);
-}
-
-export function resetAllMaturity(): void {
-    // 1. Clear all memory nodes
-    saveToCacheAndStore(STORAGE_KEYS.MEMORY_NODES, []);
-
-    // 2. Clear all review errors
-    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, []);
-
-    // 3. Regenerate nodes based on currently learned surahs and completed mindmaps
-    syncMemoryNodesWithLearned(true);
-}
-
-export interface AnchorIssue {
-    anchorId: string;
-    label: string;
-    surahId: number;
-    count: number;
-    startVerse?: number;
-    endVerse?: number;
-}
-
-export function getSuspendedAnchors(threshold: number = 3): AnchorIssue[] {
-    return getErrorsByAnchor()
-        .filter(e => e.count >= threshold && e.surahId && e.anchorId)
-        .map(e => ({
-            anchorId: e.anchorId!,
-            label: e.label,
-            surahId: e.surahId!,
-            count: e.count,
-            startVerse: e.startVerse,
-            endVerse: e.endVerse,
-        }));
-}
-
-export function clearAnchorIssues(surahId: number, anchorId: string): void {
-    const errors = getReviewErrors();
-    const issueErrors = errors.filter(err => err.surahId === surahId && err.anchorId === anchorId);
-
-    // 1. Clear the errors to unsuspend
-    const remaining = errors.filter(err => !(err.surahId === surahId && err.anchorId === anchorId));
-    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, remaining);
-
-    // 2. Identify and trigger re-learning for the associated MemoryNode
-    if (issueErrors.length > 0) {
-        const nodeId = issueErrors[0].nodeId;
-        const nodes = getMemoryNodes();
-        const nodeIdx = nodes.findIndex(n => n.id === nodeId);
-
-        if (nodeIdx !== -1) {
-            const node = nodes[nodeIdx];
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            // Check if FSRS or SM-2 and handle accordingly
-            // Check if FSRS or SM-2
-            if (!isSM2State(node.scheduler)) {
-                // Already FSRS: just unsuspend
-                node.scheduler = unsuspendCard(node.scheduler as any);
-            } else {
-                // SM-2: Migrate first, then unsuspend
-                const fsrsState = migrateSM2ToFSRS(node.scheduler as any);
-                node.scheduler = unsuspendCard(fsrsState);
-            }
-
-            saveMemoryNodes(nodes);
-        }
-    }
-}
-
-export function findAnchorForRange(surahId: number, startVerse?: number, endVerse?: number): Anchor | undefined {
-    const mindmap = getMindMap(surahId);
-    if (!startVerse || !endVerse) return undefined;
-    return mindmap.anchors.find(a => a.startVerse <= startVerse && a.endVerse >= endVerse);
-}
-
-export interface MutashabihatDecision {
-    status: 'pending' | 'ignored' | 'solved_mindmap' | 'solved_note';
-    note?: string;
-    confirmedAt?: string;
-    updatedAt?: string;
-}
-
-export interface CustomMutashabih {
-    id: string;
-    verse1: { surahId: number; ayahId: number };
-    verse2: { surahId: number; ayahId: number };
-    status: 'pending' | 'ignored' | 'solved_mindmap' | 'solved_note';
-    note?: string;
-    createdAt: string;
-    isCustom: true; // Distinction for development purposes
-}
-
-export function getCustomMutashabihat(): CustomMutashabih[] {
-    return getFromCache(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, []);
-}
-
-export function saveCustomMutashabih(mut: CustomMutashabih): void {
-    const all = getCustomMutashabihat();
-    const existingIdx = all.findIndex(m => m.id === mut.id);
-    if (existingIdx >= 0) {
-        all[existingIdx] = mut;
+    // Check if exists
+    const existing = errors.find(e => e.verseId === error.verseId);
+    if (existing) {
+        existing.count++;
+        existing.timestamp = new Date().toISOString();
     } else {
-        all.push(mut);
+        errors.push(error);
     }
-    saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, all);
+    await saveReviewErrors(errors);
 }
 
-export function deleteCustomMutashabih(id: string): void {
-    const all = getCustomMutashabihat().filter(m => m.id !== id);
-    saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, all);
+export async function removeReviewError(verseId: string) {
+    const errors = getReviewErrors();
+    const filtered = errors.filter(e => e.verseId !== verseId);
+    await saveReviewErrors(filtered);
+}
+
+// Mutashabihat
+export interface MutashabihatDecision {
+    id: string; // absoluteAyah or absoluteAyah-phraseId
+    status: 'confirmed' | 'ignored' | 'pending' | 'solved_mindmap' | 'solved_note';
+    confirmedAt?: string;
+    notes?: string;
 }
 
 export function getMutashabihatDecisions(): Record<string, MutashabihatDecision> {
     return getFromCache(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, {});
 }
 
-export function setMutashabihatDecision(absoluteAyah: number, decision: MutashabihatDecision, phraseId?: string): void {
-    const decisions = getMutashabihatDecisions();
-    const key = phraseId ? `${absoluteAyah}-${phraseId}` : absoluteAyah.toString();
-    // Add updatedAt for proper sync merge ordering
-    decisions[key] = {
-        ...decision,
-        updatedAt: new Date().toISOString()
-    };
-    saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, decisions);
+export async function setMutashabihatDecision(decision: MutashabihatDecision) {
+    const decisions = { ...getMutashabihatDecisions() };
+    decisions[decision.id] = decision;
+    await persistGeneric(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, decisions);
 }
 
-export function resetMutashabihatDecisions(absoluteAyat: number[]): void {
-    const decisions = getMutashabihatDecisions();
-    const keysToDelete = Object.keys(decisions).filter(key => {
-        const abs = parseInt(key.split('-')[0], 10);
-        return absoluteAyat.includes(abs);
-    });
+export async function resetMutashabihatDecisions(absoluteAyahs?: number[]) {
+    if (!absoluteAyahs) {
+        await persistGeneric(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, {});
+        return;
+    }
 
-    if (keysToDelete.length === 0) return;
+    const decisions = { ...getMutashabihatDecisions() };
+    const ayahSet = new Set(absoluteAyahs.map(String));
 
-    keysToDelete.forEach(key => delete decisions[key]);
-    saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, decisions);
-}
-
-export function bulkSetSurahStatus(surahIds: number[], status: 'learned' | 'new' | 'skipped'): void {
-    const settings = getSettings();
-    const allSurahs = SURAHS;
-
-    surahIds.forEach(id => {
-        const surah = allSurahs.find(s => s.id === id);
-        if (!surah) return;
-
-        const surahKey = id.toString();
-
-        // Update settings but preserve artifacts
-        if (status === 'learned') {
-            settings.skippedSurahs = (settings.skippedSurahs || []).filter(sId => sId !== id);
-            const verseIds = Array.from({ length: surah.verseCount }, (_, i) => i + 1);
-            settings.learnedVerses[surahKey] = verseIds;
-        } else if (status === 'skipped') {
-            settings.skippedSurahs = Array.from(new Set([...(settings.skippedSurahs || []), id]));
-        } else if (status === 'new') {
-            settings.skippedSurahs = (settings.skippedSurahs || []).filter(sId => sId !== id);
-            delete settings.learnedVerses[surahKey];
+    Object.keys(decisions).forEach(key => {
+        const absoluteAyah = key.split('-')[0];
+        if (ayahSet.has(absoluteAyah)) {
+            delete decisions[key];
         }
     });
 
-    if (settings.skippedSurahs) {
-        settings.skippedSurahs.sort((a, b) => a - b);
-    }
-
-    saveSettings(settings);
-    // Sync memory nodes to ensure UI reflects current status visibility
-    syncMemoryNodesWithLearned();
+    await persistGeneric(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, decisions);
 }
 
-function pruneSurahArtifacts(surahId: number): void {
-    // Remove memory nodes for this surah
-    const nodes = getMemoryNodes().filter(n => n.surahId !== surahId);
-    saveMemoryNodes(nodes);
-
-    // Remove surah mindmap
-    const maps = getMindMaps();
-    if (maps[surahId]) {
-        delete maps[surahId];
-        saveToCacheAndStore(STORAGE_KEYS.MINDMAPS_INDEX, maps);
-    }
-
-    // Remove review errors
-    const remainingErrors = getReviewErrors().filter(err => err.surahId !== surahId);
-    saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, remainingErrors);
+export interface CustomMutashabih {
+    id: string;
+    verseId: string; // surah:ayah
+    phrase: string;
+    targetVerseId: string;
+    notes?: string;
+    createdAt: string;
+    status?: 'confirmed' | 'ignored' | 'pending' | 'solved_mindmap' | 'solved_note';
 }
 
-function isNodeSuspended(node: MemoryNode, issues: AnchorIssue[]): boolean {
-    if (!node.surahId) return false;
-    const relatedIssues = issues.filter(i => i.surahId === node.surahId);
-    if (relatedIssues.length === 0) return false;
+export function getCustomMutashabihat(): CustomMutashabih[] {
+    return getFromCache(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, []);
+}
 
-    if (node.type === 'mindmap') return true;
-    if (node.type === 'verse') {
-        const anchor = findAnchorForRange(node.surahId, node.startVerse, node.endVerse);
-        return anchor ? relatedIssues.some(i => i.anchorId === anchor.id) : false;
+export async function saveCustomMutashabih(item: CustomMutashabih) {
+    const items = getCustomMutashabihat();
+    const existingIdx = items.findIndex(i => i.id === item.id);
+    if (existingIdx >= 0) {
+        items[existingIdx] = item;
+    } else {
+        items.push(item);
     }
+    await persistGeneric(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, items);
+}
+
+// Anchors (Suspended)
+export function getSuspendedAnchors(): string[] {
+    return [];
+}
+
+export async function clearAnchorIssues(surahId: number, anchorId?: string) {
+    // No-op
+}
+
+export function findAnchorForRange(surahId: number, start: number, end: number): MemoryNode | undefined {
+    const nodes = getMemoryNodes();
+    return nodes.find(n => 
+        n.type === 'verse_segment' && 
+        n.surahId === surahId && 
+        n.startVerse === start && 
+        n.endVerse === end
+    );
+}
+
+// Listening Progress
+export function getListeningProgress(): Record<string, number> {
+    return getFromCache(STORAGE_KEYS.LISTENING_PROGRESS, {});
+}
+
+export async function saveListeningProgress(progress: Record<string, number>) {
+    await persistGeneric(STORAGE_KEYS.LISTENING_PROGRESS, progress);
+}
+
+export function getPortionPointer(partId: number): string | null {
+    const pointers = getFromCache<Record<string, string>>(STORAGE_KEYS.PORTION_POINTERS, {});
+    return pointers[partId] || null;
+}
+
+// Scheduler Helpers
+export function hasNodeBeenReviewed(scheduler: any): boolean {
+    if (!scheduler) return false;
+    if ('reps' in scheduler) return scheduler.reps > 0;
+    if ('repetition' in scheduler) return scheduler.repetition > 0;
     return false;
 }
 
-export function getAudioSettings(): AudioSettings | undefined {
-    return audioSettings$.get();
+export function getNodeStability(node: MemoryNode): number {
+    return (node.scheduler as any).stability || 0;
 }
 
-export function saveAudioSettings(settings: AudioSettings): void {
-    settings.updatedAt = new Date().toISOString();
-    audioSettings$.set(settings);
+export function getNodeDifficulty(node: MemoryNode): number {
+    return (node.scheduler as any).difficulty || 0;
 }
 
-export interface BackupData {
-    settings?: AppSettings;
-    memoryNodes?: MemoryNode[];
-    mindmaps?: { [surahId: string]: MindMap };
-    partMindmaps?: { [partId: string]: PartMindMap };
-    listeningStats?: { [surahId: string]: ListeningStats };
-    listeningProgress?: Record<string, ListeningProgress>;
-    reviewErrors?: ReviewError[];
-    mutashabihatDecisions?: Record<string, MutashabihatDecision>;
-    customMutashabihat?: CustomMutashabih[];
-    audioSettings?: AudioSettings;
-    cycleStart?: string;
-    listeningComplete?: string | null;
-    lastResolvedFor?: string;
-    exportedAt: string;
+export function getNodeReps(node: MemoryNode): number {
+    return (node.scheduler as any).reps || (node.scheduler as any).repetition || 0;
 }
 
-export async function exportBackup(): Promise<BackupData> {
-    const data: Partial<BackupData> = {
+export function getNodeDueDate(node: MemoryNode): string | null {
+    return (node.scheduler as any).due || (node.scheduler as any).dueDate || null;
+}
+
+export function isSurahSkipped(surahId: number, settings: AppSettings): boolean {
+    return (settings.skippedSurahs || []).includes(surahId);
+}
+
+export async function clearSecondaryStorage() {
+    // Clear Dexie tables except Settings
+    await db.mindmaps.clear();
+    await db.partMindmaps.clear();
+    await db.memoryNodes.clear();
+    // Clear generic keys except Settings (which is in db.settings)
+    await db.keyval.clear();
+    
+    // Clear cache
+    Object.keys(storageCache).forEach(key => {
+        if (key !== STORAGE_KEYS.SETTINGS) {
+            delete storageCache[key];
+        }
+    });
+}
+
+export async function clearAllData() {
+    await db.delete();
+    await db.open();
+    // Clear cache
+    Object.keys(storageCache).forEach(key => delete storageCache[key]);
+    window.location.reload();
+}
+
+// Backup / Restore
+export async function exportBackup(): Promise<any> {
+    await ensureCacheLoaded();
+    return {
+        version: 1,
+        timestamp: new Date().toISOString(),
         settings: getSettings(),
         memoryNodes: getMemoryNodes(),
-        listeningStats: getListeningStats(),
-        listeningProgress: getFromCache(STORAGE_KEYS.LISTENING_PROGRESS, {}),
-        reviewErrors: getReviewErrors(),
-        mutashabihatDecisions: getMutashabihatDecisions(),
+        mindmaps: getMindMaps(),
+        partMindmaps: getPartMindMaps(),
         customMutashabihat: getCustomMutashabihat(),
-        audioSettings: getAudioSettings(),
-        cycleStart: getCycleStart(),
-        listeningComplete: getFromCache(STORAGE_KEYS.LISTENING_COMPLETE, null),
-        lastResolvedFor: getFromCache(STORAGE_KEYS.LAST_RESOLVED_FOR, undefined),
-        exportedAt: getFromCache(STORAGE_KEYS.LAST_MODIFIED, new Date().toISOString()),
+        decisions: getMutashabihatDecisions(),
+        listeningProgress: getListeningProgress(),
+        reviewErrors: getReviewErrors()
     };
-
-    // Gather full mindmaps
-    const mindmaps: Record<string, MindMap> = {};
-    const mindmapsIndex = getMindMaps();
-    if (typeof window !== 'undefined' && customStore) {
-        for (const id of Object.keys(mindmapsIndex)) {
-            try {
-                const full = await get<MindMap>(`quran-app-mindmap-${id}`, customStore);
-                if (full) mindmaps[id] = full;
-                else mindmaps[id] = mindmapsIndex[id];
-            } catch (e) {
-                mindmaps[id] = mindmapsIndex[id];
-            }
-        }
-    } else {
-        Object.assign(mindmaps, mindmapsIndex);
-    }
-    data.mindmaps = mindmaps;
-
-    // Gather full part mindmaps
-    const partMindmaps: Record<string, PartMindMap> = {};
-    const partMindmapsIndex = getPartMindMaps();
-    if (typeof window !== 'undefined' && customStore) {
-        for (const id of Object.keys(partMindmapsIndex)) {
-            try {
-                const full = await get<PartMindMap>(`quran-app-part-mindmap-${id}`, customStore);
-                if (full) partMindmaps[id] = full;
-                else partMindmaps[id] = partMindmapsIndex[id];
-            } catch (e) {
-                partMindmaps[id] = partMindmapsIndex[id];
-            }
-        }
-    } else {
-        Object.assign(partMindmaps, partMindmapsIndex);
-    }
-    data.partMindmaps = partMindmaps;
-
-    return data as BackupData;
 }
 
-export async function importBackup(data: BackupData, options?: { skipSyncTrigger?: boolean }): Promise<void> {
-    appLogger.addLog('Importing backup...', 'info');
+export async function importBackup(data: any) {
+    if (!data || !data.version) throw new Error('Invalid backup file');
     
-    // Batch import: Suppress individual events to prevent UI flickering/flashing
-    // We will dispatch ONE event at the end.
-    const saveOptions = { ...options, suppressEvent: true };
-
-    if (data.settings) await saveSettings(data.settings, saveOptions);
-    if (data.memoryNodes) saveMemoryNodes(data.memoryNodes, saveOptions);
+    if (data.settings) await saveSettings(data.settings);
+    if (data.memoryNodes) await saveMemoryNodes(data.memoryNodes);
     
     if (data.mindmaps) {
-        const current = getMindMaps();
-        const incoming = data.mindmaps;
-        
-        // Parallel save for mindmaps (much faster)
-        const promises = Object.keys(incoming).map(async (id) => {
-            // Protect against malformed boolean values in map
-             if (incoming[id] && typeof incoming[id] === 'object') {
-                if (!incoming[id].imageUrl && current[id]?.imageUrl) {
-                    incoming[id].imageUrl = current[id].imageUrl;
-                    incoming[id].imageUrlDark = current[id].imageUrlDark;
-                }
-                // Save using new split logic with suppressed events
-                await saveMindMap(incoming[id], saveOptions);
-            }
-        });
-        await Promise.all(promises);
+        for (const [surahId, map] of Object.entries(data.mindmaps)) {
+            await saveMindMap(Number(surahId), map as MindMap);
+        }
     }
-
+    
     if (data.partMindmaps) {
-        const current = getPartMindMaps();
-        const incoming = data.partMindmaps;
-        const promises = Object.keys(incoming).map(async (id) => {
-             const pId = id as any;
-             if (incoming[pId] && typeof incoming[pId] === 'object') {
-                if (!incoming[pId].imageUrl && current[pId]?.imageUrl) {
-                    incoming[pId].imageUrl = current[pId].imageUrl;
-                    incoming[pId].imageUrlDark = current[pId].imageUrlDark;
-                }
-                await savePartMindMap(incoming[pId], saveOptions);
-            }
-        });
-        await Promise.all(promises);
+        for (const [partId, map] of Object.entries(data.partMindmaps)) {
+            await savePartMindMap(Number(partId) as QuranPart, map as PartMindMap);
+        }
     }
-
-    if (data.listeningStats) {
-        saveToCacheAndStore(STORAGE_KEYS.LISTENING_STATS, data.listeningStats, saveOptions);
-    }
-    if (data.listeningProgress) {
-        saveToCacheAndStore(STORAGE_KEYS.LISTENING_PROGRESS, data.listeningProgress, saveOptions);
-    }
-    if (data.reviewErrors) {
-        saveToCacheAndStore(STORAGE_KEYS.REVIEW_ERRORS, data.reviewErrors, saveOptions);
-    }
-    if (data.mutashabihatDecisions) {
-        saveToCacheAndStore(STORAGE_KEYS.MUTASHABIHAT_DECISIONS, data.mutashabihatDecisions, saveOptions);
-    }
+    
     if (data.customMutashabihat) {
-        saveToCacheAndStore(STORAGE_KEYS.CUSTOM_MUTASHABIHAT, data.customMutashabihat, saveOptions);
+        for (const item of data.customMutashabihat) {
+            await saveCustomMutashabih(item as CustomMutashabih);
+        }
     }
-    if (data.audioSettings) {
-        audioSettings$.set(data.audioSettings);
+    
+    if (data.decisions) {
+        for (const [id, dec] of Object.entries(data.decisions)) {
+            await setMutashabihatDecision(dec as MutashabihatDecision);
+        }
     }
-    if (data.cycleStart) setCycleStart(data.cycleStart);
-    if (data.listeningComplete) saveToCacheAndStore(STORAGE_KEYS.LISTENING_COMPLETE, data.listeningComplete, saveOptions);
-    if (data.lastResolvedFor) saveToCacheAndStore(STORAGE_KEYS.LAST_RESOLVED_FOR, data.lastResolvedFor, saveOptions);
-
-    // Finally, update the last modified timestamp to match the imported backup's time
-    if (data.exportedAt) {
-        saveToCacheAndStore(STORAGE_KEYS.LAST_MODIFIED, data.exportedAt, saveOptions);
+    
+    if (data.listeningProgress) {
+        await saveListeningProgress(data.listeningProgress);
     }
-
-    appLogger.addLog('Backup imported successfully', 'success');
-
-    // Dispatch Global Refresh Event
-    // We trigger 'settings' update as a proxy for "everything changed" because most components listen to it
-    // or we can dispatch multiple specific events if needed, but a single reload trigger is better.
-    if (typeof window !== 'undefined') {
-        window.dispatchEvent(new StorageEvent('storage', {
-            key: STORAGE_KEYS.SETTINGS, 
-            newValue: JSON.stringify(data.settings || getSettings()),
-        }));
-        // Also trigger mindmaps index update explicitly as it's critical
-        window.dispatchEvent(new StorageEvent('storage', {
-            key: STORAGE_KEYS.MINDMAPS_INDEX, 
-            newValue: JSON.stringify(data.mindmaps ? getMindMaps() : {}),
-        }));
+    
+    if (data.reviewErrors) {
+        await saveReviewErrors(data.reviewErrors);
     }
 }
