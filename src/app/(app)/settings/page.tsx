@@ -13,10 +13,7 @@ import {
     DEFAULT_SETTINGS,
     getSettings,
     updateSetting,
-    toggleSurahLearned,
     toggleSurahSkipped,
-    isSurahSkipped,
-    getSurahLearnedStatus,
     setGroupMaturity,
     setSurahMaturity,
     setNodeMaturity,
@@ -410,73 +407,90 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                            <Check size={18} /> Surah Status
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Check size={18} /> Skipped Surah
                         </h2>
-                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                Manage learned and skipped surahs for the active part. <br />
-                                <span style={{ opacity: 0.8, fontSize: '0.8rem' }}>Tap a surah to cycle between: <b>Not Learned (Red)</b> → <b>Learned (Green)</b> → <b>Skipped (Grey)</b></span>
-                            </p>
-                            <div className="surah-pills-container" style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '0.6rem',
-                                marginTop: '0.5rem'
-                            }}>
-                                {activePartSurahs.map(s => {
-                                    const { learned, total } = getSurahLearnedStatus(s.id);
-                                    const skipped = isSurahSkipped(s.id);
-                                    const isLearned = learned === total;
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            Search and add Surahs you want to skip (e.g., ones you know perfectly).
+                        </p>
 
-                                    let statusColor = 'var(--danger)'; // Not Learned (Red)
-                                    if (isLearned) {
-                                        statusColor = '#22c55e'; // Learned (Green)
-                                    } else if (skipped) {
-                                        statusColor = '#94a3b8'; // Skipped (Grey)
-                                    }
+                        <div className="add-skipped-container" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                            <select
+                                value={surahToSkipId}
+                                onChange={(e) => setSurahToSkipId(e.target.value ? Number(e.target.value) : '')}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background)',
+                                    color: 'var(--foreground)',
+                                    fontSize: '0.95rem'
+                                }}
+                            >
+                                <option value="">Select Surah to Skip...</option>
+                                {SURAHS.map(s => (
+                                    <option key={s.id} value={s.id} disabled={settings.skippedSurahs?.includes(s.id)}>
+                                        {s.id}. {s.name} ({s.arabicName})
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleAddSkippedSurah}
+                                disabled={!surahToSkipId}
+                                style={{
+                                    padding: '0 1.25rem',
+                                    borderRadius: '12px',
+                                    background: surahToSkipId ? 'var(--accent)' : 'var(--border)',
+                                    color: 'white',
+                                    fontWeight: 600,
+                                    border: 'none',
+                                    cursor: surahToSkipId ? 'pointer' : 'not-allowed',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Add
+                            </button>
+                        </div>
 
-                                    return (
+                        <div className="skipped-surahs-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            {(!settings.skippedSurahs || settings.skippedSurahs.length === 0) && (
+                                <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', fontStyle: 'italic', width: '100%' }}>No surahs skipped.</p>
+                            )}
+                            {settings.skippedSurahs?.map(id => {
+                                const s = SURAHS.find(surah => surah.id === id);
+                                if (!s) return null;
+                                return (
+                                    <div key={id} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '0.5rem 0.75rem',
+                                        borderRadius: '20px',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{s.name}</span>
                                         <button
-                                            key={s.id}
-                                            onClick={() => handleCycleStatus(s.id)}
-                                            className="surah-pill"
+                                            onClick={() => handleRemoveSkippedSurah(id)}
                                             style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                padding: '0.5rem 0.8rem',
-                                                borderRadius: '24px',
-                                                border: `1px solid ${statusColor}`,
-                                                background: `${statusColor}15`, // Translucent background
-                                                color: statusColor,
-                                                fontSize: '0.85rem',
-                                                fontWeight: 500,
+                                                background: 'none',
+                                                border: 'none',
+                                                color: 'var(--foreground-secondary)',
                                                 cursor: 'pointer',
-                                                transition: 'all 0.2s ease',
-                                                outline: 'none'
-                                            }}
-                                            title={`${s.name} - Tap to cycle status`}
-                                        >
-                                            <span style={{
-                                                width: '20px',
-                                                height: '20px',
-                                                borderRadius: '50%',
-                                                background: statusColor,
-                                                color: 'white',
-                                                fontSize: '0.7rem',
+                                                padding: '2px',
                                                 display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                marginRight: '0.5rem',
-                                                flexShrink: 0
-                                            }}>
-                                                {s.id}
-                                            </span>
-                                            <span style={{ marginRight: '0.4rem' }}>{s.arabicName}</span>
-                                            <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{s.name}</span>
+                                                alignItems: 'center'
+                                            }}
+                                            title="Unskip (Add back to cycle)"
+                                        >
+                                            <X size={14} />
                                         </button>
-                                    );
-                                })}
-                            </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
@@ -922,8 +936,6 @@ export default function SettingsPage() {
     useEffect(() => {
         getQuranVerses().then(setVerses).catch(() => setVerses([]));
     }, []);
-
-    const activePartSurahs = useMemo(() => getSurahsByPart(settings.activePart), [settings.activePart]);
 
     const handleCompletionDays = (days: number) => {
         updateSetting('completionDays', Math.max(5, Math.min(120, days)));
