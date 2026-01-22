@@ -8,27 +8,45 @@ import { Suspense } from 'react';
 import Spinner from '@/components/ui/Spinner';
 
 function AuthContent() {
-    const { user, isLoading: isAuthLoading } = db.useAuth();
+    const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
+    
+    // Log state for debugging
+    console.log('AuthContent state:', { 
+        user: !!user, 
+        isAuthLoading, 
+        hasSearchParams: !!searchParams,
+        authStateError 
+    });
+    
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
     const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
     const [authLoading, setAuthLoading] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
+    
     const checkoutId = searchParams?.get('checkout_id');
+    const cycle = searchParams?.get('cycle') || 'monthly';
 
     // Owner email from env - owner bypasses Polar checkout
     const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
 
     // Use db.useQuery to check for purchases in InstantDB
-    const { data: purchaseData, isLoading: isPurchaseLoading } = db.useQuery(user?.email ? {
+    const { data: purchaseData, isLoading: isPurchaseLoading, error: purchaseError } = db.useQuery(user?.email ? {
         purchases: {
             $: {
                 where: { email: user.email, status: 'completed' }
             }
         }
     } : null);
+
+    console.log('Purchase data state:', { 
+        hasUser: !!user, 
+        isPurchaseLoading, 
+        hasPurchase: !!purchaseData?.purchases?.length,
+        purchaseError 
+    });
 
     useEffect(() => {
         if (user && !isPurchaseLoading) {
@@ -41,7 +59,6 @@ function AuthContent() {
         }
     }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAIL]);
 
-    const cycle = searchParams?.get('cycle') || 'monthly';
     const isSandbox = process.env.NEXT_PUBLIC_POLAR_SANDBOX === 'true';
 
     const PRODUCT_ID_MONTHLY = isSandbox 
@@ -80,10 +97,58 @@ function AuthContent() {
         window.location.href = checkoutUrl;
     };
 
-    if (isAuthLoading) return <Spinner />;
+    if (isAuthLoading) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--background)'
+            }}>
+                <Spinner text="Verifying authentication..." />
+            </div>
+        );
+    }
+
+    if (authStateError) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2rem',
+                background: 'var(--background)',
+                textAlign: 'center'
+            }}>
+                <div>
+                    <Lock size={48} color="var(--danger)" style={{ marginBottom: '1rem' }} />
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Connection Error</h2>
+                    <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem' }}>{authStateError.message}</p>
+                    <button onClick={() => window.location.reload()} className="btn btn-primary">Try Again</button>
+                </div>
+            </div>
+        );
+    }
+
+    // If logged in but still checking for purchase, show loading
+    if (user && isPurchaseLoading) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--background)'
+            }}>
+                <Spinner text="Checking subscription status..." />
+            </div>
+        );
+    }
 
     // If logged in but no purchase found and not owner, show checkout option
-    if (user && !isPurchaseLoading) {
+    if (user) {
         const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
         const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
         
@@ -341,7 +406,17 @@ function AuthContent() {
 
 export default function AuthPage() {
     return (
-        <Suspense fallback={<Spinner />}>
+        <Suspense fallback={
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--background)'
+            }}>
+                <Spinner text="Loading..." />
+            </div>
+        }>
             <AuthContent />
         </Suspense>
     );

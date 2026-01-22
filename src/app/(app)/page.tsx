@@ -25,6 +25,7 @@ export default function Home() {
     } : null);
 
     useEffect(() => {
+        console.log('Home auth state:', { user: !!user, isAuthLoading, isPurchaseLoading, loading });
         if (isAuthLoading) return;
 
         if (user) {
@@ -33,8 +34,10 @@ export default function Home() {
             // Check owner bypass
             const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
             const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
+            console.log('Home check:', { isOwner, hasPurchase });
 
             if (isOwner || hasPurchase) {
+                console.log('Redirecting to dashboard');
                 router.push('/dashboard');
             } else {
                 // Logged in but not paid - stay on landing page
@@ -43,9 +46,10 @@ export default function Home() {
         } else {
             setLoading(false);
         }
-    }, [user, isAuthLoading, isPurchaseLoading, purchaseData, router]);
+    }, [user, isAuthLoading, isPurchaseLoading, purchaseData, router, loading]);
 
     const handleGetStarted = (cycle: 'monthly' | 'yearly') => {
+        console.log('Get Started clicked, cycle:', cycle);
         // Navigate to auth page with billing cycle
         router.push(`/auth?cycle=${cycle}`);
     };

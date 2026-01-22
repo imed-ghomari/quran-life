@@ -83,7 +83,7 @@ class ErrorBoundary extends Component<Props, State> {
                                 alignItems: 'center',
                                 gap: '0.5rem',
                                 padding: '0.75rem 1.5rem',
-                                background: 'var(--primary)',
+                                background: 'var(--accent)',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '8px',
@@ -97,13 +97,13 @@ class ErrorBoundary extends Component<Props, State> {
                         </button>
 
                         <Link
-                            href="/dashboard"
+                            href="/"
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '0.5rem',
                                 padding: '0.75rem 1.5rem',
-                                background: 'var(--background-secondary)',
+                                background: 'transparent',
                                 color: 'var(--foreground)',
                                 border: '1px solid var(--border)',
                                 borderRadius: '8px',
@@ -113,7 +113,7 @@ class ErrorBoundary extends Component<Props, State> {
                             }}
                         >
                             <Home size={18} />
-                            Go to Dashboard
+                            Back to Home
                         </Link>
                     </div>
 
