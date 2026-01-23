@@ -10,7 +10,7 @@ import {
     useInstantMutashabihat,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { getNodeStability, getNodeDueDate } from '@/lib/types'; 
+import { getNodeStability, getNodeDueDate } from '@/lib/types';
 
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 
@@ -37,9 +37,9 @@ export default function StatisticsPage() {
     const { nodes: memoryNodes, isLoading: nodesLoading } = useInstantNodes();
     const { progress: listeningProgress, isLoading: progressLoading } = useInstantListeningProgress();
     const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useInstantMutashabihat();
-    
+
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
-    
+
     const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading;
 
     const activePart = settings?.activePart || 1;
@@ -195,12 +195,12 @@ export default function StatisticsPage() {
                                 // End of segment, calculate chunks
                                 const segmentLength = segmentEnd - segmentStart + 1;
                                 const chunks = Math.ceil(segmentLength / 5);
-                                
+
                                 // Get maturity for this segment
-                                const nodes = memoryNodes.filter(n => 
-                                    n.type === 'verse_segment' && 
-                                    n.surahId === s.id && 
-                                    (n.startVerse ?? 0) >= segmentStart && 
+                                const nodes = memoryNodes.filter(n =>
+                                    n.type === 'verse_segment' &&
+                                    n.surahId === s.id &&
+                                    (n.startVerse ?? 0) >= segmentStart &&
                                     (n.endVerse ?? 0) <= segmentEnd
                                 );
 
@@ -225,7 +225,7 @@ export default function StatisticsPage() {
 
                     const learnedChunksCount = chunkMaturities.length;
                     const unlearnedChunks = totalChunks - learnedChunksCount;
-                    
+
                     notLearned += Math.max(0, unlearnedChunks);
 
                     chunkMaturities.forEach(m => {
@@ -263,7 +263,7 @@ export default function StatisticsPage() {
         const cycles = partProgress?.cycles || 0;
 
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
-        
+
         const learnedVerseCount = progress;
 
         // Calculate surah counts

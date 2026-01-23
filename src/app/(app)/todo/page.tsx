@@ -15,7 +15,7 @@ import { X } from 'lucide-react';
 import MindmapEditor from '@/components/MindmapEditor';
 import MindmapViewer from '@/components/MindmapViewer';
 import TodoKanban from '@/components/todo/TodoKanban';
-import { AnchorBuilderState } from '@/components/todo/AnchorBuilders'; 
+import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -85,15 +85,14 @@ export default function TodoPage() {
     const activePart = settings.activePart;
 
     const surahTasks = useMemo(() => {
-        const learnedSurahIds = new Set(Object.keys(settings.learnedVerses || {}).map(Number));
         const eligible = SURAHS.filter(s =>
             (activePart === 5 || s.part === activePart) &&
-            learnedSurahIds.has(s.id)
+            !settings.skippedSurahs?.includes(s.id)
         );
         return eligible
             .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
             .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, activePart, settings.learnedVerses]);
+    }, [mindmaps, activePart, settings.skippedSurahs]);
 
     const partTasks = useMemo(() => {
         const parts: QuranPart[] = [1, 2, 3, 4];
