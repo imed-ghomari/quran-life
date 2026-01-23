@@ -1,39 +1,44 @@
+import { useMemo } from 'react';
 import { db } from '@/lib/instant';
 import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
+
+// Static defaults to ensure reference stability
+const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
+    completionDays: 365,
+    activePart: 5,
+    learnedVerses: {},
+    skippedSurahs: [],
+    theme: 'system',
+    isOnboardingComplete: false,
+    kanbanColumns: {},
+};
 
 // ==========================================
 // Settings Hook
 // ==========================================
 export function useInstantSettings() {
     const { user, isLoading: isAuthLoading } = db.useAuth();
-    
+
     // Query for the user's settings
     const { data, isLoading: isDataLoading, error } = db.useQuery({
         settings: {
             $: {
-                where: { userId: user?.id },
+                where: { userId: user?.id || '' },
             },
         },
     });
 
     const settingsEntry = data?.settings?.[0];
 
-    // Default settings matching initial state
-    const defaultSettings: AppSettings = {
-        completionDays: 365,
-        activePart: 5,
-        learnedVerses: {},
-        skippedSurahs: [],
-        theme: 'system',
-        isOnboardingComplete: false,
-        kanbanColumns: {},
-        userId: user?.id || '',
-        lastSyncedAt: new Date().toISOString(),
-    };
-
-    const currentSettings: AppSettings = settingsEntry 
-        ? { ...defaultSettings, ...settingsEntry } as AppSettings
-        : defaultSettings;
+    const currentSettings = useMemo(() => {
+        const base = {
+            ...DEFAULT_SETTINGS_BASE,
+            userId: user?.id || '',
+            lastSyncedAt: new Date().toISOString(),
+        };
+        if (!settingsEntry) return base;
+        return { ...base, ...settingsEntry } as AppSettings;
+    }, [settingsEntry, user?.id]);
 
     const saveSettings = async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
@@ -43,20 +48,22 @@ export function useInstantSettings() {
         } else {
             const id = crypto.randomUUID();
             await db.transact(db.tx.settings[id].update({
-                ...defaultSettings,
+                ...DEFAULT_SETTINGS_BASE,
                 ...newSettings,
                 userId: user.id
             }));
         }
     };
 
-    return { 
-        settings: { ...currentSettings, id: settingsEntry?.id }, 
-        saveSettings, 
-        isLoading: isAuthLoading || isDataLoading, 
+    const results = useMemo(() => ({
+        settings: { ...currentSettings, id: settingsEntry?.id },
+        saveSettings,
+        isLoading: isAuthLoading || isDataLoading,
         error,
         user
-    };
+    }), [currentSettings, settingsEntry?.id, isAuthLoading, isDataLoading, error, user]);
+
+    return results;
 }
 
 // ==========================================
@@ -64,24 +71,24 @@ export function useInstantSettings() {
 // ==========================================
 export function useInstantNodes() {
     const { user } = db.useAuth();
-    
-    const { isLoading, error, data } = db.useQuery({ 
+
+    const { isLoading, error, data } = db.useQuery({
         memoryNodes: {
             $: {
-                where: { userId: user?.id }
+                where: { userId: user?.id || '' }
             }
-        } 
+        }
     });
-    
-    const nodes = (data?.memoryNodes || []) as unknown as MemoryNode[];
 
-    const dueNodes = nodes.filter(node => {
+    const nodes = useMemo(() => (data?.memoryNodes || []) as unknown as MemoryNode[], [data?.memoryNodes]);
+
+    const dueNodes = useMemo(() => nodes.filter(node => {
         if (!node.scheduler) return false;
         const dueString = (node.scheduler as any).due || (node.scheduler as any).dueDate;
-        if (!dueString) return true; 
+        if (!dueString) return true;
         const due = new Date(dueString);
         return due <= new Date();
-    });
+    }), [nodes]);
 
     const saveNode = (node: MemoryNode) => {
         if (!user) return Promise.resolve();
@@ -96,7 +103,14 @@ export function useInstantNodes() {
         return db.transact(db.tx.memoryNodes[id].delete());
     };
 
-    return { nodes, dueNodes, saveNode, deleteNode, isLoading, error };
+    return useMemo(() => ({
+        nodes,
+        dueNodes,
+        saveNode,
+        deleteNode,
+        isLoading,
+        error
+    }), [nodes, dueNodes, isLoading, error]);
 }
 
 // ==========================================
@@ -104,34 +118,33 @@ export function useInstantNodes() {
 // ==========================================
 export function useInstantMindMaps() {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({ 
+    const { isLoading, error, data } = db.useQuery({
         mindMaps: {
             $: {
-                where: { userId: user?.id }
+                where: { userId: user?.id || '' }
             }
         },
         partMindMaps: {
             $: {
-                where: { userId: user?.id }
+                where: { userId: user?.id || '' }
             }
         }
     });
-    
-    const mindmaps = (data?.mindMaps || []) as unknown as MindMap[];
-    const partMindMaps = (data?.partMindMaps || []) as unknown as any[];
+
+    const mindmaps = useMemo(() => (data?.mindMaps || []) as unknown as MindMap[], [data?.mindMaps]);
+    const partMindMaps = useMemo(() => (data?.partMindMaps || []) as unknown as any[], [data?.partMindMaps]);
 
     const saveMindMap = (surahId: number, mapData: Partial<MindMap>) => {
         if (!user) return Promise.resolve();
         const existing = mindmaps.find(m => m.surahId === surahId);
         const id = existing ? (existing as any).id : crypto.randomUUID();
-        
-        // Sanitize data to remove nulls which InstantDB doesn't like for some types
+
         const sanitizedData: any = { ...mapData };
         if (sanitizedData.imageUrl === null) delete sanitizedData.imageUrl;
         if (sanitizedData.imageUrlDark === null) delete sanitizedData.imageUrlDark;
-        
-        return db.transact(db.tx.mindMaps[id].update({ 
-            ...sanitizedData, 
+
+        return db.transact(db.tx.mindMaps[id].update({
+            ...sanitizedData,
             surahId,
             userId: user.id,
             updatedAt: new Date().toISOString()
@@ -142,16 +155,23 @@ export function useInstantMindMaps() {
         if (!user) return Promise.resolve();
         const existing = partMindMaps.find(m => m.partId === partId);
         const id = existing ? existing.id : crypto.randomUUID();
-        
-        return db.transact(db.tx.partMindMaps[id].update({ 
-            ...mapData, 
+
+        return db.transact(db.tx.partMindMaps[id].update({
+            ...mapData,
             partId,
             userId: user.id,
             updatedAt: new Date().toISOString()
         }));
     };
 
-    return { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading, error };
+    return useMemo(() => ({
+        mindmaps,
+        partMindMaps,
+        saveMindMap,
+        savePartMindMap,
+        isLoading,
+        error
+    }), [mindmaps, partMindMaps, isLoading, error]);
 }
 
 // ==========================================
@@ -159,19 +179,19 @@ export function useInstantMindMaps() {
 // ==========================================
 export function useInstantListeningStats() {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({ 
+    const { isLoading, error, data } = db.useQuery({
         listeningStats: {
-            $: { where: { userId: user?.id } }
-        } 
+            $: { where: { userId: user?.id || '' } }
+        }
     });
-    
-    const stats = (data?.listeningStats || []) as unknown as any[];
+
+    const stats = useMemo(() => (data?.listeningStats || []) as unknown as any[], [data?.listeningStats]);
 
     const saveStats = (surahId: number, newStats: any) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
         const id = existing ? existing.id : crypto.randomUUID();
-        
+
         return db.transact(db.tx.listeningStats[id].update({
             ...newStats,
             surahId,
@@ -179,7 +199,7 @@ export function useInstantListeningStats() {
         }));
     };
 
-    return { stats, saveStats, isLoading, error };
+    return useMemo(() => ({ stats, saveStats, isLoading, error }), [stats, isLoading, error]);
 }
 
 // ==========================================
@@ -187,19 +207,19 @@ export function useInstantListeningStats() {
 // ==========================================
 export function useInstantListeningProgress() {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({ 
+    const { isLoading, error, data } = db.useQuery({
         listeningProgress: {
-            $: { where: { userId: user?.id } }
-        } 
+            $: { where: { userId: user?.id || '' } }
+        }
     });
-    
-    const progress = (data?.listeningProgress || []) as unknown as any[];
+
+    const progress = useMemo(() => (data?.listeningProgress || []) as unknown as any[], [data?.listeningProgress]);
 
     const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
         const id = existing ? existing.id : crypto.randomUUID();
-        
+
         return db.transact(db.tx.listeningProgress[id].update({
             partId,
             lastVerseIndex,
@@ -209,7 +229,7 @@ export function useInstantListeningProgress() {
         }));
     };
 
-    return { progress, saveProgress, isLoading, error };
+    return useMemo(() => ({ progress, saveProgress, isLoading, error }), [progress, isLoading, error]);
 }
 
 // ==========================================
@@ -217,13 +237,13 @@ export function useInstantListeningProgress() {
 // ==========================================
 export function useInstantMutashabihat() {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({ 
-        mutashabihatDecisions: { $: { where: { userId: user?.id } } },
-        customMutashabihat: { $: { where: { userId: user?.id } } }
+    const { isLoading, error, data } = db.useQuery({
+        mutashabihatDecisions: { $: { where: { userId: user?.id || '' } } },
+        customMutashabihat: { $: { where: { userId: user?.id || '' } } }
     });
-    
-    const decisions = (data?.mutashabihatDecisions || []) as unknown as any[];
-    const custom = (data?.customMutashabihat || []) as unknown as any[];
+
+    const decisions = useMemo(() => (data?.mutashabihatDecisions || []) as unknown as any[], [data?.mutashabihatDecisions]);
+    const custom = useMemo(() => (data?.customMutashabihat || []) as unknown as any[], [data?.customMutashabihat]);
 
     const saveDecision = (phraseId: string, update: any) => {
         if (!user) return Promise.resolve();
@@ -247,7 +267,14 @@ export function useInstantMutashabihat() {
         }));
     };
 
-    return { decisions, custom, saveDecision, saveCustom, isLoading, error };
+    return useMemo(() => ({
+        decisions,
+        custom,
+        saveDecision,
+        saveCustom,
+        isLoading,
+        error
+    }), [decisions, custom, isLoading, error]);
 }
 
 // ==========================================
@@ -256,10 +283,10 @@ export function useInstantMutashabihat() {
 export function useInstantReviewLogs() {
     const { user } = db.useAuth();
     const { isLoading, error, data } = db.useQuery({
-        fsrsReviewLogs: { $: { where: { userId: user?.id } } }
+        fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const logs = (data?.fsrsReviewLogs || []) as unknown as any[];
+    const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
 
     const saveLog = (log: any) => {
         if (!user) return Promise.resolve();
@@ -270,7 +297,7 @@ export function useInstantReviewLogs() {
         }));
     };
 
-    return { logs, saveLog, isLoading, error };
+    return useMemo(() => ({ logs, saveLog, isLoading, error }), [logs, isLoading, error]);
 }
 
 // ==========================================
@@ -279,16 +306,16 @@ export function useInstantReviewLogs() {
 export function useInstantReviewErrors() {
     const { user } = db.useAuth();
     const { isLoading, error, data } = db.useQuery({
-        reviewErrors: { $: { where: { userId: user?.id } } }
+        reviewErrors: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const errors = (data?.reviewErrors || []) as unknown as any[];
+    const errors = useMemo(() => (data?.reviewErrors || []) as unknown as any[], [data?.reviewErrors]);
 
-    const saveError = (error: any) => {
+    const saveError = (errorItem: any) => {
         if (!user) return Promise.resolve();
-        const id = error.id || crypto.randomUUID();
+        const id = errorItem.id || crypto.randomUUID();
         return db.transact(db.tx.reviewErrors[id].update({
-            ...error,
+            ...errorItem,
             userId: user.id
         }));
     };
@@ -298,7 +325,7 @@ export function useInstantReviewErrors() {
         return db.transact(db.tx.reviewErrors[id].delete());
     };
 
-    return { errors, saveError, deleteError, isLoading, error };
+    return useMemo(() => ({ errors, saveError, deleteError, isLoading, error }), [errors, isLoading, error]);
 }
 
 // ==========================================
@@ -307,15 +334,16 @@ export function useInstantReviewErrors() {
 export function useInstantOptimization() {
     const { user } = db.useAuth();
     const { isLoading, error, data } = db.useQuery({
-        optimizationMeta: { $: { where: { userId: user?.id } } },
-        customWeights: { $: { where: { userId: user?.id } } }
+        optimizationMeta: { $: { where: { userId: user?.id || '' } } },
+        customWeights: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const meta = data?.optimizationMeta?.[0] || {
+    const meta = useMemo(() => data?.optimizationMeta?.[0] || {
         logCountAtLastOptimization: 0,
         lastOptimizedAt: new Date().toISOString()
-    };
-    const weights = data?.customWeights?.[0]?.weights || [];
+    }, [data?.optimizationMeta]);
+
+    const weights = useMemo(() => data?.customWeights?.[0]?.weights || [], [data?.customWeights]);
 
     const saveMeta = (newMeta: any) => {
         if (!user) return Promise.resolve();
@@ -335,5 +363,5 @@ export function useInstantOptimization() {
         }));
     };
 
-    return { meta, weights, saveMeta, saveWeights, isLoading, error };
+    return useMemo(() => ({ meta, weights, saveMeta, saveWeights, isLoading, error }), [meta, weights, isLoading, error]);
 }

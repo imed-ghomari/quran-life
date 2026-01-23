@@ -6,9 +6,12 @@ import LandingPage from '@/components/LandingPage/LandingPage';
 import Spinner from '@/components/ui/Spinner';
 import { useEffect, useState } from 'react';
 
-// Owner bypass - set this in your .env.local: NEXT_PUBLIC_OWNER_EMAIL=your@email.com
+// Owner bypass - set these in your .env.local: NEXT_PUBLIC_OWNER_EMAIL=your@email.com
 // This allows you to bypass payment and go directly to auth
-const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
+const OWNER_EMAILS = [
+    process.env.NEXT_PUBLIC_OWNER_EMAIL,
+    process.env.NEXT_PUBLIC_OWNER_EMAIL2
+].filter(Boolean).map(e => e?.toLowerCase());
 
 export default function Home() {
     const { user, isLoading: isAuthLoading } = db.useAuth();
@@ -32,7 +35,7 @@ export default function Home() {
             if (isPurchaseLoading) return;
 
             // Check owner bypass
-            const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+            const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
             const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
             console.log('Home check:', { isOwner, hasPurchase });
 

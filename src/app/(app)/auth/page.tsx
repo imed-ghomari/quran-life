@@ -11,26 +11,29 @@ function AuthContent() {
     const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
-    
+
     // Log state for debugging
-    console.log('AuthContent state:', { 
-        user: !!user, 
-        isAuthLoading, 
+    console.log('AuthContent state:', {
+        user: !!user,
+        isAuthLoading,
         hasSearchParams: !!searchParams,
-        authStateError 
+        authStateError
     });
-    
+
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
     const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
     const [authLoading, setAuthLoading] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
-    
+
     const checkoutId = searchParams?.get('checkout_id');
     const cycle = searchParams?.get('cycle') || 'monthly';
 
-    // Owner email from env - owner bypasses Polar checkout
-    const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL;
+    // Owner emails from env - owners bypass Polar checkout
+    const OWNER_EMAILS = [
+        process.env.NEXT_PUBLIC_OWNER_EMAIL,
+        process.env.NEXT_PUBLIC_OWNER_EMAIL2
+    ].filter(Boolean).map(e => e?.toLowerCase());
 
     // Use db.useQuery to check for purchases in InstantDB
     const { data: purchaseData, isLoading: isPurchaseLoading, error: purchaseError } = db.useQuery({
@@ -41,30 +44,30 @@ function AuthContent() {
         }
     });
 
-    console.log('Purchase data state:', { 
-        hasUser: !!user, 
-        isPurchaseLoading, 
+    console.log('Purchase data state:', {
+        hasUser: !!user,
+        isPurchaseLoading,
         hasPurchase: !!purchaseData?.purchases?.length,
-        purchaseError 
+        purchaseError
     });
 
     useEffect(() => {
         if (user && !isPurchaseLoading) {
-            const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+            const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
             const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
 
             if (isOwner || hasPurchase) {
                 router.push('/dashboard');
             }
         }
-    }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAIL]);
+    }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAILS]);
 
     const isSandbox = process.env.NEXT_PUBLIC_POLAR_SANDBOX === 'true';
 
-    const PRODUCT_ID_MONTHLY = isSandbox 
+    const PRODUCT_ID_MONTHLY = isSandbox
         ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_MONTHLY
         : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_MONTHLY || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID);
-        
+
     const PRODUCT_ID_YEARLY = isSandbox
         ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_YEARLY
         : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_YEARLY || PRODUCT_ID_MONTHLY);
@@ -149,9 +152,9 @@ function AuthContent() {
 
     // If logged in but no purchase found and not owner, show checkout option
     if (user) {
-        const isOwner = OWNER_EMAIL && user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+        const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
         const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
-        
+
         if (!isOwner && !hasPurchase) {
             return (
                 <div style={{
@@ -263,7 +266,7 @@ function AuthContent() {
                         {authStep === 'email' ? 'Sign in to Quran Life' : 'Check your email'}
                     </h2>
                     <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem' }}>
-                        {authStep === 'email' 
+                        {authStep === 'email'
                             ? "We'll send you a magic link to sign in instantly."
                             : `We sent a code to ${email}. Enter it below to continue.`}
                     </p>
@@ -370,7 +373,7 @@ function AuthContent() {
                             </>
                         )}
                     </button>
-                    
+
                     {authStep === 'code' && (
                         <button
                             type="button"
