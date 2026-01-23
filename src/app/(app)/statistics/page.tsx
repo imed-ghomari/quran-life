@@ -42,14 +42,6 @@ export default function StatisticsPage() {
     
     const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading;
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-            </div>
-        );
-    }
-
     const activePart = settings?.activePart || 1;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
 
@@ -189,7 +181,6 @@ export default function StatisticsPage() {
 
                     // Logic to calculate chunks directly from learnedVerses to avoid sync issues
                     const sortedVerses = [...learnedVerses].sort((a, b) => a - b);
-                    let learnedChunksCount = 0;
                     const chunkMaturities: MaturityBucket[] = [];
 
                     if (sortedVerses.length > 0) {
@@ -198,49 +189,72 @@ export default function StatisticsPage() {
 
                         for (let i = 1; i <= sortedVerses.length; i++) {
                             const isContiguous = i < sortedVerses.length && sortedVerses[i] === segmentEnd + 1;
-                            const segmentSize = segmentEnd - segmentStart + 1;
+                            if (isContiguous) {
+                                segmentEnd = sortedVerses[i];
+                            } else {
+                                // End of segment, calculate chunks
+                                const segmentLength = segmentEnd - segmentStart + 1;
+                                const chunks = Math.ceil(segmentLength / 5);
+                                
+                                // Get maturity for this segment
+                                const nodes = memoryNodes.filter(n => 
+                                    n.type === 'verse_segment' && 
+                                    n.surahId === s.id && 
+                                    (n.startVerse ?? 0) >= segmentStart && 
+                                    (n.endVerse ?? 0) <= segmentEnd
+                                );
 
-                            if (!isContiguous || segmentSize >= 5 || i === sortedVerses.length) {
-                                const nodeId = `verse-${s.id}-${segmentStart}-${segmentEnd}`;
-                                const node = memoryNodes.find(n => n.id === nodeId);
-                                chunkMaturities.push(node ? getMaturity(getNodeStability(node)) : 'new');
-                                learnedChunksCount++;
+                                let maturity: MaturityBucket = 'new';
+                                if (nodes.length > 0) {
+                                    const totalStability = nodes.reduce((acc, n) => acc + getNodeStability(n), 0);
+                                    const avgInterval = totalStability / nodes.length;
+                                    maturity = getMaturity(avgInterval);
+                                }
+
+                                for (let c = 0; c < chunks; c++) {
+                                    chunkMaturities.push(maturity);
+                                }
 
                                 if (i < sortedVerses.length) {
                                     segmentStart = sortedVerses[i];
                                     segmentEnd = segmentStart;
                                 }
-                            } else {
-                                segmentEnd = sortedVerses[i];
                             }
                         }
                     }
 
-                    const unlearnedChunks = Math.max(0, totalChunks - learnedChunksCount);
-                    notLearned += unlearnedChunks;
+                    const learnedChunksCount = chunkMaturities.length;
+                    const unlearnedChunks = totalChunks - learnedChunksCount;
+                    
+                    notLearned += Math.max(0, unlearnedChunks);
 
-                    chunkMaturities.forEach(maturity => {
-                        if (maturity === 'mastered') learnedMastered++;
-                        else if (maturity === 'strong') learnedStrong++;
-                        else if (maturity === 'medium') learnedMedium++;
+                    chunkMaturities.forEach(m => {
+                        if (m === 'mastered') learnedMastered++;
+                        else if (m === 'strong') learnedStrong++;
+                        else if (m === 'medium') learnedMedium++;
                         else learnedNew++;
                     });
                 }
             }
         });
 
+        const totalSegments = targetSurahs.reduce((acc, s) => {
+            if (verseChunkMode === 'surahs') return acc + 1;
+            return acc + Math.ceil(s.verseCount / 5);
+        }, 0);
+
         return {
-            total: skipped + notLearned + learnedNew + learnedMedium + learnedStrong + learnedMastered,
+            total: totalSegments,
             segments: [
-                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: verseChunkMode === 'surahs' ? 'Skipped surahs' : 'Verses in skipped surahs' },
-                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: verseChunkMode === 'surahs' ? 'Surahs not yet started' : 'Verses not yet learned' },
+                { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Excluded from cycle' },
+                { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Not yet memorized' },
                 { label: 'New (< 14d)', count: learnedNew, color: 'var(--chart-new)', description: 'Newly learned (< 14 days)' },
                 { label: 'Medium (14-30d)', count: learnedMedium, color: 'var(--chart-medium)', description: 'Intermediate maturity (14-30 days)' },
                 { label: 'Strong (30-90d)', count: learnedStrong, color: 'var(--chart-strong)', description: 'Strong memory (30-90 days)' },
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, memoryNodes, skippedSurahs, verseChunkMode, settings?.learnedVerses]);
+    }, [activePart, settings?.learnedVerses, memoryNodes, skippedSurahs, verseChunkMode]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
@@ -395,6 +409,14 @@ export default function StatisticsPage() {
             maxDay
         };
     }, [activePart, memoryNodes, showBacklog, timeRange]);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="content-wrapper">
