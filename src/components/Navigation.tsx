@@ -81,7 +81,8 @@ function NavigationContent() {
         // Today's reviews
         const today = new Date().toISOString().split('T')[0];
         const dueToday = nodes.filter(n => {
-            const due = (n.scheduler as any).due;
+            if (!n.scheduler) return false;
+            const due = (n.scheduler as any).due || (n.scheduler as any).dueDate;
             return due && due.split('T')[0] <= today;
         }).length;
         setTodayReviews(dueToday);

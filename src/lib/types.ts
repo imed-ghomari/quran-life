@@ -212,18 +212,22 @@ export function getAudioPath(surahId: number, ayahId: number): string {
 
 // MemoryNode Utility Helpers
 export function getNodeStability(node: MemoryNode): number {
+    if (!node.scheduler) return 0;
     return (node.scheduler as any).stability || 0;
 }
 
 export function getNodeDifficulty(node: MemoryNode): number {
+    if (!node.scheduler) return 0;
     return (node.scheduler as any).difficulty || 0;
 }
 
 export function getNodeReps(node: MemoryNode): number {
+    if (!node.scheduler) return 0;
     return (node.scheduler as any).reps || (node.scheduler as any).repetition || 0;
 }
 
 export function getNodeDueDate(node: MemoryNode): string | null {
+    if (!node.scheduler) return null;
     return (node.scheduler as any).due || (node.scheduler as any).dueDate || null;
 }
 

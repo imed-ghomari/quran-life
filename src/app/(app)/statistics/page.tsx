@@ -159,7 +159,7 @@ export default function StatisticsPage() {
                 if (skippedSurahs.has(s.id)) {
                     skipped++;
                 } else {
-                    const learnedVerses = settings?.learnedVerses[s.id] || [];
+                    const learnedVerses = settings?.learnedVerses?.[s.id.toString()] || [];
                     const learned = learnedVerses.length;
                     if (learned === 0) {
                         notLearned++;
@@ -169,7 +169,8 @@ export default function StatisticsPage() {
                         if (nodes.length === 0) {
                             learnedNew++; // Learned but nodes not synced yet
                         } else {
-                            const avgInterval = nodes.reduce((acc, n) => acc + getNodeStability(n), 0) / nodes.length;
+                            const totalStability = nodes.reduce((acc, n) => acc + getNodeStability(n), 0);
+                            const avgInterval = totalStability / nodes.length;
                             const maturity = getMaturity(avgInterval);
                             if (maturity === 'mastered') learnedMastered++;
                             else if (maturity === 'strong') learnedStrong++;
@@ -184,7 +185,7 @@ export default function StatisticsPage() {
                 if (skippedSurahs.has(s.id)) {
                     skipped += totalChunks;
                 } else {
-                    const learnedVerses = settings?.learnedVerses[s.id] || [];
+                    const learnedVerses = settings?.learnedVerses?.[s.id.toString()] || [];
 
                     // Logic to calculate chunks directly from learnedVerses to avoid sync issues
                     const sortedVerses = [...learnedVerses].sort((a, b) => a - b);
