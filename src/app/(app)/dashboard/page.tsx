@@ -358,17 +358,23 @@ export default function TodayPage() {
             portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
         }
 
-        // Check if completed today based on updatedAt
-        if (partProgress?.updatedAt) {
-            const lastUpdate = new Date(partProgress.updatedAt);
-            const now = new Date();
-            if (lastUpdate.toDateString() === now.toDateString()) {
-                setListeningComplete(true);
-            }
-        }
-
-        return { portion, startVerseIndex: 0, versesPerDay, totalVerses };
+        return { 
+            portion, 
+            startVerseIndex: 0, 
+            versesPerDay, 
+            totalVerses,
+            lastUpdateAt: partProgress?.updatedAt
+        };
     }, [allVerses, settings, listeningProgress]);
+
+    useEffect(() => {
+        if (!portionData.lastUpdateAt) return;
+        const lastUpdate = new Date(portionData.lastUpdateAt);
+        const now = new Date();
+        if (lastUpdate.toDateString() === now.toDateString()) {
+            setListeningComplete(true);
+        }
+    }, [portionData.lastUpdateAt]);
 
     useEffect(() => {
         setTodaysPortion(portionData.portion);
@@ -385,7 +391,7 @@ export default function TodayPage() {
     // Grade review
     const handleGrade = useCallback((remembered: boolean) => {
         const node = dueNodes[currentReviewIndex];
-        if (!node) return;
+        if (!node || !node.scheduler) return;
 
         const errorId = !remembered ? `err-${Date.now()}` : undefined;
         // Save state for undo BEFORE updating
@@ -441,7 +447,7 @@ export default function TodayPage() {
 
     const handlePostpone = useCallback(() => {
         const node = dueNodes[currentReviewIndex];
-        if (!node) return;
+        if (!node || !node.scheduler) return;
 
         setLastGrading({
             node: JSON.parse(JSON.stringify(node)),
