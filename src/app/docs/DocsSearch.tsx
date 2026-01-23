@@ -65,19 +65,19 @@ export default function DocsSearch({ className }: { className?: string }) {
             if (!searchIndex && !indexLoaded.current) {
                 await loadIndex();
             }
-            
+
             // Wait a bit for index to set if it was just loaded
             // But since we await loadIndex(), if it updates state, we might need to access the ref or wait for re-render
             // Actually, we can pass the data directly if we modify loadIndex to return it.
             // For now, let's assume if indexLoaded is true, searchIndex might be in next render cycle if we just set it.
             // Better to return data from loadIndex.
-            
+
             let docs = searchIndex;
             if (!docs) {
-                 const res = await fetch('/search-index.json');
-                 docs = await res.json();
-                 setSearchIndex(docs);
-                 indexLoaded.current = true;
+                const res = await fetch('/search-index.json');
+                docs = await res.json();
+                setSearchIndex(docs);
+                indexLoaded.current = true;
             }
 
             if (docs) {
@@ -101,27 +101,27 @@ export default function DocsSearch({ className }: { className?: string }) {
     const navigateTo = (href: string) => {
         const highlightParam = query.trim() ? `?highlight=${encodeURIComponent(query.trim())}` : '';
         const finalHref = href.includes('?') ? `${href}&highlight=${encodeURIComponent(query.trim())}` : `${href}${highlightParam}`;
-        router.push(finalHref);
+        router.push(finalHref, { scroll: false });
         setIsOpen(false);
         setQuery('');
     };
 
     const Highlight = ({ text, query }: { text: string; query: string }) => {
         if (!query.trim()) return <>{text}</>;
-        
+
         // Strip common markdown characters
         const cleanText = text.replace(/[#*`_]/g, '');
-        
+
         // Split query into words and escape them for regex
         const words = query.trim().split(/\s+/).filter(word => word.length > 1);
-        
+
         if (words.length === 0) {
             // Fallback for single characters or empty queries
             const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const parts = cleanText.split(new RegExp(`(${escapedQuery})`, 'gi'));
             return (
                 <>
-                    {parts.map((part, i) => 
+                    {parts.map((part, i) =>
                         part.toLowerCase() === query.toLowerCase() ? (
                             <mark key={i} style={{ backgroundColor: 'rgba(234, 179, 8, 0.3)', color: 'inherit', borderRadius: '2px', padding: '0 1px' }}>
                                 {part}
@@ -138,13 +138,13 @@ export default function DocsSearch({ className }: { className?: string }) {
         const pattern = words
             .map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
             .join('|');
-        
+
         const parts = cleanText.split(new RegExp(`(${pattern})`, 'gi'));
         const wordSet = new Set(words.map(w => w.toLowerCase()));
-        
+
         return (
             <>
-                {parts.map((part, i) => 
+                {parts.map((part, i) =>
                     wordSet.has(part.toLowerCase()) || part.toLowerCase() === query.toLowerCase() ? (
                         <mark key={i} style={{ backgroundColor: 'rgba(234, 179, 8, 0.3)', color: 'inherit', borderRadius: '2px', padding: '0 1px' }}>
                             {part}
@@ -178,6 +178,7 @@ export default function DocsSearch({ className }: { className?: string }) {
             {/* Search Modal Backdrop */}
             {isOpen && (
                 <div
+                    id="docs-search-modal"
                     style={{
                         position: 'fixed',
                         inset: 0,

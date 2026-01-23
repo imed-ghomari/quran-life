@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useSearchParams, usePathname } from 'next/navigation';
 
 export default function SearchHighlight() {
     const searchParams = useSearchParams();
+    const pathname = usePathname();
     const highlight = searchParams.get('highlight');
+    const observerRef = useRef<MutationObserver | null>(null);
 
     useEffect(() => {
         if (!highlight) return;
@@ -13,13 +15,37 @@ export default function SearchHighlight() {
         const term = decodeURIComponent(highlight).toLowerCase();
         if (!term) return;
 
-        // Give the page a moment to render content
-        const timer = setTimeout(() => {
+        // Cleanup any previous observer
+        if (observerRef.current) {
+            observerRef.current.disconnect();
+            observerRef.current = null;
+        }
+
+        const processAndScroll = () => {
             const article = document.querySelector('article.docs-content');
-            if (!article) return;
+            if (!article) return false;
+
+            // Check if article has meaningful content (not just empty or loading)
+            // Look for text that contains our search term
+            const articleText = article.textContent?.toLowerCase() || '';
+            if (!articleText.includes(term)) {
+                console.log('SearchHighlight: Term not found in article yet, waiting...', { term });
+                return false;
+            }
+
+            console.log('SearchHighlight: Found term in article, processing...');
+
+            // First, remove any existing highlights to avoid double highlighting or stale matches
+            const existingHighlights = article.querySelectorAll('.search-highlight');
+            existingHighlights.forEach(el => {
+                const parent = el.parentNode;
+                if (parent) {
+                    parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+                }
+            });
+            article.normalize(); // Merge adjacent text nodes
 
             // Simple text replacement within the article for the search term
-            // We use a tree walker to find text nodes and wrap the matches
             const walker = document.createTreeWalker(
                 article,
                 NodeFilter.SHOW_TEXT,
@@ -29,7 +55,7 @@ export default function SearchHighlight() {
             const nodesToProcess: Text[] = [];
             let currentNode = walker.nextNode();
             while (currentNode) {
-                if (currentNode.parentElement?.tagName !== 'SCRIPT' && 
+                if (currentNode.parentElement?.tagName !== 'SCRIPT' &&
                     currentNode.parentElement?.tagName !== 'STYLE' &&
                     currentNode.textContent?.toLowerCase().includes(term)) {
                     nodesToProcess.push(currentNode as Text);
@@ -39,14 +65,19 @@ export default function SearchHighlight() {
 
             nodesToProcess.forEach(node => {
                 const text = node.textContent || '';
-                const parts = text.split(new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-                
+                const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const parts = text.split(new RegExp(`(${escapedTerm})`, 'gi'));
+
                 if (parts.length > 1) {
                     const fragment = document.createDocumentFragment();
                     parts.forEach(part => {
                         if (part.toLowerCase() === term) {
                             const span = document.createElement('span');
                             span.className = 'search-highlight';
+                            span.style.backgroundColor = 'rgba(234, 179, 8, 0.4)';
+                            span.style.color = 'inherit';
+                            span.style.borderRadius = '2px';
+                            span.style.padding = '0 1px';
                             span.textContent = part;
                             fragment.appendChild(span);
                         } else if (part) {
@@ -56,10 +87,113 @@ export default function SearchHighlight() {
                     node.parentNode?.replaceChild(fragment, node);
                 }
             });
-        }, 300);
 
-        return () => clearTimeout(timer);
-    }, [highlight]);
+            // Now scroll to the first highlight
+            const firstHighlight = article.querySelector('.search-highlight') as HTMLElement;
+            const container = document.querySelector('.docs-main') as HTMLElement;
+
+            if (firstHighlight && container) {
+                // Reset scroll to top first
+                container.scrollTop = 0;
+
+                // Force reflow
+                container.offsetHeight;
+
+                // Calculate and scroll after layout update
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        const containerRect = container.getBoundingClientRect();
+                        const highlightRect = firstHighlight.getBoundingClientRect();
+
+                        // Since container.scrollTop is 0, this gives us the actual offset
+                        const highlightOffset = highlightRect.top - containerRect.top;
+
+                        // Scroll to center the highlight in the viewport
+                        const targetScroll = highlightOffset - (containerRect.height / 2) + (highlightRect.height / 2);
+
+                        console.log('SearchHighlight: Scrolling to highlight', {
+                            highlightOffset,
+                            targetScroll,
+                            containerHeight: containerRect.height
+                        });
+
+                        container.scrollTo({
+                            top: Math.max(0, targetScroll),
+                            behavior: 'smooth'
+                        });
+                    }, 50);
+                });
+            }
+
+            return true;
+        };
+
+        // Try immediately first (in case content is already loaded)
+        const initialDelay = setTimeout(() => {
+            if (processAndScroll()) {
+                console.log('SearchHighlight: Processed on initial attempt');
+                return;
+            }
+
+            // If content not ready, set up a MutationObserver to wait for it
+            console.log('SearchHighlight: Setting up MutationObserver to wait for content');
+            const article = document.querySelector('article.docs-content');
+            if (!article) {
+                console.warn('SearchHighlight: Article element not found');
+                return;
+            }
+
+            let attempts = 0;
+            const maxAttempts = 20; // Max 4 seconds (20 * 200ms)
+
+            observerRef.current = new MutationObserver(() => {
+                attempts++;
+                console.log('SearchHighlight: Content changed, attempt', attempts);
+
+                if (processAndScroll()) {
+                    console.log('SearchHighlight: Successfully processed after mutation');
+                    observerRef.current?.disconnect();
+                    observerRef.current = null;
+                } else if (attempts >= maxAttempts) {
+                    console.warn('SearchHighlight: Max attempts reached, giving up');
+                    observerRef.current?.disconnect();
+                    observerRef.current = null;
+                }
+            });
+
+            observerRef.current.observe(article, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+
+            // Also set up a polling mechanism as backup
+            let pollAttempts = 0;
+            const pollInterval = setInterval(() => {
+                pollAttempts++;
+                if (processAndScroll()) {
+                    console.log('SearchHighlight: Successfully processed via polling');
+                    clearInterval(pollInterval);
+                    observerRef.current?.disconnect();
+                    observerRef.current = null;
+                } else if (pollAttempts >= maxAttempts) {
+                    console.warn('SearchHighlight: Polling max attempts reached');
+                    clearInterval(pollInterval);
+                }
+            }, 200);
+
+            // Cleanup interval on unmount
+            return () => clearInterval(pollInterval);
+        }, 100);
+
+        return () => {
+            clearTimeout(initialDelay);
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+                observerRef.current = null;
+            }
+        };
+    }, [highlight, pathname]);
 
     return null;
 }

@@ -1,4 +1,4 @@
-import { BackToTopButton } from '@/components/common/back-to-top-button'
+
 import { GithubIcon } from '@/components/common/icon/github'
 import { Article } from '@/types/content-types'
 import { format } from 'date-fns'
@@ -24,7 +24,7 @@ export function DocsArticleInfo({ article }: { article: Article }) {
 					<span>Edit this page on GitHub</span>
 				</Link>
 			)}
-			<BackToTopButton />
+		
 		</div>
 	)
 }
