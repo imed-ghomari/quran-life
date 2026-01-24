@@ -51,7 +51,9 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
 
     return (
         <div className="content-wrapper !max-w-full h-full flex flex-col">
-            <ScrollOnNavigate />
+            <Suspense fallback={null}>
+                <ScrollOnNavigate />
+            </Suspense>
             {/* Mobile Header */}
             <div className="flex items-center justify-between mb-4 shrink-0 md:hidden px-5 pt-5">
                 <div className="flex items-center gap-3">
@@ -121,7 +123,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                     </div>
                 </aside>
             </div>
-         
+
         </div>
     );
 }
