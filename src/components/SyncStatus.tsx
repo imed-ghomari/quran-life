@@ -103,7 +103,6 @@ export default function SyncStatus({ variant, onConflictClick }: SyncStatusProps
             <div
                 className="sync-status-mobile"
             >
-                <ThemeToggle variant="mobile" />
 
                 <button
                     onClick={handleClick}

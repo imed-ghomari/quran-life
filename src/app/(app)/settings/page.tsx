@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import { QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
-import { db } from '@/lib/instant'; 
-import { useInstantSettings, useInstantNodes, useInstantMutashabihat } from '@/hooks/useInstantData'; 
+import { db } from '@/lib/instant';
+import { useInstantSettings, useInstantNodes, useInstantMutashabihat } from '@/hooks/useInstantData';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
     Upload,
@@ -20,8 +20,13 @@ import {
     Book,
     Activity,
     X,
-    Trash2
+    Trash2,
+    Sun,
+    Moon,
+    Monitor,
+    Palette
 } from 'lucide-react';
+import { useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
@@ -31,6 +36,71 @@ interface MutashabihatDecision {
     status: 'confirmed' | 'ignored' | 'pending' | 'solved_mindmap' | 'solved_note';
     confirmedAt?: string;
     notes?: string;
+}
+
+function AppearanceCard() {
+    const { theme, setTheme } = useTheme();
+
+    return (
+        <div className="card modern-card" style={{
+            background: 'var(--background-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: '16px'
+        }}>
+            <div className="section-title"
+                style={{
+                    color: 'var(--accent)',
+                    fontWeight: 700,
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    fontSize: 'clamp(1rem, 5vw, 1.1rem)'
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Palette size={18} />
+                    </div>
+                    <span>Appearance</span>
+                </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                    Choose how Quran Life looks for you.
+                </p>
+                <div style={{ display: 'flex', gap: '0.65rem' }}>
+                    {[
+                        { id: 'light', label: 'Light', icon: Sun },
+                        { id: 'dark', label: 'Dark', icon: Moon },
+                        { id: 'system', label: 'System', icon: Monitor }
+                    ].map((mode) => (
+                        <button
+                            key={mode.id}
+                            onClick={() => setTheme(mode.id as any)}
+                            style={{
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.75rem 0.5rem',
+                                borderRadius: '12px',
+                                border: theme === mode.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
+                                color: theme === mode.id ? 'var(--accent)' : 'var(--foreground-secondary)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                            }}
+                        >
+                            <mode.icon size={20} />
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{mode.label}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
@@ -108,7 +178,7 @@ export default function SettingsPage() {
         representativeAbs: number;
     } | null>(null);
 
-    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | null>(null);
+    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'appearance' | null>(null);
 
     // Sync instant decisions to local state for easier lookups
     useEffect(() => {
@@ -149,17 +219,17 @@ export default function SettingsPage() {
 
     useEffect(() => {
         const handleResize = () => {
-             if (window.innerWidth >= 768) {
-                 setSectionsExpanded({
+            if (window.innerWidth >= 768) {
+                setSectionsExpanded({
                     cloudSync: true,
                     backupRestore: true,
                     schedule: true,
                     activePart: true,
                     surahStatus: true,
                     mutashabihat: true,
-                 });
-                 setShowDebugNodes(true);
-             }
+                });
+                setShowDebugNodes(true);
+            }
         };
 
         if (typeof window !== 'undefined') {
@@ -174,14 +244,14 @@ export default function SettingsPage() {
                 });
                 setShowDebugNodes(false);
             } else {
-                 setSectionsExpanded({
+                setSectionsExpanded({
                     cloudSync: true,
                     backupRestore: true,
                     schedule: true,
                     activePart: true,
                     surahStatus: true,
                     mutashabihat: true,
-                 });
+                });
             }
         }
 
@@ -218,199 +288,199 @@ export default function SettingsPage() {
     useEffect(() => {
         // Initial load handled by hook
         // setSettings(getSettings());
-        
-        }, []);
+
+    }, []);
 
     const renderMobileView = () => {
 
         if (activeMobilePage === 'account') {
-             return (
-                 <div className="content-wrapper">
-                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem'}}>
-                        <button onClick={() => setActiveMobilePage(null)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center'}}>
+            return (
+                <div className="content-wrapper">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
-                        <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Account & Data</h1>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Account & Data</h1>
                     </div>
-                    
+
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Database size={18} /> User Account
                         </h2>
-                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                {user
-                                    ? `Signed in as ${user.email}. Your data is synced automatically.`
-                                    : "Sign in to sync your progress across devices."}
-                            </p>
+                        <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                            {user
+                                ? `Signed in as ${user.email}. Your data is synced automatically.`
+                                : "Sign in to sync your progress across devices."}
+                        </p>
 
-                            <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
-                                {!isOnline && (
-                                    <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}>
-                                        <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Offline</div>
-                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
-                                            Cloud sync and authentication are paused. Keep using the app; changes will sync when online.
-                                        </div>
+                        <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
+                            {!isOnline && (
+                                <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}>
+                                    <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Offline</div>
+                                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                                        Cloud sync and authentication are paused. Keep using the app; changes will sync when online.
                                     </div>
-                                )}
+                                </div>
+                            )}
 
-                                {user ? (
-                                    <>
+                            {user ? (
+                                <>
 
 
-                                        <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                                            <button
-                                                className="btn btn-secondary"
-                                                onClick={async () => {
-                                                    // InstantDB handles sync automatically
-                                                    if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
-                                                    
-                                                    // Sign out from InstantDB (it clears local storage token)
-                                                    db.auth.signOut();
-                                                    router.push('/');
-                                                }}
-                                                style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
-                                            >
-                                                Sign Out
-                                            </button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        {authStep === 'email' ? (
-                                            <input
-                                                suppressHydrationWarning={true}
-                                                type="email"
-                                                placeholder="Enter your email"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                required
-                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                            />
-                                        ) : (
-                                            <input
-                                                type="text"
-                                                placeholder="Enter verification code"
-                                                value={code}
-                                                onChange={(e) => setCode(e.target.value)}
-                                                required
-                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                            />
-                                        )}
-                                        {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
+                                    <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                         <button
-                                            suppressHydrationWarning={true}
-                                            type="submit"
-                                            className="btn btn-primary"
-                                            disabled={isAuthProcessing}
-                                            style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
+                                            className="btn btn-secondary"
+                                            onClick={async () => {
+                                                // InstantDB handles sync automatically
+                                                if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
+
+                                                // Sign out from InstantDB (it clears local storage token)
+                                                db.auth.signOut();
+                                                router.push('/');
+                                            }}
+                                            style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                         >
-                                            {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
+                                            Sign Out
                                         </button>
-                                    </form>
-                                )}
-                            </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    {authStep === 'email' ? (
+                                        <input
+                                            suppressHydrationWarning={true}
+                                            type="email"
+                                            placeholder="Enter your email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                        />
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            placeholder="Enter verification code"
+                                            value={code}
+                                            onChange={(e) => setCode(e.target.value)}
+                                            required
+                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                        />
+                                    )}
+                                    {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
+                                    <button
+                                        suppressHydrationWarning={true}
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={isAuthProcessing}
+                                        style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
+                                    >
+                                        {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
+                                    </button>
+                                </form>
+                            )}
+                        </div>
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                         <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Download size={18} /> Backup, Import & Reset
                         </h2>
-                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                Manage your data: Export backup, import from file, or reset all data.
-                            </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={handleExport}
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem',
-                                        fontSize: '0.9rem',
-                                        height: 'auto',
-                                        background: 'var(--background)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '12px'
-                                    }}
-                                >
-                                    <Download size={20} style={{ color: 'var(--accent)' }} />
-                                    <span>Export Data</span>
-                                </button>
-                                <label
-                                    className="btn btn-secondary"
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem',
-                                        cursor: 'pointer',
-                                        fontSize: '0.9rem',
-                                        height: 'auto',
-                                        background: 'var(--background)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '12px'
-                                    }}
-                                >
-                                    <Upload size={20} style={{ color: 'var(--accent)' }} />
-                                    <span>Import Data</span>
-                                    <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-                                </label>
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={handleReset}
-                                    style={{
-                                        gridColumn: 'span 2',
-                                        display: 'flex',
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem',
-                                        fontSize: '0.9rem',
-                                        height: 'auto',
-                                        background: 'var(--background)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '12px',
-                                        color: '#ef4444'
-                                    }}
-                                >
-                                    <Trash2 size={20} />
-                                    <span>Reset All Data</span>
-                                </button>
-                            </div>
+                        <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                            Manage your data: Export backup, import from file, or reset all data.
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleExport}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    padding: '1rem',
+                                    fontSize: '0.9rem',
+                                    height: 'auto',
+                                    background: 'var(--background)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '12px'
+                                }}
+                            >
+                                <Download size={20} style={{ color: 'var(--accent)' }} />
+                                <span>Export Data</span>
+                            </button>
+                            <label
+                                className="btn btn-secondary"
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    padding: '1rem',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    height: 'auto',
+                                    background: 'var(--background)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '12px'
+                                }}
+                            >
+                                <Upload size={20} style={{ color: 'var(--accent)' }} />
+                                <span>Import Data</span>
+                                <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                            </label>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleReset}
+                                style={{
+                                    gridColumn: 'span 2',
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    padding: '1rem',
+                                    fontSize: '0.9rem',
+                                    height: 'auto',
+                                    background: 'var(--background)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '12px',
+                                    color: '#ef4444'
+                                }}
+                            >
+                                <Trash2 size={20} />
+                                <span>Reset All Data</span>
+                            </button>
+                        </div>
                     </div>
-                 </div>
-             );
+                </div>
+            );
         }
-        
+
         if (activeMobilePage === 'plan') {
-             return (
-                 <div className="content-wrapper">
-                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem'}}>
-                        <button onClick={() => setActiveMobilePage(null)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center'}}>
+            return (
+                <div className="content-wrapper">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
-                        <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Memorization Plan</h1>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Memorization Plan</h1>
                     </div>
 
                     <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Clock size={18} /> Completion Schedule
                         </h2>
-                            <DailyCompletionSlider
-                                days={settings.completionDays || 30}
-                                onChange={handleCompletionDays}
-                                activePart={settings.activePart}
-                            />
+                        <DailyCompletionSlider
+                            days={settings.completionDays || 30}
+                            onChange={handleCompletionDays}
+                            activePart={settings.activePart}
+                        />
                     </div>
 
                     <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <PauseCircle size={18} /> Active Part
                         </h2>
                         <div className="part-selector" style={{
@@ -452,18 +522,18 @@ export default function SettingsPage() {
                             ))}
                         </div>
                     </div>
-                 </div>
-             );
+                </div>
+            );
         }
 
         if (activeMobilePage === 'tracking') {
-             return (
-                 <div className="content-wrapper">
-                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem'}}>
-                        <button onClick={() => setActiveMobilePage(null)} style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center'}}>
+            return (
+                <div className="content-wrapper">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
-                        <h1 style={{fontSize: '1.5rem', fontWeight: 700, margin: 0}}>Progress Tracking</h1>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Progress Tracking</h1>
                     </div>
 
                     <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
@@ -554,107 +624,107 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Activity size={18} /> Knowledge Tracking
                         </h2>
-                                <div className="knowledge-groups-mobile">
-                                    {/* MINDMAPS MOBILE GROUP */}
-                                    <div className="mobile-group-item">
-                                        <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <MapIcon size={20} />
-                                                <span style={{ fontWeight: 600 }}>Mindmaps</span>
-                                            </div>
-                                            <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                        </div>
-                                        {expandedGroups['mindmaps'] && (
-                                            <div className="mobile-subgroup-list">
-                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                    id: 'mindmaps-part',
-                                                    title: 'Part Mindmaps',
-                                                    type: 'part_mindmap' as any as any,
-                                                    nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
-                                                })}>
-                                                    <span>Part Mindmaps</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
-                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                    </div>
-                                                </div>
-                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                    id: 'mindmaps-surah',
-                                                    title: 'Surah Mindmaps',
-                                                    type: 'mindmap' as any as any,
-                                                    nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
-                                                })}>
-                                                    <span>Surah Mindmaps</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
-                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                        <div className="knowledge-groups-mobile">
+                            {/* MINDMAPS MOBILE GROUP */}
+                            <div className="mobile-group-item">
+                                <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <MapIcon size={20} />
+                                        <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                     </div>
-
-                                    {/* VERSES MOBILE GROUP */}
-                                    <div className="mobile-group-item">
-                                        <div className="mobile-group-header" onClick={() => toggleGroup('verses')}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <Book size={20} />
-                                                <span style={{ fontWeight: 600 }}>Verses</span>
-                                            </div>
-                                            <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                        </div>
-                                        {expandedGroups['verses'] && (
-                                            <div className="mobile-subgroup-list">
-                                                {/* Issue #10: Filter by active part */}
-                                                {(() => {
-                                                    // Get all eligible surahs for the current active part
-                                                    const eligibleSurahs = SURAHS.filter(s => 
-                                                        (settings.activePart === 5 || s.part === settings.activePart) &&
-                                                        !settings.skippedSurahs?.includes(s.id)
-                                                    ).sort((a, b) => a.id - b.id);
-
-                                                    if (eligibleSurahs.length === 0) {
-                                                        return (
-                                                            <div className="empty-state" style={{ padding: '1rem' }}>No surahs in Part {settings.activePart}</div>
-                                                        );
-                                                    }
-
-                                                    return eligibleSurahs.map(surah => {
-                                                        const surahId = surah.id;
-                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
-                                                        
-                                                        // Always show the surah group, even if no nodes exist yet (0 items)
-                                                        // This allows users to set maturity for the whole group before starting reviews
-                                                        return (
-                                                            <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                                id: `verse-surah-${surahId}`,
-                                                                title: `${surah.id}. ${surah.name}`,
-                                                                type: 'verse_segment',
-                                                                nodes: surahNodes,
-                                                                surahId
-                                                            })}>
-                                                                <span>{surah.name}</span>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className={`status-badge ${surahNodes.length === 0 ? 'neutral' : ''}`}>
-                                                                        {surahNodes.length}
-                                                                    </span>
-                                                                    <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
+                                    <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                 </div>
+                                {expandedGroups['mindmaps'] && (
+                                    <div className="mobile-subgroup-list">
+                                        <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                            id: 'mindmaps-part',
+                                            title: 'Part Mindmaps',
+                                            type: 'part_mindmap' as any as any,
+                                            nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
+                                        })}>
+                                            <span>Part Mindmaps</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
+                                                <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                            </div>
+                                        </div>
+                                        <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                            id: 'mindmaps-surah',
+                                            title: 'Surah Mindmaps',
+                                            type: 'mindmap' as any as any,
+                                            nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
+                                        })}>
+                                            <span>Surah Mindmaps</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
+                                                <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* VERSES MOBILE GROUP */}
+                            <div className="mobile-group-item">
+                                <div className="mobile-group-header" onClick={() => toggleGroup('verses')}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <Book size={20} />
+                                        <span style={{ fontWeight: 600 }}>Verses</span>
+                                    </div>
+                                    <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
+                                {expandedGroups['verses'] && (
+                                    <div className="mobile-subgroup-list">
+                                        {/* Issue #10: Filter by active part */}
+                                        {(() => {
+                                            // Get all eligible surahs for the current active part
+                                            const eligibleSurahs = SURAHS.filter(s =>
+                                                (settings.activePart === 5 || s.part === settings.activePart) &&
+                                                !settings.skippedSurahs?.includes(s.id)
+                                            ).sort((a, b) => a.id - b.id);
+
+                                            if (eligibleSurahs.length === 0) {
+                                                return (
+                                                    <div className="empty-state" style={{ padding: '1rem' }}>No surahs in Part {settings.activePart}</div>
+                                                );
+                                            }
+
+                                            return eligibleSurahs.map(surah => {
+                                                const surahId = surah.id;
+                                                const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+
+                                                // Always show the surah group, even if no nodes exist yet (0 items)
+                                                // This allows users to set maturity for the whole group before starting reviews
+                                                return (
+                                                    <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                        id: `verse-surah-${surahId}`,
+                                                        title: `${surah.id}. ${surah.name}`,
+                                                        type: 'verse_segment',
+                                                        nodes: surahNodes,
+                                                        surahId
+                                                    })}>
+                                                        <span>{surah.name}</span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span className={`status-badge ${surahNodes.length === 0 ? 'neutral' : ''}`}>
+                                                                {surahNodes.length}
+                                                            </span>
+                                                            <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                    
+
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Brain size={18} /> Similar Verse Coverage
                         </h2>
                         <div className="knowledge-groups-mobile">
@@ -691,7 +761,7 @@ export default function SettingsPage() {
                                     const phraseId = `custom-${c.id}`;
                                     const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
                                     const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
-                                    
+
                                     if (!surahMutsMap[phraseId]) {
                                         surahMutsMap[phraseId] = {
                                             phraseId,
@@ -778,30 +848,98 @@ export default function SettingsPage() {
                             })}
                         </div>
                     </div>
-                 </div>
-             );
+                </div>
+            );
+        }
+
+        if (activeMobilePage === 'appearance') {
+            const { theme, setTheme } = useTheme();
+            return (
+                <div className="content-wrapper">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                            <ChevronLeft size={28} />
+                        </button>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Appearance</h1>
+                    </div>
+
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Palette size={18} /> Theme Mode
+                        </h2>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {[
+                                { id: 'light', label: 'Light Mode', icon: Sun },
+                                { id: 'dark', label: 'Dark Mode', icon: Moon },
+                                { id: 'system', label: 'System Default', icon: Monitor }
+                            ].map((mode) => (
+                                <button
+                                    key={mode.id}
+                                    onClick={() => setTheme(mode.id as any)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '1rem',
+                                        padding: '1rem',
+                                        borderRadius: '12px',
+                                        border: theme === mode.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                        background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
+                                        color: theme === mode.id ? 'var(--accent)' : 'var(--foreground)',
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                        transition: 'all 0.2s ease',
+                                        fontWeight: theme === mode.id ? 600 : 400
+                                    }}
+                                >
+                                    <mode.icon size={20} />
+                                    <span>{mode.label}</span>
+                                    {theme === mode.id && <Check size={18} style={{ marginLeft: 'auto' }} />}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
         }
 
         return (
-             <div className="content-wrapper">
+            <div className="content-wrapper">
                 {/* <h1 className="text-2xl font-bold mb-6">Settings</h1> */}
-                <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <button onClick={() => setActiveMobilePage('appearance')} className="modern-card" style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '1.25rem', background: 'var(--background-secondary)',
+                        border: '1px solid var(--border)', borderRadius: '16px',
+                        cursor: 'pointer', textAlign: 'left', width: '100%'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Palette size={24} />
+                            </div>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Appearance</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Theme, Dark Mode</div>
+                            </div>
+                        </div>
+                        <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
+                    </button>
+
                     <button onClick={() => setActiveMobilePage('account')} className="modern-card" style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '1.25rem', background: 'var(--background-secondary)',
                         border: '1px solid var(--border)', borderRadius: '16px',
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
-                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-                            <div style={{background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <Database size={24} />
                             </div>
                             <div>
-                                <div style={{fontWeight: 700, fontSize: '1.1rem'}}>Account & Data</div>
-                                <div style={{fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px'}}>Sync, Backup, Import</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Account & Data</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Sync, Backup, Import</div>
                             </div>
                         </div>
-                        <ChevronRight size={24} style={{color: 'var(--foreground-secondary)'}} />
+                        <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
                     </button>
 
                     <button onClick={() => setActiveMobilePage('plan')} className="modern-card" style={{
@@ -810,16 +948,16 @@ export default function SettingsPage() {
                         border: '1px solid var(--border)', borderRadius: '16px',
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
-                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-                            <div style={{background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <Clock size={24} />
                             </div>
                             <div>
-                                <div style={{fontWeight: 700, fontSize: '1.1rem'}}>Memorization Plan</div>
-                                <div style={{fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px'}}>Schedule, Active Part</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Memorization Plan</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Schedule, Active Part</div>
                             </div>
                         </div>
-                        <ChevronRight size={24} style={{color: 'var(--foreground-secondary)'}} />
+                        <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
                     </button>
 
                     <button onClick={() => setActiveMobilePage('tracking')} className="modern-card" style={{
@@ -828,19 +966,19 @@ export default function SettingsPage() {
                         border: '1px solid var(--border)', borderRadius: '16px',
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
-                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-                            <div style={{background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <Activity size={24} />
                             </div>
                             <div>
-                                <div style={{fontWeight: 700, fontSize: '1.1rem'}}>Progress Tracking</div>
-                                <div style={{fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px'}}>Status, Knowledge, Similar Verses</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Progress Tracking</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Status, Knowledge, Similar Verses</div>
                             </div>
                         </div>
-                        <ChevronRight size={24} style={{color: 'var(--foreground-secondary)'}} />
+                        <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
                     </button>
                 </div>
-             </div>
+            </div>
         );
     };
 
@@ -932,7 +1070,7 @@ export default function SettingsPage() {
             return;
         }
 
-        const transactions = nodesToUpdate.map(node => 
+        const transactions = nodesToUpdate.map(node =>
             db.tx.memoryNodes[node.id].update({
                 scheduler: { ...node.scheduler, ...newState }
             })
@@ -981,7 +1119,7 @@ export default function SettingsPage() {
         if (!surahToSkipId) return;
         const currentSkipped = settings?.skippedSurahs || [];
         if (!currentSkipped.includes(Number(surahToSkipId))) {
-             saveSettings({ skippedSurahs: [...currentSkipped, Number(surahToSkipId)] });
+            saveSettings({ skippedSurahs: [...currentSkipped, Number(surahToSkipId)] });
         }
         setSurahToSkipId('');
     };
@@ -1072,7 +1210,7 @@ export default function SettingsPage() {
 
     const mutashabihatBySurah = useMemo(() => {
         const map: Record<number, number> = {};
-        
+
         // Static dataset
         getAllMutashabihatRefs(instantCustomMutashabihat).forEach(abs => {
             const ref = absoluteToSurahAyah(abs);
@@ -1105,1307 +1243,1308 @@ export default function SettingsPage() {
         <>
             {isMobile ? renderMobileView() : (
                 <div className="content-wrapper">
-            <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
+                    <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <div className="settings-grid">
-                    <div className="card modern-card" style={{
-                        background: 'var(--background-secondary)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '16px'
-                    }}>
-                        <div className="section-title"
-                        onClick={() => toggleSection('cloudSync')}
-                        style={{
-                            color: 'var(--accent)',
-                            fontWeight: 700,
-                            marginBottom: sectionsExpanded.cloudSync ? '1rem' : '0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.75rem',
-                            fontSize: 'clamp(1rem, 5vw, 1.1rem)',
-                            cursor: 'pointer'
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Database size={18} />
-                            </div>
-                            <div className="flex flex-col">
-                                <span>User Account</span>
-                            </div>
-                        </div>
-                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.cloudSync ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                    </div>
-                    {sectionsExpanded.cloudSync && (
-                        <>
-                            <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                {user
-                                    ? `Signed in as ${user.email}. Your data is synced automatically.`
-                                    : "Sign in to sync your progress across devices."}
-                            </p>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        <div className="settings-grid">
 
-                            <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
-                                {!isOnline && (
-                                    <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}>
-                                        <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Offline</div>
-                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
-                                            Cloud sync and authentication are paused. Keep using the app; changes will sync when online.
+                            <div className="card modern-card" style={{
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => toggleSection('cloudSync')}
+                                    style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        marginBottom: sectionsExpanded.cloudSync ? '1rem' : '0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Database size={18} />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span>User Account</span>
                                         </div>
                                     </div>
-                                )}
+                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.cloudSync ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
 
-                                {user ? (
+                                {sectionsExpanded.cloudSync && (
                                     <>
+                                        <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                            {user
+                                                ? `Signed in as ${user.email}. Your data is synced automatically.`
+                                                : "Sign in to sync your progress across devices."}
+                                        </p>
+
+                                        <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
+                                            {!isOnline && (
+                                                <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)' }}>
+                                                    <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Offline</div>
+                                                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                                                        Cloud sync and authentication are paused. Keep using the app; changes will sync when online.
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {user ? (
+                                                <>
 
 
-                                        <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+                                                    <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            onClick={async () => {
+                                                                // InstantDB handles sync automatically
+                                                                if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
+
+                                                                // Sign out from InstantDB (it clears local storage token)
+                                                                db.auth.signOut();
+                                                                router.push('/');
+                                                            }}
+                                                            style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+                                                        >
+                                                            Sign Out
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                    {authStep === 'email' ? (
+                                                        <input
+                                                            type="email"
+                                                            placeholder="Enter your email"
+                                                            value={email}
+                                                            onChange={(e) => setEmail(e.target.value)}
+                                                            required
+                                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                                        />
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Enter verification code"
+                                                            value={code}
+                                                            onChange={(e) => setCode(e.target.value)}
+                                                            required
+                                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
+                                                        />
+                                                    )}
+                                                    {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
+                                                    <button
+                                                        type="submit"
+                                                        className="btn btn-primary"
+                                                        disabled={isAuthProcessing}
+                                                        style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
+                                                    >
+                                                        {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
+                                                    </button>
+                                                </form>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <AppearanceCard />
+                            <div className="card modern-card" style={{
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => toggleSection('backupRestore')}
+                                    style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        marginBottom: sectionsExpanded.backupRestore ? '1rem' : '0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Download size={18} />
+                                        </div>
+                                        <span>Backup, Import & Reset</span>
+                                    </div>
+                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
+                                {sectionsExpanded.backupRestore && (
+                                    <>
+                                        <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
+                                            Manage your data: Export backup, import from file, or reset all data.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={async () => {
-                                                    // InstantDB handles sync automatically
-                                                    if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
-                                                    
-                                                    // Sign out from InstantDB (it clears local storage token)
-                                                    db.auth.signOut();
-                                                    router.push('/');
+                                                onClick={handleExport}
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '0.5rem',
+                                                    padding: '1rem',
+                                                    fontSize: '0.9rem',
+                                                    height: 'auto',
+                                                    background: 'var(--background)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '12px'
                                                 }}
-                                                style={{ width: '100%', padding: '0.85rem', background: 'transparent', border: '1px solid var(--border)', fontSize: '1rem' }}
                                             >
-                                                Sign Out
+                                                <Download size={20} style={{ color: 'var(--accent)' }} />
+                                                <span>Export Data</span>
+                                            </button>
+                                            <label
+                                                className="btn btn-secondary"
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '0.5rem',
+                                                    padding: '1rem',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.9rem',
+                                                    height: 'auto',
+                                                    background: 'var(--background)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '12px'
+                                                }}
+                                            >
+                                                <Upload size={20} style={{ color: 'var(--accent)' }} />
+                                                <span>Import Data</span>
+                                                <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                                            </label>
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={handleReset}
+                                                style={{
+                                                    gridColumn: 'span 2',
+                                                    display: 'flex',
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '0.5rem',
+                                                    padding: '1rem',
+                                                    fontSize: '0.9rem',
+                                                    height: 'auto',
+                                                    background: 'var(--background)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '12px',
+                                                    color: '#ef4444'
+                                                }}
+                                            >
+                                                <Trash2 size={20} />
+                                                <span>Reset All Data</span>
                                             </button>
                                         </div>
                                     </>
-                                ) : (
-                                    <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        {authStep === 'email' ? (
-                                            <input
-                                                type="email"
-                                                placeholder="Enter your email"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                required
-                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                            />
-                                        ) : (
-                                            <input
-                                                type="text"
-                                                placeholder="Enter verification code"
-                                                value={code}
-                                                onChange={(e) => setCode(e.target.value)}
-                                                required
-                                                style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--background)', fontSize: '1rem' }}
-                                            />
-                                        )}
-                                        {authError && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{authError}</p>}
-                                        <button
-                                            type="submit"
-                                            className="btn btn-primary"
-                                            disabled={isAuthProcessing}
-                                            style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
-                                        >
-                                            {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
-                                        </button>
-                                    </form>
                                 )}
                             </div>
-                        </>
-                    )}
-                </div>
 
-                <div className="card modern-card" style={{
-                    background: 'var(--background-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px'
-                }}>
-                    <div className="section-title"
-                        onClick={() => toggleSection('backupRestore')}
-                        style={{
-                            color: 'var(--accent)',
-                            fontWeight: 700,
-                            marginBottom: sectionsExpanded.backupRestore ? '1rem' : '0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.75rem',
-                            fontSize: 'clamp(1rem, 5vw, 1.1rem)',
-                            cursor: 'pointer'
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Download size={18} />
-                            </div>
-                            <span>Backup, Import & Reset</span>
-                        </div>
-                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                    </div>
-                    {sectionsExpanded.backupRestore && (
-                        <>
-                            <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
-                                Manage your data: Export backup, import from file, or reset all data.
-                            </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={handleExport}
+                            <div className="card modern-card" style={{
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => toggleSection('schedule')}
                                     style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        marginBottom: sectionsExpanded.schedule ? '1rem' : '0',
                                         display: 'flex',
-                                        flexDirection: 'column',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem',
-                                        fontSize: '0.9rem',
-                                        height: 'auto',
-                                        background: 'var(--background)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '12px'
-                                    }}
-                                >
-                                    <Download size={20} style={{ color: 'var(--accent)' }} />
-                                    <span>Export Data</span>
-                                </button>
-                                <label
-                                    className="btn btn-secondary"
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem',
-                                        cursor: 'pointer',
-                                        fontSize: '0.9rem',
-                                        height: 'auto',
-                                        background: 'var(--background)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '12px'
-                                    }}
-                                >
-                                    <Upload size={20} style={{ color: 'var(--accent)' }} />
-                                    <span>Import Data</span>
-                                    <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-                                </label>
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={handleReset}
-                                    style={{
-                                        gridColumn: 'span 2',
-                                        display: 'flex',
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem',
-                                        fontSize: '0.9rem',
-                                        height: 'auto',
-                                        background: 'var(--background)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '12px',
-                                        color: '#ef4444'
-                                    }}
-                                >
-                                    <Trash2 size={20} />
-                                    <span>Reset All Data</span>
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                <div className="card modern-card" style={{
-                    background: 'var(--background-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px'
-                }}>
-                    <div className="section-title"
-                        onClick={() => toggleSection('schedule')}
-                        style={{
-                            color: 'var(--accent)',
-                            fontWeight: 700,
-                            marginBottom: sectionsExpanded.schedule ? '1rem' : '0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.75rem',
-                            fontSize: 'clamp(1rem, 5vw, 1.1rem)',
-                            cursor: 'pointer'
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Clock size={18} />
-                            </div>
-                            <span>Completion Schedule</span>
-                        </div>
-                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.schedule ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                    </div>
-                    {sectionsExpanded.schedule && (
-                        <>
-                            <DailyCompletionSlider
-                                days={settings.completionDays || 30}
-                                onChange={handleCompletionDays}
-                                activePart={settings.activePart}
-                            />
-                        </>
-                    )}
-                </div>
-
-                <div className="card modern-card" style={{
-                    background: 'var(--background-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px'
-                }}>
-                    <div className="section-title"
-                        onClick={() => toggleSection('activePart')}
-                        style={{
-                            color: 'var(--accent)',
-                            fontWeight: 700,
-                            marginBottom: sectionsExpanded.activePart ? '1rem' : '0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.75rem',
-                            fontSize: 'clamp(1rem, 5vw, 1.1rem)',
-                            cursor: 'pointer'
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <PauseCircle size={18} />
-                            </div>
-                            <span>Active Part</span>
-                        </div>
-                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.activePart ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                    </div>
-                    {sectionsExpanded.activePart && (
-                        <div className="part-selector" style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-                            gap: '0.75rem'
-                        }}>
-                            {[
-                                { id: 1, name: "Sab'ut-Tiwal" },
-                                { id: 2, name: "Al-Mi'un" },
-                                { id: 3, name: "Al-Mathani" },
-                                { id: 4, name: "Al-Mufassal" },
-                                { id: 5, name: "All Quran" }
-                            ].map(p => (
-                                <button
-                                    key={p.id}
-                                    className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
-                                    onClick={() => handleActivePart(p.id as QuranPart)}
-                                    style={{
-                                        padding: '1.25rem 0.75rem',
-                                        borderRadius: '16px',
-                                        border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
-                                        background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
-                                        transition: 'all 0.2s',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        textAlign: 'center',
-                                        gap: '0.25rem'
-                                    }}
-                                >
-                                    <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>
-                                        {p.id === 5 ? '∞' : p.id}
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Clock size={18} />
+                                        </div>
+                                        <span>Completion Schedule</span>
                                     </div>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div style={{ marginTop: '0.85rem' }}>
-                <div className="card modern-card" style={{
-                    padding: sectionsExpanded.surahStatus ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
-                    background: 'var(--background-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px'
-                }}>
-                    <div className="section-title"
-                        onClick={() => toggleSection('surahStatus')}
-                        style={{
-                            color: 'var(--accent)',
-                            fontWeight: 700,
-                            marginBottom: sectionsExpanded.surahStatus ? '0.75rem' : '0',
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.75rem',
-                            cursor: 'pointer'
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Check size={18} />
-                            </div>
-                            <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Skipped Surah</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.surahStatus ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                        </div>
-                    </div>
-                    {sectionsExpanded.surahStatus && (
-                        <>
-                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                Manage surahs you want to skip from the daily review queue.
-                            </p>
-                            
-                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                                <select
-                                    value={surahToSkipId}
-                                    onChange={(e) => setSurahToSkipId(e.target.value ? Number(e.target.value) : '')}
-                                    style={{
-                                        flex: 1,
-                                        padding: '0.75rem',
-                                        borderRadius: '12px',
-                                        border: '1px solid var(--border)',
-                                        background: 'var(--background)',
-                                        color: 'var(--foreground)',
-                                        fontSize: '0.9rem',
-                                        outline: 'none'
-                                    }}
-                                >
-                                    <option value="">Select a surah to skip...</option>
-                                    {SURAHS.map(s => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.id}. {s.name} ({s.arabicName})
-                                        </option>
-                                    ))}
-                                </select>
-                                <button
-                                    onClick={handleAddSkippedSurah}
-                                    disabled={!surahToSkipId}
-                                    style={{
-                                        padding: '0 1.25rem',
-                                        borderRadius: '12px',
-                                        background: surahToSkipId ? 'var(--accent)' : 'var(--border)',
-                                        color: 'white',
-                                        fontWeight: 600,
-                                        border: 'none',
-                                        cursor: surahToSkipId ? 'pointer' : 'not-allowed',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    Add
-                                </button>
-                            </div>
-
-                            <div className="skipped-surahs-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                {(!settings.skippedSurahs || settings.skippedSurahs.length === 0) && (
-                                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', fontStyle: 'italic', width: '100%' }}>No surahs skipped.</p>
+                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.schedule ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
+                                {sectionsExpanded.schedule && (
+                                    <>
+                                        <DailyCompletionSlider
+                                            days={settings.completionDays || 30}
+                                            onChange={handleCompletionDays}
+                                            activePart={settings.activePart}
+                                        />
+                                    </>
                                 )}
-                                {settings.skippedSurahs?.map(id => {
-                                    const s = SURAHS.find(surah => surah.id === id);
-                                    if (!s) return null;
-                                    return (
-                                        <div key={id} style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem',
-                                            padding: '0.5rem 0.75rem',
-                                            background: 'var(--background)',
-                                            border: '1px solid var(--border)',
-                                            borderRadius: '20px',
-                                            fontSize: '0.85rem'
-                                        }}>
-                                            <span>{s.id}. {s.name}</span>
+                            </div>
+
+                            <div className="card modern-card" style={{
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => toggleSection('activePart')}
+                                    style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        marginBottom: sectionsExpanded.activePart ? '1rem' : '0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <PauseCircle size={18} />
+                                        </div>
+                                        <span>Active Part</span>
+                                    </div>
+                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.activePart ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
+                                {sectionsExpanded.activePart && (
+                                    <div className="part-selector" style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                                        gap: '0.75rem'
+                                    }}>
+                                        {[
+                                            { id: 1, name: "Sab'ut-Tiwal" },
+                                            { id: 2, name: "Al-Mi'un" },
+                                            { id: 3, name: "Al-Mathani" },
+                                            { id: 4, name: "Al-Mufassal" },
+                                            { id: 5, name: "All Quran" }
+                                        ].map(p => (
                                             <button
-                                                onClick={() => handleRemoveSkippedSurah(id)}
+                                                key={p.id}
+                                                className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
+                                                onClick={() => handleActivePart(p.id as QuranPart)}
                                                 style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    padding: 0,
-                                                    color: 'var(--foreground-secondary)',
-                                                    cursor: 'pointer',
+                                                    padding: '1.25rem 0.75rem',
+                                                    borderRadius: '16px',
+                                                    border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
+                                                    background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
+                                                    transition: 'all 0.2s',
                                                     display: 'flex',
-                                                    alignItems: 'center'
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    textAlign: 'center',
+                                                    gap: '0.25rem',
+                                                    gridColumn: p.id === 5 ? '1 / -1' : 'auto'
                                                 }}
                                             >
-                                                <X size={14} />
+                                                <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>
+                                                    {p.id === 5 ? '∞' : p.id}
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
+                                                <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="card modern-card" style={{
+                                padding: sectionsExpanded.surahStatus ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => toggleSection('surahStatus')}
+                                    style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        marginBottom: sectionsExpanded.surahStatus ? '0.75rem' : '0',
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Check size={18} />
+                                        </div>
+                                        <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Skipped Surah</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.surahStatus ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
+                                </div>
+                                {sectionsExpanded.surahStatus && (
+                                    <>
+                                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                            Manage surahs you want to skip from the daily review queue.
+                                        </p>
+
+                                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                            <select
+                                                value={surahToSkipId}
+                                                onChange={(e) => setSurahToSkipId(e.target.value ? Number(e.target.value) : '')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '0.75rem',
+                                                    borderRadius: '12px',
+                                                    border: '1px solid var(--border)',
+                                                    background: 'var(--background)',
+                                                    color: 'var(--foreground)',
+                                                    fontSize: '0.9rem',
+                                                    outline: 'none'
+                                                }}
+                                            >
+                                                <option value="">Select a surah to skip...</option>
+                                                {SURAHS.map(s => (
+                                                    <option key={s.id} value={s.id}>
+                                                        {s.id}. {s.name} ({s.arabicName})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={handleAddSkippedSurah}
+                                                disabled={!surahToSkipId}
+                                                style={{
+                                                    padding: '0 1.25rem',
+                                                    borderRadius: '12px',
+                                                    background: surahToSkipId ? 'var(--accent)' : 'var(--border)',
+                                                    color: 'white',
+                                                    fontWeight: 600,
+                                                    border: 'none',
+                                                    cursor: surahToSkipId ? 'pointer' : 'not-allowed',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                Add
                                             </button>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
 
-            <div style={{ marginTop: '1.5rem' }}>
-                <div className="card modern-card" style={{
-                    background: 'var(--background-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px'
-                }}>
-                    <div className="section-title"
-                        onClick={() => {
-                            if (window.innerWidth < 768) {
-                                setShowDebugNodes(!showDebugNodes);
-                            }
-                        }}
-                        style={{
-                            color: 'var(--accent)',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: showDebugNodes ? '1.5rem' : '0',
-                            fontSize: 'clamp(1rem, 5vw, 1.1rem)'
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Activity size={18} />
+                                        <div className="skipped-surahs-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                            {(!settings.skippedSurahs || settings.skippedSurahs.length === 0) && (
+                                                <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', fontStyle: 'italic', width: '100%' }}>No surahs skipped.</p>
+                                            )}
+                                            {settings.skippedSurahs?.map(id => {
+                                                const s = SURAHS.find(surah => surah.id === id);
+                                                if (!s) return null;
+                                                return (
+                                                    <div key={id} style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.5rem',
+                                                        padding: '0.5rem 0.75rem',
+                                                        background: 'var(--background)',
+                                                        border: '1px solid var(--border)',
+                                                        borderRadius: '20px',
+                                                        fontSize: '0.85rem'
+                                                    }}>
+                                                        <span>{s.id}. {s.name}</span>
+                                                        <button
+                                                            onClick={() => handleRemoveSkippedSurah(id)}
+                                                            style={{
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                padding: 0,
+                                                                color: 'var(--foreground-secondary)',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center'
+                                                            }}
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                            <span>Knowledge Tracking</span>
                         </div>
-                        <ChevronDown className="md:hidden" size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                    </div>
 
-                    {showDebugNodes && (
                         <div style={{ marginTop: '1.5rem' }}>
-                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                                This section shows your active memory nodes and their review schedules.
-                            </p>
-
-                            {isMobile ? (
-                                <div className="knowledge-groups-mobile">
-                                    {/* MINDMAPS MOBILE GROUP */}
-                                    <div className="mobile-group-item">
-                                        <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <MapIcon size={20} />
-                                                <span style={{ fontWeight: 600 }}>Mindmaps</span>
-                                            </div>
-                                            <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            <div className="card modern-card" style={{
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => {
+                                        if (window.innerWidth < 768) {
+                                            setShowDebugNodes(!showDebugNodes);
+                                        }
+                                    }}
+                                    style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        marginBottom: showDebugNodes ? '1.5rem' : '0',
+                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Activity size={18} />
                                         </div>
-                                        {expandedGroups['mindmaps'] && (
-                                            <div className="mobile-subgroup-list">
-                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                    id: 'mindmaps-part',
-                                                    title: 'Part Mindmaps',
-                                                    type: 'part_mindmap' as any,
-                                                    nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
-                                                })}>
-                                                    <span>Part Mindmaps</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
-                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                    </div>
-                                                </div>
-                                                <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                    id: 'mindmaps-surah',
-                                                    title: 'Surah Mindmaps',
-                                                    type: 'mindmap' as any,
-                                                    nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
-                                                })}>
-                                                    <span>Surah Mindmaps</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
-                                                        <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <span>Knowledge Tracking</span>
                                     </div>
+                                    <ChevronDown className="md:hidden" size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
 
-                                    {/* VERSES MOBILE GROUP */}
-                                    <div className="mobile-group-item">
-                                        <div className="mobile-group-header" onClick={() => toggleGroup('verses')}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <Book size={20} />
-                                                <span style={{ fontWeight: 600 }}>Verses</span>
-                                            </div>
-                                            <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                        </div>
-                                        {expandedGroups['verses'] && (
-                                            <div className="mobile-subgroup-list">
-                                                {/* Issue #10: Filter by active part */}
-                                                {(() => {
-                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
-                                                        .filter(surahId => {
-                                                            const surah = getSurah(surahId!);
-                                                            if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
-                                                            if (settings.skippedSurahs?.includes(surahId!)) return false;
-                                                            return true;
-                                                        })
-                                                        .sort((a, b) => (a || 0) - (b || 0));
+                                {showDebugNodes && (
+                                    <div style={{ marginTop: '1.5rem' }}>
+                                        <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                                            This section shows your active memory nodes and their review schedules.
+                                        </p>
 
-                                                    if (filteredSurahs.length === 0) {
-                                                        return (
-                                                            <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes in Part {settings.activePart}</div>
-                                                        );
-                                                    }
-
-                                                    return filteredSurahs.map(surahId => {
-                                                        const surah = getSurah(surahId!);
-                                                        const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
-                                                        return (
-                                                            <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                                id: `verse-surah-${surahId}`,
-                                                                title: `${surah?.id}. ${surah?.name}`,
-                                                                type: 'verse_segment',
-                                                                nodes: surahNodes,
-                                                                surahId
+                                        {isMobile ? (
+                                            <div className="knowledge-groups-mobile">
+                                                {/* MINDMAPS MOBILE GROUP */}
+                                                <div className="mobile-group-item">
+                                                    <div className="mobile-group-header" onClick={() => toggleGroup('mindmaps')}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <MapIcon size={20} />
+                                                            <span style={{ fontWeight: 600 }}>Mindmaps</span>
+                                                        </div>
+                                                        <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                    </div>
+                                                    {expandedGroups['mindmaps'] && (
+                                                        <div className="mobile-subgroup-list">
+                                                            <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                                id: 'mindmaps-part',
+                                                                title: 'Part Mindmaps',
+                                                                type: 'part_mindmap' as any,
+                                                                nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
                                                             })}>
-                                                                <span>{surah?.name}</span>
+                                                                <span>Part Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{surahNodes.length}</span>
+                                                                    <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                    <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
-                                        <thead>
-                                            <tr>
-                                                <th>Target / Range</th>
-                                                <th>Maturity</th>
-                                                <th>Interval</th>
-                                                <th>Difficulty</th>
-                                                <th>Reps</th>
-                                                <th>Next Review</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {/* MINDMAPS GROUP */}
-                                            <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
-                                                <td colSpan={6} style={{ fontWeight: 700 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
-                                                            <MapIcon size={16} /> Mindmaps
-                                                        </div>
-                                                        <select
-                                                            className="maturity-select"
-                                                            style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                                                            value=""
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            onChange={async (e) => {
-                                                                const val = e.target.value as any;
-                                                                if (!val) return;
-                                                                await handleGroupMaturityReset('mindmap', val);
-                                                                await handleGroupMaturityReset('part_mindmap', val);
-                                                            }}
-                                                        >
-                                                            <option value="">Set Group...</option>
-                                                            <option value="reset">Reset</option>
-                                                            <option value="medium">Medium</option>
-                                                            <option value="strong">Strong</option>
-                                                            <option value="mastered">Mastered</option>
-                                                        </select>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {expandedGroups['mindmaps'] && (
-                                                <>
-                                                    {/* Part Mindmaps Subgroup */}
-                                                    <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
-                                                        <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
-                                                                    Part Mindmaps
+                                                            <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                                id: 'mindmaps-surah',
+                                                                title: 'Surah Mindmaps',
+                                                                type: 'mindmap' as any,
+                                                                nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
+                                                            })}>
+                                                                <span>Surah Mindmaps</span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
+                                                                    <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
-                                                                <select
-                                                                    className="maturity-select"
-                                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                                                                    value=""
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                    onChange={async (e) => {
-                                                                        const val = e.target.value as any;
-                                                                        if (!val) return;
-                                                                        await handleGroupMaturityReset('part_mindmap', val);
-                                                                    }}
-                                                                >
-                                                                    <option value="">Set Subgroup...</option>
-                                                                    <option value="reset">Reset</option>
-                                                                    <option value="medium">Medium</option>
-                                                                    <option value="strong">Strong</option>
-                                                                    <option value="mastered">Mastered</option>
-                                                                </select>
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                    {expandedGroups['mindmaps-part'] && (
-                                                        memoryNodes.filter(n => (n as any).type === 'part_mindmap').length > 0 ? (
-                                                            memoryNodes
-                                                                .filter(n => (n as any).type === 'part_mindmap')
-                                                                .sort((a, b) => (a.partId || 0) - (b.partId || 0))
-                                                                .map(node => (
-                                                                    <tr key={node.id} className="node-row">
-                                                                        <td>Part {node.partId}</td>
-                                                                        <td>
-                                                                            <select
-                                                                                value=""
-                                                                                onChange={async (e) => {
-                                                                                    if (!e.target.value) return;
-                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
-                                                                                }}
-                                                                                className="maturity-select"
-                                                                            >
-                                                                                <option value="">Set To...</option>
-                                                                                <option value="reset">Reset</option>
-                                                                                <option value="medium">Medium</option>
-                                                                                <option value="strong">Strong</option>
-                                                                                <option value="mastered">Mastered</option>
-                                                                            </select>
-                                                                        </td>
-                                                                        <td>{getNodeStability(node)}d</td>
-                                                                        <td>{getNodeDifficulty(node)}</td>
-                                                                        <td>{getNodeReps(node)}</td>
-                                                                        <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
-                                                                    </tr>
-                                                                ))
-                                                        ) : (
-                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
-                                                        )
-                                                    )}
-
-                                                    {/* Surah Mindmaps Subgroup */}
-                                                    <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
-                                                        <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
-                                                                    Surah Mindmaps
-                                                                </div>
-                                                                <select
-                                                                    className="maturity-select"
-                                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                                                                    value=""
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                    onChange={async (e) => {
-                                                                        const val = e.target.value as any;
-                                                                        if (!val) return;
-                                                                        await handleGroupMaturityReset('mindmap', val);
-                                                                    }}
-                                                                >
-                                                                    <option value="">Set Subgroup...</option>
-                                                                    <option value="reset">Reset</option>
-                                                                    <option value="medium">Medium</option>
-                                                                    <option value="strong">Strong</option>
-                                                                    <option value="mastered">Mastered</option>
-                                                                </select>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    {expandedGroups['mindmaps-surah'] && (
-                                                        memoryNodes.filter(n => (n as any).type === 'mindmap').length > 0 ? (
-                                                            memoryNodes
-                                                                .filter(n => (n as any).type === 'mindmap')
-                                                                .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
-                                                                .map(node => (
-                                                                    <tr key={node.id} className="node-row">
-                                                                        <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
-                                                                        <td>
-                                                                            <select
-                                                                                value=""
-                                                                                onChange={async (e) => {
-                                                                                        if (!e.target.value) return;
-                                                                                        await handleNodeMaturityReset(node.id, e.target.value as any);
-                                                                                    }}
-                                                                                className="maturity-select"
-                                                                            >
-                                                                                <option value="">Set To...</option>
-                                                                                <option value="reset">Reset</option>
-                                                                                <option value="medium">Medium</option>
-                                                                                <option value="strong">Strong</option>
-                                                                                <option value="mastered">Mastered</option>
-                                                                            </select>
-                                                                        </td>
-                                                                        <td>{getNodeStability(node)}d</td>
-                                                                        <td>{getNodeDifficulty(node)}</td>
-                                                                        <td>{getNodeReps(node)}</td>
-                                                                        <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
-                                                                    </tr>
-                                                                ))
-                                                        ) : (
-                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
-                                                        )
-                                                    )}
-                                                </>
-                                            )}
-
-                                            {/* VERSES GROUP */}
-                                            <tr className="group-header" onClick={() => toggleGroup('verses')}>
-                                                <td colSpan={6} style={{ fontWeight: 700 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
-                                                            <Book size={16} /> Verses
                                                         </div>
-                                                        <select
-                                                            className="maturity-select"
-                                                            style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                                                            value=""
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            onChange={async (e) => {
-                                                                const val = e.target.value as any;
-                                                                if (!val) return;
-                                                                await handleGroupMaturityReset('verse', val);
-                                                            }}
-                                                        >
-                                                            <option value="">Set Group...</option>
-                                                            <option value="reset">Reset</option>
-                                                            <option value="medium">Medium</option>
-                                                            <option value="strong">Strong</option>
-                                                            <option value="mastered">Mastered</option>
-                                                        </select>
+                                                    )}
+                                                </div>
+
+                                                {/* VERSES MOBILE GROUP */}
+                                                <div className="mobile-group-item">
+                                                    <div className="mobile-group-header" onClick={() => toggleGroup('verses')}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <Book size={20} />
+                                                            <span style={{ fontWeight: 600 }}>Verses</span>
+                                                        </div>
+                                                        <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                                     </div>
-                                                </td>
-                                            </tr>
-                                            {expandedGroups['verses'] && (
-                                                <>
-                                                    {/* Issue #10: Filter by active part, show only learned surahs */}
-                                                    {(() => {
-                                                        const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
-                                                            .filter(surahId => {
-                                                                const surah = getSurah(surahId!);
-                                                                // Filter by active part (show all if part 5)
-                                                                if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
-                                                                // Only show non-skipped surahs
-                                                                if (settings.skippedSurahs?.includes(surahId!)) return false;
-                                                                return true;
-                                                            })
-                                                            .sort((a, b) => (a || 0) - (b || 0));
+                                                    {expandedGroups['verses'] && (
+                                                        <div className="mobile-subgroup-list">
+                                                            {/* Issue #10: Filter by active part */}
+                                                            {(() => {
+                                                                const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
+                                                                    .filter(surahId => {
+                                                                        const surah = getSurah(surahId!);
+                                                                        if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
+                                                                        if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                                        return true;
+                                                                    })
+                                                                    .sort((a, b) => (a || 0) - (b || 0));
 
-                                                        if (filteredSurahs.length === 0) {
-                                                            return (
-                                                                <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes in Part {settings.activePart}</td></tr>
-                                                            );
-                                                        }
+                                                                if (filteredSurahs.length === 0) {
+                                                                    return (
+                                                                        <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes in Part {settings.activePart}</div>
+                                                                    );
+                                                                }
 
-                                                        return filteredSurahs.map(surahId => {
-                                                            const surah = getSurah(surahId!);
-                                                            const surahKey = `verse-surah-${surahId}`;
-                                                            const surahNodes = memoryNodes
-                                                                .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
-                                                                .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
-
-                                                            return (
-                                                                <React.Fragment key={surahId}>
-                                                                    <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
-                                                                        <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                                    <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
-                                                                                    {surah?.id}. {surah?.name} ({surahNodes.length})
-                                                                                </div>
-                                                                                {/* Issue #3: Bulk maturity controls per surah */}
-                                                                                <select
-                                                                                    className="maturity-select"
-                                                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                                                                                    value=""
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={async (e) => {
-                                                                                        const val = e.target.value as any;
-                                                                                        if (!val) return;
-                                                                                        await handleGroupMaturityReset('verse', val, surahId!, surah?.name);
-                                                                                        e.target.value = '';
-                                                                                    }}
-                                                                                >
-                                                                                    <option value="">Set Subgroup...</option>
-                                                                                    <option value="reset">Reset</option>
-                                                                                    <option value="medium">Medium</option>
-                                                                                    <option value="strong">Strong</option>
-                                                                                    <option value="mastered">Mastered</option>
-                                                                                </select>
+                                                                return filteredSurahs.map(surahId => {
+                                                                    const surah = getSurah(surahId!);
+                                                                    const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                                                    return (
+                                                                        <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
+                                                                            id: `verse-surah-${surahId}`,
+                                                                            title: `${surah?.id}. ${surah?.name}`,
+                                                                            type: 'verse_segment',
+                                                                            nodes: surahNodes,
+                                                                            surahId
+                                                                        })}>
+                                                                            <span>{surah?.name}</span>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                <span className="status-badge">{surahNodes.length}</span>
+                                                                                <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                             </div>
-                                                                        </td>
-                                                                    </tr>
-                                                                    {expandedGroups[surahKey] && surahNodes.map(node => (
-                                                                        <tr key={node.id} className="node-row">
-                                                                            <td>Ayat {node.startVerse}-{node.endVerse}</td>
-                                                                            <td>
-                                                                                <select
-                                                                                    value=""
-                                                                                    onChange={async (e) => {
-                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
-                                                                                }}
-                                                                                    className="maturity-select"
-                                                                                >
-                                                                                    <option value="">Set To...</option>
-                                                                                    <option value="reset">Reset</option>
-                                                                                    <option value="medium">Medium</option>
-                                                                                    <option value="strong">Strong</option>
-                                                                                    <option value="mastered">Mastered</option>
-                                                                                </select>
-                                                                            </td>
-                                                                            <td>{getNodeStability(node)}d</td>
-                                                                            <td>{getNodeDifficulty(node)}</td>
-                                                                            <td>{getNodeReps(node)}</td>
-                                                                            <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </React.Fragment>
-                                                            );
-                                                        });
-                                                    })()}
-                                                </>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="card modern-card" style={{
-                marginTop: '1.5rem',
-                background: 'var(--background-secondary)',
-                border: '1px solid var(--border)',
-                borderRadius: '16px',
-                padding: sectionsExpanded.mutashabihat ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem'
-            }}>
-                <div className="section-title mut-header"
-                    onClick={() => toggleSection('mutashabihat')}
-                    style={{
-                        color: 'var(--accent)',
-                        fontWeight: 700,
-                        borderBottom: sectionsExpanded.mutashabihat ? '1px' : 'none',
-                        paddingBottom: sectionsExpanded.mutashabihat ? '1rem' : '0',
-                        marginBottom: sectionsExpanded.mutashabihat ? '1.25rem' : '0',
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        gap: '1rem',
-                        cursor: 'pointer'
-                    }}>
-                    <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Check size={18} />
-                    </div>
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flex: 1,
-                        gap: '0.75rem'
-                    }}>
-                        <span style={{ fontSize: 'clamp(1rem, 4vw, 1.1rem)' }}>Similar Verse Coverage</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            {sectionsExpanded.mutashabihat && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    <button
-                                        className="bulk-btn learned"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setTargetSurahId(undefined);
-                                            setIsAddModalOpen(true);
-                                        }}
-                                        title="Add Custom Mutashabih"
-                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
-                                    >
-                                        <Plus size={14} /> <span className="hide-mobile">Add Custom</span><span className="show-mobile">Add</span>
-                                    </button>
-                                    <button
-                                        className="bulk-btn reset-mut"
-                                        onClick={(e) => { e.stopPropagation(); handleResetMutashabihat(); }}
-                                        title="Reset all mutashabihat decisions for this part"
-                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
-                                    >
-                                        <RotateCcw size={14} /> <span className="hide-mobile">Reset Decisions</span><span className="show-mobile">Reset</span>
-                                    </button>
-                                </div>
-                            )}
-                            <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.mutashabihat ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                        </div>
-                    </div>
-                </div>
-                {sectionsExpanded.mutashabihat && (
-                    <div style={{ marginTop: '1.5rem' }}>
-                        <p className="mut-subheader" style={{ color: 'var(--foreground-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem' }}>
-                            Surahs with similar verses in this part. Tap to expand and annotate similar ayat.
-                        </p>
-
-                        {isMobile ? (
-                            <div className="knowledge-groups-mobile">
-                                {mutashabihatSurahs.map(({ surah, count }) => {
-                                    const isOpen = expandedSurahs[surah.id] ?? false;
-
-                                    // Calculate surah group data
-                                    const surahMutsMap: Record<string, {
-                                        phraseId: string,
-                                        ayahIds: number[],
-                                        entry: any,
-                                        absRefs: number[]
-                                    }> = {};
-
-                                    getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
-                                        const ref = absoluteToSurahAyah(abs);
-                                        return ref.surahId === surah.id;
-                                    }).forEach(abs => {
-                                        const muts = getMutashabihatForAbsolute(abs, instantCustomMutashabihat);
-                                        const ref = absoluteToSurahAyah(abs);
-                                        muts.forEach(m => {
-                                            if (!surahMutsMap[m.phraseId]) {
-                                                surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [] };
-                                            }
-                                            if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
-                                                surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
-                                                surahMutsMap[m.phraseId].absRefs.push(abs);
-                                            }
-                                        });
-                                    });
-
-                                    const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
-
-                                    return (
-                                        <div key={surah.id} className="mobile-group-item">
-                                            <div className="mobile-group-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                    <span style={{
-                                                        width: '24px', height: '24px', borderRadius: '6px',
-                                                        background: 'var(--accent)', color: 'white',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        fontSize: '0.75rem', fontWeight: 700
-                                                    }}>{surah.id}</span>
-                                                    <span style={{ fontWeight: 600 }}>{surah.name}</span>
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span className="status-badge" style={{ background: 'var(--accent-light)', color: 'white' }}>{count}</span>
-                                                    <ChevronDown size={20} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                                        </div>
+                                                                    );
+                                                                });
+                                                            })()}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
-                                            {isOpen && (
-                                                <div className="mobile-subgroup-list">
-                                                    {groups.map(group => {
-                                                        const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
-                                                        const decisionKey = `${representativeAbs}-${group.phraseId}`;
-                                                        const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                                                        const isConfirmed = !!existing.confirmedAt;
-
-                                                        return (
-                                                            <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
-                                                                id: decisionKey,
-                                                                title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
-                                                                surahId: surah.id,
-                                                                phraseId: group.phraseId,
-                                                                group,
-                                                                representativeAbs
-                                                            })}>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                    <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>
-                                                                        {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
-                                                                    </span>
-                                                                    <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                                                                        {group.entry.matches.length - 1} matches
-                                                                    </span>
+                                        ) : (
+                                            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                                <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Target / Range</th>
+                                                            <th>Maturity</th>
+                                                            <th>Interval</th>
+                                                            <th>Difficulty</th>
+                                                            <th>Reps</th>
+                                                            <th>Next Review</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {/* MINDMAPS GROUP */}
+                                                        <tr className="group-header" onClick={() => toggleGroup('mindmaps')}>
+                                                            <td colSpan={6} style={{ fontWeight: 700 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                        <ChevronDown size={16} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none' }} />
+                                                                        <MapIcon size={16} /> Mindmaps
+                                                                    </div>
+                                                                    <select
+                                                                        className="maturity-select"
+                                                                        style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                        value=""
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onChange={async (e) => {
+                                                                            const val = e.target.value as any;
+                                                                            if (!val) return;
+                                                                            await handleGroupMaturityReset('mindmap', val);
+                                                                            await handleGroupMaturityReset('part_mindmap', val);
+                                                                        }}
+                                                                    >
+                                                                        <option value="">Set Group...</option>
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
                                                                 </div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    {isConfirmed && <Check size={16} style={{ color: '#22c55e' }} />}
-                                                                    <span className={`status-badge ${existing.status !== 'pending' ? 'active' : ''}`} style={{
-                                                                        fontSize: '0.65rem',
-                                                                        background: existing.status === 'pending' ? 'var(--border)' : 'var(--accent)',
-                                                                        color: 'white'
-                                                                    }}>
-                                                                        {MUT_STATES.find(s => s.value === existing.status)?.label.split(' ')[0]}
-                                                                    </span>
-                                                                    <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ width: '50px' }}></th>
-                                            <th>Ayah Number</th>
-                                            <th>Matches</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                            <th>Note</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {mutashabihatSurahs.map(({ surah, count }) => {
-                                            const isOpen = expandedSurahs[surah.id] ?? false;
-                                            return (
-                                                <React.Fragment key={surah.id}>
-                                                    <tr className="subgroup-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
-                                                        <td colSpan={6} style={{ fontWeight: 600 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />
-                                                                    {surah.id}. {surah.name} ({count})
-                                                                </div>
-                                                                <span className="status-badge partial" style={{ margin: 0 }}>{count} entries</span>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    {isOpen && (() => {
-                                                        const surahMutsMap: Record<string, {
-                                                            phraseId: string,
-                                                            ayahIds: number[],
-                                                            entry: any,
-                                                            absRefs: number[]
-                                                        }> = {};
+                                                            </td>
+                                                        </tr>
+                                                        {expandedGroups['mindmaps'] && (
+                                                            <>
+                                                                {/* Part Mindmaps Subgroup */}
+                                                                <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-part')}>
+                                                                    <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-part'] ? 'rotate(180deg)' : 'none' }} />
+                                                                                Part Mindmaps
+                                                                            </div>
+                                                                            <select
+                                                                                className="maturity-select"
+                                                                                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                                value=""
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={async (e) => {
+                                                                                    const val = e.target.value as any;
+                                                                                    if (!val) return;
+                                                                                    await handleGroupMaturityReset('part_mindmap', val);
+                                                                                }}
+                                                                            >
+                                                                                <option value="">Set Subgroup...</option>
+                                                                                <option value="reset">Reset</option>
+                                                                                <option value="medium">Medium</option>
+                                                                                <option value="strong">Strong</option>
+                                                                                <option value="mastered">Mastered</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                                {expandedGroups['mindmaps-part'] && (
+                                                                    memoryNodes.filter(n => (n as any).type === 'part_mindmap').length > 0 ? (
+                                                                        memoryNodes
+                                                                            .filter(n => (n as any).type === 'part_mindmap')
+                                                                            .sort((a, b) => (a.partId || 0) - (b.partId || 0))
+                                                                            .map(node => (
+                                                                                <tr key={node.id} className="node-row">
+                                                                                    <td>Part {node.partId}</td>
+                                                                                    <td>
+                                                                                        <select
+                                                                                            value=""
+                                                                                            onChange={async (e) => {
+                                                                                                if (!e.target.value) return;
+                                                                                                await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                            }}
+                                                                                            className="maturity-select"
+                                                                                        >
+                                                                                            <option value="">Set To...</option>
+                                                                                            <option value="reset">Reset</option>
+                                                                                            <option value="medium">Medium</option>
+                                                                                            <option value="strong">Strong</option>
+                                                                                            <option value="mastered">Mastered</option>
+                                                                                        </select>
+                                                                                    </td>
+                                                                                    <td>{getNodeStability(node)}d</td>
+                                                                                    <td>{getNodeDifficulty(node)}</td>
+                                                                                    <td>{getNodeReps(node)}</td>
+                                                                                    <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
+                                                                                </tr>
+                                                                            ))
+                                                                    ) : (
+                                                                        <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
+                                                                    )
+                                                                )}
 
-                                                        getAllMutashabihatRefs().filter(abs => {
-                                                            const ref = absoluteToSurahAyah(abs);
-                                                            return ref.surahId === surah.id;
-                                                        }).forEach(abs => {
-                                                            const muts = getMutashabihatForAbsolute(abs);
-                                                            const ref = absoluteToSurahAyah(abs);
-                                                            muts.forEach(m => {
-                                                                if (!surahMutsMap[m.phraseId]) {
-                                                                    surahMutsMap[m.phraseId] = {
-                                                                        phraseId: m.phraseId,
-                                                                        ayahIds: [],
-                                                                        entry: m,
-                                                                        absRefs: []
-                                                                    };
-                                                                }
-                                                                if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
-                                                                    surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
-                                                                    surahMutsMap[m.phraseId].absRefs.push(abs);
-                                                                }
-                                                            });
-                                                        });
+                                                                {/* Surah Mindmaps Subgroup */}
+                                                                <tr className="subgroup-header" onClick={() => toggleGroup('mindmaps-surah')}>
+                                                                    <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                <ChevronDown size={14} style={{ transform: expandedGroups['mindmaps-surah'] ? 'rotate(180deg)' : 'none' }} />
+                                                                                Surah Mindmaps
+                                                                            </div>
+                                                                            <select
+                                                                                className="maturity-select"
+                                                                                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                                value=""
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={async (e) => {
+                                                                                    const val = e.target.value as any;
+                                                                                    if (!val) return;
+                                                                                    await handleGroupMaturityReset('mindmap', val);
+                                                                                }}
+                                                                            >
+                                                                                <option value="">Set Subgroup...</option>
+                                                                                <option value="reset">Reset</option>
+                                                                                <option value="medium">Medium</option>
+                                                                                <option value="strong">Strong</option>
+                                                                                <option value="mastered">Mastered</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                                {expandedGroups['mindmaps-surah'] && (
+                                                                    memoryNodes.filter(n => (n as any).type === 'mindmap').length > 0 ? (
+                                                                        memoryNodes
+                                                                            .filter(n => (n as any).type === 'mindmap')
+                                                                            .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
+                                                                            .map(node => (
+                                                                                <tr key={node.id} className="node-row">
+                                                                                    <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
+                                                                                    <td>
+                                                                                        <select
+                                                                                            value=""
+                                                                                            onChange={async (e) => {
+                                                                                                if (!e.target.value) return;
+                                                                                                await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                            }}
+                                                                                            className="maturity-select"
+                                                                                        >
+                                                                                            <option value="">Set To...</option>
+                                                                                            <option value="reset">Reset</option>
+                                                                                            <option value="medium">Medium</option>
+                                                                                            <option value="strong">Strong</option>
+                                                                                            <option value="mastered">Mastered</option>
+                                                                                        </select>
+                                                                                    </td>
+                                                                                    <td>{getNodeStability(node)}d</td>
+                                                                                    <td>{getNodeDifficulty(node)}</td>
+                                                                                    <td>{getNodeReps(node)}</td>
+                                                                                    <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
+                                                                                </tr>
+                                                                            ))
+                                                                    ) : (
+                                                                        <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
+                                                                    )
+                                                                )}
+                                                            </>
+                                                        )}
 
-                                                        // Add custom mutashabihat
-                                                        instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
-                                                            const phraseId = `custom-${c.id}`;
-                                                            const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
-                                                            const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
-                                                            
-                                                            if (!surahMutsMap[phraseId]) {
-                                                                surahMutsMap[phraseId] = {
-                                                                    phraseId,
-                                                                    ayahIds: [c.ayahId],
-                                                                    absRefs: [abs],
-                                                                    entry: {
-                                                                        phraseId,
-                                                                        matches: [abs, targetAbs],
-                                                                        meta: {
-                                                                            sourceAbs: abs,
-                                                                            sourceRange: [0, 0],
-                                                                            matches: [
-                                                                                { absolute: abs, wordRange: [0, 0] },
-                                                                                { absolute: targetAbs, wordRange: [0, 0] }
-                                                                            ]
-                                                                        }
+                                                        {/* VERSES GROUP */}
+                                                        <tr className="group-header" onClick={() => toggleGroup('verses')}>
+                                                            <td colSpan={6} style={{ fontWeight: 700 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                        <ChevronDown size={16} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none' }} />
+                                                                        <Book size={16} /> Verses
+                                                                    </div>
+                                                                    <select
+                                                                        className="maturity-select"
+                                                                        style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                        value=""
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onChange={async (e) => {
+                                                                            const val = e.target.value as any;
+                                                                            if (!val) return;
+                                                                            await handleGroupMaturityReset('verse', val);
+                                                                        }}
+                                                                    >
+                                                                        <option value="">Set Group...</option>
+                                                                        <option value="reset">Reset</option>
+                                                                        <option value="medium">Medium</option>
+                                                                        <option value="strong">Strong</option>
+                                                                        <option value="mastered">Mastered</option>
+                                                                    </select>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        {expandedGroups['verses'] && (
+                                                            <>
+                                                                {/* Issue #10: Filter by active part, show only learned surahs */}
+                                                                {(() => {
+                                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
+                                                                        .filter(surahId => {
+                                                                            const surah = getSurah(surahId!);
+                                                                            // Filter by active part (show all if part 5)
+                                                                            if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
+                                                                            // Only show non-skipped surahs
+                                                                            if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                                            return true;
+                                                                        })
+                                                                        .sort((a, b) => (a || 0) - (b || 0));
+
+                                                                    if (filteredSurahs.length === 0) {
+                                                                        return (
+                                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes in Part {settings.activePart}</td></tr>
+                                                                        );
                                                                     }
-                                                                };
-                                                            }
-                                                        });
 
-                                                        return Object.values(surahMutsMap)
-                                                            .sort((a, b) => {
-                                                                const aMin = Math.min(...a.ayahIds);
-                                                                const bMin = Math.min(...b.ayahIds);
-                                                                return aMin - bMin;
-                                                            })
-                                                            .map(group => {
-                                                                const entry = group.entry;
-                                                                // Use the first abs that has a decision, or the first one in the list
-                                                                const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
-                                                                const decisionKey = `${representativeAbs}-${group.phraseId}`;
-                                                                const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                                                                const isConfirmed = !!existing.confirmedAt;
-                                                                const isDetailExpanded = expandedMutItems[decisionKey] || false;
+                                                                    return filteredSurahs.map(surahId => {
+                                                                        const surah = getSurah(surahId!);
+                                                                        const surahKey = `verse-surah-${surahId}`;
+                                                                        const surahNodes = memoryNodes
+                                                                            .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                            .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
 
-                                                                const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
-
-                                                                return (
-                                                                    <React.Fragment key={decisionKey}>
-                                                                        <tr
-                                                                            className="node-row"
-                                                                            onClick={toggleExpand}
-                                                                            style={{ cursor: 'pointer' }}
-                                                                        >
-                                                                            <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
-                                                                                <button
-                                                                                    className="bulk-btn"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        toggleExpand();
-                                                                                    }}
-                                                                                    style={{ padding: '4px', background: isDetailExpanded ? 'var(--accent)' : 'transparent', color: isDetailExpanded ? 'white' : 'inherit' }}
-                                                                                >
-                                                                                    <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                                                                </button>
-                                                                            </td>
-                                                                            <td>
-                                                                                <div style={{ fontWeight: 500 }}>
-                                                                                    {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
-                                                                                </div>
-                                                                                <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                                                                    {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
-                                                                                </div>
-                                                                            </td>
-                                                                            <td>{entry.matches.length - 1} matches</td>
-                                                                            <td>
-                                                                                <select
-                                                                                    value={existing.status}
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
-                                                                                    className="maturity-select"
-                                                                                    style={{
-                                                                                        borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
-                                                                                        color: existing.status !== 'pending' ? 'var(--accent)' : 'inherit'
-                                                                                    }}
-                                                                                >
-                                                                                    {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                                                                </select>
-                                                                            </td>
-                                                                            <td>
-                                                                                <button
-                                                                                    className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleDecisionUpdate(representativeAbs, {
-                                                                                            ...existing,
-                                                                                            confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                                                        }, decisionKey);
-                                                                                    }}
-                                                                                    title={isConfirmed ? "Resolved" : "Not Resolved"}
-                                                                                    style={{ minWidth: '100px' }}
-                                                                                >
-                                                                                    {isConfirmed ? 'Resolved' : 'Not Resolved'}
-                                                                                </button>
-                                                                            </td>
-                                                                            <td>
-                                                                                <input
-                                                                                    type="text"
-                                                                                    placeholder="Add note..."
-                                                                                    value={existing.notes || ''}
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                    onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
-                                                                                    style={{ minWidth: '150px' }}
-                                                                                />
-                                                                            </td>
-                                                                        </tr>
-                                                                        {isDetailExpanded && (
-                                                                            <tr>
-                                                                                <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px' }}>
-                                                                                    <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
-                                                                                        <div className="mut-text">
-                                                                                            <div className="mut-text-label" style={{ marginBottom: '0.75rem' }}>
-                                                                                                Surah {surah.name} - {group.ayahIds.join(', ')} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
+                                                                        return (
+                                                                            <React.Fragment key={surahId}>
+                                                                                <tr className="subgroup-header" onClick={() => toggleGroup(surahKey)}>
+                                                                                    <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                                <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
+                                                                                                {surah?.id}. {surah?.name} ({surahNodes.length})
                                                                                             </div>
-                                                                                            <div className="mut-context">
-                                                                                                {group.absRefs.map(absRef => {
-                                                                                                    const ref = absoluteToSurahAyah(absRef);
-                                                                                                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
-                                                                                                    const mutEntry = getMutashabihatForAbsolute(absRef).find(m => m.phraseId === group.phraseId);
-                                                                                                    if (!mutEntry || !baseVerse) return null;
-
-                                                                                                    return (
-                                                                                                        <div key={absRef} style={{ marginBottom: group.absRefs.length > 1 ? '1rem' : 0 }}>
-                                                                                                            <p className="arabic-text mut-core" style={{ fontSize: '1.25rem' }}>
-                                                                                                                <span className="mut-ayah-tag">{ref.ayahId}</span>
-                                                                                                                <HighlightedVerse
-                                                                                                                    text={baseVerse.text}
-                                                                                                                    range={mutEntry.meta.sourceAbs === absRef ? mutEntry.meta.sourceRange : mutEntry.meta.matches.find((m: any) => m.absolute === absRef)?.wordRange}
-                                                                                                                />
-                                                                                                            </p>
-                                                                                                        </div>
-                                                                                                    );
-                                                                                                })}
-                                                                                            </div>
+                                                                                            {/* Issue #3: Bulk maturity controls per surah */}
+                                                                                            <select
+                                                                                                className="maturity-select"
+                                                                                                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                                                                                value=""
+                                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                                onChange={async (e) => {
+                                                                                                    const val = e.target.value as any;
+                                                                                                    if (!val) return;
+                                                                                                    await handleGroupMaturityReset('verse', val, surahId!, surah?.name);
+                                                                                                    e.target.value = '';
+                                                                                                }}
+                                                                                            >
+                                                                                                <option value="">Set Subgroup...</option>
+                                                                                                <option value="reset">Reset</option>
+                                                                                                <option value="medium">Medium</option>
+                                                                                                <option value="strong">Strong</option>
+                                                                                                <option value="mastered">Mastered</option>
+                                                                                            </select>
                                                                                         </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                                {expandedGroups[surahKey] && surahNodes.map(node => (
+                                                                                    <tr key={node.id} className="node-row">
+                                                                                        <td>Ayat {node.startVerse}-{node.endVerse}</td>
+                                                                                        <td>
+                                                                                            <select
+                                                                                                value=""
+                                                                                                onChange={async (e) => {
+                                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                                }}
+                                                                                                className="maturity-select"
+                                                                                            >
+                                                                                                <option value="">Set To...</option>
+                                                                                                <option value="reset">Reset</option>
+                                                                                                <option value="medium">Medium</option>
+                                                                                                <option value="strong">Strong</option>
+                                                                                                <option value="mastered">Mastered</option>
+                                                                                            </select>
+                                                                                        </td>
+                                                                                        <td>{getNodeStability(node)}d</td>
+                                                                                        <td>{getNodeDifficulty(node)}</td>
+                                                                                        <td>{getNodeReps(node)}</td>
+                                                                                        <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    });
+                                                                })()}
+                                                            </>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                                                                                        <div className="mut-matches" style={{ marginTop: '1.5rem' }}>
-                                                                                            {(() => {
-                                                                                                const matches = entry.matches.filter((m: any) => m !== representativeAbs);
-                                                                                                const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
-                                                                                                const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
-                                                                                                const hasMore = matches.length > 4;
+                        <div className="card modern-card" style={{
+                            marginTop: '1.5rem',
+                            background: 'var(--background-secondary)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '16px',
+                            padding: sectionsExpanded.mutashabihat ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem'
+                        }}>
+                            <div className="section-title mut-header"
+                                onClick={() => toggleSection('mutashabihat')}
+                                style={{
+                                    color: 'var(--accent)',
+                                    fontWeight: 700,
+                                    borderBottom: sectionsExpanded.mutashabihat ? '1px' : 'none',
+                                    paddingBottom: sectionsExpanded.mutashabihat ? '1rem' : '0',
+                                    marginBottom: sectionsExpanded.mutashabihat ? '1.25rem' : '0',
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    alignItems: 'center',
+                                    gap: '1rem',
+                                    cursor: 'pointer'
+                                }}>
+                                <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Check size={18} />
+                                </div>
+                                <div style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flex: 1,
+                                    gap: '0.75rem'
+                                }}>
+                                    <span style={{ fontSize: 'clamp(1rem, 4vw, 1.1rem)' }}>Similar Verse Coverage</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        {sectionsExpanded.mutashabihat && (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                <button
+                                                    className="bulk-btn learned"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setTargetSurahId(undefined);
+                                                        setIsAddModalOpen(true);
+                                                    }}
+                                                    title="Add Custom Mutashabih"
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                                >
+                                                    <Plus size={14} /> <span className="hide-mobile">Add Custom</span><span className="show-mobile">Add</span>
+                                                </button>
+                                                <button
+                                                    className="bulk-btn reset-mut"
+                                                    onClick={(e) => { e.stopPropagation(); handleResetMutashabihat(); }}
+                                                    title="Reset all mutashabihat decisions for this part"
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                                >
+                                                    <RotateCcw size={14} /> <span className="hide-mobile">Reset Decisions</span><span className="show-mobile">Reset</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.mutashabihat ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
+                                </div>
+                            </div>
+                            {sectionsExpanded.mutashabihat && (
+                                <div style={{ marginTop: '1.5rem' }}>
+                                    <p className="mut-subheader" style={{ color: 'var(--foreground-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem' }}>
+                                        Surahs with similar verses in this part. Tap to expand and annotate similar ayat.
+                                    </p>
 
-                                                                                                return (
-                                                                                                    <>
-                                                                                                        {visibleMatches.map((matchAbs: number, idx: number) => {
-                                                                                                            const mref = absoluteToSurahAyah(matchAbs);
-                                                                                                            const msurah = getSurah(mref.surahId);
-                                                                                                            const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
-                                                                                                            const matchRange = entry.meta.matches.find((m: any) => m.absolute === matchAbs)?.wordRange;
+                                    {isMobile ? (
+                                        <div className="knowledge-groups-mobile">
+                                            {mutashabihatSurahs.map(({ surah, count }) => {
+                                                const isOpen = expandedSurahs[surah.id] ?? false;
+
+                                                // Calculate surah group data
+                                                const surahMutsMap: Record<string, {
+                                                    phraseId: string,
+                                                    ayahIds: number[],
+                                                    entry: any,
+                                                    absRefs: number[]
+                                                }> = {};
+
+                                                getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
+                                                    const ref = absoluteToSurahAyah(abs);
+                                                    return ref.surahId === surah.id;
+                                                }).forEach(abs => {
+                                                    const muts = getMutashabihatForAbsolute(abs, instantCustomMutashabihat);
+                                                    const ref = absoluteToSurahAyah(abs);
+                                                    muts.forEach(m => {
+                                                        if (!surahMutsMap[m.phraseId]) {
+                                                            surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [] };
+                                                        }
+                                                        if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
+                                                            surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
+                                                            surahMutsMap[m.phraseId].absRefs.push(abs);
+                                                        }
+                                                    });
+                                                });
+
+                                                const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+
+                                                return (
+                                                    <div key={surah.id} className="mobile-group-item">
+                                                        <div className="mobile-group-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                <span style={{
+                                                                    width: '24px', height: '24px', borderRadius: '6px',
+                                                                    background: 'var(--accent)', color: 'white',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    fontSize: '0.75rem', fontWeight: 700
+                                                                }}>{surah.id}</span>
+                                                                <span style={{ fontWeight: 600 }}>{surah.name}</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span className="status-badge" style={{ background: 'var(--accent-light)', color: 'white' }}>{count}</span>
+                                                                <ChevronDown size={20} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                            </div>
+                                                        </div>
+                                                        {isOpen && (
+                                                            <div className="mobile-subgroup-list">
+                                                                {groups.map(group => {
+                                                                    const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
+                                                                    const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                                    const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
+                                                                    const isConfirmed = !!existing.confirmedAt;
+
+                                                                    return (
+                                                                        <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
+                                                                            id: decisionKey,
+                                                                            title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
+                                                                            surahId: surah.id,
+                                                                            phraseId: group.phraseId,
+                                                                            group,
+                                                                            representativeAbs
+                                                                        })}>
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                                <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>
+                                                                                    {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                                </span>
+                                                                                <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                                                                    {group.entry.matches.length - 1} matches
+                                                                                </span>
+                                                                            </div>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                {isConfirmed && <Check size={16} style={{ color: '#22c55e' }} />}
+                                                                                <span className={`status-badge ${existing.status !== 'pending' ? 'active' : ''}`} style={{
+                                                                                    fontSize: '0.65rem',
+                                                                                    background: existing.status === 'pending' ? 'var(--border)' : 'var(--accent)',
+                                                                                    color: 'white'
+                                                                                }}>
+                                                                                    {MUT_STATES.find(s => s.value === existing.status)?.label.split(' ')[0]}
+                                                                                </span>
+                                                                                <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                            <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ width: '50px' }}></th>
+                                                        <th>Ayah Number</th>
+                                                        <th>Matches</th>
+                                                        <th>Status</th>
+                                                        <th>Actions</th>
+                                                        <th>Note</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {mutashabihatSurahs.map(({ surah, count }) => {
+                                                        const isOpen = expandedSurahs[surah.id] ?? false;
+                                                        return (
+                                                            <React.Fragment key={surah.id}>
+                                                                <tr className="subgroup-header" onClick={() => setExpandedSurahs(prev => ({ ...prev, [surah.id]: !isOpen }))}>
+                                                                    <td colSpan={6} style={{ fontWeight: 600 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />
+                                                                                {surah.id}. {surah.name} ({count})
+                                                                            </div>
+                                                                            <span className="status-badge partial" style={{ margin: 0 }}>{count} entries</span>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                                {isOpen && (() => {
+                                                                    const surahMutsMap: Record<string, {
+                                                                        phraseId: string,
+                                                                        ayahIds: number[],
+                                                                        entry: any,
+                                                                        absRefs: number[]
+                                                                    }> = {};
+
+                                                                    getAllMutashabihatRefs().filter(abs => {
+                                                                        const ref = absoluteToSurahAyah(abs);
+                                                                        return ref.surahId === surah.id;
+                                                                    }).forEach(abs => {
+                                                                        const muts = getMutashabihatForAbsolute(abs);
+                                                                        const ref = absoluteToSurahAyah(abs);
+                                                                        muts.forEach(m => {
+                                                                            if (!surahMutsMap[m.phraseId]) {
+                                                                                surahMutsMap[m.phraseId] = {
+                                                                                    phraseId: m.phraseId,
+                                                                                    ayahIds: [],
+                                                                                    entry: m,
+                                                                                    absRefs: []
+                                                                                };
+                                                                            }
+                                                                            if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
+                                                                                surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
+                                                                                surahMutsMap[m.phraseId].absRefs.push(abs);
+                                                                            }
+                                                                        });
+                                                                    });
+
+                                                                    // Add custom mutashabihat
+                                                                    instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
+                                                                        const phraseId = `custom-${c.id}`;
+                                                                        const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
+                                                                        const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
+
+                                                                        if (!surahMutsMap[phraseId]) {
+                                                                            surahMutsMap[phraseId] = {
+                                                                                phraseId,
+                                                                                ayahIds: [c.ayahId],
+                                                                                absRefs: [abs],
+                                                                                entry: {
+                                                                                    phraseId,
+                                                                                    matches: [abs, targetAbs],
+                                                                                    meta: {
+                                                                                        sourceAbs: abs,
+                                                                                        sourceRange: [0, 0],
+                                                                                        matches: [
+                                                                                            { absolute: abs, wordRange: [0, 0] },
+                                                                                            { absolute: targetAbs, wordRange: [0, 0] }
+                                                                                        ]
+                                                                                    }
+                                                                                }
+                                                                            };
+                                                                        }
+                                                                    });
+
+                                                                    return Object.values(surahMutsMap)
+                                                                        .sort((a, b) => {
+                                                                            const aMin = Math.min(...a.ayahIds);
+                                                                            const bMin = Math.min(...b.ayahIds);
+                                                                            return aMin - bMin;
+                                                                        })
+                                                                        .map(group => {
+                                                                            const entry = group.entry;
+                                                                            // Use the first abs that has a decision, or the first one in the list
+                                                                            const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
+                                                                            const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                                            const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
+                                                                            const isConfirmed = !!existing.confirmedAt;
+                                                                            const isDetailExpanded = expandedMutItems[decisionKey] || false;
+
+                                                                            const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
+
+                                                                            return (
+                                                                                <React.Fragment key={decisionKey}>
+                                                                                    <tr
+                                                                                        className="node-row"
+                                                                                        onClick={toggleExpand}
+                                                                                        style={{ cursor: 'pointer' }}
+                                                                                    >
+                                                                                        <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
+                                                                                            <button
+                                                                                                className="bulk-btn"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    toggleExpand();
+                                                                                                }}
+                                                                                                style={{ padding: '4px', background: isDetailExpanded ? 'var(--accent)' : 'transparent', color: isDetailExpanded ? 'white' : 'inherit' }}
+                                                                                            >
+                                                                                                <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                                                            </button>
+                                                                                        </td>
+                                                                                        <td>
+                                                                                            <div style={{ fontWeight: 500 }}>
+                                                                                                {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                                            </div>
+                                                                                            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                                                                                {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
+                                                                                            </div>
+                                                                                        </td>
+                                                                                        <td>{entry.matches.length - 1} matches</td>
+                                                                                        <td>
+                                                                                            <select
+                                                                                                value={existing.status}
+                                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                                onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
+                                                                                                className="maturity-select"
+                                                                                                style={{
+                                                                                                    borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
+                                                                                                    color: existing.status !== 'pending' ? 'var(--accent)' : 'inherit'
+                                                                                                }}
+                                                                                            >
+                                                                                                {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                                                            </select>
+                                                                                        </td>
+                                                                                        <td>
+                                                                                            <button
+                                                                                                className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleDecisionUpdate(representativeAbs, {
+                                                                                                        ...existing,
+                                                                                                        confirmedAt: isConfirmed ? undefined : new Date().toISOString()
+                                                                                                    }, decisionKey);
+                                                                                                }}
+                                                                                                title={isConfirmed ? "Resolved" : "Not Resolved"}
+                                                                                                style={{ minWidth: '100px' }}
+                                                                                            >
+                                                                                                {isConfirmed ? 'Resolved' : 'Not Resolved'}
+                                                                                            </button>
+                                                                                        </td>
+                                                                                        <td>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="Add note..."
+                                                                                                value={existing.notes || ''}
+                                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                                onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
+                                                                                                style={{ minWidth: '150px' }}
+                                                                                            />
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                    {isDetailExpanded && (
+                                                                                        <tr>
+                                                                                            <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px' }}>
+                                                                                                <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
+                                                                                                    <div className="mut-text">
+                                                                                                        <div className="mut-text-label" style={{ marginBottom: '0.75rem' }}>
+                                                                                                            Surah {surah.name} - {group.ayahIds.join(', ')} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
+                                                                                                        </div>
+                                                                                                        <div className="mut-context">
+                                                                                                            {group.absRefs.map(absRef => {
+                                                                                                                const ref = absoluteToSurahAyah(absRef);
+                                                                                                                const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                                                                                                const mutEntry = getMutashabihatForAbsolute(absRef).find(m => m.phraseId === group.phraseId);
+                                                                                                                if (!mutEntry || !baseVerse) return null;
+
+                                                                                                                return (
+                                                                                                                    <div key={absRef} style={{ marginBottom: group.absRefs.length > 1 ? '1rem' : 0 }}>
+                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.25rem' }}>
+                                                                                                                            <span className="mut-ayah-tag">{ref.ayahId}</span>
+                                                                                                                            <HighlightedVerse
+                                                                                                                                text={baseVerse.text}
+                                                                                                                                range={mutEntry.meta.sourceAbs === absRef ? mutEntry.meta.sourceRange : mutEntry.meta.matches.find((m: any) => m.absolute === absRef)?.wordRange}
+                                                                                                                            />
+                                                                                                                        </p>
+                                                                                                                    </div>
+                                                                                                                );
+                                                                                                            })}
+                                                                                                        </div>
+                                                                                                    </div>
+
+                                                                                                    <div className="mut-matches" style={{ marginTop: '1.5rem' }}>
+                                                                                                        {(() => {
+                                                                                                            const matches = entry.matches.filter((m: any) => m !== representativeAbs);
+                                                                                                            const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
+                                                                                                            const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
+                                                                                                            const hasMore = matches.length > 4;
 
                                                                                                             return (
-                                                                                                                <div key={`${decisionKey}-match-${idx}`} className="mut-text match-item" style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-                                                                                                                    <div className="mut-text-label" style={{ marginBottom: '0.5rem', fontSize: '0.8rem', opacity: 0.8 }}>
-                                                                                                                        Compare: Surah {msurah?.name} - {mref.ayahId}
-                                                                                                                    </div>
-                                                                                                                    <div className="mut-context">
-                                                                                                                        {mVerse && (
-                                                                                                                            <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', opacity: 0.9 }}>
-                                                                                                                                <span className="mut-ayah-tag">{mref.ayahId}</span>
-                                                                                                                                <HighlightedVerse text={mVerse.text} range={matchRange} />
-                                                                                                                            </p>
-                                                                                                                        )}
-                                                                                                                    </div>
-                                                                                                                </div>
+                                                                                                                <>
+                                                                                                                    {visibleMatches.map((matchAbs: number, idx: number) => {
+                                                                                                                        const mref = absoluteToSurahAyah(matchAbs);
+                                                                                                                        const msurah = getSurah(mref.surahId);
+                                                                                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                                                                                        const matchRange = entry.meta.matches.find((m: any) => m.absolute === matchAbs)?.wordRange;
+
+                                                                                                                        return (
+                                                                                                                            <div key={`${decisionKey}-match-${idx}`} className="mut-text match-item" style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+                                                                                                                                <div className="mut-text-label" style={{ marginBottom: '0.5rem', fontSize: '0.8rem', opacity: 0.8 }}>
+                                                                                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                                                                                                </div>
+                                                                                                                                <div className="mut-context">
+                                                                                                                                    {mVerse && (
+                                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', opacity: 0.9 }}>
+                                                                                                                                            <span className="mut-ayah-tag">{mref.ayahId}</span>
+                                                                                                                                            <HighlightedVerse text={mVerse.text} range={matchRange} />
+                                                                                                                                        </p>
+                                                                                                                                    )}
+                                                                                                                                </div>
+                                                                                                                            </div>
+                                                                                                                        );
+                                                                                                                    })}
+                                                                                                                    {hasMore && (
+                                                                                                                        <button
+                                                                                                                            className="btn-show-more"
+                                                                                                                            onClick={() => setExpandedMutItems(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
+                                                                                                                            style={{
+                                                                                                                                width: '100%',
+                                                                                                                                padding: '8px',
+                                                                                                                                marginTop: '8px',
+                                                                                                                                fontSize: '0.8rem',
+                                                                                                                                color: 'var(--accent)',
+                                                                                                                                background: 'none',
+                                                                                                                                border: '1px dashed var(--accent)',
+                                                                                                                                borderRadius: '8px',
+                                                                                                                                cursor: 'pointer'
+                                                                                                                            }}
+                                                                                                                        >
+                                                                                                                            {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
+                                                                                                                        </button>
+                                                                                                                    )}
+                                                                                                                </>
                                                                                                             );
-                                                                                                        })}
-                                                                                                        {hasMore && (
-                                                                                                            <button
-                                                                                                                className="btn-show-more"
-                                                                                                                onClick={() => setExpandedMutItems(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
-                                                                                                                style={{
-                                                                                                                    width: '100%',
-                                                                                                                    padding: '8px',
-                                                                                                                    marginTop: '8px',
-                                                                                                                    fontSize: '0.8rem',
-                                                                                                                    color: 'var(--accent)',
-                                                                                                                    background: 'none',
-                                                                                                                    border: '1px dashed var(--accent)',
-                                                                                                                    borderRadius: '8px',
-                                                                                                                    cursor: 'pointer'
-                                                                                                                }}
-                                                                                                            >
-                                                                                                                {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
-                                                                                                            </button>
-                                                                                                        )}
-                                                                                                    </>
-                                                                                                );
-                                                                                            })()}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </td>
-                                                                            </tr>
-                                                                        )}
-                                                                    </React.Fragment>
-                                                                );
-                                                            });
-                                                    })()}
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                                                                                                        })()}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    )}
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        });
+                                                                })()}
+                                                            </React.Fragment>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                )}
-            </div>
-        </div>
                 </div>
             )}
 
-            {/* Similar Verses Slide-over Detail View */ }
+            {/* Similar Verses Slide-over Detail View */}
             {activeMutSlideOver && (() => {
                 const decisionKey = activeMutSlideOver.id;
                 const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
@@ -2811,7 +2950,7 @@ export default function SettingsPage() {
                                         } else {
                                             await handleGroupMaturityReset(activeSlideOverGroup.type as any, val);
                                         }
-                                        
+
                                         // Update local state to reflect changes
                                         setActiveSlideOverGroup(prev => {
                                             if (!prev) return null;
@@ -2853,7 +2992,7 @@ export default function SettingsPage() {
                                                             const val = e.target.value as any;
                                                             if (!val) return;
                                                             await handleNodeMaturityReset(node.id, val);
-                                                            
+
                                                             // Update local nodes in slideover
                                                             setActiveSlideOverGroup(prev => {
                                                                 if (!prev) return null;
