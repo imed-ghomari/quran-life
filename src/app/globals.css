@@ -81,7 +81,8 @@ html {
 
 @media (min-width: 768px) {
   .docs-header {
-    display: none; /* Hide custom docs header on desktop to match other tabs */
+    display: none;
+    /* Hide custom docs header on desktop to match other tabs */
   }
 }
 
@@ -788,7 +789,7 @@ h3 {
   .card {
     margin-bottom: 1rem;
   }
-  
+
   .content-wrapper {
     padding: 0 !important;
   }
@@ -1965,7 +1966,8 @@ input:focus {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding-bottom: 1rem; /* Small bottom padding for aesthetics */
+    padding-bottom: 1rem;
+    /* Small bottom padding for aesthetics */
   }
 
   .has-sync-bar {
@@ -2231,20 +2233,45 @@ input:focus {
 /* Badge Styling */
 .nav-badge {
   position: absolute;
-  top: -2px;
-  right: -5px;
-  background: var(--danger);
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 700;
-  min-width: 16px;
-  height: 16px;
+  bottom: -6px;
+  right: -14px;
+  background: #c7920e;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 1.5px solid var(--background-secondary);
+  border-radius: 999px;
+  border: 2px solid var(--background-secondary);
+  box-shadow: 0 1.5px 3px rgba(0, 0, 0, 0.15);
   z-index: 100;
+  line-height: 1;
+}
+
+.nav-badge.status-alert {
+  background: #f59e0b;
+  /* Deeper amber for alert */
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+  animation: badge-pulse-yellow 2s infinite;
+}
+
+@keyframes badge-pulse-yellow {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .nav-status-dot {
@@ -2596,6 +2623,7 @@ input:focus {
 
 /* Cards (Global) - Statistics, Settings, Today */
 @media (prefers-color-scheme: light) {
+
   :root:not([data-theme="dark"]) .card,
   :root:not([data-theme="dark"]) .modern-card,
   :root:not([data-theme="dark"]) .docs-main,
@@ -2608,7 +2636,7 @@ input:focus {
   :root:not([data-theme="dark"]) .sync-status-desktop {
     background-color: #f4f6f8 !important;
   }
-  
+
   :root:not([data-theme="dark"]) .roadmap-card {
     background-color: #ffffff !important;
   }
@@ -2659,11 +2687,12 @@ input:focus {
 
 /* System Dark Mode Support for Kanban & Search Bar */
 @media (prefers-color-scheme: dark) {
+
   :root:not([data-theme="light"]) .kanban-column,
   :root:not([data-theme="light"]) .roadmap-column {
     background-color: var(--background-secondary) !important;
   }
-  
+
   :root:not([data-theme="light"]) .docs-search-trigger.todo-search-bar {
     background-color: var(--background-secondary) !important;
   }
