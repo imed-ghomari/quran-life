@@ -12,7 +12,7 @@ import {
     useInstantMindMaps,
     useInstantMutashabihat,
     useInstantReviewErrors,
-    useInstantListeningStats
+    useInstantListeningProgress
 } from '@/hooks/useInstantData';
 import { getMutashabihatForAbsolute, surahAyahToAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
@@ -24,10 +24,10 @@ function NavigationContent() {
     const { mindmaps, partMindMaps } = useInstantMindMaps();
     const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
-    const { stats } = useInstantListeningStats();
+    const { progress: listeningProgress } = useInstantListeningProgress();
 
     const [pendingCount, setPendingCount] = useState(0);
-    const [todayReviews, setTodayReviews] = useState(0);
+    const [todayTasks, setTodayTasks] = useState(0);
     const [isPortionComplete, setIsPortionComplete] = useState(false);
 
     useEffect(() => {
@@ -125,16 +125,22 @@ function NavigationContent() {
             const due = (n.scheduler as any).due || (n.scheduler as any).dueDate;
             return due && due.split('T')[0] <= today;
         }).length;
-        setTodayReviews(dueToday);
-
         // Portion complete
-        const todayStat = stats.find(s => s.date === today);
-        setIsPortionComplete(!!todayStat?.isComplete);
+        const partProgress = listeningProgress.find(p => p.partId === activePart);
+        let portionDone = false;
+        if (partProgress?.updatedAt) {
+            const lastUpdate = new Date(partProgress.updatedAt);
+            const now = new Date();
+            portionDone = lastUpdate.toDateString() === now.toDateString();
+        }
+        setIsPortionComplete(portionDone);
 
-    }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, stats]);
+        setTodayTasks(dueToday + (portionDone ? 0 : 1));
+
+    }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayReviews, status: !isPortionComplete },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, status: !isPortionComplete },
         { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount },
         { href: '/statistics', icon: BarChart3, label: 'Statistics' },
         { href: '/docs', icon: HelpCircle, label: 'Docs' },

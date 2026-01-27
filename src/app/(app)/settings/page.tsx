@@ -29,6 +29,7 @@ import {
 import { useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 
 interface MutashabihatDecision {
@@ -265,6 +266,10 @@ export default function SettingsPage() {
     const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
     const [isAuthProcessing, setIsAuthProcessing] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
+    const [googleNonce] = useState(() => crypto.randomUUID());
+
+    const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+    const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -376,6 +381,50 @@ export default function SettingsPage() {
                                     >
                                         {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
                                     </button>
+
+                                    {authStep === 'email' && (
+                                        <>
+                                            <div style={{ display: 'flex', alignItems: 'center', margin: '0.5rem 0', gap: '0.75rem' }}>
+                                                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)' }}>or</span>
+                                                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                                            </div>
+
+                                            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                    <GoogleLogin
+                                                        nonce={googleNonce}
+                                                        theme="outline"
+                                                        shape="pill"
+                                                        size="large"
+                                                        width="100%"
+                                                        text="continue_with"
+                                                        onError={() => {
+                                                            console.error('Google login failed');
+                                                            setAuthError('Google login failed');
+                                                        }}
+                                                        onSuccess={({ credential }) => {
+                                                            if (!credential) return;
+                                                            setIsAuthProcessing(true);
+                                                            db.auth
+                                                                .signInWithIdToken({
+                                                                    clientName: GOOGLE_CLIENT_NAME,
+                                                                    idToken: credential,
+                                                                    nonce: googleNonce,
+                                                                })
+                                                                .catch((err) => {
+                                                                    console.error('InstantDB Google auth error:', err);
+                                                                    setAuthError('Uh oh: ' + (err.body?.message || err.message));
+                                                                })
+                                                                .finally(() => {
+                                                                    setIsAuthProcessing(false);
+                                                                });
+                                                        }}
+                                                    />
+                                                </div>
+                                            </GoogleOAuthProvider>
+                                        </>
+                                    )}
                                 </form>
                             )}
                         </div>
@@ -1346,6 +1395,50 @@ export default function SettingsPage() {
                                                     >
                                                         {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
                                                     </button>
+
+                                                    {authStep === 'email' && (
+                                                        <>
+                                                            <div style={{ display: 'flex', alignItems: 'center', margin: '0.5rem 0', gap: '0.75rem' }}>
+                                                                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                                                                <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)' }}>or</span>
+                                                                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                                                            </div>
+
+                                                            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                                    <GoogleLogin
+                                                                        nonce={googleNonce}
+                                                                        theme="outline"
+                                                                        shape="pill"
+                                                                        size="large"
+                                                                        width="100%"
+                                                                        text="continue_with"
+                                                                        onError={() => {
+                                                                            console.error('Google login failed');
+                                                                            setAuthError('Google login failed');
+                                                                        }}
+                                                                        onSuccess={({ credential }) => {
+                                                                            if (!credential) return;
+                                                                            setIsAuthProcessing(true);
+                                                                            db.auth
+                                                                                .signInWithIdToken({
+                                                                                    clientName: GOOGLE_CLIENT_NAME,
+                                                                                    idToken: credential,
+                                                                                    nonce: googleNonce,
+                                                                                })
+                                                                                .catch((err) => {
+                                                                                    console.error('InstantDB Google auth error:', err);
+                                                                                    setAuthError('Uh oh: ' + (err.body?.message || err.message));
+                                                                                })
+                                                                                .finally(() => {
+                                                                                    setIsAuthProcessing(false);
+                                                                                });
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </GoogleOAuthProvider>
+                                                        </>
+                                                    )}
                                                 </form>
                                             )}
                                         </div>
