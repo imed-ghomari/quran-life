@@ -281,22 +281,7 @@ export default function TodayPage() {
         load();
     }, []);
 
-    // Settings sync
-    useEffect(() => {
-        // InstantDB handles real-time updates via hooks, so we don't need manual polling or storage event listeners here
-    }, []);
 
-    // Reload due nodes
-    useEffect(() => {
-        if (!isLoaded) return;
-
-        // Only refresh due nodes list if we aren't in the middle of a review session
-        // This prevents "skipping" cards when background sync happens
-        // if (dueNodes.length === 0 || currentReviewIndex === 0) {
-        //     // In InstantDB, dueNodes are already synced and filtered in the hook
-        // }
-        // setListeningComplete(getListeningCompletedToday());
-    }, [isLoaded, dueNodes.length, currentReviewIndex]);
 
     // Calculate today's portion (preserve per-part listening progress)
     const portionData = useMemo(() => {
@@ -381,12 +366,7 @@ export default function TodayPage() {
         setCurrentVerseIndex(portionData.startVerseIndex);
     }, [portionData]);
 
-    // Persist listening progress per part
-    // (REMOVED: Automatic saving on every verse change)
-    // useEffect(() => {
-    //     const settings = getSettings();
-    //     saveListeningProgress(settings.activePart, currentVerseIndex);
-    // }, [currentVerseIndex]);
+  
 
     // Grade review
     const handleGrade = useCallback((remembered: boolean) => {
@@ -497,11 +477,6 @@ export default function TodayPage() {
         setToasts([]);
     };
 
-    useEffect(() => {
-        if (toasts.length > 0) {
-            // cleanup is handled by addToast's setTimeout
-        }
-    }, [toasts]);
 
     const handleCompleteListening = () => {
         if (!settings) return;
@@ -598,27 +573,7 @@ export default function TodayPage() {
         }
     }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses]);
 
-    // Auto-scroll revealed section
-    useEffect(() => {
-        if (!targetBoxRef.current) return;
-
-        // Try to find the "next" blurred chunk
-        const nextBlur = targetBoxRef.current.querySelector('.next-blur') as HTMLElement;
-        if (nextBlur) {
-            nextBlur.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return;
-        }
-
-        // Fallback: If no next blur (end of verse or finished), scroll to the active verse's last visible part
-        const activeVerse = targetBoxRef.current.querySelector('.active-verse') as HTMLElement;
-        if (activeVerse) {
-            // Find the last text node or element in the active verse
-            activeVerse.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-            // Last resort: scroll to bottom
-            targetBoxRef.current.scrollTop = targetBoxRef.current.scrollHeight;
-        }
-    }, [revealedChunks, currentVerseInReview]);
+ 
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -1227,7 +1182,7 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             y: touch.clientY - dragStart.y
         });
     };
-
+const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     return (
         <div
             className="zoom-modal-overlay"
@@ -1250,10 +1205,10 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
             <div
                 style={{
                     position: 'absolute',
-                    top: typeof window !== 'undefined' && window.innerWidth < 768 ? 15 : 20,
-                    right: typeof window !== 'undefined' && window.innerWidth < 768 ? 15 : 20,
+                    top: isMobile ? 15 : 20,
+                    right: isMobile ? 15 : 20,
                     display: 'flex',
-                    gap: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 12,
+                    gap: isMobile ? 8 : 12,
                     zIndex: 2001
                 }}
             >
@@ -1317,7 +1272,7 @@ function ImageZoomModal({ src, onClose }: { src: string; onClose: () => void }) 
                     className="zoom-helper"
                     style={{
                         position: 'absolute',
-                        bottom: typeof window !== 'undefined' && window.innerWidth < 768 ? 100 : 40,
+                        bottom: isMobile ? 100 : 40,
                         color: 'white',
                         fontSize: '0.8rem',
                         display: 'flex',

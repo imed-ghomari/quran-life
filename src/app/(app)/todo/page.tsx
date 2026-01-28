@@ -22,7 +22,7 @@ import { useTheme } from '@/components/ThemeProvider';
 export default function TodoPage() {
     const { settings, saveSettings } = useInstantSettings();
     const { nodes } = useInstantNodes();
-    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap } = useInstantMindMaps();
+    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap } = useInstantMindMaps();
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
 
@@ -474,14 +474,16 @@ export default function TodoPage() {
                     }}
                     onDeleteMindmap={async (type, id) => {
                         if (type === 'surah') {
-                            const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
-                            const updated = { ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false };
-                            await saveMindMap(id, updated);
+                            const entity = mindmapsList.find((m: any) => Number(m.surahId) === id);
+                            if (entity && (entity as any).id) {
+                                await deleteMindMap((entity as any).id);
+                            }
                         } else {
                             const pId = id as QuranPart;
-                            const existing = partMindmapsMap[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
-                            const updated = { ...existing, imageUrl: null, imageUrlDark: null, tldrawSnapshot: undefined, isComplete: false };
-                            await savePartMindMap(pId, updated);
+                            const entity = partMindmapsList.find((m: any) => Number(m.partId) === pId);
+                            if (entity && (entity as any).id) {
+                                await deletePartMindMap((entity as any).id);
+                            }
                         }
                     }}
                     getBuilderState={getBuilderState}
