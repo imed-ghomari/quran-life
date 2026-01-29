@@ -17,19 +17,46 @@ import MindmapViewer from '@/components/MindmapViewer';
 import TodoKanban from '@/components/todo/TodoKanban';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
+// Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 
+/**
+ * TodoPage Component
+ * 
+ * This is the main controller for the Quran Life Kanban board.
+ * It handles:
+ * 1. Data synchronization with InstantDB (Settings, Nodes, Mindmaps, Errors).
+ * 2. Aggregating tasks (Surahs/Parts) into Kanban columns.
+ * 3. Managing "Mutashabihat" (Similarity) errors and resolution flows.
+ * 4. Editor state for Mindmaps (Surah and Part level).
+ * 5. Anchor building logic for defining verse ranges.
+ */
 export default function TodoPage() {
+    // -- 1. Data Hooks: Syncing with InstantDB --
     const { settings, saveSettings } = useInstantSettings();
     const { nodes } = useInstantNodes();
+    // Raw lists from DB - might contain duplicates due to sync/offline issues
     const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap } = useInstantMindMaps();
+
+    // Debug logging for development
+    useEffect(() => {
+        console.log('mindmapsList updated:', mindmapsList);
+    }, [mindmapsList]);
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
 
+    // -- 2. Data Memoization & Deduplication --
+    // We map raw lists to a dictionary for O(1) access. 
+    // CRITICAL: We also handle duplicates here. If multiple records exist for the same Surah/Part,
+    // we only take the FIRST one. This prevents "ghost" items from overwriting valid data.
     const mindmaps = useMemo(() => {
         const acc: Record<number, MindMap> = {};
         mindmapsList.forEach(mm => {
-            acc[mm.surahId] = mm as unknown as MindMap;
+            const sId = Number(mm.surahId);
+            if (!acc[sId]) {
+                // First-Wins strategy: Only assign if key doesn't exist yet.
+                acc[sId] = mm as unknown as MindMap;
+            }
         });
         return acc;
     }, [mindmapsList]);
@@ -37,14 +64,20 @@ export default function TodoPage() {
     const partMindmapsMap = useMemo(() => {
         const acc: Record<number, PartMindMap> = {};
         partMindmapsList.forEach(pmm => {
-            acc[pmm.partId] = pmm as unknown as PartMindMap;
+            const pId = Number(pmm.partId);
+            if (!acc[pId]) {
+                // First-Wins strategy for Parts as well
+                acc[pId] = pmm as unknown as PartMindMap;
+            }
         });
         return acc;
     }, [partMindmapsList]);
 
+    // -- 3. Local UI State --
     const [anchorBuilders, setAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
 
+    // Check if the user has already reviewed chunks for this Surah (used to lock anchor editing)
     const hasReviewedChunks = useCallback((surahId: number) => {
         return nodes.some(n => n.type === 'verse_segment' && n.surahId === surahId && hasNodeBeenReviewed(n.scheduler));
     }, [nodes]);
@@ -82,8 +115,10 @@ export default function TodoPage() {
         return acc;
     }, [decisions]);
 
+    // -- 4. Task Aggregation --
     const activePart = settings.activePart;
 
+    // Filter Surahs based on the user's active part setting
     const surahTasks = useMemo(() => {
         const eligible = SURAHS.filter(s =>
             (activePart === 5 || s.part === activePart) &&
@@ -101,6 +136,7 @@ export default function TodoPage() {
             .map(p => ({ part: p, mindmap: partMindmapsMap[p] }));
     }, [partMindmapsMap, activePart]);
 
+    // Gather Similarity Errors (Mutashabihat) that need resolution
     const similarityItems = useMemo(() => {
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
@@ -108,6 +144,7 @@ export default function TodoPage() {
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
                 return { err, muts };
             })
+            // Filter out items that are already resolved/ignored
             .filter(entry => {
                 const absolute = entry.err.absoluteAyah!;
                 const verseDecision = decisionsMap[absolute.toString()];
@@ -122,6 +159,7 @@ export default function TodoPage() {
             });
     }, [errors, decisionsMap, customMutashabihat]);
 
+    // Group similarity items by Surah for cleaner display in Kanban
     const groupedSimilarity = useMemo(() => {
         const groups: Record<number, typeof similarityItems> = {};
         similarityItems.forEach(item => {
@@ -137,11 +175,15 @@ export default function TodoPage() {
     }, [similarityItems]);
 
 
+
+    // -- 5. Anchor Logic --
+    // Anchors define the breakdown of a Surah into chunks for memorization.
     const getBuilderState = (surahId: number) => {
         if (anchorBuilders[surahId]) return anchorBuilders[surahId];
         const surahMeta = SURAHS.find(s => s.id === surahId);
         const verseCount = surahMeta?.verseCount || 1;
         const mindmap = mindmaps[surahId];
+        // If anchors exist in DB, rehydrate the builder state
         if (mindmap?.anchors?.length) {
             const sorted = [...mindmap.anchors].sort((a, b) => a.startVerse - b.startVerse);
             const breaks = sorted.slice(0, -1).map(a => Math.min(Math.max(1, a.endVerse + 1), verseCount - 1));
@@ -149,6 +191,7 @@ export default function TodoPage() {
             sorted.forEach((a, idx) => { labels[idx] = a.label; });
             return { breaks, labels };
         }
+        // Default clean state
         return { breaks: [], labels: {} };
     };
 
@@ -184,6 +227,7 @@ export default function TodoPage() {
         await saveMindMap(surahId, { ...existing, anchors: newAnchors });
     };
 
+    // Marks a Mindmap (Surah level) as complete/incomplete
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
         const existing = currentMindmap || mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
         const tldrawSnapshot = currentMindmap?.tldrawSnapshot || existing.tldrawSnapshot;
@@ -303,6 +347,7 @@ export default function TodoPage() {
         });
     };
 
+    // Handles saving from the Mindmap Editor modal (Surah)
     const handleEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activeMindmapEditor) return;
         const { surahId } = activeMindmapEditor;
@@ -474,11 +519,13 @@ export default function TodoPage() {
                     }}
                     onDeleteMindmap={async (type, id) => {
                         if (type === 'surah') {
+                            // Find specific entity to delete
                             const entity = mindmapsList.find((m: any) => Number(m.surahId) === id);
                             if (entity && (entity as any).id) {
                                 await deleteMindMap((entity as any).id);
                             }
                         } else {
+                            // Find specific part entity to delete
                             const pId = id as QuranPart;
                             const entity = partMindmapsList.find((m: any) => Number(m.partId) === pId);
                             if (entity && (entity as any).id) {
