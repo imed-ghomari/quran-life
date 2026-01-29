@@ -420,7 +420,7 @@ export default function StatisticsPage() {
 
     return (
         <div className="content-wrapper">
-            <h1 className="hidden md:block text-2xl font-bold mb-6">Progress Statistics</h1>
+            <h1 className="hidden md:block text-2xl font-bold mb-6">Statistics</h1>
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <div className="stats-header md:hidden" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                     <div>

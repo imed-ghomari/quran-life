@@ -1,41 +1,57 @@
 'use client';
 
+// Import necessary React hooks and Next.js utilities
 import { db } from '@/lib/instant';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Mail, ArrowRight, Loader2, CheckCircle, Lock, Hash } from 'lucide-react';
-import { Suspense } from 'react';
-import Spinner from '@/components/ui/Spinner';
 
+// Import UI icons from lucide-react
+import { Mail, ArrowRight, Loader2, CheckCircle, Lock, Hash } from 'lucide-react';
+
+// Import Suspense for handling asynchronous components
+import { Suspense } from 'react';
+
+// Import custom Spinner component and Google OAuth components
+import Spinner from '@/components/ui/Spinner';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+
+// Main authentication content component
 function AuthContent() {
+    // Fetch user authentication status and data using InstantDB's hook
     const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
+    // Initialize Next.js router for navigation
     const router = useRouter();
+    // Get URL search parameters (e.g., for redirecting after login or payment success)
     const searchParams = useSearchParams();
 
-    // Log state for debugging
-    console.log('AuthContent state:', {
-        user: !!user,
-        isAuthLoading,
-        hasSearchParams: !!searchParams,
-        authStateError
-    });
-
+    // State for managing email and magic code inputs
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
+    // State to control the authentication flow step (email input or code input)
     const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
+    // State for managing loading indicators during authentication actions
     const [authLoading, setAuthLoading] = useState(false);
+    // State for displaying authentication-related errors
     const [authError, setAuthError] = useState<string | null>(null);
+    // State for Google OAuth nonce to prevent replay attacks
+    const [googleNonce] = useState(() => crypto.randomUUID());
 
+    // Environment variables for Google OAuth configuration
+    const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+    const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
+
+    // Extract checkout ID and cycle (monthly/yearly) from URL search parameters
     const checkoutId = searchParams?.get('checkout_id');
     const cycle = searchParams?.get('cycle') || 'monthly';
 
-    // Owner emails from env - owners bypass Polar checkout
+    // Define owner emails for special access (e.g., bypassing payment).
+    // These should ideally be loaded from environment variables or a secure configuration.
     const OWNER_EMAILS = [
         process.env.NEXT_PUBLIC_OWNER_EMAIL,
         process.env.NEXT_PUBLIC_OWNER_EMAIL2
     ].filter(Boolean).map(e => e?.toLowerCase());
 
-    // Use db.useQuery to check for purchases in InstantDB
+    // Use db.useQuery to check for completed purchases in InstantDB for the current user
     const { data: purchaseData, isLoading: isPurchaseLoading, error: purchaseError } = db.useQuery({
         purchases: {
             $: {
@@ -44,26 +60,26 @@ function AuthContent() {
         }
     });
 
-    console.log('Purchase data state:', {
-        hasUser: !!user,
-        isPurchaseLoading,
-        hasPurchase: !!purchaseData?.purchases?.length,
-        purchaseError
-    });
-
+    // Effect hook to handle post-authentication logic and redirects
     useEffect(() => {
+        // Only proceed if user data is available and purchase data has finished loading
         if (user && !isPurchaseLoading) {
+            // Determine if the current user is an owner
             const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
+            // Determine if the user has any completed purchases
             const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
 
+            // If the user is an owner or has a purchase, redirect them to the dashboard
             if (isOwner || hasPurchase) {
                 router.push('/dashboard');
             }
         }
-    }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAILS]);
+    }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAILS]); // Dependencies for the effect
 
+    // Determine if the Polar integration is in sandbox mode
     const isSandbox = process.env.NEXT_PUBLIC_POLAR_SANDBOX === 'true';
 
+    // Define product IDs for monthly and yearly subscriptions, considering sandbox mode
     const PRODUCT_ID_MONTHLY = isSandbox
         ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_MONTHLY
         : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_MONTHLY || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID);
@@ -72,34 +88,42 @@ function AuthContent() {
         ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_YEARLY
         : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_YEARLY || PRODUCT_ID_MONTHLY);
 
+    // Select the appropriate product ID based on the 'cycle' search parameter
     const selectedProductId = cycle === 'yearly' ? PRODUCT_ID_YEARLY : PRODUCT_ID_MONTHLY;
 
+    // Handle the magic link authentication process
     const handleAuth = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setAuthError(null);
-        setAuthLoading(true);
+        e.preventDefault(); // Prevent default form submission
+        setAuthError(null); // Clear any previous errors
+        setAuthLoading(true); // Show loading indicator
 
         try {
             if (authStep === 'email') {
+                // If in the email step, send a magic code to the provided email
                 await db.auth.sendMagicCode({ email });
-                setAuthStep('code');
+                setAuthStep('code'); // Move to the code input step
             } else {
+                // If in the code step, sign in with the email and magic code
                 await db.auth.signInWithMagicCode({ email, code });
-                // Redirect logic will be handled by useEffect when user state changes
+                // Redirect logic will be handled by the useEffect when the user state changes
             }
         } catch (err: any) {
             console.error('Auth error:', err);
+            // Catch and display any authentication errors
             setAuthError(err.body?.message || err.message || 'An error occurred during authentication');
         } finally {
-            setAuthLoading(false);
+            setAuthLoading(false); // Hide loading indicator
         }
     };
 
+    // Handle redirection to the Polar checkout page
     const handleProceedToCheckout = () => {
+        // Construct the checkout URL with the selected product ID
         const checkoutUrl = `/api/polar/checkout?product_id=${selectedProductId}`;
-        window.location.href = checkoutUrl;
+        window.location.href = checkoutUrl; // Redirect the user
     };
 
+    // Render a loading spinner while initial authentication status is being verified
     if (isAuthLoading) {
         return (
             <div style={{
@@ -114,6 +138,7 @@ function AuthContent() {
         );
     }
 
+    // Render an error message if there's an issue with the authentication state
     if (authStateError) {
         return (
             <div style={{
@@ -135,7 +160,7 @@ function AuthContent() {
         );
     }
 
-    // If logged in but still checking for purchase, show loading
+    // If user is logged in but still checking for purchase, show loading spinner
     if (user && isPurchaseLoading) {
         return (
             <div style={{
@@ -150,7 +175,7 @@ function AuthContent() {
         );
     }
 
-    // If logged in but no purchase found and not owner, show checkout option
+    // If user is logged in but has no purchase and is not an owner, prompt for checkout
     if (user) {
         const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
         const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
@@ -207,6 +232,7 @@ function AuthContent() {
         }
     }
 
+    // Render the main authentication form
     return (
         <div style={{
             minHeight: '100vh',
@@ -225,6 +251,7 @@ function AuthContent() {
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
                 border: '1px solid var(--border)',
             }}>
+                {/* Display payment success message if checkoutId is present in URL */}
                 {checkoutId && (
                     <div style={{
                         marginBottom: '1.5rem',
@@ -248,6 +275,7 @@ function AuthContent() {
                     </div>
                 )}
 
+                {/* Header section for the authentication form */}
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{
                         width: '60px',
@@ -260,6 +288,7 @@ function AuthContent() {
                         justifyContent: 'center',
                         margin: '0 auto 1.5rem'
                     }}>
+                        {/* Icon changes based on auth step */}
                         {authStep === 'email' ? <Mail size={32} /> : <Hash size={32} />}
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
@@ -272,8 +301,10 @@ function AuthContent() {
                     </p>
                 </div>
 
+                {/* Magic Link Authentication Form */}
                 <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     {authStep === 'email' ? (
+                        // Email input field
                         <div style={{ position: 'relative' }}>
                             <Mail size={18} style={{
                                 position: 'absolute',
@@ -302,6 +333,7 @@ function AuthContent() {
                             />
                         </div>
                     ) : (
+                        // Magic code input field
                         <div style={{ position: 'relative' }}>
                             <Hash size={18} style={{
                                 position: 'absolute',
@@ -332,6 +364,7 @@ function AuthContent() {
                         </div>
                     )}
 
+                    {/* Display authentication errors */}
                     {authError && (
                         <p style={{
                             color: '#ef4444',
@@ -346,6 +379,7 @@ function AuthContent() {
                         </p>
                     )}
 
+                    {/* Submit button for magic link flow */}
                     <button
                         type="submit"
                         disabled={authLoading}
@@ -374,6 +408,7 @@ function AuthContent() {
                         )}
                     </button>
 
+                    {/* Option to use a different email if in code step */}
                     {authStep === 'code' && (
                         <button
                             type="button"
@@ -392,6 +427,54 @@ function AuthContent() {
                     )}
                 </form>
 
+                {/* Google OAuth Login Section */}
+                {authStep === 'email' && (
+                    <>
+                        {/* Separator */}
+                        <div style={{ display: 'flex', alignItems: 'center', margin: '1.5rem 0', gap: '1rem' }}>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>or</span>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                        </div>
+
+                        {/* Google Login Button */}
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                                <GoogleLogin
+                                    nonce={googleNonce}
+                                    theme="filled_blue"
+                                    shape="pill"
+                                    size="large"
+                                    width="100%"
+                                    text="continue_with"
+                                    onError={() => {
+                                        console.error('Google login failed');
+                                        setAuthError('Google login failed');
+                                    }}
+                                    onSuccess={({ credential }) => {
+                                        if (!credential) return;
+                                        setAuthLoading(true);
+                                        db.auth
+                                            .signInWithIdToken({
+                                                clientName: GOOGLE_CLIENT_NAME,
+                                                idToken: credential,
+                                                nonce: googleNonce,
+                                            })
+                                            .catch((err) => {
+                                                console.error('InstantDB Google auth error:', err);
+                                                setAuthError('Uh oh: ' + (err.body?.message || err.message));
+                                            })
+                                            .finally(() => {
+                                                setAuthLoading(false);
+                                            });
+                                    }}
+                                />
+                            </GoogleOAuthProvider>
+                        </div>
+                    </>
+                )}
+
+                {/* Terms and Privacy Policy footer */}
                 <div style={{
                     marginTop: '2rem',
                     paddingTop: '1.5rem',
@@ -407,9 +490,11 @@ function AuthContent() {
     );
 }
 
+// Wrapper AuthPage component to provide Suspense boundary
 export default function AuthPage() {
     return (
         <Suspense fallback={
+            // Fallback UI while AuthContent is loading (e.g., during initial Google OAuth script load)
             <div style={{
                 minHeight: '100vh',
                 display: 'flex',

@@ -112,7 +112,7 @@ export default function CardActionMenu({
                 });
             }
 
-            if (hasMindmap) {
+            if (hasMindmap && cardType === 'surah') {
                 items.push({
                     label: 'Change Splits',
                     icon: <SplitSquareHorizontal size={18} />,

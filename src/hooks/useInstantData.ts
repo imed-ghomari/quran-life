@@ -136,7 +136,7 @@ export function useInstantMindMaps() {
 
     const saveMindMap = (surahId: number, mapData: Partial<MindMap>) => {
         if (!user) return Promise.resolve();
-        const existing = mindmaps.find(m => m.surahId === surahId);
+        const existing = mindmaps.find(m => Number((m as any).surahId) === surahId);
         const id = existing ? (existing as any).id : crypto.randomUUID();
 
         const sanitizedData: any = { ...mapData };
@@ -153,7 +153,7 @@ export function useInstantMindMaps() {
 
     const savePartMindMap = (partId: number, mapData: any) => {
         if (!user) return Promise.resolve();
-        const existing = partMindMaps.find(m => m.partId === partId);
+        const existing = partMindMaps.find(m => Number((m as any).partId) === partId);
         const id = existing ? existing.id : crypto.randomUUID();
 
         return db.transact(db.tx.partMindMaps[id].update({
@@ -164,14 +164,26 @@ export function useInstantMindMaps() {
         }));
     };
 
+    const deleteMindMap = (id: string) => {
+        if (!user) return Promise.resolve();
+        return db.transact(db.tx.mindMaps[id].delete());
+    };
+
+    const deletePartMindMap = (id: string) => {
+        if (!user) return Promise.resolve();
+        return db.transact(db.tx.partMindMaps[id].delete());
+    };
+
     return useMemo(() => ({
         mindmaps,
         partMindMaps,
         saveMindMap,
         savePartMindMap,
+        deleteMindMap,
+        deletePartMindMap,
         isLoading,
         error
-    }), [mindmaps, partMindMaps, isLoading, error]);
+    }), [mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading, error]);
 }
 
 // ==========================================
