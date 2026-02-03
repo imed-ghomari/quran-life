@@ -543,10 +543,10 @@ export function DesktopAnchorBuilder({
     };
 
     return (
-        <div className="anchor-builder-desktop" style={{ padding: '1rem', background: 'var(--background-secondary)', borderRadius: '16px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="anchor-builder-desktop" style={{ padding: '1rem', background: 'var(--background-secondary)', borderRadius: '16px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ background: 'var(--accent)', color: 'white', padding: '5px', borderRadius: '8px', display: 'flex' }}>
                         <SplitSquareHorizontal size={18} />
                     </div>
                     <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Anchors</span>

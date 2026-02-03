@@ -99,7 +99,7 @@ export default function StatisticsPage() {
 
         targetSurahs.forEach(s => {
             const isLearned = learnedVerses[s.id.toString()];
-            if (skippedSurahs.has(s.id) || !isLearned) {
+            if (skippedSurahs.has(s.id)) {
                 skipped++;
             } else {
                 const mm = mindmaps.find(m => m.surahId === s.id);

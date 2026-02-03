@@ -745,7 +745,7 @@ h1 {
   .review-verse-container {
     display: flex;
     flex-direction: column;
-    max-height: none;
+    max-height: 60vh;
   }
 
   .review-target-box {
@@ -756,8 +756,8 @@ h1 {
     flex-direction: column;
     gap: 10px;
     position: relative;
-    flex: none;
-    overflow-y: visible;
+    flex: 1;
+    overflow-y: auto;
     min-height: 0;
   }
 }
@@ -1807,23 +1807,6 @@ input:focus {
 }
 
 @media (min-width: 768px) {
-  .review-verse-container {
-    max-height: 60vh;
-  }
-
-  .review-target-box {
-    padding: 0.75rem;
-    background: var(--verse-bg);
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    position: relative;
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
-  }
-
   .content-wrapper {
     max-width: 100%;
     margin: 0 auto;
@@ -2256,23 +2239,13 @@ input:focus {
   background: #f59e0b;
   /* Deeper amber for alert */
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
-  animation: badge-pulse-yellow 2s infinite;
+ 
 }
 
-@keyframes badge-pulse-yellow {
-  0% {
-    transform: scale(1);
-  }
 
-  50% {
-    transform: scale(1.1);
-    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
-  }
 
-  100% {
-    transform: scale(1);
-  }
-}
+
+
 
 .nav-status-dot {
   position: absolute;

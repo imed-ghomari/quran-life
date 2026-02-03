@@ -9,7 +9,8 @@ import {
     useInstantMutashabihat,
     useInstantReviewErrors
 } from '@/hooks/useInstantData';
-import { MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart } from '@/lib/types';
+import { MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
+import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { X } from 'lucide-react';
 import MindmapEditor from '@/components/MindmapEditor';
@@ -19,6 +20,7 @@ import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
+
 
 /**
  * TodoPage Component
@@ -34,7 +36,7 @@ import { useTheme } from '@/components/ThemeProvider';
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
     const { settings, saveSettings } = useInstantSettings();
-    const { nodes } = useInstantNodes();
+    const { nodes, saveNode } = useInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
     const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap } = useInstantMindMaps();
 
@@ -229,18 +231,44 @@ export default function TodoPage() {
 
     // Marks a Mindmap (Surah level) as complete/incomplete
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
+        console.log('handleMarkComplete called:', { surahId, forceState, currentMindmap });
         const existing = currentMindmap || mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
         const tldrawSnapshot = currentMindmap?.tldrawSnapshot || existing.tldrawSnapshot;
+
+        const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
+        console.log('isNowComplete:', isNowComplete);
 
         const updated = {
             ...existing,
             imageUrl: undefined, // Clear images to save storage
             imageUrlDark: undefined,
             tldrawSnapshot,
-            isComplete: forceState !== undefined ? forceState : !existing.isComplete
+            isComplete: isNowComplete
         };
 
         await saveMindMap(surahId, updated);
+
+        // If marking as complete, ensure a MemoryNode exists for scheduling
+        if (isNowComplete) {
+            console.log('Checking for existing mindmap MemoryNode for surah:', surahId);
+            const existingNode = nodes.find(n => n.type === 'mindmap' && n.surahId === surahId);
+            console.log('Existing node found:', existingNode);
+            if (!existingNode) {
+                const newNode: MemoryNode = {
+                    id: crypto.randomUUID(),
+                    type: 'mindmap',
+                    surahId: surahId,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString()
+                };
+                console.log('Creating new MemoryNode:', newNode);
+                await saveNode(newNode);
+                appLogger.addLog(`Created scheduling node for Surah ${surahId} mindmap`, 'info');
+                console.log('MemoryNode created successfully');
+            } else {
+                console.log('MemoryNode already exists, skipping creation');
+            }
+        }
     };
 
     const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
@@ -321,8 +349,25 @@ export default function TodoPage() {
 
     const handlePartComplete = async (part: QuranPart, forceState?: boolean) => {
         const existing = partMindmapsMap[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
-        const updated = { ...existing, isComplete: forceState !== undefined ? forceState : !existing.isComplete };
+        const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
+        const updated = { ...existing, isComplete: isNowComplete };
         await savePartMindMap(part, updated);
+
+        // If marking as complete, ensure a MemoryNode exists for scheduling
+        if (isNowComplete) {
+            const existingNode = nodes.find(n => n.type === 'part_mindmap' && n.partId === part);
+            if (!existingNode) {
+                const newNode: MemoryNode = {
+                    id: crypto.randomUUID(),
+                    type: 'part_mindmap',
+                    partId: part,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString()
+                };
+                await saveNode(newNode);
+                appLogger.addLog(`Created scheduling node for Part ${part} mindmap`, 'info');
+            }
+        }
     };
 
     const handleFixConfirm = (_surahId: number, _anchorId: string) => {
