@@ -347,6 +347,30 @@ export default function SettingsPage() {
                                         >
                                             Sign Out
                                         </button>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={handleReset}
+                                            style={{
+                                                width: '100%',
+                                                display: 'flex',
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '0.5rem',
+                                                padding: '0.85rem',
+                                                fontSize: '1rem',
+                                                height: 'auto',
+                                                background: 'var(--background)',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: '12px',
+                                                color: '#ef4444',
+                                                fontWeight: 600,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <Trash2 size={20} />
+                                            <span>Reset All Data</span>
+                                        </button>
                                     </div>
                                 </>
                             ) : (
@@ -427,80 +451,6 @@ export default function SettingsPage() {
                                     )}
                                 </form>
                             )}
-                        </div>
-                    </div>
-
-                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Download size={18} /> Backup, Import & Reset
-                        </h2>
-                        <p style={{ marginBottom: '1rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                            Manage your data: Export backup, import from file, or reset all data.
-                        </p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <button
-                                className="btn btn-secondary"
-                                onClick={handleExport}
-                                style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.5rem',
-                                    padding: '1rem',
-                                    fontSize: '0.9rem',
-                                    height: 'auto',
-                                    background: 'var(--background)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '12px'
-                                }}
-                            >
-                                <Download size={20} style={{ color: 'var(--accent)' }} />
-                                <span>Export Data</span>
-                            </button>
-                            <label
-                                className="btn btn-secondary"
-                                style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.5rem',
-                                    padding: '1rem',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    height: 'auto',
-                                    background: 'var(--background)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '12px'
-                                }}
-                            >
-                                <Upload size={20} style={{ color: 'var(--accent)' }} />
-                                <span>Import Data</span>
-                                <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-                            </label>
-                            <button
-                                className="btn btn-secondary"
-                                onClick={handleReset}
-                                style={{
-                                    gridColumn: 'span 2',
-                                    display: 'flex',
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.5rem',
-                                    padding: '1rem',
-                                    fontSize: '0.9rem',
-                                    height: 'auto',
-                                    background: 'var(--background)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '12px',
-                                    color: '#ef4444'
-                                }}
-                            >
-                                <Trash2 size={20} />
-                                <span>Reset All Data</span>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1363,6 +1313,30 @@ export default function SettingsPage() {
                                                         >
                                                             Sign Out
                                                         </button>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            onClick={handleReset}
+                                                            style={{
+                                                                width: '100%',
+                                                                display: 'flex',
+                                                                flexDirection: 'row',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '0.5rem',
+                                                                padding: '0.85rem',
+                                                                fontSize: '1rem',
+                                                                height: 'auto',
+                                                                background: 'var(--background)',
+                                                                border: '1px solid var(--border)',
+                                                                borderRadius: '12px',
+                                                                color: '#ef4444',
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <Trash2 size={20} />
+                                                            <span>Reset All Data</span>
+                                                        </button>
                                                     </div>
                                                 </>
                                             ) : (
@@ -1446,106 +1420,6 @@ export default function SettingsPage() {
                                 )}
                             </div>
                             <AppearanceCard />
-                            <div className="card modern-card" style={{
-                                background: 'var(--background-secondary)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '16px'
-                            }}>
-                                <div className="section-title"
-                                    onClick={() => toggleSection('backupRestore')}
-                                    style={{
-                                        color: 'var(--accent)',
-                                        fontWeight: 700,
-                                        marginBottom: sectionsExpanded.backupRestore ? '1rem' : '0',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: '0.75rem',
-                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
-                                        cursor: 'pointer'
-                                    }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            <Download size={18} />
-                                        </div>
-                                        <span>Backup, Import & Reset</span>
-                                    </div>
-                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.backupRestore ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                </div>
-                                {sectionsExpanded.backupRestore && (
-                                    <>
-                                        <p style={{ marginBottom: '1.25rem', color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
-                                            Manage your data: Export backup, import from file, or reset all data.
-                                        </p>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                            <button
-                                                className="btn btn-secondary"
-                                                onClick={handleExport}
-                                                style={{
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '0.5rem',
-                                                    padding: '1rem',
-                                                    fontSize: '0.9rem',
-                                                    height: 'auto',
-                                                    background: 'var(--background)',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: '12px'
-                                                }}
-                                            >
-                                                <Download size={20} style={{ color: 'var(--accent)' }} />
-                                                <span>Export Data</span>
-                                            </button>
-                                            <label
-                                                className="btn btn-secondary"
-                                                style={{
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '0.5rem',
-                                                    padding: '1rem',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.9rem',
-                                                    height: 'auto',
-                                                    background: 'var(--background)',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: '12px'
-                                                }}
-                                            >
-                                                <Upload size={20} style={{ color: 'var(--accent)' }} />
-                                                <span>Import Data</span>
-                                                <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-                                            </label>
-                                            <button
-                                                className="btn btn-secondary"
-                                                onClick={handleReset}
-                                                style={{
-                                                    gridColumn: 'span 2',
-                                                    display: 'flex',
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '0.5rem',
-                                                    padding: '1rem',
-                                                    fontSize: '0.9rem',
-                                                    height: 'auto',
-                                                    background: 'var(--background)',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: '12px',
-                                                    color: '#ef4444'
-                                                }}
-                                            >
-                                                <Trash2 size={20} />
-                                                <span>Reset All Data</span>
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-
                             <div className="card modern-card" style={{
                                 background: 'var(--background-secondary)',
                                 border: '1px solid var(--border)',
@@ -1655,7 +1529,8 @@ export default function SettingsPage() {
                                 padding: sectionsExpanded.surahStatus ? 'clamp(1rem, 4vw, 1.5rem)' : '1rem',
                                 background: 'var(--background-secondary)',
                                 border: '1px solid var(--border)',
-                                borderRadius: '16px'
+                                borderRadius: '16px',
+                                gridColumn: '1 / -1'
                             }}>
                                 <div className="section-title"
                                     onClick={() => toggleSection('surahStatus')}
@@ -1906,7 +1781,7 @@ export default function SettingsPage() {
                                             </div>
                                         ) : (
                                             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                                <table className="debug-table" style={{ minWidth: '700px', width: '100%'}}>
+                                                <table className="debug-table" style={{ minWidth: '700px', width: '100%', tableLayout:'fixed'}}>
                                                     <thead>
                                                         <tr>
                                                             <th>Target / Range</th>
@@ -2531,14 +2406,14 @@ export default function SettingsPage() {
                                                                                             </button>
                                                                                         </td>
                                                                                         <td>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="Add note..."
-                                                                                                value={existing.notes || ''}
-                                                                                                onClick={(e) => e.stopPropagation()}
-                                                                                                onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
-                                                                                                style={{ minWidth: '150px' }}
-                                                                                            />
+                                                                                           <input
+                                                                                        type="text"
+                                                                                        placeholder="Add note..."
+                                                                                        value={existing.notes || ''}
+                                                                                        onClick={(e) => e.stopPropagation()}
+                                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
+                                                                                        className="min-w-[150px] max-h-[35px] placeholder:text-sm placeholder:text-gray-400"
+                                                                                        />
                                                                                         </td>
                                                                                     </tr>
                                                                                     {isDetailExpanded && (

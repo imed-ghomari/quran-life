@@ -128,38 +128,29 @@ export default function TodayPage() {
             if (id.startsWith('surah-')) {
                 const surahIdNum = parseInt(id.replace('surah-', ''));
                 const surah = getSurah(surahIdNum);
-                const mindmap = mindmaps.find(m => Number(m.surahId) === surahIdNum);
-
-                if (surah && mindmap) {
-                    // 1. Add mindmap review item (without verses so it shows mindmap prompt directly)
-                    reviewItems.push({
-                        type: 'surah_mindmap',
-                        surahId: surahIdNum,
-                        surah,
-                        mindmap
-                    });
-
-                    // 2. Add verses from anchors immediately after mindmap for the same surah
-                    const anchorVerses: Verse[] = [];
-                    if (mindmap.anchors?.length) {
-                        mindmap.anchors.forEach((anchor: any) => {
-                            const start = Number(anchor.startVerse);
-                            const end = Number(anchor.endVerse);
-                            for (let ayahId = start; ayahId <= end; ayahId++) {
-                                const verse = allVerses.find(v => Number(v.surahId) === surahIdNum && Number(v.ayahId) === ayahId);
-                                if (verse) anchorVerses.push(verse);
-                            }
+                if (surah) {
+                    const mindmap = mindmaps.find(m => Number(m.surahId) === surahIdNum);
+                    if (mindmap) {
+                        // 1. Add mindmap review item
+                        reviewItems.push({
+                            type: 'surah_mindmap',
+                            surahId: surahIdNum,
+                            surah,
+                            mindmap
                         });
                     }
 
-                 /*   if (anchorVerses.length > 0) {
+                    // 2. Add all verses of the surah
+                    const surahVerses = allVerses.filter(v => Number(v.surahId) === surahIdNum);
+
+                    if (surahVerses.length > 0) {
                         reviewItems.push({
                             type: 'surah_verse',
                             surahId: surahIdNum,
                             surah,
-                            verses: anchorVerses
+                            verses: surahVerses
                         });
-                    }*/
+                    }
                 }
             } else if (id.startsWith('part-')) {
                 const partId = parseInt(id.replace('part-', '')) as QuranPart;
