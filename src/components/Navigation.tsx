@@ -125,23 +125,14 @@ function NavigationContent() {
             const due = (n.scheduler as any).due || (n.scheduler as any).dueDate;
             return due && due.split('T')[0] <= today;
         }).length;
-        // Portion complete
-        const partProgress = listeningProgress.find(p => p.partId === activePart);
-        let portionDone = false;
-        if (partProgress?.updatedAt) {
-            const lastUpdate = new Date(partProgress.updatedAt);
-            const now = new Date();
-            portionDone = lastUpdate.toDateString() === now.toDateString();
-        }
-        setIsPortionComplete(portionDone);
-
-        setTodayTasks(dueToday + (portionDone ? 0 : 1));
+       
+        setTodayTasks(dueToday );
 
     }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
 
     const navItems = [
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, status: !isPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount },
+        { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount, status: true },
         { href: '/statistics', icon: BarChart3, label: 'Statistics' },
         { href: '/docs', icon: HelpCircle, label: 'Docs' },
         { href: '/settings', icon: Settings, label: 'Settings' },

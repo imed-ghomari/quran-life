@@ -43,7 +43,7 @@ const KanbanCard = ({
 
     const handleDeleteClick = async () => {
         setMenuOpen(false);
-        
+
         if (window.confirm("Are you sure you want to delete this mindmap? This action cannot be undone and you will lose all progress on this map.")) {
             setIsDeleting(true);
             try {
@@ -219,7 +219,12 @@ function renderCardZones({
                 </span>
 
                 {/* Menu Trigger */}
-                <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
+                <div
+                    className="relative z-10"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                >
                     <CardMenuTrigger
                         buttonRef={menuButtonRef}
                         onClick={handleMenuClick}

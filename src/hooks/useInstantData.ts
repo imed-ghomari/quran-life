@@ -139,7 +139,10 @@ export function useInstantMindMaps() {
         const existing = mindmaps.find(m => Number((m as any).surahId) === surahId);
         const id = existing ? (existing as any).id : crypto.randomUUID();
 
-        const sanitizedData: any = { ...mapData };
+        // Merge existing data with new data to preserve fields like anchors
+        const mergedData = existing ? { ...existing, ...mapData } : mapData;
+        
+        const sanitizedData: any = { ...mergedData };
         if (sanitizedData.imageUrl === null) delete sanitizedData.imageUrl;
         if (sanitizedData.imageUrlDark === null) delete sanitizedData.imageUrlDark;
 
@@ -156,8 +159,11 @@ export function useInstantMindMaps() {
         const existing = partMindMaps.find(m => Number((m as any).partId) === partId);
         const id = existing ? existing.id : crypto.randomUUID();
 
+        // Merge existing data with new data to preserve all fields
+        const mergedData = existing ? { ...existing, ...mapData } : mapData;
+
         return db.transact(db.tx.partMindMaps[id].update({
-            ...mapData,
+            ...mergedData,
             partId,
             userId: user.id,
             updatedAt: new Date().toISOString()

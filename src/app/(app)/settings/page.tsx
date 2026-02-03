@@ -1859,23 +1859,29 @@ export default function SettingsPage() {
                                                         <div className="mobile-subgroup-list">
                                                             {/* Issue #10: Filter by active part */}
                                                             {(() => {
-                                                                const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
-                                                                    .filter(surahId => {
-                                                                        const surah = getSurah(surahId!);
-                                                                        if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
-                                                                        if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                                const learnedSurahs = settings.learnedVerses || {};
+                                                                const filteredSurahs = SURAHS
+                                                                    .filter(surah => {
+                                                                        // Filter by active part (show all if part 5)
+                                                                        if (settings.activePart !== 5 && surah.part !== settings.activePart) return false;
+                                                                        // Only show learned surahs (have entries in learnedVerses)
+                                                                      
+                                                                        // Only show non-skipped surahs
+                                                                        if (settings.skippedSurahs?.includes(surah.id)) return false;
                                                                         return true;
                                                                     })
-                                                                    .sort((a, b) => (a || 0) - (b || 0));
+                                                                    .map(surah => surah.id)
+                                                                    .sort((a, b) => a - b);
 
                                                                 if (filteredSurahs.length === 0) {
                                                                     return (
-                                                                        <div className="empty-state" style={{ padding: '1rem' }}>No verse nodes in Part {settings.activePart}</div>
+                                                                        <div className="empty-state" style={{ padding: '1rem' }}>No learned surahs in Part {settings.activePart}</div>
                                                                     );
                                                                 }
 
                                                                 return filteredSurahs.map(surahId => {
                                                                     const surah = getSurah(surahId!);
+                                                                    const learnedVerses = settings.learnedVerses?.[surahId.toString()] || [];
                                                                     const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
                                                                     return (
                                                                         <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
@@ -1887,7 +1893,7 @@ export default function SettingsPage() {
                                                                         })}>
                                                                             <span>{surah?.name}</span>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <span className="status-badge">{surahNodes.length}</span>
+                                                                                <span className="status-badge">{learnedVerses.length}</span>
                                                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                             </div>
                                                                         </div>
@@ -1900,7 +1906,7 @@ export default function SettingsPage() {
                                             </div>
                                         ) : (
                                             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                                <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                                                <table className="debug-table" style={{ minWidth: '700px', width: '100%'}}>
                                                     <thead>
                                                         <tr>
                                                             <th>Target / Range</th>
@@ -2103,26 +2109,30 @@ export default function SettingsPage() {
                                                             <>
                                                                 {/* Issue #10: Filter by active part, show only learned surahs */}
                                                                 {(() => {
-                                                                    const filteredSurahs = Array.from(new Set(memoryNodes.filter(n => n.type === 'verse_segment').map(n => n.surahId)))
-                                                                        .filter(surahId => {
-                                                                            const surah = getSurah(surahId!);
+                                                                    const learnedSurahs = settings.learnedVerses || {};
+                                                                    const filteredSurahs = SURAHS
+                                                                        .filter(surah => {
                                                                             // Filter by active part (show all if part 5)
-                                                                            if (settings.activePart !== 5 && surah?.part !== settings.activePart) return false;
+                                                                            if (settings.activePart !== 5 && surah.part !== settings.activePart) return false;
+                                                                            // Only show learned surahs (have entries in learnedVerses)
+                                                                           
                                                                             // Only show non-skipped surahs
-                                                                            if (settings.skippedSurahs?.includes(surahId!)) return false;
+                                                                            if (settings.skippedSurahs?.includes(surah.id)) return false;
                                                                             return true;
                                                                         })
-                                                                        .sort((a, b) => (a || 0) - (b || 0));
+                                                                        .map(surah => surah.id)
+                                                                        .sort((a, b) => a - b);
 
                                                                     if (filteredSurahs.length === 0) {
                                                                         return (
-                                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No verse nodes in Part {settings.activePart}</td></tr>
+                                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No learned surahs in Part {settings.activePart}</td></tr>
                                                                         );
                                                                     }
 
                                                                     return filteredSurahs.map(surahId => {
                                                                         const surah = getSurah(surahId!);
                                                                         const surahKey = `verse-surah-${surahId}`;
+                                                                        const learnedVerses = settings.learnedVerses?.[surahId.toString()] || [];
                                                                         const surahNodes = memoryNodes
                                                                             .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
                                                                             .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
@@ -2134,7 +2144,7 @@ export default function SettingsPage() {
                                                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                                                 <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
-                                                                                                {surah?.id}. {surah?.name} ({surahNodes.length})
+                                                                                                {surah?.id}. {surah?.name} ({learnedVerses.length})
                                                                                             </div>
                                                                                             {/* Issue #3: Bulk maturity controls per surah */}
                                                                                             <select
@@ -2361,7 +2371,7 @@ export default function SettingsPage() {
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                            <table className="debug-table" style={{ minWidth: '700px', width: '100%' }}>
+                                            <table className="debug-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
                                                 <thead>
                                                     <tr>
                                                         <th style={{ width: '50px' }}></th>
@@ -2533,7 +2543,7 @@ export default function SettingsPage() {
                                                                                     </tr>
                                                                                     {isDetailExpanded && (
                                                                                         <tr>
-                                                                                            <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px' }}>
+                                                                                            <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px', maxWidth:'0', overflow:'hidden' }}>
                                                                                                 <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
                                                                                                     <div className="mut-text">
                                                                                                         <div className="mut-text-label" style={{ marginBottom: '0.75rem' }}>
