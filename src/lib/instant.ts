@@ -69,6 +69,8 @@ const schema = i.schema({
     mutashabihatDecisions: i.entity({
       phraseId: i.string(), // key
       status: i.string(), // 'pending' | 'ignored' | 'solved_mindmap' | 'solved_note'
+      notes: i.string(),
+      confirmedAt: i.string(),
       timestamp: i.string(),
       userId: i.string(),
     }),

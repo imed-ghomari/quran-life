@@ -552,7 +552,8 @@ export function DesktopAnchorBuilder({
                     <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Anchors</span>
                 </div>
                 {!isEditing ? (
-                    <button className="btn btn-secondary" onClick={() => {
+                    <button className="btn btn-secondary"
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => {
                         if (hasReviewedHistory) {
                             if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying anchors will reset the review progress (memory nodes) for these chunks.\n\nAre you sure you want to proceed?")) {
                                 return;
@@ -585,7 +586,7 @@ export function DesktopAnchorBuilder({
                     borderRadius: '8px',
                     cursor: isEditing ? 'pointer' : 'default',
                     marginTop: '1rem',
-                    marginBottom: '2rem',
+                    marginBottom: '1rem',
                     border: '1px solid var(--border)'
                 }}
             >

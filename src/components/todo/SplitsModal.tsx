@@ -105,92 +105,82 @@ export default function SplitsModal({
             </div>
         );
     }
+return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        {/* Backdrop */}
+        <div
+            className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'
+                }`}
+            onClick={onClose}
+            aria-hidden="true"
+        />
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center  ">
+        {/* Modal */}
+        <div
+            className={`
+                relative w-2xl 
+                max-h-[calc(100vh-4rem)]
+                mx-auto
+                bg-[var(--background)]
+                border border-[var(--border)]
+                rounded-2xl
+                shadow-2xl
+                overflow-hidden
+                flex flex-col
+                transform transition-all duration-300
+                ${isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
+            `}
+        >
+           
+            {/* Header */}
+<div className="flex items-start justify-between px-6 pt-5 pb-4 gap-4" style={{ paddingLeft: '16px', paddingRight: '14px', paddingTop: '17px' }}>
+    <div className="flex-1">
+        <h2 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
+            Splits Configuration
+        </h2>
+       <p className="text-sm text-[var(--foreground-secondary)] mt-1 !mb-3">
+            Adjust anchor points for optimal memorization
+           
+        </p>
+    </div>
 
-            {/* Backdrop */}
-            <div
-                className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'
-                    }`}
-                onClick={onClose}
-                aria-hidden="true"
-            />
-
-            {/* Modal */}
-            <div
-                className={`
-        relative w-2xl 
-        max-h-[calc(100vh-4rem)]
-        mx-auto
-        bg-[var(--background)]
-        border border-[var(--border)]
-        rounded-2xl
-        shadow-2xl
-        overflow-hidden
-        transform transition-all duration-300
-        ${isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
-      `}
-            >
-            
-             
-
-                    {/* Header */}
-                    {/* Header */}
-<div className="flex items-start justify-between px-6">
-    <div>
-                           
-                            <h2 className="text-xl font-bold tracking-tight mt-4">
-                                <br></br>
-                                Splits Configuration
-                            </h2>
-                            
-                            <p className="text-sm text-[var(--foreground-secondary)] mt-1">
-
-                                Adjust anchor points for optimal memorization
-                            </p>
-                        </div>
-
-                        <button
-                            onClick={onClose}
-                            className="p-2 mt-4 rounded-lg cursor-pointer hover:bg-[var(--background-secondary)] transition-colors"
-                        >
-                            <X size={22} />
-                        </button>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 overflow-y-auto pr-1 flex flex-col">
-
-                        {(mindmapImageUrl || snapshot) && (
-                            <div className="border border-[var(--border)] rounded-lg overflow-hidden h-[280px] bg-[var(--background-secondary)]">
-                                <MindmapViewer
-                                    snapshot={snapshot}
-                                    imageUrl={mindmapImageUrl}
-                                    imageUrlDark={mindmapImageUrlDark}
-                                    isDark={isDark || false}
-                                    title="Reference Map"
-                                    height="100%"
-                                />
-                            </div>
-                        )}
-
-                        <DesktopAnchorBuilder
-                            surahId={surahId}
-                            verseCount={verseCount}
-                            builderState={builderState}
-                            onAddBreak={onAddBreak}
-                            onRemoveBreak={onRemoveBreak}
-                            onSave={() => {
-                                onSave();
-                                onClose();
-                            }}
-                            hasReviewedHistory={hasReviewedHistory}
+    <button
+        onClick={onClose}
+        className="p-2 rounded-lg hover:bg-[var(--background-secondary)] transition-colors flex-shrink-0 ml-4 cursor-pointer"
+    >
+        <X size={22} />
+    </button>
+</div>
+ <br></br>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col ">
+                {(mindmapImageUrl || snapshot) && (
+                    <div className="border border-[var(--border)] rounded-lg overflow-hidden h-[280px] bg-[var(--background-secondary)]">
+                        <MindmapViewer
+                            snapshot={snapshot}
+                            imageUrl={mindmapImageUrl}
+                            imageUrlDark={mindmapImageUrlDark}
+                            isDark={isDark || false}
+                            title="Reference Map"
+                            height="100%"
                         />
                     </div>
-               
+                )}
+
+                <DesktopAnchorBuilder
+                    surahId={surahId}
+                    verseCount={verseCount}
+                    builderState={builderState}
+                    onAddBreak={onAddBreak}
+                    onRemoveBreak={onRemoveBreak}
+                    onSave={() => {
+                        onSave();
+                        onClose();
+                    }}
+                    hasReviewedHistory={hasReviewedHistory}
+                />
             </div>
         </div>
-    );
-
+    </div>
+);
 }
