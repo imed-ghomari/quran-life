@@ -181,6 +181,37 @@ export default function SettingsPage() {
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'appearance' | null>(null);
 
+    const latestPartMindmaps = useMemo(() => {
+        const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
+        const latestMap: { [key: number]: MemoryNode } = {};
+        partMindmapNodes.forEach(node => {
+            const part = (node as any).part;
+            if (node.createdAt) {
+                const existingNode = latestMap[part];
+                if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
+                    latestMap[part] = node;
+                }
+            }
+        });
+        return Object.values(latestMap);
+    }, [memoryNodes]);
+
+    const latestSurahMindmaps = useMemo(() => {
+        const surahMindmapNodes = memoryNodes.filter(n => (n as any).type === 'mindmap');
+        const latestMap: { [key: number]: MemoryNode } = {};
+        surahMindmapNodes.forEach(node => {
+            const surahId = (node as any).surahId;
+            if (node.createdAt) {
+                const existingNode = latestMap[surahId];
+                if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
+                    latestMap[surahId] = node;
+                }
+            }
+        });
+        return Object.values(latestMap);
+    }, [memoryNodes]);
+
+
     // Sync instant decisions to local state for easier lookups
     useEffect(() => {
         const decisionsMap: Record<string, MutashabihatDecision> = {};
@@ -1128,11 +1159,17 @@ export default function SettingsPage() {
         saveSettings({ skippedSurahs: currentSkipped.filter(s => s !== id) });
     };
 
-    const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { id: _ignored, ...updateWithoutId } = update;
-        await updateInstantDecision(phraseId, updateWithoutId);
+  const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
+    const { id: _ignored, ...updateWithoutId } = update;
+    
+    // Convert undefined to null for database compatibility
+    const cleanUpdate = {
+        ...updateWithoutId,
+        confirmedAt: updateWithoutId.confirmedAt ?? null
     };
+    
+    await updateInstantDecision(phraseId, cleanUpdate);
+};
 
     const handleAddCustomMutashabih = async (mut: any) => {
         const [s1, a1] = mut.verseId.split(':').map(Number);
@@ -1697,11 +1734,11 @@ export default function SettingsPage() {
                                                                 id: 'mindmaps-part',
                                                                 title: 'Part Mindmaps',
                                                                 type: 'part_mindmap' as any,
-                                                                nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
+                                                                nodes: latestPartMindmaps
                                                             })}>
                                                                 <span>Part Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
+                                                                    <span className="status-badge">{latestPartMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -1709,11 +1746,11 @@ export default function SettingsPage() {
                                                                 id: 'mindmaps-surah',
                                                                 title: 'Surah Mindmaps',
                                                                 type: 'mindmap' as any,
-                                                                nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
+                                                                nodes: latestSurahMindmaps
                                                             })}>
                                                                 <span>Surah Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
+                                                                    <span className="status-badge">{latestSurahMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -2391,19 +2428,20 @@ export default function SettingsPage() {
                                                                                         </td>
                                                                                         <td>
                                                                                             <button
-                                                                                                className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    handleDecisionUpdate(representativeAbs, {
-                                                                                                        ...existing,
-                                                                                                        confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                                                                    }, decisionKey);
-                                                                                                }}
-                                                                                                title={isConfirmed ? "Resolved" : "Not Resolved"}
-                                                                                                style={{ minWidth: '100px' }}
-                                                                                            >
-                                                                                                {isConfirmed ? 'Resolved' : 'Not Resolved'}
-                                                                                            </button>
+    className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+    onClick={(e) => {
+        e.stopPropagation();
+        const update = isConfirmed 
+            ? { ...existing, confirmedAt: undefined, status: 'pending' as const }
+            : { ...existing, confirmedAt: new Date().toISOString() };
+        handleDecisionUpdate(representativeAbs, update, decisionKey);
+    }}
+    title={isConfirmed ? "Resolved" : "Not Resolved"}
+    style={{ minWidth: '100px' }}
+>
+    {isConfirmed ? 'Resolved' : 'Not Resolved'}
+</button>
+   
                                                                                         </td>
                                                                                         <td>
                                                                                            <input
@@ -2559,17 +2597,17 @@ export default function SettingsPage() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                                         <button
-                                            className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                            onClick={() => {
-                                                handleDecisionUpdate(activeMutSlideOver.representativeAbs, {
-                                                    ...existing,
-                                                    confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                }, activeMutSlideOver.id);
-                                            }}
-                                            style={{ height: '38px', minWidth: '100px' }}
-                                        >
-                                            {isConfirmed ? 'Resolved' : 'Mark Resolved'}
-                                        </button>
+                                        className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                        onClick={() => {
+                                            const update = isConfirmed 
+                                                ? { ...existing, confirmedAt: undefined, status: 'pending' as const }
+                                                : { ...existing, confirmedAt: new Date().toISOString() };
+                                            handleDecisionUpdate(activeMutSlideOver.representativeAbs, update, activeMutSlideOver.id);
+                                        }}
+                                        style={{ height: '38px', minWidth: '100px' }}
+                                    >
+                                        {isConfirmed ? 'Resolved' : 'Mark Resolved'}
+                                    </button>
                                     </div>
                                 </div>
 
