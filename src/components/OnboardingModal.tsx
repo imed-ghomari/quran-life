@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Check,
     ChevronRight,
@@ -32,14 +32,17 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const [selectedPart, setSelectedPart] = useState<QuranPart>(4);
     const [days, setDays] = useState(30);
     const [localSkipped, setLocalSkipped] = useState<number[]>([]);
+    const initializationKey = useRef<string | null>(null);
 
     useEffect(() => {
-        if (settings) {
-            setSelectedPart(settings.activePart || 4);
-            setDays(settings.completionDays || 30);
-            setLocalSkipped(settings.skippedSurahs || []);
-        }
-    }, [settings]);
+        if (!settings || !user) return;
+        const key = `${user.id}-${settings.id ?? 'new'}`;
+        if (initializationKey.current === key) return;
+        setSelectedPart(settings.activePart || 4);
+        setDays(settings.completionDays || 30);
+        setLocalSkipped(settings.skippedSurahs || []);
+        initializationKey.current = key;
+    }, [settings, user]);
 
     if (!settings || !user) return null;
 
