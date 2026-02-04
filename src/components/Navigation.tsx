@@ -29,6 +29,7 @@ function NavigationContent() {
     const [pendingCount, setPendingCount] = useState(0);
     const [todayTasks, setTodayTasks] = useState(0);
     const [isPortionComplete, setIsPortionComplete] = useState(false);
+    const [isDailyPortionComplete, setIsDailyPortionComplete] = useState(false);
 
     useEffect(() => {
         if (!settings) return;
@@ -127,6 +128,13 @@ function NavigationContent() {
         const portionComplete = hasWorkItems && allSurahsComplete && allPartsComplete && similarityItemsFinal.length === 0;
         setIsPortionComplete(portionComplete);
 
+        // Daily portion completion (listening progress updated today)
+        const activeProgress = listeningProgress.find(p => p.partId === settings.activePart);
+        const lastUpdate = activeProgress?.updatedAt ? new Date(activeProgress.updatedAt) : null;
+        const todayDate = new Date();
+        const dailyComplete = !!lastUpdate && lastUpdate.toDateString() === todayDate.toDateString();
+        setIsDailyPortionComplete(dailyComplete);
+
         // Today's reviews
         const today = new Date().toISOString().split('T')[0];
         const dueToday = nodes.filter(n => {
@@ -140,7 +148,7 @@ function NavigationContent() {
     }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, showStatusDot: !isPortionComplete },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, showStatusDot: !isDailyPortionComplete },
         { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount, showStatusDot: false },
         { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },

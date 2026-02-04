@@ -257,6 +257,23 @@ export default function TodayPage() {
         }
     }, [highlightedWordIndex]);
 
+    // Keep review index in sync with changing due queue to avoid blanks
+    useEffect(() => {
+        if (orderedDueNodes.length === 0) {
+            setCurrentReviewIndex(0);
+            setRevealedChunks(0);
+            setCurrentVerseInReview(0);
+            setShowGrading(false);
+            return;
+        }
+        if (currentReviewIndex >= orderedDueNodes.length) {
+            setCurrentReviewIndex(orderedDueNodes.length - 1);
+            setRevealedChunks(0);
+            setCurrentVerseInReview(0);
+            setShowGrading(false);
+        }
+    }, [orderedDueNodes.length, currentReviewIndex]);
+
     useEffect(() => {
         if (theme === 'dark') {
             setIsDark(true);
@@ -807,24 +824,45 @@ export default function TodayPage() {
     }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext]);
 
     useEffect(() => {
-        if (targetBoxRef.current) {
-            const nextBlur = targetBoxRef.current.querySelector('.next-blur') as HTMLElement;
-            if (nextBlur) {
-                // Use manual scrollTo on the container to prevent the whole window from scrolling
-                const container = targetBoxRef.current;
-                const elementTop = nextBlur.offsetTop;
-                const elementHeight = nextBlur.offsetHeight;
-                const containerHeight = container.offsetHeight;
+        if (!targetBoxRef.current) return;
 
-                container.scrollTo({
-                    top: elementTop - (containerHeight / 2) + (elementHeight / 2),
-                    behavior: 'smooth'
-                });
-            } else if (showGrading) {
-                // If we finished the verse, scroll to the bottom of the box
-                targetBoxRef.current.scrollTo({ top: targetBoxRef.current.scrollHeight, behavior: 'smooth' });
+        requestAnimationFrame(() => {
+            if (!targetBoxRef.current) return;
+            const container = targetBoxRef.current;
+            const nextBlur = container.querySelector('.next-blur') as HTMLElement | null;
+
+            if (nextBlur) {
+                const containerHeight = container.offsetHeight;
+                const activeVerse = container.querySelector('.active-verse') as HTMLElement | null;
+
+                if (activeVerse) {
+                    const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
+                    const visibleChunks = textEl
+                        ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
+                        : [];
+                    const lastRevealed = visibleChunks[visibleChunks.length - 1] || activeVerse;
+
+                    const chunkTop = lastRevealed.offsetTop;
+                    const chunkBottom = chunkTop + lastRevealed.offsetHeight;
+                    const viewTop = container.scrollTop;
+                    const viewBottom = viewTop + containerHeight;
+                    const margin = 8;
+
+                    if (chunkTop < viewTop + margin || chunkBottom > viewBottom - margin) {
+                        const desiredTop = chunkTop - (containerHeight / 2) + (lastRevealed.offsetHeight / 2);
+                        container.scrollTo({
+                            top: Math.max(0, desiredTop),
+                            behavior: 'smooth'
+                        });
+                    }
+                    return;
+                }
             }
-        }
+
+            if (showGrading) {
+                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+            }
+        });
     }, [revealedChunks, currentVerseInReview, showGrading]);
 
     // Move isLoaded check to AFTER all hooks
@@ -985,7 +1023,7 @@ export default function TodayPage() {
 
                                     {/* Verse type content */}
                                     {activeContent.type === 'verse' && (
-                                        <div className="review-verse-container">
+                                        <div className="review-verse-container" style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0 }}>
                                             {/* Context */}
                                             {activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
                                                 <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
