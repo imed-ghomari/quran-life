@@ -57,11 +57,12 @@ export default function SearchHighlight() {
             const nodesToProcess: Text[] = [];
             let currentNode = walker.nextNode();
             while (currentNode) {
-                if (currentNode instanceof Text) {
-                    if (currentNode.parentElement?.tagName !== 'SCRIPT' &&
-                        currentNode.parentElement?.tagName !== 'STYLE' &&
-                        terms.some(term => currentNode.textContent?.toLowerCase().includes(term))) {
-                        nodesToProcess.push(currentNode);
+                if (currentNode.nodeType === Node.TEXT_NODE) {
+                    const textNode = currentNode as Text;
+                    if (textNode.parentElement?.tagName !== 'SCRIPT' &&
+                        textNode.parentElement?.tagName !== 'STYLE' &&
+                        terms.some(term => textNode.textContent?.toLowerCase().includes(term))) {
+                        nodesToProcess.push(textNode);
                     }
                 }
                 currentNode = walker.nextNode();
