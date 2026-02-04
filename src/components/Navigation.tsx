@@ -54,7 +54,7 @@ function NavigationContent() {
                     break;
                 }
             }
-            return { id, column };
+            return { id, column, isComplete };
         });
 
         // 2. Part Items
@@ -71,7 +71,7 @@ function NavigationContent() {
                     break;
                 }
             }
-            return { id, column };
+            return { id, column, isComplete };
         });
 
         // 3. Similarity Items
@@ -118,6 +118,15 @@ function NavigationContent() {
 
         setPendingCount(totalPending);
 
+        // Calculate if portion is complete (all surahs and parts are complete)
+        const allSurahsComplete = surahItems.every(item => item.isComplete);
+        const allPartsComplete = partItems.every(item => item.isComplete);
+        const hasWorkItems = surahItems.length > 0 || partItems.length > 0;
+        
+        // Portion is complete when there are items and all are complete, OR no pending items exist
+        const portionComplete = hasWorkItems && allSurahsComplete && allPartsComplete && similarityItemsFinal.length === 0;
+        setIsPortionComplete(portionComplete);
+
         // Today's reviews
         const today = new Date().toISOString().split('T')[0];
         const dueToday = nodes.filter(n => {
@@ -126,16 +135,16 @@ function NavigationContent() {
             return due && due.split('T')[0] <= today;
         }).length;
        
-        setTodayTasks(dueToday );
+        setTodayTasks(dueToday);
 
     }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, status: !isPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount, status: true },
-        { href: '/statistics', icon: BarChart3, label: 'Statistics' },
-        { href: '/docs', icon: HelpCircle, label: 'Docs' },
-        { href: '/settings', icon: Settings, label: 'Settings' },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, showStatusDot: !isPortionComplete },
+        { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount, showStatusDot: false },
+        { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
+        { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
+        { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },
     ];
 
     return (
@@ -143,6 +152,7 @@ function NavigationContent() {
             {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href || (item.href === '/docs' && pathname?.startsWith('/docs'));
+                
                 return (
                     <Link
                         key={item.href}
@@ -150,9 +160,12 @@ function NavigationContent() {
                         className={`nav-item ${isActive ? 'active' : ''}`}
                     >
                         <div className="nav-icon">
+                            {item.showStatusDot && (
+                                <span className="nav-status-dot blue" />
+                            )}
                             <Icon size={22} />
                             {item.badge !== undefined && item.badge > 0 && (
-                                <span className={`nav-badge ${item.status ? 'status-alert' : ''}`}>
+                                <span className="nav-badge">
                                     {item.badge}
                                 </span>
                             )}

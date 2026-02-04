@@ -181,6 +181,55 @@ export default function SettingsPage() {
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'appearance' | null>(null);
 
+    const latestPartMindmaps = useMemo(() => {
+        const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
+        const latestMap: { [key: number]: MemoryNode } = {};
+        partMindmapNodes.forEach(node => {
+            const part = node.partId;
+            if (part === undefined) return;
+            if (node.createdAt) {
+                const existingNode = latestMap[part];
+                if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
+                    latestMap[part] = node;
+                }
+            }
+        });
+        return Object.values(latestMap);
+    }, [memoryNodes]);
+
+    const latestSurahMindmaps = useMemo(() => {
+        const surahMindmapNodes = memoryNodes.filter(n => (n as any).type === 'mindmap');
+        const latestMap: { [key: number]: MemoryNode } = {};
+        surahMindmapNodes.forEach(node => {
+            const surahId = (node as any).surahId;
+            if (node.createdAt) {
+                const existingNode = latestMap[surahId];
+                if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
+                    latestMap[surahId] = node;
+                }
+            }
+        });
+        return Object.values(latestMap);
+    }, [memoryNodes]);
+
+    const latestVerseSegments = useMemo(() => {
+        const verseNodes = memoryNodes.filter(n => n.type === 'verse_segment');
+        const latestMap: Record<string, MemoryNode> = {};
+        verseNodes.forEach(node => {
+            const key = `${node.surahId}-${node.startVerse}-${node.endVerse}`;
+            const existing = latestMap[key];
+            if (!existing) {
+                latestMap[key] = node;
+                return;
+            }
+            if (node.createdAt && (!existing.createdAt || new Date(node.createdAt) > new Date(existing.createdAt))) {
+                latestMap[key] = node;
+            }
+        });
+        return Object.values(latestMap);
+    }, [memoryNodes]);
+
+
     // Sync instant decisions to local state for easier lookups
     useEffect(() => {
         const decisionsMap: Record<string, MutashabihatDecision> = {};
@@ -642,11 +691,11 @@ export default function SettingsPage() {
                                             id: 'mindmaps-part',
                                             title: 'Part Mindmaps',
                                             type: 'part_mindmap' as any as any,
-                                            nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
+                                            nodes: latestPartMindmaps
                                         })}>
                                             <span>Part Mindmaps</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
+                                                <span className="status-badge">{latestPartMindmaps.length}</span>
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
@@ -654,11 +703,11 @@ export default function SettingsPage() {
                                             id: 'mindmaps-surah',
                                             title: 'Surah Mindmaps',
                                             type: 'mindmap' as any as any,
-                                            nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
+                                            nodes: latestSurahMindmaps
                                         })}>
                                             <span>Surah Mindmaps</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
+                                                <span className="status-badge">{latestSurahMindmaps.length}</span>
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
@@ -693,7 +742,7 @@ export default function SettingsPage() {
 
                                             return eligibleSurahs.map(surah => {
                                                 const surahId = surah.id;
-                                                const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                                const surahNodes = latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
 
                                                 // Always show the surah group, even if no nodes exist yet (0 items)
                                                 // This allows users to set maturity for the whole group before starting reviews
@@ -707,9 +756,6 @@ export default function SettingsPage() {
                                                     })}>
                                                         <span>{surah.name}</span>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <span className={`status-badge ${surahNodes.length === 0 ? 'neutral' : ''}`}>
-                                                                {surahNodes.length}
-                                                            </span>
                                                             <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                         </div>
                                                     </div>
@@ -1128,11 +1174,17 @@ export default function SettingsPage() {
         saveSettings({ skippedSurahs: currentSkipped.filter(s => s !== id) });
     };
 
-    const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { id: _ignored, ...updateWithoutId } = update;
-        await updateInstantDecision(phraseId, updateWithoutId);
+  const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
+    const { id: _ignored, ...updateWithoutId } = update;
+    
+    // Convert undefined to null for database compatibility
+    const cleanUpdate = {
+        ...updateWithoutId,
+        confirmedAt: updateWithoutId.confirmedAt ?? null
     };
+    
+    await updateInstantDecision(phraseId, cleanUpdate);
+};
 
     const handleAddCustomMutashabih = async (mut: any) => {
         const [s1, a1] = mut.verseId.split(':').map(Number);
@@ -1697,11 +1749,11 @@ export default function SettingsPage() {
                                                                 id: 'mindmaps-part',
                                                                 title: 'Part Mindmaps',
                                                                 type: 'part_mindmap' as any,
-                                                                nodes: memoryNodes.filter(n => (n as any).type === 'part_mindmap')
+                                                                nodes: latestPartMindmaps
                                                             })}>
                                                                 <span>Part Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'part_mindmap').length}</span>
+                                                                    <span className="status-badge">{latestPartMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -1709,11 +1761,11 @@ export default function SettingsPage() {
                                                                 id: 'mindmaps-surah',
                                                                 title: 'Surah Mindmaps',
                                                                 type: 'mindmap' as any,
-                                                                nodes: memoryNodes.filter(n => (n as any).type === 'mindmap')
+                                                                nodes: latestSurahMindmaps
                                                             })}>
                                                                 <span>Surah Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{memoryNodes.filter(n => (n as any).type === 'mindmap').length}</span>
+                                                                    <span className="status-badge">{latestSurahMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -1756,8 +1808,7 @@ export default function SettingsPage() {
 
                                                                 return filteredSurahs.map(surahId => {
                                                                     const surah = getSurah(surahId!);
-                                                                    const learnedVerses = settings.learnedVerses?.[surahId.toString()] || [];
-                                                                    const surahNodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                                                    const surahNodes = latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
                                                                     return (
                                                                         <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                                             id: `verse-surah-${surahId}`,
@@ -1768,7 +1819,6 @@ export default function SettingsPage() {
                                                                         })}>
                                                                             <span>{surah?.name}</span>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <span className="status-badge">{learnedVerses.length}</span>
                                                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                             </div>
                                                                         </div>
@@ -1853,9 +1903,8 @@ export default function SettingsPage() {
                                                                     </td>
                                                                 </tr>
                                                                 {expandedGroups['mindmaps-part'] && (
-                                                                    memoryNodes.filter(n => (n as any).type === 'part_mindmap').length > 0 ? (
-                                                                        memoryNodes
-                                                                            .filter(n => (n as any).type === 'part_mindmap')
+                                                                    latestPartMindmaps.length > 0 ? (
+                                                                        latestPartMindmaps
                                                                             .sort((a, b) => (a.partId || 0) - (b.partId || 0))
                                                                             .map(node => (
                                                                                 <tr key={node.id} className="node-row">
@@ -1916,9 +1965,8 @@ export default function SettingsPage() {
                                                                     </td>
                                                                 </tr>
                                                                 {expandedGroups['mindmaps-surah'] && (
-                                                                    memoryNodes.filter(n => (n as any).type === 'mindmap').length > 0 ? (
-                                                                        memoryNodes
-                                                                            .filter(n => (n as any).type === 'mindmap')
+                                                                    latestSurahMindmaps.length > 0 ? (
+                                                                        latestSurahMindmaps
                                                                             .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
                                                                             .map(node => (
                                                                                 <tr key={node.id} className="node-row">
@@ -2007,8 +2055,7 @@ export default function SettingsPage() {
                                                                     return filteredSurahs.map(surahId => {
                                                                         const surah = getSurah(surahId!);
                                                                         const surahKey = `verse-surah-${surahId}`;
-                                                                        const learnedVerses = settings.learnedVerses?.[surahId.toString()] || [];
-                                                                        const surahNodes = memoryNodes
+                                                                        const surahNodes = latestVerseSegments
                                                                             .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
                                                                             .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
 
@@ -2019,7 +2066,7 @@ export default function SettingsPage() {
                                                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                                                 <ChevronDown size={14} style={{ transform: expandedGroups[surahKey] ? 'rotate(180deg)' : 'none' }} />
-                                                                                                {surah?.id}. {surah?.name} ({learnedVerses.length})
+                                                                                                {surah?.id}. {surah?.name}
                                                                                             </div>
                                                                                             {/* Issue #3: Bulk maturity controls per surah */}
                                                                                             <select
@@ -2391,19 +2438,20 @@ export default function SettingsPage() {
                                                                                         </td>
                                                                                         <td>
                                                                                             <button
-                                                                                                className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    handleDecisionUpdate(representativeAbs, {
-                                                                                                        ...existing,
-                                                                                                        confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                                                                    }, decisionKey);
-                                                                                                }}
-                                                                                                title={isConfirmed ? "Resolved" : "Not Resolved"}
-                                                                                                style={{ minWidth: '100px' }}
-                                                                                            >
-                                                                                                {isConfirmed ? 'Resolved' : 'Not Resolved'}
-                                                                                            </button>
+    className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+    onClick={(e) => {
+        e.stopPropagation();
+        const update = isConfirmed 
+            ? { ...existing, confirmedAt: undefined, status: 'pending' as const }
+            : { ...existing, confirmedAt: new Date().toISOString() };
+        handleDecisionUpdate(representativeAbs, update, decisionKey);
+    }}
+    title={isConfirmed ? "Resolved" : "Not Resolved"}
+    style={{ minWidth: '100px' }}
+>
+    {isConfirmed ? 'Resolved' : 'Not Resolved'}
+</button>
+   
                                                                                         </td>
                                                                                         <td>
                                                                                            <input
@@ -2559,17 +2607,17 @@ export default function SettingsPage() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                                         <button
-                                            className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
-                                            onClick={() => {
-                                                handleDecisionUpdate(activeMutSlideOver.representativeAbs, {
-                                                    ...existing,
-                                                    confirmedAt: isConfirmed ? undefined : new Date().toISOString()
-                                                }, activeMutSlideOver.id);
-                                            }}
-                                            style={{ height: '38px', minWidth: '100px' }}
-                                        >
-                                            {isConfirmed ? 'Resolved' : 'Mark Resolved'}
-                                        </button>
+                                        className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                        onClick={() => {
+                                            const update = isConfirmed 
+                                                ? { ...existing, confirmedAt: undefined, status: 'pending' as const }
+                                                : { ...existing, confirmedAt: new Date().toISOString() };
+                                            handleDecisionUpdate(activeMutSlideOver.representativeAbs, update, activeMutSlideOver.id);
+                                        }}
+                                        style={{ height: '38px', minWidth: '100px' }}
+                                    >
+                                        {isConfirmed ? 'Resolved' : 'Mark Resolved'}
+                                    </button>
                                     </div>
                                 </div>
 
@@ -2930,14 +2978,13 @@ export default function SettingsPage() {
                                         }
 
                                         // Update local state to reflect changes
-                                        setActiveSlideOverGroup(prev => {
-                                            if (!prev) return null;
-                                            const updatedNodes = instantNodes.filter(n => {
-                                                if (prev.type === 'verse_segment') return n.type === 'verse_segment' && n.surahId === prev.surahId;
-                                                return n.type === prev.type;
+                                            setActiveSlideOverGroup(prev => {
+                                                if (!prev) return null;
+                                                const updatedNodes = prev.type === 'verse_segment'
+                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === prev.surahId)
+                                                    : instantNodes.filter(n => n.type === prev.type);
+                                                return { ...prev, nodes: updatedNodes };
                                             });
-                                            return { ...prev, nodes: updatedNodes };
-                                        });
                                     }}
                                 >
                                     <option value="">Set Subgroup...</option>
@@ -2974,10 +3021,9 @@ export default function SettingsPage() {
                                                             // Update local nodes in slideover
                                                             setActiveSlideOverGroup(prev => {
                                                                 if (!prev) return null;
-                                                                const updatedNodes = instantNodes.filter(n => {
-                                                                    if (prev.type === 'verse_segment') return n.type === 'verse_segment' && n.surahId === prev.surahId;
-                                                                    return n.type === prev.type;
-                                                                });
+                                                                const updatedNodes = prev.type === 'verse_segment'
+                                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === prev.surahId)
+                                                                    : instantNodes.filter(n => n.type === prev.type);
                                                                 return { ...prev, nodes: updatedNodes };
                                                             });
                                                         }}

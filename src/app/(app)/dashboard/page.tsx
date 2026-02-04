@@ -36,7 +36,7 @@ import {
     useInstantListeningStats,
     useInstantListeningProgress,
 } from '@/hooks/useInstantData';
-import { reviewCard, getSchedulingPreview } from '@/lib/fsrs';
+import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
 import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
 import { useTheme } from '@/components/ThemeProvider';
@@ -57,7 +57,7 @@ function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
 
 export default function TodayPage() {
     const { settings, isLoading: settingsLoading } = useInstantSettings();
-    const { dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
+    const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
     const { saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
     const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
@@ -87,18 +87,6 @@ export default function TodayPage() {
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
 
-    // State for completed items review queue
-    const [completedReviewQueue, setCompletedReviewQueue] = useState<Array<{
-        type: 'surah_mindmap' | 'surah_verse' | 'part_mindmap';
-        surahId?: number;
-        partId?: QuranPart;
-        mindmap?: any;
-        verses?: Verse[];
-        surah?: any;
-    }>>([]);
-    const [completedReviewIndex, setCompletedReviewIndex] = useState(0);
-    const [showCompletedReview, setShowCompletedReview] = useState(false);
-
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
         const mindmap = mindmaps.find(m => m.surahId === surahId);
@@ -106,69 +94,147 @@ export default function TodayPage() {
         return (mindmap.anchors as any[]).find(a => a.startVerse === start && a.endVerse === end);
     }, [mindmaps]);
 
-    // Build completed items review queue from kanban state
-    const buildCompletedReviewQueue = useCallback(() => {
-        if (!settings?.kanbanColumns || !allVerses.length) return [];
+    // Order due nodes to keep mindmap + full-surah verses adjacent by surah
+    const orderedDueNodes = useMemo(() => {
+        if (!dueNodes.length) return [];
 
-        const completedIds = settings.kanbanColumns.complete || [];
+        const originalIndex = new Map<string, number>();
+        dueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
 
-        type ReviewItem = {
-            type: 'surah_mindmap' | 'surah_verse' | 'part_mindmap';
-            surahId?: number;
-            partId?: QuranPart;
-            mindmap?: any;
-            verses?: Verse[];
-            surah?: any;
+        const surahGroups = new Map<number, { mindmap?: MemoryNode; fullSurah?: MemoryNode; others: MemoryNode[] }>();
+        const otherNodes: MemoryNode[] = [];
+
+        const isFullSurah = (node: MemoryNode) => {
+            if (node.type !== 'verse_segment' || !node.surahId) return false;
+            const surah = getSurah(node.surahId);
+            if (!surah) return false;
+            return node.startVerse === 1 && node.endVerse === surah.verseCount;
         };
 
-        const reviewItems: ReviewItem[] = [];
-
-        // Process completed items - for each surah, add mindmap then verses as separate steps
-        completedIds.forEach(id => {
-            if (id.startsWith('surah-')) {
-                const surahIdNum = parseInt(id.replace('surah-', ''));
-                const surah = getSurah(surahIdNum);
-                if (surah) {
-                    const mindmap = mindmaps.find(m => Number(m.surahId) === surahIdNum);
-                    if (mindmap) {
-                        // 1. Add mindmap review item
-                        reviewItems.push({
-                            type: 'surah_mindmap',
-                            surahId: surahIdNum,
-                            surah,
-                            mindmap
-                        });
-                    }
-
-                    // 2. Add all verses of the surah
-                    const surahVerses = allVerses.filter(v => Number(v.surahId) === surahIdNum);
-
-                    if (surahVerses.length > 0) {
-                        reviewItems.push({
-                            type: 'surah_verse',
-                            surahId: surahIdNum,
-                            surah,
-                            verses: surahVerses
-                        });
-                    }
+        dueNodes.forEach(node => {
+            if (node.surahId) {
+                if (!surahGroups.has(node.surahId)) {
+                    surahGroups.set(node.surahId, { others: [] });
                 }
-            } else if (id.startsWith('part-')) {
-                const partId = parseInt(id.replace('part-', '')) as QuranPart;
-                const partMindmap = partMindMaps.find(pm => Number(pm.partId) === partId);
-
-                if (partMindmap) {
-                    // Only add mindmap for parts
-                    reviewItems.push({
-                        type: 'part_mindmap',
-                        partId,
-                        mindmap: partMindmap
-                    });
+                const group = surahGroups.get(node.surahId)!;
+                if (node.type === 'mindmap') {
+                    group.mindmap = node;
+                } else if (isFullSurah(node)) {
+                    group.fullSurah = node;
+                } else {
+                    group.others.push(node);
                 }
+            } else {
+                otherNodes.push(node);
             }
         });
 
-        return reviewItems;
-    }, [settings?.kanbanColumns, allVerses, mindmaps, partMindMaps]);
+        const ordered: MemoryNode[] = [];
+        const surahIds = Array.from(surahGroups.keys()).sort((a, b) => a - b);
+        surahIds.forEach(surahId => {
+            const group = surahGroups.get(surahId)!;
+            if (group.mindmap) ordered.push(group.mindmap);
+            if (group.fullSurah) ordered.push(group.fullSurah);
+            if (group.others.length) {
+                group.others.sort((a, b) => (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0));
+                ordered.push(...group.others);
+            }
+        });
+
+        if (otherNodes.length) {
+            otherNodes.sort((a, b) => (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0));
+            ordered.push(...otherNodes);
+        }
+
+        return ordered;
+    }, [dueNodes]);
+
+    // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
+    useEffect(() => {
+        const completedIds = settings?.kanbanColumns?.complete || [];
+        if (completedIds.length === 0) return;
+
+        const completedSurahIds = completedIds
+            .filter(id => id.startsWith('surah-'))
+            .map(id => parseInt(id.replace('surah-', ''), 10))
+            .filter(id => Number.isFinite(id));
+
+        const completedPartIds = completedIds
+            .filter(id => id.startsWith('part-'))
+            .map(id => parseInt(id.replace('part-', ''), 10) as QuranPart)
+            .filter(id => Number.isFinite(id));
+
+        const nodesToCreate: MemoryNode[] = [];
+
+        completedSurahIds.forEach(surahId => {
+            const surah = getSurah(surahId);
+            if (!surah) return;
+
+            const fullSurahTargetId = `completed-surah-${surahId}`;
+            const fullSurahNodeExists = nodes.some(n =>
+                n.targetId === fullSurahTargetId ||
+                (
+                    n.type === 'verse_segment' &&
+                    n.surahId === surahId &&
+                    n.startVerse === 1 &&
+                    n.endVerse === surah.verseCount
+                )
+            );
+
+            if (!fullSurahNodeExists) {
+                nodesToCreate.push({
+                    id: crypto.randomUUID(),
+                    type: 'verse_segment',
+                    surahId,
+                    startVerse: 1,
+                    endVerse: surah.verseCount,
+                    targetId: fullSurahTargetId,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString()
+                });
+            }
+
+            const mindmapTargetId = `mindmap-${surahId}`;
+            const mindmap = mindmaps.find(m => Number(m.surahId) === surahId);
+            const mindmapNodeExists = nodes.some(n =>
+                n.targetId === mindmapTargetId ||
+                (n.type === 'mindmap' && n.surahId === surahId)
+            );
+            if (mindmap && !mindmapNodeExists) {
+                nodesToCreate.push({
+                    id: crypto.randomUUID(),
+                    type: 'mindmap',
+                    surahId,
+                    targetId: mindmapTargetId,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString()
+                });
+            }
+        });
+
+        completedPartIds.forEach(partId => {
+            const partTargetId = `part-mindmap-${partId}`;
+            const partMindmap = partMindMaps.find(pm => Number(pm.partId) === partId);
+            const partMindmapNodeExists = nodes.some(n =>
+                n.targetId === partTargetId ||
+                (n.type === 'part_mindmap' && n.partId === partId)
+            );
+            if (partMindmap && !partMindmapNodeExists) {
+                nodesToCreate.push({
+                    id: crypto.randomUUID(),
+                    type: 'part_mindmap',
+                    partId,
+                    targetId: partTargetId,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString()
+                });
+            }
+        });
+
+        if (nodesToCreate.length > 0) {
+            nodesToCreate.forEach(node => updateInstantNode(node));
+        }
+    }, [settings, nodes, mindmaps, partMindMaps, updateInstantNode]);
 
     const isLoaded = isVersesLoaded && !settingsLoading && !nodesLoading;
 
@@ -207,13 +273,6 @@ export default function TodayPage() {
             }
         }
     }, [theme]);
-
-    // Populate completed review queue when settings or data changes
-    useEffect(() => {
-        const queue = buildCompletedReviewQueue();
-        setCompletedReviewQueue(queue);
-        setCompletedReviewIndex(0);
-    }, [buildCompletedReviewQueue]);
 
     // Mindmap Editor States
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
@@ -463,7 +522,7 @@ export default function TodayPage() {
 
     // Grade review
     const handleGrade = useCallback((remembered: boolean) => {
-        const node = dueNodes[currentReviewIndex];
+        const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
 
         const errorId = !remembered ? crypto.randomUUID() : undefined;
@@ -539,7 +598,7 @@ export default function TodayPage() {
 
         addToast(remembered ? 'success' : 'error', remembered ? 'Remembered' : 'Forgot', info);
 
-        if (currentReviewIndex < dueNodes.length - 1) {
+        if (currentReviewIndex < orderedDueNodes.length - 1) {
             setCurrentReviewIndex(prev => prev + 1);
             // Move to next item - stay hidden until clicked
             setRevealedChunks(0);
@@ -548,10 +607,10 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [dueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
 
     const handlePostpone = useCallback(() => {
-        const node = dueNodes[currentReviewIndex];
+        const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
 
         setLastGrading({
@@ -578,7 +637,7 @@ export default function TodayPage() {
 
         addToast('postpone', 'Postponed to tomorrow', info);
 
-        if (currentReviewIndex < dueNodes.length - 1) {
+        if (currentReviewIndex < orderedDueNodes.length - 1) {
             setCurrentReviewIndex(prev => prev + 1);
             setRevealedChunks(0);
             setCurrentVerseInReview(0);
@@ -586,7 +645,7 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [dueNodes, currentReviewIndex, addToast, updateInstantNode]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode]);
 
     const handleUndo = () => {
         if (!lastGrading) return;
@@ -639,8 +698,8 @@ export default function TodayPage() {
 
     // Get content
     const getCurrentReviewContent = () => {
-        if (dueNodes.length === 0 || currentReviewIndex >= dueNodes.length) return null;
-        const node = dueNodes[currentReviewIndex];
+        if (orderedDueNodes.length === 0 || currentReviewIndex >= orderedDueNodes.length) return null;
+        const node = orderedDueNodes[currentReviewIndex];
 
         if (node.type === 'part_mindmap') {
             const pm = partMindMaps.find(m => m.partId === node.partId);
@@ -683,26 +742,8 @@ export default function TodayPage() {
         }
     };
 
-    // Get current completed review content
-    const getCurrentCompletedReviewContent = () => {
-        if (completedReviewQueue.length === 0 || completedReviewIndex >= completedReviewQueue.length) return null;
-        const item = completedReviewQueue[completedReviewIndex];
-
-        if (item.type === 'surah_mindmap') {
-            return { type: 'mindmap', surah: item.surah, mindmap: item.mindmap, verses: item.verses };
-        } else if (item.type === 'surah_verse') {
-            return { type: 'verse', surah: item.surah, verses: item.verses, contextVerses: [] };
-        } else if (item.type === 'part_mindmap') {
-            return { type: 'part_mindmap', partId: item.partId, mindmap: item.mindmap };
-        }
-        return null;
-    };
-
     const reviewContent = getCurrentReviewContent();
-    const completedReviewContent = getCurrentCompletedReviewContent();
-
-    // Use the appropriate content based on which mode we're in
-    const activeContent = showCompletedReview ? completedReviewContent : reviewContent;
+    const activeContent = reviewContent;
 
     // Reveal Logic
     const getCurrentVerseChunks = () => {
@@ -733,46 +774,25 @@ export default function TodayPage() {
         }
     }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent, showGrading]);
 
-    // Handler to move to next completed review item
-    const handleNextCompletedItem = useCallback(() => {
-        if (completedReviewIndex < completedReviewQueue.length - 1) {
-            setCompletedReviewIndex(prev => prev + 1);
-            setRevealedChunks(0);
-            setCurrentVerseInReview(0);
-            setShowGrading(false);
-        }
-    }, [completedReviewIndex, completedReviewQueue.length]);
-
-
-
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Check if we have any items to review in either mode
-            const hasItems = showCompletedReview ? completedReviewQueue.length > 0 : dueNodes.length > 0;
+            // Check if we have any items to review
+            const hasItems = orderedDueNodes.length > 0;
             if (!hasItems) return;
 
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
             if (showGrading) {
-                if (showCompletedReview) {
-                    // In completed review mode, almost any key moves to next
-                    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
-                        e.preventDefault();
-                        handleNextCompletedItem();
-                    }
-                } else {
-                    // Regular review mode
-                    if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        handlePostpone();
-                    } else if (e.key === 'ArrowRight') {
-                        e.preventDefault();
-                        handleGrade(true);
-                    } else if (e.key === 'ArrowDown') {
-                        e.preventDefault();
-                        handleGrade(false);
-                    }
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    handlePostpone();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    handleGrade(true);
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    handleGrade(false);
                 }
             } else {
                 if (e.key === 'ArrowRight' || e.key === ' ') {
@@ -784,7 +804,7 @@ export default function TodayPage() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [dueNodes, showGrading, showCompletedReview, completedReviewQueue.length, handlePostpone, handleGrade, handleRevealNext, handleNextCompletedItem]);
+    }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext]);
 
     useEffect(() => {
         if (targetBoxRef.current) {
@@ -938,27 +958,8 @@ export default function TodayPage() {
                 {/* Reviews Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(dueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{dueNodes.length - currentReviewIndex}</span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(orderedDueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{orderedDueNodes.length - currentReviewIndex}</span>}</div>
                         <div className="flex items-center gap-2">
-                            {completedReviewQueue.length > 0 && (
-                                <button
-                                    className={`px-2 py-1 text-xs rounded-md transition-colors ${showCompletedReview
-                                        ? 'bg-blue-200 text-blue-900 dark:bg-blue-900/30 dark:text-blue-400'
-                                        : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                        }`}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowCompletedReview(!showCompletedReview);
-                                        setCurrentReviewIndex(0);
-                                        setCompletedReviewIndex(0);
-                                        setRevealedChunks(0);
-                                        setCurrentVerseInReview(0);
-                                        setShowGrading(false);
-                                    }}
-                                >
-                                    {showCompletedReview ? 'Regular' : 'Completed'}
-                                </button>
-                            )}
                             <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                         </div>
                     </div>
@@ -966,19 +967,16 @@ export default function TodayPage() {
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
                             {/* Empty state */}
-                            {(showCompletedReview ? completedReviewQueue.length === 0 : dueNodes.length === 0) ? (
+                            {orderedDueNodes.length === 0 ? (
                                 <div className="empty-state">
                                     <CheckCircle size={40} className="empty-icon" />
-                                    <p>{showCompletedReview ? 'No completed items to review!' : 'No reviews due!'}</p>
+                                    <p>No reviews due!</p>
                                 </div>
                             ) : activeContent && (
                                 <div style={{ paddingTop: '0.5rem' }}>
                                     {/* Header */}
                                     <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
-                                        {showCompletedReview
-                                            ? `${completedReviewIndex + 1}/${completedReviewQueue.length}`
-                                            : `${currentReviewIndex + 1}`
-                                        } • {
+                                        {`${currentReviewIndex + 1}`} • {
                                             activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
                                                 activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
                                                     `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`
@@ -988,8 +986,8 @@ export default function TodayPage() {
                                     {/* Verse type content */}
                                     {activeContent.type === 'verse' && (
                                         <div className="review-verse-container">
-                                            {/* Context - only for regular reviews */}
-                                            {!showCompletedReview && activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
+                                            {/* Context */}
+                                            {activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
                                                 <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
                                                     {activeContent.contextVerses.map(c => <p key={c.ayahId} className="arabic-text" style={{ fontSize: '1rem' }}>{c.text}</p>)}
                                                 </div>
@@ -1027,21 +1025,17 @@ export default function TodayPage() {
                                                     <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleRevealNext}>
                                                         {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
                                                     </button>
-                                                ) : showCompletedReview ? (
-                                                    <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleNextCompletedItem}>
-                                                        {completedReviewIndex >= completedReviewQueue.length - 1 ? 'Done' : 'Next'}
-                                                    </button>
                                                 ) : (
                                                     <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
                                                         <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone}>
                                                             <span style={{ fontSize: '0.85rem' }}>Not sure</span>
-                                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Today</span>
+                                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
                                                         </button>
                                                         <button className="review-btn not-remembered" style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
                                                             <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                                 Next: {(() => {
-                                                                    const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                    const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
                                                                     return preview.again;
                                                                 })()}
                                                             </span>
@@ -1050,7 +1044,7 @@ export default function TodayPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
                                                             <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                                 Next: {(() => {
-                                                                    const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                    const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
                                                                     return preview.good;
                                                                 })()}
                                                             </span>
@@ -1065,45 +1059,11 @@ export default function TodayPage() {
                                     {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
                                         <div>
                                             {!showGrading ? (
-                                                activeContent.verses && activeContent.verses.length > 0 ? (
-                                                    <div className="review-verse-container">
-                                                        <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, overflowY: 'auto' }}>
-                                                            <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
-                                                                {activeContent.verses?.map((v, idx) => {
-                                                                    const chunks = verseChunkMap[idx] || [];
-                                                                    const isPast = idx < currentVerseInReview;
-                                                                    const isCurrent = idx === currentVerseInReview;
-                                                                    const showAll = showGrading || isPast;
-                                                                    const visibleChunks = showAll ? chunks : isCurrent ? chunks.slice(0, revealedChunks) : [];
-                                                                    const nextChunk = (!showAll && isCurrent) ? chunks[revealedChunks] : undefined;
-                                                                    const remainingHidden = showAll ? '' : (isCurrent ? chunks.slice(revealedChunks + 1).join(' ') : v.text);
-
-                                                                    return (
-                                                                        <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
-                                                                            <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
-                                                                            <span className="grouped-verse-text arabic-text">
-                                                                                {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
-                                                                                {nextChunk && <span className="blurred-chunk next-blur">{nextChunk}</span>}
-                                                                                {remainingHidden && <span className="blurred-chunk strong-blur">{remainingHidden}</span>}
-                                                                            </span>
-                                                                        </span>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                        <div style={{ marginTop: '0.75rem', flexShrink: 0 }}>
-                                                            <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleRevealNext}>
-                                                                {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Show Mindmap' : 'Reveal Chunk'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="verse-hidden" onClick={() => setShowGrading(true)}>
-                                                        <EyeOff size={24} style={{ marginBottom: 8 }} />
-                                                        <p>Visualize mindmap structure...</p>
-                                                        <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
-                                                    </div>
-                                                )
+                                                <div className="verse-hidden" onClick={() => setShowGrading(true)}>
+                                                    <EyeOff size={24} style={{ marginBottom: 8 }} />
+                                                    <p>Visualize mindmap structure...</p>
+                                                    <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
+                                                </div>
                                             ) : (
                                                 <div>
                                                     {(() => {
@@ -1144,52 +1104,44 @@ export default function TodayPage() {
                                                         );
                                                     })()}
 
-                                                    {/* Quick Actions - only for regular reviews */}
-                                                    {!showCompletedReview && (
-                                                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                                                            <button
-                                                                className="btn btn-secondary"
-                                                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (activeContent.type === 'mindmap') {
-                                                                        setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                    } else {
-                                                                        setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <PenTool size={14} /> Edit Map
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-secondary"
-                                                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--danger)' }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (activeContent.type === 'mindmap') {
-                                                                        handleMindmapIncomplete(activeContent.surah!.id);
-                                                                    } else {
-                                                                        handlePartMindmapIncomplete(activeContent.partId as QuranPart);
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <RotateCcw size={14} /> Mark Incomplete
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                                    {/* Quick Actions */}
+                                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (activeContent.type === 'mindmap') {
+                                                                    setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                } else {
+                                                                    setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <PenTool size={14} /> Edit Map
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--danger)' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (activeContent.type === 'mindmap') {
+                                                                    handleMindmapIncomplete(activeContent.surah!.id);
+                                                                } else {
+                                                                    handlePartMindmapIncomplete(activeContent.partId as QuranPart);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={14} /> Mark Incomplete
+                                                        </button>
+                                                    </div>
 
                                                     {/* Controls */}
-                                                    {showCompletedReview ? (
-                                                        <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleNextCompletedItem}>
-                                                            {completedReviewIndex >= completedReviewQueue.length - 1 ? 'Done' : 'Next'}
-                                                        </button>
-                                                    ) : (
-                                                        <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                            <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
-                                                            <button className="review-btn not-remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
-                                                            <button className="review-btn remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
-                                                        </div>
-                                                    )}
+                                                    <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                        <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
+                                                        <button className="review-btn not-remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
+                                                        <button className="review-btn remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
