@@ -121,10 +121,10 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
                 .custom-range-slider::-webkit-slider-thumb {
                     -webkit-appearance: none;
                     appearance: none;
-                    width: 24px;
-                    height: 24px;
+                    width: 18px;
+                    height: 18px;
                     background: var(--accent);
-                    border: 4px solid white;
+                    border: 3px solid white;
                     border-radius: 50%;
                     cursor: pointer;
                     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
@@ -137,10 +137,10 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
                     transform: scale(0.95);
                 }
                 .custom-range-slider::-moz-range-thumb {
-                    width: 24px;
-                    height: 24px;
+                    width: 18px;
+                    height: 18px;
                     background: var(--accent);
-                    border: 4px solid white;
+                    border: 3px solid white;
                     border-radius: 50%;
                     cursor: pointer;
                     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
