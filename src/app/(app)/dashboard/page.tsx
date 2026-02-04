@@ -94,6 +94,61 @@ export default function TodayPage() {
         return (mindmap.anchors as any[]).find(a => a.startVerse === start && a.endVerse === end);
     }, [mindmaps]);
 
+    // Order due nodes to keep mindmap + full-surah verses adjacent by surah
+    const orderedDueNodes = useMemo(() => {
+        if (!dueNodes.length) return [];
+
+        const originalIndex = new Map<string, number>();
+        dueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
+
+        const surahGroups = new Map<number, { mindmap?: MemoryNode; fullSurah?: MemoryNode; others: MemoryNode[] }>();
+        const otherNodes: MemoryNode[] = [];
+
+        const isFullSurah = (node: MemoryNode) => {
+            if (node.type !== 'verse_segment' || !node.surahId) return false;
+            const surah = getSurah(node.surahId);
+            if (!surah) return false;
+            return node.startVerse === 1 && node.endVerse === surah.verseCount;
+        };
+
+        dueNodes.forEach(node => {
+            if (node.surahId) {
+                if (!surahGroups.has(node.surahId)) {
+                    surahGroups.set(node.surahId, { others: [] });
+                }
+                const group = surahGroups.get(node.surahId)!;
+                if (node.type === 'mindmap') {
+                    group.mindmap = node;
+                } else if (isFullSurah(node)) {
+                    group.fullSurah = node;
+                } else {
+                    group.others.push(node);
+                }
+            } else {
+                otherNodes.push(node);
+            }
+        });
+
+        const ordered: MemoryNode[] = [];
+        const surahIds = Array.from(surahGroups.keys()).sort((a, b) => a - b);
+        surahIds.forEach(surahId => {
+            const group = surahGroups.get(surahId)!;
+            if (group.mindmap) ordered.push(group.mindmap);
+            if (group.fullSurah) ordered.push(group.fullSurah);
+            if (group.others.length) {
+                group.others.sort((a, b) => (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0));
+                ordered.push(...group.others);
+            }
+        });
+
+        if (otherNodes.length) {
+            otherNodes.sort((a, b) => (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0));
+            ordered.push(...otherNodes);
+        }
+
+        return ordered;
+    }, [dueNodes]);
+
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {
         const completedIds = settings?.kanbanColumns?.complete || [];
@@ -139,13 +194,18 @@ export default function TodayPage() {
                 });
             }
 
+            const mindmapTargetId = `mindmap-${surahId}`;
             const mindmap = mindmaps.find(m => Number(m.surahId) === surahId);
-            const mindmapNodeExists = nodes.some(n => n.type === 'mindmap' && n.surahId === surahId);
+            const mindmapNodeExists = nodes.some(n =>
+                n.targetId === mindmapTargetId ||
+                (n.type === 'mindmap' && n.surahId === surahId)
+            );
             if (mindmap && !mindmapNodeExists) {
                 nodesToCreate.push({
-                    id: `mindmap-${surahId}`,
+                    id: crypto.randomUUID(),
                     type: 'mindmap',
                     surahId,
+                    targetId: mindmapTargetId,
                     scheduler: createNewFSRSState(),
                     createdAt: new Date().toISOString()
                 });
@@ -153,13 +213,18 @@ export default function TodayPage() {
         });
 
         completedPartIds.forEach(partId => {
+            const partTargetId = `part-mindmap-${partId}`;
             const partMindmap = partMindMaps.find(pm => Number(pm.partId) === partId);
-            const partMindmapNodeExists = nodes.some(n => n.type === 'part_mindmap' && n.partId === partId);
+            const partMindmapNodeExists = nodes.some(n =>
+                n.targetId === partTargetId ||
+                (n.type === 'part_mindmap' && n.partId === partId)
+            );
             if (partMindmap && !partMindmapNodeExists) {
                 nodesToCreate.push({
-                    id: `part-mindmap-${partId}`,
+                    id: crypto.randomUUID(),
                     type: 'part_mindmap',
                     partId,
+                    targetId: partTargetId,
                     scheduler: createNewFSRSState(),
                     createdAt: new Date().toISOString()
                 });
@@ -457,7 +522,7 @@ export default function TodayPage() {
 
     // Grade review
     const handleGrade = useCallback((remembered: boolean) => {
-        const node = dueNodes[currentReviewIndex];
+        const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
 
         const errorId = !remembered ? crypto.randomUUID() : undefined;
@@ -533,7 +598,7 @@ export default function TodayPage() {
 
         addToast(remembered ? 'success' : 'error', remembered ? 'Remembered' : 'Forgot', info);
 
-        if (currentReviewIndex < dueNodes.length - 1) {
+        if (currentReviewIndex < orderedDueNodes.length - 1) {
             setCurrentReviewIndex(prev => prev + 1);
             // Move to next item - stay hidden until clicked
             setRevealedChunks(0);
@@ -542,10 +607,10 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [dueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
 
     const handlePostpone = useCallback(() => {
-        const node = dueNodes[currentReviewIndex];
+        const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
 
         setLastGrading({
@@ -572,7 +637,7 @@ export default function TodayPage() {
 
         addToast('postpone', 'Postponed to tomorrow', info);
 
-        if (currentReviewIndex < dueNodes.length - 1) {
+        if (currentReviewIndex < orderedDueNodes.length - 1) {
             setCurrentReviewIndex(prev => prev + 1);
             setRevealedChunks(0);
             setCurrentVerseInReview(0);
@@ -580,7 +645,7 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [dueNodes, currentReviewIndex, addToast, updateInstantNode]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode]);
 
     const handleUndo = () => {
         if (!lastGrading) return;
@@ -633,8 +698,8 @@ export default function TodayPage() {
 
     // Get content
     const getCurrentReviewContent = () => {
-        if (dueNodes.length === 0 || currentReviewIndex >= dueNodes.length) return null;
-        const node = dueNodes[currentReviewIndex];
+        if (orderedDueNodes.length === 0 || currentReviewIndex >= orderedDueNodes.length) return null;
+        const node = orderedDueNodes[currentReviewIndex];
 
         if (node.type === 'part_mindmap') {
             const pm = partMindMaps.find(m => m.partId === node.partId);
@@ -713,7 +778,7 @@ export default function TodayPage() {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Check if we have any items to review
-            const hasItems = dueNodes.length > 0;
+            const hasItems = orderedDueNodes.length > 0;
             if (!hasItems) return;
 
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -739,7 +804,7 @@ export default function TodayPage() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [dueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext]);
+    }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext]);
 
     useEffect(() => {
         if (targetBoxRef.current) {
@@ -893,7 +958,7 @@ export default function TodayPage() {
                 {/* Reviews Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(dueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{dueNodes.length - currentReviewIndex}</span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(orderedDueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{orderedDueNodes.length - currentReviewIndex}</span>}</div>
                         <div className="flex items-center gap-2">
                             <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                         </div>
@@ -902,7 +967,7 @@ export default function TodayPage() {
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
                             {/* Empty state */}
-                            {dueNodes.length === 0 ? (
+                            {orderedDueNodes.length === 0 ? (
                                 <div className="empty-state">
                                     <CheckCircle size={40} className="empty-icon" />
                                     <p>No reviews due!</p>
@@ -964,13 +1029,13 @@ export default function TodayPage() {
                                                     <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
                                                         <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone}>
                                                             <span style={{ fontSize: '0.85rem' }}>Not sure</span>
-                                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Today</span>
+                                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
                                                         </button>
                                                         <button className="review-btn not-remembered" style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
                                                             <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                                 Next: {(() => {
-                                                                    const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                    const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
                                                                     return preview.again;
                                                                 })()}
                                                             </span>
@@ -979,7 +1044,7 @@ export default function TodayPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
                                                             <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                                 Next: {(() => {
-                                                                    const preview = getSchedulingPreview(dueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                    const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
                                                                     return preview.good;
                                                                 })()}
                                                             </span>
@@ -994,45 +1059,11 @@ export default function TodayPage() {
                                     {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
                                         <div>
                                             {!showGrading ? (
-                                                activeContent.verses && activeContent.verses.length > 0 ? (
-                                                    <div className="review-verse-container">
-                                                        <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, overflowY: 'auto' }}>
-                                                            <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
-                                                                {activeContent.verses?.map((v, idx) => {
-                                                                    const chunks = verseChunkMap[idx] || [];
-                                                                    const isPast = idx < currentVerseInReview;
-                                                                    const isCurrent = idx === currentVerseInReview;
-                                                                    const showAll = showGrading || isPast;
-                                                                    const visibleChunks = showAll ? chunks : isCurrent ? chunks.slice(0, revealedChunks) : [];
-                                                                    const nextChunk = (!showAll && isCurrent) ? chunks[revealedChunks] : undefined;
-                                                                    const remainingHidden = showAll ? '' : (isCurrent ? chunks.slice(revealedChunks + 1).join(' ') : v.text);
-
-                                                                    return (
-                                                                        <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
-                                                                            <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
-                                                                            <span className="grouped-verse-text arabic-text">
-                                                                                {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
-                                                                                {nextChunk && <span className="blurred-chunk next-blur">{nextChunk}</span>}
-                                                                                {remainingHidden && <span className="blurred-chunk strong-blur">{remainingHidden}</span>}
-                                                                            </span>
-                                                                        </span>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                        <div style={{ marginTop: '0.75rem', flexShrink: 0 }}>
-                                                            <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleRevealNext}>
-                                                                {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Show Mindmap' : 'Reveal Chunk'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="verse-hidden" onClick={() => setShowGrading(true)}>
-                                                        <EyeOff size={24} style={{ marginBottom: 8 }} />
-                                                        <p>Visualize mindmap structure...</p>
-                                                        <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
-                                                    </div>
-                                                )
+                                                <div className="verse-hidden" onClick={() => setShowGrading(true)}>
+                                                    <EyeOff size={24} style={{ marginBottom: 8 }} />
+                                                    <p>Visualize mindmap structure...</p>
+                                                    <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
+                                                </div>
                                             ) : (
                                                 <div>
                                                     {(() => {
