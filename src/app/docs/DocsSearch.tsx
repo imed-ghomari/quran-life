@@ -99,8 +99,15 @@ export default function DocsSearch({ className }: { className?: string }) {
     }, [query, handleSearch]);
 
     const navigateTo = (href: string) => {
-        const highlightParam = query.trim() ? `?highlight=${encodeURIComponent(query.trim())}` : '';
-        const finalHref = href.includes('?') ? `${href}&highlight=${encodeURIComponent(query.trim())}` : `${href}${highlightParam}`;
+        const term = query.trim();
+        let finalHref = href;
+        
+        if (term) {
+            const [url, hash] = href.split('#');
+            const separator = url.includes('?') ? '&' : '?';
+            finalHref = `${url}${separator}highlight=${encodeURIComponent(term)}${hash ? '#' + hash : ''}`;
+        }
+
         router.push(finalHref, { scroll: false });
         setIsOpen(false);
         setQuery('');
