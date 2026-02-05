@@ -378,6 +378,7 @@ export default function TodoPage() {
             alert('No tldraw mindmap found to export.');
             return;
         }
+        const anchors = type === 'surah' ? (mindmaps[id]?.anchors || []) : [];
         try {
             const response = await fetch('/api/premade-mindmaps/export', {
                 method: 'POST',
@@ -386,7 +387,7 @@ export default function TodoPage() {
                     type,
                     id,
                     tldrawSnapshot: mindmap.tldrawSnapshot,
-                    anchors: type === 'surah' ? (mindmap.anchors || []) : []
+                    anchors
                 })
             });
             if (!response.ok) {
