@@ -20,7 +20,6 @@ import {
     Book,
     Activity,
     X,
-    Trash2,
     Sun,
     Moon,
     Monitor,
@@ -28,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
+import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
@@ -153,6 +153,12 @@ export default function SettingsPage() {
     const [selectedMutSurah, setSelectedMutSurah] = useState<number | null>(null);
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [noteModal, setNoteModal] = useState<{
+        decisionKey: string;
+        representativeAbs: number;
+        title: string;
+        initialNote: string;
+    } | null>(null);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
     const [showDebugNodes, setShowDebugNodes] = useState(true);
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
@@ -350,7 +356,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'account') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -396,30 +402,6 @@ export default function SettingsPage() {
                                             style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                         >
                                             Sign Out
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={handleReset}
-                                            style={{
-                                                width: '100%',
-                                                display: 'flex',
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '0.5rem',
-                                                padding: '0.85rem',
-                                                fontSize: '1rem',
-                                                height: 'auto',
-                                                background: 'var(--background)',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '12px',
-                                                color: '#ef4444',
-                                                fontWeight: 600,
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            <Trash2 size={20} />
-                                            <span>Reset All Data</span>
                                         </button>
                                     </div>
                                 </>
@@ -509,7 +491,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'plan') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -577,7 +559,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'tracking') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -900,7 +882,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'appearance') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -948,7 +930,7 @@ export default function SettingsPage() {
         }
 
         return (
-            <div className="content-wrapper">
+            <div className="content-wrapper tab-content">
                 {/* <h1 className="text-2xl font-bold mb-6">Settings</h1> */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <button onClick={() => setActiveMobilePage('appearance')} className="modern-card" style={{
@@ -1176,13 +1158,23 @@ export default function SettingsPage() {
 
   const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
     const { id: _ignored, ...updateWithoutId } = update;
-    
+
     // Convert undefined to null for database compatibility
     const cleanUpdate = {
         ...updateWithoutId,
         confirmedAt: updateWithoutId.confirmedAt ?? null
     };
-    
+
+    // Optimistic local update so UI reflects changes immediately
+    setDecisions(prev => ({
+        ...prev,
+        [phraseId]: {
+            ...(prev[phraseId] || { id: phraseId, phraseId, status: 'pending' }),
+            ...cleanUpdate,
+            phraseId
+        } as MutashabihatDecision
+    }));
+
     await updateInstantDecision(phraseId, cleanUpdate);
 };
 
@@ -1244,21 +1236,6 @@ export default function SettingsPage() {
         reader.readAsText(file);
     };
 
-    const handleReset = async () => {
-        if (confirm('WARNING: This will delete ALL your data in the cloud. This action cannot be undone.\n\nAre you sure you want to reset all data?')) {
-            if (confirm('Double check: Are you absolutely sure? All data will be lost forever.')) {
-                // Clear all entities for this user
-                const txs = [
-                    ...instantNodes.map(n => db.tx.memoryNodes[n.id].delete()),
-                    ...instantDecisions.map(d => db.tx.mutashabihatDecisions[d.id].delete())
-                    // Add other entities here
-                ];
-                if (txs.length > 0) await db.transact(txs);
-                window.location.reload();
-            }
-        }
-    };
-
     const mutashabihatBySurah = useMemo(() => {
         const map: Record<number, number> = {};
 
@@ -1293,7 +1270,7 @@ export default function SettingsPage() {
     return (
         <>
             {isMobile ? renderMobileView() : (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -1364,30 +1341,6 @@ export default function SettingsPage() {
                                                             style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                                         >
                                                             Sign Out
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            onClick={handleReset}
-                                                            style={{
-                                                                width: '100%',
-                                                                display: 'flex',
-                                                                flexDirection: 'row',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: '0.5rem',
-                                                                padding: '0.85rem',
-                                                                fontSize: '1rem',
-                                                                height: 'auto',
-                                                                background: 'var(--background)',
-                                                                border: '1px solid var(--border)',
-                                                                borderRadius: '12px',
-                                                                color: '#ef4444',
-                                                                fontWeight: 600,
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <Trash2 size={20} />
-                                                            <span>Reset All Data</span>
                                                         </button>
                                                     </div>
                                                 </>
@@ -1714,7 +1667,7 @@ export default function SettingsPage() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        marginBottom: showDebugNodes ? '1.5rem' : '0',
+                                        marginBottom: showDebugNodes ? '0rem' : '0',
                                         fontSize: 'clamp(1rem, 5vw, 1.1rem)'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1729,7 +1682,7 @@ export default function SettingsPage() {
                                 {showDebugNodes && (
                                     <div style={{ marginTop: '1.5rem' }}>
                                         <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                                            This section shows your active memory nodes and their review schedules.
+                                            This section shows your review schedules.
                                         </p>
 
                                         {isMobile ? (
@@ -2454,14 +2407,21 @@ export default function SettingsPage() {
    
                                                                                         </td>
                                                                                         <td>
-                                                                                           <input
-                                                                                        type="text"
-                                                                                        placeholder="Add note..."
-                                                                                        value={existing.notes || ''}
-                                                                                        onClick={(e) => e.stopPropagation()}
-                                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
-                                                                                        className="min-w-[150px] max-h-[35px] placeholder:text-sm placeholder:text-gray-400"
-                                                                                        />
+                                                                                            <button
+                                                                                                className="bulk-btn"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    setNoteModal({
+                                                                                                        decisionKey,
+                                                                                                        representativeAbs,
+                                                                                                        title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
+                                                                                                        initialNote: existing.notes || ''
+                                                                                                    });
+                                                                                                }}
+                                                                                                style={{ minWidth: '110px' }}
+                                                                                            >
+                                                                                                {existing.notes ? 'Edit Note' : 'Add Note'}
+                                                                                            </button>
                                                                                         </td>
                                                                                     </tr>
                                                                                     {isDetailExpanded && (
@@ -2948,6 +2908,19 @@ export default function SettingsPage() {
                 onClose={() => setIsAddModalOpen(false)}
                 onSave={handleAddCustomMutashabih}
                 initialSurahId={targetSurahId}
+            />
+            <MutashabihNoteModal
+                isOpen={!!noteModal}
+                title={noteModal?.title || 'Edit Note'}
+                initialNote={noteModal?.initialNote || ''}
+                onClose={() => setNoteModal(null)}
+                onSave={(note) => {
+                    if (!noteModal) return;
+                    const { representativeAbs, decisionKey } = noteModal;
+                    const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
+                    handleDecisionUpdate(representativeAbs, { ...existing, notes: note }, decisionKey);
+                    setNoteModal(null);
+                }}
             />
 
             {/* Mobile Slide-over for Node Management */}

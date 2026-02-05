@@ -10,13 +10,25 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "/pwa-icon.png?v=2",
+      "src": "/icon-desktop-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-icon.png?v=2",
+      "src": "/icon-desktop-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-mobile-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-mobile-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -27,12 +39,12 @@
     {
       "name": "Daily Todo",
       "url": "/todo",
-      "icons": [{ "src": "/pwa-icon.png?v=2", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/icon-desktop-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Settings",
       "url": "/settings",
-      "icons": [{ "src": "/pwa-icon.png?v=2", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/icon-desktop-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

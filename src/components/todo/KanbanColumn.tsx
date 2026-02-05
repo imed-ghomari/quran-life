@@ -21,6 +21,8 @@ interface KanbanColumnProps {
     onExportMindmap?: (item: KanbanItem) => void;
     onResetMindmap?: (item: KanbanItem) => void;
     onChangeSplits: (item: KanbanItem) => void;
+    onViewVerseContext?: (item: KanbanItem) => void;
+    onViewSimilarityContext?: (item: KanbanItem) => void;
     getHasMindmap: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;
     getDocLink: (item: KanbanItem) => string | undefined;
@@ -49,6 +51,8 @@ const KanbanColumn = ({
     onExportMindmap,
     onResetMindmap,
     onChangeSplits,
+    onViewVerseContext,
+    onViewSimilarityContext,
     getHasMindmap,
     getHasPremade,
     getDocLink
@@ -124,6 +128,8 @@ const KanbanColumn = ({
                                 onExportMindmap={onExportMindmap ? () => onExportMindmap(item) : undefined}
                                 onResetMindmap={onResetMindmap ? () => onResetMindmap(item) : undefined}
                                 onChangeSplits={() => onChangeSplits(item)}
+                                onViewVerseContext={onViewVerseContext ? () => onViewVerseContext(item) : undefined}
+                                onViewSimilarityContext={onViewSimilarityContext ? () => onViewSimilarityContext(item) : undefined}
                             />
                         ))}
                         {provided.placeholder}

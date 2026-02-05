@@ -73,8 +73,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                     if (!nodes.some(n => n.id === nodeId)) {
                         const maturity = getMaturityState('mastered');
                         transactions.push(
-                            db.tx.memoryNodes[crypto.randomUUID()].update({
-                                id: nodeId, // InstantDB uses the key as ID, but we can store it too
+                            // Use deterministic IDs so future updates target the same record
+                            db.tx.memoryNodes[nodeId].update({
+                                id: nodeId,
                                 type: 'verse_segment',
                                 surahId: surahId,
                                 startVerse: i,
