@@ -38,6 +38,10 @@ const schema = i.schema({
       updatedAt: i.string(),
       storagePath: i.string(),
       _isRemote: i.boolean(),
+      source: i.string(),
+      premadeId: i.string(),
+      premadeImportedAt: i.string(),
+      premadeEdited: i.boolean(),
       userId: i.string(),
     }),
     partMindMaps: i.entity({
@@ -50,6 +54,10 @@ const schema = i.schema({
       updatedAt: i.string(),
       storagePath: i.string(),
       _isRemote: i.boolean(),
+      source: i.string(),
+      premadeId: i.string(),
+      premadeImportedAt: i.string(),
+      premadeEdited: i.boolean(),
       userId: i.string(),
     }),
     listeningProgress: i.entity({

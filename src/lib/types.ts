@@ -120,6 +120,10 @@ export interface MindMap {
     storagePath?: string;
     _isRemote?: boolean;
     deletedAt?: string;
+    source?: 'premade' | 'custom';
+    premadeId?: string;
+    premadeImportedAt?: string;
+    premadeEdited?: boolean;
 }
 
 export interface PartMindMap {
@@ -133,6 +137,10 @@ export interface PartMindMap {
     storagePath?: string;
     _isRemote?: boolean;
     deletedAt?: string;
+    source?: 'premade' | 'custom';
+    premadeId?: string;
+    premadeImportedAt?: string;
+    premadeEdited?: boolean;
 }
 
 // Transition (optional, for continuity issues)

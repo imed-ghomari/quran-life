@@ -459,8 +459,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         if (maxWaitTimer.current) {
             clearTimeout(maxWaitTimer.current);
         }
-        // Save without images on close to minimize storage
-        await saveContent(false);
+        // Save only if user actually changed something
+        if (isDirty.current) {
+            await saveContent(false);
+        }
         onClose();
     };
 
