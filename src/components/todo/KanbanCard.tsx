@@ -21,7 +21,8 @@ interface KanbanCardProps {
     onExportMindmap?: () => void;
     onResetMindmap?: () => void;
     onChangeSplits: () => void;
-    onCardAction?: (action: 'fix' | 'resolve', item: KanbanItem) => void; // Generic action handler fallback
+    onViewVerseContext?: () => void;
+    onViewSimilarityContext?: () => void;
 }
 
 const KanbanCard = ({
@@ -38,7 +39,8 @@ const KanbanCard = ({
     onExportMindmap,
     onResetMindmap,
     onChangeSplits,
-    onCardAction
+    onViewVerseContext,
+    onViewSimilarityContext
 }: KanbanCardProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -133,9 +135,10 @@ const KanbanCard = ({
                             onExportMindmap,
                             onResetMindmap: handleResetClick,
                             onChangeSplits,
-                            onCardAction,
                             footerPad: 'pt-3',
-                            docLink
+                            docLink,
+                            onViewVerseContext,
+                            onViewSimilarityContext
                         })}
                     </div>
                 )}
@@ -163,7 +166,8 @@ interface RenderZoneProps {
     onExportMindmap?: () => void;
     onResetMindmap?: () => void;
     onChangeSplits: () => void;
-    onCardAction?: (action: 'fix' | 'resolve', item: KanbanItem) => void;
+    onViewVerseContext?: () => void;
+    onViewSimilarityContext?: () => void;
     footerPad: string;
     docLink?: string;
 }
@@ -187,9 +191,10 @@ function renderCardZones({
     onExportMindmap,
     onResetMindmap,
     onChangeSplits,
-    onCardAction,
     footerPad,
-    docLink
+    docLink,
+    onViewVerseContext,
+    onViewSimilarityContext
 }: RenderZoneProps) {
     let zone1 = { label: "TASK", color: "var(--accent)" };
     let zone2 = { english: "", arabic: "" };
@@ -201,12 +206,14 @@ function renderCardZones({
         case 'suspended': {
             const issue = item.data;
             const surah = getSurah(issue.surahId);
-            zone1 = { label: "FIX REQUIRED", color: "var(--danger)" };
+            const labelLower = (issue?.label || '').toString().toLowerCase();
+            const label = labelLower.includes('error') ? 'REVIEW ERROR' : 'SUSPENDED';
+            zone1 = { label, color: "var(--danger)" };
             zone2 = {
                 english: surah ? `${surah.id}. ${surah.name}` : `Surah ${issue.surahId}`,
                 arabic: surah?.arabicName || 'الإصلاح'
             };
-            zone3 = issue.label || "Review anchors to fix suspended status.";
+            zone3 = issue.label || "Review splits to fix suspended status.";
             zone4Meta = `${issue.surahId}:${issue.startVerse}`;
             break;
         }
@@ -242,10 +249,6 @@ function renderCardZones({
             break;
         }
     }
-
-    // Handlers for specific card types
-    const handleFixIssue = () => onCardAction?.('fix', item);
-    const handleResolve = () => onCardAction?.('resolve', item);
 
     return (
         <>
@@ -286,8 +289,8 @@ function renderCardZones({
                         onExportMindmap={onExportMindmap}
                         onResetMindmap={onResetMindmap}
                         onChangeSplits={onChangeSplits}
-                        onFixIssue={handleFixIssue}
-                        onResolveSimilarity={handleResolve}
+                        onViewVerseContext={onViewVerseContext}
+                        onViewSimilarityContext={onViewSimilarityContext}
                         docLink={docLink}
                         anchorRef={menuButtonRef}
                         showExport={showExport}
@@ -304,42 +307,42 @@ function renderCardZones({
                         <h4 className="text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
                             {zone2.english}
                         </h4>
-                    {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
-                        (() => {
-                            const mindmap = (item as any).data?.mindmap;
-                            const isPremade = mindmap?.source === 'premade';
-                            const isEdited = isPremade && mindmap?.premadeEdited;
-                            const hasResetAvailable = !isPremade && !!hasPremade;
-                            const iconClass = 'text-[var(--accent)] opacity-80';
+                        {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
+                            (() => {
+                                const mindmap = (item as any).data?.mindmap;
+                                const isPremade = mindmap?.source === 'premade';
+                                const isEdited = isPremade && mindmap?.premadeEdited;
+                                const hasResetAvailable = !isPremade && !!hasPremade;
+                                const iconClass = 'text-[var(--accent)] opacity-80';
 
-                            if (hasResetAvailable) {
+                                if (hasResetAvailable) {
+                                    return (
+                                        <span className="inline-flex items-center shrink-0" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
+                                            <Layers size={14} className={iconClass} />
+                                        </span>
+                                    );
+                                }
+                                if (isEdited) {
+                                    return (
+                                        <span className="inline-flex items-center shrink-0" title="Official map (edited)" aria-label="Official map (edited)">
+                                            <PenSquare size={14} className={iconClass} />
+                                        </span>
+                                    );
+                                }
+                                if (isPremade) {
+                                    return (
+                                        <span className="inline-flex items-center shrink-0" title="Official map" aria-label="Official map">
+                                            <BadgeCheck size={14} className={iconClass} />
+                                        </span>
+                                    );
+                                }
                                 return (
-                                    <span title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
-                                        <Layers size={14} className={iconClass} />
+                                    <span className="inline-flex items-center shrink-0" title="Custom map" aria-label="Custom map">
+                                        <Brain size={14} className={iconClass} />
                                     </span>
                                 );
-                            }
-                            if (isEdited) {
-                                return (
-                                    <span title="Official map (edited)" aria-label="Official map (edited)">
-                                        <PenSquare size={14} className={iconClass} />
-                                    </span>
-                                );
-                            }
-                            if (isPremade) {
-                                return (
-                                    <span title="Official map" aria-label="Official map">
-                                        <BadgeCheck size={14} className={iconClass} />
-                                    </span>
-                                );
-                            }
-                            return (
-                                <span title="Custom map" aria-label="Custom map">
-                                    <Brain size={14} className={iconClass} />
-                                </span>
-                            );
-                        })()
-                    )}
+                            })()
+                        )}
                     </div>
                     {zone2.arabic && (
                         <div className="text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 whitespace-nowrap">

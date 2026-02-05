@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, PenTool, Download, Trash2, SplitSquareHorizontal, FileText, Check, AlertTriangle, Search, Upload, RotateCcw } from 'lucide-react';
+import { MoreVertical, PenTool, Download, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 
 interface CardActionMenuProps {
@@ -27,8 +27,8 @@ interface CardActionMenuProps {
     onExportMindmap?: () => void;
     onResetMindmap?: () => void;
     onChangeSplits: () => void;
-    onFixIssue?: () => void;      // For Suspended
-    onResolveSimilarity?: () => void; // For Similarity
+    onViewVerseContext?: () => void; // For Suspended
+    onViewSimilarityContext?: () => void; // For Similarity
 
     docLink?: string;
 }
@@ -47,8 +47,8 @@ export default function CardActionMenu({
     onExportMindmap,
     onResetMindmap,
     onChangeSplits,
-    onFixIssue,
-    onResolveSimilarity,
+    onViewVerseContext,
+    onViewSimilarityContext,
     docLink,
     showExport,
     showDelete,
@@ -178,15 +178,21 @@ export default function CardActionMenu({
         // 2. Suspended Actions
         if (cardType === 'suspended') {
             items.push({
-                label: 'Jump to Issue',
-                icon: <AlertTriangle size={20} />,
-                onClick: onEditMindmap, // Reuse edit mindmap to jump (context aware in KanbanCard)
+                label: 'Edit Mindmap',
+                icon: <PenTool size={20} />,
+                onClick: onEditMindmap,
                 disabled: isProcessing
             });
             items.push({
-                label: 'Complete & Fix',
-                icon: <Check size={20} />,
-                onClick: onFixIssue,
+                label: 'Edit Splits',
+                icon: <SplitSquareHorizontal size={20} />,
+                onClick: onChangeSplits,
+                disabled: isProcessing
+            });
+            items.push({
+                label: 'View Verse Context',
+                icon: <FileText size={20} />,
+                onClick: onViewVerseContext,
                 disabled: isProcessing
             });
         }
@@ -194,15 +200,21 @@ export default function CardActionMenu({
         // 3. Similarity Actions
         if (cardType === 'similarity') {
             items.push({
-                label: 'Resolve Conflict',
-                icon: <Search size={20} />,
-                onClick: onResolveSimilarity,
+                label: 'Edit Mindmap',
+                icon: <PenTool size={20} />,
+                onClick: onEditMindmap,
                 disabled: isProcessing
             });
             items.push({
-                label: 'View Context',
-                icon: <FileText size={20} />,
-                onClick: onResolveSimilarity, // Can map to same for now, or new View handler
+                label: 'Edit Splits',
+                icon: <SplitSquareHorizontal size={20} />,
+                onClick: onChangeSplits,
+                disabled: isProcessing
+            });
+            items.push({
+                label: 'View Similarity Conflict',
+                icon: <Search size={20} />,
+                onClick: onViewSimilarityContext,
                 disabled: isProcessing
             });
         }

@@ -2,7 +2,6 @@
 
 import React from 'react';
 import Navigation from './Navigation';
-import MobileSyncBar from './MobileSyncBar';
 import { usePathname } from 'next/navigation';
 
 interface AppShellProps {
@@ -18,8 +17,7 @@ export default function AppShell({ children }: AppShellProps) {
     return (
         <div className="app-shell">
             <Navigation />
-            <MobileSyncBar />
-            <div className={`page-container ${!isAuthOrHome ? 'has-sync-bar' : ''} ${isFixedLayout ? 'fixed-layout' : ''}`}>
+            <div className={`page-container ${isFixedLayout ? 'fixed-layout' : ''}`}>
                 {children}
             </div>
         </div>

@@ -500,13 +500,24 @@ export default function TodoPage() {
         }
 
         const key = phraseId ? `${absoluteAyah}-${phraseId}` : absoluteAyah.toString();
-        const existing = decisions.find(d => d.phraseId === key) || { status: 'pending', note: '' };
+        const existing = decisions.find(d => d.phraseId === key) || { status: 'pending', notes: '' };
         await saveDecision(key, {
             ...existing,
             status,
             confirmedAt: confirm ? new Date().toISOString() : existing.confirmedAt
         });
     };
+
+    const handleMutashabihatDecisionUpdate = useCallback((_representativeAbs: number, update: any, decisionKey: string) => {
+        const existing = decisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
+        const normalized = {
+            ...existing,
+            ...update,
+            notes: update.notes ?? existing.notes ?? existing.note ?? '',
+            phraseId: decisionKey
+        };
+        saveDecision(decisionKey, normalized);
+    }, [decisions, saveDecision]);
 
     // Handles saving from the Mindmap Editor modal (Surah)
     const handleEditorSave = useCallback(async (snapshot: any, _images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
@@ -550,7 +561,7 @@ export default function TodoPage() {
     }, [activePartEditor, partMindmapsMap, savePartMindMap]);
 
     return (
-        <div className="content-wrapper">
+        <div className="content-wrapper tab-content">
             {/* Surah Mindmap Editor */}
             {activeMindmapEditor && (
                 <MindmapEditor
@@ -659,6 +670,8 @@ export default function TodoPage() {
                     }}
                     appMode={appMode}
                     getHasPremade={hasPremadeMindmap}
+                    mutashabihatDecisions={decisions}
+                    onMutashabihatDecisionUpdate={handleMutashabihatDecisionUpdate}
                     getBuilderState={getBuilderState}
                     onAddBreak={(sid, val) => handleAddBreak(sid, val)}
                     onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}

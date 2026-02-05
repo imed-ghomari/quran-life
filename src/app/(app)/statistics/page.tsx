@@ -8,6 +8,7 @@ import {
     useInstantNodes,
     useInstantListeningProgress,
     useInstantMutashabihat,
+    useInstantReviewLogs,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { getNodeStability, getNodeDueDate } from '@/lib/types';
@@ -37,10 +38,11 @@ export default function StatisticsPage() {
     const { nodes: memoryNodes, isLoading: nodesLoading } = useInstantNodes();
     const { progress: listeningProgress, isLoading: progressLoading } = useInstantListeningProgress();
     const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useInstantMutashabihat();
+    const { logs: reviewLogs, isLoading: reviewLogsLoading } = useInstantReviewLogs();
 
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
 
-    const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading;
+    const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading || reviewLogsLoading;
 
     const activePart = settings?.activePart || 1;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
@@ -349,6 +351,8 @@ export default function StatisticsPage() {
         let backlogCount = 0;
         let dueTomorrow = 0;
 
+        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
+
         nodes.forEach(node => {
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return;
@@ -399,16 +403,30 @@ export default function StatisticsPage() {
 
         const average = totalReviews / (maxDay - minDay + 1);
 
+        const reviewsToday = reviewLogs.filter(log => {
+            if (!log.review_time) return false;
+            const reviewDate = new Date(log.review_time);
+            if (isNaN(reviewDate.getTime())) return false;
+            reviewDate.setHours(0, 0, 0, 0);
+            if (reviewDate.getTime() !== today.getTime()) return false;
+            if (activePart === 5) return true;
+            const node = nodeById.get(log.nodeId);
+            if (!node) return false;
+            if (!node.surahId) return true;
+            return targetSurahs.has(node.surahId);
+        }).length;
+
         return {
             data,
             total: totalReviews,
             average: average.toFixed(1),
             dueTomorrow,
             dailyLoad: (totalReviews / (maxDay - minDay + 1)).toFixed(1), // Simplified for now
+            reviewsToday,
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, showBacklog, timeRange]);
+    }, [activePart, memoryNodes, reviewLogs, showBacklog, timeRange]);
 
     if (isLoading) {
         return (
@@ -419,7 +437,7 @@ export default function StatisticsPage() {
     }
 
     return (
-        <div className="content-wrapper">
+        <div className="content-wrapper tab-content">
             <h1 className="hidden md:block text-2xl font-bold mb-6">Statistics</h1>
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <div className="stats-header md:hidden" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -528,17 +546,17 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 }) {
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                         <CalendarClock size={20} />
                     </div>
-                    <h2 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>Future Reviews</h2>
+                    <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Future Reviews</h2>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>
                         <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
-                        Backlog
+                        Include Overdue
                     </label>
                     <select
                         value={timeRange}
@@ -558,8 +576,8 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
                     <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Total Reviews</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.total}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Reviewed Today</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.reviewsToday}</div>
                     </div>
                     <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Average / Day</div>
@@ -598,7 +616,10 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                 <svg viewBox={`0 0 500 ${chartHeight}`} width="100%" height="100%" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
                     {(() => {
                         const vWidth = 500;
-                        const getX = (day: number) => padding.left + ((day - minDay) / (maxDay - minDay)) * (vWidth - padding.left - padding.right);
+                        const plotWidth = vWidth - padding.left - padding.right;
+                        const span = Math.max(1, maxDay - minDay + 1);
+                        const step = plotWidth / span;
+                        const getX = (day: number) => padding.left + (day - minDay + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxCount) * (chartHeight - padding.top - padding.bottom);
                         const getYCumulative = (cumulative: number) => chartHeight - padding.bottom - (cumulative / maxCumulative) * (chartHeight - padding.top - padding.bottom);
 
@@ -616,11 +637,12 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
 
                                 {/* Bars */}
                                 {data.map((d, i) => {
-                                    const barWidth = Math.max(1, (vWidth - padding.left - padding.right) / (maxDay - minDay + 1) - 0.5);
+                                    const barWidth = Math.max(1, step - 0.5);
+                                    const x = getX(d.day);
                                     return (
                                         <rect
                                             key={i}
-                                            x={getX(d.day) - barWidth / 2}
+                                            x={x - barWidth / 2}
                                             y={getYCount(d.count)}
                                             width={barWidth}
                                             height={Math.max(0, chartHeight - padding.bottom - getYCount(d.count))}

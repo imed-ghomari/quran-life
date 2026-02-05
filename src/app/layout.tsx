@@ -27,8 +27,8 @@ export const metadata: Metadata = {
     description: 'Complete your learned Quran portions in manageable daily readings',
     manifest: '/manifest.json',
     icons: {
-        icon: '/logo.png',
-        apple: '/logo.png',
+        icon: '/icon-desktop-192.png',
+        apple: '/icon-mobile-180.png',
     },
     appleWebApp: {
         capable: true,

@@ -138,9 +138,8 @@ return (
         <h2 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
             Splits Configuration
         </h2>
-       <p className="text-sm text-[var(--foreground-secondary)] mt-1 !mb-3">
-            Adjust anchor points for optimal memorization
-           
+        <p className="text-sm text-[var(--foreground-secondary)] mt-1 !mb-3">
+            Adjust split points for optimal memorization
         </p>
     </div>
 
