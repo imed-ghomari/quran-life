@@ -63,13 +63,18 @@ export function getNearestHeadingAnchor(content: string, matchIndex: number): st
     return lastAnchor ? `#${lastAnchor}` : '';
 }
 
+function stripMarkdownLinks(content: string): string {
+    return content.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1');
+}
+
 export function performSearch(documents: SearchDocument[], query: string): SearchResult[] {
     const results: SearchResult[] = [];
     
     for (const doc of documents) {
+        const searchableContent = stripMarkdownLinks(doc.content);
         // Search in both title and content
         const titleMatch = fuzzyMatch(doc.title, query);
-        const contentMatch = fuzzyMatch(doc.content, query);
+        const contentMatch = fuzzyMatch(searchableContent, query);
 
         if (titleMatch.matches || contentMatch.matches) {
             // Boost title matches
@@ -77,18 +82,18 @@ export function performSearch(documents: SearchDocument[], query: string): Searc
             
             // Extract a clean excerpt
             const index = contentMatch.matches ? contentMatch.index : 0;
-            const anchor = getNearestHeadingAnchor(doc.content, index);
+            const anchor = getNearestHeadingAnchor(searchableContent, index);
             const finalHref = `${doc.href}${anchor}`;
 
             const start = Math.max(0, index - 40);
-            const end = Math.min(doc.content.length, index + query.length + 80);
-            let excerpt = doc.content.substring(start, end)
+            const end = Math.min(searchableContent.length, index + query.length + 80);
+            let excerpt = searchableContent.substring(start, end)
                 .replace(/[#*`]/g, '') // Remove markdown symbols
                 .replace(/\n/g, ' ')   // Remove newlines
                 .trim();
 
             if (start > 0) excerpt = '...' + excerpt;
-            if (end < doc.content.length) excerpt = excerpt + '...';
+            if (end < searchableContent.length) excerpt = excerpt + '...';
 
             results.push({
                 title: doc.title,
