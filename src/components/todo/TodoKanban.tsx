@@ -501,8 +501,9 @@ export default function TodoKanban({
                 }, 6000);
                 removalTimersRef.current.set(movedItem.id, removalTimer);
 
+                const toastType: TodoToastType = movedItem.type === 'similarity' ? 'similarity' : 'suspended';
                 const toastId = addToast(
-                    movedItem.type,
+                    toastType,
                     'Marked complete',
                     `${info}\nWill disappear when this popup closes`,
                     () => {
