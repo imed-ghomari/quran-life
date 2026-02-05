@@ -791,6 +791,10 @@ export default function TodayPage() {
     const verseChunkMap = activeContent?.verses?.map(v => splitIntoChunks(v.text)) || [];
 
     const handleRevealNext = useCallback(() => {
+        if (activeContent && (activeContent.type === 'mindmap' || activeContent.type === 'part_mindmap')) {
+            setShowGrading(true);
+            return;
+        }
         if (revealedChunks < totalChunks) {
             setRevealedChunks(prev => prev + 1);
         } else if (currentVerseInReview < totalVerses - 1) {
@@ -963,7 +967,7 @@ export default function TodayPage() {
                 {/* Reviews Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(orderedDueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{orderedDueNodes.length - currentReviewIndex}</span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span></div>
                         <div className="flex items-center gap-2">
                             <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                         </div>
@@ -1170,7 +1174,7 @@ export default function TodayPage() {
                 {/* Daily Portion Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => toggleSection('daily')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete ? <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">✓</span> : <span className="status-badge partial show-mobile" style={{ background: 'transparent', padding: 0, color: 'var(--warning)', display: 'flex', alignItems: 'center' }}><AlertCircle size={18} /></span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             {!listeningComplete && (
                                 <div className="toggle-wrapper" onClick={(e) => { e.stopPropagation(); setReadOnlyMode(!readOnlyMode); }} style={{ cursor: 'pointer' }}>

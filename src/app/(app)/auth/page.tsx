@@ -3,6 +3,7 @@
 // Import necessary React hooks and Next.js utilities
 import { db } from '@/lib/instant';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 // Import UI icons from lucide-react
@@ -123,6 +124,20 @@ function AuthContent() {
         window.location.href = checkoutUrl; // Redirect the user
     };
 
+    // Allow user to switch accounts after logging in
+    const handleSwitchAccount = async () => {
+        setAuthError(null);
+        try {
+            await db.auth.signOut();
+            setEmail('');
+            setCode('');
+            setAuthStep('email');
+        } catch (err: any) {
+            console.error('Sign out error:', err);
+            setAuthError(err.body?.message || err.message || 'Unable to sign out. Please try again.');
+        }
+    };
+
     // Render a loading spinner while initial authentication status is being verified
     if (isAuthLoading) {
         return (
@@ -226,6 +241,35 @@ function AuthContent() {
                         >
                             Proceed to Checkout
                         </button>
+                        <button
+                            type="button"
+                            onClick={handleSwitchAccount}
+                            style={{
+                                marginTop: '1rem',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--foreground-secondary)',
+                                fontSize: '0.85rem',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                            }}
+                        >
+                            Use a different account
+                        </button>
+                        {authError && (
+                            <p style={{
+                                color: '#ef4444',
+                                fontSize: '0.85rem',
+                                textAlign: 'center',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                padding: '0.5rem',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                marginTop: '1rem'
+                            }}>
+                                {authError}
+                            </p>
+                        )}
                     </div>
                 </div>
             );
@@ -482,7 +526,14 @@ function AuthContent() {
                     textAlign: 'center'
                 }}>
                     <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                        By continuing, you agree to our Terms of Service and Privacy Policy.
+                        By continuing, you agree to our{' '}
+                        <Link href="/terms" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                            Terms of Service
+                        </Link>{' '}
+                        and{' '}
+                        <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                            Privacy Policy
+                        </Link>.
                     </p>
                 </div>
             </div>
