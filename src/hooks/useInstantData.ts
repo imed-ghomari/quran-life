@@ -145,6 +145,10 @@ export function useInstantMindMaps() {
         const sanitizedData: any = { ...mergedData };
         if (sanitizedData.imageUrl === null) delete sanitizedData.imageUrl;
         if (sanitizedData.imageUrlDark === null) delete sanitizedData.imageUrlDark;
+        if (sanitizedData.tldrawSnapshot) {
+            delete sanitizedData.imageUrl;
+            delete sanitizedData.imageUrlDark;
+        }
 
         return db.transact(db.tx.mindMaps[id].update({
             ...sanitizedData,
@@ -161,9 +165,14 @@ export function useInstantMindMaps() {
 
         // Merge existing data with new data to preserve all fields
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
+        const sanitizedData: any = { ...mergedData };
+        if (sanitizedData.tldrawSnapshot) {
+            delete sanitizedData.imageUrl;
+            delete sanitizedData.imageUrlDark;
+        }
 
         return db.transact(db.tx.partMindMaps[id].update({
-            ...mergedData,
+            ...sanitizedData,
             partId,
             userId: user.id,
             updatedAt: new Date().toISOString()

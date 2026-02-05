@@ -322,9 +322,11 @@ export default function TodoPage() {
                 const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
-                    ...data,
                     surahId: id, // Ensure ID matches
                     anchors: importedAnchors.length > 0 ? importedAnchors : (existing.anchors || []),
+                    imageUrl: undefined,
+                    imageUrlDark: undefined,
+                    tldrawSnapshot: data,
                     isComplete: true
                 };
                 await saveMindMap(id, updated);
@@ -333,8 +335,10 @@ export default function TodoPage() {
                 const existing = partMindmapsMap[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
                 const updated = {
                     ...existing,
-                    ...data,
                     partId: pId,
+                    imageUrl: undefined,
+                    imageUrlDark: undefined,
+                    tldrawSnapshot: data,
                     isComplete: true
                 };
                 await savePartMindMap(pId, updated);
@@ -393,82 +397,37 @@ export default function TodoPage() {
     };
 
     // Handles saving from the Mindmap Editor modal (Surah)
-    const handleEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
+    const handleEditorSave = useCallback(async (snapshot: any, _images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activeMindmapEditor) return;
         const { surahId } = activeMindmapEditor;
 
-        const save = async (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-            const updated = {
-                ...existing,
-                imageUrl: lightUrl || undefined,
-                imageUrlDark: darkUrl || undefined,
-                tldrawSnapshot: snapshot
-            };
-            await saveMindMap(surahId, updated);
-            if (shouldClose) {
-                setActiveMindmapEditor(null);
-            }
+        const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
+        const updated = {
+            ...existing,
+            imageUrl: undefined,
+            imageUrlDark: undefined,
+            tldrawSnapshot: snapshot
         };
-
-        if (images && (images.light || images.dark)) {
-            const blobs = images;
-
-            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
-                if (!blob) return Promise.resolve(null);
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                });
-            };
-
-            const [light, dark] = await Promise.all([
-                processBlob(blobs.light),
-                processBlob(blobs.dark)
-            ]);
-            await save(light, dark);
-        } else {
-            await save(null, null);
+        await saveMindMap(surahId, updated);
+        if (shouldClose) {
+            setActiveMindmapEditor(null);
         }
     }, [activeMindmapEditor, mindmaps, saveMindMap]);
 
-    const handlePartEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
+    const handlePartEditorSave = useCallback(async (snapshot: any, _images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
-        const save = async (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = partMindmapsMap[partId] || { partId, imageUrl: null, description: '', isComplete: false };
-            const updated = {
-                ...existing,
-                imageUrl: lightUrl || undefined,
-                imageUrlDark: darkUrl || undefined,
-                tldrawSnapshot: snapshot
-            };
-            await savePartMindMap(partId, updated);
-            if (shouldClose) {
-                setActivePartEditor(null);
-            }
+        const existing = partMindmapsMap[partId] || { partId, imageUrl: null, description: '', isComplete: false };
+        const updated = {
+            ...existing,
+            imageUrl: undefined,
+            imageUrlDark: undefined,
+            tldrawSnapshot: snapshot
         };
-
-        if (images && (images.light || images.dark)) {
-            const blobs = images;
-            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
-                if (!blob) return Promise.resolve(null);
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                });
-            };
-
-            const [light, dark] = await Promise.all([
-                processBlob(blobs.light),
-                processBlob(blobs.dark)
-            ]);
-            await save(light, dark);
-        } else {
-            await save(null, null);
+        await savePartMindMap(partId, updated);
+        if (shouldClose) {
+            setActivePartEditor(null);
         }
     }, [activePartEditor, partMindmapsMap, savePartMindMap]);
 
