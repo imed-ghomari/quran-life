@@ -75,6 +75,7 @@ export interface MemoryNode {
 
 export interface AudioSettings {
     selectedReciterId: string;
+    playbackSpeed?: PlaybackSpeed;
     playbackState?: {
         surahId: number;
         ayahId: number;

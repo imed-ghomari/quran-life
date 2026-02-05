@@ -16,6 +16,7 @@ interface AudioPlayerProps {
 }
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2];
+const SPEED_STORAGE_KEY = 'audio_playback_speed';
 
 export default function AudioPlayer({
     verses,
@@ -44,6 +45,7 @@ export default function AudioPlayer({
     // Progress
     const [progress, setProgress] = useState(0);
     const [elapsedTime, setElapsedTime] = useState(0);
+    const savedPlaybackStateRef = useRef<{ surahId: number; ayahId: number; timestamp: number } | null>(null);
 
     const currentVerse = verses[currentVerseIndex];
     const totalVerses = verses.length;
@@ -97,6 +99,24 @@ export default function AudioPlayer({
         });
     }, [verses, settings?.audioSettings]); // Add verses and audioSettings dependency
 
+    useEffect(() => {
+        savedPlaybackStateRef.current = settings?.audioSettings?.playbackState ?? null;
+    }, [settings?.audioSettings?.playbackState]);
+
+    useEffect(() => {
+        const stored = settings?.audioSettings?.playbackSpeed ?? (() => {
+            const raw = localStorage.getItem(SPEED_STORAGE_KEY);
+            if (!raw) return undefined;
+            const parsed = Number(raw) as PlaybackSpeed;
+            return SPEED_OPTIONS.includes(parsed) ? parsed : undefined;
+        })();
+
+        if (stored && stored !== speed) {
+            setSpeed(stored);
+            if (audioRef.current) audioRef.current.playbackRate = stored;
+        }
+    }, [settings?.audioSettings?.playbackSpeed, speed]);
+
     // Load Recitation Data when Reciter or Surah changes
     useEffect(() => {
         if (!selectedReciter || !currentVerse) return;
@@ -143,18 +163,34 @@ export default function AudioPlayer({
                 const currentSrcPath = audioRef.current.src.split('?')[0]; // basic check
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
 
+                let desiredStartTime = startTime;
+                const saved = savedPlaybackStateRef.current;
+                if (
+                    saved &&
+                    saved.surahId === currentVerse.surahId &&
+                    saved.ayahId === currentVerse.ayahId &&
+                    Number.isFinite(saved.timestamp)
+                ) {
+                    desiredStartTime = saved.timestamp;
+                    if (endTime !== null) {
+                        const clamped = Math.min(Math.max(desiredStartTime, startTime), Math.max(startTime, endTime - 0.05));
+                        desiredStartTime = clamped;
+                    }
+                }
+
                 if (currentSrcPath !== newSrcPath) {
                     audioRef.current.src = url;
-                    audioRef.current.currentTime = startTime;
+                    audioRef.current.currentTime = desiredStartTime;
                 } else {
                     // Same src (Surah mode), just seek
                     // Only seek if significantly different (to avoid jitter)
-                    if (Math.abs(audioRef.current.currentTime - startTime) > 0.5) {
-                        audioRef.current.currentTime = startTime;
+                    if (Math.abs(audioRef.current.currentTime - desiredStartTime) > 0.5) {
+                        audioRef.current.currentTime = desiredStartTime;
                     }
                 }
                 
                 audioRef.current.playbackRate = speed;
+                setElapsedTime(desiredStartTime);
                 
                 if (isPlaying) {
                     audioRef.current.play().catch(console.error);
@@ -179,6 +215,7 @@ export default function AudioPlayer({
                     saveSettings({
                         audioSettings: {
                             selectedReciterId: selectedReciter.id,
+                            playbackSpeed: speed,
                             updatedAt: new Date().toISOString(),
                             playbackState: {
                                 surahId: currentVerse.surahId,
@@ -250,6 +287,7 @@ export default function AudioPlayer({
             saveSettings({
                 audioSettings: {
                     selectedReciterId: id,
+                    playbackSpeed: speed,
                     updatedAt: new Date().toISOString()
                 }
             });
@@ -273,6 +311,17 @@ export default function AudioPlayer({
         const newSpeed = SPEED_OPTIONS[nextIndex];
         setSpeed(newSpeed);
         if (audioRef.current) audioRef.current.playbackRate = newSpeed;
+        localStorage.setItem(SPEED_STORAGE_KEY, newSpeed.toString());
+
+        if (selectedReciter) {
+            saveSettings({
+                audioSettings: {
+                    selectedReciterId: selectedReciter.id,
+                    playbackSpeed: newSpeed,
+                    updatedAt: new Date().toISOString()
+                }
+            });
+        }
     };
 
     return (
