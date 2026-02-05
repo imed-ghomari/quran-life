@@ -2496,7 +2496,10 @@ export default function SettingsPage() {
 
                                                                                                     <div className="mut-matches" style={{ marginTop: '1.5rem' }}>
                                                                                                         {(() => {
-                                                                                                            const matches = entry.matches.filter((m: any) => m !== representativeAbs);
+                                                                                                            const matches = entry.matches.filter((matchAbs: number) => {
+                                                                                                                const matchRef = absoluteToSurahAyah(matchAbs);
+                                                                                                                return matchRef.surahId !== surah.id;
+                                                                                                            });
                                                                                                             const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
                                                                                                             const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
                                                                                                             const hasMore = matches.length > 4;
@@ -2651,7 +2654,10 @@ export default function SettingsPage() {
                                             const mutEntry = getMutashabihatForAbsolute(absRef).find(m => m.phraseId === group.phraseId);
                                             if (!mutEntry || !baseVerse) return null;
 
-                                            const matches = mutEntry.matches;
+                                            const matches = mutEntry.matches.filter((matchAbs: number) => {
+                                                const matchRef = absoluteToSurahAyah(matchAbs);
+                                                return matchRef.surahId !== ref.surahId;
+                                            });
                                             const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
                                             const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
                                             const hasMore = matches.length > 4;
@@ -2670,7 +2676,7 @@ export default function SettingsPage() {
                                                             />
                                                         </p>
 
-                                                        {displayedMatches.filter((matchAbs: number) => matchAbs !== absRef).map((matchAbs: number, idx: number) => {
+                                                        {displayedMatches.map((matchAbs: number, idx: number) => {
                                                             const mref = absoluteToSurahAyah(matchAbs);
                                                             const msurah = getSurah(mref.surahId);
                                                             const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
