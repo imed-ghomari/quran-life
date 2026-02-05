@@ -5,11 +5,6 @@
     "content": "# The Quran Life Philosophy\n\nWelcome to the **Quran Life** documentation. This application is not just a tool—it is a unified system designed for the lifelong journey of Quran memorization and maintenance.\n\n## Beyond Rote Memorization\n\nThe core philosophy of Quran Life is to **maximize sequential Quranic verse recall with minimal cognitive effort.** \n\nTraditional memorization works but is not efficient due to:\n1. **The Forgetting Curve**: Without structured review, what is learned is quickly lost.\n2. **Cognitive Overload**: Managing what to review, when to review, and how to fix errors can become overwhelming.\n\nQuran Life addresses these by integrating three powerful pillars:\n- **Visual Memory (Mindmaps)**: Giving your brain a physical \"place\" to store verses.\n- **Smart Review (Spaced Repetition)**: Scientifically optimized schedules to ensure long-term retention.\n- **Similar Verse (Mutashabihat) Awareness**: Proactive handling of common points of confusion.\n\n## The \"Life\" in Quran Life\nThe app is designed to be a companion for life. It handles the \"administrative\" side of memorization—scheduling, tracking, and error analysis—allowing you to focus entirely on the sacred words.\n\n---\n\n**Ready to start?** Head over to our [Getting Started Guide](/docs/philosophy/getting-started) for a step-by-step walkthrough of the app.\n"
   },
   {
-    "title": "Index",
-    "href": "/docs/mindmaps",
-    "content": "# Quran Mindmaps\n\nExplore mindmaps for all parts and surahs of the Quran to aid in your memorization and understanding.\n\n## Browse by Part\n[Part 1](/docs/mindmaps/part-1)\n...\n\n## Browse by Surah\n[Al-Fatiha](/docs/mindmaps/surah-1)\n...\n"
-  },
-  {
     "title": "Part 1",
     "href": "/docs/mindmaps/part-1",
     "content": "# Part 1\n\n## Mindmap\n\n## Explanation\n"

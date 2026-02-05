@@ -58,6 +58,9 @@ function generateIndex() {
         if (href === '/docs/index') href = '/docs'; // Should not happen with above logic but safe guard
         if (href === '') href = '/docs';
 
+        // Exclude the "Index" page from the search index
+        if (title === 'Index') return;
+
         documents.push({
             title,
             href,
