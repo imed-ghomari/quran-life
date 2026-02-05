@@ -337,7 +337,7 @@ export default function TodoPage() {
                     imageUrlDark: undefined,
                     tldrawSnapshot: data,
                     isComplete: true,
-                    source: 'premade',
+                    source: 'premade' as const,
                     premadeId: `surah-${id}`,
                     premadeImportedAt: new Date().toISOString(),
                     premadeEdited: false
@@ -353,7 +353,7 @@ export default function TodoPage() {
                     imageUrlDark: undefined,
                     tldrawSnapshot: data,
                     isComplete: true,
-                    source: 'premade',
+                    source: 'premade' as const,
                     premadeId: `part-${id}`,
                     premadeImportedAt: new Date().toISOString(),
                     premadeEdited: false
@@ -513,13 +513,14 @@ export default function TodoPage() {
         const { surahId } = activeMindmapEditor;
 
         const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
+        const source = existing.source === 'premade' ? 'premade' : 'custom';
         const updated = {
             ...existing,
             imageUrl: undefined,
             imageUrlDark: undefined,
             tldrawSnapshot: snapshot,
-            source: existing.source || 'custom',
-            premadeEdited: existing.source === 'premade' ? true : existing.premadeEdited
+            source,
+            premadeEdited: source === 'premade' ? true : existing.premadeEdited
         };
         await saveMindMap(surahId, updated);
         if (shouldClose) {
@@ -532,13 +533,14 @@ export default function TodoPage() {
         const { partId } = activePartEditor;
 
         const existing = partMindmapsMap[partId] || { partId, imageUrl: null, description: '', isComplete: false };
+        const source = existing.source === 'premade' ? 'premade' : 'custom';
         const updated = {
             ...existing,
             imageUrl: undefined,
             imageUrlDark: undefined,
             tldrawSnapshot: snapshot,
-            source: existing.source || 'custom',
-            premadeEdited: existing.source === 'premade' ? true : existing.premadeEdited
+            source,
+            premadeEdited: source === 'premade' ? true : existing.premadeEdited
         };
         await savePartMindMap(partId, updated);
         if (shouldClose) {
