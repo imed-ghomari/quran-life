@@ -12,8 +12,10 @@ export default function SearchHighlight() {
     useEffect(() => {
         if (!highlight) return;
 
-        const term = decodeURIComponent(highlight).toLowerCase();
-        if (!term) return;
+        const rawTerm = decodeURIComponent(highlight).trim();
+        if (!rawTerm) return;
+        const terms = Array.from(new Set(rawTerm.toLowerCase().split(/\s+/).filter(Boolean)));
+        if (terms.length === 0) return;
 
         // Cleanup any previous observer
         if (observerRef.current) {
@@ -28,8 +30,8 @@ export default function SearchHighlight() {
             // Check if article has meaningful content (not just empty or loading)
             // Look for text that contains our search term
             const articleText = article.textContent?.toLowerCase() || '';
-            if (!articleText.includes(term)) {
-                console.log('SearchHighlight: Term not found in article yet, waiting...', { term });
+            if (!terms.some(term => articleText.includes(term))) {
+                console.log('SearchHighlight: Term not found in article yet, waiting...', { terms });
                 return false;
             }
 
@@ -55,23 +57,28 @@ export default function SearchHighlight() {
             const nodesToProcess: Text[] = [];
             let currentNode = walker.nextNode();
             while (currentNode) {
-                if (currentNode.parentElement?.tagName !== 'SCRIPT' &&
-                    currentNode.parentElement?.tagName !== 'STYLE' &&
-                    currentNode.textContent?.toLowerCase().includes(term)) {
-                    nodesToProcess.push(currentNode as Text);
+                if (currentNode.nodeType === Node.TEXT_NODE) {
+                    const textNode = currentNode as Text;
+                    if (textNode.parentElement?.tagName !== 'SCRIPT' &&
+                        textNode.parentElement?.tagName !== 'STYLE' &&
+                        terms.some(term => textNode.textContent?.toLowerCase().includes(term))) {
+                        nodesToProcess.push(textNode);
+                    }
                 }
                 currentNode = walker.nextNode();
             }
 
             nodesToProcess.forEach(node => {
                 const text = node.textContent || '';
-                const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const parts = text.split(new RegExp(`(${escapedTerm})`, 'gi'));
+                const escapedTerms = terms
+                    .map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                    .join('|');
+                const parts = text.split(new RegExp(`(${escapedTerms})`, 'gi'));
 
                 if (parts.length > 1) {
                     const fragment = document.createDocumentFragment();
                     parts.forEach(part => {
-                        if (part.toLowerCase() === term) {
+                        if (terms.includes(part.toLowerCase())) {
                             const span = document.createElement('span');
                             span.className = 'search-highlight';
                             span.style.backgroundColor = 'rgba(234, 179, 8, 0.4)';
@@ -93,22 +100,12 @@ export default function SearchHighlight() {
             const container = document.querySelector('.docs-main') as HTMLElement;
 
             if (firstHighlight && container) {
-                // Reset scroll to top first
-                container.scrollTop = 0;
-
-                // Force reflow
-                container.offsetHeight;
-
                 // Calculate and scroll after layout update
                 requestAnimationFrame(() => {
                     setTimeout(() => {
                         const containerRect = container.getBoundingClientRect();
                         const highlightRect = firstHighlight.getBoundingClientRect();
-
-                        // Since container.scrollTop is 0, this gives us the actual offset
-                        const highlightOffset = highlightRect.top - containerRect.top;
-
-                        // Scroll to center the highlight in the viewport
+                        const highlightOffset = highlightRect.top - containerRect.top + container.scrollTop;
                         const targetScroll = highlightOffset - (containerRect.height / 2) + (highlightRect.height / 2);
 
                         console.log('SearchHighlight: Scrolling to highlight', {
