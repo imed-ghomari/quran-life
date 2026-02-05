@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import Script from 'next/script';
 import { Outfit } from 'next/font/google';
 import './globals.css';
 import 'tldraw/tldraw.css';
@@ -27,8 +26,8 @@ export const metadata: Metadata = {
     description: 'Complete your learned Quran portions in manageable daily readings',
     manifest: '/manifest.json',
     icons: {
-        icon: '/icon-desktop-192.png',
-        apple: '/icon-mobile-180.png',
+        icon: '/logo.png',
+        apple: '/logo.png',
     },
     appleWebApp: {
         capable: true,
@@ -48,15 +47,6 @@ export default function RootLayout({
     return (
         <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
-                <Script id="register-sw" strategy="afterInteractive">
-                    {`
-                        if ('serviceWorker' in navigator) {
-                            window.addEventListener('load', function() {
-                                navigator.serviceWorker.register('/sw.js').catch(function() {});
-                            });
-                        }
-                    `}
-                </Script>
                 <Providers>
                     <ErrorBoundary>
                         <AppShell>

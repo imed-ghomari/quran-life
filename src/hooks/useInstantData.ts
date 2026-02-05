@@ -294,11 +294,17 @@ export function useInstantMutashabihat() {
         }));
     };
 
+    const deleteCustom = (id: string) => {
+        if (!user) return Promise.resolve();
+        return db.transact(db.tx.customMutashabihat[id].delete());
+    };
+
     return useMemo(() => ({
         decisions,
         custom,
         saveDecision,
         saveCustom,
+        deleteCustom,
         isLoading,
         error
     }), [decisions, custom, isLoading, error]);

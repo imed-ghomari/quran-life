@@ -286,6 +286,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <img src="/logo.png?v=3" width={20} height={20} alt="Quran Life Logo" />
             <span>Quran Life</span>
           </div>
+          <div className="footer-links">
+            <a href="/terms">Terms of Service</a>
+            <span aria-hidden="true">•</span>
+            <a href="/privacy">Privacy Policy</a>
+          </div>
           <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>
         </div>
       </footer>

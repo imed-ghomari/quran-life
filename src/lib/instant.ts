@@ -84,8 +84,14 @@ const schema = i.schema({
     }),
     customMutashabihat: i.entity({
       id: i.string(),
-      phrase: i.string(),
-      verses: i.json(), // Array of refs
+      verseId: i.string(),
+      targetVerseId: i.string(),
+      surahId: i.number(),
+      ayahId: i.number(),
+      targetSurahId: i.number(),
+      targetAyahId: i.number(),
+      notes: i.string(),
+      status: i.string(),
       createdAt: i.string(),
       userId: i.string(),
     }),

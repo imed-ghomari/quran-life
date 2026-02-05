@@ -512,6 +512,26 @@
   color: var(--foreground);
 }
 
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.footer-links a {
+  color: var(--foreground-secondary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer-links a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .landing-wrapper {
     --landing-nav-height: 64px;
