@@ -514,7 +514,7 @@ export default function TodoPage() {
         const { surahId } = activeMindmapEditor;
 
         const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const source = existing.source === 'premade' ? 'premade' : 'custom';
+        const source: 'premade' | 'custom' = existing.source === 'premade' ? 'premade' : 'custom';
         const updated = {
             ...existing,
             imageUrl: undefined,
@@ -534,7 +534,7 @@ export default function TodoPage() {
         const { partId } = activePartEditor;
 
         const existing = partMindmapsMap[partId] || { partId, imageUrl: null, description: '', isComplete: false };
-        const source = existing.source === 'premade' ? 'premade' : 'custom';
+        const source: 'premade' | 'custom' = existing.source === 'premade' ? 'premade' : 'custom';
         const updated = {
             ...existing,
             imageUrl: undefined,
