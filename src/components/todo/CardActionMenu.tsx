@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, PenTool, Download, Trash2, SplitSquareHorizontal, FileText, Check, AlertTriangle, Search } from 'lucide-react';
+import { MoreVertical, PenTool, Download, Trash2, SplitSquareHorizontal, FileText, Check, AlertTriangle, Search, Upload, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 
 interface CardActionMenuProps {
@@ -11,6 +11,9 @@ interface CardActionMenuProps {
     hasMindmap: boolean;
     cardType: 'surah' | 'part' | 'suspended' | 'similarity';
     isProcessing?: boolean;
+    showExport?: boolean;
+    showDelete?: boolean;
+    showReset?: boolean;
 
     // State
     isOpen: boolean;
@@ -21,6 +24,8 @@ interface CardActionMenuProps {
     onEditMindmap: () => void;
     onImportMindmap: () => void;
     onDeleteMindmap: () => void;
+    onExportMindmap?: () => void;
+    onResetMindmap?: () => void;
     onChangeSplits: () => void;
     onFixIssue?: () => void;      // For Suspended
     onResolveSimilarity?: () => void; // For Similarity
@@ -39,10 +44,15 @@ export default function CardActionMenu({
     onEditMindmap,
     onImportMindmap,
     onDeleteMindmap,
+    onExportMindmap,
+    onResetMindmap,
     onChangeSplits,
     onFixIssue,
     onResolveSimilarity,
     docLink,
+    showExport,
+    showDelete,
+    showReset,
 }: CardActionMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -104,6 +114,15 @@ export default function CardActionMenu({
                 isFirst: true
             });
 
+            if (showExport) {
+                items.push({
+                    label: 'Export Mindmap',
+                    icon: <Upload size={20} />,
+                    onClick: onExportMindmap,
+                    disabled: isProcessing || !hasMindmap
+                });
+            }
+
             if (!hasMindmap) {
                 items.push({
                     label: 'Import Template',
@@ -132,16 +151,27 @@ export default function CardActionMenu({
                 });
             }
 
-            if (hasMindmap) {
+            if (hasMindmap && (showDelete || showReset)) {
                 items.push({ type: 'divider' });
-                items.push({
-                    label: 'Delete Mindmap',
-                    icon: <Trash2 size={20} />,
-                    onClick: onDeleteMindmap,
-                    disabled: isProcessing,
-                    danger: true,
-                    isLast: true
-                });
+                if (showReset) {
+                    items.push({
+                        label: 'Reset to Original',
+                        icon: <RotateCcw size={20} />,
+                        onClick: onResetMindmap,
+                        disabled: isProcessing,
+                        danger: true,
+                        isLast: true
+                    });
+                } else if (showDelete) {
+                    items.push({
+                        label: 'Delete Mindmap',
+                        icon: <Trash2 size={20} />,
+                        onClick: onDeleteMindmap,
+                        disabled: isProcessing,
+                        danger: true,
+                        isLast: true
+                    });
+                }
             }
         }
 

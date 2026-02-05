@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -18,6 +18,7 @@ import MindmapViewer from '@/components/MindmapViewer';
 import TodoKanban from '@/components/todo/TodoKanban';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
+import { APP_MODE, isOwnerMode } from '@/lib/appMode';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -38,7 +39,7 @@ export default function TodoPage() {
     const { settings, saveSettings } = useInstantSettings();
     const { nodes, saveNode } = useInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
-    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap } = useInstantMindMaps();
+    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
 
     // Debug logging for development
     useEffect(() => {
@@ -46,6 +47,10 @@ export default function TodoPage() {
     }, [mindmapsList]);
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
+
+    const appMode = APP_MODE;
+    const [premadeIndex, setPremadeIndex] = useState<{ surah: number[]; part: number[]; updatedAt?: string } | null>(null);
+    const autoImportedRef = useRef<Set<string>>(new Set());
 
     // -- 2. Data Memoization & Deduplication --
     // We map raw lists to a dictionary for O(1) access. 
@@ -271,14 +276,18 @@ export default function TodoPage() {
         }
     };
 
-    const handleImportPremade = async (type: 'surah' | 'part', id: number) => {
+    const handleImportPremade = useCallback(async (type: 'surah' | 'part', id: number, options?: { silent?: boolean }) => {
         try {
             const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
             if (!response.ok) {
                 if (response.status === 404) {
-                    alert(`Premade mindmap for this ${type} is not available yet.`);
+                    if (!options?.silent) {
+                        alert(`Premade mindmap for this ${type} is not available yet.`);
+                    }
                 } else {
-                    alert(`Failed to import mindmap: ${response.statusText}`);
+                    if (!options?.silent) {
+                        alert(`Failed to import mindmap: ${response.statusText}`);
+                    }
                 }
                 return;
             }
@@ -327,7 +336,11 @@ export default function TodoPage() {
                     imageUrl: undefined,
                     imageUrlDark: undefined,
                     tldrawSnapshot: data,
-                    isComplete: true
+                    isComplete: true,
+                    source: 'premade',
+                    premadeId: `surah-${id}`,
+                    premadeImportedAt: new Date().toISOString(),
+                    premadeEdited: false
                 };
                 await saveMindMap(id, updated);
             } else {
@@ -339,17 +352,115 @@ export default function TodoPage() {
                     imageUrl: undefined,
                     imageUrlDark: undefined,
                     tldrawSnapshot: data,
-                    isComplete: true
+                    isComplete: true,
+                    source: 'premade',
+                    premadeId: `part-${id}`,
+                    premadeImportedAt: new Date().toISOString(),
+                    premadeEdited: false
                 };
                 await savePartMindMap(pId, updated);
             }
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
-            alert(`Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`);
+            if (!options?.silent) {
+                alert(`Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`);
+            }
         } catch (error) {
             console.error('Import failed:', error);
-            alert('Failed to import mindmap. Please try again.');
+            if (!options?.silent) {
+                alert('Failed to import mindmap. Please try again.');
+            }
         }
-    };
+    }, [mindmaps, partMindmapsMap, saveMindMap, savePartMindMap]);
+
+    const handleExportPremade = useCallback(async (type: 'surah' | 'part', id: number) => {
+        const mindmap = type === 'surah' ? mindmaps[id] : partMindmapsMap[id];
+        if (!mindmap?.tldrawSnapshot) {
+            alert('No tldraw mindmap found to export.');
+            return;
+        }
+        try {
+            const response = await fetch('/api/premade-mindmaps/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type,
+                    id,
+                    tldrawSnapshot: mindmap.tldrawSnapshot,
+                    anchors: type === 'surah' ? (mindmap.anchors || []) : []
+                })
+            });
+            if (!response.ok) {
+                const msg = await response.text();
+                alert(`Export failed: ${msg || response.statusText}`);
+                return;
+            }
+            const data = await response.json();
+            setPremadeIndex(data.index || null);
+            appLogger.addLog(`Exported premade mindmap for ${type} ${id}`, 'success');
+            alert(`Premade mindmap for ${type} ${id} exported successfully.`);
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Failed to export mindmap. Please try again.');
+        }
+    }, [mindmaps, partMindmapsMap]);
+
+    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number) => {
+        await handleImportPremade(type, id);
+    }, [handleImportPremade]);
+
+    useEffect(() => {
+        if (isOwnerMode) return;
+        fetch('/assets/premade-mindmaps/index.json', { cache: 'no-store' })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data && Array.isArray(data.surah) && Array.isArray(data.part)) {
+                    setPremadeIndex(data);
+                } else {
+                    setPremadeIndex({ surah: [], part: [] });
+                }
+            })
+            .catch(() => setPremadeIndex({ surah: [], part: [] }));
+    }, [isOwnerMode]);
+
+    useEffect(() => {
+        if (isOwnerMode) return;
+        if (mindmapsLoading) return;
+        if (!premadeIndex) return;
+
+        const hasAnyPremade = premadeIndex.surah.length > 0 || premadeIndex.part.length > 0;
+        if (!hasAnyPremade) return;
+
+        (async () => {
+            let importedAny = false;
+
+            for (const id of premadeIndex.surah) {
+                const key = `surah-${id}`;
+                if (autoImportedRef.current.has(key)) continue;
+                if (mindmaps[id]) continue; // preserve user-created mindmap
+                await handleImportPremade('surah', id, { silent: true });
+                autoImportedRef.current.add(key);
+                importedAny = true;
+            }
+
+            for (const id of premadeIndex.part) {
+                const key = `part-${id}`;
+                if (autoImportedRef.current.has(key)) continue;
+                if (partMindmapsMap[id]) continue; // preserve user-created mindmap
+                await handleImportPremade('part', id, { silent: true });
+                autoImportedRef.current.add(key);
+                importedAny = true;
+            }
+
+            if (importedAny) {
+                appLogger.addLog('Auto-imported premade mindmaps (per missing item)', 'info');
+            }
+        })();
+    }, [isOwnerMode, premadeIndex, mindmaps, partMindmapsMap, mindmapsLoading, handleImportPremade]);
+
+    const hasPremadeMindmap = useCallback((type: 'surah' | 'part', id: number) => {
+        if (!premadeIndex) return false;
+        return type === 'surah' ? premadeIndex.surah.includes(id) : premadeIndex.part.includes(id);
+    }, [premadeIndex]);
 
     const handlePartComplete = async (part: QuranPart, forceState?: boolean) => {
         const existing = partMindmapsMap[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
@@ -406,7 +517,9 @@ export default function TodoPage() {
             ...existing,
             imageUrl: undefined,
             imageUrlDark: undefined,
-            tldrawSnapshot: snapshot
+            tldrawSnapshot: snapshot,
+            source: existing.source || 'custom',
+            premadeEdited: existing.source === 'premade' ? true : existing.premadeEdited
         };
         await saveMindMap(surahId, updated);
         if (shouldClose) {
@@ -423,7 +536,9 @@ export default function TodoPage() {
             ...existing,
             imageUrl: undefined,
             imageUrlDark: undefined,
-            tldrawSnapshot: snapshot
+            tldrawSnapshot: snapshot,
+            source: existing.source || 'custom',
+            premadeEdited: existing.source === 'premade' ? true : existing.premadeEdited
         };
         await savePartMindMap(partId, updated);
         if (shouldClose) {
@@ -514,6 +629,8 @@ export default function TodoPage() {
                     onPartComplete={handlePartComplete}
                     onSurahComplete={handleMarkComplete}
                     onImportPremade={handleImportPremade}
+                    onExportPremade={isOwnerMode ? handleExportPremade : undefined}
+                    onResetMindmap={!isOwnerMode ? handleResetMindmap : undefined}
                     onEditMindmap={(id, snapshot, isPart) => {
                         if (isPart) {
                             setActivePartEditor({ partId: id as any, snapshot });
@@ -537,6 +654,8 @@ export default function TodoPage() {
                             }
                         }
                     }}
+                    appMode={appMode}
+                    getHasPremade={hasPremadeMindmap}
                     getBuilderState={getBuilderState}
                     onAddBreak={(sid, val) => handleAddBreak(sid, val)}
                     onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
