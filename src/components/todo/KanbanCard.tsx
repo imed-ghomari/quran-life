@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
-import { Brain } from 'lucide-react';
+import { Brain, BadgeCheck, PenSquare, Layers } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
 import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
 
@@ -12,10 +12,14 @@ interface KanbanCardProps {
     index: number;
     isMobile: boolean;
     hasMindmap: boolean;
+    hasPremade?: boolean;
+    appMode: 'owner' | 'user';
     docLink?: string;
     onEditMindmap: () => void;
     onImportMindmap: () => void;
     onDeleteMindmap: () => void;
+    onExportMindmap?: () => void;
+    onResetMindmap?: () => void;
     onChangeSplits: () => void;
     onCardAction?: (action: 'fix' | 'resolve', item: KanbanItem) => void; // Generic action handler fallback
 }
@@ -25,10 +29,14 @@ const KanbanCard = ({
     index,
     isMobile,
     hasMindmap,
+    hasPremade,
+    appMode,
     docLink,
     onEditMindmap,
     onImportMindmap,
     onDeleteMindmap,
+    onExportMindmap,
+    onResetMindmap,
     onChangeSplits,
     onCardAction
 }: KanbanCardProps) => {
@@ -59,6 +67,22 @@ const KanbanCard = ({
         }
     };
 
+    const handleResetClick = async () => {
+        setMenuOpen(false);
+
+        if (window.confirm("Reset this mindmap to the original shared version? Your edits will be replaced.")) {
+            setIsDeleting(true);
+            try {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await onResetMindmap?.();
+            } catch (e) {
+                console.error("Reset failed", e);
+            } finally {
+                setIsDeleting(false);
+            }
+        }
+    };
+
     // Responsive Spacing Config - Tighter for Mobile
     // const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-5';
     // const borderRadius = isMobile ? '!rounded-[12px]' : '!rounded-2xl';
@@ -68,6 +92,9 @@ const KanbanCard = ({
 
     // Determine card type for menu
     const cardType = item.type; // 'surah' | 'part' | 'suspended' | 'similarity'
+    const showExport = appMode === 'owner' && hasMindmap;
+    const showDelete = appMode === 'owner' && hasMindmap;
+    const showReset = appMode === 'user' && hasMindmap && !!hasPremade;
 
     return (
         <>
@@ -90,6 +117,10 @@ const KanbanCard = ({
                         {renderCardZones({
                             item,
                             hasMindmap,
+                            hasPremade,
+                            showExport,
+                            showDelete,
+                            showReset,
                             cardType,
                             menuOpen,
                             setMenuOpen,
@@ -99,6 +130,8 @@ const KanbanCard = ({
                             onEditMindmap,
                             onImportMindmap,
                             onDeleteMindmap: handleDeleteClick,
+                            onExportMindmap,
+                            onResetMindmap: handleResetClick,
                             onChangeSplits,
                             onCardAction,
                             footerPad: 'pt-3',
@@ -114,6 +147,10 @@ const KanbanCard = ({
 interface RenderZoneProps {
     item: KanbanItem;
     hasMindmap: boolean;
+    hasPremade?: boolean;
+    showExport: boolean;
+    showDelete: boolean;
+    showReset: boolean;
     cardType: string;
     menuOpen: boolean;
     setMenuOpen: (open: boolean) => void;
@@ -123,6 +160,8 @@ interface RenderZoneProps {
     onEditMindmap: () => void;
     onImportMindmap: () => void;
     onDeleteMindmap: () => void;
+    onExportMindmap?: () => void;
+    onResetMindmap?: () => void;
     onChangeSplits: () => void;
     onCardAction?: (action: 'fix' | 'resolve', item: KanbanItem) => void;
     footerPad: string;
@@ -132,6 +171,10 @@ interface RenderZoneProps {
 function renderCardZones({
     item,
     hasMindmap,
+    hasPremade,
+    showExport,
+    showDelete,
+    showReset,
     cardType,
     menuOpen,
     setMenuOpen,
@@ -141,6 +184,8 @@ function renderCardZones({
     onEditMindmap,
     onImportMindmap,
     onDeleteMindmap,
+    onExportMindmap,
+    onResetMindmap,
     onChangeSplits,
     onCardAction,
     footerPad,
@@ -238,11 +283,16 @@ function renderCardZones({
                         onEditMindmap={onEditMindmap}
                         onImportMindmap={onImportMindmap}
                         onDeleteMindmap={onDeleteMindmap}
+                        onExportMindmap={onExportMindmap}
+                        onResetMindmap={onResetMindmap}
                         onChangeSplits={onChangeSplits}
                         onFixIssue={handleFixIssue}
                         onResolveSimilarity={handleResolve}
                         docLink={docLink}
                         anchorRef={menuButtonRef}
+                        showExport={showExport}
+                        showDelete={showDelete}
+                        showReset={showReset}
                     />
                 </div>
             </div>
@@ -254,9 +304,42 @@ function renderCardZones({
                         <h4 className="text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
                             {zone2.english}
                         </h4>
-                        {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
-                            <Brain size={14} className="text-[var(--accent)] opacity-80" />
-                        )}
+                    {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
+                        (() => {
+                            const mindmap = (item as any).data?.mindmap;
+                            const isPremade = mindmap?.source === 'premade';
+                            const isEdited = isPremade && mindmap?.premadeEdited;
+                            const hasResetAvailable = !isPremade && !!hasPremade;
+                            const iconClass = 'text-[var(--accent)] opacity-80';
+
+                            if (hasResetAvailable) {
+                                return (
+                                    <span title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
+                                        <Layers size={14} className={iconClass} />
+                                    </span>
+                                );
+                            }
+                            if (isEdited) {
+                                return (
+                                    <span title="Official map (edited)" aria-label="Official map (edited)">
+                                        <PenSquare size={14} className={iconClass} />
+                                    </span>
+                                );
+                            }
+                            if (isPremade) {
+                                return (
+                                    <span title="Official map" aria-label="Official map">
+                                        <BadgeCheck size={14} className={iconClass} />
+                                    </span>
+                                );
+                            }
+                            return (
+                                <span title="Custom map" aria-label="Custom map">
+                                    <Brain size={14} className={iconClass} />
+                                </span>
+                            );
+                        })()
+                    )}
                     </div>
                     {zone2.arabic && (
                         <div className="text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 whitespace-nowrap">

@@ -51,8 +51,12 @@ interface TodoKanbanProps {
     onPartComplete: (part: QuranPart, forceState?: boolean) => void;
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
     onImportPremade: (type: 'surah' | 'part', id: number) => void;
+    onExportPremade?: (type: 'surah' | 'part', id: number) => void;
+    onResetMindmap?: (type: 'surah' | 'part', id: number) => void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
     onDeleteMindmap?: (type: 'surah' | 'part', id: number) => void;
+    appMode: 'owner' | 'user';
+    getHasPremade?: (type: 'surah' | 'part', id: number) => boolean;
 
     // Anchor Builder Props
     getBuilderState: (surahId: number) => AnchorBuilderState;
@@ -79,8 +83,12 @@ export default function TodoKanban({
     onPartComplete,
     onSurahComplete,
     onImportPremade,
+    onExportPremade,
+    onResetMindmap,
     onEditMindmap,
     onDeleteMindmap,
+    appMode,
+    getHasPremade,
     getBuilderState,
     onAddBreak,
     onRemoveBreak,
@@ -361,6 +369,24 @@ export default function TodoKanban({
         }
     }, [onDeleteMindmap]);
 
+    const handleCardExportMindmap = useCallback((item: KanbanItem) => {
+        if (!onExportPremade) return;
+        if (item.type === 'surah') {
+            onExportPremade('surah', item.data.surah.id);
+        } else if (item.type === 'part') {
+            onExportPremade('part', item.data.part);
+        }
+    }, [onExportPremade]);
+
+    const handleCardResetMindmap = useCallback((item: KanbanItem) => {
+        if (!onResetMindmap) return;
+        if (item.type === 'surah') {
+            onResetMindmap('surah', item.data.surah.id);
+        } else if (item.type === 'part') {
+            onResetMindmap('part', item.data.part);
+        }
+    }, [onResetMindmap]);
+
     const handleCardChangeSplits = useCallback((item: KanbanItem) => {
         if (item.type === 'surah') {
             setSplitsModalItem(item);
@@ -383,6 +409,13 @@ export default function TodoKanban({
         }
         return undefined;
     }, []);
+
+    const getHasPremadeForItem = useCallback((item: KanbanItem): boolean => {
+        if (!getHasPremade) return false;
+        if (item.type === 'surah') return getHasPremade('surah', item.data.surah.id);
+        if (item.type === 'part') return getHasPremade('part', item.data.part);
+        return false;
+    }, [getHasPremade]);
 
     const renderSlideOverContent = () => {
         if (!activeItem) return null;
@@ -676,12 +709,16 @@ export default function TodoKanban({
                             items={col.items.filter(filteredItem)}
                             isMobile={isMobile}
                             isTablet={isTablet}
+                            appMode={appMode}
                             onCardClick={(item) => setActiveItem(item)}
                             onEditMindmap={handleCardEditMindmap}
                             onImportMindmap={handleCardImportMindmap}
                             onDeleteMindmap={handleCardDeleteMindmap}
+                            onExportMindmap={handleCardExportMindmap}
+                            onResetMindmap={handleCardResetMindmap}
                             onChangeSplits={handleCardChangeSplits}
                             getHasMindmap={getHasMindmap}
+                            getHasPremade={getHasPremadeForItem}
                             getDocLink={getDocLink}
                         />
                     ))}

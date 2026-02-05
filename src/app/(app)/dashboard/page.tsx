@@ -86,6 +86,7 @@ export default function TodayPage() {
     const [listeningComplete, setListeningComplete] = useState(false);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
+    const lastPortionKeyRef = useRef<string>('');
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -531,8 +532,22 @@ export default function TodayPage() {
     }, [portionData.lastUpdateAt]);
 
     useEffect(() => {
-        setTodaysPortion(portionData.portion);
-        setCurrentVerseIndex(portionData.startVerseIndex);
+        if (!portionData.portion.length) {
+            lastPortionKeyRef.current = '';
+            setTodaysPortion([]);
+            setCurrentVerseIndex(0);
+            return;
+        }
+
+        const first = portionData.portion[0];
+        const last = portionData.portion[portionData.portion.length - 1];
+        const portionKey = `${first.surahId}:${first.ayahId}-${last.surahId}:${last.ayahId}-${portionData.portion.length}`;
+
+        if (portionKey !== lastPortionKeyRef.current) {
+            lastPortionKeyRef.current = portionKey;
+            setTodaysPortion(portionData.portion);
+            setCurrentVerseIndex(portionData.startVerseIndex);
+        }
     }, [portionData]);
 
 
@@ -812,7 +827,7 @@ export default function TodayPage() {
                     handleGrade(false);
                 }
             } else {
-                if (e.key === 'ArrowRight' || e.key === ' ') {
+                if (e.key === 'ArrowRight') {
                     e.preventDefault();
                     handleRevealNext();
                 }
@@ -829,34 +844,30 @@ export default function TodayPage() {
         requestAnimationFrame(() => {
             if (!targetBoxRef.current) return;
             const container = targetBoxRef.current;
-            const nextBlur = container.querySelector('.next-blur') as HTMLElement | null;
+            const containerHeight = container.offsetHeight;
+            const activeVerse = container.querySelector('.active-verse') as HTMLElement | null;
 
-            if (nextBlur) {
-                const containerHeight = container.offsetHeight;
-                const activeVerse = container.querySelector('.active-verse') as HTMLElement | null;
+            if (activeVerse) {
+                const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
+                const visibleChunks = textEl
+                    ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
+                    : [];
+                const lastRevealed = visibleChunks[visibleChunks.length - 1] || activeVerse;
 
-                if (activeVerse) {
-                    const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
-                    const visibleChunks = textEl
-                        ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
-                        : [];
-                    const lastRevealed = visibleChunks[visibleChunks.length - 1] || activeVerse;
+                const chunkTop = lastRevealed.offsetTop;
+                const chunkBottom = chunkTop + lastRevealed.offsetHeight;
+                const viewTop = container.scrollTop;
+                const viewBottom = viewTop + containerHeight;
+                const margin = 8;
 
-                    const chunkTop = lastRevealed.offsetTop;
-                    const chunkBottom = chunkTop + lastRevealed.offsetHeight;
-                    const viewTop = container.scrollTop;
-                    const viewBottom = viewTop + containerHeight;
-                    const margin = 8;
-
-                    if (chunkTop < viewTop + margin || chunkBottom > viewBottom - margin) {
-                        const desiredTop = chunkTop - (containerHeight / 2) + (lastRevealed.offsetHeight / 2);
-                        container.scrollTo({
-                            top: Math.max(0, desiredTop),
-                            behavior: 'smooth'
-                        });
-                    }
-                    return;
+                if (chunkTop < viewTop + margin || chunkBottom > viewBottom - margin) {
+                    const desiredTop = chunkTop - (containerHeight / 2) + (lastRevealed.offsetHeight / 2);
+                    container.scrollTo({
+                        top: Math.max(0, desiredTop),
+                        behavior: 'smooth'
+                    });
                 }
+                return;
             }
 
             if (showGrading) {
@@ -888,85 +899,41 @@ export default function TodayPage() {
         }
     };
 
-    const handleMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
+    const handleMindmapEditorSave = useCallback(async (snapshot: any, _images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activeMindmapEditor) return;
         const { surahId } = activeMindmapEditor;
 
-        const save = (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = mindmaps.find(m => m.surahId === surahId);
-            const newMindMap = {
-                ...existing,
-                surahId,
-                imageUrl: lightUrl || undefined, // Set to undefined to remove from InstantDB if no new image
-                imageUrlDark: darkUrl || undefined,
-                tldrawSnapshot: snapshot,
-                isComplete: true // If we are editing and saving, we assume it's part of completion flow or just an update
-            };
-            saveMindMap(surahId, newMindMap);
-            if (shouldClose) {
-                setActiveMindmapEditor(null);
-            }
+        const existing = mindmaps.find(m => m.surahId === surahId);
+        const newMindMap = {
+            ...existing,
+            surahId,
+            imageUrl: undefined,
+            imageUrlDark: undefined,
+            tldrawSnapshot: snapshot,
+            isComplete: true // If we are editing and saving, we assume it's part of completion flow or just an update
         };
-
-        if (images && (images.light || images.dark)) {
-            const blobs = images;
-            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
-                if (!blob) return Promise.resolve(null);
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                });
-            };
-
-            const [light, dark] = await Promise.all([
-                processBlob(blobs.light),
-                processBlob(blobs.dark)
-            ]);
-            save(light, dark);
-        } else {
-            save(null, null);
+        saveMindMap(surahId, newMindMap);
+        if (shouldClose) {
+            setActiveMindmapEditor(null);
         }
     }, [activeMindmapEditor, mindmaps, saveMindMap]);
 
-    const handlePartMindmapEditorSave = useCallback(async (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
+    const handlePartMindmapEditorSave = useCallback(async (snapshot: any, _images?: { light?: Blob, dark?: Blob }, shouldClose: boolean = true) => {
         if (!activePartEditor) return;
         const { partId } = activePartEditor;
 
-        const save = (lightUrl: string | null, darkUrl: string | null) => {
-            const existing = partMindMaps.find(m => m.partId === partId);
-            const newMindMap = {
-                ...existing,
-                partId,
-                imageUrl: lightUrl || undefined,
-                imageUrlDark: darkUrl || undefined,
-                tldrawSnapshot: snapshot,
-                isComplete: true
-            };
-            savePartMindMap(partId, newMindMap);
-            if (shouldClose) {
-                setActivePartEditor(null);
-            }
+        const existing = partMindMaps.find(m => m.partId === partId);
+        const newMindMap = {
+            ...existing,
+            partId,
+            imageUrl: undefined,
+            imageUrlDark: undefined,
+            tldrawSnapshot: snapshot,
+            isComplete: true
         };
-
-        if (images && (images.light || images.dark)) {
-            const blobs = images;
-            const processBlob = (blob: Blob | undefined): Promise<string | null> => {
-                if (!blob) return Promise.resolve(null);
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                });
-            };
-
-            const [light, dark] = await Promise.all([
-                processBlob(blobs.light),
-                processBlob(blobs.dark)
-            ]);
-            save(light, dark);
-        } else {
-            save(null, null);
+        savePartMindMap(partId, newMindMap);
+        if (shouldClose) {
+            setActivePartEditor(null);
         }
     }, [activePartEditor, partMindMaps, savePartMindMap]);
 
@@ -1032,7 +999,7 @@ export default function TodayPage() {
                                             )}
 
                                             {/* Scrollable verse content */}
-                                            <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, overflowY: 'auto' }}>
+                                            <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                                                 <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
                                                     {activeContent.verses?.map((v, idx) => {
                                                         const chunks = verseChunkMap[idx] || [];
@@ -1058,7 +1025,7 @@ export default function TodayPage() {
                                             </div>
 
                                             {/* Controls */}
-                                            <div style={{ marginTop: '0.75rem', flexShrink: 0 }}>
+                                            <div style={{ marginTop: 'auto', paddingTop: '0.75rem', flexShrink: 0 }}>
                                                 {!showGrading ? (
                                                     <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleRevealNext}>
                                                         {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}

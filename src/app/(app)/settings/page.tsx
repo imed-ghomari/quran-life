@@ -145,6 +145,7 @@ export default function SettingsPage() {
     const { settings, saveSettings } = useInstantSettings();
     const { nodes: instantNodes } = useInstantNodes();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
+    const { theme, setTheme } = useTheme();
 
     const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>({});
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
@@ -898,7 +899,6 @@ export default function SettingsPage() {
         }
 
         if (activeMobilePage === 'appearance') {
-            const { theme, setTheme } = useTheme();
             return (
                 <div className="content-wrapper">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
