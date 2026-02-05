@@ -594,7 +594,7 @@ export default function TodoKanban({
                                 placeholder="Search..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full !bg-transparent !border-none !outline-none !ring-0 !focus:ring-0 !focus:outline-none placeholder:text-[var(--foreground-secondary)] text-[var(--foreground)] !p-0 !m-0 !shadow-none"
+                                className="w-full !bg-transparent !border-none !outline-none !ring-0 !focus:ring-0 !focus:outline-none placeholder:text-[var(--foreground-secondary)] text-[var(--foreground)] !p-0 !m-0 !shadow-none !rounded-none"
                                 style={{ 
                                     padding: 0,
                                     fontSize: '0.75rem',
