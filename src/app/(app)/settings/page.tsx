@@ -184,6 +184,7 @@ export default function SettingsPage() {
             ayahIds: number[];
             entry: any;
             absRefs: number[];
+            customId?: string;
         };
         representativeAbs: number;
     } | null>(null);
@@ -2200,7 +2201,8 @@ export default function SettingsPage() {
                                                     phraseId: string,
                                                     ayahIds: number[],
                                                     entry: any,
-                                                    absRefs: number[]
+                                                    absRefs: number[],
+                                                    customId?: string
                                                 }> = {};
 
                                                 getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
@@ -2320,7 +2322,8 @@ export default function SettingsPage() {
                                                                         phraseId: string,
                                                                         ayahIds: number[],
                                                                         entry: any,
-                                                                        absRefs: number[]
+                                                                        absRefs: number[],
+                                                                        customId?: string
                                                                     }> = {};
 
                                                                     getAllMutashabihatRefs().filter(abs => {
