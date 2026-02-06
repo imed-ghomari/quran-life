@@ -1,57 +1,65 @@
-const withPWA = require('next-pwa')({
-    dest: 'public',
-    register: true,
-    skipWaiting: true,
-    cleanupOutdatedCaches: true,
-    disable: process.env.NODE_ENV === 'development',
-    fallbacks: {
-        document: '/offline',
-    },
-    runtimeCaching: [
-        // HTML navigations: prefer network, but allow fast fallback if network is slow.
-        {
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
-            options: {
-                cacheName: 'pages',
-                networkTimeoutSeconds: 4,
-                expiration: {
-                    maxEntries: 50,
-                    maxAgeSeconds: 24 * 60 * 60,
+let withPWA = (config) => config;
+try {
+    withPWA = require('next-pwa')({
+        dest: 'public',
+        register: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true,
+        disable: process.env.NODE_ENV === 'development',
+        fallbacks: {
+            document: '/offline',
+        },
+        runtimeCaching: [
+            // HTML navigations: prefer network, but allow fast fallback if network is slow.
+            {
+                urlPattern: ({ request }) => request.mode === 'navigate',
+                handler: 'NetworkFirst',
+                options: {
+                    cacheName: 'pages',
+                    networkTimeoutSeconds: 4,
+                    expiration: {
+                        maxEntries: 50,
+                        maxAgeSeconds: 24 * 60 * 60,
+                    },
                 },
             },
-        },
-        // Static assets: update in background to reduce stale UI.
-        {
-            urlPattern: ({ request }) =>
-                request.destination === 'style' ||
-                request.destination === 'script' ||
-                request.destination === 'font' ||
-                request.destination === 'image',
-            handler: 'StaleWhileRevalidate',
-            options: {
-                cacheName: 'static-assets',
-                expiration: {
-                    maxEntries: 200,
-                    maxAgeSeconds: 7 * 24 * 60 * 60,
+            // Static assets: update in background to reduce stale UI.
+            {
+                urlPattern: ({ request }) =>
+                    request.destination === 'style' ||
+                    request.destination === 'script' ||
+                    request.destination === 'font' ||
+                    request.destination === 'image',
+                handler: 'StaleWhileRevalidate',
+                options: {
+                    cacheName: 'static-assets',
+                    expiration: {
+                        maxEntries: 200,
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    },
                 },
             },
-        },
-        // JSON data: keep short-lived cache to avoid long-lived stale data.
-        {
-            urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.endsWith('.json'),
-            handler: 'NetworkFirst',
-            options: {
-                cacheName: 'data-json',
-                networkTimeoutSeconds: 3,
-                expiration: {
-                    maxEntries: 50,
-                    maxAgeSeconds: 24 * 60 * 60,
+            // JSON data: keep short-lived cache to avoid long-lived stale data.
+            {
+                urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.endsWith('.json'),
+                handler: 'NetworkFirst',
+                options: {
+                    cacheName: 'data-json',
+                    networkTimeoutSeconds: 3,
+                    expiration: {
+                        maxEntries: 50,
+                        maxAgeSeconds: 24 * 60 * 60,
+                    },
                 },
             },
-        },
-    ],
-});
+        ],
+    });
+} catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+        // Avoid failing the build if next-pwa is not installed.
+        console.warn('next-pwa is not installed; skipping PWA setup.');
+    }
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
