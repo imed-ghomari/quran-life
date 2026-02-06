@@ -162,7 +162,7 @@
 
 /* Hero Section */
 .hero {
-  padding: calc(var(--landing-nav-height) + 5rem) 0 6rem;
+  padding: 10rem 0 6rem;
   overflow: hidden;
   position: relative;
 }

@@ -81,7 +81,9 @@ export default function DocsSearch({ className }: { className?: string }) {
             }
 
             if (docs) {
-                const searchResults = performSearch(docs, searchQuery);
+                // Exclude the "Index" page from search results
+                const filteredDocs = docs.filter(doc => doc.title !== 'Index');
+                const searchResults = performSearch(filteredDocs, searchQuery);
                 setResults(searchResults.slice(0, 10)); // Limit to 10
             }
         } catch (error) {

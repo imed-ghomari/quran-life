@@ -85,7 +85,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </h1>
               <p className="hero-subtitle delay-100 animate-entry">
                 The first platform combining intuitive mindmapping and smart spaced repetition
-                to help you memorize and retain the Quran forever—without the struggle.
+                to help you memorize and retain the Quran forever without the struggle.
               </p>
             </div>
 
