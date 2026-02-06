@@ -287,9 +287,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="footer-links">
-            <a href="/terms">Terms of Service</a>
+            <a className="footer-link" href="/terms">Terms of Service</a>
             <span aria-hidden="true">•</span>
-            <a href="/privacy">Privacy Policy</a>
+            <a className="footer-link" href="/privacy">Privacy Policy</a>
+            <span aria-hidden="true">•</span>
+            <a
+              className="footer-link discord-link"
+              href="https://discord.gg/placeholder"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Discord Community
+            </a>
           </div>
           <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>
         </div>

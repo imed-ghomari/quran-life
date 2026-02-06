@@ -521,15 +521,36 @@
   font-size: 0.9rem;
 }
 
-.footer-links a {
+.footer-link {
   color: var(--foreground-secondary);
   text-decoration: none;
   font-weight: 500;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.footer-links a:hover {
+.footer-link:hover {
   color: var(--foreground);
-  text-decoration: underline;
+  background: var(--landing-accent-light);
+  border-color: var(--border);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.footer-link.discord-link {
+  color: #ffffff;
+  background: linear-gradient(135deg, #5865f2 0%, #7b8bff 100%);
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.25);
+}
+
+.footer-link.discord-link:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #4b57e6 0%, #6d7cff 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(88, 101, 242, 0.28);
 }
 
 @media (max-width: 768px) {
