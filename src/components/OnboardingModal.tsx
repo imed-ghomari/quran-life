@@ -46,54 +46,68 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
     if (!settings || !user) return null;
 
-    const handleNext = async () => {
-        if (step < 4) {
-            setStep(step + 1);
-        } else {
-            // Save final settings
-            const settingsId = settings.id || crypto.randomUUID();
-            
-            const transactions = [
-                db.tx.settings[settingsId].update({
-                    activePart: selectedPart,
-                    completionDays: days,
-                    isOnboardingComplete: true,
-                    skippedSurahs: localSkipped,
-                    userId: user.id
-                }) as any
-            ];
+    const completeOnboarding = async () => {
+        // Save final settings
+        const settingsId = settings.id || crypto.randomUUID();
+        
+        const transactions = [
+            db.tx.settings[settingsId].update({
+                activePart: selectedPart,
+                completionDays: days,
+                isOnboardingComplete: true,
+                skippedSurahs: localSkipped,
+                userId: user.id
+            }) as any
+        ];
 
-            // Sync memory nodes for skipped surahs
-            for (const surahId of localSkipped) {
-                const surah = SURAHS.find(s => s.id === surahId);
-                if (!surah) continue;
+        // Sync memory nodes for skipped surahs
+        for (const surahId of localSkipped) {
+            const surah = SURAHS.find(s => s.id === surahId);
+            if (!surah) continue;
 
-                for (let i = 1; i <= surah.verseCount; i++) {
-                    const nodeId = `verse-${surahId}-${i}-${i}`;
-                    if (!nodes.some(n => n.id === nodeId)) {
-                        const maturity = getMaturityState('mastered');
-                        transactions.push(
-                            // Use deterministic IDs so future updates target the same record
-                            db.tx.memoryNodes[nodeId].update({
-                                id: nodeId,
-                                type: 'verse_segment',
-                                surahId: surahId,
-                                startVerse: i,
-                                endVerse: i,
-                                scheduler: {
-                                    ...createNewFSRSState(),
-                                    ...maturity
-                                },
-                                createdAt: new Date().toISOString(),
-                                userId: user.id
-                            }) as any
-                        );
-                    }
+            for (let i = 1; i <= surah.verseCount; i++) {
+                const targetId = `verse-${surahId}-${i}-${i}`;
+                const alreadyExists = nodes.some(n =>
+                    n.targetId === targetId ||
+                    (
+                        n.type === 'verse_segment' &&
+                        n.surahId === surahId &&
+                        n.startVerse === i &&
+                        n.endVerse === i
+                    )
+                );
+                if (!alreadyExists) {
+                    const maturity = getMaturityState('mastered');
+                    const nodeId = crypto.randomUUID();
+                    transactions.push(
+                        db.tx.memoryNodes[nodeId].update({
+                            id: nodeId,
+                            type: 'verse_segment',
+                            surahId: surahId,
+                            startVerse: i,
+                            endVerse: i,
+                            targetId,
+                            scheduler: {
+                                ...createNewFSRSState(),
+                                ...maturity
+                            },
+                            createdAt: new Date().toISOString(),
+                            userId: user.id
+                        }) as any
+                    );
                 }
             }
-            
-            await db.transact(transactions);
-            onComplete();
+        }
+        
+        await db.transact(transactions);
+        onComplete();
+    };
+
+    const handleNext = async () => {
+        if (step < 3) {
+            setStep(step + 1);
+        } else {
+            await completeOnboarding();
         }
     };
 
@@ -153,7 +167,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         top: 0,
                         height: '100%',
                         background: 'var(--accent)',
-                        width: `${((step + 1) / 5) * 100}%`,
+                        width: `${((step + 1) / 4) * 100}%`,
                         transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     }} />
                 </div>
@@ -303,15 +317,18 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         </div>
                     )}
 
-                    {step === 4 && (
+                    {step === 3 && (
                         <div className="step-content animate-fade-in">
+                            
+
+
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                                 <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
                                     <Info size={28} />
                                 </div>
                                 <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>How to Start</h2>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.5rem' }}>
                                 <div style={{ display: 'flex', gap: '1rem' }}>
                                     <div style={{
                                         width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent)', color: 'white',
@@ -349,39 +366,22 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {step === 3 && (
-                        <div className="step-content animate-fade-in" style={{ textAlign: 'center' }}>
-                            <div style={{ marginBottom: '2rem' }}>
-                                <div style={{
-                                    width: '80px', height: '80px', background: 'var(--success-bg)', borderRadius: '50%',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', color: 'var(--success)'
-                                }}>
-                                    <Star size={40} fill="var(--success)" />
-                                </div>
-                                <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>You&apos;re all set!</h2>
-                                <p style={{ color: 'var(--foreground-secondary)', lineHeight: 1.6 }}>
-                                    Welcome to Quran Life. Your personalized review plan is ready.
-                                </p>
-                            </div>
 
                             <div style={{
                                 background: 'var(--verse-bg)',
                                 padding: '1.5rem',
                                 borderRadius: '20px',
                                 border: '1px dashed var(--accent)',
-                                marginBottom: '2rem'
+                                marginBottom: '2rem',
+                                textAlign: 'center'
                             }}>
                                 <h3 style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                                     <Info size={18} /> Need more help?
                                 </h3>
-                                <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
-                                    Explore our comprehensive documentation to learn more about the methodology.
-                                </p>
+                                
                                 <Link
                                     href="/docs"
+                                    onClick={() => { void completeOnboarding(); }}
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
@@ -396,6 +396,8 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 </Link>
                             </div>
                         </div>
+
+                            
                     )}
                 </div>
 
@@ -443,7 +445,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             boxShadow: '0 4px 12px rgba(91, 143, 185, 0.3)',
                         }}
                     >
-                        {step === 4 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
+                        {step === 3 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
                     </button>
                 </div>
             </div>

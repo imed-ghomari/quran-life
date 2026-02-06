@@ -284,7 +284,7 @@ export default function CardActionMenu({
 
                 <div
                     ref={menuRef}
-                    className="relative w-full bg-[var(--background)] rounded-t-[28px] p-5 pb-8 shadow-2xl"
+                    className="relative w-full bg-[var(--background)] rounded-t-[28px] border-2 border-[var(--border)] p-6 pt-8 pb-16 shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                     style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
                 >
@@ -293,7 +293,7 @@ export default function CardActionMenu({
                         <div className="w-12 h-1.5 bg-[var(--foreground-secondary)]/20 rounded-full" />
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 pb-6">
                         {menuItems.map((item, idx) => {
                             if (item.type === 'divider') {
                                 return <div key={idx} className="h-px bg-[var(--border)] my-2" />;
@@ -303,7 +303,7 @@ export default function CardActionMenu({
                             const isLastItem = item.isLast;
 
                             const className = `
-                                w-full flex items-center gap-4 pl-4 pr-4 py-4 text-[17px] font-medium text-left rounded-2xl transition-colors
+                                w-full flex items-center gap-4 px-6 py-5 text-[17px] font-medium text-left rounded-2xl transition-colors
                                 ${isFirstItem ? 'mt-1' : ''}
                                 ${isLastItem ? 'mb-1' : ''}
                                 ${item.disabled

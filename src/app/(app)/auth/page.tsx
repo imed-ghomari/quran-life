@@ -154,7 +154,7 @@ function AuthContent() {
                         margin: '0 auto 1.5rem'
                     }}>
                         {/* Icon changes based on auth step */}
-                        {authStep === 'email' ? <Lock size={32} color="white" /> : <Hash size={32} />}
+                        {authStep === 'email' ? <Lock size={32} color="white" /> : <Hash size={32} color="white"/>}
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
                         {authStep === 'email' ? 'Sign in to Quran Life' : 'Check your email'}

@@ -40,6 +40,20 @@ export default function SplitsModal({
     hasReviewedHistory
 }: SplitsModalProps) {
     const [visible, setVisible] = useState(isOpen);
+    const [useSlideOver, setUseSlideOver] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const media = window.matchMedia('(max-width: 1024px)');
+        const update = () => setUseSlideOver(media.matches);
+        update();
+        if (media.addEventListener) {
+            media.addEventListener('change', update);
+            return () => media.removeEventListener('change', update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
@@ -56,7 +70,7 @@ export default function SplitsModal({
     if (!visible && !isOpen) return null;
 
     // Mobile: Full SlideOver Presentation
-    if (isMobile) {
+    if (isMobile || useSlideOver) {
         return (
             <SlideOver
                 isOpen={isOpen}
