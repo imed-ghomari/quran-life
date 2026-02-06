@@ -439,9 +439,11 @@ export default function SettingsPage() {
                                                 // InstantDB handles sync automatically
                                                 if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
 
+                                                // Flag sign-out so AuthGate routes to landing instead of /auth
+                                                window.localStorage.setItem('auth:signingOut', '1');
                                                 // Sign out from InstantDB (it clears local storage token)
-                                                db.auth.signOut();
-                                                router.push('/');
+                                                await db.auth.signOut();
+                                                router.replace('/');
                                             }}
                                             style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                         >
@@ -1410,9 +1412,11 @@ export default function SettingsPage() {
                                                                 // InstantDB handles sync automatically
                                                                 if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
 
+                                                                // Flag sign-out so AuthGate routes to landing instead of /auth
+                                                                window.localStorage.setItem('auth:signingOut', '1');
                                                                 // Sign out from InstantDB (it clears local storage token)
-                                                                db.auth.signOut();
-                                                                router.push('/');
+                                                                await db.auth.signOut();
+                                                                router.replace('/');
                                                             }}
                                                             style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                                         >

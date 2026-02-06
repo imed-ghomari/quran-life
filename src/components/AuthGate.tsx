@@ -49,6 +49,15 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (isAuthLoading) return;
     if (!isOnline) return;
 
+    if (typeof window !== 'undefined') {
+      const isSigningOut = window.localStorage.getItem('auth:signingOut') === '1';
+      if (isSigningOut) {
+        window.localStorage.removeItem('auth:signingOut');
+        router.replace('/');
+        return;
+      }
+    }
+
     if (!user) {
       router.replace('/auth');
       return;
