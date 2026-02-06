@@ -2,12 +2,12 @@
 
 // Import necessary React hooks and Next.js utilities
 import { db } from '@/lib/instant';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 // Import UI icons from lucide-react
-import { Mail, ArrowRight, Loader2, CheckCircle, Lock, Hash } from 'lucide-react';
+import { Mail, ArrowRight, Loader2, Lock, Hash } from 'lucide-react';
 
 // Import Suspense for handling asynchronous components
 import { Suspense } from 'react';
@@ -22,9 +22,6 @@ function AuthContent() {
     const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
     // Initialize Next.js router for navigation
     const router = useRouter();
-    // Get URL search parameters (e.g., for redirecting after login or payment success)
-    const searchParams = useSearchParams();
-
     // State for managing email and magic code inputs
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
@@ -41,56 +38,12 @@ function AuthContent() {
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
 
-    // Extract checkout ID and cycle (monthly/yearly) from URL search parameters
-    const checkoutId = searchParams?.get('checkout_id');
-    const cycle = searchParams?.get('cycle') || 'monthly';
-
-    // Define owner emails for special access (e.g., bypassing payment).
-    // These should ideally be loaded from environment variables or a secure configuration.
-    const OWNER_EMAILS = [
-        process.env.NEXT_PUBLIC_OWNER_EMAIL,
-        process.env.NEXT_PUBLIC_OWNER_EMAIL2
-    ].filter(Boolean).map(e => e?.toLowerCase());
-
-    // Use db.useQuery to check for completed purchases in InstantDB for the current user
-    const { data: purchaseData, isLoading: isPurchaseLoading, error: purchaseError } = db.useQuery({
-        purchases: {
-            $: {
-                where: { email: user?.email || '', status: 'completed' }
-            }
-        }
-    });
-
     // Effect hook to handle post-authentication logic and redirects
     useEffect(() => {
-        // Only proceed if user data is available and purchase data has finished loading
-        if (user && !isPurchaseLoading) {
-            // Determine if the current user is an owner
-            const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
-            // Determine if the user has any completed purchases
-            const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
-
-            // If the user is an owner or has a purchase, redirect them to the dashboard
-            if (isOwner || hasPurchase) {
-                router.push('/dashboard');
-            }
+        if (user) {
+            router.push('/dashboard');
         }
-    }, [user, purchaseData, isPurchaseLoading, router, OWNER_EMAILS]); // Dependencies for the effect
-
-    // Determine if the Polar integration is in sandbox mode
-    const isSandbox = process.env.NEXT_PUBLIC_POLAR_SANDBOX === 'true';
-
-    // Define product IDs for monthly and yearly subscriptions, considering sandbox mode
-    const PRODUCT_ID_MONTHLY = isSandbox
-        ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_MONTHLY
-        : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_MONTHLY || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID);
-
-    const PRODUCT_ID_YEARLY = isSandbox
-        ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID_YEARLY
-        : (process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID_YEARLY || PRODUCT_ID_MONTHLY);
-
-    // Select the appropriate product ID based on the 'cycle' search parameter
-    const selectedProductId = cycle === 'yearly' ? PRODUCT_ID_YEARLY : PRODUCT_ID_MONTHLY;
+    }, [user, router]); // Dependencies for the effect
 
     // Handle the magic link authentication process
     const handleAuth = async (e: React.FormEvent) => {
@@ -114,27 +67,6 @@ function AuthContent() {
             setAuthError(err.body?.message || err.message || 'An error occurred during authentication');
         } finally {
             setAuthLoading(false); // Hide loading indicator
-        }
-    };
-
-    // Handle redirection to the Polar checkout page
-    const handleProceedToCheckout = () => {
-        // Construct the checkout URL with the selected product ID
-        const checkoutUrl = `/api/polar/checkout?product_id=${selectedProductId}`;
-        window.location.href = checkoutUrl; // Redirect the user
-    };
-
-    // Allow user to switch accounts after logging in
-    const handleSwitchAccount = async () => {
-        setAuthError(null);
-        try {
-            await db.auth.signOut();
-            setEmail('');
-            setCode('');
-            setAuthStep('email');
-        } catch (err: any) {
-            console.error('Sign out error:', err);
-            setAuthError(err.body?.message || err.message || 'Unable to sign out. Please try again.');
         }
     };
 
@@ -175,8 +107,7 @@ function AuthContent() {
         );
     }
 
-    // If user is logged in but still checking for purchase, show loading spinner
-    if (user && isPurchaseLoading) {
+    if (user) {
         return (
             <div style={{
                 minHeight: '100vh',
@@ -185,95 +116,9 @@ function AuthContent() {
                 justifyContent: 'center',
                 background: 'var(--background)'
             }}>
-                <Spinner text="Checking subscription status..." />
+                <Spinner text="Redirecting to your dashboard..." />
             </div>
         );
-    }
-
-    // If user is logged in but has no purchase and is not an owner, prompt for checkout
-    if (user) {
-        const isOwner = user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
-        const hasPurchase = purchaseData?.purchases && purchaseData.purchases.length > 0;
-
-        if (!isOwner && !hasPurchase) {
-            return (
-                <div style={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '1rem',
-                    background: 'var(--background)'
-                }}>
-                    <div style={{
-                        width: '100%',
-                        maxWidth: '400px',
-                        background: 'var(--background)',
-                        borderRadius: '24px',
-                        padding: '2.5rem',
-                        boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
-                        border: '1px solid var(--border)',
-                        textAlign: 'center'
-                    }}>
-                        <div style={{
-                            width: '60px',
-                            height: '60px',
-                            background: 'var(--accent-light)',
-                            color: 'var(--accent)',
-                            borderRadius: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 1.5rem'
-                        }}>
-                            <CheckCircle size={32} />
-                        </div>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                            Account Created
-                        </h2>
-                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '2rem' }}>
-                            Signed in as {user.email}. One final step to access Quran Life!
-                        </p>
-                        <button
-                            onClick={handleProceedToCheckout}
-                            className="btn btn-primary"
-                            style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 600 }}
-                        >
-                            Proceed to Checkout
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleSwitchAccount}
-                            style={{
-                                marginTop: '1rem',
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--foreground-secondary)',
-                                fontSize: '0.85rem',
-                                cursor: 'pointer',
-                                textDecoration: 'underline'
-                            }}
-                        >
-                            Use a different account
-                        </button>
-                        {authError && (
-                            <p style={{
-                                color: '#ef4444',
-                                fontSize: '0.85rem',
-                                textAlign: 'center',
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                padding: '0.5rem',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(239, 68, 68, 0.2)',
-                                marginTop: '1rem'
-                            }}>
-                                {authError}
-                            </p>
-                        )}
-                    </div>
-                </div>
-            );
-        }
     }
 
     // Render the main authentication form
@@ -295,30 +140,6 @@ function AuthContent() {
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
                 border: '1px solid var(--border)',
             }}>
-                {/* Display payment success message if checkoutId is present in URL */}
-                {checkoutId && (
-                    <div style={{
-                        marginBottom: '1.5rem',
-                        padding: '1rem',
-                        background: 'rgba(126, 153, 122, 0.1)',
-                        borderRadius: '12px',
-                        border: '1px solid var(--success)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.75rem'
-                    }}>
-                        <CheckCircle size={24} style={{ color: 'var(--success)', flexShrink: 0 }} />
-                        <div>
-                            <p style={{ fontWeight: 600, color: 'var(--success)', marginBottom: '0.25rem' }}>
-                                Payment Successful!
-                            </p>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                                Sign in to your account to access Quran Life
-                            </p>
-                        </div>
-                    </div>
-                )}
-
                 {/* Header section for the authentication form */}
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{
