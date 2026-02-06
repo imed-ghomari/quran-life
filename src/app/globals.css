@@ -1762,6 +1762,10 @@ input:focus {
   padding-right: 1.25rem;
 }
 
+.daily-portion-card {
+  min-height: 220px;
+}
+
 @media (max-width: 768px) {
   .future-due-header {
     flex-wrap: wrap;
@@ -1805,6 +1809,14 @@ input:focus {
     padding-right: 2rem;
     padding-top: 2rem;
     padding-bottom: 2rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .daily-portion-card {
+    min-height: 0;
+    height: 50%;
+    align-self: start;
   }
 }
 
