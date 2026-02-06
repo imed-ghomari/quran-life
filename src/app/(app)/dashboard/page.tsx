@@ -357,7 +357,7 @@ export default function TodayPage() {
         setToasts(prev => [...prev, { id, type, message, info }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
-        }, 4000);
+        }, 6000);
     }, []);
 
     // FSRS Optimization Check
@@ -1122,7 +1122,7 @@ export default function TodayPage() {
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
                                         !showGrading ? (
-                                            <button className="btn btn-primary btn-full" onClick={handleRevealNext}>
+                                            <button className="btn btn-primary btn-full review-reveal-btn" onClick={handleRevealNext}>
                                                 {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
                                             </button>
                                         ) : (
@@ -1348,6 +1348,13 @@ export default function TodayPage() {
                                 {t.info}
                             </div>
                         )}
+                        <div
+                            className="toast-countdown"
+                            style={{
+                                background: t.type === 'postpone' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.7)',
+                                ['--toast-duration' as any]: '6s'
+                            }}
+                        />
                     </div>
                 ))}
             </div>

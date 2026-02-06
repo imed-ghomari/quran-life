@@ -518,17 +518,18 @@ export default function StatisticsPage() {
                     />
 
                     <ProgressBarSection
-                        title="Daily Portion"
-                        icon={<Repeat size={20} />}
-                        stats={dailyPortionStats}
-                        minHeight={300}
-                        headerSuffix={
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
-                                <Repeat size={14} />
-                                <span>{dailyPortionStats.completions} cycles</span>
-                            </div>
-                        }
-                    />
+    title="Daily Portion"
+    icon={<Repeat size={20} />}
+    stats={dailyPortionStats}
+    className="daily-portion-card"
+    minHeight={100}  // Add this line - adjust value as needed
+    headerSuffix={
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+            <Repeat size={14} />
+            <span>{dailyPortionStats.completions} cycles</span>
+        </div>
+    }
+/>
 
                     <FutureDueSection
                         stats={futureDueStats}
@@ -837,9 +838,9 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
     );
 }
 
-function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode; minHeight?: number }) {
+function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, className }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode; minHeight?: number; className?: string }) {
     return (
-        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)', minHeight }}>
+        <div className={`card modern-card${className ? ` ${className}` : ''}`} style={{ width: '100%', background: 'var(--background-secondary)', minHeight }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>{icon}</div>

@@ -283,37 +283,39 @@ export function MobileAnchorBuilder({
                 borderBottom: '1px solid var(--border)',
                 zIndex: 40,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                flexDirection: 'column',
+                gap: '0.6rem',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
-                <span style={{ fontWeight: 600 }}>Editing Splits</span>
-                <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                        setIsEditing(false);
-                        onSave();
-                    }}
-                >
-                    <Check size={16} style={{ marginRight: 6 }} />
-                    Confirm
-                </button>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 600 }}>Editing Splits</span>
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => {
+                            setIsEditing(false);
+                            onSave();
+                        }}
+                    >
+                        <Check size={16} style={{ marginRight: 6 }} />
+                        Confirm
+                    </button>
+                </div>
 
-            {/* Sticky Mindmap Preview (Small) */}
-            {hasMindmap && (
-                <div
-                    style={{
-                        height: '190px',
-                        background: 'var(--background-secondary)',
-                        position: 'relative',
-                        zIndex: 30,
-                        flexShrink: 0,
-                        padding: '8px',
-                        borderBottom: '1px solid var(--border)'
-                    }}
-                >
-                    <div style={{ height: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                {/* Mindmap Preview (Sticky) */}
+                {hasMindmap && (
+                    <div
+                        style={{
+                            height: '190px',
+                            background: 'var(--background-secondary)',
+                            position: 'relative',
+                            zIndex: 30,
+                            flexShrink: 0,
+                            padding: '8px',
+                            border: '1px solid var(--border)',
+                            borderRadius: '12px',
+                            overflow: 'hidden'
+                        }}
+                    >
                         <MindmapViewer
                             snapshot={snapshot}
                             imageUrl={mindmapImageUrl || undefined}
@@ -323,8 +325,8 @@ export function MobileAnchorBuilder({
                             height="100%"
                         />
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Scrollable Area */}
             <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
