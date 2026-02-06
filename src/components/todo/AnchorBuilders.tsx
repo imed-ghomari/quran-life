@@ -3,6 +3,7 @@ import Image from 'next/image';
 import {
     SplitSquareHorizontal, Check, PenTool, X, Trash2, Plus, Minus, ImageIcon
 } from 'lucide-react';
+import MindmapViewer from '../MindmapViewer';
 
 export type AnchorBuilderState = { breaks: number[]; labels: Record<number, string> };
 
@@ -12,7 +13,9 @@ export function MobileAnchorBuilder({
     builderState,
     mindmapImageUrl,
     mindmapImageUrlDark,
+    snapshot,
     isDark,
+    showMindmapPreview = true,
     onAddBreak,
     onRemoveBreak,
     onSave,
@@ -23,7 +26,9 @@ export function MobileAnchorBuilder({
     builderState: AnchorBuilderState;
     mindmapImageUrl?: string | null;
     mindmapImageUrlDark?: string | null;
+    snapshot?: any;
     isDark?: boolean;
+    showMindmapPreview?: boolean;
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
     onSave: () => void;
@@ -35,6 +40,8 @@ export function MobileAnchorBuilder({
     const [showFullMindmap, setShowFullMindmap] = useState(false);
     const [zoomLevel, setZoomLevel] = useState(1);
     const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
+    const shouldShowPreview = showMindmapPreview && !!displayUrl;
+    const hasMindmap = !!(snapshot || displayUrl);
 
     // Height of one "verse unit" in pixels
     const VERSE_HEIGHT = 50;
@@ -77,7 +84,7 @@ export function MobileAnchorBuilder({
     const boundaries = Array.from(new Set([1, ...breaks.map(b => b + 1), verseCount + 1])).sort((a, b) => a - b);
 
     // Full Screen Mindmap Overlay
-    if (showFullMindmap && displayUrl) {
+    if (showFullMindmap && shouldShowPreview) {
         return (
             <div
                 style={{
@@ -113,7 +120,7 @@ export function MobileAnchorBuilder({
                     </button>
                 </div>
                 <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                    {displayUrl && (
+                    {shouldShowPreview && (
                         <Image
                             src={displayUrl}
                             alt="Full Mindmap"
@@ -156,7 +163,7 @@ export function MobileAnchorBuilder({
                     flexDirection: 'column',
                     gap: '1rem'
                 }}>
-                    {displayUrl && (
+                    {shouldShowPreview && (
                         <div
                             style={{
                                 height: '150px',
@@ -294,26 +301,27 @@ export function MobileAnchorBuilder({
             </div>
 
             {/* Sticky Mindmap Preview (Small) */}
-            {displayUrl && (
+            {hasMindmap && (
                 <div
                     style={{
-                        height: '80px',
+                        height: '190px',
                         background: 'var(--background-secondary)',
                         position: 'relative',
                         zIndex: 30,
                         flexShrink: 0,
-                        cursor: 'pointer'
+                        padding: '8px',
+                        borderBottom: '1px solid var(--border)'
                     }}
-                    onClick={() => setShowFullMindmap(true)}
                 >
-                    <Image
-                        src={displayUrl}
-                        alt="Mindmap Preview"
-                        fill
-                        style={{ objectFit: 'contain', opacity: 0.8 }}
-                    />
-                    <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'var(--background)', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: '4px' }}>
-                        <ImageIcon size={10} color="var(--foreground)" />
+                    <div style={{ height: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        <MindmapViewer
+                            snapshot={snapshot}
+                            imageUrl={mindmapImageUrl || undefined}
+                            imageUrlDark={mindmapImageUrlDark || undefined}
+                            isDark={isDark || false}
+                            title="Reference Map"
+                            height="100%"
+                        />
                     </div>
                 </div>
             )}
@@ -393,7 +401,7 @@ export function MobileAnchorBuilder({
                     <div style={{
                         position: 'relative',
                         // Large padding to allow first/last gap to reach center
-                        paddingTop: '50vh',
+                        paddingTop: hasMindmap ? '0px' : '50vh',
                         paddingBottom: '50vh',
                     }}>
                         {Array.from({ length: verseCount }).map((_, i) => {

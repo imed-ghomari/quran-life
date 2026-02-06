@@ -24,6 +24,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
     title: 'Quran Life',
     description: 'Complete your learned Quran portions in manageable daily readings',
+    manifest: '/manifest.json',
     icons: {
         icon: '/logo.png',
         apple: '/logo.png',

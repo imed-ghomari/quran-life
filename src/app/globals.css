@@ -514,6 +514,8 @@ article.prose pre {
   --chart-medium: #3b82f6;
   --chart-strong: #0ea5e9;
   --chart-mastered: #10b981;
+
+  --reviews-chart-panel: var(--background);
 }
 
 @media (max-width: 767px) {
@@ -569,6 +571,7 @@ article.prose pre {
     --chart-medium: #2563eb;
     --chart-strong: #0891b2;
     --chart-mastered: #059669;
+
   }
 }
 
@@ -598,6 +601,7 @@ article.prose pre {
   --chart-medium: #2563eb;
   --chart-strong: #0891b2;
   --chart-mastered: #059669;
+
 }
 
 :root[data-theme="dark"] .dark-mode-only {
@@ -633,6 +637,7 @@ article.prose pre {
   --chart-medium: #3b82f6;
   --chart-strong: #0ea5e9;
   --chart-mastered: #10b981;
+
 }
 
 :root[data-theme="light"] .dark-mode-only {
@@ -647,6 +652,7 @@ article.prose pre {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+  transition-delay: 0ms;
 }
 
 html,
@@ -795,6 +801,11 @@ h3 {
   min-height: 0;
   overflow-y: auto;
   padding-bottom: 0.5rem;
+}
+
+/* Reviews: keep only the inner target box scroll */
+.review-section-content .today-card-content {
+  overflow: visible;
 }
 
 .today-card-footer {
@@ -1733,6 +1744,38 @@ input:focus {
   padding-right: 1.25rem;
 }
 
+@media (max-width: 768px) {
+  .future-due-header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .future-due-title {
+    flex: 1 1 auto;
+  }
+
+  .future-due-actions {
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .future-due-toggle,
+  .future-due-range {
+    padding: 6px 10px;
+    min-height: 34px;
+    font-size: 0.75rem;
+    line-height: 1.1;
+  }
+
+  .future-due-toggle input {
+    width: 16px;
+    height: 16px;
+  }
+}
+
 @media (min-width: 768px) {
   .stats-grid-main {
     grid-template-columns: repeat(2, 1fr);
@@ -1764,6 +1807,13 @@ input:focus {
 .stat-label {
   font-size: 0.8rem;
   color: var(--foreground-secondary);
+}
+
+/* Reviews chart styling */
+.reviews-chart {
+  border-radius: 18px;
+  padding: 2px 0 0;
+  box-shadow: none;
 }
 
 /* File upload */
@@ -1961,6 +2011,7 @@ input:focus {
     overflow-y: auto;
     padding-bottom: 0.5rem;
   }
+
 
   .today-card-footer {
     position: sticky;
@@ -2404,6 +2455,69 @@ input:focus {
 .mut-actions-v2 .action-row {
   display: flex;
   gap: 0.75rem;
+}
+
+/* Verse Context (Todo modal) spacing */
+.verse-context-modal .verse-context-content {
+  padding: 1.25rem 1.5rem !important;
+}
+
+.verse-context-modal .verse-context-verse {
+  padding: 0.6rem 0.9rem !important;
+}
+
+.verse-context-modal .verse-context-ayah {
+  padding: 0.45rem !important;
+  border-radius: 10px;
+}
+
+.verse-context-modal .verse-context-header {
+  padding: 0.6rem 1rem !important;
+}
+
+.verse-context-modal .verse-context-title {
+  padding: 0.1rem 0.25rem !important;
+}
+
+.verse-context-modal .verse-context-close {
+  padding: 0.5rem !important;
+}
+
+.verse-context-modal .verse-context-stack > * + * {
+  margin-top: 0 !important;
+}
+
+.verse-context-modal .verse-context-stack {
+  gap: 0 !important;
+}
+
+.verse-context-modal .verse-context-verse {
+  margin: 0 !important;
+}
+
+.verse-context-modal .verse-context-verse + .verse-context-verse {
+  margin-top: 0 !important;
+}
+
+.verse-context-modal .verse-context-label {
+  margin-bottom: 0.25rem !important;
+}
+
+/* Similarity Context (Todo modal) spacing to match Verse Context */
+.similarity-context-modal .similarity-context-content {
+  padding: 1.25rem 1.5rem !important;
+}
+
+.similarity-context-modal .similarity-context-header {
+  padding: 0.6rem 1rem !important;
+}
+
+.similarity-context-modal .similarity-context-title {
+  padding: 0.1rem 0.25rem !important;
+}
+
+.similarity-context-modal .similarity-context-close {
+  padding: 0.5rem !important;
 }
 
 .mut-actions-v2 select {
