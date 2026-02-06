@@ -13,18 +13,19 @@ interface DailyCompletionSliderProps {
 }
 
 export default function DailyCompletionSlider({ days, onChange, activePart }: DailyCompletionSliderProps) {
+    const clampedDays = Math.min(120, Math.max(7, days));
     const stats = useMemo(() => {
         const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart);
         const totalVerses = surahsInPart.reduce((acc, s) => acc + s.verseCount, 0);
         const totalWords = surahsInPart.reduce((acc, s) => acc + (SURAH_WORD_COUNTS[s.id] || 0), 0);
-        const wordsPerDay = Math.ceil(totalWords / days);
+        const wordsPerDay = Math.ceil(totalWords / clampedDays);
 
         return {
-            versesPerDay: Math.ceil(totalVerses / days),
+            versesPerDay: Math.ceil(totalVerses / clampedDays),
             wordsPerDay: wordsPerDay,
             minutesPerDay: Math.ceil(wordsPerDay / 70) // ~70 wpm reading speed
         };
-    }, [activePart, days]);
+    }, [activePart, clampedDays]);
 
     return (
         <div className="daily-completion-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -34,7 +35,7 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
                     type="range"
                     min="7"
                     max="120"
-                    value={days}
+                    value={clampedDays}
                     onChange={(e) => onChange(parseInt(e.target.value))}
                     className="custom-range-slider"
                     style={{
@@ -114,17 +115,17 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
                 gap: '2px'
             }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--foreground-secondary)' }}>Full Cycle Duration</span>
-                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--foreground)' }}>{days} <span style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)' }}>days</span></span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--foreground)' }}>{clampedDays} <span style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)' }}>days</span></span>
             </div>
 
             <style jsx>{`
                 .custom-range-slider::-webkit-slider-thumb {
                     -webkit-appearance: none;
                     appearance: none;
-                    width: 18px;
-                    height: 18px;
+                    width: 26px;
+                    height: 26px;
                     background: var(--accent);
-                    border: 3px solid white;
+                    border: 4px solid white;
                     border-radius: 50%;
                     cursor: pointer;
                     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
@@ -137,10 +138,10 @@ export default function DailyCompletionSlider({ days, onChange, activePart }: Da
                     transform: scale(0.95);
                 }
                 .custom-range-slider::-moz-range-thumb {
-                    width: 18px;
-                    height: 18px;
+                    width: 26px;
+                    height: 26px;
                     background: var(--accent);
-                    border: 3px solid white;
+                    border: 4px solid white;
                     border-radius: 50%;
                     cursor: pointer;
                     box-shadow: 0 4px 10px rgba(0,0,0,0.15);

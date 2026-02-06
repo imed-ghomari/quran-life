@@ -1036,7 +1036,7 @@ export default function TodoKanban({
                 <SplitsModal
                     isOpen={!!splitsModalItem}
                     onClose={() => setSplitsModalItem(null)}
-                    isMobile={isMobile}
+                    isMobile={isMobile || isTablet}
                     surahId={splitsData.surahId}
                     verseCount={splitsData.verseCount}
                     builderState={getBuilderState(splitsData.surahId)}

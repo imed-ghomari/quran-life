@@ -13,11 +13,12 @@ export const OnlineStatusContext = createContext(true);
 function OnboardingWrapper() {
   const pathname = usePathname();
   const isAuthOrHome = pathname === '/' || pathname === '/auth';
+  const isDocs = pathname?.startsWith('/docs');
   const { settings, isLoading, user } = useInstantSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (isAuthOrHome) {
+    if (isAuthOrHome || isDocs) {
       if (showOnboarding) setShowOnboarding(false);
       return;
     }
@@ -25,7 +26,7 @@ function OnboardingWrapper() {
     if (user && !isLoading && settings && !settings.isOnboardingComplete) {
       setShowOnboarding(true);
     }
-  }, [settings, isLoading, user, isAuthOrHome, showOnboarding]);
+  }, [settings, isLoading, user, isAuthOrHome, isDocs, showOnboarding]);
 
   if (!showOnboarding) return null;
 

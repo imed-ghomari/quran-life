@@ -4,7 +4,7 @@ import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
 
 // Static defaults to ensure reference stability
 const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
-    completionDays: 365,
+    completionDays: 30,
     activePart: 5,
     learnedVerses: {},
     skippedSurahs: [],
