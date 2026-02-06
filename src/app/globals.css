@@ -818,6 +818,24 @@ h3 {
   z-index: 1;
 }
 
+.toast-countdown {
+  height: 2px;
+  width: 100%;
+  margin-top: 6px;
+  border-radius: 999px;
+  transform-origin: left center;
+  animation: toastCountdown var(--toast-duration, 6s) linear forwards;
+}
+
+@keyframes toastCountdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 .today-card-footer .btn,
 .today-card-footer .review-btn {
   min-height: 44px;

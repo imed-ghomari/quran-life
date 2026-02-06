@@ -357,7 +357,7 @@ export default function TodayPage() {
         setToasts(prev => [...prev, { id, type, message, info }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
-        }, 4000);
+        }, 6000);
     }, []);
 
     // FSRS Optimization Check
@@ -1348,6 +1348,13 @@ export default function TodayPage() {
                                 {t.info}
                             </div>
                         )}
+                        <div
+                            className="toast-countdown"
+                            style={{
+                                background: t.type === 'postpone' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.7)',
+                                ['--toast-duration' as any]: '6s'
+                            }}
+                        />
                     </div>
                 ))}
             </div>

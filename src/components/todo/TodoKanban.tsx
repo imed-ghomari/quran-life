@@ -1365,6 +1365,13 @@ export default function TodoKanban({
                                     {t.info}
                                 </div>
                             )}
+                            <div
+                                className="toast-countdown"
+                                style={{
+                                    background: 'rgba(255,255,255,0.7)',
+                                    ['--toast-duration' as any]: '6s'
+                                }}
+                            />
                         </div>
                     ))}
                 </div>
