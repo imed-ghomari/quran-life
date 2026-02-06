@@ -791,6 +791,10 @@ export default function TodayPage() {
     const verseChunkMap = activeContent?.verses?.map(v => splitIntoChunks(v.text)) || [];
 
     const handleRevealNext = useCallback(() => {
+        if (activeContent && (activeContent.type === 'mindmap' || activeContent.type === 'part_mindmap')) {
+            setShowGrading(true);
+            return;
+        }
         if (revealedChunks < totalChunks) {
             setRevealedChunks(prev => prev + 1);
         } else if (currentVerseInReview < totalVerses - 1) {
@@ -940,7 +944,7 @@ export default function TodayPage() {
     if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
 
     return (
-        <div className="content-wrapper">
+        <div className="content-wrapper tab-content">
             {activeMindmapEditor && (
                 <MindmapEditor
                     title={`Edit ${getSurah(activeMindmapEditor.surahId)?.name} Mindmap`}
@@ -963,7 +967,7 @@ export default function TodayPage() {
                 {/* Reviews Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span>{(orderedDueNodes.length - currentReviewIndex) > 0 && <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">{orderedDueNodes.length - currentReviewIndex}</span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span></div>
                         <div className="flex items-center gap-2">
                             <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                         </div>
@@ -971,185 +975,195 @@ export default function TodayPage() {
 
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
-                            {/* Empty state */}
-                            {orderedDueNodes.length === 0 ? (
-                                <div className="empty-state">
-                                    <CheckCircle size={40} className="empty-icon" />
-                                    <p>No reviews due!</p>
-                                </div>
-                            ) : activeContent && (
-                                <div style={{ paddingTop: '0.5rem' }}>
-                                    {/* Header */}
-                                    <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
-                                        {`${currentReviewIndex + 1}`} • {
-                                            activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
-                                                activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
-                                                    `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`
-                                        }
-                                    </p>
+                            <div className="today-card-content">
+                                {/* Empty state */}
+                                {orderedDueNodes.length === 0 ? (
+                                    <div className="empty-state">
+                                        <CheckCircle size={40} className="empty-icon" />
+                                        <p>No reviews due!</p>
+                                    </div>
+                                ) : activeContent && (
+                                    <div style={{ paddingTop: '0.5rem' }}>
+                                        {/* Header */}
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
+                                            {`${currentReviewIndex + 1}`} • {
+                                                activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
+                                                    activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
+                                                        `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`
+                                            }
+                                        </p>
 
-                                    {/* Verse type content */}
-                                    {activeContent.type === 'verse' && (
-                                        <div className="review-verse-container" style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0 }}>
-                                            {/* Context */}
-                                            {activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
-                                                <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
-                                                    {activeContent.contextVerses.map(c => <p key={c.ayahId} className="arabic-text" style={{ fontSize: '1rem' }}>{c.text}</p>)}
-                                                </div>
-                                            )}
+                                        {/* Verse type content */}
+                                        {activeContent.type === 'verse' && (
+                                            <div className="review-verse-container" style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0 }}>
+                                                {/* Context */}
+                                                {activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
+                                                    <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
+                                                        {activeContent.contextVerses.map(c => <p key={c.ayahId} className="arabic-text" style={{ fontSize: '1rem' }}>{c.text}</p>)}
+                                                    </div>
+                                                )}
 
-                                            {/* Scrollable verse content */}
-                                            <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                                                <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
-                                                    {activeContent.verses?.map((v, idx) => {
-                                                        const chunks = verseChunkMap[idx] || [];
-                                                        const isPast = idx < currentVerseInReview;
-                                                        const isCurrent = idx === currentVerseInReview;
-                                                        const showAll = showGrading || isPast;
-                                                        const visibleChunks = showAll ? chunks : isCurrent ? chunks.slice(0, revealedChunks) : [];
-                                                        const nextChunk = (!showAll && isCurrent) ? chunks[revealedChunks] : undefined;
-                                                        const remainingHidden = showAll ? '' : (isCurrent ? chunks.slice(revealedChunks + 1).join(' ') : v.text);
+                                                {/* Scrollable verse content */}
+                                                <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                                                    <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
+                                                        {activeContent.verses?.map((v, idx) => {
+                                                            const chunks = verseChunkMap[idx] || [];
+                                                            const isPast = idx < currentVerseInReview;
+                                                            const isCurrent = idx === currentVerseInReview;
+                                                            const showAll = showGrading || isPast;
+                                                            const visibleChunks = showAll ? chunks : isCurrent ? chunks.slice(0, revealedChunks) : [];
+                                                            const nextChunk = (!showAll && isCurrent) ? chunks[revealedChunks] : undefined;
+                                                            const remainingHidden = showAll ? '' : (isCurrent ? chunks.slice(revealedChunks + 1).join(' ') : v.text);
 
-                                                        return (
-                                                            <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
-                                                                <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
-                                                                <span className="grouped-verse-text arabic-text">
-                                                                    {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
-                                                                    {nextChunk && <span className="blurred-chunk next-blur">{nextChunk}</span>}
-                                                                    {remainingHidden && <span className="blurred-chunk strong-blur">{remainingHidden}</span>}
+                                                            return (
+                                                                <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
+                                                                    <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
+                                                                    <span className="grouped-verse-text arabic-text">
+                                                                        {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
+                                                                        {nextChunk && <span className="blurred-chunk next-blur">{nextChunk}</span>}
+                                                                        {remainingHidden && <span className="blurred-chunk strong-blur">{remainingHidden}</span>}
+                                                                    </span>
                                                                 </span>
-                                                            </span>
-                                                        );
-                                                    })}
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             </div>
+                                        )}
 
-                                            {/* Controls */}
-                                            <div style={{ marginTop: 'auto', paddingTop: '0.75rem', flexShrink: 0 }}>
+                                        {/* Mindmap type content */}
+                                        {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
+                                            <div>
                                                 {!showGrading ? (
-                                                    <button className="btn btn-primary btn-full" style={{ padding: '0.65rem' }} onClick={handleRevealNext}>
-                                                        {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
-                                                    </button>
+                                                    <div className="verse-hidden" onClick={() => setShowGrading(true)}>
+                                                        <EyeOff size={24} style={{ marginBottom: 8 }} />
+                                                        <p>Visualize mindmap structure...</p>
+                                                        <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
+                                                    </div>
                                                 ) : (
-                                                    <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                        <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone}>
-                                                            <span style={{ fontSize: '0.85rem' }}>Not sure</span>
-                                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
-                                                        </button>
-                                                        <button className="review-btn not-remembered" style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
-                                                            <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                                                                Next: {(() => {
-                                                                    const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
-                                                                    return preview.again;
-                                                                })()}
-                                                            </span>
-                                                        </button>
-                                                        <button className="review-btn remembered" style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
-                                                            <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                                                                Next: {(() => {
-                                                                    const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
-                                                                    return preview.good;
-                                                                })()}
-                                                            </span>
-                                                        </button>
+                                                    <div>
+                                                        {(() => {
+                                                            const hasContent = !!activeContent.mindmap?.imageUrl || !!activeContent.mindmap?.imageUrlDark || !!activeContent.mindmap?.tldrawSnapshot;
+
+                                                            if (!hasContent) {
+                                                                return (
+                                                                    <div
+                                                                        className="verse-hidden"
+                                                                        style={{ background: 'var(--accent-light)', border: '1px dashed var(--accent)', color: 'var(--accent)', cursor: 'pointer' }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (activeContent.type === 'mindmap') {
+                                                                                setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                            } else {
+                                                                                setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <PenTool size={24} style={{ marginBottom: 8 }} />
+                                                                        <p>Preview missing (Lean Sync)</p>
+                                                                        <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Click to view & generate local preview</p>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            return (
+                                                                <div style={{ marginBottom: '1rem' }}>
+                                                                    <MindmapViewer
+                                                                        snapshot={activeContent.mindmap?.tldrawSnapshot}
+                                                                        imageUrl={activeContent.mindmap?.imageUrl}
+                                                                        imageUrlDark={activeContent.mindmap?.imageUrlDark}
+                                                                        isDark={isDark}
+                                                                        title={activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` : `Part ${activeContent.partId} Mindmap`}
+                                                                        height={320}
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })()}
+
+                                                        {/* Quick Actions */}
+                                                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (activeContent.type === 'mindmap') {
+                                                                        setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                    } else {
+                                                                        setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <PenTool size={14} /> Edit Map
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--danger)' }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (activeContent.type === 'mindmap') {
+                                                                        handleMindmapIncomplete(activeContent.surah!.id);
+                                                                    } else {
+                                                                        handlePartMindmapIncomplete(activeContent.partId as QuranPart);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <RotateCcw size={14} /> Mark Incomplete
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {orderedDueNodes.length > 0 && activeContent && (
+                                <div className="today-card-footer">
+                                    {activeContent.type === 'verse' && (
+                                        !showGrading ? (
+                                            <button className="btn btn-primary btn-full" onClick={handleRevealNext}>
+                                                {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
+                                            </button>
+                                        ) : (
+                                            <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone}>
+                                                    <span style={{ fontSize: '0.85rem' }}>Not sure</span>
+                                                    <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
+                                                </button>
+                                                <button className="review-btn not-remembered" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
+                                                    <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                        Next: {(() => {
+                                                            const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                            return preview.again;
+                                                        })()}
+                                                    </span>
+                                                </button>
+                                                <button className="review-btn remembered" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
+                                                    <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                        Next: {(() => {
+                                                            const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                            return preview.good;
+                                                        })()}
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        )
                                     )}
-
-                                    {/* Mindmap type content */}
                                     {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
-                                        <div>
-                                            {!showGrading ? (
-                                                <div className="verse-hidden" onClick={() => setShowGrading(true)}>
-                                                    <EyeOff size={24} style={{ marginBottom: 8 }} />
-                                                    <p>Visualize mindmap structure...</p>
-                                                    <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    {(() => {
-                                                        const hasContent = !!activeContent.mindmap?.imageUrl || !!activeContent.mindmap?.imageUrlDark || !!activeContent.mindmap?.tldrawSnapshot;
-
-                                                        if (!hasContent) {
-                                                            return (
-                                                                <div
-                                                                    className="verse-hidden"
-                                                                    style={{ background: 'var(--accent-light)', border: '1px dashed var(--accent)', color: 'var(--accent)', cursor: 'pointer' }}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (activeContent.type === 'mindmap') {
-                                                                            setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                        } else {
-                                                                            setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <PenTool size={24} style={{ marginBottom: 8 }} />
-                                                                    <p>Preview missing (Lean Sync)</p>
-                                                                    <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Click to view & generate local preview</p>
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        return (
-                                                            <div style={{ marginBottom: '1rem' }}>
-                                                                <MindmapViewer
-                                                                    snapshot={activeContent.mindmap?.tldrawSnapshot}
-                                                                    imageUrl={activeContent.mindmap?.imageUrl}
-                                                                    imageUrlDark={activeContent.mindmap?.imageUrlDark}
-                                                                    isDark={isDark}
-                                                                    title={activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` : `Part ${activeContent.partId} Mindmap`}
-                                                                    height={320}
-                                                                />
-                                                            </div>
-                                                        );
-                                                    })()}
-
-                                                    {/* Quick Actions */}
-                                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (activeContent.type === 'mindmap') {
-                                                                    setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                } else {
-                                                                    setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                }
-                                                            }}
-                                                        >
-                                                            <PenTool size={14} /> Edit Map
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--danger)' }}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (activeContent.type === 'mindmap') {
-                                                                    handleMindmapIncomplete(activeContent.surah!.id);
-                                                                } else {
-                                                                    handlePartMindmapIncomplete(activeContent.partId as QuranPart);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <RotateCcw size={14} /> Mark Incomplete
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Controls */}
-                                                    <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                        <button className="review-btn postpone" style={{ padding: '0.4rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
-                                                        <button className="review-btn not-remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
-                                                        <button className="review-btn remembered" style={{ padding: '0.4rem' }} onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                                        !showGrading ? (
+                                            <button className="btn btn-primary btn-full" onClick={() => setShowGrading(true)}>
+                                                Reveal Mindmap
+                                            </button>
+                                        ) : (
+                                            <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
+                                                <button className="review-btn not-remembered" onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
+                                                <button className="review-btn remembered" onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
+                                            </div>
+                                        )
                                     )}
                                 </div>
                             )}
@@ -1160,7 +1174,7 @@ export default function TodayPage() {
                 {/* Daily Portion Col */}
                 <div className="card">
                     <div className="collapsible-header" onClick={() => toggleSection('daily')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span>{listeningComplete ? <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-200 text-green-900 dark:bg-green-900/30 dark:text-green-400">✓</span> : <span className="status-badge partial show-mobile" style={{ background: 'transparent', padding: 0, color: 'var(--warning)', display: 'flex', alignItems: 'center' }}><AlertCircle size={18} /></span>}</div>
+                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             {!listeningComplete && (
                                 <div className="toggle-wrapper" onClick={(e) => { e.stopPropagation(); setReadOnlyMode(!readOnlyMode); }} style={{ cursor: 'pointer' }}>
@@ -1178,91 +1192,96 @@ export default function TodayPage() {
                                 <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
                             ) : (
                                 <>
-                                    {!readOnlyMode ? (
-                                        <div className="audio-mode-section" style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <div className="mb-2" style={{ flexShrink: 0 }}>
-                                                <AudioPlayer
-                                                    verses={todaysPortion}
-                                                    currentVerseIndex={currentVerseIndex}
-                                                    onVerseChange={setCurrentVerseIndex}
-                                                    onWordIndexChange={setHighlightedWordIndex}
-                                                />
-                                            </div>
+                                    <div className="today-card-content">
+                                        {!readOnlyMode ? (
+                                            <div className="audio-mode-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                                                <div className="mb-2" style={{ flexShrink: 0 }}>
+                                                    <AudioPlayer
+                                                        verses={todaysPortion}
+                                                        currentVerseIndex={currentVerseIndex}
+                                                        onVerseChange={setCurrentVerseIndex}
+                                                        onWordIndexChange={setHighlightedWordIndex}
+                                                    />
+                                                </div>
 
-                                            <div
-                                                ref={verseContainerRef}
-                                                className="verse-item p-4 border rounded-xl bg-[var(--background-secondary)]"
-                                                style={{
-                                                    marginTop: '0.5rem',
-                                                    overflowY: 'auto',
-                                                    height: '22vh',
-                                                    position: 'relative'
-                                                }}
-                                            >
-                                                {todaysPortion[currentVerseIndex] && (
-                                                    <>
-                                                        <div className="verse-ref">
-                                                            {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
-                                                        </div>
-                                                        {todaysPortion[currentVerseIndex].ayahId === 1 ? (
-                                                            todaysPortion[currentVerseIndex].surahId !== 1 &&
-                                                            todaysPortion[currentVerseIndex].surahId !== 9 && (
-                                                                <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
-                                                                    بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                                                                </div>
-                                                            )
-                                                        ) : (
-                                                            currentVerseIndex === 0 && (
-                                                                <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
-                                                                    أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
-                                                                </div>
-                                                            )
-                                                        )}
-                                                        <div className="arabic-text">
-                                                            {todaysPortion[currentVerseIndex].text.split(' ').map((word, i) => (
-                                                                <span key={i} id={`word-${i}`} style={{
-                                                                    backgroundColor: i === highlightedWordIndex ? 'color-mix(in srgb, var(--accent), transparent 85%)' : 'transparent',
-                                                                    borderRadius: '4px',
-                                                                    transition: 'background-color 0.2s'
-                                                                }}>
-                                                                    {word} {' '}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="read-view">
-                                            {todaysPortion.map((v, idx) => {
-                                                const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;
-                                                const isNewSurah = !prevVerse || prevVerse.surahId !== v.surahId;
-                                                const surah = getSurah(v.surahId);
-
-                                                return (
-                                                    <div key={idx}>
-                                                        {isNewSurah && surah && (
-                                                            <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                                                                <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
-                                                                {v.ayahId === 1 ? (
-                                                                    surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
-                                                                ) : (
-                                                                    <p className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
-                                                                )}
+                                                <div
+                                                    ref={verseContainerRef}
+                                                    className="verse-item daily-verse-preview p-4 border rounded-xl"
+                                                    style={{
+                                                        marginTop: '0.5rem',
+                                                        overflowY: 'auto',
+                                                        position: 'relative',
+                                                        flex: 1,
+                                                        minHeight: 0
+                                                    }}
+                                                >
+                                                    {todaysPortion[currentVerseIndex] && (
+                                                        <>
+                                                            <div className="verse-ref">
+                                                                {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
                                                             </div>
-                                                        )}
-                                                        <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
-                                                            <span className="verse-ref" style={{ float: 'left', fontSize: '0.7rem' }}>{v.ayahId}</span>
-                                                            <span className="arabic-text" style={{ fontSize: '1.2rem' }}>{v.text}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                                            {todaysPortion[currentVerseIndex].ayahId === 1 ? (
+                                                                todaysPortion[currentVerseIndex].surahId !== 1 &&
+                                                                todaysPortion[currentVerseIndex].surahId !== 9 && (
+                                                                    <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                                                        بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                                                                    </div>
+                                                                )
+                                                            ) : (
+                                                                currentVerseIndex === 0 && (
+                                                                    <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                                                        أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
+                                                                    </div>
+                                                                )
+                                                            )}
+                                                            <div className="arabic-text">
+                                                                {todaysPortion[currentVerseIndex].text.split(' ').map((word, i) => (
+                                                                    <span key={i} id={`word-${i}`} style={{
+                                                                        backgroundColor: i === highlightedWordIndex ? 'color-mix(in srgb, var(--accent), transparent 85%)' : 'transparent',
+                                                                        borderRadius: '4px',
+                                                                        transition: 'background-color 0.2s'
+                                                                    }}>
+                                                                        {word} {' '}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="read-view">
+                                                {todaysPortion.map((v, idx) => {
+                                                    const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;
+                                                    const isNewSurah = !prevVerse || prevVerse.surahId !== v.surahId;
+                                                    const surah = getSurah(v.surahId);
 
-                                    <button className="btn btn-success btn-full" style={{ marginTop: '1rem' }} onClick={handleCompleteListening}><Check size={20} /> Complete</button>
+                                                    return (
+                                                        <div key={idx}>
+                                                            {isNewSurah && surah && (
+                                                                <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                                                                    <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                    {v.ayahId === 1 ? (
+                                                                        surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
+                                                                    ) : (
+                                                                        <p className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
+                                                                <span className="verse-ref" style={{ float: 'left', fontSize: '0.7rem' }}>{v.ayahId}</span>
+                                                                <span className="arabic-text" style={{ fontSize: '1.2rem' }}>{v.text}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="today-card-footer">
+                                        <button className="btn btn-success btn-full" onClick={handleCompleteListening}><Check size={20} /> Complete</button>
+                                    </div>
                                 </>
                             )}
                         </div>

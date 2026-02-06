@@ -38,6 +38,10 @@ const schema = i.schema({
       updatedAt: i.string(),
       storagePath: i.string(),
       _isRemote: i.boolean(),
+      source: i.string(),
+      premadeId: i.string(),
+      premadeImportedAt: i.string(),
+      premadeEdited: i.boolean(),
       userId: i.string(),
     }),
     partMindMaps: i.entity({
@@ -50,6 +54,10 @@ const schema = i.schema({
       updatedAt: i.string(),
       storagePath: i.string(),
       _isRemote: i.boolean(),
+      source: i.string(),
+      premadeId: i.string(),
+      premadeImportedAt: i.string(),
+      premadeEdited: i.boolean(),
       userId: i.string(),
     }),
     listeningProgress: i.entity({
@@ -76,8 +84,14 @@ const schema = i.schema({
     }),
     customMutashabihat: i.entity({
       id: i.string(),
-      phrase: i.string(),
-      verses: i.json(), // Array of refs
+      verseId: i.string(),
+      targetVerseId: i.string(),
+      surahId: i.number(),
+      ayahId: i.number(),
+      targetSurahId: i.number(),
+      targetAyahId: i.number(),
+      notes: i.string(),
+      status: i.string(),
       createdAt: i.string(),
       userId: i.string(),
     }),

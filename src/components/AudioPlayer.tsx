@@ -136,6 +136,15 @@ export default function AudioPlayer({
         setUseFallback(false);
     }, [currentVerse, selectedReciter]);
 
+    const safePlay = useCallback(() => {
+        if (!audioRef.current) return;
+        audioRef.current.play().catch((err) => {
+            if (err?.name !== 'AbortError') {
+                console.error(err);
+            }
+        });
+    }, []);
+
     // Main Audio Loading Logic
     useEffect(() => {
         if (!currentVerse || !selectedReciter) return;
@@ -179,7 +188,9 @@ export default function AudioPlayer({
                 }
 
                 if (currentSrcPath !== newSrcPath) {
+                    audioRef.current.pause();
                     audioRef.current.src = url;
+                    audioRef.current.load();
                     audioRef.current.currentTime = desiredStartTime;
                 } else {
                     // Same src (Surah mode), just seek
@@ -193,7 +204,7 @@ export default function AudioPlayer({
                 setElapsedTime(desiredStartTime);
                 
                 if (isPlaying) {
-                    audioRef.current.play().catch(console.error);
+                    safePlay();
                 }
             }
             setVerseEndTime(endTime);
@@ -206,7 +217,7 @@ export default function AudioPlayer({
     useEffect(() => {
         if (audioRef.current) {
             if (isPlaying) {
-                audioRef.current.play().catch(console.error);
+                safePlay();
             } else {
                 audioRef.current.pause();
                 

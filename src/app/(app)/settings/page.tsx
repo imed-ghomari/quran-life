@@ -6,13 +6,14 @@ import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import { QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
 import { db } from '@/lib/instant';
-import { useInstantSettings, useInstantNodes, useInstantMutashabihat } from '@/hooks/useInstantData';
+import { useInstantSettings, useInstantNodes, useInstantMutashabihat, useInstantListeningProgress } from '@/hooks/useInstantData';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
     Upload,
     Database,
     Brain,
     Plus,
+    Trash2,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -20,7 +21,6 @@ import {
     Book,
     Activity,
     X,
-    Trash2,
     Sun,
     Moon,
     Monitor,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
+import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
@@ -144,6 +145,7 @@ export default function SettingsPage() {
     const { user } = db.useAuth();
     const { settings, saveSettings } = useInstantSettings();
     const { nodes: instantNodes } = useInstantNodes();
+    const { progress: listeningProgress } = useInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme } = useTheme();
 
@@ -153,6 +155,12 @@ export default function SettingsPage() {
     const [selectedMutSurah, setSelectedMutSurah] = useState<number | null>(null);
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [noteModal, setNoteModal] = useState<{
+        decisionKey: string;
+        representativeAbs: number;
+        title: string;
+        initialNote: string;
+    } | null>(null);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
     const [showDebugNodes, setShowDebugNodes] = useState(true);
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
@@ -176,6 +184,7 @@ export default function SettingsPage() {
             ayahIds: number[];
             entry: any;
             absRefs: number[];
+            customId?: string;
         };
         representativeAbs: number;
     } | null>(null);
@@ -350,7 +359,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'account') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -396,30 +405,6 @@ export default function SettingsPage() {
                                             style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                         >
                                             Sign Out
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={handleReset}
-                                            style={{
-                                                width: '100%',
-                                                display: 'flex',
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '0.5rem',
-                                                padding: '0.85rem',
-                                                fontSize: '1rem',
-                                                height: 'auto',
-                                                background: 'var(--background)',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '12px',
-                                                color: '#ef4444',
-                                                fontWeight: 600,
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            <Trash2 size={20} />
-                                            <span>Reset All Data</span>
                                         </button>
                                     </div>
                                 </>
@@ -509,7 +494,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'plan') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -577,7 +562,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'tracking') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -900,7 +885,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'appearance') {
             return (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
@@ -948,7 +933,7 @@ export default function SettingsPage() {
         }
 
         return (
-            <div className="content-wrapper">
+            <div className="content-wrapper tab-content">
                 {/* <h1 className="text-2xl font-bold mb-6">Settings</h1> */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <button onClick={() => setActiveMobilePage('appearance')} className="modern-card" style={{
@@ -1136,6 +1121,18 @@ export default function SettingsPage() {
         saveSettings({ activePart: part });
     };
 
+    const handleResetDailyPortion = async () => {
+        if (!settings) return;
+        const partName = settings.activePart === 5 ? 'the whole Quran' : `Part ${settings.activePart}`;
+        const message = `Reset daily portion progress for ${partName}? This will restart the daily portion from the beginning and mark today as incomplete.`;
+        if (!window.confirm(message)) return;
+
+        const entry = listeningProgress.find(p => p.partId === settings.activePart);
+        if (entry?.id) {
+            await db.transact(db.tx.listeningProgress[entry.id].delete());
+        }
+    };
+
     const handleResetMutashabihat = async () => {
         const partName = settings?.activePart === 5 ? 'the whole Quran' : `Part ${settings?.activePart}`;
         const msg = `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`;
@@ -1176,34 +1173,58 @@ export default function SettingsPage() {
 
   const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
     const { id: _ignored, ...updateWithoutId } = update;
-    
+
     // Convert undefined to null for database compatibility
     const cleanUpdate = {
         ...updateWithoutId,
         confirmedAt: updateWithoutId.confirmedAt ?? null
     };
-    
+
+    // Optimistic local update so UI reflects changes immediately
+    setDecisions(prev => ({
+        ...prev,
+        [phraseId]: {
+            ...(prev[phraseId] || { id: phraseId, phraseId, status: 'pending' }),
+            ...cleanUpdate,
+            phraseId
+        } as MutashabihatDecision
+    }));
+
     await updateInstantDecision(phraseId, cleanUpdate);
 };
+
+    const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
     const handleAddCustomMutashabih = async (mut: any) => {
         const [s1, a1] = mut.verseId.split(':').map(Number);
         const [s2, a2] = mut.targetVerseId.split(':').map(Number);
 
         const customItem = {
-            id: mut.id || crypto.randomUUID(),
+            id: mut.id && isUuid(mut.id) ? mut.id : crypto.randomUUID(),
             verseId: mut.verseId,
             targetVerseId: mut.targetVerseId,
             surahId: s1,
             ayahId: a1,
             targetSurahId: s2,
             targetAyahId: a2,
-            notes: mut.notes,
-            status: mut.status,
+            notes: mut.notes ?? '',
+            status: mut.status ?? 'pending',
             createdAt: new Date().toISOString()
         };
 
         await updateInstantCustom(customItem);
+    };
+
+    const handleDeleteCustomMutashabih = async (customId: string) => {
+        if (!window.confirm('Delete this custom mutashabih? This cannot be undone.')) return;
+
+        const relatedDecisions = instantDecisions.filter(d => d.phraseId?.includes(`custom-${customId}`));
+        const deletes = [
+            db.tx.customMutashabihat[customId].delete(),
+            ...relatedDecisions.map(d => db.tx.mutashabihatDecisions[d.id].delete())
+        ];
+
+        await db.transact(deletes);
     };
 
     const handleExport = async () => {
@@ -1244,21 +1265,6 @@ export default function SettingsPage() {
         reader.readAsText(file);
     };
 
-    const handleReset = async () => {
-        if (confirm('WARNING: This will delete ALL your data in the cloud. This action cannot be undone.\n\nAre you sure you want to reset all data?')) {
-            if (confirm('Double check: Are you absolutely sure? All data will be lost forever.')) {
-                // Clear all entities for this user
-                const txs = [
-                    ...instantNodes.map(n => db.tx.memoryNodes[n.id].delete()),
-                    ...instantDecisions.map(d => db.tx.mutashabihatDecisions[d.id].delete())
-                    // Add other entities here
-                ];
-                if (txs.length > 0) await db.transact(txs);
-                window.location.reload();
-            }
-        }
-    };
-
     const mutashabihatBySurah = useMemo(() => {
         const map: Record<number, number> = {};
 
@@ -1293,7 +1299,7 @@ export default function SettingsPage() {
     return (
         <>
             {isMobile ? renderMobileView() : (
-                <div className="content-wrapper">
+                <div className="content-wrapper tab-content">
                     <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -1364,30 +1370,6 @@ export default function SettingsPage() {
                                                             style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                                         >
                                                             Sign Out
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            onClick={handleReset}
-                                                            style={{
-                                                                width: '100%',
-                                                                display: 'flex',
-                                                                flexDirection: 'row',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: '0.5rem',
-                                                                padding: '0.85rem',
-                                                                fontSize: '1rem',
-                                                                height: 'auto',
-                                                                background: 'var(--background)',
-                                                                border: '1px solid var(--border)',
-                                                                borderRadius: '12px',
-                                                                color: '#ef4444',
-                                                                fontWeight: 600,
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <Trash2 size={20} />
-                                                            <span>Reset All Data</span>
                                                         </button>
                                                     </div>
                                                 </>
@@ -1496,7 +1478,19 @@ export default function SettingsPage() {
                                         </div>
                                         <span>Completion Schedule</span>
                                     </div>
-                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.schedule ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        {sectionsExpanded.schedule && (
+                                            <button
+                                                className="bulk-btn reset-mut"
+                                                onClick={(e) => { e.stopPropagation(); handleResetDailyPortion(); }}
+                                                title="Reset daily portion progress for the active part"
+                                                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                            >
+                                                <RotateCcw size={14} /> <span className="hide-mobile">Reset Daily Portion</span><span className="show-mobile">Reset</span>
+                                            </button>
+                                        )}
+                                        <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.schedule ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
                                 </div>
                                 {sectionsExpanded.schedule && (
                                     <>
@@ -1714,7 +1708,7 @@ export default function SettingsPage() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        marginBottom: showDebugNodes ? '1.5rem' : '0',
+                                        marginBottom: showDebugNodes ? '0rem' : '0',
                                         fontSize: 'clamp(1rem, 5vw, 1.1rem)'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1729,7 +1723,7 @@ export default function SettingsPage() {
                                 {showDebugNodes && (
                                     <div style={{ marginTop: '1.5rem' }}>
                                         <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                                            This section shows your active memory nodes and their review schedules.
+                                            This section shows your review schedules.
                                         </p>
 
                                         {isMobile ? (
@@ -2207,7 +2201,8 @@ export default function SettingsPage() {
                                                     phraseId: string,
                                                     ayahIds: number[],
                                                     entry: any,
-                                                    absRefs: number[]
+                                                    absRefs: number[],
+                                                    customId?: string
                                                 }> = {};
 
                                                 getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
@@ -2218,7 +2213,7 @@ export default function SettingsPage() {
                                                     const ref = absoluteToSurahAyah(abs);
                                                     muts.forEach(m => {
                                                         if (!surahMutsMap[m.phraseId]) {
-                                                            surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [] };
+                                                            surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [], customId: (m as any)?.meta?.customId };
                                                         }
                                                         if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
                                                             surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
@@ -2253,6 +2248,7 @@ export default function SettingsPage() {
                                                                     const decisionKey = `${representativeAbs}-${group.phraseId}`;
                                                                     const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                                                                     const isConfirmed = !!existing.confirmedAt;
+                                                                    const isCustom = group.phraseId.startsWith('custom-');
 
                                                                     return (
                                                                         <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
@@ -2280,6 +2276,7 @@ export default function SettingsPage() {
                                                                                 }}>
                                                                                     {MUT_STATES.find(s => s.value === existing.status)?.label.split(' ')[0]}
                                                                                 </span>
+                                                                                {isCustom && <Trash2 size={14} style={{ opacity: 0.7 }} />}
                                                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                             </div>
                                                                         </div>
@@ -2325,7 +2322,8 @@ export default function SettingsPage() {
                                                                         phraseId: string,
                                                                         ayahIds: number[],
                                                                         entry: any,
-                                                                        absRefs: number[]
+                                                                        absRefs: number[],
+                                                                        customId?: string
                                                                     }> = {};
 
                                                                     getAllMutashabihatRefs().filter(abs => {
@@ -2361,6 +2359,7 @@ export default function SettingsPage() {
                                                                                 phraseId,
                                                                                 ayahIds: [c.ayahId],
                                                                                 absRefs: [abs],
+                                                                                customId: c.id,
                                                                                 entry: {
                                                                                     phraseId,
                                                                                     matches: [abs, targetAbs],
@@ -2370,7 +2369,9 @@ export default function SettingsPage() {
                                                                                         matches: [
                                                                                             { absolute: abs, wordRange: [0, 0] },
                                                                                             { absolute: targetAbs, wordRange: [0, 0] }
-                                                                                        ]
+                                                                                        ],
+                                                                                        isCustom: true,
+                                                                                        customId: c.id
                                                                                     }
                                                                                 }
                                                                             };
@@ -2391,6 +2392,8 @@ export default function SettingsPage() {
                                                                             const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                                                                             const isConfirmed = !!existing.confirmedAt;
                                                                             const isDetailExpanded = expandedMutItems[decisionKey] || false;
+                                                                            const isCustom = group.phraseId.startsWith('custom-');
+                                                                            const customId = (group as any).customId || (entry?.meta as any)?.customId;
 
                                                                             const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
 
@@ -2454,14 +2457,41 @@ export default function SettingsPage() {
    
                                                                                         </td>
                                                                                         <td>
-                                                                                           <input
-                                                                                        type="text"
-                                                                                        placeholder="Add note..."
-                                                                                        value={existing.notes || ''}
-                                                                                        onClick={(e) => e.stopPropagation()}
-                                                                                        onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
-                                                                                        className="min-w-[150px] max-h-[35px] placeholder:text-sm placeholder:text-gray-400"
-                                                                                        />
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                                                                                {isCustom && customId && (
+                                                                                                    <button
+                                                                                                        className="bulk-btn reset-mut"
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            handleDeleteCustomMutashabih(customId);
+                                                                                                        }}
+                                                                                                        title="Delete"
+                                                                                                       style={{
+                                                                                                            padding: '4px 10px',
+                                                                                                            display: 'inline-flex',
+                                                                                                            alignItems: 'center',
+                                                                                                            justifyContent: 'center'
+                                                                                                        }}
+                                                                                                    >
+                                                                                                        <Trash2 size={14} />
+                                                                                                    </button>
+                                                                                                )}
+                                                                                                <button
+                                                                                                    className="bulk-btn"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        setNoteModal({
+                                                                                                            decisionKey,
+                                                                                                            representativeAbs,
+                                                                                                            title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
+                                                                                                            initialNote: existing.notes || ''
+                                                                                                        });
+                                                                                                    }}
+                                                                                                    style={{ minWidth: '110px' }}
+                                                                                                >
+                                                                                                    {existing.notes ? 'Edit Note' : 'Add Note'}
+                                                                                                </button>
+                                                                                            </div>
                                                                                         </td>
                                                                                     </tr>
                                                                                     {isDetailExpanded && (
@@ -2579,6 +2609,8 @@ export default function SettingsPage() {
                 const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
                 const isConfirmed = !!existing.confirmedAt;
                 const group = activeMutSlideOver.group;
+                const isCustom = activeMutSlideOver.phraseId.startsWith('custom-');
+                const customId = (group as any)?.customId || ((group as any)?.entry?.meta as any)?.customId;
 
                 return (
                     <div className="slide-over-overlay" onClick={() => setActiveMutSlideOver(null)}>
@@ -2642,6 +2674,22 @@ export default function SettingsPage() {
                                         }}
                                     />
                                 </div>
+
+                                {isCustom && customId && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                        <button
+                                            className="bulk-btn reset-mut"
+                                            onClick={async () => {
+                                                await handleDeleteCustomMutashabih(customId);
+                                                setActiveMutSlideOver(null);
+                                            }}
+                                            style={{ minWidth: '140px' }}
+                                        >
+                                            <Trash2 size={14} style={{ marginRight: '4px' }} />
+                                            Delete Custom
+                                        </button>
+                                    </div>
+                                )}
 
                                 <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: '1px solid var(--border)', background: 'transparent' }}>
                                     <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--background-secondary)', fontWeight: 600 }}>
@@ -2948,6 +2996,19 @@ export default function SettingsPage() {
                 onClose={() => setIsAddModalOpen(false)}
                 onSave={handleAddCustomMutashabih}
                 initialSurahId={targetSurahId}
+            />
+            <MutashabihNoteModal
+                isOpen={!!noteModal}
+                title={noteModal?.title || 'Edit Note'}
+                initialNote={noteModal?.initialNote || ''}
+                onClose={() => setNoteModal(null)}
+                onSave={(note) => {
+                    if (!noteModal) return;
+                    const { representativeAbs, decisionKey } = noteModal;
+                    const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
+                    handleDecisionUpdate(representativeAbs, { ...existing, notes: note }, decisionKey);
+                    setNoteModal(null);
+                }}
             />
 
             {/* Mobile Slide-over for Node Management */}

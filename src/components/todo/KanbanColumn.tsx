@@ -12,13 +12,19 @@ interface KanbanColumnProps {
     items: KanbanItem[];
     isMobile: boolean;
     isTablet?: boolean;
+    appMode: 'owner' | 'user';
     onCardClick: (item: KanbanItem) => void;
     // New props for card actions
     onEditMindmap: (item: KanbanItem) => void;
     onImportMindmap: (item: KanbanItem) => void;
     onDeleteMindmap: (item: KanbanItem) => void;
+    onExportMindmap?: (item: KanbanItem) => void;
+    onResetMindmap?: (item: KanbanItem) => void;
     onChangeSplits: (item: KanbanItem) => void;
+    onViewVerseContext?: (item: KanbanItem) => void;
+    onViewSimilarityContext?: (item: KanbanItem) => void;
     getHasMindmap: (item: KanbanItem) => boolean;
+    getHasPremade?: (item: KanbanItem) => boolean;
     getDocLink: (item: KanbanItem) => string | undefined;
 }
 
@@ -37,12 +43,18 @@ const KanbanColumn = ({
     items,
     isMobile,
     isTablet,
+    appMode,
     onCardClick,
     onEditMindmap,
     onImportMindmap,
     onDeleteMindmap,
+    onExportMindmap,
+    onResetMindmap,
     onChangeSplits,
+    onViewVerseContext,
+    onViewSimilarityContext,
     getHasMindmap,
+    getHasPremade,
     getDocLink
 }: KanbanColumnProps) => {
     return (
@@ -107,11 +119,17 @@ const KanbanColumn = ({
                                 index={index}
                                 isMobile={isMobile}
                                 hasMindmap={getHasMindmap(item)}
+                                hasPremade={getHasPremade ? getHasPremade(item) : false}
+                                appMode={appMode}
                                 docLink={getDocLink(item)}
                                 onEditMindmap={() => onEditMindmap(item)}
                                 onImportMindmap={() => onImportMindmap(item)}
                                 onDeleteMindmap={() => onDeleteMindmap(item)}
+                                onExportMindmap={onExportMindmap ? () => onExportMindmap(item) : undefined}
+                                onResetMindmap={onResetMindmap ? () => onResetMindmap(item) : undefined}
                                 onChangeSplits={() => onChangeSplits(item)}
+                                onViewVerseContext={onViewVerseContext ? () => onViewVerseContext(item) : undefined}
+                                onViewSimilarityContext={onViewSimilarityContext ? () => onViewSimilarityContext(item) : undefined}
                             />
                         ))}
                         {provided.placeholder}

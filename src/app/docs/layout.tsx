@@ -78,13 +78,13 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
             }}>
                 {/* Desktop Sidebar */}
                 <aside className="card modern-card custom-scrollbar hidden md:block !mb-0" style={{
-                    width: '280px',
+                    width: '260px',
                     border: '1px solid var(--border)',
                     height: '100%',
                     padding: '0',
                     borderRadius: '16px',
                     overflowY: 'auto',
-                    flexShrink: 0
+                    flex: '0 0 260px'
                 }}>
                     <div style={{ padding: '1.5rem' }}>
                         <SidebarNav items={sidebarItems} />
@@ -92,7 +92,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 </aside>
 
                 {/* Main Content Area */}
-                <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+                <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative" style={{ flex: '1.2 1 0%' }}>
                     {/* Content */}
                     <main className="docs-main custom-scrollbar card modern-card flex-1 !border-[var(--border)] !mb-0" style={{
                         height: '100%',
@@ -110,7 +110,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 {/* Desktop Table of Contents */}
-                <aside className="hidden lg:flex flex-col gap-4 h-full" style={{ width: '280px', flexShrink: 0 }}>
+                <aside className="hidden lg:flex flex-col gap-4 h-full" style={{ width: '260px', flex: '0 0 260px' }}>
                     <DocsSearch className="!w-full !max-w-none !justify-start px-4 py-2 !h-10 !bg-[var(--background-secondary)] !border-[var(--border)] !rounded-[16px] hover:!shadow-none transition-all flex-shrink-0" />
                     <div className="card modern-card custom-scrollbar !mb-0" style={{
                         border: '1px solid var(--border)',

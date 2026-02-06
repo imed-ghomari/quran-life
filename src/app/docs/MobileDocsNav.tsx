@@ -32,7 +32,7 @@ export default function MobileDocsNav({ items }: { items: SidebarItem[] }) {
                   style={{
                     position: 'fixed',
                     inset: 0,
-                    top: '7rem', /* Account for app sync bar + docs header */
+                    top: '3.5rem', /* Account for docs header */
                     zIndex: 100,
                     backgroundColor: 'var(--background)',
                     overflowY: 'auto',

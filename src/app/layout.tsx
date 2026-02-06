@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import Script from 'next/script';
 import { Outfit } from 'next/font/google';
 import './globals.css';
 import 'tldraw/tldraw.css';
@@ -48,15 +47,6 @@ export default function RootLayout({
     return (
         <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
-                <Script id="register-sw" strategy="afterInteractive">
-                    {`
-                        if ('serviceWorker' in navigator) {
-                            window.addEventListener('load', function() {
-                                navigator.serviceWorker.register('/sw.js').catch(function() {});
-                            });
-                        }
-                    `}
-                </Script>
                 <Providers>
                     <ErrorBoundary>
                         <AppShell>

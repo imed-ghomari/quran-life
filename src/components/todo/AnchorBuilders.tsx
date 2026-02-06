@@ -197,7 +197,7 @@ export function MobileAnchorBuilder({
                         className="btn btn-secondary btn-full"
                         onClick={() => {
                             if (hasReviewedHistory) {
-                                if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying anchors will reset the review progress (memory nodes) for these chunks.\n\nAre you sure you want to proceed?")) {
+                                if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying splits will reset the review progress for these chunks.\n\nAre you sure you want to proceed?")) {
                                     return;
                                 }
                             }
@@ -549,19 +549,19 @@ export function DesktopAnchorBuilder({
                     <div style={{ background: 'var(--accent)', color: 'white', padding: '5px', borderRadius: '8px', display: 'flex' }}>
                         <SplitSquareHorizontal size={18} />
                     </div>
-                    <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Anchors</span>
+                    <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Splits</span>
                 </div>
                 {!isEditing ? (
                     <button className="btn btn-secondary"
                     style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => {
                         if (hasReviewedHistory) {
-                            if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying anchors will reset the review progress (memory nodes) for these chunks.\n\nAre you sure you want to proceed?")) {
+                            if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying splits will reset the review progress for these chunks.\n\nAre you sure you want to proceed?")) {
                                 return;
                             }
                         }
                         setIsEditing(true);
                     }}>
-                        Edit Anchors
+                        Edit Splits
                     </button>
                 ) : (
                     <button className="btn btn-primary" onClick={() => {

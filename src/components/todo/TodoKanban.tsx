@@ -10,10 +10,17 @@ import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
 import SplitsModal from './SplitsModal';
-import { Check, PenTool, Download, Search } from 'lucide-react';
+import { PenTool, Download, Search, X, Brain, Check } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { QuranPart, MutashabihatDecision } from '@/lib/types';
+
+const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
+    { value: 'pending', label: 'Pending Review' },
+    { value: 'ignored', label: 'Ignored (Not similar)' },
+    { value: 'solved_mindmap', label: 'Solved by Mindmap' },
+    { value: 'solved_note', label: 'Solved by Note' },
+];
 
 // Helper to highlight logic
 function HighlightedVerse({ text, range }: { text: string; range?: [number, number] }) {
@@ -51,8 +58,14 @@ interface TodoKanbanProps {
     onPartComplete: (part: QuranPart, forceState?: boolean) => void;
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
     onImportPremade: (type: 'surah' | 'part', id: number) => void;
+    onExportPremade?: (type: 'surah' | 'part', id: number) => void;
+    onResetMindmap?: (type: 'surah' | 'part', id: number) => void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
     onDeleteMindmap?: (type: 'surah' | 'part', id: number) => void;
+    appMode: 'owner' | 'user';
+    getHasPremade?: (type: 'surah' | 'part', id: number) => boolean;
+    mutashabihatDecisions?: any[];
+    onMutashabihatDecisionUpdate?: (representativeAbs: number, update: any, decisionKey: string) => void;
 
     // Anchor Builder Props
     getBuilderState: (surahId: number) => AnchorBuilderState;
@@ -79,8 +92,14 @@ export default function TodoKanban({
     onPartComplete,
     onSurahComplete,
     onImportPremade,
+    onExportPremade,
+    onResetMindmap,
     onEditMindmap,
     onDeleteMindmap,
+    appMode,
+    getHasPremade,
+    mutashabihatDecisions,
+    onMutashabihatDecisionUpdate,
     getBuilderState,
     onAddBreak,
     onRemoveBreak,
@@ -108,6 +127,108 @@ export default function TodoKanban({
 
     // Splits Modal State
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
+
+    // Toast + Undo (for removing suspended/similarity after completion)
+    type TodoToastType = 'suspended' | 'similarity';
+
+    interface TodoToastItem {
+        id: string;
+        type: TodoToastType;
+        message: string;
+        info?: string;
+        onUndo?: () => void;
+        onExpire?: () => void;
+    }
+    const [toasts, setToasts] = useState<TodoToastItem[]>([]);
+    const removalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+    const pendingToastIdsRef = useRef<Map<string, string>>(new Map());
+    const [hiddenItemIds, setHiddenItemIds] = useState<Set<string>>(new Set());
+
+    const addToast = useCallback((type: TodoToastType, message: string, info?: string, onUndo?: () => void, onExpire?: () => void) => {
+        const id = Math.random().toString(36).substring(2, 9);
+        setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }]);
+        setTimeout(() => {
+            if (onExpire) onExpire();
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 6000);
+        return id;
+    }, []);
+
+    // Verse Context Modal State (Suspended Cards)
+    const [verseContextItem, setVerseContextItem] = useState<KanbanItem | null>(null);
+
+    // Similarity Context Modal State
+    const [activeSimilarityContext, setActiveSimilarityContext] = useState<{
+        decisionKey: string;
+        representativeAbs: number;
+        group: {
+            phraseId: string;
+            absRefs: number[];
+            entry: any;
+            ayahIds: number[];
+            surahId: number;
+        };
+        surah: { id: number; name: string; arabicName?: string };
+    } | null>(null);
+    const [expandedSimilarityMatches, setExpandedSimilarityMatches] = useState<Record<string, boolean>>({});
+    const lastRemovalRef = useRef<{ itemId: string; at: number } | null>(null);
+
+    const restoreItemToColumn = useCallback((item: KanbanItem, colId: string, index: number) => {
+        setColumns(prev => {
+            const next: Record<string, KanbanColumnData> = { ...prev };
+            Object.values(next).forEach(col => {
+                col.items = col.items.filter(i => i.id !== item.id);
+            });
+            const target = next[colId] || next['backlog'];
+            const insertAt = Math.min(Math.max(index, 0), target.items.length);
+            target.items.splice(insertAt, 0, { ...item, status: target.id as any });
+
+            if (onKanbanStateChange) {
+                const state: Record<string, string[]> = {};
+                Object.values(next).forEach(col => {
+                    state[col.id] = col.items.map(i => i.id);
+                });
+                setTimeout(() => onKanbanStateChange(state), 0);
+            }
+
+            return { ...next };
+        });
+    }, [onKanbanStateChange]);
+
+    const clearPendingRemoval = useCallback((itemId: string) => {
+        const timer = removalTimersRef.current.get(itemId);
+        if (timer) {
+            clearTimeout(timer);
+            removalTimersRef.current.delete(itemId);
+        }
+        const toastId = pendingToastIdsRef.current.get(itemId);
+        if (toastId) {
+            setToasts(prev => prev.filter(t => t.id !== toastId));
+            pendingToastIdsRef.current.delete(itemId);
+        }
+    }, []);
+
+    const finalizeRemoval = useCallback((item: KanbanItem) => {
+        setHiddenItemIds(prev => {
+            const next = new Set(prev);
+            next.add(item.id);
+            return next;
+        });
+        setColumns(prev => {
+            const next: Record<string, KanbanColumnData> = { ...prev };
+            Object.values(next).forEach(col => {
+                col.items = col.items.filter(i => i.id !== item.id);
+            });
+            if (onKanbanStateChange) {
+                const state: Record<string, string[]> = {};
+                Object.values(next).forEach(col => {
+                    state[col.id] = col.items.map(i => i.id);
+                });
+                setTimeout(() => onKanbanStateChange(state), 0);
+            }
+            return { ...next };
+        });
+    }, [onKanbanStateChange]);
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -162,23 +283,27 @@ export default function TodoKanban({
 
         suspendedAnchors.forEach(item => {
             const id = `suspended-${item.surahId}-${item.anchorId}`;
+            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
         });
 
         similarityGroups.forEach(group => {
             const id = `similarity-${group.surah.id}`;
+            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
         partTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `part-${item.part}`;
+            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'part', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
         surahTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `surah-${item.surah.id}`;
+            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
@@ -244,7 +369,7 @@ export default function TodoKanban({
             'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState]);
+    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, hiddenItemIds]);
 
     const handleCompletionTrigger = useCallback((item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
@@ -305,6 +430,10 @@ export default function TodoKanban({
                 [destination.droppableId]: { ...destCol, items: destItems }
             };
 
+            const shouldRemoveAfterComplete = destination.droppableId === 'complete'
+                && source.droppableId !== 'complete'
+                && (movedItem.type === 'suspended' || movedItem.type === 'similarity');
+
             if (onKanbanStateChange) {
                 const state: Record<string, string[]> = {};
                 Object.values(newColsMap).forEach(col => {
@@ -330,9 +459,69 @@ export default function TodoKanban({
                 }
             }
 
+            if (source.droppableId === 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
+                clearPendingRemoval(movedItem.id);
+            }
+
+            if (shouldRemoveAfterComplete) {
+                const now = Date.now();
+                if (lastRemovalRef.current?.itemId === movedItem.id && now - lastRemovalRef.current.at < 500) {
+                    return newColsMap;
+                }
+                lastRemovalRef.current = { itemId: movedItem.id, at: now };
+
+                const info = movedItem.type === 'suspended'
+                    ? `Suspended • Surah ${movedItem.data.surahId}`
+                    : `Similarity • ${movedItem.data?.surah?.name || 'Surah'}`;
+
+                const similarityUndoSnapshot: Array<{ decisionKey: string; update: any; representativeAbs: number }> = [];
+
+                if (movedItem.type === 'similarity' && mutashabihatDecisions && onMutashabihatDecisionUpdate) {
+                    movedItem.data.items.forEach((simItem: any) => {
+                        simItem.muts.forEach((entry: any) => {
+                            const decisionKey = `${simItem.err.absoluteAyah}-${entry.phraseId}`;
+                            const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
+                            similarityUndoSnapshot.push({
+                                decisionKey,
+                                update: {
+                                    status: existing.status ?? 'pending',
+                                    notes: existing.notes ?? existing.note ?? '',
+                                    confirmedAt: existing.confirmedAt
+                                },
+                                representativeAbs: simItem.err.absoluteAyah
+                            });
+                        });
+                    });
+                }
+
+                const removalTimer = setTimeout(() => {
+                    finalizeRemoval(movedItem);
+                    removalTimersRef.current.delete(movedItem.id);
+                    pendingToastIdsRef.current.delete(movedItem.id);
+                }, 6000);
+                removalTimersRef.current.set(movedItem.id, removalTimer);
+
+                const toastType: TodoToastType = movedItem.type === 'similarity' ? 'similarity' : 'suspended';
+                const toastId = addToast(
+                    toastType,
+                    'Marked complete',
+                    `${info}\nWill disappear when this popup closes`,
+                    () => {
+                        clearPendingRemoval(movedItem.id);
+                        restoreItemToColumn(movedItem, source.droppableId, source.index);
+                        if (movedItem.type === 'similarity' && onMutashabihatDecisionUpdate) {
+                            similarityUndoSnapshot.forEach(s => {
+                                onMutashabihatDecisionUpdate(s.representativeAbs, { ...s.update }, s.decisionKey);
+                            });
+                        }
+                    }
+                );
+                pendingToastIdsRef.current.set(movedItem.id, toastId);
+            }
+
             return newColsMap;
         });
-    }, [onKanbanStateChange, handleCompletionTrigger]);
+    }, [onKanbanStateChange, handleCompletionTrigger, addToast, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback((item: KanbanItem) => {
@@ -340,8 +529,12 @@ export default function TodoKanban({
             onEditMindmap(item.data.surah.id, item.data.mindmap?.tldrawSnapshot, false);
         } else if (item.type === 'part') {
             onEditMindmap(item.data.part, item.data.mindmap?.tldrawSnapshot, true);
+        } else if (item.type === 'suspended') {
+            onEditMindmap(item.data.surahId, mindmaps[item.data.surahId]?.tldrawSnapshot, false);
+        } else if (item.type === 'similarity') {
+            onEditMindmap(item.data.surah.id, mindmaps[item.data.surah.id]?.tldrawSnapshot, false);
         }
-    }, [onEditMindmap]);
+    }, [onEditMindmap, mindmaps]);
 
     const handleCardImportMindmap = useCallback((item: KanbanItem) => {
         if (item.type === 'surah') {
@@ -361,11 +554,85 @@ export default function TodoKanban({
         }
     }, [onDeleteMindmap]);
 
-    const handleCardChangeSplits = useCallback((item: KanbanItem) => {
+    const handleCardExportMindmap = useCallback((item: KanbanItem) => {
+        if (!onExportPremade) return;
         if (item.type === 'surah') {
+            onExportPremade('surah', item.data.surah.id);
+        } else if (item.type === 'part') {
+            onExportPremade('part', item.data.part);
+        }
+    }, [onExportPremade]);
+
+    const handleCardResetMindmap = useCallback((item: KanbanItem) => {
+        if (!onResetMindmap) return;
+        if (item.type === 'surah') {
+            onResetMindmap('surah', item.data.surah.id);
+        } else if (item.type === 'part') {
+            onResetMindmap('part', item.data.part);
+        }
+    }, [onResetMindmap]);
+
+    const handleCardChangeSplits = useCallback((item: KanbanItem) => {
+        if (item.type === 'surah' || item.type === 'suspended' || item.type === 'similarity') {
             setSplitsModalItem(item);
         }
     }, []);
+
+    const handleCardViewVerseContext = useCallback((item: KanbanItem) => {
+        if (item.type !== 'suspended') return;
+        setVerseContextItem(item);
+    }, []);
+
+    const handleCardViewSimilarityContext = useCallback((item: KanbanItem) => {
+        if (item.type !== 'similarity') return;
+        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
+
+        const group = item.data;
+        const phraseMap: Record<string, { phraseId: string; absRefs: number[]; entry: any; ayahIds: number[] }> = {};
+
+        group.items.forEach((gItem: any) => {
+            const abs = gItem.err.absoluteAyah!;
+            gItem.muts.forEach((entry: any) => {
+                if (!phraseMap[entry.phraseId]) {
+                    phraseMap[entry.phraseId] = {
+                        phraseId: entry.phraseId,
+                        absRefs: [],
+                        entry,
+                        ayahIds: []
+                    };
+                }
+                if (!phraseMap[entry.phraseId].absRefs.includes(abs)) {
+                    phraseMap[entry.phraseId].absRefs.push(abs);
+                    const ref = absoluteToSurahAyah(abs);
+                    phraseMap[entry.phraseId].ayahIds.push(ref.ayahId);
+                }
+            });
+        });
+
+        const groups = Object.values(phraseMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+        if (groups.length === 0) return;
+
+        const selected = groups[0];
+        const representativeAbs = selected.absRefs.find(abs => {
+            const key = `${abs}-${selected.phraseId}`;
+            const existing = mutashabihatDecisions.find(d => d.phraseId === key);
+            return existing && existing.status !== 'pending';
+        }) || selected.absRefs[0];
+        const decisionKey = `${representativeAbs}-${selected.phraseId}`;
+
+        setActiveSimilarityContext({
+            decisionKey,
+            representativeAbs,
+            group: {
+                phraseId: selected.phraseId,
+                absRefs: selected.absRefs,
+                entry: selected.entry,
+                ayahIds: selected.ayahIds,
+                surahId: group.surah.id
+            },
+            surah: group.surah
+        });
+    }, [mutashabihatDecisions, onMutashabihatDecisionUpdate]);
 
     const getHasMindmap = useCallback((item: KanbanItem): boolean => {
         if (item.type === 'surah' || item.type === 'part') {
@@ -383,6 +650,13 @@ export default function TodoKanban({
         }
         return undefined;
     }, []);
+
+    const getHasPremadeForItem = useCallback((item: KanbanItem): boolean => {
+        if (!getHasPremade) return false;
+        if (item.type === 'surah') return getHasPremade('surah', item.data.surah.id);
+        if (item.type === 'part') return getHasPremade('part', item.data.part);
+        return false;
+    }, [getHasPremade]);
 
     const renderSlideOverContent = () => {
         if (!activeItem) return null;
@@ -408,9 +682,6 @@ export default function TodoKanban({
                     <div className="flex gap-2">
                         <button className="btn btn-secondary flex-1" onClick={() => onEditMindmap(issue.surahId, mindmap?.tldrawSnapshot)}>
                             <PenTool size={16} className="mr-2" /> Edit Map
-                        </button>
-                        <button className="btn btn-primary flex-1" onClick={() => onFixConfirm(issue.surahId, issue.anchorId)}>
-                            <Check size={16} className="mr-2" /> Complete
                         </button>
                     </div>
                 </div>
@@ -450,11 +721,6 @@ export default function TodoKanban({
                                         })}
                                     </div>
 
-                                    <div className="flex gap-2">
-                                        <button className="btn btn-primary flex-1 text-xs" onClick={() => onSimilarityDecision(abs, 'solved_note', entry.phraseId, true)}>
-                                            Confirm Distinction
-                                        </button>
-                                    </div>
                                 </div>
                             );
                         });
@@ -551,10 +817,14 @@ export default function TodoKanban({
 
     // Get surah data for splits modal
     const getSplitsModalData = () => {
-        if (!splitsModalItem || splitsModalItem.type !== 'surah') return null;
-        const surahId = splitsModalItem.data.surah.id;
+        if (!splitsModalItem) return null;
+        const surahId = splitsModalItem.type === 'surah'
+            ? splitsModalItem.data.surah.id
+            : splitsModalItem.type === 'similarity'
+                ? splitsModalItem.data.surah.id
+                : splitsModalItem.data.surahId;
         const surahMeta = SURAHS.find(s => s.id === surahId);
-        const mindmap = splitsModalItem.data.mindmap;
+        const mindmap = splitsModalItem.type === 'surah' ? splitsModalItem.data.mindmap : mindmaps[surahId];
         return {
             surahId,
             verseCount: surahMeta?.verseCount || 1,
@@ -676,12 +946,18 @@ export default function TodoKanban({
                             items={col.items.filter(filteredItem)}
                             isMobile={isMobile}
                             isTablet={isTablet}
+                            appMode={appMode}
                             onCardClick={(item) => setActiveItem(item)}
                             onEditMindmap={handleCardEditMindmap}
                             onImportMindmap={handleCardImportMindmap}
                             onDeleteMindmap={handleCardDeleteMindmap}
+                            onExportMindmap={handleCardExportMindmap}
+                            onResetMindmap={handleCardResetMindmap}
                             onChangeSplits={handleCardChangeSplits}
+                            onViewVerseContext={handleCardViewVerseContext}
+                            onViewSimilarityContext={handleCardViewSimilarityContext}
                             getHasMindmap={getHasMindmap}
+                            getHasPremade={getHasPremadeForItem}
                             getDocLink={getDocLink}
                         />
                     ))}
@@ -714,6 +990,315 @@ export default function TodoKanban({
                     onSave={() => onSaveAnchors(splitsData.surahId, splitsData.verseCount)}
                     hasReviewedHistory={hasReviewedChunks(splitsData.surahId)}
                 />
+            )}
+
+            {/* Suspended Verse Context Modal */}
+            {verseContextItem && (() => {
+                const issue = verseContextItem.data;
+                const surahId = issue.surahId;
+                const surah = getSurah(surahId);
+                const surahMeta = SURAHS.find(s => s.id === surahId);
+                const total = surahMeta?.verseCount || 1;
+                const target = Math.min(Math.max(1, issue.startVerse || 1), total);
+                const prev = target > 1 ? target - 1 : null;
+                const next = target < total ? target + 1 : null;
+                const getVerseText = (ayahId: number) => verses.find((v: any) => v.surahId === surahId && v.ayahId === ayahId)?.text || '';
+                const renderVerse = (ayahId: number, highlight: boolean) => (
+                    <div key={ayahId} className="bg-[var(--background-secondary)] p-4 rounded-lg">
+                        <div className="text-xs text-[var(--foreground-secondary)] mb-2">
+                            {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
+                        </div>
+                        <p
+                            className="text-right font-arabic text-xl leading-loose"
+                            style={highlight ? { background: 'rgba(255, 99, 99, 0.18)', borderRadius: '8px', padding: '6px' } : undefined}
+                        >
+                            {getVerseText(ayahId)}
+                        </p>
+                    </div>
+                );
+
+                const content = (
+                    <div className="space-y-4">
+                        {prev && renderVerse(prev, false)}
+                        {renderVerse(target, true)}
+                        {next && renderVerse(next, false)}
+                    </div>
+                );
+
+                if (isMobile || isTablet) {
+                    return (
+                        <SlideOver
+                            isOpen={!!verseContextItem}
+                            onClose={() => setVerseContextItem(null)}
+                            title="Verse Context"
+                        >
+                            {content}
+                        </SlideOver>
+                    );
+                }
+
+                return (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center" role="dialog" aria-modal="true">
+                        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setVerseContextItem(null)} />
+                        <div className="relative w-full max-w-2xl max-h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+                                <h3 className="text-lg font-bold">Verse Context</h3>
+                                <button
+                                    onClick={() => setVerseContextItem(null)}
+                                    className="p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="px-6 py-6 space-y-4 overflow-y-auto max-h-[calc(85vh-70px)]">
+                                {content}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* Similarity Context Modal */}
+            {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
+                const { decisionKey, representativeAbs, group, surah } = activeSimilarityContext;
+                const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
+                const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
+                const isConfirmed = !!existing.confirmedAt;
+                const entry = group.entry;
+
+                const matches = entry.matches.filter((matchAbs: number) => {
+                    const matchRef = absoluteToSurahAyah(matchAbs);
+                    return matchRef.surahId !== group.surahId;
+                });
+                const isExpanded = expandedSimilarityMatches[`${decisionKey}-full`] || false;
+                const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
+                const hasMore = matches.length > 4;
+
+                const similarityContent = (
+                    <>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                            <div style={{ flex: 1, minWidth: '140px' }}>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
+                                <select
+                                    value={existing.status}
+                                    onChange={e => onMutashabihatDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
+                                    className="maturity-select"
+                                    style={{ width: '100%', padding: '8px' }}
+                                >
+                                    {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Notes</label>
+                            <textarea
+                                placeholder="Add your distinction notes here..."
+                                value={existingNotes}
+                                onChange={e => onMutashabihatDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
+                                style={{
+                                    width: '100%',
+                                    minHeight: '80px',
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background-secondary)',
+                                    fontSize: '0.9rem',
+                                    resize: 'vertical'
+                                }}
+                            />
+                        </div>
+
+                        <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: '1px solid var(--border)', background: 'transparent' }}>
+                            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--background-secondary)', fontWeight: 600 }}>
+                                Similarity Context
+                            </div>
+                            <div style={{ padding: '0.5rem' }}>
+                                {group.absRefs.map(absRef => {
+                                    const ref = absoluteToSurahAyah(absRef);
+                                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                    const matchRange = entry.meta?.matches?.find((m: any) => m.absolute === absRef)?.wordRange;
+                                    const isSource = entry.meta?.sourceAbs === absRef;
+                                    const sourceRange = entry.meta?.sourceRange;
+
+                                    if (!baseVerse) return null;
+
+                                    return (
+                                        <div key={absRef} className="mut-text" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
+                                            <div className="mut-text-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
+                                                {getSurah(ref.surahId)?.name} - {ref.ayahId} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
+                                            </div>
+                                            <div className="mut-context">
+                                                <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', textAlign: 'right', direction: 'rtl', lineHeight: '2.2', marginBottom: '1.5rem' }}>
+                                                    <span className="mut-ayah-tag">{ref.ayahId}</span>
+                                                    <HighlightedVerse
+                                                        text={baseVerse.text}
+                                                        range={isSource ? sourceRange : matchRange}
+                                                    />
+                                                </p>
+
+                                                {displayedMatches.map((matchAbs: number, idx: number) => {
+                                                    const mref = absoluteToSurahAyah(matchAbs);
+                                                    const msurah = getSurah(mref.surahId);
+                                                    const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                    const matchRange = entry.meta?.matches?.find((m: any) => m.absolute === matchAbs)?.wordRange;
+
+                                                    return (
+                                                        <div key={idx} className="mut-match-item" style={{
+                                                            marginBottom: '1rem',
+                                                            padding: '0.75rem',
+                                                            borderRadius: '8px',
+                                                            background: 'var(--background)',
+                                                            border: '1px solid var(--border)'
+                                                        }}>
+                                                            <div className="mut-match-label" style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                                                                Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                            </div>
+                                                            <div className="mut-context">
+                                                                {mVerse && (
+                                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', textAlign: 'right', direction: 'rtl', lineHeight: '2' }}>
+                                                                        <span className="mut-ayah-tag">{mref.ayahId}</span>
+                                                                        <HighlightedVerse text={mVerse.text} range={matchRange} />
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+
+                                                {hasMore && (
+                                                    <button
+                                                        className="btn-show-more"
+                                                        onClick={() => setExpandedSimilarityMatches(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '8px',
+                                                            marginTop: '8px',
+                                                            fontSize: '0.8rem',
+                                                            color: 'var(--accent)',
+                                                            background: 'none',
+                                                            border: '1px dashed var(--accent)',
+                                                            borderRadius: '8px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                );
+
+                if (isMobile || isTablet) {
+                    return (
+                        <SlideOver
+                            isOpen={!!activeSimilarityContext}
+                            onClose={() => setActiveSimilarityContext(null)}
+                            title="Similarity Conflict"
+                        >
+                            {similarityContent}
+                        </SlideOver>
+                    );
+                }
+
+                return (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center" role="dialog" aria-modal="true">
+                        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setActiveSimilarityContext(null)} />
+                        <div className="relative w-full max-w-3xl max-h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+                            <div className="flex items-center justify-between px-10 py-6 border-b border-[var(--border)]">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                        <Brain size={18} />
+                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: '1rem' }}>
+                                        {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
+                                    </h3>
+                                </div>
+                                <button className="close-btn" onClick={() => setActiveSimilarityContext(null)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
+                                {similarityContent}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* Toasts (Undo) */}
+            {toasts.length > 0 && (
+                <div className="toast-container" style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '20px',
+                    zIndex: 1000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    pointerEvents: 'none',
+                    maxWidth: 'calc(100vw - 40px)'
+                }}>
+                    {toasts.map((t) => (
+                        <div key={t.id} className="review-toast success" style={{
+                            padding: '0.65rem 1rem',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 4,
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                            animation: 'slideInRight 0.3s ease-out',
+                            background: t.type === 'similarity' ? 'var(--warning)' : 'var(--danger)',
+                            border: '1px solid var(--border)',
+                            color: 'white',
+                            minWidth: '180px',
+                            fontSize: '0.85rem',
+                            pointerEvents: 'auto',
+                            backdropFilter: 'blur(12px)',
+                            opacity: 1
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <Check size={18} />
+                                <span style={{ fontWeight: 600 }}>{t.message}</span>
+                                {t.onUndo && (
+                                    <button
+                                        onClick={() => {
+                                            t.onUndo?.();
+                                            setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                        }}
+                                        style={{
+                                            background: 'rgba(255,255,255,0.2)',
+                                            border: 'none',
+                                            color: 'inherit',
+                                            padding: '0.2rem 0.5rem',
+                                            borderRadius: '4px',
+                                            fontSize: '0.7rem',
+                                            cursor: 'pointer',
+                                            marginLeft: 'auto'
+                                        }}
+                                    >
+                                        Undo
+                                    </button>
+                                )}
+                            </div>
+                            {t.info && (
+                                <div style={{
+                                    fontSize: '0.8rem',
+                                    opacity: 0.9,
+                                    paddingLeft: '28px',
+                                    whiteSpace: 'pre-line'
+                                }}>
+                                    {t.info}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     );

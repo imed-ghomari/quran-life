@@ -78,22 +78,38 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       <main>
         {/* --- Hero Section --- */}
         <section className="hero">
-          <div className="hero-bg" />
-          <div className="container">
-            <div className="animate-entry">
+          <div className="container hero-grid">
+            <div className="hero-copy animate-entry">
               <h1 className="hero-title">
-                Master your Quran Hifdh<br /> with Visual Mindmaps.
+                Master your Quran Hifdh with Visual Mindmaps.
               </h1>
               <p className="hero-subtitle delay-100 animate-entry">
                 The first platform combining intuitive mindmapping and smart spaced repetition
                 to help you memorize and retain the Quran forever—without the struggle.
               </p>
-              <div className="cta-group delay-200 animate-entry">
-                <button className="btn btn-primary" onClick={() => onBuy(billingCycle)}>
-                  Start Your Journey
-                  <ArrowRight size={18} />
-                </button>
-              </div>
+            </div>
+
+            <div className="hero-media delay-200 animate-entry">
+                <img
+                  src="/landing/hero-light.png"
+                  alt="Quran Life visual mindmap preview"
+                  className="hero-image hero-image-light"
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
+                  width={1200}
+                  height={900}
+                />
+              <img
+                src="/landing/hero-dark.png"
+                alt="Quran Life visual mindmap preview"
+                className="hero-image hero-image-dark"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                width={1200}
+                height={900}
+              />
             </div>
           </div>
         </section>
@@ -269,6 +285,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
           <div className="footer-logo">
             <img src="/logo.png?v=3" width={20} height={20} alt="Quran Life Logo" />
             <span>Quran Life</span>
+          </div>
+          <div className="footer-links">
+            <a href="/terms">Terms of Service</a>
+            <span aria-hidden="true">•</span>
+            <a href="/privacy">Privacy Policy</a>
           </div>
           <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>
         </div>

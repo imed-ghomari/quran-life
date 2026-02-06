@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/generate-search-index.js && next dev",
-    "build": "node scripts/generate-search-index.js && next build",
+    "dev:owner": "NEXT_PUBLIC_APP_MODE=owner node scripts/generate-search-index.js && NEXT_PUBLIC_APP_MODE=owner next dev",
+    "dev:user": "NEXT_PUBLIC_APP_MODE=user node scripts/generate-search-index.js && NEXT_PUBLIC_APP_MODE=user next dev",
+    "build": "node scripts/generate-search-index.js && next build --webpack",
     "start": "next start",
     "lint": "next lint"
   },

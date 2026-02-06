@@ -41,7 +41,7 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
 
     const handleSave = () => {
         const newMut: CustomMutashabih = {
-            id: Math.random().toString(36).substring(2, 11),
+            id: crypto.randomUUID(),
             verseId: `${surah1}:${ayah1}`,
             targetVerseId: `${surah2}:${ayah2}`,
             surahId: surah1,

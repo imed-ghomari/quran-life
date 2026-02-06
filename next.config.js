@@ -1,3 +1,52 @@
+const withPWA = require('next-pwa')({
+    dest: 'public',
+    register: true,
+    skipWaiting: true,
+    disable: process.env.NODE_ENV === 'development',
+    fallbacks: {
+        document: '/offline',
+    },
+    runtimeCaching: [
+        {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+                cacheName: 'pages',
+                expiration: {
+                    maxEntries: 100,
+                    maxAgeSeconds: 7 * 24 * 60 * 60,
+                },
+            },
+        },
+        {
+            urlPattern: ({ request }) =>
+                request.destination === 'style' ||
+                request.destination === 'script' ||
+                request.destination === 'font' ||
+                request.destination === 'image',
+            handler: 'CacheFirst',
+            options: {
+                cacheName: 'static-assets',
+                expiration: {
+                    maxEntries: 200,
+                    maxAgeSeconds: 30 * 24 * 60 * 60,
+                },
+            },
+        },
+        {
+            urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.endsWith('.json'),
+            handler: 'CacheFirst',
+            options: {
+                cacheName: 'data-json',
+                expiration: {
+                    maxEntries: 50,
+                    maxAgeSeconds: 30 * 24 * 60 * 60,
+                },
+            },
+        },
+    ],
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
@@ -57,6 +106,6 @@ const nextConfig = {
             }
         ];
     }
-}
+};
 
-module.exports = nextConfig
+module.exports = withPWA(nextConfig);

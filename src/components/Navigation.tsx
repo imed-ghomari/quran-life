@@ -20,7 +20,7 @@ import { SURAHS } from '@/lib/quranData';
 function NavigationContent() {
     const pathname = usePathname();
     const { settings } = useInstantSettings();
-    const { nodes } = useInstantNodes();
+    const { nodes, dueNodes } = useInstantNodes();
     const { mindmaps, partMindMaps } = useInstantMindMaps();
     const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
@@ -136,16 +136,9 @@ function NavigationContent() {
         setIsDailyPortionComplete(dailyComplete);
 
         // Today's reviews
-        const today = new Date().toISOString().split('T')[0];
-        const dueToday = nodes.filter(n => {
-            if (!n.scheduler) return false;
-            const due = (n.scheduler as any).due || (n.scheduler as any).dueDate;
-            return due && due.split('T')[0] <= today;
-        }).length;
-       
-        setTodayTasks(dueToday);
+        setTodayTasks(dueNodes.length);
 
-    }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
+    }, [settings, nodes, dueNodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
 
     const navItems = [
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, showStatusDot: !isDailyPortionComplete },
@@ -188,7 +181,7 @@ function NavigationContent() {
 
 export default function Navigation() {
     const pathname = usePathname();
-    const isAuthOrHome = pathname === '/' || pathname === '/auth';
+    const isAuthOrHome = pathname === '/' || pathname === '/auth' || pathname === '/terms' || pathname === '/privacy';
 
     if (isAuthOrHome) return null;
 

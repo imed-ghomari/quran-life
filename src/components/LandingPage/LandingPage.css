@@ -117,7 +117,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
-  padding: 1rem 0;
+  padding: 0.5rem 0;
 }
 
 .nav-content {
@@ -163,60 +163,67 @@
 /* Hero Section */
 .hero {
   padding: 8rem 0 6rem;
-  text-align: center;
   overflow: hidden;
   position: relative;
-  isolation: isolate; /* Creates a stacking context so z-index: -1 stays within this section */
 }
 
-/* Hero Background Image */
-.hero-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  /* User: Place your image at /public/quran-bg.jpg */
-  background-image: url('/quran-bg.jpg?v=1'); 
-  background-size: cover;
-  background-position: center top;
-  background-repeat: no-repeat;
-  
-  /* The Blur Effect */
-  filter: blur(3px);
-  
-  /* Fade out at the bottom to blend with next section */
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
-  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
-  
-  /* Fallback gradient if image is missing */
-  background-color: var(--background); 
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 3rem;
+  align-items: start;
 }
 
-/* Overlay for text readability */
-.hero-bg::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: var(--hero-overlay-bg);
-  z-index: 1;
+.hero-copy {
+  text-align: left;
 }
 
-/* Ensure content is readable and above background */
-.hero .container {
-  position: relative;
-  z-index: 2;
+.hero-media {
+  display: flex;
+  justify-content: flex-end;
+  align-self: start;
+}
+
+.hero-image {
+  width: min(560px, 100%);
+  height: auto;
+  display: block;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Theme-aware hero image switching */
+.hero-image-dark {
+  display: none;
+}
+
+[data-theme="dark"] .hero-image-dark {
+  display: block;
+}
+
+[data-theme="dark"] .hero-image-light {
+  display: none;
+}
+
+[data-theme="light"] .hero-image-light {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .hero-image-dark {
+    display: block;
+  }
+
+  :root:not([data-theme]) .hero-image-light {
+    display: none;
+  }
 }
 
 .hero-title {
-  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-size: clamp(2.2rem, 4.2vw, 3.6rem);
   font-weight: 800;
   letter-spacing: -0.02em;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2.25rem;
   line-height: 1.1;
   background: linear-gradient(135deg, var(--foreground) 0%, var(--foreground-secondary) 100%);
   -webkit-background-clip: text;
@@ -228,7 +235,7 @@
   font-size: 1.25rem;
   color: var(--foreground-secondary);
   max-width: 650px;
-  margin: 0 auto 3rem;
+  margin: 0 0 3rem;
 }
 
 .cta-group {
@@ -236,6 +243,25 @@
   gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .hero-copy {
+    text-align: center;
+  }
+
+  .hero-subtitle {
+    margin: 0 auto 2rem;
+  }
+
+  .hero-media {
+    justify-content: center;
+  }
 }
 
 /* Buttons */
@@ -484,6 +510,26 @@
 .footer-logo span {
   font-weight: bold;
   color: var(--foreground);
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.footer-links a {
+  color: var(--foreground-secondary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer-links a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
 }
 
 @media (max-width: 768px) {
