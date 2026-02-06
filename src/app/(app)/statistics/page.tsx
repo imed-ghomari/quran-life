@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { SURAHS } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -348,6 +348,7 @@ export default function StatisticsPage() {
 
         const dayCounts: Record<number, number> = {};
         let totalReviews = 0;
+        let totalFutureReviews = 0;
         let backlogCount = 0;
         let dueTomorrow = 0;
 
@@ -371,6 +372,7 @@ export default function StatisticsPage() {
             } else {
                 dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
                 totalReviews++;
+                totalFutureReviews++;
                 if (diffDays === 1) dueTomorrow++;
             }
         });
@@ -401,7 +403,11 @@ export default function StatisticsPage() {
             }
         }
 
-        const average = totalReviews / (maxDay - minDay + 1);
+        const totalDays = Math.max(1, maxDay - minDay + 1);
+        const futureStart = Math.max(0, minDay);
+        const futureDays = Math.max(1, maxDay - futureStart + 1);
+        const average = totalReviews / totalDays;
+        const dailyLoad = totalFutureReviews / futureDays;
 
         const reviewsToday = reviewLogs.filter(log => {
             if (!log.review_time) return false;
@@ -421,7 +427,7 @@ export default function StatisticsPage() {
             total: totalReviews,
             average: average.toFixed(1),
             dueTomorrow,
-            dailyLoad: (totalReviews / (maxDay - minDay + 1)).toFixed(1), // Simplified for now
+            dailyLoad: dailyLoad.toFixed(1),
             reviewsToday,
             minDay,
             maxDay
@@ -515,6 +521,7 @@ export default function StatisticsPage() {
                         title="Daily Portion"
                         icon={<Repeat size={20} />}
                         stats={dailyPortionStats}
+                        minHeight={300}
                         headerSuffix={
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
                                 <Repeat size={14} />
@@ -546,19 +553,20 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 }) {
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                <div className="future-due-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                         <CalendarClock size={20} />
                     </div>
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Reviews</h2>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>
+                <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <label className="future-due-toggle" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>
                         <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
                         Include Overdue
                     </label>
                     <select
+                        className="future-due-range"
                         value={timeRange}
                         onChange={(e) => setTimeRange(e.target.value as any)}
                         style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.75rem', background: 'var(--background)', outline: 'none', color: 'var(--foreground)' }}
@@ -576,16 +584,8 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
                     <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Reviewed Today</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.reviewsToday}</div>
-                    </div>
-                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Average / Day</div>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.average}</div>
-                    </div>
-                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Due Tomorrow</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)' }}>{stats.dueTomorrow}</div>
                     </div>
                     <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Daily Load</div>
@@ -600,70 +600,146 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number; maxDay: number }) {
     if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
 
-    const chartHeight = 180;
-    const padding = { top: 20, right: 10, bottom: 30, left: 35 };
+    const chartHeight = 210;
+    const padding = { top: 12, right: 28, bottom: 38, left: 36 };
 
-    const maxCount = Math.max(...data.map(d => d.count), 1);
-    const maxCumulative = Math.max(...data.map(d => d.cumulative), 1);
+    const nonZeroData = data.filter(d => d.count > 0);
+    if (nonZeroData.length === 0) {
+        return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+    }
+
+    const maxCount = Math.max(...nonZeroData.map(d => d.count), 1);
+    const niceStep = (val: number) => {
+        if (val <= 10) return 10;
+        return Math.ceil(val / 50) * 50;
+    };
+    const maxNice = niceStep(maxCount);
+    const gradientSeed = useId();
+    const ids = {
+        bar: `reviews-bar-${gradientSeed}`,
+        clip: `reviews-chart-clip-${gradientSeed}`,
+    };
 
     // Use a ref to get the container width for responsiveness
     return (
-        <div style={{ width: '100%', height: chartHeight, position: 'relative' }}>
+        <div className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
             <svg width="100%" height={chartHeight} style={{ overflow: 'visible' }} preserveAspectRatio="none">
                 {/* We use percentage-based coordinates or just let SVG handle scaling if possible, 
                     but for precise mapping we need the actual width. 
                     Actually, we can use viewBox for responsiveness. */}
                 <svg viewBox={`0 0 500 ${chartHeight}`} width="100%" height="100%" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                    <defs>
+                        <clipPath id={ids.clip}>
+                            <rect x={padding.left} y={padding.top} width={500 - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
+                        </clipPath>
+                    </defs>
                     {(() => {
                         const vWidth = 500;
                         const plotWidth = vWidth - padding.left - padding.right;
-                        const span = Math.max(1, maxDay - minDay + 1);
-                        const step = plotWidth / span;
-                        const getX = (day: number) => padding.left + (day - minDay + 0.5) * step;
-                        const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxCount) * (chartHeight - padding.top - padding.bottom);
-                        const getYCumulative = (cumulative: number) => chartHeight - padding.bottom - (cumulative / maxCumulative) * (chartHeight - padding.top - padding.bottom);
+                        const plotHeight = chartHeight - padding.top - padding.bottom;
+                        const span = Math.max(1, nonZeroData.length);
+                        const groupWidth = plotWidth * 0.72;
+                        const groupStart = padding.left + (plotWidth - groupWidth) / 2;
+                        const step = groupWidth / span;
+                        const getX = (index: number) => groupStart + (index + 0.5) * step;
+                        const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
+                        const labelStep = Math.max(1, Math.ceil(nonZeroData.length / 6));
+                        const formatDayLabel = (day: number) => {
+                            if (day === 0) return 'Today';
+                            if (day === 1) return '1d';
+                            if (day === -1) return '1d ago';
+                            if (day < 0) return `${Math.abs(day)}d ago`;
+                            return `${day}d`;
+                        };
 
-                        let areaPath = `M ${getX(data[0].day)} ${chartHeight - padding.bottom}`;
-                        data.forEach(d => {
-                            areaPath += ` L ${getX(d.day)} ${getYCumulative(d.cumulative)}`;
-                        });
-                        areaPath += ` L ${getX(data[data.length - 1].day)} ${chartHeight - padding.bottom} Z`;
-
+                        const roundedPath = (x: number, y: number, w: number, h: number, rt: number, rb: number) => {
+                            const right = x + w;
+                            const bottom = y + h;
+                            const rTop = Math.min(rt, w / 2, h / 2);
+                            const rBottom = Math.min(rb, w / 2, h / 2);
+                            return [
+                                `M ${x} ${y + rTop}`,
+                                `Q ${x} ${y} ${x + rTop} ${y}`,
+                                `L ${right - rTop} ${y}`,
+                                `Q ${right} ${y} ${right} ${y + rTop}`,
+                                `L ${right} ${bottom - rBottom}`,
+                                `Q ${right} ${bottom} ${right - rBottom} ${bottom}`,
+                                `L ${x + rBottom} ${bottom}`,
+                                `Q ${x} ${bottom} ${x} ${bottom - rBottom}`,
+                                'Z'
+                            ].join(' ');
+                        };
                         return (
                             <>
-                                {/* Cumulative Area */}
-                                <path d={areaPath} fill="var(--chart-skipped)" opacity="0.1" />
-                                <path d={areaPath.replace(' Z', '')} fill="none" stroke="var(--foreground-secondary)" strokeWidth="1" opacity="0.2" />
+                                <rect
+                                    x={padding.left}
+                                    y={padding.top}
+                                    width={plotWidth}
+                                    height={chartHeight - padding.top - padding.bottom}
+                                    rx={16}
+                                    ry={16}
+                                    fill="var(--reviews-chart-panel)"
+                                    stroke="none"
+                                />
 
-                                {/* Bars */}
-                                {data.map((d, i) => {
-                                    const barWidth = Math.max(1, step - 0.5);
-                                    const x = getX(d.day);
-                                    return (
-                                        <rect
-                                            key={i}
-                                            x={x - barWidth / 2}
-                                            y={getYCount(d.count)}
-                                            width={barWidth}
-                                            height={Math.max(0, chartHeight - padding.bottom - getYCount(d.count))}
-                                            fill="var(--chart-mastered)"
-                                            opacity={d.day < 0 ? 0.8 : 0.6}
-                                        />
-                                    );
-                                })}
+                                <g clipPath={`url(#${ids.clip})`}>
+                                    {/* Bars */}
+                                    {nonZeroData.map((d, i) => {
+                                        const barWidth = Math.max(14, Math.min(40, step * 0.96));
+                                        const x = getX(i);
+                                        const height = Math.max(0, chartHeight - padding.bottom - getYCount(d.count));
+                                        const bgY = padding.top + 6;
+                                        const bgHeight = plotHeight - 6;
+                                        const isPeak = d.count === maxCount;
+                                        return (
+                                            <g key={i}>
+                                                <path
+                                                    d={roundedPath(x - barWidth / 2, bgY, barWidth, bgHeight, 14, 10)}
+                                                    fill="var(--border)"
+                                                    opacity="0.22"
+                                                />
+                                                <path
+                                                    d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
+                                                    fill={isPeak ? 'var(--accent)' : 'var(--chart-medium)'}
+                                                    opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                                <title>{`${d.count} review${d.count === 1 ? '' : 's'} (${formatDayLabel(d.day)})`}</title>
+                                            </g>
+                                        );
+                                    })}
+                                </g>
 
                                 {/* X-axis */}
-                                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={vWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={vWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.5" />
 
                                 {/* Left Y-axis (Daily Count) */}
-                                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" />
+                                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.35" />
                                 {[0, 0.5, 1].map((p, i) => {
-                                    const val = p * maxCount;
+                                    const val = p * maxNice;
                                     const y = getYCount(val);
                                     return (
                                         <g key={i}>
                                             <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{Math.round(val)}</text>
                                         </g>
+                                    );
+                                })}
+
+                                {/* X-axis labels */}
+                                {nonZeroData.map((d, i) => {
+                                    if (i % labelStep !== 0 && i !== nonZeroData.length - 1) return null;
+                                    const x = getX(i);
+                                    return (
+                                        <text
+                                            key={`label-${i}`}
+                                            x={x}
+                                            y={chartHeight - padding.bottom + 18}
+                                            textAnchor="middle"
+                                            fontSize="10"
+                                            fill="var(--foreground-secondary)"
+                                        >
+                                            {formatDayLabel(d.day)}
+                                        </text>
                                     );
                                 })}
                             </>
@@ -761,9 +837,9 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
     );
 }
 
-function ProgressBarSection({ title, icon, stats, headerSuffix }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode }) {
+function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode; minHeight?: number }) {
     return (
-        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
+        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)', minHeight }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>{icon}</div>

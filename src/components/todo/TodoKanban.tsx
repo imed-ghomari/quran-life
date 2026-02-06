@@ -1063,13 +1063,13 @@ export default function TodoKanban({
                 const next = target < total ? target + 1 : null;
                 const getVerseText = (ayahId: number) => verses.find((v: any) => v.surahId === surahId && v.ayahId === ayahId)?.text || '';
                 const renderVerse = (ayahId: number, highlight: boolean) => (
-                    <div key={ayahId} className="bg-[var(--background-secondary)] p-4 rounded-lg">
-                        <div className="text-xs text-[var(--foreground-secondary)] mb-2">
+                    <div key={ayahId} className="verse-context-verse bg-[var(--background-secondary)] p-6 rounded-lg">
+                        <div className="verse-context-label text-xs text-[var(--foreground-secondary)] mb-2">
                             {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
                         </div>
                         <p
-                            className="text-right font-arabic text-xl leading-loose"
-                            style={highlight ? { background: 'rgba(255, 99, 99, 0.18)', borderRadius: '8px', padding: '6px' } : undefined}
+                            className="verse-context-ayah text-right font-arabic text-xl leading-loose"
+                            style={highlight ? { background: 'rgba(255, 99, 99, 0.18)' } : undefined}
                         >
                             {getVerseText(ayahId)}
                         </p>
@@ -1077,7 +1077,7 @@ export default function TodoKanban({
                 );
 
                 const content = (
-                    <div className="space-y-4">
+                    <div className="verse-context-stack">
                         {prev && renderVerse(prev, false)}
                         {renderVerse(target, true)}
                         {next && renderVerse(next, false)}
@@ -1090,6 +1090,11 @@ export default function TodoKanban({
                             isOpen={!!verseContextItem}
                             onClose={() => setVerseContextItem(null)}
                             title="Verse Context"
+                            rootClassName="verse-context-modal"
+                            headerClassName="verse-context-header"
+                            titleClassName="verse-context-title"
+                            closeClassName="verse-context-close"
+                            contentClassName="verse-context-content"
                         >
                             {content}
                         </SlideOver>
@@ -1097,19 +1102,19 @@ export default function TodoKanban({
                 }
 
                 return (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center" role="dialog" aria-modal="true">
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center verse-context-modal" role="dialog" aria-modal="true">
                         <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setVerseContextItem(null)} />
                         <div className="relative w-full max-w-2xl max-h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-                                <h3 className="text-lg font-bold">Verse Context</h3>
+                            <div className="verse-context-header flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+                                <h3 className="verse-context-title text-lg font-bold">Verse Context</h3>
                                 <button
                                     onClick={() => setVerseContextItem(null)}
-                                    className="p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
+                                    className="verse-context-close p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
                                 >
                                     <X size={18} />
                                 </button>
                             </div>
-                            <div className="px-6 py-6 space-y-4 overflow-y-auto max-h-[calc(85vh-70px)]">
+                            <div className="verse-context-content px-8 py-7 space-y-5 overflow-y-auto max-h-[calc(85vh-70px)]">
                                 {content}
                             </div>
                         </div>
@@ -1259,6 +1264,11 @@ export default function TodoKanban({
                             isOpen={!!activeSimilarityContext}
                             onClose={() => setActiveSimilarityContext(null)}
                             title="Similarity Conflict"
+                            rootClassName="similarity-context-modal"
+                            headerClassName="similarity-context-header"
+                            titleClassName="similarity-context-title"
+                            closeClassName="similarity-context-close"
+                            contentClassName="similarity-context-content"
                         >
                             {similarityContent}
                         </SlideOver>
@@ -1266,23 +1276,23 @@ export default function TodoKanban({
                 }
 
                 return (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center" role="dialog" aria-modal="true">
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center similarity-context-modal" role="dialog" aria-modal="true">
                         <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setActiveSimilarityContext(null)} />
                         <div className="relative w-full max-w-3xl max-h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
-                            <div className="flex items-center justify-between px-10 py-6 border-b border-[var(--border)]">
+                            <div className="similarity-context-header flex items-center justify-between px-10 py-6 border-b border-[var(--border)]">
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                     <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                                         <Brain size={18} />
                                     </div>
-                                    <h3 style={{ margin: 0, fontSize: '1rem' }}>
+                                    <h3 className="similarity-context-title" style={{ margin: 0, fontSize: '1rem' }}>
                                         {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
                                     </h3>
                                 </div>
-                                <button className="close-btn" onClick={() => setActiveSimilarityContext(null)}>
+                                <button className="close-btn similarity-context-close" onClick={() => setActiveSimilarityContext(null)}>
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
+                            <div className="similarity-context-content px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
                                 {similarityContent}
                             </div>
                         </div>
