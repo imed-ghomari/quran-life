@@ -129,14 +129,6 @@ const schema = i.schema({
       fsrs_weights: i.json(),
       userId: i.string(),
     }),
-    purchases: i.entity({
-      email: i.string(),
-      polar_checkout_id: i.string(),
-      polar_customer_id: i.string(),
-      polar_product_id: i.string(),
-      purchased_at: i.string(),
-      status: i.string(),
-    }),
     optimizationMeta: i.entity({
       logCountAtLastOptimization: i.number(),
       lastOptimizedAt: i.string(),

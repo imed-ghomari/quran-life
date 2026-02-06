@@ -20,7 +20,6 @@
     "@instantdb/react": "^0.22.107",
     "@legendapp/state": "^2.1.15",
     "@open-spaced-repetition/binding": "^0.1.2",
-    "@polar-sh/sdk": "^0.42.1",
     "@radix-ui/react-slot": "^1.2.4",
     "@react-oauth/google": "^0.13.4",
     "@tailwindcss/postcss": "^4.1.18",
