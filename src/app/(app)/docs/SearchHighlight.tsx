@@ -97,27 +97,41 @@ export default function SearchHighlight() {
 
             // Now scroll to the first highlight
             const firstHighlight = article.querySelector('.search-highlight') as HTMLElement;
-            const container = document.querySelector('.docs-main') as HTMLElement;
+            const container = document.querySelector('.docs-main') as HTMLElement | null;
 
-            if (firstHighlight && container) {
+            if (firstHighlight) {
                 // Calculate and scroll after layout update
                 requestAnimationFrame(() => {
                     setTimeout(() => {
-                        const containerRect = container.getBoundingClientRect();
-                        const highlightRect = firstHighlight.getBoundingClientRect();
-                        const highlightOffset = highlightRect.top - containerRect.top + container.scrollTop;
-                        const targetScroll = highlightOffset - (containerRect.height / 2) + (highlightRect.height / 2);
+                        const canScrollContainer =
+                            container &&
+                            container.scrollHeight > container.clientHeight + 1 &&
+                            getComputedStyle(container).overflowY !== 'visible';
 
-                        console.log('SearchHighlight: Scrolling to highlight', {
-                            highlightOffset,
-                            targetScroll,
-                            containerHeight: containerRect.height
-                        });
+                        if (container && canScrollContainer) {
+                            const containerRect = container.getBoundingClientRect();
+                            const highlightRect = firstHighlight.getBoundingClientRect();
+                            const highlightOffset = highlightRect.top - containerRect.top + container.scrollTop;
+                            const targetScroll = highlightOffset - (containerRect.height / 2) + (highlightRect.height / 2);
 
-                        container.scrollTo({
-                            top: Math.max(0, targetScroll),
-                            behavior: 'smooth'
-                        });
+                            console.log('SearchHighlight: Scrolling container to highlight', {
+                                highlightOffset,
+                                targetScroll,
+                                containerHeight: containerRect.height
+                            });
+
+                            container.scrollTo({
+                                top: Math.max(0, targetScroll),
+                                behavior: 'smooth'
+                            });
+                        } else {
+                            console.log('SearchHighlight: Scrolling window to highlight');
+                            firstHighlight.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center',
+                                inline: 'nearest'
+                            });
+                        }
                     }, 50);
                 });
             }

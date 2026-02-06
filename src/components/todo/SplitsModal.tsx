@@ -73,7 +73,7 @@ export default function SplitsModal({
                     <div className="flex flex-col h-full">
                         {/* Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] shrink-0">
-                            <h2 className="text-lg font-bold tracking-tight">Edit Splits</h2>
+                       <div />
                             <button
                                 onClick={onClose}
                                 className="p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
