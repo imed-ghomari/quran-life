@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useContext, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
 import Spinner from '@/components/ui/Spinner';
+import { OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
 
@@ -21,6 +22,7 @@ type AuthGateProps = {
 export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const isOnline = useContext(OnlineStatusContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
@@ -45,6 +47,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
+    if (!isOnline) return;
 
     if (!user) {
       router.replace('/auth');
@@ -54,7 +57,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!isOwner && !hasPurchase && !isPurchaseLoading) {
       router.replace('/auth');
     }
-  }, [isPublic, isAuthLoading, user, isOwner, hasPurchase, isPurchaseLoading, router]);
+  }, [isPublic, isAuthLoading, isOnline, user, isOwner, hasPurchase, isPurchaseLoading, router]);
 
   if (isPublic) {
     return <>{children}</>;
@@ -86,6 +89,10 @@ export default function AuthGate({ children }: AuthGateProps) {
         <Spinner text="Redirecting to sign in..." />
       </div>
     );
+  }
+
+  if (!isOnline) {
+    return <>{children}</>;
   }
 
   if (isPurchaseLoading) {

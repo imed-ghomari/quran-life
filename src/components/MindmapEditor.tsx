@@ -575,7 +575,9 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{
+            <div
+                className="mindmap-editor-header"
+                style={{
                 height: '50px',
                 borderBottom: '1px solid #e5e5e5',
                 display: 'flex',
@@ -583,13 +585,14 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 justifyContent: 'space-between',
                 padding: '0 1rem'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div className="mindmap-editor-header-left" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <button onClick={handleClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', display: 'flex' }}>
                         <X size={24} />
                     </button>
-                    <span style={{ fontWeight: 600 }}>{title || 'Mindmap Editor'}</span>
+                    <span className="mindmap-editor-title" style={{ fontWeight: 600 }}>{title || 'Mindmap Editor'}</span>
                     {docLink && (
                         <a
+                            className="mindmap-editor-doclink"
                             href={docLink}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -607,7 +610,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         </a>
                     )}
                 </div>
-                <span style={{ fontSize: '0.8rem', color: '#666' }}>Auto-saves on close</span>
+                <span className="mindmap-editor-status" style={{ fontSize: '0.8rem', color: '#666' }}>Auto-saves on close</span>
             </div>
 
             <div className="tldraw-container" style={{ 

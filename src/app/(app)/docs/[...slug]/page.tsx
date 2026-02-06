@@ -56,7 +56,7 @@ export async function generateStaticParams() {
     const files = getAllFiles(contentDir);
     
     return files
-        .filter(file => file !== 'index.mdx') // Skip root index.mdx as it's handled by app/docs/page.tsx
+        .filter(file => file !== 'index.mdx') // Skip root index.mdx as it's handled by app/(app)/docs/page.tsx
         .map(file => {
             const slug = file.replace(/\.mdx$/, '').split(path.sep);
             // Handle directory index files (e.g., "mindmaps/index.mdx" -> ["mindmaps"])

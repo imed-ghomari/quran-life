@@ -54,14 +54,16 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
             <Suspense fallback={null}>
                 <ScrollOnNavigate />
             </Suspense>
+            
             {/* Mobile Header */}
-            <div className="flex items-center justify-between mb-4 shrink-0 md:hidden px-5 pt-5">
+<div className="flex items-center justify-between shrink-0 md:hidden px-5 pt-5">
                 <div className="flex items-center gap-3">
                     <MobileDocsNav items={sidebarItems} />
                     <DocsBreadcrumbs />
                 </div>
                 <DocsSearch />
             </div>
+            <div className="md:hidden" style={{ height: '16px' }} />
 
             {/* Desktop Title */}
             <h1 className="hidden md:block text-2xl font-bold mb-6 flex-shrink-0">Documentation</h1>
@@ -92,15 +94,15 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 </aside>
 
                 {/* Main Content Area */}
-                <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative" style={{ flex: '1.2 1 0%' }}>
+<div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative md:mt-0" style={{ flex: '1.2 1 0%' }}>
                     {/* Content */}
-                    <main className="docs-main custom-scrollbar card modern-card flex-1 !border-[var(--border)] !mb-0" style={{
-                        height: '100%',
-                        overflowY: 'auto',
-                        padding: '0',
-                        borderRadius: '16px'
-                    }}>
-                        <article className="docs-content p-5 md:p-6">
+              <main className="docs-main custom-scrollbar card modern-card flex-1 !border-[var(--border)] !mb-0 mx-4 md:mx-0 mt-10 md:mt-0" style={{
+    height: '100%',
+    overflowY: 'auto',
+    padding: '0',
+    borderRadius: '16px'
+}}>
+                     <article className="docs-content p-5 pt-6 md:p-6 md:pt-6">
                             <Suspense fallback={null}>
                                 <SearchHighlight />
                             </Suspense>

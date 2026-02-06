@@ -10,16 +10,17 @@ const RoadmapSection: React.FC = () => {
       { id: 12, title: 'Completing Mindmaps (Part 1, 2, 3)', tag: 'Planned' },
       { id: 13, title: 'Better Design for Mindmaps', tag: 'Planned' },
       { id: 14, title: 'Community Platform (Discord)', tag: 'Planned' },
+      
     ],
     inProgress: [
       { id: 7, title: 'Part 4 Mindmaps Integration', tag: 'In Progress' },
-      { id: 5, title: 'UI Polishing & Enhancements', tag: 'In Progress' },
+ 
     ],
     completed: [
       { id: 10, title: 'Documentation', tag: 'Live' },
       { id: 8, title: 'Spaced Repetition Algorithm', tag: 'Live' },
       { id: 9, title: 'Similar Verse Support', tag: 'Live' },
-      { id: 11, title: 'Offline Support', tag: 'Live' },
+      { id: 15, title: 'Offline Mode', tag: 'Live' },
       { id: 3, title: 'More Choice of Reciters', tag: 'Live' },
     ]
   };

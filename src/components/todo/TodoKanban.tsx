@@ -307,6 +307,63 @@ export default function TodoKanban({
             itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
+        const showReviewDummies = process.env.NEXT_PUBLIC_SHOW_REVIEW_DUMMIES === 'true';
+
+        if (showReviewDummies && suspendedAnchors.length === 0) {
+            const dummyId = 'suspended-dummy-1';
+            if (!hiddenItemIds.has(dummyId)) {
+                itemMap.set(dummyId, {
+                    id: dummyId,
+                    type: 'suspended',
+                    status: 'backlog',
+                    data: {
+                        surahId: 1,
+                        anchorId: 'dummy-review-fix',
+                        label: 'Dummy review fix (dev)',
+                        startVerse: 1,
+                        endVerse: 7,
+                        isDummy: true
+                    }
+                });
+            }
+        }
+
+        if (showReviewDummies && similarityGroups.length === 0) {
+            const dummyId = 'similarity-dummy-1';
+            if (!hiddenItemIds.has(dummyId)) {
+                const dummySurah = getSurah(1);
+                itemMap.set(dummyId, {
+                    id: dummyId,
+                    type: 'similarity',
+                    status: 'backlog',
+                    data: {
+                        surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
+                        count: 1,
+                        isDummy: true,
+                        items: [
+                            {
+                                err: { absoluteAyah: 1 },
+                                muts: [
+                                    {
+                                        phraseId: 'dummy-phrase-1',
+                                        meta: {
+                                            sourceAbs: 1,
+                                            sourceRange: [1, 3],
+                                            matches: [
+                                                { absolute: 1, wordRange: [1, 3] },
+                                                { absolute: 2, wordRange: [1, 2] }
+                                            ]
+                                        },
+                                        matches: [1, 2]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                });
+            }
+        }
+
         const newCols: Record<string, KanbanItem[]> = {
             'backlog': [],
             'in-progress': [],
@@ -373,8 +430,10 @@ export default function TodoKanban({
 
     const handleCompletionTrigger = useCallback((item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
+            if (item.data?.isDummy) return;
             onFixConfirm(item.data.surahId, item.data.anchorId);
         } else if (item.type === 'similarity') {
+            if (item.data?.isDummy) return;
             const group = item.data;
             group.items.forEach((simItem: any) => {
                 simItem.muts.forEach((entry: any) => {
@@ -841,7 +900,7 @@ export default function TodoKanban({
             {/* Header Area */}
             <div className={`
                 flex shrink-0 bg-[var(--background)] gap-4
-                ${isMobile ? 'flex-col items-stretch px-5 pt-5 pb-2' : 'flex-row items-center justify-between px-0 pt-0 pb-6'}
+                ${isMobile ? 'flex-col items-stretch px-3 pt-4 pb-2' : 'flex-row items-center justify-between px-0 pt-0 pb-6'}
             `}>
                 {/* Title - Desktop only */}
                 {!isMobile && (
@@ -931,7 +990,7 @@ export default function TodoKanban({
                     ref={containerRef}
                     style={{ position: 'relative' }}
                     className={`
-                        flex-1 min-h-0 px-5 pb-2 md:px-0
+                        flex-1 min-h-0 px-3 pb-2 md:px-0
                         ${isMobile
                     ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
                     : 'grid grid-cols-3 gap-6 !mt-4 !grid-rows-[minmax(0,1fr)]'

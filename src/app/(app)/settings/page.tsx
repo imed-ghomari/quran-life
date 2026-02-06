@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useContext } from 'react';
+import React, { useEffect, useMemo, useState, useContext, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
@@ -189,7 +189,9 @@ export default function SettingsPage() {
         representativeAbs: number;
     } | null>(null);
 
-    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'appearance' | null>(null);
+    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | null>(null);
+    const mobileHistorySyncRef = useRef(false);
+    const mobileHistoryKey = 'mobileSettingsPage';
 
     const latestPartMindmaps = useMemo(() => {
         const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
@@ -260,6 +262,42 @@ export default function SettingsPage() {
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
+
+    useEffect(() => {
+        if (!isMobile) return;
+
+        const currentState = window.history.state || {};
+        if (currentState[mobileHistoryKey] === undefined) {
+            window.history.replaceState({ ...currentState, [mobileHistoryKey]: null }, '');
+        }
+
+        const handlePopState = (event: PopStateEvent) => {
+            mobileHistorySyncRef.current = true;
+            const nextPage = event.state?.[mobileHistoryKey] ?? null;
+            setActiveMobilePage(nextPage);
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [isMobile, mobileHistoryKey]);
+
+    useEffect(() => {
+        if (!isMobile) return;
+        if (mobileHistorySyncRef.current) {
+            mobileHistorySyncRef.current = false;
+            return;
+        }
+
+        const currentState = window.history.state || {};
+        const currentPage = currentState[mobileHistoryKey] ?? null;
+        if (currentPage === activeMobilePage) return;
+
+        if (activeMobilePage === null) {
+            window.history.replaceState({ ...currentState, [mobileHistoryKey]: null }, '');
+        } else {
+            window.history.pushState({ ...currentState, [mobileHistoryKey]: activeMobilePage }, '');
+        }
+    }, [activeMobilePage, isMobile, mobileHistoryKey]);
 
     const [sectionsExpanded, setSectionsExpanded] = useState({
         cloudSync: true,
@@ -360,14 +398,17 @@ export default function SettingsPage() {
         if (activeMobilePage === 'account') {
             return (
                 <div className="content-wrapper tab-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div
+                        onClick={() => setActiveMobilePage(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', cursor: 'pointer' }}
+                    >
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
                         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Account & Data</h1>
                     </div>
 
-                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1rem' }}>
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Database size={18} /> User Account
                         </h2>
@@ -488,6 +529,42 @@ export default function SettingsPage() {
                             )}
                         </div>
                     </div>
+
+                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Palette size={18} /> Theme Mode
+                        </h2>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {[
+                                { id: 'light', label: 'Light Mode', icon: Sun },
+                                { id: 'dark', label: 'Dark Mode', icon: Moon },
+                                { id: 'system', label: 'System Default', icon: Monitor }
+                            ].map((mode) => (
+                                <button
+                                    key={mode.id}
+                                    onClick={() => setTheme(mode.id as any)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '1rem',
+                                        padding: '1rem',
+                                        borderRadius: '12px',
+                                        border: theme === mode.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                        background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
+                                        color: theme === mode.id ? 'var(--accent)' : 'var(--foreground)',
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                        transition: 'all 0.2s ease',
+                                        fontWeight: theme === mode.id ? 600 : 400
+                                    }}
+                                >
+                                    <mode.icon size={20} />
+                                    <span>{mode.label}</span>
+                                    {theme === mode.id && <Check size={18} style={{ marginLeft: 'auto' }} />}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             );
         }
@@ -495,7 +572,10 @@ export default function SettingsPage() {
         if (activeMobilePage === 'plan') {
             return (
                 <div className="content-wrapper tab-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div
+                        onClick={() => setActiveMobilePage(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', cursor: 'pointer' }}
+                    >
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
@@ -503,9 +583,19 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Clock size={18} /> Completion Schedule
-                        </h2>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem' }}>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Clock size={18} /> Completion Schedule
+                            </h2>
+                            <button
+                                className="bulk-btn reset-mut"
+                                onClick={handleResetDailyPortion}
+                                title="Reset daily portion progress for the active part"
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                            >
+                                <RotateCcw size={14} /> Reset
+                            </button>
+                        </div>
                         <DailyCompletionSlider
                             days={settings.completionDays || 30}
                             onChange={handleCompletionDays}
@@ -563,7 +653,10 @@ export default function SettingsPage() {
         if (activeMobilePage === 'tracking') {
             return (
                 <div className="content-wrapper tab-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div
+                        onClick={() => setActiveMobilePage(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', cursor: 'pointer' }}
+                    >
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
@@ -758,6 +851,27 @@ export default function SettingsPage() {
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Brain size={18} /> Similar Verse Coverage
                         </h2>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                            <button
+                                className="bulk-btn learned"
+                                onClick={() => {
+                                    setTargetSurahId(undefined);
+                                    setIsAddModalOpen(true);
+                                }}
+                                title="Add Custom Mutashabih"
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                            >
+                                <Plus size={14} /> <span>Add Custom</span>
+                            </button>
+                            <button
+                                className="bulk-btn reset-mut"
+                                onClick={handleResetMutashabihat}
+                                title="Reset all mutashabihat decisions for this part"
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                            >
+                                <RotateCcw size={14} /> <span>Reset Decisions</span>
+                            </button>
+                        </div>
                         <div className="knowledge-groups-mobile">
                             {mutashabihatSurahs.map(({ surah, count }) => {
                                 const isOpen = expandedSurahs[surah.id] ?? false;
@@ -883,77 +997,10 @@ export default function SettingsPage() {
             );
         }
 
-        if (activeMobilePage === 'appearance') {
-            return (
-                <div className="content-wrapper tab-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                        <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
-                            <ChevronLeft size={28} />
-                        </button>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Appearance</h1>
-                    </div>
-
-                    <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Palette size={18} /> Theme Mode
-                        </h2>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {[
-                                { id: 'light', label: 'Light Mode', icon: Sun },
-                                { id: 'dark', label: 'Dark Mode', icon: Moon },
-                                { id: 'system', label: 'System Default', icon: Monitor }
-                            ].map((mode) => (
-                                <button
-                                    key={mode.id}
-                                    onClick={() => setTheme(mode.id as any)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '1rem',
-                                        padding: '1rem',
-                                        borderRadius: '12px',
-                                        border: theme === mode.id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
-                                        color: theme === mode.id ? 'var(--accent)' : 'var(--foreground)',
-                                        cursor: 'pointer',
-                                        width: '100%',
-                                        transition: 'all 0.2s ease',
-                                        fontWeight: theme === mode.id ? 600 : 400
-                                    }}
-                                >
-                                    <mode.icon size={20} />
-                                    <span>{mode.label}</span>
-                                    {theme === mode.id && <Check size={18} style={{ marginLeft: 'auto' }} />}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
         return (
             <div className="content-wrapper tab-content">
                 {/* <h1 className="text-2xl font-bold mb-6">Settings</h1> */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <button onClick={() => setActiveMobilePage('appearance')} className="modern-card" style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '1.25rem', background: 'var(--background-secondary)',
-                        border: '1px solid var(--border)', borderRadius: '16px',
-                        cursor: 'pointer', textAlign: 'left', width: '100%'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Palette size={24} />
-                            </div>
-                            <div>
-                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Appearance</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Theme, Dark Mode</div>
-                            </div>
-                        </div>
-                        <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
-                    </button>
-
                     <button onClick={() => setActiveMobilePage('account')} className="modern-card" style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '1.25rem', background: 'var(--background-secondary)',
@@ -965,8 +1012,8 @@ export default function SettingsPage() {
                                 <Database size={24} />
                             </div>
                             <div>
-                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Account & Data</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Sync, Backup, Import</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Account & Appearance</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Sync, Backup, Themes</div>
                             </div>
                         </div>
                         <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />

@@ -448,7 +448,7 @@ export default function StatisticsPage() {
                     </div>
                 </div>
 
-                <div className="stats-grid-main">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
                     <ProgressBarSection
                         title="Part Mindmaps"
                         icon={<MapIcon size={20} />}
@@ -551,7 +551,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                         <CalendarClock size={20} />
                     </div>
-                    <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Future Reviews</h2>
+                    <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Reviews</h2>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>

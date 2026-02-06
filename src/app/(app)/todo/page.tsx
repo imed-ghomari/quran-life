@@ -561,7 +561,7 @@ export default function TodoPage() {
     }, [activePartEditor, partMindmapsMap, savePartMindMap]);
 
     return (
-        <div className="content-wrapper tab-content">
+        <div className="content-wrapper tab-content todo-page">
             {/* Surah Mindmap Editor */}
             {activeMindmapEditor && (
                 <MindmapEditor
@@ -622,7 +622,7 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <div className="content-wrapper !max-w-full h-full flex flex-col">
+            <div className="w-full h-full flex flex-col px-2 sm:px-4 md:px-6 py-2 sm:py-4">
                 <TodoKanban
                     suspendedAnchors={[]}
                     similarityGroups={groupedSimilarity}

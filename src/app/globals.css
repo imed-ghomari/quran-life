@@ -137,7 +137,7 @@ html {
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  padding: 1.5rem 1.5rem 4rem;
+  padding: 3.5rem 1.5rem 4rem;
 }
 
 @media (min-width: 768px) {
@@ -839,7 +839,12 @@ h3 {
 
   /* Match card spacing across grids on mobile */
   .stats-grid-main {
-    gap: 1rem;
+    gap: 0.6rem;
+  }
+
+  /* Tighten card spacing specifically for statistics grid on mobile */
+  .stats-grid-main > .card {
+    margin-bottom: 0;
   }
 }
 
@@ -1706,6 +1711,21 @@ input:focus {
   grid-template-columns: 1fr;
   gap: 1.5rem;
   width: 100%;
+}
+
+@media (max-width: 900px) {
+  .stats-grid-main {
+    gap: 0.6rem !important;
+  }
+
+  .stats-grid-main .card {
+    margin-bottom: 0 !important;
+  }
+
+  /* Tighten edge padding for Todo tab on mobile */
+  .todo-page.tab-content {
+    padding: 0.75rem;
+  }
 }
 
 .statistics-container {
@@ -2704,5 +2724,59 @@ input:focus {
 
   :root:not([data-theme="light"]) .docs-search-trigger.todo-search-bar {
     background-color: var(--background-secondary) !important;
+  }
+}
+/* Remove outer border/padding issues on mobile */
+@media (max-width: 640px) {
+    .todo-page.content-wrapper,
+    .todo-page > .content-wrapper {
+        padding: 0.5rem !important;
+        margin: 0 !important;
+        border: none !important;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+    
+    /* If there's a border class being applied */
+    .todo-page {
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+  .mindmap-editor-header {
+    height: auto !important;
+    padding: 0.5rem 0.75rem !important;
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: 0.35rem;
+  }
+
+  .mindmap-editor-header-left {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.6rem !important;
+  }
+
+  .mindmap-editor-title {
+    font-size: 0.95rem;
+    line-height: 1.2;
+    max-width: 100%;
+  }
+
+  .mindmap-editor-doclink {
+    margin-left: 0 !important;
+    margin-right: auto;
+    padding: 3px 6px !important;
+    font-size: 0.7rem !important;
+    white-space: nowrap;
+  }
+
+  .mindmap-editor-status {
+    width: 100%;
+    text-align: left;
+    font-size: 0.7rem !important;
+    color: #666;
   }
 }
