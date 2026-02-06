@@ -1122,7 +1122,7 @@ export default function TodayPage() {
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
                                         !showGrading ? (
-                                            <button className="btn btn-primary btn-full" onClick={handleRevealNext}>
+                                            <button className="btn btn-primary btn-full review-reveal-btn" onClick={handleRevealNext}>
                                                 {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
                                             </button>
                                         ) : (

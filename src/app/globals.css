@@ -806,12 +806,18 @@ h3 {
 /* Reviews: keep only the inner target box scroll */
 .review-section-content .today-card-content {
   overflow: visible;
+  padding-bottom: 1rem;
+}
+
+.review-section-content .today-card-footer {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
 }
 
 .today-card-footer {
   position: sticky;
   bottom: 0;
-  background: var(--background-secondary);
+  background-color: inherit !important;
   padding-top: 0.75rem;
   padding-bottom: 0.25rem;
   margin-top: auto;
@@ -840,6 +846,15 @@ h3 {
 .today-card-footer .review-btn {
   min-height: 44px;
   padding: 0.6rem;
+}
+
+.today-card-footer > .btn {
+  margin-top: 0.25rem !important;
+}
+
+.today-card-footer .review-reveal-btn {
+  margin-top: 0.25rem !important;
+  border-top: 1px solid var(--border);
 }
 
 .daily-verse-preview {
@@ -874,6 +889,10 @@ h3 {
   /* Tighten card spacing specifically for statistics grid on mobile */
   .stats-grid-main > .card {
     margin-bottom: 0;
+  }
+
+  .review-section-content .today-card-footer {
+    border-top: none;
   }
 }
 
@@ -1981,6 +2000,7 @@ input:focus {
     overflow: hidden;
   }
 
+
   .settings-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -2046,7 +2066,7 @@ input:focus {
   .today-card-footer {
     position: sticky;
     bottom: 0;
-    background: var(--background-secondary);
+    background-color: inherit !important;
     padding-top: 0.75rem;
     padding-bottom: 0.25rem;
     margin-top: auto;
@@ -2812,6 +2832,10 @@ input:focus {
     background-color: #f4f6f8 !important;
   }
 
+  :root:not([data-theme="dark"]) .review-section-content .today-card-footer {
+    background-color: #f4f6f8 !important;
+  }
+
   :root:not([data-theme="dark"]) .roadmap-card {
     background-color: #ffffff !important;
   }
@@ -2828,6 +2852,10 @@ input:focus {
   background-color: #f4f6f8 !important;
 }
 
+:root[data-theme="light"] .review-section-content .today-card-footer {
+  background-color: #f4f6f8 !important;
+}
+
 :root[data-theme="light"] .kanban-card,
 :root[data-theme="light"] .roadmap-card {
   background-color: #ffffff !important;
@@ -2836,6 +2864,10 @@ input:focus {
 /* Dark Mode Kanban Overrides */
 :root[data-theme="dark"] .kanban-column,
 :root[data-theme="dark"] .roadmap-column {
+  background-color: var(--background-secondary) !important;
+}
+
+:root[data-theme="dark"] .review-section-content .today-card-footer {
   background-color: var(--background-secondary) !important;
 }
 
