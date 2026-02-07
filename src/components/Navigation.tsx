@@ -181,7 +181,10 @@ function NavigationContent() {
 
 export default function Navigation() {
     const pathname = usePathname();
-    const isAuthOrHome = pathname === '/' || pathname === '/auth' || pathname === '/terms' || pathname === '/privacy';
+    const isAuthOrHome = pathname === '/'
+        || pathname === '/auth'
+        || pathname === '/terms'
+        || pathname === '/privacy';
 
     if (isAuthOrHome) return null;
 

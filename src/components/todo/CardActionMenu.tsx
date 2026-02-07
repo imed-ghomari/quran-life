@@ -246,7 +246,7 @@ export default function CardActionMenu({
                             const isLastItem = item.isLast;
 
                             const className = `
-                                w-full flex items-center gap-2 pl-4 pr-4 py-3.5 text-[13px] font-medium text-left rounded-xl transition-colors
+                                w-full flex items-center gap-2 pl-10 pr-4 py-3.5 text-[13px] font-medium text-left rounded-xl transition-colors
                                 ${isFirstItem ? 'mt-1' : ''}
                                 ${isLastItem ? 'mb-1' : ''}
                                 ${item.disabled
@@ -259,7 +259,7 @@ export default function CardActionMenu({
                             if (item.isLink) {
                                 return (
                                     <Link key={idx} href={item.href!} className={className} onClick={onClose}>
-                                        <span className={`w-8 flex items-center justify-center opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
+                                        <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
                                         <span>{item.label}</span>
                                     </Link>
                                 );
@@ -267,7 +267,7 @@ export default function CardActionMenu({
 
                             return (
                                 <button key={idx} onClick={() => { item.onClick?.(); onClose(); }} disabled={item.disabled} className={className}>
-                                    <span className={`w-8 flex items-center justify-center opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
+                                    <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
                                     <span>{item.label}</span>
                                 </button>
                             );
@@ -303,7 +303,7 @@ export default function CardActionMenu({
                             const isLastItem = item.isLast;
 
                             const className = `
-                                w-full flex items-center gap-4 px-6 py-5 text-[17px] font-medium text-left rounded-2xl transition-colors
+                                w-full flex items-center gap-4 pl-12 pr-6 py-5 text-[17px] font-medium text-left rounded-2xl transition-colors
                                 ${isFirstItem ? 'mt-1' : ''}
                                 ${isLastItem ? 'mb-1' : ''}
                                 ${item.disabled
@@ -316,7 +316,7 @@ export default function CardActionMenu({
                             if (item.isLink) {
                                 return (
                                     <Link key={idx} href={item.href!} className={className} onClick={onClose}>
-                                        <span className="w-8 flex items-center justify-center">{item.icon}</span>
+                                        <span className="w-8 flex items-center justify-center ml-2">{item.icon}</span>
                                         <span>{item.label}</span>
                                     </Link>
                                 );
@@ -324,7 +324,7 @@ export default function CardActionMenu({
 
                             return (
                                 <button key={idx} onClick={() => { item.onClick?.(); onClose(); }} disabled={item.disabled} className={className}>
-                                    <span className="w-8 flex items-center justify-center">{item.icon}</span>
+                                    <span className="w-8 flex items-center justify-center ml-2">{item.icon}</span>
                                     <span>{item.label}</span>
                                 </button>
                             );

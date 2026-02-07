@@ -9,7 +9,6 @@ export const keys = () =>
       PADDLE_WEBHOOK_SECRET: z.string().optional(),
       PADDLE_ENV: z.enum([Environment.sandbox, Environment.production]).optional(),
       INSTANT_ADMIN_TOKEN: z.string().min(1).optional(),
-      NEXT_PUBLIC_INSTANT_APP_ID: z.string().min(1).optional(),
     },
     client: {
       NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: z

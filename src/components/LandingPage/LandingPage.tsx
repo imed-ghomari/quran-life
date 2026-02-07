@@ -300,7 +300,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               Discord Community
             </a>
           </div>
-          <p>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</p>
+          <p className="footer-meta">
+            <span>&copy; {new Date().getFullYear()} Quran Life. All rights reserved.</span>
+            <span className="footer-meta-separator" aria-hidden="true">•</span>
+            <span className="footer-attribution">
+              Quran text, audio, and mutashabihat are provided thanks to the{' '}
+              <a
+                href="https://qul.tarteel.ai/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Quran Universal Library
+              </a>.
+            </span>
+          </p>
         </div>
       </footer>
     </div>

@@ -553,6 +553,31 @@
   box-shadow: 0 10px 20px rgba(88, 101, 242, 0.28);
 }
 
+.footer-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--foreground-secondary);
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.footer-meta-separator {
+  opacity: 0.7;
+}
+
+.footer-attribution a {
+  color: var(--foreground);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer-attribution a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .landing-wrapper {
     --landing-nav-height: 64px;
