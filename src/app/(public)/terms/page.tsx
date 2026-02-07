@@ -66,7 +66,7 @@ export default function TermsPage() {
             <ul>
               <li>Billing is handled by our payment processor. We do not store your full payment details.</li>
               <li>Trial access ends automatically unless you subscribe before the trial expires.</li>
-              <li>Refunds are provided only where required by law or explicitly stated at checkout.</li>
+              <li>Refund are provided upon request and will be handled by our payment provider.</li>
             </ul>
           </section>
 
