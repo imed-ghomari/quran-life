@@ -5,24 +5,39 @@ import { db } from '@/lib/instant';
 import { usePaddle } from '@/lib/paddle/checkout';
 import Spinner from '@/components/ui/Spinner';
 
-const PRICE_ID = 'PRICE_ID_GOES_HERE';
+const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
+const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
 
 export default function CheckoutPage() {
   const paddle = usePaddle();
   const { user, isLoading } = db.useAuth();
   const [isOpening, setIsOpening] = useState(false);
+  const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly');
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+
+  const priceId = plan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
 
   const handleCheckout = () => {
     if (!paddle || !user) return;
     setIsOpening(true);
 
     paddle.Checkout.open({
-      items: [{ priceId: PRICE_ID, quantity: 1 }],
+      items: [{ priceId, quantity: 1 }],
       customer: user.email ? { email: user.email } : undefined,
       customData: { userId: user.id },
     });
 
     setIsOpening(false);
+    setIsCheckoutOpen(true);
+  };
+
+  const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
+    setPlan(nextPlan);
+    if (!paddle || !isCheckoutOpen) return;
+    const nextPriceId = nextPlan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+    paddle.Checkout.updateCheckout({
+      items: [{ priceId: nextPriceId, quantity: 1 }],
+    });
   };
 
   if (isLoading) {
@@ -84,8 +99,42 @@ export default function CheckoutPage() {
           disabled={!paddle || isOpening}
           style={{ width: '100%' }}
         >
-          {isOpening ? 'Opening checkout...' : 'Open Paddle Checkout'}
+          {isOpening ? 'Opening checkout...' : 'Proceed'}
         </button>
+
+        {isCheckoutOpen && (
+          <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1.25rem' }}>
+            <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem' }}>
+              Switch billing plan while checkout is open:
+            </div>
+            <button
+              type="button"
+              onClick={() => handlePlanChange('monthly')}
+              className="btn"
+              style={{
+                border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                background: plan === 'monthly' ? 'var(--accent-light)' : 'var(--background-secondary)',
+                color: 'var(--foreground)',
+                width: '100%',
+              }}
+            >
+              Monthly plan
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePlanChange('yearly')}
+              className="btn"
+              style={{
+                border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                background: plan === 'yearly' ? 'var(--accent-light)' : 'var(--background-secondary)',
+                color: 'var(--foreground)',
+                width: '100%',
+              }}
+            >
+              Yearly plan
+            </button>
+          </div>
+        )}
 
         {!paddle && (
           <p style={{ marginTop: '0.75rem', color: 'var(--foreground-secondary)' }}>

@@ -68,7 +68,8 @@ export const POST = async (request: Request) => {
   }
 
   const body = await request.text();
-  const signature = headers().get('paddle-signature');
+  const headerPayload = await headers();
+  const signature = headerPayload.get('paddle-signature');
 
   if (!signature) {
     return NextResponse.json({ ok: false, error: 'missing paddle-signature header' }, { status: 400 });

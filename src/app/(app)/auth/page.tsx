@@ -2,9 +2,9 @@
 
 // Import necessary React hooks and Next.js utilities
 import { db } from '@/lib/instant';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 // Import UI icons from lucide-react
 import { Mail, ArrowRight, Loader2, Lock, Hash } from 'lucide-react';
@@ -15,13 +15,29 @@ import { Suspense } from 'react';
 // Import custom Spinner component and Google OAuth components
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { usePaddle } from '@/lib/paddle/checkout';
+
+const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
+const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
+const OWNER_EMAILS = (process.env.NEXT_PUBLIC_OWNER_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
 
 // Main authentication content component
 function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
     const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
-    // Initialize Next.js router for navigation
     const router = useRouter();
+    const paddle = usePaddle();
+    const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
+        subscriptions: {
+            $: {
+                where: { userId: user?.id || '' },
+            },
+        },
+    });
     // State for managing email and magic code inputs
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
@@ -33,17 +49,71 @@ function AuthContent() {
     const [authError, setAuthError] = useState<string | null>(null);
     // State for Google OAuth nonce to prevent replay attacks
     const [googleNonce] = useState(() => crypto.randomUUID());
+    // Checkout state (shown after auth succeeds)
+    const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly');
+    const [isOpening, setIsOpening] = useState(false);
+    const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
 
-    // Effect hook to handle post-authentication logic and redirects
+    const priceId = plan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+
+    const latestSubscription = useMemo(() => {
+        const subscriptions = subscriptionData?.subscriptions ?? [];
+        if (subscriptions.length === 0) return null;
+        return [...subscriptions].sort((a, b) => {
+            const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            return bTime - aTime;
+        })[0];
+    }, [subscriptionData?.subscriptions]);
+
+    const hasActiveSubscription = useMemo(() => {
+        const status = latestSubscription?.status;
+        if (!status) return false;
+        return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
+    }, [latestSubscription?.status]);
+    const isOwnerEmail = useMemo(() => {
+        if (!user?.email) return false;
+        return OWNER_EMAILS.includes(user.email.toLowerCase());
+    }, [user?.email]);
+
     useEffect(() => {
-        if (user) {
+        if (!user) return;
+        if (isSubscriptionLoading) return;
+        if (hasActiveSubscription || isOwnerEmail) {
             router.push('/dashboard');
         }
-    }, [user, router]); // Dependencies for the effect
+    }, [user, isSubscriptionLoading, hasActiveSubscription, isOwnerEmail, router]);
+
+    const handleCheckout = () => {
+        if (!user) {
+            setAuthError('Please sign in or create an account before proceeding to checkout.');
+            return;
+        }
+        if (!paddle) return;
+        setIsOpening(true);
+
+        paddle.Checkout.open({
+            items: [{ priceId, quantity: 1 }],
+            customer: user.email ? { email: user.email } : undefined,
+            customData: { userId: user.id },
+        });
+
+        setIsOpening(false);
+        setIsCheckoutOpen(true);
+    };
+
+    const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
+        setPlan(nextPlan);
+        if (!paddle || !isCheckoutOpen) return;
+        const nextPriceId = nextPlan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+        paddle.Checkout.updateCheckout({
+            items: [{ priceId: nextPriceId, quantity: 1 }],
+        });
+    };
 
     // Handle the magic link authentication process
     const handleAuth = async (e: React.FormEvent) => {
@@ -107,20 +177,6 @@ function AuthContent() {
         );
     }
 
-    if (user) {
-        return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--background)'
-            }}>
-                <Spinner text="Redirecting to your dashboard..." />
-            </div>
-        );
-    }
-
     // Render the main authentication form
     return (
         <div style={{
@@ -133,13 +189,26 @@ function AuthContent() {
         }}>
             <div style={{
                 width: '100%',
-                maxWidth: '400px',
+                maxWidth: '920px',
                 background: 'var(--background)',
-                borderRadius: '24px',
-                padding: '2.5rem',
+                borderRadius: '28px',
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
                 border: '1px solid var(--border)',
+                overflow: 'hidden',
+                position: 'relative'
             }}>
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    position: 'relative',
+                    zIndex: 1
+                }}>
+                    {/* Left panel: Auth */}
+                    <div style={{
+                        flex: 1,
+                        padding: '2.5rem',
+                        borderRight: '1px solid var(--border)'
+                    }}>
                 {/* Header section for the authentication form */}
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{
@@ -339,23 +408,135 @@ function AuthContent() {
                     </>
                 )}
 
-                {/* Terms and Privacy Policy footer */}
-                <div style={{
-                    marginTop: '2rem',
-                    paddingTop: '1.5rem',
-                    borderTop: '1px solid var(--border)',
-                    textAlign: 'center'
-                }}>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
-                        By continuing, you agree to our{' '}
-                        <Link href="/terms" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
-                            Terms of Service
-                        </Link>{' '}
-                        and{' '}
-                        <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
-                            Privacy Policy
-                        </Link>.
-                    </p>
+                {/* Login success message (bottom of auth panel) */}
+                {user && (
+                    <div style={{
+                        marginTop: '2rem',
+                        paddingTop: '1.5rem',
+                        borderTop: '1px solid var(--border)',
+                        textAlign: 'center'
+                    }}>
+                        <p style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '999px',
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            color: '#059669',
+                            fontSize: '0.85rem',
+                            fontWeight: 600
+                        }}>
+                            <span style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '999px',
+                                background: '#10b981',
+                                display: 'inline-block'
+                            }} />
+                            Logged in as {user.email ?? 'your account'}
+                        </p>
+                    </div>
+                )}
+                    </div>
+
+                    {/* Right panel: Checkout (revealed after auth success) */}
+                    <div style={{
+                        flex: 1,
+                        padding: '2.5rem',
+                        background: 'var(--background)',
+                        filter: !user || isSubscriptionLoading ? 'blur(36px)' : hasActiveSubscription ? 'blur(6px)' : 'none',
+                        opacity: !user || isSubscriptionLoading ? 0.85 : hasActiveSubscription ? 0.85 : 1,
+                        transition: 'filter 400ms ease, opacity 400ms ease'
+                    }}>
+                        <div>
+                        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                            Activate your subscription
+                        </h1>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem' }}>
+                            Complete checkout to unlock the full app experience.
+                        </p>
+
+                        <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                            <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem' }}>
+                                Choose your billing plan:
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handlePlanChange('monthly')}
+                                className="btn"
+                                style={{
+                                    border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                    background: plan === 'monthly' ? 'var(--accent-light)' : 'var(--background-secondary)',
+                                    color: 'var(--foreground)',
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '1rem',
+                                    padding: '0.9rem 1rem'
+                                }}
+                            >
+                                <span style={{ fontWeight: 600 }}>Monthly plan</span>
+                                <span style={{ fontWeight: 700 }}>$10<span style={{ fontWeight: 400 }}>/mo</span></span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handlePlanChange('yearly')}
+                                className="btn"
+                                style={{
+                                    border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                    background: plan === 'yearly' ? 'var(--accent-light)' : 'var(--background-secondary)',
+                                    color: 'var(--foreground)',
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '1rem',
+                                    padding: '0.9rem 1rem'
+                                }}
+                            >
+                                <span style={{ fontWeight: 600 }}>Yearly plan</span>
+                                <span style={{ fontWeight: 700 }}>$96<span style={{ fontWeight: 400 }}>/yr</span></span>
+                            </button>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
+                                1 week trial included.
+                            </div>
+                        </div>
+
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleCheckout}
+                            disabled={!paddle || isOpening}
+                            style={{ width: '100%' }}
+                        >
+                            {isOpening ? 'Opening checkout...' : 'Proceed'}
+                        </button>
+
+                        {!paddle && (
+                            <p style={{ marginTop: '0.75rem', color: 'var(--foreground-secondary)' }}>
+                                Preparing secure checkout...
+                            </p>
+                        )}
+                        <div style={{
+                            marginTop: '2rem',
+                            paddingTop: '1.5rem',
+                            borderTop: '1px solid var(--border)',
+                            textAlign: 'center'
+                        }}>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)' }}>
+                                By continuing, you agree to our{' '}
+                                <Link href="/terms" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                                    Terms of Service
+                                </Link>{' '}
+                                and{' '}
+                                <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                                    Privacy Policy
+                                </Link>.
+                            </p>
+                        </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
