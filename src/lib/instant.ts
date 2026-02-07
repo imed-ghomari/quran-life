@@ -138,6 +138,20 @@ const schema = i.schema({
       weights: i.json(),
       userId: i.string(),
     }),
+    subscriptions: i.entity({
+      userId: i.string(),
+      status: i.string(),
+      paddleSubscriptionId: i.string(),
+      paddleCustomerId: i.string(),
+      priceId: i.string(),
+      updatedAt: i.string(),
+      customData: i.json(),
+    }),
+    paddleWebhookEvents: i.entity({
+      eventId: i.string(),
+      eventType: i.string(),
+      processedAt: i.string(),
+    }),
   },
 });
 
