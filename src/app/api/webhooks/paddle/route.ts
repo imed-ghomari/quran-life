@@ -19,11 +19,32 @@ async function hasProcessedEvent(eventId: string) {
   return (result?.paddleWebhookEvents ?? []).length > 0;
 }
 
-async function recordEvent(eventId: string, eventType: string) {
+async function recordEvent({
+  eventId,
+  eventType,
+  userId,
+  subscriptionId,
+  customerId,
+  status,
+  priceId,
+}: {
+  eventId: string;
+  eventType: string;
+  userId?: string | null;
+  subscriptionId?: string | null;
+  customerId?: string | null;
+  status?: string | null;
+  priceId?: string | null;
+}) {
   await instantAdmin.transact(
     instantAdmin.tx.paddleWebhookEvents[eventId].update({
       eventId,
       eventType,
+      userId: userId ?? '',
+      subscriptionId: subscriptionId ?? '',
+      customerId: customerId ?? '',
+      status: status ?? '',
+      priceId: priceId ?? '',
       processedAt: new Date().toISOString(),
     }),
   );
@@ -57,30 +78,6 @@ async function upsertSubscription({
   );
 }
 
-async function upsertPaidUser({
-  userId,
-  subscriptionId,
-  status,
-  customerId,
-  priceId,
-}: {
-  userId: string;
-  subscriptionId: string;
-  status: string;
-  customerId?: string | null;
-  priceId?: string | null;
-}) {
-  await instantAdmin.transact(
-    instantAdmin.tx.users[userId].update({
-      userId,
-      status,
-      paddleSubscriptionId: subscriptionId,
-      paddleCustomerId: customerId ?? '',
-      priceId: priceId ?? '',
-      updatedAt: new Date().toISOString(),
-    }),
-  );
-}
 
 export const POST = async (request: Request) => {
   if (!PADDLE_WEBHOOK_SECRET) {
@@ -97,6 +94,9 @@ export const POST = async (request: Request) => {
   const signature = headerPayload.get('paddle-signature');
 
   if (!signature) {
+    console.error('Paddle webhook missing signature header', {
+      hasSignature: Boolean(signature),
+    });
     return NextResponse.json({ ok: false, error: 'missing paddle-signature header' }, { status: 400 });
   }
 
@@ -117,9 +117,12 @@ export const POST = async (request: Request) => {
         if (!userId) {
           console.warn('Subscription webhook missing customData.userId', {
             eventId: eventData.eventId,
+            eventType: eventData.eventType,
             subscriptionId: subscription.id,
+            customerId: subscription.customerId ?? null,
+            customData: subscription.customData ?? null,
           });
-          await recordEvent(eventData.eventId, eventData.eventType);
+          await recordEvent({ eventId: eventData.eventId, eventType: eventData.eventType });
           return NextResponse.json({ ok: true, ignored: 'missing userId' });
         }
 
@@ -134,15 +137,15 @@ export const POST = async (request: Request) => {
           customData: subscription.customData ?? null,
         });
 
-        await upsertPaidUser({
+        await recordEvent({
+          eventId: eventData.eventId,
+          eventType: eventData.eventType,
           userId,
           subscriptionId: subscription.id,
+          customerId: subscription.customerId ?? null,
           status: subscription.status,
-          customerId: subscription.customerId,
           priceId,
         });
-
-        await recordEvent(eventData.eventId, eventData.eventType);
 
         return NextResponse.json({
           ok: true,
@@ -151,12 +154,14 @@ export const POST = async (request: Request) => {
         });
       }
       default: {
-        await recordEvent(eventData.eventId, eventData.eventType);
+        await recordEvent({ eventId: eventData.eventId, eventType: eventData.eventType });
         return NextResponse.json({ ok: true, ignored: eventData.eventType });
       }
     }
   } catch (error) {
-    console.error('Paddle webhook error', error);
+    console.error('Paddle webhook error', {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json({ ok: false, error: 'invalid signature' }, { status: 400 });
   }
 };

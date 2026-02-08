@@ -25,7 +25,8 @@ export const keys = () =>
       PADDLE_ENV: process.env.PADDLE_ENV,
       NEXT_PUBLIC_PADDLE_ENV: process.env.NEXT_PUBLIC_PADDLE_ENV,
       NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN,
-      INSTANT_ADMIN_TOKEN: process.env.INSTANT_ADMIN_TOKEN,
+      INSTANT_ADMIN_TOKEN:
+        process.env.INSTANT_APP_ADMIN_TOKEN ?? process.env.INSTANT_ADMIN_TOKEN,
       NEXT_PUBLIC_INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID,
     },
   });

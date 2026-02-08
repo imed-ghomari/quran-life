@@ -38,11 +38,6 @@ function AuthContent() {
                 where: { userId: user?.id || '' },
             },
         },
-        users: {
-            $: {
-                where: { userId: user?.id || '' },
-            },
-        },
     });
     // State for managing email and magic code inputs
     const [email, setEmail] = useState('');
@@ -100,10 +95,6 @@ function AuthContent() {
         if (!status) return false;
         return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
     }, [latestSubscription?.status]);
-    const hasPaidUser = useMemo(() => {
-        const paidUsers = subscriptionData?.users ?? [];
-        return paidUsers.some((record) => ACTIVE_SUBSCRIPTION_STATUSES.has(record.status));
-    }, [subscriptionData?.users]);
     const isOwnerEmail = useMemo(() => {
         if (!user?.email) return false;
         return OWNER_EMAILS.includes(user.email.toLowerCase());
@@ -113,10 +104,10 @@ function AuthContent() {
     useEffect(() => {
         if (!user) return;
         if (isSubscriptionLoading) return;
-        if (hasPaidUser || hasActiveSubscription || isOwnerEmail) {
+        if (hasActiveSubscription || isOwnerEmail) {
             router.push('/dashboard');
         }
-    }, [user, isSubscriptionLoading, hasPaidUser, hasActiveSubscription, isOwnerEmail, router]);
+    }, [user, isSubscriptionLoading, hasActiveSubscription, isOwnerEmail, router]);
 
     const handleCheckout = () => {
         if (!user) {
@@ -488,8 +479,8 @@ function AuthContent() {
                         flex: 1,
                         padding: '2.5rem',
                         background: 'var(--background)',
-                        filter: !user || isSubscriptionLoading || forceCheckoutBlur || hasPaidUser ? 'blur(36px)' : hasActiveSubscription ? 'blur(6px)' : 'none',
-                        opacity: !user || isSubscriptionLoading || forceCheckoutBlur || hasPaidUser ? 0.85 : hasActiveSubscription ? 0.85 : 1,
+                        filter: !user || isSubscriptionLoading || forceCheckoutBlur ? 'blur(36px)' : hasActiveSubscription ? 'blur(6px)' : 'none',
+                        opacity: !user || isSubscriptionLoading || forceCheckoutBlur ? 0.85 : hasActiveSubscription ? 0.85 : 1,
                         transition: 'filter 400ms ease, opacity 400ms ease',
                         pointerEvents: isCheckoutLocked ? 'none' : 'auto'
                     }}>
