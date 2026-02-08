@@ -5,6 +5,14 @@ export const APP_ID = process.env.NEXT_PUBLIC_INSTANT_APP_ID || 'pr-quran-life';
 
 const schema = i.schema({
   entities: {
+    users: i.entity({
+      userId: i.string(),
+      status: i.string(),
+      paddleSubscriptionId: i.string(),
+      paddleCustomerId: i.string(),
+      priceId: i.string(),
+      updatedAt: i.string(),
+    }),
     settings: i.entity({
       completionDays: i.number(),
       activePart: i.number(),

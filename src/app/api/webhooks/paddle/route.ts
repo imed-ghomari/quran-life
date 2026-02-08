@@ -57,6 +57,31 @@ async function upsertSubscription({
   );
 }
 
+async function upsertPaidUser({
+  userId,
+  subscriptionId,
+  status,
+  customerId,
+  priceId,
+}: {
+  userId: string;
+  subscriptionId: string;
+  status: string;
+  customerId?: string | null;
+  priceId?: string | null;
+}) {
+  await instantAdmin.transact(
+    instantAdmin.tx.users[userId].update({
+      userId,
+      status,
+      paddleSubscriptionId: subscriptionId,
+      paddleCustomerId: customerId ?? '',
+      priceId: priceId ?? '',
+      updatedAt: new Date().toISOString(),
+    }),
+  );
+}
+
 export const POST = async (request: Request) => {
   if (!PADDLE_WEBHOOK_SECRET) {
     console.error('Missing PADDLE_WEBHOOK_SECRET');
@@ -107,6 +132,14 @@ export const POST = async (request: Request) => {
           customerId: subscription.customerId,
           priceId,
           customData: subscription.customData ?? null,
+        });
+
+        await upsertPaidUser({
+          userId,
+          subscriptionId: subscription.id,
+          status: subscription.status,
+          customerId: subscription.customerId,
+          priceId,
         });
 
         await recordEvent(eventData.eventId, eventData.eventType);

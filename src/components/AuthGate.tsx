@@ -30,6 +30,11 @@ export default function AuthGate({ children }: AuthGateProps) {
         where: { userId: user?.id || '' },
       },
     },
+    users: {
+      $: {
+        where: { userId: user?.id || '' },
+      },
+    },
   });
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
@@ -48,11 +53,15 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!status) return false;
     return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
   }, [latestSubscription?.status]);
+  const hasPaidUser = useMemo(() => {
+    const paidUsers = subscriptionData?.users ?? [];
+    return paidUsers.some((record) => ACTIVE_SUBSCRIPTION_STATUSES.has(record.status));
+  }, [subscriptionData?.users]);
   const isOwnerEmail = useMemo(() => {
     if (!user?.email) return false;
     return OWNER_EMAILS.includes(user.email.toLowerCase());
   }, [user?.email]);
-  const hasAccess = hasActiveSubscription || isOwnerEmail || hasRecentCheckout;
+  const hasAccess = hasPaidUser || hasActiveSubscription || isOwnerEmail || hasRecentCheckout;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -405,7 +405,7 @@ export default function SettingsPage() {
                         <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                             <ChevronLeft size={28} />
                         </button>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Account & Data</h1>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Account & Appearance</h1>
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', marginBottom: '1rem' }}>

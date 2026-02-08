@@ -3,7 +3,7 @@
 // Import necessary React hooks and Next.js utilities
 import { db } from '@/lib/instant';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 // Import UI icons from lucide-react
@@ -30,9 +30,15 @@ function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
     const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const paddle = usePaddle();
     const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
         subscriptions: {
+            $: {
+                where: { userId: user?.id || '' },
+            },
+        },
+        users: {
             $: {
                 where: { userId: user?.id || '' },
             },
@@ -49,8 +55,14 @@ function AuthContent() {
     const [authError, setAuthError] = useState<string | null>(null);
     // State for Google OAuth nonce to prevent replay attacks
     const [googleNonce] = useState(() => crypto.randomUUID());
+    // Force checkout blur when user opts to switch email
+    const [forceCheckoutBlur, setForceCheckoutBlur] = useState(false);
     // Checkout state (shown after auth succeeds)
-    const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly');
+    const planFromQuery = useMemo(() => {
+        const rawPlan = searchParams?.get('plan');
+        return rawPlan === 'monthly' || rawPlan === 'yearly' ? rawPlan : null;
+    }, [searchParams]);
+    const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
@@ -59,6 +71,19 @@ function AuthContent() {
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
 
     const priceId = plan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+
+    useEffect(() => {
+        if (!planFromQuery) return;
+        setPlan(planFromQuery);
+    }, [planFromQuery]);
+
+    useEffect(() => {
+        if (!forceCheckoutBlur) return;
+        if (!user?.email) return;
+        if (!email) return;
+        if (user.email.toLowerCase() !== email.toLowerCase()) return;
+        setForceCheckoutBlur(false);
+    }, [forceCheckoutBlur, user?.email, email]);
 
     const latestSubscription = useMemo(() => {
         const subscriptions = subscriptionData?.subscriptions ?? [];
@@ -75,18 +100,23 @@ function AuthContent() {
         if (!status) return false;
         return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
     }, [latestSubscription?.status]);
+    const hasPaidUser = useMemo(() => {
+        const paidUsers = subscriptionData?.users ?? [];
+        return paidUsers.some((record) => ACTIVE_SUBSCRIPTION_STATUSES.has(record.status));
+    }, [subscriptionData?.users]);
     const isOwnerEmail = useMemo(() => {
         if (!user?.email) return false;
         return OWNER_EMAILS.includes(user.email.toLowerCase());
     }, [user?.email]);
+    const isCheckoutLocked = !user || isSubscriptionLoading || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
         if (!user) return;
         if (isSubscriptionLoading) return;
-        if (hasActiveSubscription || isOwnerEmail) {
+        if (hasPaidUser || hasActiveSubscription || isOwnerEmail) {
             router.push('/dashboard');
         }
-    }, [user, isSubscriptionLoading, hasActiveSubscription, isOwnerEmail, router]);
+    }, [user, isSubscriptionLoading, hasPaidUser, hasActiveSubscription, isOwnerEmail, router]);
 
     const handleCheckout = () => {
         if (!user) {
@@ -134,7 +164,14 @@ function AuthContent() {
         } catch (err: any) {
             console.error('Auth error:', err);
             // Catch and display any authentication errors
-            setAuthError(err.body?.message || err.message || 'An error occurred during authentication');
+            const rawMessage = err?.body?.message || err?.message || 'An error occurred during authentication';
+            if (typeof rawMessage === 'string' && rawMessage.includes('app-user-magic-code')) {
+                setAuthError('That code is invalid or expired. Please request a new code.');
+                setAuthStep('email');
+                setCode('');
+            } else {
+                setAuthError(rawMessage);
+            }
         } finally {
             setAuthLoading(false); // Hide loading indicator
         }
@@ -346,7 +383,13 @@ function AuthContent() {
                     {authStep === 'code' && (
                         <button
                             type="button"
-                            onClick={() => setAuthStep('email')}
+                            onClick={() => {
+                                setForceCheckoutBlur(true);
+                                setAuthError(null);
+                                setEmail('');
+                                setCode('');
+                                setAuthStep('email');
+                            }}
                             style={{
                                 background: 'none',
                                 border: 'none',
@@ -445,9 +488,10 @@ function AuthContent() {
                         flex: 1,
                         padding: '2.5rem',
                         background: 'var(--background)',
-                        filter: !user || isSubscriptionLoading ? 'blur(36px)' : hasActiveSubscription ? 'blur(6px)' : 'none',
-                        opacity: !user || isSubscriptionLoading ? 0.85 : hasActiveSubscription ? 0.85 : 1,
-                        transition: 'filter 400ms ease, opacity 400ms ease'
+                        filter: !user || isSubscriptionLoading || forceCheckoutBlur || hasPaidUser ? 'blur(36px)' : hasActiveSubscription ? 'blur(6px)' : 'none',
+                        opacity: !user || isSubscriptionLoading || forceCheckoutBlur || hasPaidUser ? 0.85 : hasActiveSubscription ? 0.85 : 1,
+                        transition: 'filter 400ms ease, opacity 400ms ease',
+                        pointerEvents: isCheckoutLocked ? 'none' : 'auto'
                     }}>
                         <div>
                         <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
@@ -464,6 +508,7 @@ function AuthContent() {
                             <button
                                 type="button"
                                 onClick={() => handlePlanChange('monthly')}
+                                disabled={isCheckoutLocked}
                                 className="btn"
                                 style={{
                                     border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
@@ -483,6 +528,7 @@ function AuthContent() {
                             <button
                                 type="button"
                                 onClick={() => handlePlanChange('yearly')}
+                                disabled={isCheckoutLocked}
                                 className="btn"
                                 style={{
                                     border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
@@ -507,7 +553,7 @@ function AuthContent() {
                         <button
                             className="btn btn-primary"
                             onClick={handleCheckout}
-                            disabled={!paddle || isOpening}
+                            disabled={!paddle || isOpening || isCheckoutLocked}
                             style={{ width: '100%' }}
                         >
                             {isOpening ? 'Opening checkout...' : 'Proceed'}
