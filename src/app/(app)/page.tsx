@@ -17,7 +17,7 @@ export default function Home() {
 
     const handleGetStarted = (cycle: 'monthly' | 'yearly') => {
         console.log('Get Started clicked, cycle:', cycle);
-        window.location.href = '/auth';
+        window.location.href = `/auth?plan=${cycle}`;
     };
 
     if (loading || isAuthLoading) {

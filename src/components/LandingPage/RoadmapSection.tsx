@@ -26,7 +26,7 @@ const RoadmapSection: React.FC = () => {
   };
 
   return (
-    <section className="roadmap-section">
+    <section id="roadmap" className="roadmap-section">
       <div className="container">
         <div className="section-header">
           <h2 className="section-title">Product Roadmap</h2>

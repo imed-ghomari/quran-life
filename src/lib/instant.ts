@@ -1,10 +1,13 @@
 import { init, i } from '@instantdb/react';
 
+// InstantDB app identifier (public env var in Next.js)
 // TODO: Replace with your actual App ID from InstantDB dashboard
 export const APP_ID = process.env.NEXT_PUBLIC_INSTANT_APP_ID || 'pr-quran-life';
 
+// Schema definition for all InstantDB entities used by the app.
 const schema = i.schema({
   entities: {
+    // User-level app preferences and progress.
     settings: i.entity({
       completionDays: i.number(),
       activePart: i.number(),
@@ -16,6 +19,7 @@ const schema = i.schema({
       lastSyncedAt: i.string(),
       userId: i.string(),
     }),
+    // Atomic memory items (verses/sections) tracked by the scheduler.
     memoryNodes: i.entity({
       id: i.string(),
       type: i.string(),
@@ -28,6 +32,7 @@ const schema = i.schema({
       createdAt: i.string(),
       userId: i.string(),
     }),
+    // Surah-level mind maps and their snapshots.
     mindMaps: i.entity({
       surahId: i.number(),
       imageUrl: i.string(),
@@ -44,6 +49,7 @@ const schema = i.schema({
       premadeEdited: i.boolean(),
       userId: i.string(),
     }),
+    // Part-level mind maps and their snapshots.
     partMindMaps: i.entity({
       partId: i.number(),
       imageUrl: i.string(),
@@ -60,6 +66,7 @@ const schema = i.schema({
       premadeEdited: i.boolean(),
       userId: i.string(),
     }),
+    // Last listened verse per part (for resuming audio).
     listeningProgress: i.entity({
       partId: i.number(),
       lastVerseIndex: i.number(),
@@ -67,6 +74,7 @@ const schema = i.schema({
       updatedAt: i.string(),
       userId: i.string(),
     }),
+    // Aggregate listening stats per surah.
     listeningStats: i.entity({
       surahId: i.number(),
       totalMinutes: i.number(),
@@ -74,6 +82,7 @@ const schema = i.schema({
       lastListened: i.string(),
       userId: i.string(),
     }),
+    // Decisions and notes for similar-phrase (mutashabihat) items.
     mutashabihatDecisions: i.entity({
       phraseId: i.string(), // key
       status: i.string(), // 'pending' | 'ignored' | 'solved_mindmap' | 'solved_note'
@@ -82,6 +91,7 @@ const schema = i.schema({
       timestamp: i.string(),
       userId: i.string(),
     }),
+    // User-defined similar-phrase links across verses.
     customMutashabihat: i.entity({
       id: i.string(),
       verseId: i.string(),
@@ -95,6 +105,7 @@ const schema = i.schema({
       createdAt: i.string(),
       userId: i.string(),
     }),
+    // Mistakes recorded during review sessions.
     reviewErrors: i.entity({
       id: i.string(),
       timestamp: i.string(),
@@ -110,6 +121,7 @@ const schema = i.schema({
       absoluteAyah: i.number(),
       userId: i.string(),
     }),
+    // FSRS scheduler logs for each review event.
     fsrsReviewLogs: i.entity({
       id: i.string(),
       nodeId: i.string(), // maps to memoryNode id
@@ -125,19 +137,23 @@ const schema = i.schema({
       review_time: i.string(),
       userId: i.string(),
     }),
+    // User profile data for scheduling.
     profiles: i.entity({
       fsrs_weights: i.json(),
       userId: i.string(),
     }),
+    // Metadata used when optimizing FSRS parameters.
     optimizationMeta: i.entity({
       logCountAtLastOptimization: i.number(),
       lastOptimizedAt: i.string(),
       userId: i.string(),
     }),
+    // User-specified weight overrides for FSRS.
     customWeights: i.entity({
       weights: i.json(),
       userId: i.string(),
     }),
+    // Subscription records (Paddle).
     subscriptions: i.entity({
       userId: i.string(),
       status: i.string(),
@@ -147,14 +163,21 @@ const schema = i.schema({
       updatedAt: i.string(),
       customData: i.json(),
     }),
+    // Raw webhook events for reconciliation.
     paddleWebhookEvents: i.entity({
       eventId: i.string(),
       eventType: i.string(),
+      userId: i.string(),
+      subscriptionId: i.string(),
+      customerId: i.string(),
+      status: i.string(),
+      priceId: i.string(),
       processedAt: i.string(),
     }),
   },
 });
 
+// Typed database client.
 export const db = init({ appId: APP_ID, schema });
 
 // Helper to get typed db

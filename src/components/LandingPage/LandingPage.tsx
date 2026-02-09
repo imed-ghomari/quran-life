@@ -58,6 +58,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="nav-actions">
+            <a href="#features" className="nav-link">
+              Features
+            </a>
+            <a href="#pricing" className="nav-link">
+              Pricing
+            </a>
+            <a href="#roadmap" className="nav-link">
+              Roadmap
+            </a>
             <button 
               className="btn btn-secondary nav-theme-btn" 
               onClick={cycleTheme}
@@ -65,9 +74,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             >
               {getThemeIcon()}
             </button>
-            <a href="#features" className="btn btn-secondary nav-features-btn">
-              Features
-            </a>
             <button className="btn btn-primary" onClick={() => onBuy(billingCycle)}>
               Get Started
             </button>
@@ -77,7 +83,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
       <main>
         {/* --- Hero Section --- */}
-        <section className="hero">
+        <section id="top" className="hero">
           <div className="container hero-grid">
             <div className="hero-copy animate-entry">
               <h1 className="hero-title">
@@ -115,7 +121,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
         </section>
 
         {/* --- Method Section (How it Works) --- */}
-        <section className="features" style={{ background: 'var(--background)' }}>
+        <section id="method" className="features" style={{ background: 'var(--background)' }}>
           <div className="container">
             <div className="section-header">
               <h2 className="section-title">The 3-Phase System</h2>
@@ -209,7 +215,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
         </section>
 
         {/* --- Pricing Section (Premium Only) --- */}
-        <section className="pricing">
+        <section id="pricing" className="pricing">
           <div className="container">
             <div className="section-header">
               <h2 className="section-title">Invest in your Akhirah</h2>
@@ -280,7 +286,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
       </main>
 
       {/* --- Footer --- */}
-      <footer className="footer">
+      <footer id="footer" className="footer">
         <div className="container">
           <div className="footer-logo">
             <img src="/logo.png?v=3" width={20} height={20} alt="Quran Life Logo" />
