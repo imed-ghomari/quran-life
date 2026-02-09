@@ -5,6 +5,7 @@ import { db } from '@/lib/instant';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
 import { Mail, ArrowRight, Loader2, Lock, Hash } from 'lucide-react';
@@ -28,7 +29,13 @@ const OWNER_EMAILS = (process.env.NEXT_PUBLIC_OWNER_EMAILS || '')
 // Main authentication content component
 function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
-    const { user, isLoading: isAuthLoading, error: authStateError } = db.useAuth();
+    const authState = db.useAuth() as {
+        user?: InstantUser | null;
+        isLoading: boolean;
+        error?: { message: string } | undefined;
+    };
+    const { user, isLoading: isAuthLoading, error: authStateError } = authState;
+    const userEmail = user?.email ?? 'your account';
     const router = useRouter();
     const searchParams = useSearchParams();
     const paddle = usePaddle();
@@ -459,7 +466,7 @@ function AuthContent() {
                                     background: '#10b981',
                                     display: 'inline-block'
                                 }} />
-                                Logged in as {user.email ?? 'your account'}
+                                Logged in as {userEmail}
                             </p>
                         </div>
                     )}
