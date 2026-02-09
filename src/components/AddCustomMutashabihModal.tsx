@@ -144,6 +144,7 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                     z-index: 1000;
                     backdrop-filter: blur(4px);
                     padding: 1rem;
+                    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
                 }
                 .modal-content {
                     background: var(--background);
@@ -151,17 +152,16 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                     border-radius: 16px;
                     width: 100%;
                     max-width: 500px;
-                    max-height: 85vh;
+                    max-height: calc(100vh - 2rem);
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-                    margin-bottom: 60px; /* Space for bottom navigation/buttons */
                 }
                 @media (max-width: 480px) {
                     .modal-content {
                         max-width: 95%;
-                        margin-bottom: 80px;
+                        max-height: calc(100vh - 1.5rem);
                     }
                     .modal-body {
                         padding: 1rem;
@@ -197,6 +197,8 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                     display: flex;
                     flex-direction: column;
                     gap: 1.25rem;
+                    overflow-y: auto;
+                    min-height: 0;
                 }
                 .form-group {
                     display: flex;

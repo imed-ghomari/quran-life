@@ -945,35 +945,53 @@ export default function TodayPage() {
         await saveSettings({ kanbanColumns: nextCols });
     };
 
-    const handleMindmapIncomplete = (surahId: number) => {
+    const handleMindmapIncomplete = async (surahId: number) => {
         if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
         const mm = mindmaps.find(m => m.surahId === surahId);
         if (mm) {
             const updated = { ...mm, isComplete: false };
-            saveMindMap(surahId, updated);
-            addToast(
-                'success',
-                'Mindmap marked as incomplete',
-                `${getSurah(surahId)?.name || 'Surah'}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
-            );
-            void moveMindmapToInProgress(`surah-${surahId}`);
+            try {
+                await saveMindMap(surahId, updated);
+                await moveMindmapToInProgress(`surah-${surahId}`);
+                addToast(
+                    'success',
+                    'Mindmap marked as incomplete',
+                    `${getSurah(surahId)?.name || 'Surah'}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
+                );
+            } catch (err) {
+                console.error('Failed to mark mindmap incomplete', err);
+                addToast(
+                    'error',
+                    'Could not update mindmap',
+                    `${getSurah(surahId)?.name || 'Surah'}\nPlease try again.`
+                );
+            }
         }
     };
 
-    const handlePartMindmapIncomplete = (partId: QuranPart) => {
+    const handlePartMindmapIncomplete = async (partId: QuranPart) => {
         if (!window.confirm("Are you sure you want to mark this part mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
         const mm = partMindMaps.find(m => m.partId === partId);
         if (mm) {
             const updated = { ...mm, isComplete: false };
-            savePartMindMap(partId, updated);
-            addToast(
-                'success',
-                'Part mindmap marked as incomplete',
-                `Part ${partId}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
-            );
-            void moveMindmapToInProgress(`part-${partId}`);
+            try {
+                await savePartMindMap(partId, updated);
+                await moveMindmapToInProgress(`part-${partId}`);
+                addToast(
+                    'success',
+                    'Part mindmap marked as incomplete',
+                    `Part ${partId}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
+                );
+            } catch (err) {
+                console.error('Failed to mark part mindmap incomplete', err);
+                addToast(
+                    'error',
+                    'Could not update part mindmap',
+                    `Part ${partId}\nPlease try again.`
+                );
+            }
         }
     };
 
@@ -1383,10 +1401,13 @@ export default function TodayPage() {
                         gap: 4,
                         boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
                         animation: 'slideInRight 0.3s ease-out',
-                        background: t.type === 'success' ? 'var(--success)' :
-                            t.type === 'postpone' ? 'var(--background-secondary)' : 'var(--danger)',
+                        background: t.type === 'success'
+                            ? 'color-mix(in srgb, var(--success) 18%, var(--background-secondary))'
+                            : t.type === 'postpone'
+                                ? 'color-mix(in srgb, var(--warning) 16%, var(--background-secondary))'
+                                : 'color-mix(in srgb, var(--danger) 16%, var(--background-secondary))',
                         border: '1px solid var(--border)',
-                        color: t.type === 'postpone' ? 'var(--foreground)' : 'white',
+                        color: 'var(--foreground)',
                         minWidth: '180px',
                         fontSize: '0.85rem',
                         pointerEvents: 'auto',
@@ -1400,8 +1421,8 @@ export default function TodayPage() {
                             <button
                                 onClick={handleUndo}
                                 style={{
-                                    background: 'rgba(255,255,255,0.2)',
-                                    border: 'none',
+                                    background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                    border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
                                     color: 'inherit',
                                     padding: '0.2rem 0.5rem',
                                     borderRadius: '4px',
@@ -1411,6 +1432,23 @@ export default function TodayPage() {
                                 }}
                             >
                                 Undo
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                }}
+                                style={{
+                                    background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                    border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                    color: 'inherit',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    marginLeft: 0
+                                }}
+                            >
+                                Skip
                             </button>
                         </div>
                         {t.info && (
@@ -1426,7 +1464,7 @@ export default function TodayPage() {
                         <div
                             className="toast-countdown"
                             style={{
-                                background: t.type === 'postpone' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.7)',
+                                background: 'color-mix(in srgb, var(--foreground) 20%, transparent)',
                                 ['--toast-duration' as any]: '6s'
                             }}
                         />
