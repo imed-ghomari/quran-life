@@ -5,15 +5,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
 import Spinner from '@/components/ui/Spinner';
 import { OnlineStatusContext } from '@/components/Providers';
+import { isPrivilegedEmail } from '@/lib/privilegedEmails';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
 const CHECKOUT_GRACE_PERIOD_MS = 10 * 60 * 1000;
-const OWNER_EMAILS = (process.env.NEXT_PUBLIC_OWNER_EMAILS || '')
-  .split(',')
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
-
 type AuthGateProps = {
   children: React.ReactNode;
 };
@@ -48,10 +44,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!status) return false;
     return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
   }, [latestSubscription?.status]);
-  const isOwnerEmail = useMemo(() => {
-    if (!user?.email) return false;
-    return OWNER_EMAILS.includes(user.email.toLowerCase());
-  }, [user?.email]);
+  const isOwnerEmail = useMemo(() => isPrivilegedEmail(user?.email), [user?.email]);
   const hasAccess = hasActiveSubscription || isOwnerEmail || hasRecentCheckout;
 
   useEffect(() => {

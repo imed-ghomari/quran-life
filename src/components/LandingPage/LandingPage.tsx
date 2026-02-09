@@ -299,7 +299,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span aria-hidden="true">•</span>
             <a
               className="footer-link discord-link"
-              href="https://discord.gg/placeholder"
+              href="https://discord.gg/6wy3YRG2qB"
               target="_blank"
               rel="noreferrer"
             >
