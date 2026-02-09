@@ -2956,3 +2956,40 @@ input:focus {
     color: #666;
   }
 }
+
+@media (max-width: 900px) {
+  .auth-layout {
+    flex-direction: column;
+  }
+
+  .auth-panel {
+    flex: 1 1 100% !important;
+    box-sizing: border-box;
+  }
+
+  .auth-panel-left {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem !important;
+  }
+
+  .auth-image-wrap {
+    min-height: 260px !important;
+  }
+
+  .auth-panel-right {
+    display: none !important;
+  }
+
+  .checkout-plan-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .checkout-title {
+    text-align: center;
+  }
+
+  .checkout-plan-label {
+    text-align: center;
+  }
+}

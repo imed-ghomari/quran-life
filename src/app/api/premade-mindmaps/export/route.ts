@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { isPrivilegedEmail } from '@/lib/privilegedEmails';
 
 type ExportPayload = {
     type: 'surah' | 'part';
@@ -22,8 +23,13 @@ type PremadeIndex = {
 const premadeDir = path.join(process.cwd(), 'public', 'assets', 'premade-mindmaps');
 const indexPath = path.join(premadeDir, 'index.json');
 
-function isOwnerMode() {
-    return (process.env.NEXT_PUBLIC_APP_MODE || 'user').toLowerCase() === 'owner';
+function isOwnerMode(req?: Request) {
+    if ((process.env.NEXT_PUBLIC_APP_MODE || 'user').toLowerCase() === 'owner') {
+        return true;
+    }
+    if (!req) return false;
+    const email = req.headers.get('x-user-email') || req.headers.get('x-editor-email');
+    return isPrivilegedEmail(email);
 }
 
 async function readIndex(): Promise<PremadeIndex> {
@@ -45,7 +51,7 @@ async function writeIndex(nextIndex: PremadeIndex) {
 }
 
 export async function POST(req: Request) {
-    if (!isOwnerMode()) {
+    if (!isOwnerMode(req)) {
         return NextResponse.json({ error: 'Not allowed in user mode.' }, { status: 403 });
     }
 

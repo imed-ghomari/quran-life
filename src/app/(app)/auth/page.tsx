@@ -17,15 +17,11 @@ import { Suspense } from 'react';
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
+import { isPrivilegedEmail } from '@/lib/privilegedEmails';
 
 const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
 const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
-const OWNER_EMAILS = (process.env.NEXT_PUBLIC_OWNER_EMAILS || '')
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-
 // Main authentication content component
 function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
@@ -82,10 +78,8 @@ function AuthContent() {
     useEffect(() => {
         if (!forceCheckoutBlur) return;
         if (!user?.email) return;
-        if (!email) return;
-        if (user.email.toLowerCase() !== email.toLowerCase()) return;
         setForceCheckoutBlur(false);
-    }, [forceCheckoutBlur, user?.email, email]);
+    }, [forceCheckoutBlur, user?.email]);
 
     const latestSubscription = useMemo(() => {
         const subscriptions = subscriptionData?.subscriptions ?? [];
@@ -102,10 +96,7 @@ function AuthContent() {
         if (!status) return false;
         return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
     }, [latestSubscription?.status]);
-    const isOwnerEmail = useMemo(() => {
-        if (!user?.email) return false;
-        return OWNER_EMAILS.includes(user.email.toLowerCase());
-    }, [user?.email]);
+    const isOwnerEmail = useMemo(() => isPrivilegedEmail(user?.email), [user?.email]);
     const isCheckoutLocked = !user || isSubscriptionLoading || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
@@ -160,14 +151,15 @@ function AuthContent() {
                 // Redirect logic will be handled by the useEffect when the user state changes
             }
         } catch (err: any) {
-            console.error('Auth error:', err);
             // Catch and display any authentication errors
             const rawMessage = err?.body?.message || err?.message || 'An error occurred during authentication';
-            if (typeof rawMessage === 'string' && rawMessage.includes('app-user-magic-code')) {
+            const isInvalidCode = typeof rawMessage === 'string' && rawMessage.includes('app-user-magic-code');
+            if (isInvalidCode) {
                 setAuthError('That code is invalid or expired. Please request a new code.');
                 setAuthStep('email');
                 setCode('');
             } else {
+                console.error('Auth error:', err);
                 setAuthError(rawMessage);
             }
         } finally {
@@ -232,14 +224,14 @@ function AuthContent() {
                 overflow: 'hidden',
                 position: 'relative'
             }}>
-                    <div style={{
+                    <div className="auth-layout" style={{
                         display: 'flex',
                         flexDirection: 'row',
                         position: 'relative',
                         zIndex: 1
                     }}>
                     {/* Left panel: Auth (pre-login) or Checkout (post-login) */}
-                    <div style={{
+                    <div className="auth-panel auth-panel-left" style={{
                         flex: '0 0 50%',
                         padding: '2.5rem',
                         borderRight: '1px solid var(--border)',
@@ -473,54 +465,90 @@ function AuthContent() {
                     </>
                 ) : (
                     <div>
-                        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                        <h1 className="checkout-title" style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
                             Activate your subscription
                         </h1>
                             
 
-                            <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                                <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem' }}>
-                                    Choose your billing plan:
-                                </div>
+                            <div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+                                Choose your billing plan:
+                            </div>
+                            <div className="checkout-plan-grid" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.25rem' }}>
                                 <button
                                     type="button"
                                     onClick={() => handlePlanChange('monthly')}
                                     disabled={isCheckoutLocked}
-                                    className="btn"
+                                    className="card"
                                     style={{
                                         border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        background: plan === 'monthly' ? 'var(--accent-light)' : 'var(--background-secondary)',
+                                        background: 'var(--background)',
                                         color: 'var(--foreground)',
                                         width: '100%',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
                                         gap: '1rem',
-                                        padding: '0.9rem 1rem'
+                                        padding: '1.5rem',
+                                        borderRadius: '20px',
+                                        boxShadow: plan === 'monthly'
+                                            ? '0 12px 30px rgba(91, 143, 185, 0.2)'
+                                            : '0 10px 24px rgba(0, 0, 0, 0.06)',
+                                        textAlign: 'left',
+                                        position: 'relative',
+                                        cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
                                     }}
                                 >
-                                    <span style={{ fontWeight: 600 }}>Monthly plan</span>
-                                    <span style={{ fontWeight: 700 }}>$10<span style={{ fontWeight: 400 }}>/mo</span></span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly plan</span>
+                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Pay as you go</span>
+                                    </div>
+                                    <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>$10</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => handlePlanChange('yearly')}
                                     disabled={isCheckoutLocked}
-                                    className="btn"
+                                    className="card"
                                     style={{
                                         border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        background: plan === 'yearly' ? 'var(--accent-light)' : 'var(--background-secondary)',
+                                        background: 'var(--background)',
                                         color: 'var(--foreground)',
                                         width: '100%',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
                                         gap: '1rem',
-                                        padding: '0.9rem 1rem'
+                                        padding: '1.5rem',
+                                        borderRadius: '20px',
+                                        boxShadow: plan === 'yearly'
+                                            ? '0 12px 30px rgba(91, 143, 185, 0.2)'
+                                            : '0 10px 24px rgba(0, 0, 0, 0.06)',
+                                        textAlign: 'left',
+                                        position: 'relative',
+                                        cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
                                     }}
                                 >
-                                    <span style={{ fontWeight: 600 }}>Yearly plan</span>
-                                    <span style={{ fontWeight: 700 }}>$96<span style={{ fontWeight: 400 }}>/yr</span></span>
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-10px',
+                                        right: '16px',
+                                        padding: '0.25rem 0.6rem',
+                                        borderRadius: '999px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        color: 'white',
+                                        background: 'var(--accent)',
+                                        boxShadow: '0 6px 16px rgba(91, 143, 185, 0.35)'
+                                    }}>
+                                        Save 20%
+                                    </span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                            <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly plan</span>
+                                        </div>
+                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best value</span>
+                                    </div>
+                                    <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>$96</span>
                                 </button>
                                
                             </div>
@@ -584,13 +612,13 @@ function AuthContent() {
                     </div>
 
                     {/* Right panel: Image (always) */}
-                    <div style={{
+                    <div className="auth-panel auth-panel-right" style={{
                         flex: '0 0 50%',
                         padding: '0',
                         background: 'var(--background)',
                         display: 'flex'
                     }}>
-                        <div style={{
+                        <div className="auth-image-wrap" style={{
                             width: '100%',
                             height: '100%',
                             minHeight: '520px',
@@ -599,18 +627,36 @@ function AuthContent() {
                             justifyContent: 'center',
                             background: 'var(--background)'
                         }}>
-                            <img
-                                src="/auth_light.png"
-                                alt="Quran Life authentication"
+                            <picture
                                 className="light-mode-only"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                            <img
-                                src="/auth_dark.png"
-                                alt="Quran Life authentication"
+                                style={{ width: '100%', height: '100%' }}
+                            >
+                                <source srcSet="/auth_light.webp" type="image/webp" />
+                                <img
+                                    src="/auth_light.png"
+                                    alt="Quran Life authentication"
+                                    width={720}
+                                    height={960}
+                                    loading="lazy"
+                                    decoding="async"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                            </picture>
+                            <picture
                                 className="dark-mode-only"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
+                                style={{ width: '100%', height: '100%' }}
+                            >
+                                <source srcSet="/auth_dark.png" type="image/webp" />
+                                <img
+                                    src="/auth_dark.png"
+                                    alt="Quran Life authentication"
+                                    width={720}
+                                    height={960}
+                                    loading="lazy"
+                                    decoding="async"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                            </picture>
                         </div>
                     </div>
                 </div>

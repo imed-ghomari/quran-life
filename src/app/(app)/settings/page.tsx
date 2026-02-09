@@ -112,6 +112,18 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_note', label: 'Solved by Note' },
 ];
 
+const formatKnowledgeTrackingDueDate = (due: string | null): string => {
+    if (!due) return '-';
+    const parsed = new Date(due);
+    if (Number.isNaN(parsed.getTime())) return due;
+    const year = parsed.getFullYear().toString().padStart(4, '0');
+    const month = (parsed.getMonth() + 1).toString().padStart(2, '0');
+    const day = parsed.getDate().toString().padStart(2, '0');
+    const hours = parsed.getHours().toString().padStart(2, '0');
+    const minutes = parsed.getMinutes().toString().padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
 /**
  * Renders Arabic text with highlighted word ranges
  */
@@ -1951,7 +1963,10 @@ export default function SettingsPage() {
                                                                     latestPartMindmaps.length > 0 ? (
                                                                         latestPartMindmaps
                                                                             .sort((a, b) => (a.partId || 0) - (b.partId || 0))
-                                                                            .map(node => (
+                                                                            .map(node => {
+                                                                                const due = getNodeDueDate(node);
+                                                                                const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
+                                                                                return (
                                                                                 <tr key={node.id} className="node-row">
                                                                                     <td>Part {node.partId}</td>
                                                                                     <td>
@@ -1973,9 +1988,10 @@ export default function SettingsPage() {
                                                                                     <td>{getNodeStability(node)}d</td>
                                                                                     <td>{getNodeDifficulty(node)}</td>
                                                                                     <td>{getNodeReps(node)}</td>
-                                                                                    <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
+                                                                                    <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
                                                                                 </tr>
-                                                                            ))
+                                                                            );
+                                                                            })
                                                                     ) : (
                                                                         <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
                                                                     )
@@ -2013,7 +2029,10 @@ export default function SettingsPage() {
                                                                     latestSurahMindmaps.length > 0 ? (
                                                                         latestSurahMindmaps
                                                                             .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
-                                                                            .map(node => (
+                                                                            .map(node => {
+                                                                                const due = getNodeDueDate(node);
+                                                                                const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
+                                                                                return (
                                                                                 <tr key={node.id} className="node-row">
                                                                                     <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
                                                                                     <td>
@@ -2035,9 +2054,10 @@ export default function SettingsPage() {
                                                                                     <td>{getNodeStability(node)}d</td>
                                                                                     <td>{getNodeDifficulty(node)}</td>
                                                                                     <td>{getNodeReps(node)}</td>
-                                                                                    <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
+                                                                                    <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
                                                                                 </tr>
-                                                                            ))
+                                                                            );
+                                                                            })
                                                                     ) : (
                                                                         <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
                                                                     )
@@ -2135,7 +2155,10 @@ export default function SettingsPage() {
                                                                                         </div>
                                                                                     </td>
                                                                                 </tr>
-                                                                                {expandedGroups[surahKey] && surahNodes.map(node => (
+                                                                                {expandedGroups[surahKey] && surahNodes.map(node => {
+                                                                                    const due = getNodeDueDate(node);
+                                                                                    const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
+                                                                                    return (
                                                                                     <tr key={node.id} className="node-row">
                                                                                         <td>Ayat {node.startVerse}-{node.endVerse}</td>
                                                                                         <td>
@@ -2156,9 +2179,10 @@ export default function SettingsPage() {
                                                                                         <td>{getNodeStability(node)}d</td>
                                                                                         <td>{getNodeDifficulty(node)}</td>
                                                                                         <td>{getNodeReps(node)}</td>
-                                                                                        <td className={(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}>{getNodeDueDate(node)}</td>
+                                                                                        <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
                                                                                     </tr>
-                                                                                ))}
+                                                                                );
+                                                                                })}
                                                                             </React.Fragment>
                                                                         );
                                                                     });
@@ -3171,7 +3195,7 @@ export default function SettingsPage() {
                                                     <div className="stat-item">
                                                         <span className="stat-label">Next</span>
                                                         <span className={`stat-value ${(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
-                                                            {getNodeDueDate(node)}
+                                                            {formatKnowledgeTrackingDueDate(getNodeDueDate(node))}
                                                         </span>
                                                     </div>
                                                 </div>

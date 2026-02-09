@@ -18,7 +18,8 @@ import MindmapViewer from '@/components/MindmapViewer';
 import TodoKanban from '@/components/todo/TodoKanban';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
-import { APP_MODE, isOwnerMode } from '@/lib/appMode';
+import { getAppModeForEmail } from '@/lib/appMode';
+import { db } from '@/lib/instant';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -48,7 +49,9 @@ export default function TodoPage() {
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
 
-    const appMode = APP_MODE;
+    const { user } = db.useAuth();
+    const appMode = useMemo(() => getAppModeForEmail(user?.email), [user?.email]);
+    const isOwnerMode = appMode === 'owner';
     const [premadeIndex, setPremadeIndex] = useState<{ surah: number[]; part: number[]; updatedAt?: string } | null>(null);
     const autoImportedRef = useRef<Set<string>>(new Set());
 
@@ -382,7 +385,10 @@ export default function TodoPage() {
         try {
             const response = await fetch('/api/premade-mindmaps/export', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-email': user?.email ?? ''
+                },
                 body: JSON.stringify({
                     type,
                     id,
@@ -403,7 +409,7 @@ export default function TodoPage() {
             console.error('Export failed:', error);
             alert('Failed to export mindmap. Please try again.');
         }
-    }, [mindmaps, partMindmapsMap]);
+    }, [mindmaps, partMindmapsMap, user?.email]);
 
     const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number) => {
         await handleImportPremade(type, id);
