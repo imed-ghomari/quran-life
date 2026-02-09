@@ -954,18 +954,8 @@ export default function TodayPage() {
             try {
                 await saveMindMap(surahId, updated);
                 await moveMindmapToInProgress(`surah-${surahId}`);
-                addToast(
-                    'success',
-                    'Mindmap marked as incomplete',
-                    `${getSurah(surahId)?.name || 'Surah'}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
-                );
             } catch (err) {
                 console.error('Failed to mark mindmap incomplete', err);
-                addToast(
-                    'error',
-                    'Could not update mindmap',
-                    `${getSurah(surahId)?.name || 'Surah'}\nPlease try again.`
-                );
             }
         }
     };
@@ -979,18 +969,8 @@ export default function TodayPage() {
             try {
                 await savePartMindMap(partId, updated);
                 await moveMindmapToInProgress(`part-${partId}`);
-                addToast(
-                    'success',
-                    'Part mindmap marked as incomplete',
-                    `Part ${partId}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
-                );
             } catch (err) {
                 console.error('Failed to mark part mindmap incomplete', err);
-                addToast(
-                    'error',
-                    'Could not update part mindmap',
-                    `Part ${partId}\nPlease try again.`
-                );
             }
         }
     };
