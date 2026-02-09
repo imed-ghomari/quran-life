@@ -865,7 +865,14 @@ export default function TodayPage() {
                 const margin = 8;
 
                 if (chunkTop < viewTop + margin || chunkBottom > viewBottom - margin) {
-                    const desiredTop = chunkTop - (containerHeight / 2) + (lastRevealed.offsetHeight / 2);
+                    let desiredTop = viewTop;
+
+                    if (chunkTop < viewTop + margin) {
+                        desiredTop = chunkTop - margin;
+                    } else if (chunkBottom > viewBottom - margin) {
+                        desiredTop = chunkBottom - containerHeight + margin;
+                    }
+
                     container.scrollTo({
                         top: Math.max(0, desiredTop),
                         behavior: 'smooth'
