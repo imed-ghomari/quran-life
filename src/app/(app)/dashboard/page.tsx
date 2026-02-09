@@ -276,19 +276,52 @@ export default function TodayPage() {
     const [isDark, setIsDark] = useState(false);
 
     const verseContainerRef = useRef<HTMLDivElement>(null);
+    const reviewScrollAnimRef = useRef<number | null>(null);
+
+    const smoothScrollContainer = useCallback((container: HTMLElement, targetTop: number, duration: number = 550) => {
+        if (reviewScrollAnimRef.current !== null) {
+            cancelAnimationFrame(reviewScrollAnimRef.current);
+            reviewScrollAnimRef.current = null;
+        }
+
+        const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        const clampedTarget = Math.max(0, Math.min(targetTop, maxTop));
+        const startTop = container.scrollTop;
+        const startTime = performance.now();
+
+        const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+        const step = (now: number) => {
+            const elapsed = Math.min(1, (now - startTime) / duration);
+            const eased = easeInOut(elapsed);
+            container.scrollTop = startTop + (clampedTarget - startTop) * eased;
+            if (elapsed < 1) {
+                reviewScrollAnimRef.current = requestAnimationFrame(step);
+            } else {
+                reviewScrollAnimRef.current = null;
+            }
+        };
+
+        reviewScrollAnimRef.current = requestAnimationFrame(step);
+    }, []);
 
     useEffect(() => {
         if (highlightedWordIndex !== -1 && verseContainerRef.current) {
             const wordEl = document.getElementById(`word-${highlightedWordIndex}`);
             if (wordEl) {
                 const container = verseContainerRef.current;
-                const offsetTop = wordEl.offsetTop;
-                const containerHeight = container.clientHeight;
-                const scrollTop = offsetTop - (containerHeight / 2) + (wordEl.clientHeight / 2);
-                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                const containerRect = container.getBoundingClientRect();
+                const wordRect = wordEl.getBoundingClientRect();
+                const padding = 12;
+                const isOutOfView = wordRect.top < containerRect.top + padding || wordRect.bottom > containerRect.bottom - padding;
+                if (isOutOfView) {
+                    const offset = wordRect.top - containerRect.top;
+                    const targetTop = container.scrollTop + offset - (container.clientHeight / 2) + (wordRect.height / 2);
+                    smoothScrollContainer(container, targetTop);
+                }
             }
         }
-    }, [highlightedWordIndex]);
+    }, [highlightedWordIndex, smoothScrollContainer]);
 
     // Keep review index in sync with changing due queue to avoid blanks
     useEffect(() => {
@@ -897,34 +930,46 @@ export default function TodayPage() {
                     : [];
                 const lastRevealed = visibleChunks[visibleChunks.length - 1] || activeVerse;
 
-                const chunkTop = lastRevealed.offsetTop;
-                const chunkBottom = chunkTop + lastRevealed.offsetHeight;
-                const viewTop = container.scrollTop;
-                const viewBottom = viewTop + containerHeight;
-                const margin = 8;
+                const targetEl = lastRevealed || activeVerse;
+                const nextChunkEl = textEl?.querySelector('.next-blur') as HTMLElement | null;
+                const nextVerseEl = activeVerse.nextElementSibling as HTMLElement | null;
+                const nextVerseBlock = nextVerseEl && nextVerseEl.classList.contains('grouped-verse-block') ? nextVerseEl : null;
+                const containerRect = container.getBoundingClientRect();
+                const targetRect = targetEl.getBoundingClientRect();
+                const nextRect = nextChunkEl?.getBoundingClientRect();
+                const nextVerseRect = nextVerseBlock?.getBoundingClientRect();
+                const styles = window.getComputedStyle(container);
+                const paddingBottom = Number.parseFloat(styles.paddingBottom || '0') || 0;
+                const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0;
+                const marginTop = Math.max(8, paddingTop);
+                const marginBottom = Math.max(24, paddingBottom);
 
-                if (chunkTop < viewTop + margin || chunkBottom > viewBottom - margin) {
-                    let desiredTop = viewTop;
+                const targetTop = targetRect.top - containerRect.top;
+                const targetBottom = targetRect.bottom - containerRect.top;
+                const nextTop = nextRect ? nextRect.top - containerRect.top : targetTop;
+                const nextBottom = nextRect ? nextRect.bottom - containerRect.top : targetBottom;
+                const nextVerseTop = nextVerseRect ? nextVerseRect.top - containerRect.top : targetTop;
+                const nextVerseBottom = nextVerseRect ? nextVerseRect.bottom - containerRect.top : targetBottom;
+                const combinedTop = Math.min(targetTop, nextTop, nextVerseTop);
+                const combinedBottom = Math.max(targetBottom, nextBottom, nextVerseBottom);
 
-                    if (chunkTop < viewTop + margin) {
-                        desiredTop = chunkTop - margin;
-                    } else if (chunkBottom > viewBottom - margin) {
-                        desiredTop = chunkBottom - containerHeight + margin;
+                if (combinedTop < marginTop || combinedBottom > containerHeight - marginBottom) {
+                    let desiredTop = container.scrollTop;
+                    if (combinedTop < marginTop) {
+                        desiredTop = container.scrollTop + combinedTop - marginTop;
+                    } else if (combinedBottom > containerHeight - marginBottom) {
+                        desiredTop = container.scrollTop + (combinedBottom - containerHeight + marginBottom);
                     }
-
-                    container.scrollTo({
-                        top: Math.max(0, desiredTop),
-                        behavior: 'smooth'
-                    });
+                    smoothScrollContainer(container, desiredTop, 420);
                 }
                 return;
             }
 
             if (showGrading) {
-                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                smoothScrollContainer(container, container.scrollHeight, 420);
             }
         });
-    }, [revealedChunks, currentVerseInReview, showGrading]);
+    }, [revealedChunks, currentVerseInReview, showGrading, smoothScrollContainer]);
 
     // Move isLoaded check to AFTER all hooks
     const moveMindmapToInProgress = async (itemId: string) => {
@@ -1271,6 +1316,7 @@ export default function TodayPage() {
                                                     <AudioPlayer
                                                         verses={todaysPortion}
                                                         currentVerseIndex={currentVerseIndex}
+                                                        currentVerseWordCount={todaysPortion[currentVerseIndex]?.text.split(' ').length || 0}
                                                         onVerseChange={setCurrentVerseIndex}
                                                         onWordIndexChange={setHighlightedWordIndex}
                                                     />
@@ -1308,11 +1354,11 @@ export default function TodayPage() {
                                                             )}
                                                             <div className="arabic-text">
                                                                 {todaysPortion[currentVerseIndex].text.split(' ').map((word, i) => (
-                                                                    <span key={i} id={`word-${i}`} style={{
-                                                                        backgroundColor: i === highlightedWordIndex ? 'color-mix(in srgb, var(--accent), transparent 85%)' : 'transparent',
-                                                                        borderRadius: '4px',
-                                                                        transition: 'background-color 0.2s'
-                                                                    }}>
+                                                                    <span
+                                                                        key={i}
+                                                                        id={`word-${i}`}
+                                                                        className={`audio-word ${i === highlightedWordIndex ? 'audio-word--active' : ''}`}
+                                                                    >
                                                                         {word} {' '}
                                                                     </span>
                                                                 ))}

@@ -688,6 +688,21 @@ body {
   color: var(--foreground);
 }
 
+/* Audio word highlighting */
+.audio-word {
+  display: inline-block;
+  padding: 0 2px;
+  border-radius: 4px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  box-decoration-break: clone;
+}
+
+.audio-word--active {
+  background-color: rgba(91, 143, 185, 0.35);
+  background-color: color-mix(in srgb, var(--accent), transparent 70%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 40%);
+}
+
 /* Page layout */
 .page-container {
   min-height: 100vh;
@@ -821,6 +836,16 @@ h3 {
   padding-bottom: 1rem;
 }
 
+/* Daily: keep player fixed, only verse preview scrolls */
+.daily-section-content .today-card-content {
+  overflow: visible;
+}
+
+.daily-section-content .audio-mode-section {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .review-section-content .today-card-footer {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
@@ -829,7 +854,7 @@ h3 {
 .today-card-footer {
   position: sticky;
   bottom: 0;
-  background-color: inherit !important;
+  background-color: var(--background-secondary) !important;
   padding-top: 0.75rem;
   padding-bottom: 0.25rem;
   margin-top: auto;
@@ -2096,7 +2121,7 @@ input:focus {
   .today-card-footer {
     position: sticky;
     bottom: 0;
-    background-color: inherit !important;
+    background-color: var(--background-secondary) !important;
     padding-top: 0.75rem;
     padding-bottom: 0.25rem;
     margin-top: auto;
@@ -2899,6 +2924,11 @@ input:focus {
 
 :root[data-theme="dark"] .review-section-content .today-card-footer {
   background-color: var(--background-secondary) !important;
+}
+
+/* Align kanban title icons with text */
+.kanban-title-icon {
+  transform: translateY(4px);
 }
 
 /* Desktop Left Toolbar */

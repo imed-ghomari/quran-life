@@ -15,12 +15,13 @@ import {
     useInstantListeningProgress
 } from '@/hooks/useInstantData';
 import { getMutashabihatForAbsolute, surahAyahToAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { getNodeDueDate } from '@/lib/types';
 import { SURAHS } from '@/lib/quranData';
 
 function NavigationContent() {
     const pathname = usePathname();
     const { settings } = useInstantSettings();
-    const { nodes, dueNodes } = useInstantNodes();
+    const { nodes } = useInstantNodes();
     const { mindmaps, partMindMaps } = useInstantMindMaps();
     const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
@@ -135,10 +136,45 @@ function NavigationContent() {
         const dailyComplete = !!lastUpdate && lastUpdate.toDateString() === todayDate.toDateString();
         setIsDailyPortionComplete(dailyComplete);
 
-        // Today's reviews
-        setTodayTasks(dueNodes.length);
+        // Today's reviews: count verse chunks + mindmaps due today (each counts as one)
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(todayStart.getDate() + 1);
 
-    }, [settings, nodes, dueNodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
+        const parseDueDate = (dueStr: string | null) => {
+            if (!dueStr) return null;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
+                const [y, m, d] = dueStr.split('-').map(Number);
+                return new Date(y, m - 1, d);
+            }
+            const date = new Date(dueStr);
+            return Number.isNaN(date.getTime()) ? null : date;
+        };
+
+        const isDueTodayOrOverdue = (dueStr: string | null) => {
+            const dueDate = parseDueDate(dueStr);
+            if (!dueDate) return false;
+            return dueDate < tomorrowStart;
+        };
+
+        const hasAnchorForNode = (node: (typeof nodes)[number]) => {
+            if (node.type !== 'verse_segment' || !node.surahId) return true;
+            const mm = mindmaps.find(m => m.surahId === node.surahId);
+            const anchors = mm?.anchors || [];
+            if (anchors.length === 0) return false;
+            return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+        };
+
+        const todayCount = nodes
+            .filter(node => node.type === 'verse_segment' || node.type === 'mindmap' || node.type === 'part_mindmap')
+            .filter(node => isDueTodayOrOverdue(getNodeDueDate(node)))
+            .filter(hasAnchorForNode)
+            .length;
+
+        setTodayTasks(todayCount);
+
+    }, [settings, nodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
 
     const navItems = [
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, showStatusDot: !isDailyPortionComplete },
