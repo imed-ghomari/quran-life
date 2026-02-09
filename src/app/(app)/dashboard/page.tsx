@@ -56,7 +56,7 @@ function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
 }
 
 export default function TodayPage() {
-    const { settings, isLoading: settingsLoading } = useInstantSettings();
+    const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
     const { saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
@@ -99,8 +99,39 @@ export default function TodayPage() {
     const orderedDueNodes = useMemo(() => {
         if (!dueNodes.length) return [];
 
+        const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
+        const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
+
+        const filteredDueNodes = hasKanbanState
+            ? dueNodes.filter(node => {
+                if (node.type === 'mindmap') {
+                    return completeIds.has(`surah-${node.surahId}`);
+                }
+                if (node.type === 'part_mindmap') {
+                    return completeIds.has(`part-${node.partId}`);
+                }
+                if (node.type === 'verse_segment' && node.surahId) {
+                    const mm = mindmaps.find(m => m.surahId === node.surahId);
+                    const anchors = mm?.anchors || [];
+                    if (anchors.length === 0) return false;
+                    return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+                }
+                return true;
+            })
+            : dueNodes.filter(node => {
+                if (node.type === 'verse_segment' && node.surahId) {
+                    const mm = mindmaps.find(m => m.surahId === node.surahId);
+                    const anchors = mm?.anchors || [];
+                    if (anchors.length === 0) return false;
+                    return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+                }
+                return true;
+            });
+
+        if (!filteredDueNodes.length) return [];
+
         const originalIndex = new Map<string, number>();
-        dueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
+        filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
 
         const surahGroups = new Map<number, { mindmap?: MemoryNode; fullSurah?: MemoryNode; others: MemoryNode[] }>();
         const otherNodes: MemoryNode[] = [];
@@ -112,7 +143,7 @@ export default function TodayPage() {
             return node.startVerse === 1 && node.endVerse === surah.verseCount;
         };
 
-        dueNodes.forEach(node => {
+        filteredDueNodes.forEach(node => {
             if (node.surahId) {
                 if (!surahGroups.has(node.surahId)) {
                     surahGroups.set(node.surahId, { others: [] });
@@ -148,7 +179,7 @@ export default function TodayPage() {
         }
 
         return ordered;
-    }, [dueNodes]);
+    }, [dueNodes, settings?.kanbanColumns, mindmaps]);
 
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {
@@ -171,27 +202,28 @@ export default function TodayPage() {
             const surah = getSurah(surahId);
             if (!surah) return;
 
-            const fullSurahTargetId = `completed-surah-${surahId}`;
-            const fullSurahNodeExists = nodes.some(n =>
-                n.targetId === fullSurahTargetId ||
-                (
-                    n.type === 'verse_segment' &&
-                    n.surahId === surahId &&
-                    n.startVerse === 1 &&
-                    n.endVerse === surah.verseCount
-                )
-            );
-
-            if (!fullSurahNodeExists) {
-                nodesToCreate.push({
-                    id: crypto.randomUUID(),
-                    type: 'verse_segment',
-                    surahId,
-                    startVerse: 1,
-                    endVerse: surah.verseCount,
-                    targetId: fullSurahTargetId,
-                    scheduler: createNewFSRSState(),
-                    createdAt: new Date().toISOString()
+            const mindmapForAnchors = mindmaps.find(m => Number(m.surahId) === surahId);
+            const anchors = mindmapForAnchors?.anchors || [];
+            if (anchors.length > 0) {
+                anchors.forEach(anchor => {
+                    const anchorNodeExists = nodes.some(n =>
+                        n.type === 'verse_segment' &&
+                        n.surahId === surahId &&
+                        n.startVerse === anchor.startVerse &&
+                        n.endVerse === anchor.endVerse
+                    );
+                    if (!anchorNodeExists) {
+                        nodesToCreate.push({
+                            id: crypto.randomUUID(),
+                            type: 'verse_segment',
+                            surahId,
+                            startVerse: anchor.startVerse,
+                            endVerse: anchor.endVerse,
+                            targetId: anchor.id,
+                            scheduler: createNewFSRSState(),
+                            createdAt: new Date().toISOString()
+                        });
+                    }
                 });
             }
 
@@ -350,9 +382,16 @@ export default function TodayPage() {
         info?: string;
     }
     const [toasts, setToasts] = useState<ToastItem[]>([]);
+    const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const [lastGrading, setLastGrading] = useState<{ node: MemoryNode; index: number; errorId?: string } | null>(null);
 
     const addToast = useCallback((type: 'success' | 'error' | 'postpone', message: string, info?: string) => {
+        const key = `${type}|${message}|${info || ''}`;
+        const now = Date.now();
+        if (lastToastRef.current && lastToastRef.current.key === key && now - lastToastRef.current.at < 500) {
+            return;
+        }
+        lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
         setToasts(prev => [...prev, { id, type, message, info }]);
         setTimeout(() => {
@@ -888,6 +927,24 @@ export default function TodayPage() {
     }, [revealedChunks, currentVerseInReview, showGrading]);
 
     // Move isLoaded check to AFTER all hooks
+    const moveMindmapToInProgress = async (itemId: string) => {
+        if (!settings) return;
+        const prevCols = settings.kanbanColumns || {};
+        const nextCols: Record<string, string[]> = {};
+
+        Object.entries(prevCols).forEach(([colId, items]) => {
+            nextCols[colId] = (items || []).filter(id => id !== itemId);
+        });
+
+        const inProgress = nextCols['in-progress'] || [];
+        if (!inProgress.includes(itemId)) {
+            inProgress.push(itemId);
+        }
+        nextCols['in-progress'] = inProgress;
+
+        await saveSettings({ kanbanColumns: nextCols });
+    };
+
     const handleMindmapIncomplete = (surahId: number) => {
         if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
@@ -895,7 +952,12 @@ export default function TodayPage() {
         if (mm) {
             const updated = { ...mm, isComplete: false };
             saveMindMap(surahId, updated);
-            addToast('success', 'Mindmap marked as incomplete', getSurah(surahId)?.name);
+            addToast(
+                'success',
+                'Mindmap marked as incomplete',
+                `${getSurah(surahId)?.name || 'Surah'}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
+            );
+            void moveMindmapToInProgress(`surah-${surahId}`);
         }
     };
 
@@ -906,7 +968,12 @@ export default function TodayPage() {
         if (mm) {
             const updated = { ...mm, isComplete: false };
             savePartMindMap(partId, updated);
-            addToast('success', 'Part mindmap marked as incomplete', `Part ${partId}`);
+            addToast(
+                'success',
+                'Part mindmap marked as incomplete',
+                `Part ${partId}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
+            );
+            void moveMindmapToInProgress(`part-${partId}`);
         }
     };
 
@@ -1350,7 +1417,8 @@ export default function TodayPage() {
                             <div style={{
                                 fontSize: '0.8rem',
                                 opacity: 0.9,
-                                paddingLeft: '28px'
+                                paddingLeft: '28px',
+                                whiteSpace: 'pre-line'
                             }}>
                                 {t.info}
                             </div>

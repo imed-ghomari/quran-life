@@ -129,7 +129,7 @@ export default function TodoKanban({
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
 
     // Toast + Undo (for removing suspended/similarity after completion)
-    type TodoToastType = 'suspended' | 'similarity';
+    type TodoToastType = 'suspended' | 'similarity' | 'success' | 'info';
 
     interface TodoToastItem {
         id: string;
@@ -140,11 +140,18 @@ export default function TodoKanban({
         onExpire?: () => void;
     }
     const [toasts, setToasts] = useState<TodoToastItem[]>([]);
+    const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const removalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
     const pendingToastIdsRef = useRef<Map<string, string>>(new Map());
     const [hiddenItemIds, setHiddenItemIds] = useState<Set<string>>(new Set());
 
     const addToast = useCallback((type: TodoToastType, message: string, info?: string, onUndo?: () => void, onExpire?: () => void) => {
+        const key = `${type}|${message}|${info || ''}`;
+        const now = Date.now();
+        if (lastToastRef.current && lastToastRef.current.key === key && now - lastToastRef.current.at < 500) {
+            return '';
+        }
+        lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
         setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }]);
         setTimeout(() => {
@@ -152,6 +159,53 @@ export default function TodoKanban({
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 6000);
         return id;
+    }, []);
+
+    const getMindmapCompletionInfo = useCallback((item: KanbanItem): string => {
+        if (item.type === 'part') {
+            const hasMap = !!(item.data.mindmap?.tldrawSnapshot || item.data.mindmap?.imageUrl || item.data.mindmap?.imageUrlDark);
+            return [
+              
+                hasMap ? 'Part mindmap added to review' : 'You need to create a mindmap to complete this card.',
+              
+            ].join('\n');
+        }
+
+        
+
+        const mindmap = item.data.mindmap;
+        const hasMap = !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl || mindmap?.imageUrlDark);
+        const hasSplits = !!(mindmap?.anchors && mindmap.anchors.length > 0);
+
+        if (hasMap && hasSplits) {
+            return [
+                
+                'Surah Mindmap and verses added to review.',
+              
+            ].join('\n');
+        }
+        if (hasMap && !hasSplits) {
+            return [
+                
+                'Mindmap added to review.',
+                'Verses not yet added. Create splits.'
+                
+            ].join('\n');
+        }
+       
+        return [
+           
+            'Create a mindmap to complete this card.',
+            
+        ].join('\n');
+    }, []);
+
+    const getMindmapRemovalInfo = useCallback((item: KanbanItem): string => {
+        if (item.type === 'part') {
+            return 'Removed part mindmap from review. ';
+        }
+      
+        return 'Removed surah mindmap from review. Verse reviews remain.';
     }, []);
 
     // Verse Context Modal State (Suspended Cards)
@@ -508,6 +562,7 @@ export default function TodoKanban({
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     if (movedItem.status !== 'complete') {
                         handleCompletionTrigger(movedItem, true);
+                        addToast('success', 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                     }
                 } else if (source.droppableId !== 'complete') {
                     handleCompletionTrigger(movedItem);
@@ -515,6 +570,7 @@ export default function TodoKanban({
             } else if (source.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     handleCompletionTrigger(movedItem, false);
+                    addToast('info', 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
                 }
             }
 
@@ -580,7 +636,7 @@ export default function TodoKanban({
 
             return newColsMap;
         });
-    }, [onKanbanStateChange, handleCompletionTrigger, addToast, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval]);
+    }, [onKanbanStateChange, handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback((item: KanbanItem) => {
@@ -1322,9 +1378,11 @@ export default function TodoKanban({
                             gap: 4,
                             boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
                             animation: 'slideInRight 0.3s ease-out',
-                            background: t.type === 'similarity' ? 'var(--warning)' : 'var(--danger)',
+                            background: t.type === 'similarity' ? 'var(--warning)' :
+                                t.type === 'suspended' ? 'var(--danger)' :
+                                    t.type === 'info' ? 'var(--background-secondary)' : 'var(--success)',
                             border: '1px solid var(--border)',
-                            color: 'white',
+                            color: t.type === 'info' ? 'var(--foreground)' : 'white',
                             minWidth: '180px',
                             fontSize: '0.85rem',
                             pointerEvents: 'auto',
@@ -1332,7 +1390,7 @@ export default function TodoKanban({
                             opacity: 1
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <Check size={18} />
+                                {t.type === 'info' ? <Brain size={18} /> : <Check size={18} />}
                                 <span style={{ fontWeight: 600 }}>{t.message}</span>
                                 {t.onUndo && (
                                     <button
@@ -1368,7 +1426,7 @@ export default function TodoKanban({
                             <div
                                 className="toast-countdown"
                                 style={{
-                                    background: 'rgba(255,255,255,0.7)',
+                                    background: t.type === 'info' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.7)',
                                     ['--toast-duration' as any]: '6s'
                                 }}
                             />
