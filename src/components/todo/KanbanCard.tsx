@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
-import { Brain, BadgeCheck, PenSquare, Layers } from 'lucide-react';
+import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
 import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
 
@@ -13,6 +13,7 @@ interface KanbanCardProps {
     isMobile: boolean;
     hasMindmap: boolean;
     hasPremade?: boolean;
+    hasSplits: boolean;
     appMode: 'owner' | 'user';
     docLink?: string;
     onEditMindmap: () => void;
@@ -31,6 +32,7 @@ const KanbanCard = ({
     isMobile,
     hasMindmap,
     hasPremade,
+    hasSplits,
     appMode,
     docLink,
     onEditMindmap,
@@ -135,6 +137,7 @@ const KanbanCard = ({
                             onExportMindmap,
                             onResetMindmap: handleResetClick,
                             onChangeSplits,
+                            hasSplits,
                             footerPad: 'pt-3',
                             docLink,
                             onViewVerseContext,
@@ -151,6 +154,7 @@ interface RenderZoneProps {
     item: KanbanItem;
     hasMindmap: boolean;
     hasPremade?: boolean;
+    hasSplits: boolean;
     showExport: boolean;
     showDelete: boolean;
     showReset: boolean;
@@ -176,6 +180,7 @@ function renderCardZones({
     item,
     hasMindmap,
     hasPremade,
+    hasSplits,
     showExport,
     showDelete,
     showReset,
@@ -200,6 +205,7 @@ function renderCardZones({
     let zone2 = { english: "", arabic: "" };
     let zone3 = "";
     let zone4Meta = "";
+    const showSplitsAlert = cardType === 'surah' && hasMindmap && !hasSplits;
 
     // Type-specific logic
     switch (item.type) {
@@ -230,7 +236,7 @@ function renderCardZones({
         }
         case 'part': {
             const partTask = item.data;
-            zone1 = { label: "PART MAP", color: "var(--accent)" };
+            zone1 = { label: "PART MAP", color: "var(--todo-part-purple)" };
             zone2 = {
                 english: `Part ${partTask.part}`,
                 arabic: `الجزء ${partTask.part}`
@@ -240,7 +246,7 @@ function renderCardZones({
         }
         case 'surah': {
             const surahTask = item.data;
-            zone1 = { label: "SURAH MAP", color: "var(--success)" };
+            zone1 = { label: "SURAH MAP", color: "#3b82f6" };
             zone2 = {
                 english: `${surahTask.surah.id}. ${surahTask.surah.name}`,
                 arabic: surahTask.surah.arabicName || 'سورة'
@@ -307,6 +313,15 @@ function renderCardZones({
                         <h4 className="text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
                             {zone2.english}
                         </h4>
+                        {showSplitsAlert && (
+                            <span
+                                className="inline-flex items-center shrink-0 text-amber-500"
+                                title="Splits missing"
+                                aria-label="Splits missing"
+                            >
+                                <Scissors size={14} />
+                            </span>
+                        )}
                         {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
                             (() => {
                                 const mindmap = (item as any).data?.mindmap;

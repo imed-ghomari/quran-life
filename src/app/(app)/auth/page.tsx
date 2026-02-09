@@ -17,7 +17,7 @@ import { Suspense } from 'react';
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
-import { isPrivilegedEmail } from '@/lib/privilegedEmails';
+import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
 
 const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
 const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
@@ -96,16 +96,19 @@ function AuthContent() {
         if (!status) return false;
         return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
     }, [latestSubscription?.status]);
-    const isOwnerEmail = useMemo(() => isPrivilegedEmail(user?.email), [user?.email]);
+    const isPaymentBypass = useMemo(
+        () => isPaymentBypassEmail(user?.email),
+        [user?.email]
+    );
     const isCheckoutLocked = !user || isSubscriptionLoading || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
         if (!user) return;
         if (isSubscriptionLoading) return;
-        if (hasActiveSubscription || isOwnerEmail) {
+        if (hasActiveSubscription || isPaymentBypass) {
             router.push('/dashboard');
         }
-    }, [user, isSubscriptionLoading, hasActiveSubscription, isOwnerEmail, router]);
+    }, [user, isSubscriptionLoading, hasActiveSubscription, isPaymentBypass, router]);
 
     const handleCheckout = () => {
         if (!user) {
