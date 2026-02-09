@@ -2928,7 +2928,7 @@ input:focus {
 
 /* Align kanban title icons with text */
 .kanban-title-icon {
-  transform: translateY(4px);
+  transform: translateY(5px);
 }
 
 /* Desktop Left Toolbar */
