@@ -515,6 +515,9 @@ article.prose pre {
   --chart-strong: #0ea5e9;
   --chart-mastered: #10b981;
 
+  /* Todo */
+  --todo-part-purple: #a78bfa;
+
   --reviews-chart-panel: var(--background);
 }
 
@@ -572,6 +575,9 @@ article.prose pre {
     --chart-strong: #0891b2;
     --chart-mastered: #059669;
 
+    /* Todo */
+    --todo-part-purple: #a78bfa;
+
   }
 }
 
@@ -601,6 +607,9 @@ article.prose pre {
   --chart-medium: #2563eb;
   --chart-strong: #0891b2;
   --chart-mastered: #059669;
+
+  /* Todo */
+  --todo-part-purple: #a78bfa;
 
 }
 
@@ -637,6 +646,9 @@ article.prose pre {
   --chart-medium: #3b82f6;
   --chart-strong: #0ea5e9;
   --chart-mastered: #10b981;
+
+  /* Todo */
+  --todo-part-purple: #a78bfa;
 
 }
 
@@ -846,6 +858,24 @@ h3 {
 .today-card-footer .review-btn {
   min-height: 44px;
   padding: 0.6rem;
+}
+
+.mindmap-quick-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.mindmap-quick-actions .btn {
+  flex: 0 1 220px;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .today-card-footer > .btn {

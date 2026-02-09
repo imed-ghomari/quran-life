@@ -4,18 +4,23 @@ const parseEmails = (raw: string) =>
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
 
-const OWNER_EMAILS = parseEmails(process.env.NEXT_PUBLIC_OWNER_EMAILS || '');
+const BYPASS_EMAILS = parseEmails(process.env.NEXT_PUBLIC_BYPASS_EMAILS || '');
 const EDITOR_EMAILS = parseEmails(
   process.env.NEXT_PUBLIC_EDITOR_EMAILS ||
     process.env.NEXT_PUBLIC_EDITOR_EMAIL ||
     ''
 );
 
-export const PRIVILEGED_EMAILS = Array.from(
-  new Set([...OWNER_EMAILS, ...EDITOR_EMAILS])
+export const PAYMENT_BYPASS_EMAILS = Array.from(
+  new Set([...BYPASS_EMAILS, ...EDITOR_EMAILS])
 );
 
-export function isPrivilegedEmail(email?: string | null) {
+export function isPaymentBypassEmail(email?: string | null) {
   if (!email) return false;
-  return PRIVILEGED_EMAILS.includes(email.trim().toLowerCase());
+  return PAYMENT_BYPASS_EMAILS.includes(email.trim().toLowerCase());
+}
+
+export function isEditorEmail(email?: string | null) {
+  if (!email) return false;
+  return EDITOR_EMAILS.includes(email.trim().toLowerCase());
 }

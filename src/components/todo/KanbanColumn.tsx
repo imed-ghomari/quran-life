@@ -24,6 +24,7 @@ interface KanbanColumnProps {
     onViewVerseContext?: (item: KanbanItem) => void;
     onViewSimilarityContext?: (item: KanbanItem) => void;
     getHasMindmap: (item: KanbanItem) => boolean;
+    getHasSplits: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;
     getDocLink: (item: KanbanItem) => string | undefined;
 }
@@ -54,6 +55,7 @@ const KanbanColumn = ({
     onViewVerseContext,
     onViewSimilarityContext,
     getHasMindmap,
+    getHasSplits,
     getHasPremade,
     getDocLink
 }: KanbanColumnProps) => {
@@ -123,6 +125,7 @@ const KanbanColumn = ({
                                 index={index}
                                 isMobile={isMobile}
                                 hasMindmap={getHasMindmap(item)}
+                                hasSplits={getHasSplits(item)}
                                 hasPremade={getHasPremade ? getHasPremade(item) : false}
                                 appMode={appMode}
                                 docLink={getDocLink(item)}

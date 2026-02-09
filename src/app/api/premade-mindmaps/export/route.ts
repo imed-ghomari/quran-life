@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { isPrivilegedEmail } from '@/lib/privilegedEmails';
+import { isEditorEmail } from '@/lib/privilegedEmails';
 
 type ExportPayload = {
     type: 'surah' | 'part';
@@ -29,7 +29,7 @@ function isOwnerMode(req?: Request) {
     }
     if (!req) return false;
     const email = req.headers.get('x-user-email') || req.headers.get('x-editor-email');
-    return isPrivilegedEmail(email);
+    return isEditorEmail(email);
 }
 
 async function readIndex(): Promise<PremadeIndex> {

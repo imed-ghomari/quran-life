@@ -1154,37 +1154,6 @@ export default function TodayPage() {
                                                             );
                                                         })()}
 
-                                                        {/* Quick Actions */}
-                                                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                                                            <button
-                                                                className="btn btn-secondary"
-                                                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (activeContent.type === 'mindmap') {
-                                                                        setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                    } else {
-                                                                        setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <PenTool size={14} /> Edit Map
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-secondary"
-                                                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--danger)' }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (activeContent.type === 'mindmap') {
-                                                                        handleMindmapIncomplete(activeContent.surah!.id);
-                                                                    } else {
-                                                                        handlePartMindmapIncomplete(activeContent.partId as QuranPart);
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <RotateCcw size={14} /> Mark Incomplete
-                                                            </button>
-                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -1232,11 +1201,42 @@ export default function TodayPage() {
                                                 Reveal Mindmap
                                             </button>
                                         ) : (
-                                            <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
-                                                <button className="review-btn not-remembered" onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
-                                                <button className="review-btn remembered" onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
-                                            </div>
+                                            <>
+                                                <div className="mindmap-quick-actions">
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (activeContent.type === 'mindmap') {
+                                                                setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                            } else {
+                                                                setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                            }
+                                                        }}
+                                                    >
+                                                        <PenTool size={14} /> Edit Mindmap
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        style={{ color: 'var(--danger)' }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (activeContent.type === 'mindmap') {
+                                                                handleMindmapIncomplete(activeContent.surah!.id);
+                                                            } else {
+                                                                handlePartMindmapIncomplete(activeContent.partId as QuranPart);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <RotateCcw size={14} /> Mark as Incomplete
+                                                    </button>
+                                                </div>
+                                                <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                                    <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
+                                                    <button className="review-btn not-remembered" onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
+                                                    <button className="review-btn remembered" onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
+                                                </div>
+                                            </>
                                         )
                                     )}
                                 </div>

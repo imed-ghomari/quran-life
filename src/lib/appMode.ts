@@ -1,4 +1,4 @@
-import { isPrivilegedEmail } from '@/lib/privilegedEmails';
+import { isEditorEmail } from '@/lib/privilegedEmails';
 
 export type AppMode = 'owner' | 'user';
 
@@ -10,5 +10,5 @@ export const isUserMode = APP_MODE === 'user';
 
 export function getAppModeForEmail(email?: string | null): AppMode {
   if (rawMode === 'owner') return 'owner';
-  return isPrivilegedEmail(email) ? 'owner' : 'user';
+  return isEditorEmail(email) ? 'owner' : 'user';
 }

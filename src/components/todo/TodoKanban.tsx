@@ -129,7 +129,7 @@ export default function TodoKanban({
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
 
     // Toast + Undo (for removing suspended/similarity after completion)
-    type TodoToastType = 'suspended' | 'similarity' | 'success' | 'info';
+    type TodoToastType = 'surah' | 'part' | 'suspended' | 'similarity';
 
     interface TodoToastItem {
         id: string;
@@ -205,7 +205,19 @@ export default function TodoKanban({
             return 'Removed part mindmap from review. ';
         }
       
-        return 'Removed surah mindmap from review. Verse reviews remain.';
+        return[ 'Removed surah mindmap from review.',
+        ' Verse reviews remain.'].join('\n');
+    }, []);
+
+    const hasMindmapForItem = useCallback((item: KanbanItem): boolean => {
+        if (item.type === 'part') {
+            return !!(item.data.mindmap?.tldrawSnapshot || item.data.mindmap?.imageUrl || item.data.mindmap?.imageUrlDark);
+        }
+        if (item.type === 'surah') {
+            const mindmap = item.data.mindmap;
+            return !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl || mindmap?.imageUrlDark);
+        }
+        return false;
     }, []);
 
     // Verse Context Modal State (Suspended Cards)
@@ -523,19 +535,64 @@ export default function TodoKanban({
             }
         }
 
-        const { source, destination } = result;
+        const { source, destination, draggableId } = result;
 
         if (!destination) return;
-        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
         setColumns(prev => {
             const sourceCol = prev[source.droppableId];
             const destCol = prev[destination.droppableId];
-            const sourceItems = [...sourceCol.items];
-            const destItems = source.droppableId === destination.droppableId ? sourceItems : [...destCol.items];
+            const sourceVisibleItems = sourceCol.items.filter(filteredItem);
+            const sourceVisibleIndex = sourceVisibleItems.findIndex(item => item.id === draggableId);
+            const safeSourceIndex = sourceVisibleIndex !== -1 ? sourceVisibleIndex : source.index;
+            const visibleItem = sourceVisibleItems[safeSourceIndex];
+            const movedItem = visibleItem?.id === draggableId
+                ? visibleItem
+                : sourceCol.items.find(item => item.id === draggableId);
+            if (!movedItem) return prev;
 
-            const [movedItem] = sourceItems.splice(source.index, 1);
-            destItems.splice(destination.index, 0, movedItem);
+            if (source.droppableId === destination.droppableId) {
+                const destVisibleItems = destCol.items.filter(filteredItem);
+                const currentVisibleIndex = destVisibleItems.findIndex(item => item.id === movedItem.id);
+                if (currentVisibleIndex === destination.index) {
+                    return prev;
+                }
+            }
+            const actualSourceIndex = sourceCol.items.findIndex(item => item.id === movedItem.id);
+            if (actualSourceIndex === -1) return prev;
+
+            if (destination.droppableId === 'complete'
+                && (movedItem.type === 'surah' || movedItem.type === 'part')
+                && !hasMindmapForItem(movedItem)
+            ) {
+                addToast(
+                    movedItem.type,
+                    'Cannot move to Complete',
+                    'Create a mindmap for this card before completing it.'
+                );
+                return prev;
+            }
+
+            const sourceItems = [...sourceCol.items];
+            sourceItems.splice(actualSourceIndex, 1);
+
+            const destItems = source.droppableId === destination.droppableId ? sourceItems : [...destCol.items];
+            const filteredDestItems = destItems.filter(filteredItem);
+
+            let insertIndex = destItems.length;
+            if (filteredDestItems.length > 0) {
+                if (destination.index >= filteredDestItems.length) {
+                    const lastFiltered = filteredDestItems[filteredDestItems.length - 1];
+                    const lastIndex = destItems.findIndex(item => item.id === lastFiltered.id);
+                    insertIndex = lastIndex === -1 ? destItems.length : lastIndex + 1;
+                } else {
+                    const target = filteredDestItems[destination.index];
+                    const targetIndex = destItems.findIndex(item => item.id === target.id);
+                    insertIndex = targetIndex === -1 ? destItems.length : targetIndex;
+                }
+            }
+
+            destItems.splice(insertIndex, 0, movedItem);
 
             const newColsMap = {
                 ...prev,
@@ -562,7 +619,7 @@ export default function TodoKanban({
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     if (movedItem.status !== 'complete') {
                         handleCompletionTrigger(movedItem, true);
-                        addToast('success', 'Moved to Complete', getMindmapCompletionInfo(movedItem));
+                        addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                     }
                 } else if (source.droppableId !== 'complete') {
                     handleCompletionTrigger(movedItem);
@@ -570,7 +627,9 @@ export default function TodoKanban({
             } else if (source.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     handleCompletionTrigger(movedItem, false);
-                    addToast('info', 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
+                    if (hasMindmapForItem(movedItem)) {
+                        addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
+                    }
                 }
             }
 
@@ -636,7 +695,7 @@ export default function TodoKanban({
 
             return newColsMap;
         });
-    }, [onKanbanStateChange, handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval]);
+    }, [onKanbanStateChange, handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, hasMindmapForItem, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval, filteredItem]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback((item: KanbanItem) => {
@@ -753,6 +812,14 @@ export default function TodoKanban({
         if (item.type === 'surah' || item.type === 'part') {
             const mindmap = item.data.mindmap;
             return !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl);
+        }
+        return false;
+    }, []);
+
+    const getHasSplits = useCallback((item: KanbanItem): boolean => {
+        if (item.type === 'surah') {
+            const mindmap = item.data.mindmap;
+            return !!(mindmap?.anchors && mindmap.anchors.length > 0);
         }
         return false;
     }, []);
@@ -1072,6 +1139,7 @@ export default function TodoKanban({
                             onViewVerseContext={handleCardViewVerseContext}
                             onViewSimilarityContext={handleCardViewSimilarityContext}
                             getHasMindmap={getHasMindmap}
+                            getHasSplits={getHasSplits}
                             getHasPremade={getHasPremadeForItem}
                             getDocLink={getDocLink}
                         />
@@ -1378,11 +1446,15 @@ export default function TodoKanban({
                             gap: 4,
                             boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
                             animation: 'slideInRight 0.3s ease-out',
-                            background: t.type === 'similarity' ? 'var(--warning)' :
-                                t.type === 'suspended' ? 'var(--danger)' :
-                                    t.type === 'info' ? 'var(--background-secondary)' : 'var(--success)',
+                            background: t.type === 'surah'
+                                ? 'color-mix(in srgb, #3b82f6 18%, var(--background-secondary))'
+                                : t.type === 'part'
+                                    ? 'color-mix(in srgb, var(--todo-part-purple) 18%, var(--background-secondary))'
+                                    : t.type === 'similarity'
+                                        ? 'color-mix(in srgb, var(--warning) 16%, var(--background-secondary))'
+                                        : 'color-mix(in srgb, var(--danger) 16%, var(--background-secondary))',
                             border: '1px solid var(--border)',
-                            color: t.type === 'info' ? 'var(--foreground)' : 'white',
+                            color: 'var(--foreground)',
                             minWidth: '180px',
                             fontSize: '0.85rem',
                             pointerEvents: 'auto',
@@ -1390,7 +1462,7 @@ export default function TodoKanban({
                             opacity: 1
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                {t.type === 'info' ? <Brain size={18} /> : <Check size={18} />}
+                                {t.type === 'similarity' ? <Brain size={18} /> : <Check size={18} />}
                                 <span style={{ fontWeight: 600 }}>{t.message}</span>
                                 {t.onUndo && (
                                     <button
@@ -1399,8 +1471,8 @@ export default function TodoKanban({
                                             setToasts(prev => prev.filter(toast => toast.id !== t.id));
                                         }}
                                         style={{
-                                            background: 'rgba(255,255,255,0.2)',
-                                            border: 'none',
+                                            background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                            border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
                                             color: 'inherit',
                                             padding: '0.2rem 0.5rem',
                                             borderRadius: '4px',
@@ -1412,6 +1484,23 @@ export default function TodoKanban({
                                         Undo
                                     </button>
                                 )}
+                                <button
+                                    onClick={() => {
+                                        setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                    }}
+                                    style={{
+                                        background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                        border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                        color: 'inherit',
+                                        padding: '0.2rem 0.5rem',
+                                        borderRadius: '4px',
+                                        fontSize: '0.7rem',
+                                        cursor: 'pointer',
+                                        marginLeft: t.onUndo ? 0 : 'auto'
+                                    }}
+                                >
+                                    Skip
+                                </button>
                             </div>
                             {t.info && (
                                 <div style={{
@@ -1426,7 +1515,7 @@ export default function TodoKanban({
                             <div
                                 className="toast-countdown"
                                 style={{
-                                    background: t.type === 'info' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.7)',
+                                    background: 'color-mix(in srgb, var(--foreground) 20%, transparent)',
                                     ['--toast-duration' as any]: '6s'
                                 }}
                             />

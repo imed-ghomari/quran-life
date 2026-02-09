@@ -26,8 +26,13 @@ export const metadata: Metadata = {
     description: 'Complete your learned Quran portions in manageable daily readings',
     manifest: '/manifest.json',
     icons: {
-        icon: '/logo.png',
-        apple: '/logo.png',
+        icon: [
+            { url: '/pwa-icon-mobile-192.png', sizes: '192x192', type: 'image/png' },
+            { url: '/pwa-icon-desktop-512.png', sizes: '512x512', type: 'image/png' },
+        ],
+        apple: [
+            { url: '/pwa-icon-mobile-192.png', sizes: '192x192', type: 'image/png' },
+        ],
     },
     formatDetection: {
         telephone: false,

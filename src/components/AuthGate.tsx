@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
 import Spinner from '@/components/ui/Spinner';
 import { OnlineStatusContext } from '@/components/Providers';
-import { isPrivilegedEmail } from '@/lib/privilegedEmails';
+import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
@@ -44,8 +44,11 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!status) return false;
     return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
   }, [latestSubscription?.status]);
-  const isOwnerEmail = useMemo(() => isPrivilegedEmail(user?.email), [user?.email]);
-  const hasAccess = hasActiveSubscription || isOwnerEmail || hasRecentCheckout;
+  const isPaymentBypass = useMemo(
+    () => isPaymentBypassEmail(user?.email),
+    [user?.email]
+  );
+  const hasAccess = hasActiveSubscription || isPaymentBypass || hasRecentCheckout;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
