@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SURAHS } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -673,6 +673,8 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
 
     const chartHeight = 210;
     const padding = { top: 12, right: 28, bottom: 38, left: 36 };
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [chartWidth, setChartWidth] = useState(0);
 
     const nonZeroData = data.filter(d => d.count > 0);
     if (nonZeroData.length === 0) {
@@ -691,21 +693,33 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
         clip: `reviews-chart-clip-${gradientSeed}`,
     };
 
-    // Use a ref to get the container width for responsiveness
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const el = containerRef.current;
+        const update = () => setChartWidth(Math.max(0, Math.floor(el.clientWidth)));
+        update();
+        const ro = new ResizeObserver(() => update());
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
     return (
-        <div className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
-            <svg width="100%" height={chartHeight} style={{ overflow: 'visible' }} preserveAspectRatio="none">
-                {/* We use percentage-based coordinates or just let SVG handle scaling if possible, 
-                    but for precise mapping we need the actual width. 
-                    Actually, we can use viewBox for responsiveness. */}
-                <svg viewBox={`0 0 500 ${chartHeight}`} width="100%" height="100%" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+        <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
+            {chartWidth > 0 && (
+                <svg
+                    width={chartWidth}
+                    height={chartHeight}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{ overflow: 'visible', display: 'block', width: '100%', height: chartHeight }}
+                >
                     <defs>
                         <clipPath id={ids.clip}>
-                            <rect x={padding.left} y={padding.top} width={500 - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
+                            <rect x={padding.left} y={padding.top} width={chartWidth - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
                         </clipPath>
                     </defs>
                     {(() => {
-                        const vWidth = 500;
+                        const vWidth = chartWidth;
                         const plotWidth = vWidth - padding.left - padding.right;
                         const plotHeight = chartHeight - padding.top - padding.bottom;
                         const span = Math.max(1, nonZeroData.length);
@@ -817,7 +831,7 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                         );
                     })()}
                 </svg>
-            </svg>
+            )}
         </div>
     );
 }
