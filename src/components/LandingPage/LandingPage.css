@@ -59,7 +59,7 @@
   --landing-accent-light: rgba(91, 143, 185, 0.1);
   --landing-bg-secondary: #f4f6f8;
   
-  --nav-bg: rgba(240, 240, 240, 0.9);
+  --nav-bg: var(--glass-bg);
   --hero-overlay-bg: rgba(255, 255, 255, 0.7);
 }
 
@@ -361,10 +361,12 @@
   margin-bottom: 4rem;
 }
 
-.section-title {
+.landing-wrapper .section-title {
+  display: block;
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 1rem;
+  text-align: center;
 }
 
 .section-header p {
@@ -785,4 +787,7 @@
 .toggle-option.active .save-badge {
   background: rgba(255, 255, 255, 0.2);
   color: white;
+}
+.section-header p {
+  white-space: nowrap;
 }

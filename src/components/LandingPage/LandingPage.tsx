@@ -126,7 +126,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <div className="section-header">
               <h2 className="section-title">The 3-Phase System</h2>
               <p>
-                A proven workflow designed to replace rote repetition with deep understanding.
+                A proven workflow designed to replace mindless repetition with deep understanding.
               </p>
             </div>
 
