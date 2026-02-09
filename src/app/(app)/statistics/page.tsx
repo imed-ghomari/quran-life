@@ -524,7 +524,7 @@ export default function StatisticsPage() {
                     </div>
                 </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 items-start">
                     <ProgressBarSection
                         title="Part Mindmaps"
                         icon={<MapIcon size={20} />}
@@ -588,18 +588,16 @@ export default function StatisticsPage() {
                     />
 
                     <ProgressBarSection
-    title="Daily Portion"
-    icon={<Repeat size={20} />}
-    stats={dailyPortionStats}
-    className="daily-portion-card"
-    minHeight={100}  // Add this line - adjust value as needed
-    headerSuffix={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
-            <Repeat size={14} />
-            <span>{dailyPortionStats.completions} cycles</span>
-        </div>
-    }
-/>
+                        title="Daily Portion"
+                        icon={<Repeat size={20} />}
+                        stats={dailyPortionStats}
+                        headerSuffix={
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                <Repeat size={14} />
+                                <span>{dailyPortionStats.completions} cycles</span>
+                            </div>
+                        }
+                    />
 
                     <FutureDueSection
                         stats={futureDueStats}
