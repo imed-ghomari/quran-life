@@ -11,7 +11,7 @@ import {
     useInstantReviewLogs,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { getNodeStability, getNodeDueDate } from '@/lib/types';
+import { getNodeStability, getNodeDueDate, MemoryNode } from '@/lib/types';
 
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 
@@ -344,7 +344,37 @@ export default function StatisticsPage() {
         today.setHours(0, 0, 0, 0);
 
         const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
-        const nodes = memoryNodes.filter(n => !n.surahId || targetSurahs.has(n.surahId));
+        const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
+        const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
+
+        const hasAnchorForNode = (node: MemoryNode) => {
+            if (node.type !== 'verse_segment' || !node.surahId) return true;
+            const mm = mindmaps.find(m => m.surahId === node.surahId);
+            const anchors = mm?.anchors || [];
+            if (anchors.length === 0) return false;
+            return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+        };
+
+        const nodes = memoryNodes.filter(node => {
+            if (node.type !== 'verse_segment' && node.type !== 'mindmap' && node.type !== 'part_mindmap') return false;
+
+            if (node.type === 'part_mindmap') {
+                if (activePart !== 5 && node.partId !== activePart) return false;
+                if (hasKanbanState && node.partId && !completeIds.has(`part-${node.partId}`)) return false;
+                return true;
+            }
+
+            if (!node.surahId) return false;
+            if (!targetSurahs.has(node.surahId)) return false;
+            if (skippedSurahs.has(node.surahId)) return false;
+
+            if (node.type === 'mindmap') {
+                if (hasKanbanState && !completeIds.has(`surah-${node.surahId}`)) return false;
+                return true;
+            }
+
+            return hasAnchorForNode(node);
+        });
 
         const dayCounts: Record<number, number> = {};
         let totalReviews = 0;
@@ -406,8 +436,48 @@ export default function StatisticsPage() {
         const totalDays = Math.max(1, maxDay - minDay + 1);
         const futureStart = Math.max(0, minDay);
         const futureDays = Math.max(1, maxDay - futureStart + 1);
-        const average = totalReviews / totalDays;
         const dailyLoad = totalFutureReviews / futureDays;
+
+        const filterLogByActivePart = (log: any) => {
+            if (!log.review_time) return false;
+            if (activePart === 5) return true;
+            const node = nodeById.get(log.nodeId);
+            if (!node) return false;
+            if (!node.surahId) return true;
+            return targetSurahs.has(node.surahId);
+        };
+
+        const validLogs = reviewLogs.filter(filterLogByActivePart).filter(log => {
+            const reviewDate = new Date(log.review_time);
+            return !isNaN(reviewDate.getTime());
+        });
+
+        let historyStartDate = new Date(today);
+        let historyDays = 1;
+        if (timeRange === 'all') {
+            const earliest = validLogs.reduce<Date | null>((min, log) => {
+                const d = new Date(log.review_time);
+                if (!min || d < min) return d;
+                return min;
+            }, null);
+            if (earliest) {
+                earliest.setHours(0, 0, 0, 0);
+                historyStartDate = earliest;
+                historyDays = Math.max(1, Math.ceil((today.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            }
+        } else {
+            historyDays = rangeDays;
+            historyStartDate = new Date(today);
+            historyStartDate.setDate(historyStartDate.getDate() - rangeDays + 1);
+        }
+
+        const historyCount = validLogs.filter(log => {
+            const reviewDate = new Date(log.review_time);
+            reviewDate.setHours(0, 0, 0, 0);
+            return reviewDate >= historyStartDate && reviewDate <= today;
+        }).length;
+
+        const average = historyCount / historyDays;
 
         const reviewsToday = reviewLogs.filter(log => {
             if (!log.review_time) return false;
@@ -432,7 +502,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, reviewLogs, showBacklog, timeRange]);
+    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, showBacklog, skippedSurahs, timeRange]);
 
     if (isLoading) {
         return (
