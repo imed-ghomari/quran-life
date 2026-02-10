@@ -8,6 +8,11 @@ const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     activePart: 5,
     learnedVerses: {},
     skippedSurahs: [],
+    todoDefaultFilter: 'all',
+    reviewSortOrder: 'surah_grouped',
+    completeExitBehavior: 'mindmap_only',
+    kanbanSortOrder: 'type_then_number',
+    dailyPortionMode: 'audio',
     theme: 'system',
     isOnboardingComplete: false,
     kanbanColumns: {},
@@ -240,7 +245,14 @@ export function useInstantListeningStats() {
         }));
     };
 
-    return useMemo(() => ({ stats, saveStats, isLoading, error }), [stats, isLoading, error]);
+    const deleteStats = (surahId: number) => {
+        if (!user) return Promise.resolve();
+        const existing = stats.find(s => s.surahId === surahId);
+        if (!existing?.id) return Promise.resolve();
+        return db.transact(db.tx.listeningStats[existing.id].delete());
+    };
+
+    return useMemo(() => ({ stats, saveStats, deleteStats, isLoading, error }), [stats, isLoading, error]);
 }
 
 // ==========================================
@@ -256,7 +268,7 @@ export function useInstantListeningProgress() {
 
     const progress = useMemo(() => (data?.listeningProgress || []) as unknown as any[], [data?.listeningProgress]);
 
-    const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number) => {
+    const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
         const id = existing ? existing.id : crypto.randomUUID();
@@ -265,12 +277,19 @@ export function useInstantListeningProgress() {
             partId,
             lastVerseIndex,
             cycles: cycles !== undefined ? cycles : (existing?.cycles || 0),
-            updatedAt: new Date().toISOString(),
+            updatedAt: updatedAt || new Date().toISOString(),
             userId: user.id
         }));
     };
 
-    return useMemo(() => ({ progress, saveProgress, isLoading, error }), [progress, isLoading, error]);
+    const deleteProgress = (partId: number) => {
+        if (!user) return Promise.resolve();
+        const existing = progress.find(p => p.partId === partId);
+        if (!existing?.id) return Promise.resolve();
+        return db.transact(db.tx.listeningProgress[existing.id].delete());
+    };
+
+    return useMemo(() => ({ progress, saveProgress, deleteProgress, isLoading, error }), [progress, isLoading, error]);
 }
 
 // ==========================================

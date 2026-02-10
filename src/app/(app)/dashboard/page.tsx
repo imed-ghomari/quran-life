@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
 import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
-import { Verse, QuranPart, MemoryNode, AppSettings } from '@/lib/types';
+import { Verse, QuranPart, MemoryNode, AppSettings, getNodeDueDate } from '@/lib/types';
 import {
     CheckCircle,
     BookOpen,
@@ -21,7 +21,9 @@ import {
     Move,
     PenTool,
     RotateCcw,
-    AlertCircle
+    AlertCircle,
+    Undo2,
+    Redo2
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import MindmapViewer from '@/components/MindmapViewer';
@@ -61,8 +63,8 @@ export default function TodayPage() {
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
     const { saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
     const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
-    const { stats: listeningStats, saveStats: saveListeningStats } = useInstantListeningStats();
-    const { progress: listeningProgress, saveProgress: saveListeningProgress } = useInstantListeningProgress();
+    const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
+    const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
 
     // Debug: Log nodes and due nodes
     useEffect(() => {
@@ -130,6 +132,20 @@ export default function TodayPage() {
 
         if (!filteredDueNodes.length) return [];
 
+        const reviewSortOrder = settings?.reviewSortOrder ?? 'surah_grouped';
+        if (reviewSortOrder === 'due_date') {
+            const originalIndex = new Map<string, number>();
+            filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
+            return [...filteredDueNodes].sort((a, b) => {
+                const aDue = getNodeDueDate(a);
+                const bDue = getNodeDueDate(b);
+                const aTime = aDue ? new Date(aDue).getTime() : 0;
+                const bTime = bDue ? new Date(bDue).getTime() : 0;
+                if (aTime !== bTime) return aTime - bTime;
+                return (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0);
+            });
+        }
+
         const originalIndex = new Map<string, number>();
         filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
 
@@ -179,7 +195,7 @@ export default function TodayPage() {
         }
 
         return ordered;
-    }, [dueNodes, settings?.kanbanColumns, mindmaps]);
+    }, [dueNodes, settings?.kanbanColumns, mindmaps, settings?.reviewSortOrder]);
 
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {
@@ -323,6 +339,11 @@ export default function TodayPage() {
         }
     }, [highlightedWordIndex, smoothScrollContainer]);
 
+    useEffect(() => {
+        const mode = settings?.dailyPortionMode ?? 'audio';
+        setReadOnlyMode(mode === 'reading');
+    }, [settings?.dailyPortionMode]);
+
     // Keep review index in sync with changing due queue to avoid blanks
     useEffect(() => {
         if (orderedDueNodes.length === 0) {
@@ -416,7 +437,128 @@ export default function TodayPage() {
     }
     const [toasts, setToasts] = useState<ToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
-    const [lastGrading, setLastGrading] = useState<{ node: MemoryNode; index: number; errorId?: string } | null>(null);
+    type ReviewUndoEntry = {
+        kind: 'review';
+        id: string;
+        beforeNode: MemoryNode;
+        afterNode: MemoryNode;
+        beforeIndex: number;
+        afterIndex: number;
+        errorId?: string;
+        errorPayload?: any;
+        toastType: 'success' | 'error' | 'postpone';
+        toastMessage: string;
+        toastInfo?: string;
+        createdAt: string;
+    };
+
+    type DailyUndoEntry = {
+        kind: 'daily_complete';
+        id: string;
+        partId: number;
+        beforeProgress: { lastVerseIndex: number; cycles: number } | null;
+        afterProgress: { lastVerseIndex: number; cycles: number };
+        beforeUpdatedAt?: string;
+        afterUpdatedAt: string;
+        beforeStats: Record<number, any | null>;
+        afterStats: Record<number, any>;
+        beforeListeningComplete: boolean;
+        afterListeningComplete: boolean;
+        toastType: 'success';
+        toastMessage: string;
+        toastInfo?: string;
+        createdAt: string;
+    };
+
+    type UndoEntry = ReviewUndoEntry | DailyUndoEntry;
+    const UNDO_STACK_STORAGE_KEY = 'review_undo_stack_v1';
+    const REDO_STACK_STORAGE_KEY = 'review_redo_stack_v1';
+    const UNDO_STACK_LIMIT = 10;
+
+    const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+    const undoStackRef = useRef<UndoEntry[]>([]);
+    const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+    const redoStackRef = useRef<UndoEntry[]>([]);
+
+    useEffect(() => {
+        const stored = localStorage.getItem(UNDO_STACK_STORAGE_KEY);
+        if (!stored) return;
+        try {
+            const parsed = JSON.parse(stored) as UndoEntry[];
+            if (Array.isArray(parsed)) {
+                const normalized = parsed.filter((entry: any) => {
+                    if (!entry?.kind) return false;
+                    if (entry.kind === 'review') {
+                        return entry.beforeNode && entry.afterNode && typeof entry.beforeIndex === 'number' && typeof entry.afterIndex === 'number';
+                    }
+                    if (entry.kind === 'daily_complete') {
+                        return typeof entry.partId === 'number' && entry.afterProgress && entry.beforeStats && entry.afterStats;
+                    }
+                    return false;
+                }) as UndoEntry[];
+                const trimmed = normalized.slice(-UNDO_STACK_LIMIT);
+                setUndoStack(trimmed);
+                undoStackRef.current = trimmed;
+            }
+        } catch (e) {
+            console.warn('Failed to load undo history', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        const stored = localStorage.getItem(REDO_STACK_STORAGE_KEY);
+        if (!stored) return;
+        try {
+            const parsed = JSON.parse(stored) as UndoEntry[];
+            if (Array.isArray(parsed)) {
+                const normalized = parsed.filter((entry: any) => {
+                    if (!entry?.kind) return false;
+                    if (entry.kind === 'review') {
+                        return entry.beforeNode && entry.afterNode && typeof entry.beforeIndex === 'number' && typeof entry.afterIndex === 'number';
+                    }
+                    if (entry.kind === 'daily_complete') {
+                        return typeof entry.partId === 'number' && entry.afterProgress && entry.beforeStats && entry.afterStats;
+                    }
+                    return false;
+                }) as UndoEntry[];
+                const trimmed = normalized.slice(-UNDO_STACK_LIMIT);
+                setRedoStack(trimmed);
+                redoStackRef.current = trimmed;
+            }
+        } catch (e) {
+            console.warn('Failed to load redo history', e);
+        }
+    }, []);
+
+    const persistUndoStack = useCallback((nextStack: UndoEntry[]) => {
+        undoStackRef.current = nextStack;
+        setUndoStack(nextStack);
+        try {
+            localStorage.setItem(UNDO_STACK_STORAGE_KEY, JSON.stringify(nextStack));
+        } catch (e) {
+            console.warn('Failed to persist undo history', e);
+        }
+    }, []);
+
+    const persistRedoStack = useCallback((nextStack: UndoEntry[]) => {
+        redoStackRef.current = nextStack;
+        setRedoStack(nextStack);
+        try {
+            localStorage.setItem(REDO_STACK_STORAGE_KEY, JSON.stringify(nextStack));
+        } catch (e) {
+            console.warn('Failed to persist redo history', e);
+        }
+    }, []);
+
+    const clearRedoStack = useCallback(() => {
+        persistRedoStack([]);
+    }, [persistRedoStack]);
+
+    const pushUndoEntry = useCallback((entry: UndoEntry) => {
+        const nextStack = [...undoStackRef.current, entry].slice(-UNDO_STACK_LIMIT);
+        persistUndoStack(nextStack);
+        clearRedoStack();
+    }, [persistUndoStack, clearRedoStack]);
 
     const addToast = useCallback((type: 'success' | 'error' | 'postpone', message: string, info?: string) => {
         const key = `${type}|${message}|${info || ''}`;
@@ -630,19 +772,21 @@ export default function TodayPage() {
         if (!node || !node.scheduler) return;
 
         const errorId = !remembered ? crypto.randomUUID() : undefined;
-        // Save state for undo BEFORE updating
-        setLastGrading({
-            node: JSON.parse(JSON.stringify(node)), // Deep copy original
-            index: currentReviewIndex,
-            errorId
-        });
+        let errorPayload: any | undefined;
+        const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
+            node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
+                `${getSurah(node.surahId!)?.arabicName} (${node.startVerse}-${node.endVerse})`;
+
+        const toastType = remembered ? 'success' : 'error';
+        const toastMessage = remembered ? 'Remembered' : 'Forgot';
 
         // Use FSRS algorithm
         const customWeightsFromInstant = customWeights;
         const result = reviewCard(node.scheduler as any, remembered, node.id, customWeightsFromInstant);
+        const afterNode = { ...node, scheduler: result.newState };
 
         // Save updated node with new FSRS state
-        updateInstantNode({ ...node, scheduler: result.newState });
+        updateInstantNode(afterNode);
 
         // Sanitize log to remove undefined and convert types
         const stateToNumber = (state: string): number => {
@@ -693,14 +837,29 @@ export default function TodayPage() {
             const abs = node.startVerse && node.surahId ? surahAyahToAbsolute(node.surahId, node.startVerse) : undefined;
             if (abs !== undefined) errorToSave.absoluteAyah = abs;
 
+            errorPayload = errorToSave;
             saveInstantReviewError(errorToSave);
         }
 
-        const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
-            node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
-                `${getSurah(node.surahId!)?.arabicName} (${node.startVerse}-${node.endVerse})`;
+        const afterIndex = currentReviewIndex < orderedDueNodes.length - 1 ? currentReviewIndex + 1 : currentReviewIndex;
 
-        addToast(remembered ? 'success' : 'error', remembered ? 'Remembered' : 'Forgot', info);
+        // Save state for undo BEFORE updating
+        pushUndoEntry({
+            kind: 'review',
+            id: crypto.randomUUID(),
+            beforeNode: JSON.parse(JSON.stringify(node)), // Deep copy original
+            afterNode: JSON.parse(JSON.stringify(afterNode)),
+            beforeIndex: currentReviewIndex,
+            afterIndex,
+            errorId,
+            errorPayload,
+            toastType,
+            toastMessage,
+            toastInfo: info,
+            createdAt: new Date().toISOString()
+        });
+
+        addToast(toastType, toastMessage, info);
 
         if (currentReviewIndex < orderedDueNodes.length - 1) {
             setCurrentReviewIndex(prev => prev + 1);
@@ -717,27 +876,39 @@ export default function TodayPage() {
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
 
-        setLastGrading({
-            node: JSON.parse(JSON.stringify(node)),
-            index: currentReviewIndex,
-        });
+        const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
+            node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
+                `${getSurah(node.surahId!)?.arabicName} (${node.startVerse}-${node.endVerse})`;
 
         // Postpone by 1 day
         const scheduler = node.scheduler as any;
         const due = new Date(scheduler.due || scheduler.dueDate || new Date());
         due.setDate(due.getDate() + 1);
 
-        updateInstantNode({
+        const afterNode = {
             ...node,
             scheduler: {
                 ...scheduler,
                 due: due.toISOString()
             }
-        });
+        };
 
-        const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
-            node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
-                `${getSurah(node.surahId!)?.arabicName} (${node.startVerse}-${node.endVerse})`;
+        updateInstantNode(afterNode);
+
+        const afterIndex = currentReviewIndex < orderedDueNodes.length - 1 ? currentReviewIndex + 1 : currentReviewIndex;
+
+        pushUndoEntry({
+            kind: 'review',
+            id: crypto.randomUUID(),
+            beforeNode: JSON.parse(JSON.stringify(node)),
+            afterNode: JSON.parse(JSON.stringify(afterNode)),
+            beforeIndex: currentReviewIndex,
+            afterIndex,
+            toastType: 'postpone',
+            toastMessage: 'Postponed to tomorrow',
+            toastInfo: info,
+            createdAt: new Date().toISOString()
+        });
 
         addToast('postpone', 'Postponed to tomorrow', info);
 
@@ -751,19 +922,79 @@ export default function TodayPage() {
         }
     }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode]);
 
-    const handleUndo = () => {
-        if (!lastGrading) return;
-        updateInstantNode(lastGrading.node);
-        if (lastGrading.errorId) {
-            removeInstantReviewError(lastGrading.errorId);
+    const handleUndo = useCallback((source: 'toast' | 'keyboard', toastId?: string) => {
+        const stack = undoStackRef.current;
+        if (!stack.length) return;
+        const last = stack[stack.length - 1];
+        const nextStack = stack.slice(0, -1);
+        persistUndoStack(nextStack);
+        const nextRedo = [...redoStackRef.current, last].slice(-UNDO_STACK_LIMIT);
+        persistRedoStack(nextRedo);
+
+        if (last.kind === 'review') {
+            updateInstantNode(last.beforeNode);
+            if (last.errorId) {
+                removeInstantReviewError(last.errorId);
+            }
+            setCurrentReviewIndex(last.beforeIndex);
+            setRevealedChunks(0);
+            setCurrentVerseInReview(0);
+            setShowGrading(true); // Return to grading view of the undone card
+        } else {
+            if (last.beforeProgress) {
+                saveListeningProgress(last.partId, last.beforeProgress.lastVerseIndex, last.beforeProgress.cycles, last.beforeUpdatedAt);
+            } else {
+                deleteListeningProgress(last.partId);
+            }
+            Object.entries(last.beforeStats).forEach(([surahIdStr, stats]) => {
+                const surahId = Number(surahIdStr);
+                if (!Number.isFinite(surahId)) return;
+                if (stats) {
+                    saveListeningStats(surahId, stats);
+                } else {
+                    deleteListeningStats(surahId);
+                }
+            });
+            setListeningComplete(last.beforeListeningComplete);
         }
-        setCurrentReviewIndex(lastGrading.index);
-        setRevealedChunks(0);
-        setCurrentVerseInReview(0);
-        setShowGrading(true); // Return to grading view of the undone card
-        setLastGrading(null);
-        setToasts([]);
-    };
+        if (source === 'toast' && toastId) {
+            setToasts(prev => prev.filter(t => t.id !== toastId));
+        }
+        addToast(last.toastType, `Undid ${last.toastMessage}`, last.toastInfo);
+    }, [persistUndoStack, persistRedoStack, updateInstantNode, removeInstantReviewError, addToast, saveListeningProgress, deleteListeningProgress, saveListeningStats, deleteListeningStats]);
+
+    const handleRedo = useCallback((source: 'toast' | 'keyboard', toastId?: string) => {
+        const stack = redoStackRef.current;
+        if (!stack.length) return;
+        const last = stack[stack.length - 1];
+        const nextStack = stack.slice(0, -1);
+        persistRedoStack(nextStack);
+        const nextUndo = [...undoStackRef.current, last].slice(-UNDO_STACK_LIMIT);
+        persistUndoStack(nextUndo);
+
+        if (last.kind === 'review') {
+            updateInstantNode(last.afterNode);
+            if (last.errorPayload) {
+                saveInstantReviewError(last.errorPayload);
+            }
+            setCurrentReviewIndex(last.afterIndex);
+            setRevealedChunks(0);
+            setCurrentVerseInReview(0);
+            setShowGrading(false);
+        } else {
+            saveListeningProgress(last.partId, last.afterProgress.lastVerseIndex, last.afterProgress.cycles, last.afterUpdatedAt);
+            Object.entries(last.afterStats).forEach(([surahIdStr, stats]) => {
+                const surahId = Number(surahIdStr);
+                if (!Number.isFinite(surahId)) return;
+                saveListeningStats(surahId, stats);
+            });
+            setListeningComplete(last.afterListeningComplete);
+        }
+        if (source === 'toast' && toastId) {
+            setToasts(prev => prev.filter(t => t.id !== toastId));
+        }
+        addToast(last.toastType, `Redid ${last.toastMessage}`, last.toastInfo);
+    }, [persistRedoStack, persistUndoStack, updateInstantNode, saveInstantReviewError, addToast, saveListeningProgress, saveListeningStats]);
 
 
     const handleCompleteListening = () => {
@@ -783,22 +1014,87 @@ export default function TodayPage() {
             cycles += 1;
         }
 
-        saveListeningProgress(settings.activePart, next, cycles);
+        const beforeProgress = partProgress
+            ? { lastVerseIndex: partProgress.lastVerseIndex, cycles: partProgress.cycles || 0 }
+            : null;
+        const beforeUpdatedAt = partProgress?.updatedAt;
+        const afterProgress = { lastVerseIndex: next, cycles };
+        const afterUpdatedAt = new Date().toISOString();
+
+        saveListeningProgress(settings.activePart, next, cycles, afterUpdatedAt);
 
         // Update stats for each surah in the portion
         const surahsInPortion = new Set(todaysPortion.map(v => v.surahId));
+        const beforeStats: Record<number, any | null> = {};
+        const afterStats: Record<number, any> = {};
+        const nowIso = afterUpdatedAt;
+
         surahsInPortion.forEach(surahId => {
             const existing = listeningStats.find(s => s.surahId === surahId);
-            saveListeningStats(surahId, {
-                ...existing,
-                surahId,
+            if (existing) {
+                const { id, userId, ...rest } = existing as any;
+                beforeStats[surahId] = rest;
+            } else {
+                beforeStats[surahId] = null;
+            }
+
+            const nextStats = {
+                ...(existing || {}),
                 totalMinutes: (existing?.totalMinutes || 0) + 5, // Assume 5 mins per portion per surah for now
-                lastListened: new Date().toISOString()
+                lastListened: nowIso
+            };
+
+            const { id, userId, ...restNext } = nextStats as any;
+            afterStats[surahId] = restNext;
+
+            saveListeningStats(surahId, {
+                ...restNext,
+                surahId
             });
+        });
+
+        pushUndoEntry({
+            kind: 'daily_complete',
+            id: crypto.randomUUID(),
+            partId: settings.activePart,
+            beforeProgress,
+            afterProgress,
+            beforeUpdatedAt,
+            afterUpdatedAt,
+            beforeStats,
+            afterStats,
+            beforeListeningComplete: listeningComplete,
+            afterListeningComplete: true,
+            toastType: 'success',
+            toastMessage: 'Completed daily portion',
+            createdAt: nowIso
         });
 
         setListeningComplete(true);
     };
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const isUndo = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z';
+            const isRedo = (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z';
+            if (!isUndo && !isRedo) return;
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName.toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || (target as HTMLElement).isContentEditable) {
+                    return;
+                }
+            }
+            e.preventDefault();
+            if (isRedo) {
+                handleRedo('keyboard');
+            } else {
+                handleUndo('keyboard');
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [handleUndo, handleRedo]);
 
     // Get content
     const getCurrentReviewContent = () => {
@@ -1078,7 +1374,29 @@ export default function TodayPage() {
                     onClose={() => setActivePartEditor(null)}
                 />
             )}
-            <h1 className="hidden md:block text-2xl font-bold mb-6">Today</h1>
+            <div className="today-header">
+                <h1 className="text-2xl font-bold">Today</h1>
+                <div className="today-header-actions">
+                    <button
+                        className="today-header-btn"
+                        onClick={() => handleUndo('keyboard')}
+                        disabled={undoStack.length === 0}
+                        title="Undo (⌘/Ctrl+Z)"
+                        aria-label="Undo"
+                    >
+                        <Undo2 size={16} />
+                    </button>
+                    <button
+                        className="today-header-btn"
+                        onClick={() => handleRedo('keyboard')}
+                        disabled={redoStack.length === 0}
+                        title="Redo (⌘/Ctrl+Shift+Z)"
+                        aria-label="Redo"
+                    >
+                        <Redo2 size={16} />
+                    </button>
+                </div>
+            </div>
 
             <div className="today-grid">
                 {/* Reviews Col */}
@@ -1309,7 +1627,7 @@ export default function TodayPage() {
                                 <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
                             ) : (
                                 <>
-                                    <div className="today-card-content">
+                                    <div className={`today-card-content ${readOnlyMode ? 'today-card-content--read' : 'today-card-content--audio'}`}>
                                         {!readOnlyMode ? (
                                             <div className="audio-mode-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                                                 <div className="mb-2" style={{ flexShrink: 0 }}>
@@ -1445,21 +1763,6 @@ export default function TodayPage() {
                                 t.type === 'postpone' ? <Brain size={18} /> : <X size={18} />}
                             <span style={{ fontWeight: 600 }}>{t.message}</span>
                             <button
-                                onClick={handleUndo}
-                                style={{
-                                    background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
-                                    border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
-                                    color: 'inherit',
-                                    padding: '0.2rem 0.5rem',
-                                    borderRadius: '4px',
-                                    fontSize: '0.7rem',
-                                    cursor: 'pointer',
-                                    marginLeft: 'auto'
-                                }}
-                            >
-                                Undo
-                            </button>
-                            <button
                                 onClick={() => {
                                     setToasts(prev => prev.filter(toast => toast.id !== t.id));
                                 }}
@@ -1471,7 +1774,7 @@ export default function TodayPage() {
                                     borderRadius: '4px',
                                     fontSize: '0.7rem',
                                     cursor: 'pointer',
-                                    marginLeft: 0
+                                    marginLeft: 'auto'
                                 }}
                             >
                                 Skip

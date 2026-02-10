@@ -19,7 +19,7 @@ interface KanbanColumnProps {
     onImportMindmap: (item: KanbanItem) => void;
     onDeleteMindmap: (item: KanbanItem) => void;
     onExportMindmap?: (item: KanbanItem) => void;
-    onResetMindmap?: (item: KanbanItem) => void;
+    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => void;
     onChangeSplits: (item: KanbanItem) => void;
     onViewVerseContext?: (item: KanbanItem) => void;
     onViewSimilarityContext?: (item: KanbanItem) => void;
@@ -133,7 +133,7 @@ const KanbanColumn = ({
                                 onImportMindmap={() => onImportMindmap(item)}
                                 onDeleteMindmap={() => onDeleteMindmap(item)}
                                 onExportMindmap={onExportMindmap ? () => onExportMindmap(item) : undefined}
-                                onResetMindmap={onResetMindmap ? () => onResetMindmap(item) : undefined}
+                                onResetMindmap={onResetMindmap ? (resetMemoryNodes) => onResetMindmap(item, resetMemoryNodes) : undefined}
                                 onChangeSplits={() => onChangeSplits(item)}
                                 onViewVerseContext={onViewVerseContext ? () => onViewVerseContext(item) : undefined}
                                 onViewSimilarityContext={onViewSimilarityContext ? () => onViewSimilarityContext(item) : undefined}

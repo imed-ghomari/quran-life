@@ -20,7 +20,7 @@ interface KanbanCardProps {
     onImportMindmap: () => void;
     onDeleteMindmap: () => void;
     onExportMindmap?: () => void;
-    onResetMindmap?: () => void;
+    onResetMindmap?: (resetMemoryNodes: boolean) => void;
     onChangeSplits: () => void;
     onViewVerseContext?: () => void;
     onViewSimilarityContext?: () => void;
@@ -74,16 +74,20 @@ const KanbanCard = ({
     const handleResetClick = async () => {
         setMenuOpen(false);
 
-        if (window.confirm("Reset this mindmap to the original shared version? Your edits will be replaced.")) {
-            setIsDeleting(true);
-            try {
-                await new Promise(resolve => setTimeout(resolve, 500));
-                await onResetMindmap?.();
-            } catch (e) {
-                console.error("Reset failed", e);
-            } finally {
-                setIsDeleting(false);
-            }
+        if (!window.confirm("Reset this mindmap to the original shared version? Your edits will be replaced.")) return;
+
+        const resetMemoryNodes = window.confirm(
+            "Also reset the memory nodes related to this mindmap?\n\nOK = Reset mindmap + reset memory nodes (review progress).\nCancel = Reset mindmap only."
+        );
+
+        setIsDeleting(true);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await onResetMindmap?.(resetMemoryNodes);
+        } catch (e) {
+            console.error("Reset failed", e);
+        } finally {
+            setIsDeleting(false);
         }
     };
 

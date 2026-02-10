@@ -77,6 +77,7 @@ export interface AudioSettings {
     selectedReciterId: string;
     playbackSpeed?: PlaybackSpeed;
     playbackState?: {
+        reciterId?: string;
         surahId: number;
         ayahId: number;
         timestamp: number;
@@ -90,6 +91,11 @@ export interface AppSettings {
     activePart: QuranPart;
     learnedVerses: { [surahId: string]: number[] };
     skippedSurahs?: number[];
+    todoDefaultFilter?: 'all' | 'maintenance' | 'construction';
+    reviewSortOrder?: 'surah_grouped' | 'due_date';
+    completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
+    kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
+    dailyPortionMode?: 'audio' | 'reading';
     theme?: 'light' | 'dark' | 'system';
     updatedAt?: string;
     isOnboardingComplete?: boolean;

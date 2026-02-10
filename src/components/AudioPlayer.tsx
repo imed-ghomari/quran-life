@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { PlaybackSpeed, getAudioPath, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
 import { useInstantSettings } from '@/hooks/useInstantData';
-import { ChevronDown, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
 interface AudioPlayerProps {
@@ -51,6 +51,7 @@ export default function AudioPlayer({
     const [progress, setProgress] = useState(0);
     const [elapsedTime, setElapsedTime] = useState(0);
     const savedPlaybackStateRef = useRef<{ surahId: number; ayahId: number; timestamp: number } | null>(null);
+    const [isCompleted, setIsCompleted] = useState(false);
 
     const currentVerse = verses[currentVerseIndex];
     const totalVerses = verses.length;
@@ -127,14 +128,23 @@ export default function AudioPlayer({
     useEffect(() => {
         if (!selectedReciter || !currentVerse) return;
 
+        let isActive = true;
+        const reciterId = selectedReciter.id;
+
         const load = async () => {
             setIsLoadingReciter(true);
             const data = await loadRecitationData(selectedReciter, currentVerse.surahId);
+            if (!isActive) return;
+            // Guard against stale resolves when reciter changes mid-load
+            if (selectedReciter.id !== reciterId) return;
             setRecitationData(data);
             setIsLoadingReciter(false);
         };
 
         load();
+        return () => {
+            isActive = false;
+        };
     }, [selectedReciter, currentVerse?.surahId]);
 
     useEffect(() => {
@@ -170,6 +180,16 @@ export default function AudioPlayer({
         setUseFallback(false);
     }, [currentVerse, selectedReciter]);
 
+    useEffect(() => {
+        if (currentVerseIndex < totalVerses - 1) {
+            setIsCompleted(false);
+        }
+    }, [currentVerseIndex, totalVerses]);
+
+    useEffect(() => {
+        setIsCompleted(false);
+    }, [verses]);
+
     const safePlay = useCallback(() => {
         if (!audioRef.current) return;
         audioRef.current.play().catch((err) => {
@@ -182,6 +202,7 @@ export default function AudioPlayer({
     // Main Audio Loading Logic
     useEffect(() => {
         if (!currentVerse || !selectedReciter) return;
+        if (isLoadingReciter && !recitationData) return;
 
         let url = '';
         let startTime = 0;
@@ -207,14 +228,17 @@ export default function AudioPlayer({
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
 
                 let desiredStartTime = startTime;
-                const saved = savedPlaybackStateRef.current;
+                const saved = savedPlaybackStateRef.current as (typeof savedPlaybackStateRef.current & { reciterId?: string }) | null;
                 if (
                     saved &&
                     saved.surahId === currentVerse.surahId &&
                     saved.ayahId === currentVerse.ayahId &&
                     Number.isFinite(saved.timestamp)
                 ) {
-                    desiredStartTime = saved.timestamp;
+                    const savedReciterId = saved.reciterId ?? settings?.audioSettings?.selectedReciterId;
+                    if (savedReciterId && savedReciterId === selectedReciter.id) {
+                        desiredStartTime = saved.timestamp;
+                    }
                     if (endTime !== null) {
                         const clamped = Math.min(Math.max(desiredStartTime, startTime), Math.max(startTime, endTime - 0.05));
                         desiredStartTime = clamped;
@@ -247,7 +271,7 @@ export default function AudioPlayer({
             onWordIndexChange?.(-1);
             lastWordIndexRef.current = -1;
         }
-    }, [currentVerse, selectedReciter, recitationData, speed, useFallback]); 
+    }, [currentVerse, selectedReciter, recitationData, speed, useFallback, isLoadingReciter, settings?.audioSettings?.selectedReciterId]); 
 
     // Handle Play/Pause effect
     useEffect(() => {
@@ -265,6 +289,7 @@ export default function AudioPlayer({
                             playbackSpeed: speed,
                             updatedAt: new Date().toISOString(),
                             playbackState: {
+                                reciterId: selectedReciter.id,
                                 surahId: currentVerse.surahId,
                                 ayahId: currentVerse.ayahId,
                                 timestamp: audioRef.current.currentTime
@@ -289,6 +314,7 @@ export default function AudioPlayer({
                     onVerseChange(currentVerseIndex + 1);
                 } else {
                     setIsPlaying(false);
+                    setIsCompleted(true);
                 }
                 return;
             }
@@ -371,6 +397,7 @@ export default function AudioPlayer({
             onVerseChange(currentVerseIndex + 1);
         } else {
             setIsPlaying(false);
+            setIsCompleted(true);
         }
     }, [currentVerseIndex, totalVerses, onVerseChange]);
 
@@ -385,6 +412,15 @@ export default function AudioPlayer({
         const id = e.target.value;
         const reciter = reciters.find(r => r.id === id);
         if (reciter) {
+            setRecitationData(null);
+            setRecitationDataMap({});
+            setActiveSegments(null);
+            setVerseEndTime(null);
+            setVerseStartTime(0);
+            setElapsedTime(0);
+            onWordIndexChange?.(-1);
+            lastWordIndexRef.current = -1;
+            setIsLoadingReciter(true);
             setSelectedReciter(reciter);
             localStorage.setItem('selected_reciter_id', id);
             
@@ -413,7 +449,47 @@ export default function AudioPlayer({
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const togglePlay = () => setIsPlaying(!isPlaying);
+    const togglePlay = () => {
+        if (isCompleted) return;
+        setIsPlaying(!isPlaying);
+    };
+
+    const restartDailyPortion = () => {
+        if (!selectedReciter || verses.length === 0) return;
+        setIsCompleted(false);
+
+        const firstVerse = verses[0];
+        const info = getAudioInfoForVerse(selectedReciter, recitationData, firstVerse.surahId, firstVerse.ayahId);
+        const desiredStartTime = info?.startTime || 0;
+
+        onVerseChange(0);
+
+        if (audioRef.current) {
+            if (Number.isFinite(desiredStartTime)) {
+                audioRef.current.currentTime = desiredStartTime;
+            }
+            setElapsedTime(desiredStartTime);
+            onWordIndexChange?.(-1);
+            lastWordIndexRef.current = -1;
+            if (isPlaying) {
+                safePlay();
+            }
+        }
+
+        saveSettings({
+            audioSettings: {
+                selectedReciterId: selectedReciter.id,
+                playbackSpeed: speed,
+                updatedAt: new Date().toISOString(),
+                playbackState: {
+                    reciterId: selectedReciter.id,
+                    surahId: firstVerse.surahId,
+                    ayahId: firstVerse.ayahId,
+                    timestamp: desiredStartTime
+                }
+            }
+        });
+    };
     
     const changeSpeed = () => {
         const currentIndex = SPEED_OPTIONS.indexOf(speed);
@@ -533,6 +609,15 @@ export default function AudioPlayer({
 
             {/* Controls */}
             <div className="player-controls">
+                <button
+                    className="player-btn"
+                    onClick={restartDailyPortion}
+                    title="Restart daily portion"
+                    disabled={verses.length === 0}
+                >
+                    <RotateCcw size={18} />
+                </button>
+
                 <button 
                     className="player-btn" 
                     onClick={() => onVerseChange(Math.max(0, currentVerseIndex - 1))} 
@@ -541,7 +626,7 @@ export default function AudioPlayer({
                     <SkipBack size={20} />
                 </button>
 
-                <button className="player-btn player-btn-main" onClick={togglePlay}>
+                <button className="player-btn player-btn-main" onClick={togglePlay} disabled={isCompleted}>
                     {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
                 </button>
 

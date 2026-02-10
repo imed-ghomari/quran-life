@@ -20,6 +20,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isOnline = useContext(OnlineStatusContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
+  const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
   const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
     subscriptions: {
       $: {
@@ -55,26 +56,31 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (hasActiveSubscription) {
       window.localStorage.removeItem('checkout:completed');
       setHasRecentCheckout(false);
+      setHasCheckedCheckout(true);
       return;
     }
     const raw = window.localStorage.getItem('checkout:completed');
     if (!raw) {
       setHasRecentCheckout(false);
+      setHasCheckedCheckout(true);
       return;
     }
     const timestamp = Number(raw);
     if (!Number.isFinite(timestamp)) {
       window.localStorage.removeItem('checkout:completed');
       setHasRecentCheckout(false);
+      setHasCheckedCheckout(true);
       return;
     }
     const isFresh = Date.now() - timestamp <= CHECKOUT_GRACE_PERIOD_MS;
     setHasRecentCheckout(isFresh);
+    setHasCheckedCheckout(true);
   }, [hasActiveSubscription]);
 
   useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
+    if (!hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout) return;
     if (!isOnline) return;
 
     if (typeof window !== 'undefined') {
@@ -117,7 +123,15 @@ export default function AuthGate({ children }: AuthGateProps) {
     return <>{children}</>;
   }
 
-  if (isAuthLoading || isSubscriptionLoading) {
+  const needsCheckoutDecision =
+    !hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout;
+  const isRedirecting =
+    isOnline
+    && user
+    && !needsCheckoutDecision
+    && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
+
+  if (isAuthLoading || isSubscriptionLoading || needsCheckoutDecision || isRedirecting) {
     return (
       <div style={{
         minHeight: '100vh',
