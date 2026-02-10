@@ -79,7 +79,7 @@ interface TodoKanbanProps {
     onKanbanStateChange?: (state: Record<string, string[]>) => void;
     defaultFilter?: 'all' | 'maintenance' | 'construction';
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
-    kanbanSortOrder?: 'type_then_number' | 'number_only';
+    kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
 }
 
 export default function TodoKanban({
@@ -485,6 +485,9 @@ export default function TodoKanban({
 
         // Auto-sort logic
         const sortItems = (items: KanbanItem[]) => {
+            if (kanbanSortOrder === 'manual') {
+                return items;
+            }
             const getNumber = (item: KanbanItem) => {
                 if (item.type === 'surah') return item.data.surah.id;
                 if (item.type === 'part') return item.data.part;

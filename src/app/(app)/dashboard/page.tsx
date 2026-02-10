@@ -1374,7 +1374,7 @@ export default function TodayPage() {
                     onClose={() => setActivePartEditor(null)}
                 />
             )}
-            <div className="today-header hidden md:flex">
+            <div className="today-header">
                 <h1 className="text-2xl font-bold">Today</h1>
                 <div className="today-header-actions">
                     <button

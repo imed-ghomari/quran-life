@@ -94,7 +94,7 @@ export interface AppSettings {
     todoDefaultFilter?: 'all' | 'maintenance' | 'construction';
     reviewSortOrder?: 'surah_grouped' | 'due_date';
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
-    kanbanSortOrder?: 'type_then_number' | 'number_only';
+    kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
     dailyPortionMode?: 'audio' | 'reading';
     theme?: 'light' | 'dark' | 'system';
     updatedAt?: string;

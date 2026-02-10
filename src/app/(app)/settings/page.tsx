@@ -177,7 +177,8 @@ export default function SettingsPage() {
     ] as const;
     const kanbanSortOptions = [
         { id: 'type_then_number', label: 'Type then Number (Default)' },
-        { id: 'number_only', label: 'Number Only' }
+        { id: 'number_only', label: 'Number Only' },
+        { id: 'manual', label: 'Manual (Drag to Sort)' }
     ] as const;
     const dailyPortionModeOptions = [
         { id: 'audio', label: 'Audio' },
@@ -212,7 +213,7 @@ export default function SettingsPage() {
     const [todoDefaultFilter, setTodoDefaultFilter] = useState<'all' | 'maintenance' | 'construction'>(settings.todoDefaultFilter ?? 'all');
     const [reviewSortOrder, setReviewSortOrder] = useState<'surah_grouped' | 'due_date'>(settings.reviewSortOrder ?? 'surah_grouped');
     const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
-    const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only'>(settings.kanbanSortOrder ?? 'type_then_number');
+    const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
 
     const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
@@ -1012,322 +1013,6 @@ export default function SettingsPage() {
                                     </div>
                                 )}
                             </div>
-                            <div className="card modern-card" style={{
-                                background: 'var(--background-secondary)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '16px',
-                                gridColumn: '1 / -1'
-                            }}>
-                                <div className="section-title"
-                                    onClick={() => toggleSection('advancedOptions')}
-                                    style={{
-                                        color: 'var(--accent)',
-                                        fontWeight: 700,
-                                        marginBottom: sectionsExpanded.advancedOptions ? '1rem' : '0',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: '0.75rem',
-                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
-                                        cursor: 'pointer'
-                                    }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            <Sliders size={18} />
-                                        </div>
-                                        <span>Advanced Options</span>
-                                    </div>
-                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.advancedOptions ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                </div>
-
-                                {sectionsExpanded.advancedOptions && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                            Choose defaults and behaviors for your workflow.
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>Default Todo Filter</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexWrap: 'wrap',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {todoFilterOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        onClick={() => {
-                                                            setTodoDefaultFilter(option.id);
-                                                            saveSettings({ todoDefaultFilter: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '6px 12px',
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: 700,
-                                                            borderRadius: '6px',
-                                                            border: 'none',
-                                                            background: (todoDefaultFilter ?? 'all') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (todoDefaultFilter ?? 'all') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                    >
-                                                        {option.label.toUpperCase()}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>Review Sorting</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexDirection: 'column',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {reviewSortOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setReviewSortOrder(option.id);
-                                                            saveSettings({ reviewSortOrder: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600,
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            background: (reviewSortOrder ?? 'surah_grouped') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (reviewSortOrder ?? 'surah_grouped') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>When Moving Out of Complete</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexDirection: 'column',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {completeExitOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setCompleteExitBehavior(option.id);
-                                                            saveSettings({ completeExitBehavior: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600,
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            background: (completeExitBehavior ?? 'mindmap_only') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (completeExitBehavior ?? 'mindmap_only') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>Kanban Card Sorting</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexDirection: 'column',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {kanbanSortOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setKanbanSortOrder(option.id);
-                                                            saveSettings({ kanbanSortOrder: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600,
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>Kanban Card Sorting</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexDirection: 'column',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {kanbanSortOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setKanbanSortOrder(option.id);
-                                                            saveSettings({ kanbanSortOrder: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600,
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>Kanban Card Sorting</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexDirection: 'column',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {kanbanSortOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setKanbanSortOrder(option.id);
-                                                            saveSettings({ kanbanSortOrder: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600,
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                            <div style={{ fontWeight: 600 }}>Daily Portion Default Mode</div>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    background: 'var(--background)',
-                                                    borderRadius: '8px',
-                                                    padding: '3px',
-                                                    border: '1px solid var(--border)',
-                                                    flexDirection: 'column',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                {dailyPortionModeOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setDailyPortionMode(option.id);
-                                                            saveSettings({ dailyPortionMode: option.id });
-                                                        }}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600,
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            background: (dailyPortionMode ?? 'audio') === option.id ? 'var(--accent)' : 'transparent',
-                                                            color: (dailyPortionMode ?? 'audio') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
 
@@ -1498,213 +1183,144 @@ export default function SettingsPage() {
                         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Advanced Options</h1>
                     </div>
 
-                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Sliders size={18} /> Advanced Options
-                        </h2>
-                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
-                            Choose defaults and behaviors for your workflow.
-                        </p>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                            <div>
-                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Default Todo Filter</div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        background: 'var(--background)',
-                                        borderRadius: '8px',
-                                        padding: '3px',
-                                        border: '1px solid var(--border)'
-                                    }}
-                                >
-                                    {todoFilterOptions.map((option) => (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setTodoDefaultFilter(option.id);
-                                                saveSettings({ todoDefaultFilter: option.id });
-                                            }}
-                                            style={{
-                                                padding: '6px 10px',
-                                                fontSize: '0.75rem',
-                                                fontWeight: 700,
-                                                borderRadius: '6px',
-                                                border: 'none',
-                                                background: currentTodoFilter === option.id ? 'var(--accent)' : 'transparent',
-                                                color: currentTodoFilter === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                flex: 1
-                                            }}
-                                        >
-                                            {option.label.toUpperCase()}
-                                        </button>
-                                    ))}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                            <h2 className="adv-section-title" style={{ marginBottom: '0.5rem' }}>
+                                <span className="adv-section-icon">
+                                    <Sliders size={16} />
+                                </span>
+                                <span>Sorting & Filters</span>
+                            </h2>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+                                Choose defaults and behaviors for your workflow.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Default Todo Filter</div>
+                                    <div className="adv-chip-row">
+                                        {todoFilterOptions.map((option) => {
+                                            const isActive = currentTodoFilter === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setTodoDefaultFilter(option.id);
+                                                        saveSettings({ todoDefaultFilter: option.id });
+                                                    }}
+                                                    className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
-                            </div>
-
-                            <div>
-                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Review Sorting</div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        background: 'var(--background)',
-                                        borderRadius: '8px',
-                                        padding: '3px',
-                                        border: '1px solid var(--border)',
-                                        flexDirection: 'column',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    {reviewSortOptions.map((option) => (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setReviewSortOrder(option.id);
-                                                saveSettings({ reviewSortOrder: option.id });
-                                            }}
-                                            style={{
-                                                padding: '8px 10px',
-                                                fontSize: '0.8rem',
-                                                fontWeight: 600,
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                background: currentReviewSort === option.id ? 'var(--accent)' : 'transparent',
-                                                color: currentReviewSort === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                textAlign: 'left'
-                                            }}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Review Sorting</div>
+                                    <div className="adv-chip-row">
+                                        {reviewSortOptions.map((option) => {
+                                            const isActive = currentReviewSort === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setReviewSortOrder(option.id);
+                                                        saveSettings({ reviewSortOrder: option.id });
+                                                    }}
+                                                    className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
-                            </div>
-
-                            <div>
-                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>When Moving Out of Complete</div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        background: 'var(--background)',
-                                        borderRadius: '8px',
-                                        padding: '3px',
-                                        border: '1px solid var(--border)',
-                                        flexDirection: 'column',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    {completeExitOptions.map((option) => (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setCompleteExitBehavior(option.id);
-                                                saveSettings({ completeExitBehavior: option.id });
-                                            }}
-                                            style={{
-                                                padding: '8px 10px',
-                                                fontSize: '0.8rem',
-                                                fontWeight: 600,
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                background: currentExitBehavior === option.id ? 'var(--accent)' : 'transparent',
-                                                color: currentExitBehavior === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                textAlign: 'left'
-                                            }}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                            </div>
-
-                            <div>
-                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Kanban Card Sorting</div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        background: 'var(--background)',
-                                        borderRadius: '8px',
-                                        padding: '3px',
-                                        border: '1px solid var(--border)',
-                                        flexDirection: 'column',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    {kanbanSortOptions.map((option) => (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setKanbanSortOrder(option.id);
-                                                saveSettings({ kanbanSortOrder: option.id });
-                                            }}
-                                            style={{
-                                                padding: '8px 10px',
-                                                fontSize: '0.8rem',
-                                                fontWeight: 600,
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
-                                                color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                textAlign: 'left'
-                                            }}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Kanban Card Sorting</div>
+                                    <div className="adv-chip-row">
+                                        {kanbanSortOptions.map((option) => {
+                                            const isActive = (kanbanSortOrder ?? 'type_then_number') === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setKanbanSortOrder(option.id);
+                                                        saveSettings({ kanbanSortOrder: option.id });
+                                                    }}
+                                                    className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div>
-                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Daily Portion Default Mode</div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        background: 'var(--background)',
-                                        borderRadius: '8px',
-                                        padding: '3px',
-                                        border: '1px solid var(--border)',
-                                        flexDirection: 'column',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    {dailyPortionModeOptions.map((option) => (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setDailyPortionMode(option.id);
-                                                saveSettings({ dailyPortionMode: option.id });
-                                            }}
-                                            style={{
-                                                padding: '8px 10px',
-                                                fontSize: '0.8rem',
-                                                fontWeight: 600,
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                background: (dailyPortionMode ?? 'audio') === option.id ? 'var(--accent)' : 'transparent',
-                                                color: (dailyPortionMode ?? 'audio') === option.id ? 'white' : 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                textAlign: 'left'
-                                            }}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
+                        <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                            <h2 className="adv-section-title" style={{ marginBottom: '0.5rem' }}>
+                                <span className="adv-section-icon">
+                                    <Activity size={16} />
+                                </span>
+                                <span>Workflow Behaviors</span>
+                            </h2>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+                                Choose defaults and behaviors for your workflow.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>When Moving Out of Complete</div>
+                                    <div className="adv-segmented">
+                                        {completeExitOptions.map((option) => {
+                                            const isActive = currentExitBehavior === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCompleteExitBehavior(option.id);
+                                                        saveSettings({ completeExitBehavior: option.id });
+                                                    }}
+                                                    className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Daily Portion Default Mode</div>
+                                    <div className="adv-segmented">
+                                        {dailyPortionModeOptions.map((option) => {
+                                            const isActive = (dailyPortionMode ?? 'audio') === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setDailyPortionMode(option.id);
+                                                        saveSettings({ dailyPortionMode: option.id });
+                                                    }}
+                                                    className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3065,7 +2681,7 @@ export default function SettingsPage() {
                                 </div>
                             </div>
                             {sectionsExpanded.mutashabihat && (
-                                <div style={{ marginTop: '1.5rem' }}>
+                                <div style={{ marginTop: '0.05rem' }}>
                                     <p className="mut-subheader" style={{ color: 'var(--foreground-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem' }}>
                                         Surahs with similar verses in this part. Tap to expand and annotate similar ayat.
                                     </p>
@@ -3169,7 +2785,7 @@ export default function SettingsPage() {
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                            <table className="debug-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
+                                            <table className="debug-table mutashabihat-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
                                                 <thead>
                                                     <tr>
                                                         <th style={{ width: '50px' }}></th>
@@ -3192,7 +2808,7 @@ export default function SettingsPage() {
                                                                                 <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />
                                                                                 {surah.id}. {surah.name} ({count})
                                                                             </div>
-                                                                            <span className="status-badge partial" style={{ margin: 0 }}>{count} entries</span>
+                                                                            <span className="status-badge entries-badge" style={{ margin: 0 }}>{count} entries</span>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
@@ -3285,12 +2901,19 @@ export default function SettingsPage() {
                                                                                     >
                                                                                         <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
                                                                                             <button
-                                                                                                className="bulk-btn"
                                                                                                 onClick={(e) => {
                                                                                                     e.stopPropagation();
                                                                                                     toggleExpand();
                                                                                                 }}
-                                                                                                style={{ padding: '4px', background: isDetailExpanded ? 'var(--accent)' : 'transparent', color: isDetailExpanded ? 'white' : 'inherit' }}
+                                                                                                style={{
+                                                                                                    padding: 0,
+                                                                                                    border: 'none',
+                                                                                                    background: 'transparent',
+                                                                                                    color: 'inherit',
+                                                                                                    display: 'inline-flex',
+                                                                                                    alignItems: 'center',
+                                                                                                    cursor: 'pointer'
+                                                                                                }}
                                                                                             >
                                                                                                 <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                                                                             </button>
@@ -3320,7 +2943,7 @@ export default function SettingsPage() {
                                                                                         </td>
                                                                                         <td>
                                                                                             <button
-    className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+    className={`bulk-btn mutashabihat-resolve-btn ${isConfirmed ? 'learned' : ''}`}
     onClick={(e) => {
         e.stopPropagation();
         const update = isConfirmed 
@@ -3336,7 +2959,7 @@ export default function SettingsPage() {
    
                                                                                         </td>
                                                                                         <td>
-                                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                                                                            <div className="mutashabihat-note-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                                                                                                 {isCustom && customId && (
                                                                                                     <button
                                                                                                         className="bulk-btn reset-mut"
@@ -3356,7 +2979,7 @@ export default function SettingsPage() {
                                                                                                     </button>
                                                                                                 )}
                                                                                                 <button
-                                                                                                    className="bulk-btn"
+                                                                                                    className="bulk-btn mutashabihat-note-btn"
                                                                                                     onClick={(e) => {
                                                                                                         e.stopPropagation();
                                                                                                         setNoteModal({
@@ -3862,6 +3485,97 @@ export default function SettingsPage() {
                         display: none !important;
                     }
                 }
+
+                @media (min-width: 768px) and (max-width: 1024px) {
+                    .mutashabihat-table {
+                        min-width: 760px !important;
+                    }
+
+                    .mutashabihat-table th,
+                    .mutashabihat-table td {
+                        padding: 0.55rem 0.5rem;
+                        font-size: 0.78rem;
+                        vertical-align: middle;
+                    }
+
+                    .mutashabihat-table th {
+                        font-size: 0.74rem;
+                        letter-spacing: 0.01em;
+                    }
+
+                    .mutashabihat-table th:nth-child(2),
+                    .mutashabihat-table td:nth-child(2) {
+                        width: 28%;
+                    }
+
+                    .mutashabihat-table th:nth-child(3),
+                    .mutashabihat-table td:nth-child(3) {
+                        width: 12%;
+                        white-space: nowrap;
+                    }
+
+                    .mutashabihat-table th:nth-child(4),
+                    .mutashabihat-table td:nth-child(4) {
+                        width: 20%;
+                    }
+
+                    .mutashabihat-table th:nth-child(5),
+                    .mutashabihat-table td:nth-child(5) {
+                        width: 20%;
+                    }
+
+                    .mutashabihat-table th:nth-child(6),
+                    .mutashabihat-table td:nth-child(6) {
+                        width: 20%;
+                    }
+
+                    .mutashabihat-table .maturity-select {
+                        padding: 4px 6px;
+                        font-size: 0.75rem;
+                        width: 100%;
+                    }
+
+                    .mutashabihat-resolve-btn {
+                        min-width: 110px !important;
+                        padding: 4px 8px;
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0 !important;
+                        white-space: normal;
+                        line-height: 1.2;
+                        box-sizing: border-box;
+                    }
+
+                    .mutashabihat-note-btn {
+                        min-width: 110px !important;
+                        padding: 4px 8px;
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0 !important;
+                        white-space: normal;
+                        line-height: 1.2;
+                        box-sizing: border-box;
+                    }
+
+                    .mutashabihat-table .bulk-btn {
+                        white-space: normal;
+                        text-align: center;
+                        height: auto;
+                        word-break: normal;
+                        overflow-wrap: normal;
+                    }
+
+                    .mutashabihat-note-actions {
+                        flex-wrap: wrap;
+                        justify-content: flex-start;
+                        gap: 6px;
+                    }
+
+                    .mutashabihat-table .entries-badge {
+                        font-size: 0.64rem;
+                        padding: 2px 6px;
+                    }
+                }
                 .mut-fold-header .mut-chevron {
                         margin-left: 0;
                     }
@@ -4031,6 +3745,10 @@ export default function SettingsPage() {
                     color: white;
                     font-weight: 600;
                 }
+                .status-badge.entries-badge {
+                    background: var(--accent);
+                    color: white;
+                }
 
                 .adv-options {
                     display: flex;
@@ -4094,14 +3812,14 @@ export default function SettingsPage() {
                 }
 
                 .adv-chip:hover {
-                    background: var(--background-secondary);
+                    background: var(--verse-bg);
                 }
 
                 .adv-chip-active {
                     border-color: var(--accent);
-                    color: var(--foreground);
-                    background: var(--background-secondary);
-                    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.02);
+                    color: var(--accent);
+                    background: var(--verse-bg);
+                    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
                 }
 
                 .adv-segmented {
@@ -4130,13 +3848,13 @@ export default function SettingsPage() {
                 }
 
                 .adv-seg-btn:hover {
-                    background: var(--background-secondary);
+                    background: var(--verse-bg);
                 }
 
                 .adv-seg-active {
                     border-color: var(--accent);
-                    color: var(--foreground);
-                    background: var(--background-secondary);
+                    color: var(--accent);
+                    background: var(--verse-bg);
                 }
 
                 .adv-check {
