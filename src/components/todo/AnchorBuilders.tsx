@@ -4,6 +4,7 @@ import {
     SplitSquareHorizontal, Check, PenTool, X, Trash2, Plus, Minus, ImageIcon
 } from 'lucide-react';
 import MindmapViewer from '../MindmapViewer';
+import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 
 export type AnchorBuilderState = { breaks: number[]; labels: Record<number, string> };
 
@@ -38,6 +39,7 @@ export function MobileAnchorBuilder({
     const [currentSplitPoint, setCurrentSplitPoint] = useState<number>(1);
     const [isEditing, setIsEditing] = useState(false);
     const [showFullMindmap, setShowFullMindmap] = useState(false);
+    const { confirm } = useConfirmDialog();
     const [zoomLevel, setZoomLevel] = useState(1);
     const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
     const shouldShowPreview = showMindmapPreview && !!displayUrl;
@@ -202,11 +204,15 @@ export function MobileAnchorBuilder({
                     )}
                     <button
                         className="btn btn-secondary btn-full"
-                        onClick={() => {
+                        onClick={async () => {
                             if (hasReviewedHistory) {
-                                if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying splits will reset the review progress for these chunks.\n\nAre you sure you want to proceed?")) {
-                                    return;
-                                }
+                                const ok = await confirm({
+                                    title: 'Confirm Split Changes',
+                                    message: 'This surah has verse chunks that have already been reviewed. Modifying splits will reset review progress for these chunks. Do you want to proceed?',
+                                    confirmLabel: 'Proceed',
+                                    isDestructive: true,
+                                });
+                                if (!ok) return;
                             }
                             setIsEditing(true);
                         }}
@@ -517,6 +523,7 @@ export function DesktopAnchorBuilder({
     const [isEditing, setIsEditing] = useState(false);
     const [hoverVal, setHoverVal] = useState<number | null>(null);
     const barRef = useRef<HTMLDivElement>(null);
+    const { confirm } = useConfirmDialog();
 
     const breaks = Array.from(new Set([...builderState.breaks]))
         .sort((a, b) => a - b)
@@ -562,15 +569,22 @@ export function DesktopAnchorBuilder({
                     <span style={{ fontWeight: 700, fontSize: '1rem' }}>Define Splits</span>
                 </div>
                 {!isEditing ? (
-                    <button className="btn btn-secondary"
-                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => {
-                        if (hasReviewedHistory) {
-                            if (!confirm("Warning: This Surah has verse chunks that have already been reviewed.\n\nModifying splits will reset the review progress for these chunks.\n\nAre you sure you want to proceed?")) {
-                                return;
+                    <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                        onClick={async () => {
+                            if (hasReviewedHistory) {
+                                const ok = await confirm({
+                                    title: 'Confirm Split Changes',
+                                    message: 'This surah has verse chunks that have already been reviewed. Modifying splits will reset review progress for these chunks. Do you want to proceed?',
+                                    confirmLabel: 'Proceed',
+                                    isDestructive: true,
+                                });
+                                if (!ok) return;
                             }
-                        }
-                        setIsEditing(true);
-                    }}>
+                            setIsEditing(true);
+                        }}
+                    >
                         Edit Splits
                     </button>
                 ) : (

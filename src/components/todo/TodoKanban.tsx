@@ -1237,18 +1237,19 @@ export default function TodoKanban({
 
                 if (isMobile || isTablet) {
                     return (
-                        <SlideOver
-                            isOpen={!!verseContextItem}
-                            onClose={() => setVerseContextItem(null)}
-                            title="Verse Context"
-                            rootClassName="verse-context-modal"
-                            headerClassName="verse-context-header"
-                            titleClassName="verse-context-title"
-                            closeClassName="verse-context-close"
-                            contentClassName="verse-context-content"
-                        >
-                            {content}
-                        </SlideOver>
+                        <div className="slide-over-overlay" onClick={() => setVerseContextItem(null)}>
+                            <div className="slide-over-content verse-context-modal" onClick={e => e.stopPropagation()}>
+                                <div className="slide-over-header verse-context-header">
+                                    <h3 className="verse-context-title" style={{ margin: 0, fontSize: '1rem' }}>Verse Context</h3>
+                                    <button className="close-btn verse-context-close" onClick={() => setVerseContextItem(null)}>
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="slide-over-body verse-context-content">
+                                    {content}
+                                </div>
+                            </div>
+                        </div>
                     );
                 }
 
@@ -1411,18 +1412,26 @@ export default function TodoKanban({
 
                 if (isMobile || isTablet) {
                     return (
-                        <SlideOver
-                            isOpen={!!activeSimilarityContext}
-                            onClose={() => setActiveSimilarityContext(null)}
-                            title="Similarity Conflict"
-                            rootClassName="similarity-context-modal"
-                            headerClassName="similarity-context-header"
-                            titleClassName="similarity-context-title"
-                            closeClassName="similarity-context-close"
-                            contentClassName="similarity-context-content"
-                        >
-                            {similarityContent}
-                        </SlideOver>
+                        <div className="slide-over-overlay" onClick={() => setActiveSimilarityContext(null)}>
+                            <div className="slide-over-content similarity-context-modal" onClick={e => e.stopPropagation()}>
+                                <div className="slide-over-header similarity-context-header">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                            <Brain size={18} />
+                                        </div>
+                                        <h3 className="similarity-context-title" style={{ margin: 0, fontSize: '1rem' }}>
+                                            {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
+                                        </h3>
+                                    </div>
+                                    <button className="close-btn similarity-context-close" onClick={() => setActiveSimilarityContext(null)}>
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="slide-over-body similarity-context-content">
+                                    {similarityContent}
+                                </div>
+                            </div>
+                        </div>
                     );
                 }
 

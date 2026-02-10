@@ -6,6 +6,7 @@ import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
 import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
+import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 
 interface KanbanCardProps {
     item: KanbanItem;
@@ -47,6 +48,7 @@ const KanbanCard = ({
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
+    const { confirm } = useConfirmDialog();
 
     const handleMenuClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -56,29 +58,45 @@ const KanbanCard = ({
     const handleDeleteClick = async () => {
         setMenuOpen(false);
 
-        if (window.confirm("Are you sure you want to delete this mindmap? This action cannot be undone and you will lose all progress on this map.")) {
-            setIsDeleting(true);
-            try {
-                // Simulate network delay for better UX if needed, or just await the prop
-                await new Promise(resolve => setTimeout(resolve, 500));
-                await onDeleteMindmap();
-            } catch (e) {
-                console.error("Delete failed", e);
-            } finally {
-                // Only reset if component is still mounted (React handles this mostly, but good practice)
-                setIsDeleting(false);
-            }
+        const ok = await confirm({
+            title: 'Delete Mindmap',
+            message: 'Are you sure you want to delete this mindmap? This action cannot be undone and you will lose all progress on this map.',
+            confirmLabel: 'Delete',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        setIsDeleting(true);
+        try {
+            // Simulate network delay for better UX if needed, or just await the prop
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await onDeleteMindmap();
+        } catch (e) {
+            console.error("Delete failed", e);
+        } finally {
+            // Only reset if component is still mounted (React handles this mostly, but good practice)
+            setIsDeleting(false);
         }
     };
 
     const handleResetClick = async () => {
         setMenuOpen(false);
 
-        if (!window.confirm("Reset this mindmap to the original shared version? Your edits will be replaced.")) return;
+        const ok = await confirm({
+            title: 'Reset Mindmap',
+            message: 'Reset this mindmap to the original shared version? Your edits will be replaced.',
+            confirmLabel: 'Reset',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
-        const resetMemoryNodes = window.confirm(
-            "Also reset the memory nodes related to this mindmap?\n\nOK = Reset mindmap + reset memory nodes (review progress).\nCancel = Reset mindmap only."
-        );
+        const resetMemoryNodes = await confirm({
+            title: 'Reset Memory Nodes?',
+            message: 'Also reset the memory nodes related to this mindmap? This will reset review progress for those nodes.',
+            confirmLabel: 'Reset Mindmap + Memory',
+            cancelLabel: 'Reset Mindmap Only',
+            isDestructive: true,
+        });
 
         setIsDeleting(true);
         try {

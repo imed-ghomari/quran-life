@@ -28,6 +28,7 @@ import {
 import dynamic from 'next/dynamic';
 import MindmapViewer from '@/components/MindmapViewer';
 import AudioPlayer from '@/components/AudioPlayer';
+import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import {
     useInstantSettings,
     useInstantNodes,
@@ -133,9 +134,10 @@ export default function TodayPage() {
         if (!filteredDueNodes.length) return [];
 
         const reviewSortOrder = settings?.reviewSortOrder ?? 'surah_grouped';
+        const originalIndex = new Map<string, number>();
+        filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
+
         if (reviewSortOrder === 'due_date') {
-            const originalIndex = new Map<string, number>();
-            filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
             return [...filteredDueNodes].sort((a, b) => {
                 const aDue = getNodeDueDate(a);
                 const bDue = getNodeDueDate(b);
@@ -146,8 +148,19 @@ export default function TodayPage() {
             });
         }
 
-        const originalIndex = new Map<string, number>();
-        filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
+        if (reviewSortOrder === 'type_grouped') {
+            const typeRank: Record<string, number> = {
+                part_mindmap: 0,
+                mindmap: 1,
+                verse_segment: 2
+            };
+            return [...filteredDueNodes].sort((a, b) => {
+                const aRank = typeRank[a.type] ?? 99;
+                const bRank = typeRank[b.type] ?? 99;
+                if (aRank !== bRank) return aRank - bRank;
+                return (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0);
+            });
+        }
 
         const surahGroups = new Map<number, { mindmap?: MemoryNode; fullSurah?: MemoryNode; others: MemoryNode[] }>();
         const otherNodes: MemoryNode[] = [];
@@ -437,6 +450,7 @@ export default function TodayPage() {
     }
     const [toasts, setToasts] = useState<ToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
+    const { confirm } = useConfirmDialog();
     type ReviewUndoEntry = {
         kind: 'review';
         id: string;
@@ -1287,7 +1301,13 @@ export default function TodayPage() {
     };
 
     const handleMindmapIncomplete = async (surahId: number) => {
-        if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
+        const ok = await confirm({
+            title: 'Mark Mindmap Incomplete',
+            message: 'Are you sure you want to mark this mindmap as incomplete? It will be removed from the review section until you mark it as complete again.',
+            confirmLabel: 'Mark Incomplete',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
         const mm = mindmaps.find(m => m.surahId === surahId);
         if (mm) {
@@ -1302,7 +1322,13 @@ export default function TodayPage() {
     };
 
     const handlePartMindmapIncomplete = async (partId: QuranPart) => {
-        if (!window.confirm("Are you sure you want to mark this part mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
+        const ok = await confirm({
+            title: 'Mark Part Mindmap Incomplete',
+            message: 'Are you sure you want to mark this part mindmap as incomplete? It will be removed from the review section until you mark it as complete again.',
+            confirmLabel: 'Mark Incomplete',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
         const mm = partMindMaps.find(m => m.partId === partId);
         if (mm) {
@@ -1612,7 +1638,14 @@ export default function TodayPage() {
                         <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             {!listeningComplete && (
-                                <div className="toggle-wrapper" onClick={(e) => { e.stopPropagation(); setReadOnlyMode(!readOnlyMode); }} style={{ cursor: 'pointer' }}>
+                                <div className="toggle-wrapper" onClick={(e) => {
+                                    e.stopPropagation();
+                                    const nextReadOnly = !readOnlyMode;
+                                    setReadOnlyMode(nextReadOnly);
+                                    if (!nextReadOnly) {
+                                        setHighlightedWordIndex(-1);
+                                    }
+                                }} style={{ cursor: 'pointer' }}>
                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, color: !readOnlyMode ? 'var(--accent)' : 'var(--foreground-secondary)' }}>Audio</span>
                                     <div className={`toggle-switch ${!readOnlyMode ? 'active' : ''}`} />
                                 </div>

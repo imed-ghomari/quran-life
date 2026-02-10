@@ -69,33 +69,37 @@ export default function SplitsModal({
 
     if (!visible && !isOpen) return null;
 
-    // Mobile: Full SlideOver Presentation
+    // Mobile: SlideOver Presentation (match settings mobile slideover)
     if (isMobile || useSlideOver) {
         return (
-            <SlideOver
-                isOpen={isOpen}
-                onClose={onClose}
-                title="Splits Configuration"
-                headerClassName="px-5 py-4"
-                contentClassName="px-4 py-4 overflow-x-hidden"
-            >
-                <div className="min-h-full pb-10">
-                    <MobileAnchorBuilder
-                        surahId={surahId}
-                        verseCount={verseCount}
-                        builderState={builderState}
-                        mindmapImageUrl={mindmapImageUrl || null}
-                        mindmapImageUrlDark={mindmapImageUrlDark || null}
-                        snapshot={snapshot}
-                        isDark={isDark}
-                        showMindmapPreview={true}
-                        onAddBreak={onAddBreak}
-                        onRemoveBreak={onRemoveBreak}
-                        onSave={() => { onSave(); onClose(); }}
-                        hasReviewedHistory={hasReviewedHistory}
-                    />
+            <div className="slide-over-overlay" onClick={onClose}>
+                <div className="slide-over-content" onClick={e => e.stopPropagation()}>
+                    <div className="slide-over-header">
+                        <h3 style={{ margin: 0, fontSize: '1rem' }}>Splits Configuration</h3>
+                        <button className="close-btn" onClick={onClose}>
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="slide-over-body" style={{ overflowX: 'hidden' }}>
+                        <div className="min-h-full pb-10">
+                            <MobileAnchorBuilder
+                                surahId={surahId}
+                                verseCount={verseCount}
+                                builderState={builderState}
+                                mindmapImageUrl={mindmapImageUrl || null}
+                                mindmapImageUrlDark={mindmapImageUrlDark || null}
+                                snapshot={snapshot}
+                                isDark={isDark}
+                                showMindmapPreview={true}
+                                onAddBreak={onAddBreak}
+                                onRemoveBreak={onRemoveBreak}
+                                onSave={() => { onSave(); onClose(); }}
+                                hasReviewedHistory={hasReviewedHistory}
+                            />
+                        </div>
+                    </div>
                 </div>
-            </SlideOver>
+            </div>
         );
     }
 return (

@@ -789,6 +789,8 @@
   background: rgba(255, 255, 255, 0.2);
   color: white;
 }
-.section-header p {
-  white-space: nowrap;
+@media (min-width: 900px) {
+  .section-header p {
+    white-space: nowrap;
+  }
 }

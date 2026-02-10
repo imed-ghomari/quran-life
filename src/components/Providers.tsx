@@ -7,6 +7,7 @@ import OnboardingModal from "./OnboardingModal";
 import { ThemeProvider } from "./ThemeProvider";
 import { useInstantSettings } from "@/hooks/useInstantData";
 import { usePathname } from "next/navigation";
+import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 
 export const OnlineStatusContext = createContext(true);
 
@@ -51,8 +52,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <OnlineStatusContext.Provider value={isOnline}>
       <SyncProvider>
         <ThemeProvider>
-          {children}
-          <OnboardingWrapper />
+          <ConfirmDialogProvider>
+            {children}
+            <OnboardingWrapper />
+          </ConfirmDialogProvider>
         </ThemeProvider>
       </SyncProvider>
     </OnlineStatusContext.Provider>

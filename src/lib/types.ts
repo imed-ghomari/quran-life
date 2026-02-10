@@ -92,7 +92,7 @@ export interface AppSettings {
     learnedVerses: { [surahId: string]: number[] };
     skippedSurahs?: number[];
     todoDefaultFilter?: 'all' | 'maintenance' | 'construction';
-    reviewSortOrder?: 'surah_grouped' | 'due_date';
+    reviewSortOrder?: 'surah_grouped' | 'due_date' | 'type_grouped';
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
     kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
     dailyPortionMode?: 'audio' | 'reading';

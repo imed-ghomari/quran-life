@@ -31,6 +31,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
+import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 
@@ -161,6 +162,7 @@ export default function SettingsPage() {
     const { progress: listeningProgress } = useInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme } = useTheme();
+    const { confirm, alert } = useConfirmDialog();
 
     const todoFilterOptions = [
         { id: 'all', label: 'All Items' },
@@ -169,7 +171,8 @@ export default function SettingsPage() {
     ] as const;
     const reviewSortOptions = [
         { id: 'surah_grouped', label: 'Grouped by Surah' },
-        { id: 'due_date', label: 'Due Date (Soonest First)' }
+        { id: 'due_date', label: 'Due Date (Soonest First)' },
+        { id: 'type_grouped', label: 'By Type (Part → Surah → Verse)' }
     ] as const;
     const completeExitOptions = [
         { id: 'mindmap_only', label: 'Suspend Mindmap Only (Recommended)' },
@@ -211,7 +214,7 @@ export default function SettingsPage() {
         surahId?: number;
     } | null>(null);
     const [todoDefaultFilter, setTodoDefaultFilter] = useState<'all' | 'maintenance' | 'construction'>(settings.todoDefaultFilter ?? 'all');
-    const [reviewSortOrder, setReviewSortOrder] = useState<'surah_grouped' | 'due_date'>(settings.reviewSortOrder ?? 'surah_grouped');
+    const [reviewSortOrder, setReviewSortOrder] = useState<'surah_grouped' | 'due_date' | 'type_grouped'>(settings.reviewSortOrder ?? 'surah_grouped');
     const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
     const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
@@ -537,7 +540,13 @@ export default function SettingsPage() {
                                             className="btn btn-secondary"
                                             onClick={async () => {
                                                 // InstantDB handles sync automatically
-                                                if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
+                                                const ok = await confirm({
+                                                    title: 'Sign Out',
+                                                    message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
+                                                    confirmLabel: 'Sign Out',
+                                                    isDestructive: true,
+                                                });
+                                                if (!ok) return;
 
                                                 // Flag sign-out so AuthGate routes to landing instead of /auth
                                                 window.localStorage.setItem('auth:signingOut', '1');
@@ -1481,7 +1490,13 @@ export default function SettingsPage() {
             typeLabel = type === 'verse_segment' || type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
         }
 
-        if (!window.confirm(`Are you sure you want to set the maturity of ${typeLabel} to ${level}?`)) return;
+        const ok = await confirm({
+            title: 'Set Maturity',
+            message: `Are you sure you want to set the maturity of ${typeLabel} to ${level}?`,
+            confirmLabel: 'Update',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
         const targetType = type === 'verse' ? 'verse_segment' : type;
         const newState = getMaturityState(level);
@@ -1493,7 +1508,10 @@ export default function SettingsPage() {
         });
 
         if (nodesToUpdate.length === 0) {
-            alert("No nodes found to update.");
+            await alert({
+                title: 'Nothing to Update',
+                message: 'No nodes found to update.',
+            });
             return;
         }
 
@@ -1522,7 +1540,13 @@ export default function SettingsPage() {
         if (!settings) return;
         const partName = settings.activePart === 5 ? 'the whole Quran' : `Part ${settings.activePart}`;
         const message = `Reset daily portion progress for ${partName}? This will restart the daily portion from the beginning and mark today as incomplete.`;
-        if (!window.confirm(message)) return;
+        const ok = await confirm({
+            title: 'Reset Daily Portion',
+            message,
+            confirmLabel: 'Reset',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
         const entry = listeningProgress.find(p => p.partId === settings.activePart);
         if (entry?.id) {
@@ -1533,7 +1557,13 @@ export default function SettingsPage() {
     const handleResetMutashabihat = async () => {
         const partName = settings?.activePart === 5 ? 'the whole Quran' : `Part ${settings?.activePart}`;
         const msg = `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`;
-        if (!window.confirm(msg)) return;
+        const ok = await confirm({
+            title: 'Reset Mutashabihat',
+            message: msg,
+            confirmLabel: 'Reset',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
         const absoluteAyat = getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
             const ref = absoluteToSurahAyah(abs);
@@ -1613,7 +1643,13 @@ export default function SettingsPage() {
     };
 
     const handleDeleteCustomMutashabih = async (customId: string) => {
-        if (!window.confirm('Delete this custom mutashabih? This cannot be undone.')) return;
+        const ok = await confirm({
+            title: 'Delete Custom Mutashabih',
+            message: 'Delete this custom mutashabih? This cannot be undone.',
+            confirmLabel: 'Delete',
+            isDestructive: true,
+        });
+        if (!ok) return;
 
         const relatedDecisions = instantDecisions.filter(d => d.phraseId?.includes(`custom-${customId}`));
         const deletes = [
@@ -1650,13 +1686,25 @@ export default function SettingsPage() {
         reader.onload = async (event) => {
             try {
                 JSON.parse(event.target?.result as string);
-                if (confirm('Importing will overwrite current progress. Continue?')) {
+                const ok = await confirm({
+                    title: 'Confirm Import',
+                    message: 'Importing will overwrite current progress. Continue?',
+                    confirmLabel: 'Import',
+                    isDestructive: true,
+                });
+                if (ok) {
                     // Implementation for InstantDB import would involve bulk transactions
                     // For now, let's warn that it's not fully implemented for InstantDB
-                    alert("Import for InstantDB is not yet fully implemented. Please use cloud sync.");
+                    await alert({
+                        title: 'Import Not Available',
+                        message: 'Import for InstantDB is not yet fully implemented. Please use cloud sync.',
+                    });
                 }
             } catch (err) {
-                alert('Invalid backup file');
+                await alert({
+                    title: 'Invalid Backup',
+                    message: 'Invalid backup file',
+                });
             }
         };
         reader.readAsText(file);
@@ -1758,7 +1806,13 @@ export default function SettingsPage() {
                                                             className="btn btn-secondary"
                                                             onClick={async () => {
                                                                 // InstantDB handles sync automatically
-                                                                if (!window.confirm("Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.")) return;
+                                                                const ok = await confirm({
+                                                                    title: 'Sign Out',
+                                                                    message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
+                                                                    confirmLabel: 'Sign Out',
+                                                                    isDestructive: true,
+                                                                });
+                                                                if (!ok) return;
 
                                                                 // Flag sign-out so AuthGate routes to landing instead of /auth
                                                                 window.localStorage.setItem('auth:signingOut', '1');
