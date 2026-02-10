@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import DailyCompletionSlider from './DailyCompletionSlider';
 import { useInstantSettings, useInstantNodes } from '@/hooks/useInstantData';
+import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { SURAHS } from '@/lib/quranData';
 import { PART_NAMES, QuranPart, getMaturityState } from '@/lib/types';
@@ -32,6 +33,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const [selectedPart, setSelectedPart] = useState<QuranPart>(4);
     const [days, setDays] = useState(30);
     const [localSkipped, setLocalSkipped] = useState<number[]>([]);
+    const [dailyPortionModeChoice, setDailyPortionModeChoice] = useState<'audio' | 'reading'>('audio');
     const initializationKey = useRef<string | null>(null);
 
     useEffect(() => {
@@ -41,6 +43,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         setSelectedPart(settings.activePart || 4);
         setDays(settings.completionDays || 30);
         setLocalSkipped(settings.skippedSurahs || []);
+        setDailyPortionModeChoice(settings.dailyPortionMode ?? 'audio');
         initializationKey.current = key;
     }, [settings, user]);
 
@@ -48,7 +51,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
     const completeOnboarding = async () => {
         // Save final settings
-        const settingsId = settings.id || crypto.randomUUID();
+        const settingsId = settings.id || id();
         
         const transactions = [
             db.tx.settings[settingsId].update({
@@ -56,6 +59,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                 completionDays: days,
                 isOnboardingComplete: true,
                 skippedSurahs: localSkipped,
+                dailyPortionMode: dailyPortionModeChoice,
                 userId: user.id
             }) as any
         ];
@@ -78,7 +82,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                 );
                 if (!alreadyExists) {
                     const maturity = getMaturityState('mastered');
-                    const nodeId = crypto.randomUUID();
+                    const nodeId = id();
                     transactions.push(
                         db.tx.memoryNodes[nodeId].update({
                             id: nodeId,
@@ -104,7 +108,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     };
 
     const handleNext = async () => {
-        if (step < 3) {
+        if (step < 4) {
             setStep(step + 1);
         } else {
             await completeOnboarding();
@@ -167,7 +171,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         top: 0,
                         height: '100%',
                         background: 'var(--accent)',
-                        width: `${((step + 1) / 4) * 100}%`,
+                        width: `${((step + 1) / 5) * 100}%`,
                         transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     }} />
                 </div>
@@ -254,6 +258,36 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                     )}
 
                     {step === 2 && (
+                        <div className="step-content animate-fade-in">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
+                                    <BookOpen size={28} />
+                                </div>
+                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Daily Portion Mode</h2>
+                            </div>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+                                Choose how you want to go through your daily portion by default. You can change this later in Settings.
+                            </p>
+                            <div className="adv-segmented" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                                <button
+                                    type="button"
+                                    className={`adv-seg-btn ${dailyPortionModeChoice === 'audio' ? 'adv-seg-active' : ''}`}
+                                    onClick={() => setDailyPortionModeChoice('audio')}
+                                >
+                                    <span>Listening</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`adv-seg-btn ${dailyPortionModeChoice === 'reading' ? 'adv-seg-active' : ''}`}
+                                    onClick={() => setDailyPortionModeChoice('reading')}
+                                >
+                                    <span>Reading</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 3 && (
                         <div className="step-content animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                                 <div style={{ background: 'var(--verse-bg)', padding: '0.75rem', borderRadius: '14px', color: 'var(--accent)' }}>
@@ -317,7 +351,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                         </div>
                     )}
 
-                    {step === 3 && (
+                    {step === 4 && (
                         <div className="step-content animate-fade-in">
                             
 
@@ -445,7 +479,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             boxShadow: '0 4px 12px rgba(91, 143, 185, 0.3)',
                         }}
                     >
-                        {step === 3 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
+                        {step === 4 ? 'Get Started' : 'Continue'} <ChevronRight size={20} />
                     </button>
                 </div>
             </div>

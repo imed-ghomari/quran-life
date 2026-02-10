@@ -542,38 +542,16 @@ export default function StatisticsPage() {
                         icon={<RotateCcw size={20} />}
                         stats={verseChunkStats}
                         headerSuffix={
-                            <div style={{ display: 'flex', background: 'var(--background)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border)' }}>
+                            <div className="segmented-compact">
                                 <button
                                     onClick={() => setVerseChunkMode('chunks')}
-                                    style={{
-                                        padding: '4px 10px',
-                                        fontSize: '0.65rem',
-                                        fontWeight: 700,
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        background: verseChunkMode === 'chunks' ? 'var(--accent)' : 'transparent',
-                                        color: verseChunkMode === 'chunks' ? 'white' : 'var(--foreground-secondary)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        boxShadow: verseChunkMode === 'chunks' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
-                                    }}
+                                    className={`adv-seg-btn ${verseChunkMode === 'chunks' ? 'adv-seg-active' : ''}`}
                                 >
                                     CHUNKS
                                 </button>
                                 <button
                                     onClick={() => setVerseChunkMode('surahs')}
-                                    style={{
-                                        padding: '4px 10px',
-                                        fontSize: '0.65rem',
-                                        fontWeight: 700,
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        background: verseChunkMode === 'surahs' ? 'var(--accent)' : 'transparent',
-                                        color: verseChunkMode === 'surahs' ? 'white' : 'var(--foreground-secondary)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        boxShadow: verseChunkMode === 'surahs' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
-                                    }}
+                                    className={`adv-seg-btn ${verseChunkMode === 'surahs' ? 'adv-seg-active' : ''}`}
                                 >
                                     SURAHS
                                 </button>

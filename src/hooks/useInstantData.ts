@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
 
@@ -48,14 +49,19 @@ export function useInstantSettings() {
     const saveSettings = async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
 
+        const syncedAt = new Date().toISOString();
         if (settingsEntry) {
-            await db.transact(db.tx.settings[settingsEntry.id].update(newSettings));
+            await db.transact(db.tx.settings[settingsEntry.id].update({
+                ...newSettings,
+                lastSyncedAt: syncedAt
+            }));
         } else {
-            const id = crypto.randomUUID();
-            await db.transact(db.tx.settings[id].update({
+            const settingsId = id();
+            await db.transact(db.tx.settings[settingsId].update({
                 ...DEFAULT_SETTINGS_BASE,
                 ...newSettings,
-                userId: user.id
+                userId: user.id,
+                lastSyncedAt: syncedAt,
             }));
         }
     };
@@ -156,7 +162,7 @@ export function useInstantMindMaps() {
     const saveMindMap = (surahId: number, mapData: Partial<MindMap>) => {
         if (!user) return Promise.resolve();
         const existing = mindmaps.find(m => Number((m as any).surahId) === surahId);
-        const id = existing ? (existing as any).id : crypto.randomUUID();
+        const mapId = existing ? (existing as any).id : id();
 
         // Merge existing data with new data to preserve fields like anchors
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
@@ -169,7 +175,7 @@ export function useInstantMindMaps() {
             delete sanitizedData.imageUrlDark;
         }
 
-        return db.transact(db.tx.mindMaps[id].update({
+        return db.transact(db.tx.mindMaps[mapId].update({
             ...sanitizedData,
             surahId,
             userId: user.id,
@@ -180,7 +186,7 @@ export function useInstantMindMaps() {
     const savePartMindMap = (partId: number, mapData: any) => {
         if (!user) return Promise.resolve();
         const existing = partMindMaps.find(m => Number((m as any).partId) === partId);
-        const id = existing ? existing.id : crypto.randomUUID();
+        const mapId = existing ? existing.id : id();
 
         // Merge existing data with new data to preserve all fields
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
@@ -190,7 +196,7 @@ export function useInstantMindMaps() {
             delete sanitizedData.imageUrlDark;
         }
 
-        return db.transact(db.tx.partMindMaps[id].update({
+        return db.transact(db.tx.partMindMaps[mapId].update({
             ...sanitizedData,
             partId,
             userId: user.id,
@@ -236,9 +242,9 @@ export function useInstantListeningStats() {
     const saveStats = (surahId: number, newStats: any) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
-        const id = existing ? existing.id : crypto.randomUUID();
+        const statsId = existing ? existing.id : id();
 
-        return db.transact(db.tx.listeningStats[id].update({
+        return db.transact(db.tx.listeningStats[statsId].update({
             ...newStats,
             surahId,
             userId: user.id
@@ -271,9 +277,9 @@ export function useInstantListeningProgress() {
     const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
-        const id = existing ? existing.id : crypto.randomUUID();
+        const progressId = existing ? existing.id : id();
 
-        return db.transact(db.tx.listeningProgress[id].update({
+        return db.transact(db.tx.listeningProgress[progressId].update({
             partId,
             lastVerseIndex,
             cycles: cycles !== undefined ? cycles : (existing?.cycles || 0),
@@ -308,9 +314,9 @@ export function useInstantMutashabihat() {
     const saveDecision = (phraseId: string, update: any) => {
         if (!user) return Promise.resolve();
         const existing = decisions.find(d => d.phraseId === phraseId);
-        const id = existing ? existing.id : crypto.randomUUID();
+        const decisionId = existing ? existing.id : id();
 
-        return db.transact(db.tx.mutashabihatDecisions[id].update({
+        return db.transact(db.tx.mutashabihatDecisions[decisionId].update({
             ...update,
             phraseId,
             timestamp: new Date().toISOString(),
@@ -320,8 +326,8 @@ export function useInstantMutashabihat() {
 
     const saveCustom = (item: any) => {
         if (!user) return Promise.resolve();
-        const id = item.id || crypto.randomUUID();
-        return db.transact(db.tx.customMutashabihat[id].update({
+        const customId = item.id || id();
+        return db.transact(db.tx.customMutashabihat[customId].update({
             ...item,
             userId: user.id
         }));
@@ -356,8 +362,8 @@ export function useInstantReviewLogs() {
 
     const saveLog = (log: any) => {
         if (!user) return Promise.resolve();
-        const id = crypto.randomUUID();
-        return db.transact(db.tx.fsrsReviewLogs[id].update({
+        const logId = id();
+        return db.transact(db.tx.fsrsReviewLogs[logId].update({
             ...log,
             userId: user.id
         }));
@@ -379,8 +385,8 @@ export function useInstantReviewErrors() {
 
     const saveError = (errorItem: any) => {
         if (!user) return Promise.resolve();
-        const id = errorItem.id || crypto.randomUUID();
-        return db.transact(db.tx.reviewErrors[id].update({
+        const errorId = errorItem.id || id();
+        return db.transact(db.tx.reviewErrors[errorId].update({
             ...errorItem,
             userId: user.id
         }));
@@ -413,8 +419,8 @@ export function useInstantOptimization() {
 
     const saveMeta = (newMeta: any) => {
         if (!user) return Promise.resolve();
-        const id = data?.optimizationMeta?.[0]?.id || crypto.randomUUID();
-        return db.transact(db.tx.optimizationMeta[id].update({
+        const metaId = data?.optimizationMeta?.[0]?.id || id();
+        return db.transact(db.tx.optimizationMeta[metaId].update({
             ...newMeta,
             userId: user.id
         }));
@@ -422,8 +428,8 @@ export function useInstantOptimization() {
 
     const saveWeights = (newWeights: any[]) => {
         if (!user) return Promise.resolve();
-        const id = data?.customWeights?.[0]?.id || crypto.randomUUID();
-        return db.transact(db.tx.customWeights[id].update({
+        const weightsId = data?.customWeights?.[0]?.id || id();
+        return db.transact(db.tx.customWeights[weightsId].update({
             weights: newWeights,
             userId: user.id
         }));
