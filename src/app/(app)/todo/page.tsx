@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { id } from '@instantdb/react';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -265,7 +266,7 @@ export default function TodoPage() {
             console.log('Existing node found:', existingNode);
             if (!existingNode) {
                 const newNode: MemoryNode = {
-                    id: crypto.randomUUID(),
+                    id: id(),
                     type: 'mindmap',
                     surahId: surahId,
                     scheduler: createNewFSRSState(),
@@ -534,7 +535,7 @@ export default function TodoPage() {
             const existingNode = nodes.find(n => n.type === 'part_mindmap' && n.partId === part);
             if (!existingNode) {
                 const newNode: MemoryNode = {
-                    id: crypto.randomUUID(),
+                    id: id(),
                     type: 'part_mindmap',
                     partId: part,
                     scheduler: createNewFSRSState(),

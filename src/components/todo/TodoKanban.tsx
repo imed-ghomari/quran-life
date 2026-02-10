@@ -1090,15 +1090,8 @@ export default function TodoKanban({
 
                     {/* Filters - Full width on mobile */}
                     <div
-                        className={isMobile ? 'w-full' : ''}
-                        style={{
-                            display: 'flex',
-                            background: 'var(--background)',
-                            borderRadius: '8px',
-                            padding: isMobile ? '1px' : '3px',
-                            border: '1px solid var(--border)',
-                            flex: isMobile ? 1 : 'unset'
-                        }}
+                        className={`segmented-compact ${isMobile ? 'w-full' : ''}`}
+                        style={{ flex: isMobile ? 1 : 'unset' }}
                     >
                         {[
                             { id: 'all', label: 'ALL ITEMS' },
@@ -1109,19 +1102,8 @@ export default function TodoKanban({
                                 key={f.id}
                                 suppressHydrationWarning={true}
                                 onClick={() => setFilter(f.id as any)}
-                                style={{
-                                    padding: isMobile ? '2px 6px' : '4px 10px',
-                                    fontSize: isMobile ? '9px' : '0.65rem',
-                                    fontWeight: 700,
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    background: filter === f.id ? 'var(--accent)' : 'transparent',
-                                    color: filter === f.id ? 'white' : 'var(--foreground-secondary)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    boxShadow: filter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-                                    flex: isMobile ? 1 : 'unset'
-                                }}
+                                className={`adv-seg-btn ${filter === f.id ? 'adv-seg-active' : ''}`}
+                                style={{ flex: isMobile ? 1 : 'unset' }}
                             >
                                 {f.label}
                             </button>

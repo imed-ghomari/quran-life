@@ -4,6 +4,7 @@
 /// <reference lib="dom.iterable" />
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { id } from '@instantdb/react';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
 import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
@@ -89,6 +90,8 @@ export default function TodayPage() {
     const [listeningComplete, setListeningComplete] = useState(false);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
+    const [isMobile, setIsMobile] = useState(false);
+    const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
     const lastPortionKeyRef = useRef<string>('');
 
     // Local helper to find anchor for range using InstantDB mindmaps
@@ -243,7 +246,7 @@ export default function TodayPage() {
                     );
                     if (!anchorNodeExists) {
                         nodesToCreate.push({
-                            id: crypto.randomUUID(),
+                            id: id(),
                             type: 'verse_segment',
                             surahId,
                             startVerse: anchor.startVerse,
@@ -264,7 +267,7 @@ export default function TodayPage() {
             );
             if (mindmap && !mindmapNodeExists) {
                 nodesToCreate.push({
-                    id: crypto.randomUUID(),
+                    id: id(),
                     type: 'mindmap',
                     surahId,
                     targetId: mindmapTargetId,
@@ -283,7 +286,7 @@ export default function TodayPage() {
             );
             if (partMindmap && !partMindmapNodeExists) {
                 nodesToCreate.push({
-                    id: crypto.randomUUID(),
+                    id: id(),
                     type: 'part_mindmap',
                     partId,
                     targetId: partTargetId,
@@ -397,22 +400,13 @@ export default function TodayPage() {
 
     const toggleSection = (section: 'review' | 'daily') => {
         setViewState(prev => {
-            const isMobile = window.innerWidth < 768;
-
-            // Disable folding on desktop
             if (!isMobile) return prev;
 
             if (section === 'review') {
                 const newState = !prev.reviewExpanded;
-                if (isMobile && newState) {
-                    return { reviewExpanded: true, dailyExpanded: false };
-                }
                 return { ...prev, reviewExpanded: newState };
             } else {
                 const newState = !prev.dailyExpanded;
-                if (isMobile && newState) {
-                    return { dailyExpanded: true, reviewExpanded: false };
-                }
                 return { ...prev, dailyExpanded: newState };
             }
         });
@@ -420,19 +414,17 @@ export default function TodayPage() {
 
     useEffect(() => {
         const handleResize = () => {
-            if (window.innerWidth >= 768) {
+            const nextIsMobile = window.innerWidth < 768;
+            setIsMobile(nextIsMobile);
+            if (!nextIsMobile) {
                 setViewState({ reviewExpanded: true, dailyExpanded: true });
             }
         };
 
         if (typeof window !== 'undefined') {
-            if (window.innerWidth < 768) {
-                // Initial state for mobile
-                setViewState({ reviewExpanded: false, dailyExpanded: false });
-            } else {
-                // Initial state for desktop
-                setViewState({ reviewExpanded: true, dailyExpanded: true });
-            }
+            const nextIsMobile = window.innerWidth < 768;
+            setIsMobile(nextIsMobile);
+            setViewState({ reviewExpanded: true, dailyExpanded: true });
         }
 
         window.addEventListener('resize', handleResize);
@@ -785,7 +777,7 @@ export default function TodayPage() {
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
 
-        const errorId = !remembered ? crypto.randomUUID() : undefined;
+        const errorId = !remembered ? id() : undefined;
         let errorPayload: any | undefined;
         const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
             node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
@@ -1412,6 +1404,28 @@ export default function TodayPage() {
                     >
                         <Undo2 size={16} />
                     </button>
+                    {isMobile && (
+                        <div className="adv-segmented today-segmented" role="radiogroup" aria-label="Today section">
+                        <button
+                            type="button"
+                            role="radio"
+                            aria-checked={mobileSection === 'daily'}
+                            className={`adv-seg-btn ${mobileSection === 'daily' ? 'adv-seg-active' : ''}`}
+                            onClick={() => setMobileSection('daily')}
+                        >
+                            <span>Daily Portion</span>
+                        </button>
+                        <button
+                            type="button"
+                            role="radio"
+                            aria-checked={mobileSection === 'review'}
+                            className={`adv-seg-btn ${mobileSection === 'review' ? 'adv-seg-active' : ''}`}
+                            onClick={() => setMobileSection('review')}
+                        >
+                            <span>Reviews</span>
+                        </button>
+                        </div>
+                    )}
                     <button
                         className="today-header-btn"
                         onClick={() => handleRedo('keyboard')}
@@ -1426,13 +1440,16 @@ export default function TodayPage() {
 
             <div className="today-grid">
                 {/* Reviews Col */}
-                <div className="card">
-                    <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span></div>
-                        <div className="flex items-center gap-2">
-                            <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
+                {(!isMobile || mobileSection === 'review') && (
+                <div className="card today-card today-card--review">
+                    {!isMobile && (
+                        <div className="collapsible-header" onClick={() => toggleSection('review')}>
+                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span></div>
+                            <div className="flex items-center gap-2">
+                                <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
@@ -1631,28 +1648,19 @@ export default function TodayPage() {
                         </div>
                     )}
                 </div>
+                )}
 
                 {/* Daily Portion Col */}
-                <div className="card">
-                    <div className="collapsible-header" onClick={() => toggleSection('daily')}>
-                        <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span></div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            {!listeningComplete && (
-                                <div className="toggle-wrapper" onClick={(e) => {
-                                    e.stopPropagation();
-                                    const nextReadOnly = !readOnlyMode;
-                                    setReadOnlyMode(nextReadOnly);
-                                    if (!nextReadOnly) {
-                                        setHighlightedWordIndex(-1);
-                                    }
-                                }} style={{ cursor: 'pointer' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: !readOnlyMode ? 'var(--accent)' : 'var(--foreground-secondary)' }}>Audio</span>
-                                    <div className={`toggle-switch ${!readOnlyMode ? 'active' : ''}`} />
-                                </div>
-                            )}
-                            <span className={`collapse-icon ${viewState.dailyExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
+                {(!isMobile || mobileSection === 'daily') && (
+                <div className="card today-card today-card--daily">
+                    {!isMobile && (
+                        <div className="collapsible-header" onClick={() => toggleSection('daily')}>
+                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <span className={`collapse-icon ${viewState.dailyExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {viewState.dailyExpanded && (
                         <div className="daily-section-content">
@@ -1756,6 +1764,7 @@ export default function TodayPage() {
                         </div>
                     )}
                 </div>
+                )}
             </div>
 
             <div className="toast-container" style={{

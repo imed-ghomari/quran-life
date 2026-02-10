@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { id } from '@instantdb/react';
 import { SURAHS } from '@/lib/quranData';
 import { CustomMutashabih, MutashabihatDecision } from '@/lib/types';
 import { X } from 'lucide-react';
@@ -41,7 +42,7 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
 
     const handleSave = () => {
         const newMut: CustomMutashabih = {
-            id: crypto.randomUUID(),
+            id: id(),
             verseId: `${surah1}:${ayah1}`,
             targetVerseId: `${surah2}:${ayah2}`,
             surahId: surah1,

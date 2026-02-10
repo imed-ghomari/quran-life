@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useContext, useRef } from 'react';
+import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
@@ -880,15 +881,7 @@ export default function SettingsPage() {
                                     <option value="not_due">Not Due</option>
                                 </select>
                             ) : (
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        background: 'var(--background)',
-                                        borderRadius: '8px',
-                                        padding: '1px',
-                                        border: '1px solid var(--border)'
-                                    }}
-                                >
+                                <div className="segmented-compact segmented-compact--small">
                                     {[
                                         { id: 'all', label: 'ALL' },
                                         { id: 'overdue', label: 'OVERDUE' },
@@ -900,19 +893,8 @@ export default function SettingsPage() {
                                             key={f.id}
                                             suppressHydrationWarning={true}
                                             onClick={() => setKnowledgeFilter(f.id as any)}
-                                            style={{
-                                                padding: '2px 6px',
-                                                fontSize: '9px',
-                                                fontWeight: 700,
-                                                borderRadius: '6px',
-                                                border: 'none',
-                                                background: knowledgeFilter === f.id ? 'var(--accent)' : 'transparent',
-                                                color: knowledgeFilter === f.id ? 'white' : 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                boxShadow: knowledgeFilter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-                                                flex: 1
-                                            }}
+                                            className={`adv-seg-btn ${knowledgeFilter === f.id ? 'adv-seg-active' : ''}`}
+                                            style={{ flex: 1 }}
                                         >
                                             {f.label}
                                         </button>
@@ -1627,7 +1609,7 @@ export default function SettingsPage() {
         const [s2, a2] = mut.targetVerseId.split(':').map(Number);
 
         const customItem = {
-            id: mut.id && isUuid(mut.id) ? mut.id : crypto.randomUUID(),
+            id: mut.id && isUuid(mut.id) ? mut.id : id(),
             verseId: mut.verseId,
             targetVerseId: mut.targetVerseId,
             surahId: s1,
@@ -2187,16 +2169,7 @@ export default function SettingsPage() {
                                                     <option value="not_due">Not Due</option>
                                                 </select>
                                             ) : (
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        background: 'var(--background)',
-                                                        borderRadius: '8px',
-                                                        padding: '3px',
-                                                        border: '1px solid var(--border)',
-                                                        width: 'fit-content'
-                                                    }}
-                                                >
+                                                <div className="segmented-compact segmented-compact--small" style={{ width: 'fit-content' }}>
                                                     {[
                                                         { id: 'all', label: 'ALL' },
                                                         { id: 'overdue', label: 'OVERDUE' },
@@ -2208,18 +2181,7 @@ export default function SettingsPage() {
                                                             key={f.id}
                                                             suppressHydrationWarning={true}
                                                             onClick={() => setKnowledgeFilter(f.id as any)}
-                                                            style={{
-                                                                padding: '4px 10px',
-                                                                fontSize: '0.65rem',
-                                                                fontWeight: 700,
-                                                                borderRadius: '6px',
-                                                                border: 'none',
-                                                                background: knowledgeFilter === f.id ? 'var(--accent)' : 'transparent',
-                                                                color: knowledgeFilter === f.id ? 'white' : 'var(--foreground-secondary)',
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s',
-                                                                boxShadow: knowledgeFilter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
-                                                            }}
+                                                            className={`adv-seg-btn ${knowledgeFilter === f.id ? 'adv-seg-active' : ''}`}
                                                         >
                                                             {f.label}
                                                         </button>

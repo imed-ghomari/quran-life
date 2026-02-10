@@ -821,6 +821,50 @@ h3 {
   gap: 0.4rem;
 }
 
+.today-segmented {
+  display: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: column;
+  column-gap: 6px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  width: 100%;
+}
+
+.today-segmented .adv-seg-btn {
+  padding: 6px 8px;
+  font-size: 0.7rem;
+  border-radius: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
+.segmented-compact {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: 6px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+.segmented-compact .adv-seg-btn {
+  padding: 6px 8px;
+  font-size: 0.6rem;
+  border-radius: 6px;
+  justify-content: center;
+}
+
+.segmented-compact--small .adv-seg-btn {
+  font-size: 0.58rem !important;
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+}
+
 .today-header-btn {
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--foreground) 8%, var(--border));
@@ -858,13 +902,27 @@ h3 {
 
   .today-header-actions {
     width: 100%;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 32px 1fr 32px;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .today-header-btn {
     width: 32px;
     height: 32px;
+    justify-self: center;
   }
+
+  .today-segmented {
+    display: grid;
+    justify-self: center;
+  }
+
+  .today-grid {
+    display: block;
+  }
+
 }
 
 /* Cards */
