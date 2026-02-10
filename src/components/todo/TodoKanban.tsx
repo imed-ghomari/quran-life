@@ -59,7 +59,7 @@ interface TodoKanbanProps {
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
     onImportPremade: (type: 'surah' | 'part', id: number) => void;
     onExportPremade?: (type: 'surah' | 'part', id: number) => void;
-    onResetMindmap?: (type: 'surah' | 'part', id: number) => void;
+    onResetMindmap?: (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
     onDeleteMindmap?: (type: 'surah' | 'part', id: number) => void;
     appMode: 'owner' | 'user';
@@ -77,6 +77,9 @@ interface TodoKanbanProps {
     // Persistence
     kanbanState?: Record<string, string[]>;
     onKanbanStateChange?: (state: Record<string, string[]>) => void;
+    defaultFilter?: 'all' | 'maintenance' | 'construction';
+    completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
+    kanbanSortOrder?: 'type_then_number' | 'number_only';
 }
 
 export default function TodoKanban({
@@ -106,7 +109,10 @@ export default function TodoKanban({
     onSaveAnchors,
     hasReviewedChunks,
     kanbanState,
-    onKanbanStateChange
+    onKanbanStateChange,
+    defaultFilter,
+    completeExitBehavior,
+    kanbanSortOrder
 }: TodoKanbanProps) {
     const [columns, setColumns] = useState<Record<string, KanbanColumnData>>({
         'backlog': { id: 'backlog', title: 'Backlog', items: [] },
@@ -118,8 +124,12 @@ export default function TodoKanban({
     const [isMobile, setIsMobile] = useState(false);
     const [isTablet, setIsTablet] = useState(false);
     // const [isDragging, setIsDragging] = useState(false); // Removed to avoid re-renders
-    const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>('all');
+    const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>(defaultFilter ?? 'all');
     const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        setFilter(defaultFilter ?? 'all');
+    }, [defaultFilter]);
 
     // Refs for stable access in callbacks
     const isMobileRef = useRef(false);
@@ -178,10 +188,11 @@ export default function TodoKanban({
         const hasSplits = !!(mindmap?.anchors && mindmap.anchors.length > 0);
 
         if (hasMap && hasSplits) {
+            const hasReviewed = hasReviewedChunks(item.data.surah.id);
             return [
-                
-                'Surah Mindmap and verses added to review.',
-              
+                hasReviewed
+                    ? 'Mindmap back in review, verses not touched.'
+                    : 'Surah Mindmap and verses added to review.',
             ].join('\n');
         }
         if (hasMap && !hasSplits) {
@@ -198,16 +209,28 @@ export default function TodoKanban({
             'Create a mindmap to complete this card.',
             
         ].join('\n');
-    }, []);
+    }, [hasReviewedChunks]);
 
     const getMindmapRemovalInfo = useCallback((item: KanbanItem): string => {
         if (item.type === 'part') {
             return 'Removed part mindmap from review. ';
         }
-      
-        return[ 'Removed surah mindmap from review.',
-        ' Verse reviews remain.'].join('\n');
-    }, []);
+        const mindmap = item.data.mindmap;
+        const hasSplits = !!(mindmap?.anchors && mindmap.anchors.length > 0);
+        if (!hasSplits) {
+            return 'Removed surah mindmap from review.';
+        }
+        if (completeExitBehavior === 'mindmap_and_verses') {
+            return [
+                'Removed surah mindmap from review.',
+                'Verse reviews suspended.'
+            ].join('\n');
+        }
+        return [
+            'Removed surah mindmap from review.',
+            'Verse reviews remain.'
+        ].join('\n');
+    }, [completeExitBehavior]);
 
     const hasMindmapForItem = useCallback((item: KanbanItem): boolean => {
         if (item.type === 'part') {
@@ -462,8 +485,18 @@ export default function TodoKanban({
 
         // Auto-sort logic
         const sortItems = (items: KanbanItem[]) => {
+            const getNumber = (item: KanbanItem) => {
+                if (item.type === 'surah') return item.data.surah.id;
+                if (item.type === 'part') return item.data.part;
+                if (item.type === 'suspended') return item.data.surahId;
+                if (item.type === 'similarity') return item.data.surah.id;
+                return 999;
+            };
             return items.sort((a, b) => {
-                // 1. Sort by Type Priority (Suspended > Similarity > Part > Surah)
+                if (kanbanSortOrder === 'number_only') {
+                    return getNumber(a) - getNumber(b);
+                }
+                // type_then_number (default)
                 const typePriority: Record<string, number> = {
                     'suspended': 0,
                     'similarity': 1,
@@ -473,15 +506,6 @@ export default function TodoKanban({
                 const pA = typePriority[a.type] ?? 99;
                 const pB = typePriority[b.type] ?? 99;
                 if (pA !== pB) return pA - pB;
-
-                // 2. Sort by ID Number (Surah ID or Part Number)
-                const getNumber = (item: KanbanItem) => {
-                    if (item.type === 'surah') return item.data.surah.id;
-                    if (item.type === 'part') return item.data.part;
-                    if (item.type === 'suspended') return item.data.surahId;
-                    if (item.type === 'similarity') return item.data.surah.id;
-                    return 999;
-                };
                 return getNumber(a) - getNumber(b);
             });
         };
@@ -492,7 +516,7 @@ export default function TodoKanban({
             'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, hiddenItemIds]);
+    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, hiddenItemIds, kanbanSortOrder]);
 
     const handleCompletionTrigger = useCallback((item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
@@ -737,12 +761,12 @@ export default function TodoKanban({
         }
     }, [onExportPremade]);
 
-    const handleCardResetMindmap = useCallback((item: KanbanItem) => {
+    const handleCardResetMindmap = useCallback((item: KanbanItem, resetMemoryNodes: boolean) => {
         if (!onResetMindmap) return;
         if (item.type === 'surah') {
-            onResetMindmap('surah', item.data.surah.id);
+            onResetMindmap('surah', item.data.surah.id, { resetMemoryNodes });
         } else if (item.type === 'part') {
-            onResetMindmap('part', item.data.part);
+            onResetMindmap('part', item.data.part, { resetMemoryNodes });
         }
     }, [onResetMindmap]);
 

@@ -38,7 +38,7 @@ import { useTheme } from '@/components/ThemeProvider';
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
     const { settings, saveSettings } = useInstantSettings();
-    const { nodes, saveNode } = useInstantNodes();
+    const { nodes, saveNode, deleteNode } = useInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
     const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
 
@@ -276,6 +276,15 @@ export default function TodoPage() {
             } else {
                 console.log('MemoryNode already exists, skipping creation');
             }
+        } else {
+            const behavior = settings.completeExitBehavior ?? 'mindmap_only';
+            if (behavior === 'mindmap_and_verses') {
+                const verseNodes = nodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                if (verseNodes.length > 0) {
+                    await Promise.all(verseNodes.map(n => deleteNode(n.id)));
+                    appLogger.addLog(`Suspended verse reviews for Surah ${surahId}`, 'info');
+                }
+            }
         }
     };
 
@@ -411,9 +420,28 @@ export default function TodoPage() {
         }
     }, [mindmaps, partMindmapsMap, user?.email]);
 
-    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number) => {
+    const resetMindmapNodes = useCallback(async (type: 'surah' | 'part', id: number) => {
+        const matching = nodes.filter(node => {
+            if (type === 'surah') return node.type === 'mindmap' && node.surahId === id;
+            return node.type === 'part_mindmap' && node.partId === id;
+        });
+        if (matching.length === 0) return;
+
+        await Promise.all(matching.map(node => saveNode({
+            ...node,
+            scheduler: createNewFSRSState(),
+            createdAt: new Date().toISOString()
+        })));
+
+        appLogger.addLog(`Reset memory nodes for ${type} ${id} mindmap`, 'info');
+    }, [nodes, saveNode]);
+
+    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => {
         await handleImportPremade(type, id);
-    }, [handleImportPremade]);
+        if (options?.resetMemoryNodes) {
+            await resetMindmapNodes(type, id);
+        }
+    }, [handleImportPremade, resetMindmapNodes]);
 
     useEffect(() => {
         if (isOwnerMode) return;
@@ -639,6 +667,9 @@ export default function TodoPage() {
                     isDark={isDark}
                     // Persisted State
                     kanbanState={settings.kanbanColumns}
+                    defaultFilter={settings.todoDefaultFilter ?? 'all'}
+                    completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
+                    kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
                     onKanbanStateChange={(cols) => {
                         saveSettings({
                             kanbanColumns: cols

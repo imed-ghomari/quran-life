@@ -805,6 +805,48 @@ h3 {
   color: var(--foreground);
 }
 
+.today-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.today-header h1 {
+  margin: 0;
+}
+
+.today-header-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.today-header-btn {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, var(--border));
+  color: var(--foreground-secondary);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.today-header-btn:hover:not(:disabled) {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.today-header-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Cards */
 .card {
   background: var(--background-secondary);
@@ -838,12 +880,25 @@ h3 {
 
 /* Daily: keep player fixed, only verse preview scrolls */
 .daily-section-content .today-card-content {
-  overflow: visible;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .daily-section-content .audio-mode-section {
   min-height: 0;
   overflow: hidden;
+}
+
+.daily-section-content .today-card-content--audio {
+  overflow: visible;
+}
+
+.daily-section-content .today-card-content--read .read-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
 }
 
 .review-section-content .today-card-footer {
@@ -2898,6 +2953,10 @@ input:focus {
     background-color: #f4f6f8 !important;
   }
 
+  :root:not([data-theme="dark"]) .daily-section-content .today-card-footer {
+    background-color: #f4f6f8 !important;
+  }
+
   :root:not([data-theme="dark"]) .roadmap-card {
     background-color: #ffffff !important;
   }
@@ -2915,6 +2974,10 @@ input:focus {
 }
 
 :root[data-theme="light"] .review-section-content .today-card-footer {
+  background-color: #f4f6f8 !important;
+}
+
+:root[data-theme="light"] .daily-section-content .today-card-footer {
   background-color: #f4f6f8 !important;
 }
 

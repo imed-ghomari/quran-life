@@ -5,6 +5,7 @@ import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/
 export interface AudioSettings {
     selectedReciterId: string;
     playbackState?: {
+        reciterId?: string;
         surahId: number;
         ayahId: number; // For ayah-based resumption
         timestamp: number; // Optional, for precise resumption

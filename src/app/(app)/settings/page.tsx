@@ -24,7 +24,8 @@ import {
     Sun,
     Moon,
     Monitor,
-    Palette
+    Palette,
+    Sliders
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
@@ -161,6 +162,28 @@ export default function SettingsPage() {
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme } = useTheme();
 
+    const todoFilterOptions = [
+        { id: 'all', label: 'All Items' },
+        { id: 'maintenance', label: 'Review Fixes' },
+        { id: 'construction', label: 'Study Progress' }
+    ] as const;
+    const reviewSortOptions = [
+        { id: 'surah_grouped', label: 'Grouped by Surah' },
+        { id: 'due_date', label: 'Due Date (Soonest First)' }
+    ] as const;
+    const completeExitOptions = [
+        { id: 'mindmap_only', label: 'Suspend Mindmap Only (Recommended)' },
+        { id: 'mindmap_and_verses', label: 'Suspend Mindmap + Verses' }
+    ] as const;
+    const kanbanSortOptions = [
+        { id: 'type_then_number', label: 'Type then Number (Default)' },
+        { id: 'number_only', label: 'Number Only' }
+    ] as const;
+    const dailyPortionModeOptions = [
+        { id: 'audio', label: 'Audio' },
+        { id: 'reading', label: 'Reading' }
+    ] as const;
+
     const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>({});
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
     const [expandedMutItems, setExpandedMutItems] = useState<Record<string, boolean>>({});
@@ -178,6 +201,7 @@ export default function SettingsPage() {
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [isMobile, setIsMobile] = useState(false);
+    const [knowledgeFilter, setKnowledgeFilter] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'not_due'>('all');
     const [activeSlideOverGroup, setActiveSlideOverGroup] = useState<{
         id: string;
         title: string;
@@ -185,6 +209,11 @@ export default function SettingsPage() {
         nodes: MemoryNode[];
         surahId?: number;
     } | null>(null);
+    const [todoDefaultFilter, setTodoDefaultFilter] = useState<'all' | 'maintenance' | 'construction'>(settings.todoDefaultFilter ?? 'all');
+    const [reviewSortOrder, setReviewSortOrder] = useState<'surah_grouped' | 'due_date'>(settings.reviewSortOrder ?? 'surah_grouped');
+    const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
+    const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only'>(settings.kanbanSortOrder ?? 'type_then_number');
+    const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
 
     const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
         id: string;
@@ -201,7 +230,7 @@ export default function SettingsPage() {
         representativeAbs: number;
     } | null>(null);
 
-    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | null>(null);
+    const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
     const mobileHistorySyncRef = useRef(false);
     const mobileHistoryKey = 'mobileSettingsPage';
 
@@ -252,6 +281,40 @@ export default function SettingsPage() {
         });
         return Object.values(latestMap);
     }, [memoryNodes]);
+
+    const getKnowledgeDueKey = (due: string | null): string | null => {
+        if (!due) return null;
+        const parsed = new Date(due);
+        if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+        const match = due.match(/\d{4}-\d{2}-\d{2}/);
+        return match ? match[0] : null;
+    };
+
+    const todayKey = new Date().toISOString().split('T')[0];
+
+    const matchesKnowledgeFilter = (node: MemoryNode): boolean => {
+        if (knowledgeFilter === 'all') return true;
+        const dueKey = getKnowledgeDueKey(getNodeDueDate(node));
+        if (!dueKey) return knowledgeFilter === 'not_due';
+        if (knowledgeFilter === 'not_due') return false;
+        if (knowledgeFilter === 'overdue') return dueKey < todayKey;
+        if (knowledgeFilter === 'today') return dueKey === todayKey;
+        if (knowledgeFilter === 'upcoming') return dueKey > todayKey;
+        return true;
+    };
+
+    const filteredPartMindmaps = latestPartMindmaps.filter(matchesKnowledgeFilter);
+    const filteredSurahMindmaps = latestSurahMindmaps.filter(matchesKnowledgeFilter);
+    const filteredVerseSegments = latestVerseSegments.filter(matchesKnowledgeFilter);
+
+    const getFilteredNodesForSlideOver = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number) => {
+        if (type === 'verse_segment' && surahId) {
+            return filteredVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+        }
+        if (type === 'mindmap') return filteredSurahMindmaps;
+        if (type === 'part_mindmap') return filteredPartMindmaps;
+        return [];
+    };
 
 
     // Sync instant decisions to local state for easier lookups
@@ -318,6 +381,7 @@ export default function SettingsPage() {
         activePart: true,
         surahStatus: true,
         mutashabihat: true,
+        advancedOptions: true,
     });
 
     const toggleSection = (key: keyof typeof sectionsExpanded) => {
@@ -337,6 +401,7 @@ export default function SettingsPage() {
                     activePart: true,
                     surahStatus: true,
                     mutashabihat: true,
+                    advancedOptions: true,
                 });
                 setShowDebugNodes(true);
             }
@@ -351,6 +416,7 @@ export default function SettingsPage() {
                     activePart: false,
                     surahStatus: false,
                     mutashabihat: false,
+                    advancedOptions: false,
                 });
                 setShowDebugNodes(false);
             } else {
@@ -361,6 +427,7 @@ export default function SettingsPage() {
                     activePart: true,
                     surahStatus: true,
                     mutashabihat: true,
+                    advancedOptions: true,
                 });
             }
         }
@@ -404,6 +471,26 @@ export default function SettingsPage() {
         // setSettings(getSettings());
 
     }, []);
+
+    useEffect(() => {
+        setTodoDefaultFilter(settings.todoDefaultFilter ?? 'all');
+    }, [settings.todoDefaultFilter]);
+
+    useEffect(() => {
+        setReviewSortOrder(settings.reviewSortOrder ?? 'surah_grouped');
+    }, [settings.reviewSortOrder]);
+
+    useEffect(() => {
+        setCompleteExitBehavior(settings.completeExitBehavior ?? 'mindmap_only');
+    }, [settings.completeExitBehavior]);
+
+    useEffect(() => {
+        setKanbanSortOrder(settings.kanbanSortOrder ?? 'type_then_number');
+    }, [settings.kanbanSortOrder]);
+
+    useEffect(() => {
+        setDailyPortionMode(settings.dailyPortionMode ?? 'audio');
+    }, [settings.dailyPortionMode]);
 
     const renderMobileView = () => {
 
@@ -765,9 +852,64 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Activity size={18} /> Knowledge Tracking
-                        </h2>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                                <Activity size={18} /> Knowledge Tracking
+                            </h2>
+                            {isMobile ? (
+                                <select
+                                    className="maturity-select"
+                                    value={knowledgeFilter}
+                                    onChange={(e) => setKnowledgeFilter(e.target.value as any)}
+                                    style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="overdue">Overdue</option>
+                                    <option value="today">Due Today</option>
+                                    <option value="upcoming">Upcoming</option>
+                                    <option value="not_due">Not Due</option>
+                                </select>
+                            ) : (
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        background: 'var(--background)',
+                                        borderRadius: '8px',
+                                        padding: '1px',
+                                        border: '1px solid var(--border)'
+                                    }}
+                                >
+                                    {[
+                                        { id: 'all', label: 'ALL' },
+                                        { id: 'overdue', label: 'OVERDUE' },
+                                        { id: 'today', label: 'DUE TODAY' },
+                                        { id: 'upcoming', label: 'UPCOMING' },
+                                        { id: 'not_due', label: 'NOT DUE' }
+                                    ].map((f) => (
+                                        <button
+                                            key={f.id}
+                                            suppressHydrationWarning={true}
+                                            onClick={() => setKnowledgeFilter(f.id as any)}
+                                            style={{
+                                                padding: '2px 6px',
+                                                fontSize: '9px',
+                                                fontWeight: 700,
+                                                borderRadius: '6px',
+                                                border: 'none',
+                                                background: knowledgeFilter === f.id ? 'var(--accent)' : 'transparent',
+                                                color: knowledgeFilter === f.id ? 'white' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                boxShadow: knowledgeFilter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                                flex: 1
+                                            }}
+                                        >
+                                            {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         <div className="knowledge-groups-mobile">
                             {/* MINDMAPS MOBILE GROUP */}
                             <div className="mobile-group-item">
@@ -784,11 +926,11 @@ export default function SettingsPage() {
                                             id: 'mindmaps-part',
                                             title: 'Part Mindmaps',
                                             type: 'part_mindmap' as any as any,
-                                            nodes: latestPartMindmaps
+                                            nodes: filteredPartMindmaps
                                         })}>
                                             <span>Part Mindmaps</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span className="status-badge">{latestPartMindmaps.length}</span>
+                                                <span className="status-badge">{filteredPartMindmaps.length}</span>
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
@@ -796,11 +938,11 @@ export default function SettingsPage() {
                                             id: 'mindmaps-surah',
                                             title: 'Surah Mindmaps',
                                             type: 'mindmap' as any as any,
-                                            nodes: latestSurahMindmaps
+                                            nodes: filteredSurahMindmaps
                                         })}>
                                             <span>Surah Mindmaps</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span className="status-badge">{latestSurahMindmaps.length}</span>
+                                                <span className="status-badge">{filteredSurahMindmaps.length}</span>
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
@@ -833,11 +975,23 @@ export default function SettingsPage() {
                                                 );
                                             }
 
-                                            return eligibleSurahs.map(surah => {
-                                                const surahId = surah.id;
-                                                const surahNodes = latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                            const visibleSurahs = knowledgeFilter === 'all'
+                                                ? eligibleSurahs
+                                                : eligibleSurahs.filter(surah => filteredVerseSegments.some(n => n.type === 'verse_segment' && n.surahId === surah.id));
 
-                                                // Always show the surah group, even if no nodes exist yet (0 items)
+                                            if (visibleSurahs.length === 0) {
+                                                return (
+                                                    <div className="empty-state" style={{ padding: '1rem' }}>No items match this filter.</div>
+                                                );
+                                            }
+
+                                            return visibleSurahs.map(surah => {
+                                                const surahId = surah.id;
+                                                const surahNodes = knowledgeFilter === 'all'
+                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                    : filteredVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+
+                                                // Always show the surah group when showing all items, even if no nodes exist yet (0 items)
                                                 // This allows users to set maturity for the whole group before starting reviews
                                                 return (
                                                     <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
@@ -855,6 +1009,322 @@ export default function SettingsPage() {
                                                 );
                                             });
                                         })()}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="card modern-card" style={{
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '16px',
+                                gridColumn: '1 / -1'
+                            }}>
+                                <div className="section-title"
+                                    onClick={() => toggleSection('advancedOptions')}
+                                    style={{
+                                        color: 'var(--accent)',
+                                        fontWeight: 700,
+                                        marginBottom: sectionsExpanded.advancedOptions ? '1rem' : '0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        fontSize: 'clamp(1rem, 5vw, 1.1rem)',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Sliders size={18} />
+                                        </div>
+                                        <span>Advanced Options</span>
+                                    </div>
+                                    <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.advancedOptions ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
+
+                                {sectionsExpanded.advancedOptions && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                            Choose defaults and behaviors for your workflow.
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>Default Todo Filter</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexWrap: 'wrap',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {todoFilterOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        onClick={() => {
+                                                            setTodoDefaultFilter(option.id);
+                                                            saveSettings({ todoDefaultFilter: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            background: (todoDefaultFilter ?? 'all') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (todoDefaultFilter ?? 'all') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        {option.label.toUpperCase()}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>Review Sorting</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexDirection: 'column',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {reviewSortOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setReviewSortOrder(option.id);
+                                                            saveSettings({ reviewSortOrder: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            background: (reviewSortOrder ?? 'surah_grouped') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (reviewSortOrder ?? 'surah_grouped') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>When Moving Out of Complete</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexDirection: 'column',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {completeExitOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setCompleteExitBehavior(option.id);
+                                                            saveSettings({ completeExitBehavior: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            background: (completeExitBehavior ?? 'mindmap_only') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (completeExitBehavior ?? 'mindmap_only') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>Kanban Card Sorting</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexDirection: 'column',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {kanbanSortOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setKanbanSortOrder(option.id);
+                                                            saveSettings({ kanbanSortOrder: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>Kanban Card Sorting</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexDirection: 'column',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {kanbanSortOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setKanbanSortOrder(option.id);
+                                                            saveSettings({ kanbanSortOrder: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>Kanban Card Sorting</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexDirection: 'column',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {kanbanSortOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setKanbanSortOrder(option.id);
+                                                            saveSettings({ kanbanSortOrder: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ fontWeight: 600 }}>Daily Portion Default Mode</div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    background: 'var(--background)',
+                                                    borderRadius: '8px',
+                                                    padding: '3px',
+                                                    border: '1px solid var(--border)',
+                                                    flexDirection: 'column',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {dailyPortionModeOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setDailyPortionMode(option.id);
+                                                            saveSettings({ dailyPortionMode: option.id });
+                                                        }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            background: (dailyPortionMode ?? 'audio') === option.id ? 'var(--accent)' : 'transparent',
+                                                            color: (dailyPortionMode ?? 'audio') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1011,6 +1481,238 @@ export default function SettingsPage() {
             );
         }
 
+        if (activeMobilePage === 'advanced') {
+            const currentTodoFilter = todoDefaultFilter ?? 'all';
+            const currentReviewSort = reviewSortOrder ?? 'surah_grouped';
+            const currentExitBehavior = completeExitBehavior ?? 'mindmap_only';
+
+            return (
+                <div className="content-wrapper tab-content">
+                    <div
+                        onClick={() => setActiveMobilePage(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', cursor: 'pointer' }}
+                    >
+                        <button onClick={() => setActiveMobilePage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                            <ChevronLeft size={28} />
+                        </button>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Advanced Options</h1>
+                    </div>
+
+                    <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Sliders size={18} /> Advanced Options
+                        </h2>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+                            Choose defaults and behaviors for your workflow.
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            <div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Default Todo Filter</div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        background: 'var(--background)',
+                                        borderRadius: '8px',
+                                        padding: '3px',
+                                        border: '1px solid var(--border)'
+                                    }}
+                                >
+                                    {todoFilterOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setTodoDefaultFilter(option.id);
+                                                saveSettings({ todoDefaultFilter: option.id });
+                                            }}
+                                            style={{
+                                                padding: '6px 10px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 700,
+                                                borderRadius: '6px',
+                                                border: 'none',
+                                                background: currentTodoFilter === option.id ? 'var(--accent)' : 'transparent',
+                                                color: currentTodoFilter === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                flex: 1
+                                            }}
+                                        >
+                                            {option.label.toUpperCase()}
+                                        </button>
+                                    ))}
+                                </div>
+
+                            </div>
+
+                            <div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Review Sorting</div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        background: 'var(--background)',
+                                        borderRadius: '8px',
+                                        padding: '3px',
+                                        border: '1px solid var(--border)',
+                                        flexDirection: 'column',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    {reviewSortOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setReviewSortOrder(option.id);
+                                                saveSettings({ reviewSortOrder: option.id });
+                                            }}
+                                            style={{
+                                                padding: '8px 10px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: currentReviewSort === option.id ? 'var(--accent)' : 'transparent',
+                                                color: currentReviewSort === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                            </div>
+
+                            <div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>When Moving Out of Complete</div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        background: 'var(--background)',
+                                        borderRadius: '8px',
+                                        padding: '3px',
+                                        border: '1px solid var(--border)',
+                                        flexDirection: 'column',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    {completeExitOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setCompleteExitBehavior(option.id);
+                                                saveSettings({ completeExitBehavior: option.id });
+                                            }}
+                                            style={{
+                                                padding: '8px 10px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: currentExitBehavior === option.id ? 'var(--accent)' : 'transparent',
+                                                color: currentExitBehavior === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                            </div>
+
+                            <div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Kanban Card Sorting</div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        background: 'var(--background)',
+                                        borderRadius: '8px',
+                                        padding: '3px',
+                                        border: '1px solid var(--border)',
+                                        flexDirection: 'column',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    {kanbanSortOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setKanbanSortOrder(option.id);
+                                                saveSettings({ kanbanSortOrder: option.id });
+                                            }}
+                                            style={{
+                                                padding: '8px 10px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'var(--accent)' : 'transparent',
+                                                color: (kanbanSortOrder ?? 'type_then_number') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Daily Portion Default Mode</div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        background: 'var(--background)',
+                                        borderRadius: '8px',
+                                        padding: '3px',
+                                        border: '1px solid var(--border)',
+                                        flexDirection: 'column',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    {dailyPortionModeOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setDailyPortionMode(option.id);
+                                                saveSettings({ dailyPortionMode: option.id });
+                                            }}
+                                            style={{
+                                                padding: '8px 10px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: (dailyPortionMode ?? 'audio') === option.id ? 'var(--accent)' : 'transparent',
+                                                color: (dailyPortionMode ?? 'audio') === option.id ? 'white' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="content-wrapper tab-content">
                 {/* <h1 className="text-2xl font-bold mb-6">Settings</h1> */}
@@ -1064,6 +1766,24 @@ export default function SettingsPage() {
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Progress Tracking</div>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Status, Knowledge, Similar Verses</div>
+                            </div>
+                        </div>
+                        <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
+                    </button>
+
+                    <button onClick={() => setActiveMobilePage('advanced')} className="modern-card" style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '1.25rem', background: 'var(--background-secondary)',
+                        border: '1px solid var(--border)', borderRadius: '16px',
+                        cursor: 'pointer', textAlign: 'left', width: '100%'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Sliders size={24} />
+                            </div>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Advanced Options</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Defaults, Behaviors</div>
                             </div>
                         </div>
                         <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
@@ -1687,7 +2407,7 @@ export default function SettingsPage() {
                                             >
                                                 <option value="">Select a surah to skip...</option>
                                                 {SURAHS.map(s => (
-                                                    <option key={s.id} value={s.id}>
+                                                    <option key={s.id} value={s.id} disabled={settings.skippedSurahs?.includes(s.id)}>
                                                         {s.id}. {s.name} ({s.arabicName})
                                                     </option>
                                                 ))}
@@ -1750,6 +2470,7 @@ export default function SettingsPage() {
                                     </>
                                 )}
                             </div>
+
                         </div>
 
                         <div style={{ marginTop: '1.5rem' }}>
@@ -1780,7 +2501,64 @@ export default function SettingsPage() {
                                         </div>
                                         <span>Knowledge Tracking</span>
                                     </div>
-                                    <ChevronDown className="md:hidden" size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        {showDebugNodes && (
+                                            isMobile ? (
+                                                <select
+                                                    className="maturity-select"
+                                                    value={knowledgeFilter}
+                                                    onChange={(e) => setKnowledgeFilter(e.target.value as any)}
+                                                    style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                                >
+                                                    <option value="all">All</option>
+                                                    <option value="overdue">Overdue</option>
+                                                    <option value="today">Due Today</option>
+                                                    <option value="upcoming">Upcoming</option>
+                                                    <option value="not_due">Not Due</option>
+                                                </select>
+                                            ) : (
+                                                <div
+                                                    style={{
+                                                        display: 'flex',
+                                                        background: 'var(--background)',
+                                                        borderRadius: '8px',
+                                                        padding: '3px',
+                                                        border: '1px solid var(--border)',
+                                                        width: 'fit-content'
+                                                    }}
+                                                >
+                                                    {[
+                                                        { id: 'all', label: 'ALL' },
+                                                        { id: 'overdue', label: 'OVERDUE' },
+                                                        { id: 'today', label: 'DUE TODAY' },
+                                                        { id: 'upcoming', label: 'UPCOMING' },
+                                                        { id: 'not_due', label: 'NOT DUE' }
+                                                    ].map((f) => (
+                                                        <button
+                                                            key={f.id}
+                                                            suppressHydrationWarning={true}
+                                                            onClick={() => setKnowledgeFilter(f.id as any)}
+                                                            style={{
+                                                                padding: '4px 10px',
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: 700,
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                background: knowledgeFilter === f.id ? 'var(--accent)' : 'transparent',
+                                                                color: knowledgeFilter === f.id ? 'white' : 'var(--foreground-secondary)',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                boxShadow: knowledgeFilter === f.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                                            }}
+                                                        >
+                                                            {f.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )
+                                        )}
+                                        <ChevronDown className="md:hidden" size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
                                 </div>
 
                                 {showDebugNodes && (
@@ -1806,11 +2584,11 @@ export default function SettingsPage() {
                                                                 id: 'mindmaps-part',
                                                                 title: 'Part Mindmaps',
                                                                 type: 'part_mindmap' as any,
-                                                                nodes: latestPartMindmaps
+                                                                nodes: filteredPartMindmaps
                                                             })}>
                                                                 <span>Part Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{latestPartMindmaps.length}</span>
+                                                                    <span className="status-badge">{filteredPartMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -1818,11 +2596,11 @@ export default function SettingsPage() {
                                                                 id: 'mindmaps-surah',
                                                                 title: 'Surah Mindmaps',
                                                                 type: 'mindmap' as any,
-                                                                nodes: latestSurahMindmaps
+                                                                nodes: filteredSurahMindmaps
                                                             })}>
                                                                 <span>Surah Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{latestSurahMindmaps.length}</span>
+                                                                    <span className="status-badge">{filteredSurahMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -1863,9 +2641,23 @@ export default function SettingsPage() {
                                                                     );
                                                                 }
 
-                                                                return filteredSurahs.map(surahId => {
+                                                                const visibleSurahs = knowledgeFilter === 'all'
+                                                                    ? filteredSurahs
+                                                                    : filteredSurahs.filter(surahId =>
+                                                                        filteredVerseSegments.some(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                    );
+
+                                                                if (visibleSurahs.length === 0) {
+                                                                    return (
+                                                                        <div className="empty-state" style={{ padding: '1rem' }}>No items match this filter.</div>
+                                                                    );
+                                                                }
+
+                                                                return visibleSurahs.map(surahId => {
                                                                     const surah = getSurah(surahId!);
-                                                                    const surahNodes = latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                                                    const surahNodes = knowledgeFilter === 'all'
+                                                                        ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                        : filteredVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
                                                                     return (
                                                                         <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                                             id: `verse-surah-${surahId}`,
@@ -1960,8 +2752,8 @@ export default function SettingsPage() {
                                                                     </td>
                                                                 </tr>
                                                                 {expandedGroups['mindmaps-part'] && (
-                                                                    latestPartMindmaps.length > 0 ? (
-                                                                        latestPartMindmaps
+                                                                    filteredPartMindmaps.length > 0 ? (
+                                                                        filteredPartMindmaps
                                                                             .sort((a, b) => (a.partId || 0) - (b.partId || 0))
                                                                             .map(node => {
                                                                                 const due = getNodeDueDate(node);
@@ -2026,8 +2818,8 @@ export default function SettingsPage() {
                                                                     </td>
                                                                 </tr>
                                                                 {expandedGroups['mindmaps-surah'] && (
-                                                                    latestSurahMindmaps.length > 0 ? (
-                                                                        latestSurahMindmaps
+                                                                    filteredSurahMindmaps.length > 0 ? (
+                                                                        filteredSurahMindmaps
                                                                             .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
                                                                             .map(node => {
                                                                                 const due = getNodeDueDate(node);
@@ -2117,10 +2909,22 @@ export default function SettingsPage() {
                                                                         );
                                                                     }
 
-                                                                    return filteredSurahs.map(surahId => {
+                                                                    const visibleSurahs = knowledgeFilter === 'all'
+                                                                        ? filteredSurahs
+                                                                        : filteredSurahs.filter(surahId =>
+                                                                            filteredVerseSegments.some(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                        );
+
+                                                                    if (visibleSurahs.length === 0) {
+                                                                        return (
+                                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No items match this filter.</td></tr>
+                                                                        );
+                                                                    }
+
+                                                                    return visibleSurahs.map(surahId => {
                                                                         const surah = getSurah(surahId!);
                                                                         const surahKey = `verse-surah-${surahId}`;
-                                                                        const surahNodes = latestVerseSegments
+                                                                        const surahNodes = (knowledgeFilter === 'all' ? latestVerseSegments : filteredVerseSegments)
                                                                             .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
                                                                             .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
 
@@ -2674,6 +3478,169 @@ export default function SettingsPage() {
                                 </div>
                             )}
                         </div>
+
+                        <div className="card modern-card" style={{
+                            marginTop: '1.5rem',
+                            background: 'var(--background-secondary)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '16px',
+                            gridColumn: '1 / -1'
+                        }}>
+                            <div className="section-title"
+                                onClick={() => toggleSection('advancedOptions')}
+                                style={{
+                                    color: 'var(--accent)',
+                                    fontWeight: 700,
+                                    marginBottom: sectionsExpanded.advancedOptions ? '1rem' : '0',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '0.75rem',
+                                    fontSize: 'clamp(1rem, 5vw, 1.1rem)',
+                                    cursor: 'pointer'
+                                }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <Sliders size={18} />
+                                    </div>
+                                    <span>Advanced Options</span>
+                                </div>
+                                <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.advancedOptions ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            </div>
+
+                            {sectionsExpanded.advancedOptions && (
+                                <div className="adv-options">
+                                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                        Choose defaults and behaviors for your workflow.
+                                    </div>
+
+                                    <div className="adv-grid">
+                                        <div className="adv-card">
+                                            <div className="adv-card-title">Sorting & Filters</div>
+
+                                            <div className="adv-group">
+                                                <div className="adv-label">Default Todo Filter</div>
+                                                <div className="adv-chip-row">
+                                                    {todoFilterOptions.map((option) => {
+                                                        const isActive = (todoDefaultFilter ?? 'all') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setTodoDefaultFilter(option.id);
+                                                                    saveSettings({ todoDefaultFilter: option.id });
+                                                                }}
+                                                                className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="adv-group">
+                                                <div className="adv-label">Review Sorting</div>
+                                                <div className="adv-chip-row">
+                                                    {reviewSortOptions.map((option) => {
+                                                        const isActive = (reviewSortOrder ?? 'surah_grouped') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setReviewSortOrder(option.id);
+                                                                    saveSettings({ reviewSortOrder: option.id });
+                                                                }}
+                                                                className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="adv-group">
+                                                <div className="adv-label">Kanban Card Sorting</div>
+                                                <div className="adv-chip-row">
+                                                    {kanbanSortOptions.map((option) => {
+                                                        const isActive = (kanbanSortOrder ?? 'type_then_number') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setKanbanSortOrder(option.id);
+                                                                    saveSettings({ kanbanSortOrder: option.id });
+                                                                }}
+                                                                className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="adv-card">
+                                            <div className="adv-card-title">Workflow Behaviors</div>
+
+                                            <div className="adv-group">
+                                                <div className="adv-label">When Moving Out of Complete</div>
+                                                <div className="adv-segmented">
+                                                    {completeExitOptions.map((option) => {
+                                                        const isActive = (completeExitBehavior ?? 'mindmap_only') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setCompleteExitBehavior(option.id);
+                                                                    saveSettings({ completeExitBehavior: option.id });
+                                                                }}
+                                                                className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="adv-group">
+                                                <div className="adv-label">Daily Portion Default Mode</div>
+                                                <div className="adv-segmented">
+                                                    {dailyPortionModeOptions.map((option) => {
+                                                        const isActive = (dailyPortionMode ?? 'audio') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setDailyPortionMode(option.id);
+                                                                    saveSettings({ dailyPortionMode: option.id });
+                                                                }}
+                                                                className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -3056,14 +4023,132 @@ export default function SettingsPage() {
                         color: var(--danger);
                     }
 
-                    .status-badge {
-                        font-size: 0.7rem;
-                        padding: 2px 6px;
-                        border-radius: 4px;
-                        background: var(--accent-light);
-                        color: white;
-                        font-weight: 600;
+                .status-badge {
+                    font-size: 0.7rem;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    background: var(--accent-light);
+                    color: white;
+                    font-weight: 600;
+                }
+
+                .adv-options {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.9rem;
+                }
+
+                .adv-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 0.9rem;
+                }
+
+                .adv-card {
+                    background: var(--background);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 0.9rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.85rem;
+                }
+
+                .adv-card-title {
+                    font-weight: 700;
+                    font-size: 0.95rem;
+                    color: var(--foreground);
+                }
+
+                .adv-group {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                }
+
+                .adv-label {
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    color: var(--foreground);
+                }
+
+                .adv-chip-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.5rem;
+                }
+
+                .adv-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 6px 10px;
+                    border-radius: 10px;
+                    border: 1px solid var(--border);
+                    background: var(--background);
+                    color: var(--foreground-secondary);
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                .adv-chip:hover {
+                    background: var(--background-secondary);
+                }
+
+                .adv-chip-active {
+                    border-color: var(--accent);
+                    color: var(--foreground);
+                    background: var(--background-secondary);
+                    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.02);
+                }
+
+                .adv-segmented {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    gap: 6px;
+                    padding: 4px;
+                    border-radius: 12px;
+                    border: 1px solid var(--border);
+                    background: var(--background);
+                }
+
+                .adv-seg-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 8px 10px;
+                    border-radius: 10px;
+                    border: 1px solid transparent;
+                    background: transparent;
+                    color: var(--foreground-secondary);
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                .adv-seg-btn:hover {
+                    background: var(--background-secondary);
+                }
+
+                .adv-seg-active {
+                    border-color: var(--accent);
+                    color: var(--foreground);
+                    background: var(--background-secondary);
+                }
+
+                .adv-check {
+                    color: var(--accent);
+                    flex-shrink: 0;
+                }
+
+                @media (min-width: 900px) {
+                    .adv-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
                     }
+                }
                 `}</style>
 
             <AddCustomMutashabihModal
@@ -3122,9 +4207,7 @@ export default function SettingsPage() {
                                         // Update local state to reflect changes
                                             setActiveSlideOverGroup(prev => {
                                                 if (!prev) return null;
-                                                const updatedNodes = prev.type === 'verse_segment'
-                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === prev.surahId)
-                                                    : instantNodes.filter(n => n.type === prev.type);
+                                                const updatedNodes = getFilteredNodesForSlideOver(prev.type, prev.surahId);
                                                 return { ...prev, nodes: updatedNodes };
                                             });
                                     }}
@@ -3163,9 +4246,7 @@ export default function SettingsPage() {
                                                             // Update local nodes in slideover
                                                             setActiveSlideOverGroup(prev => {
                                                                 if (!prev) return null;
-                                                                const updatedNodes = prev.type === 'verse_segment'
-                                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === prev.surahId)
-                                                                    : instantNodes.filter(n => n.type === prev.type);
+                                                                const updatedNodes = getFilteredNodesForSlideOver(prev.type, prev.surahId);
                                                                 return { ...prev, nodes: updatedNodes };
                                                             });
                                                         }}
