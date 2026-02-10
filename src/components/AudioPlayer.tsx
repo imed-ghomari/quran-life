@@ -268,10 +268,23 @@ export default function AudioPlayer({
             setVerseStartTime(startTime);
             setVerseEndTime(endTime);
             setActiveSegments(segments);
-            onWordIndexChange?.(-1);
-            lastWordIndexRef.current = -1;
+
+            let initialIndex = -1;
+            if (onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0 && isPlaying) {
+                if (segments && segments.length > 0) {
+                    const maxWordIndex = segments.reduce((max, s) => Math.max(max, s[0] ?? 0), 0);
+                    const indexOffset = maxWordIndex === currentVerseWordCount ? -1 : 0;
+                    const rawIndex = (segments[0]?.[0] ?? 0) + indexOffset;
+                    initialIndex = rawIndex >= 0 && rawIndex < currentVerseWordCount ? rawIndex : 0;
+                } else {
+                    initialIndex = 0;
+                }
+            }
+
+            onWordIndexChange?.(initialIndex);
+            lastWordIndexRef.current = initialIndex;
         }
-    }, [currentVerse, selectedReciter, recitationData, speed, useFallback, isLoadingReciter, settings?.audioSettings?.selectedReciterId]); 
+    }, [currentVerse, selectedReciter, recitationData, speed, useFallback, isLoadingReciter, settings?.audioSettings?.selectedReciterId, currentVerseWordCount, isPlaying]); 
 
     // Handle Play/Pause effect
     useEffect(() => {

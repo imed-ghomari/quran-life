@@ -22,6 +22,7 @@ import { getAppModeForEmail } from '@/lib/appMode';
 import { db } from '@/lib/instant';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
+import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 
 
 /**
@@ -54,6 +55,7 @@ export default function TodoPage() {
     const isOwnerMode = appMode === 'owner';
     const [premadeIndex, setPremadeIndex] = useState<{ surah: number[]; part: number[]; updatedAt?: string } | null>(null);
     const autoImportedRef = useRef<Set<string>>(new Set());
+    const { alert } = useConfirmDialog();
 
     // -- 2. Data Memoization & Deduplication --
     // We map raw lists to a dictionary for O(1) access. 
@@ -294,11 +296,17 @@ export default function TodoPage() {
             if (!response.ok) {
                 if (response.status === 404) {
                     if (!options?.silent) {
-                        alert(`Premade mindmap for this ${type} is not available yet.`);
+                        await alert({
+                            title: 'Premade Mindmap Not Available',
+                            message: `Premade mindmap for this ${type} is not available yet.`,
+                        });
                     }
                 } else {
                     if (!options?.silent) {
-                        alert(`Failed to import mindmap: ${response.statusText}`);
+                        await alert({
+                            title: 'Import Failed',
+                            message: `Failed to import mindmap: ${response.statusText}`,
+                        });
                     }
                 }
                 return;
@@ -374,20 +382,29 @@ export default function TodoPage() {
             }
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
             if (!options?.silent) {
-                alert(`Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`);
+                await alert({
+                    title: 'Import Complete',
+                    message: `Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`,
+                });
             }
         } catch (error) {
             console.error('Import failed:', error);
             if (!options?.silent) {
-                alert('Failed to import mindmap. Please try again.');
+                await alert({
+                    title: 'Import Failed',
+                    message: 'Failed to import mindmap. Please try again.',
+                });
             }
         }
-    }, [mindmaps, partMindmapsMap, saveMindMap, savePartMindMap]);
+    }, [mindmaps, partMindmapsMap, saveMindMap, savePartMindMap, alert]);
 
     const handleExportPremade = useCallback(async (type: 'surah' | 'part', id: number) => {
         const mindmap = type === 'surah' ? mindmaps[id] : partMindmapsMap[id];
         if (!mindmap?.tldrawSnapshot) {
-            alert('No tldraw mindmap found to export.');
+            await alert({
+                title: 'Nothing to Export',
+                message: 'No tldraw mindmap found to export.',
+            });
             return;
         }
         const anchors = type === 'surah' ? (mindmaps[id]?.anchors || []) : [];
@@ -407,18 +424,27 @@ export default function TodoPage() {
             });
             if (!response.ok) {
                 const msg = await response.text();
-                alert(`Export failed: ${msg || response.statusText}`);
+                await alert({
+                    title: 'Export Failed',
+                    message: `Export failed: ${msg || response.statusText}`,
+                });
                 return;
             }
             const data = await response.json();
             setPremadeIndex(data.index || null);
             appLogger.addLog(`Exported premade mindmap for ${type} ${id}`, 'success');
-            alert(`Premade mindmap for ${type} ${id} exported successfully.`);
+            await alert({
+                title: 'Export Complete',
+                message: `Premade mindmap for ${type} ${id} exported successfully.`,
+            });
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Failed to export mindmap. Please try again.');
+            await alert({
+                title: 'Export Failed',
+                message: 'Failed to export mindmap. Please try again.',
+            });
         }
-    }, [mindmaps, partMindmapsMap, user?.email]);
+    }, [mindmaps, partMindmapsMap, user?.email, alert]);
 
     const resetMindmapNodes = useCallback(async (type: 'surah' | 'part', id: number) => {
         const matching = nodes.filter(node => {
