@@ -688,6 +688,21 @@ body {
   color: var(--foreground);
 }
 
+/* Audio word highlighting */
+.audio-word {
+  display: inline-block;
+  padding: 0 2px;
+  border-radius: 4px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  box-decoration-break: clone;
+}
+
+.audio-word--active {
+  background-color: rgba(91, 143, 185, 0.35);
+  background-color: color-mix(in srgb, var(--accent), transparent 70%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 40%);
+}
+
 /* Page layout */
 .page-container {
   min-height: 100vh;
@@ -821,6 +836,16 @@ h3 {
   padding-bottom: 1rem;
 }
 
+/* Daily: keep player fixed, only verse preview scrolls */
+.daily-section-content .today-card-content {
+  overflow: visible;
+}
+
+.daily-section-content .audio-mode-section {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .review-section-content .today-card-footer {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
@@ -829,7 +854,7 @@ h3 {
 .today-card-footer {
   position: sticky;
   bottom: 0;
-  background-color: inherit !important;
+  background-color: var(--background-secondary) !important;
   padding-top: 0.75rem;
   padding-bottom: 0.25rem;
   margin-top: auto;
@@ -1811,9 +1836,6 @@ input:focus {
   padding-right: 1.25rem;
 }
 
-.daily-portion-card {
-  min-height: 220px;
-}
 
 @media (max-width: 768px) {
   .future-due-header {
@@ -1847,6 +1869,24 @@ input:focus {
   }
 }
 
+@media (min-width: 768px) and (max-width: 1024px) {
+  .future-due-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .future-due-title {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .future-due-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 @media (min-width: 768px) {
   .stats-grid-main {
     grid-template-columns: repeat(2, 1fr);
@@ -1858,14 +1898,6 @@ input:focus {
     padding-right: 2rem;
     padding-top: 2rem;
     padding-bottom: 2rem;
-  }
-}
-
-@media (min-width: 900px) {
-  .daily-portion-card {
-    min-height: 0;
-    height: 50%;
-    align-self: start;
   }
 }
 
@@ -2096,7 +2128,7 @@ input:focus {
   .today-card-footer {
     position: sticky;
     bottom: 0;
-    background-color: inherit !important;
+    background-color: var(--background-secondary) !important;
     padding-top: 0.75rem;
     padding-bottom: 0.25rem;
     margin-top: auto;
@@ -2899,6 +2931,11 @@ input:focus {
 
 :root[data-theme="dark"] .review-section-content .today-card-footer {
   background-color: var(--background-secondary) !important;
+}
+
+/* Align kanban title icons with text */
+.kanban-title-icon {
+  transform: translateY(5px);
 }
 
 /* Desktop Left Toolbar */

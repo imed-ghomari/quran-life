@@ -276,19 +276,52 @@ export default function TodayPage() {
     const [isDark, setIsDark] = useState(false);
 
     const verseContainerRef = useRef<HTMLDivElement>(null);
+    const reviewScrollAnimRef = useRef<number | null>(null);
+
+    const smoothScrollContainer = useCallback((container: HTMLElement, targetTop: number, duration: number = 550) => {
+        if (reviewScrollAnimRef.current !== null) {
+            cancelAnimationFrame(reviewScrollAnimRef.current);
+            reviewScrollAnimRef.current = null;
+        }
+
+        const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        const clampedTarget = Math.max(0, Math.min(targetTop, maxTop));
+        const startTop = container.scrollTop;
+        const startTime = performance.now();
+
+        const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+        const step = (now: number) => {
+            const elapsed = Math.min(1, (now - startTime) / duration);
+            const eased = easeInOut(elapsed);
+            container.scrollTop = startTop + (clampedTarget - startTop) * eased;
+            if (elapsed < 1) {
+                reviewScrollAnimRef.current = requestAnimationFrame(step);
+            } else {
+                reviewScrollAnimRef.current = null;
+            }
+        };
+
+        reviewScrollAnimRef.current = requestAnimationFrame(step);
+    }, []);
 
     useEffect(() => {
         if (highlightedWordIndex !== -1 && verseContainerRef.current) {
             const wordEl = document.getElementById(`word-${highlightedWordIndex}`);
             if (wordEl) {
                 const container = verseContainerRef.current;
-                const offsetTop = wordEl.offsetTop;
-                const containerHeight = container.clientHeight;
-                const scrollTop = offsetTop - (containerHeight / 2) + (wordEl.clientHeight / 2);
-                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                const containerRect = container.getBoundingClientRect();
+                const wordRect = wordEl.getBoundingClientRect();
+                const padding = 12;
+                const isOutOfView = wordRect.top < containerRect.top + padding || wordRect.bottom > containerRect.bottom - padding;
+                if (isOutOfView) {
+                    const offset = wordRect.top - containerRect.top;
+                    const targetTop = container.scrollTop + offset - (container.clientHeight / 2) + (wordRect.height / 2);
+                    smoothScrollContainer(container, targetTop);
+                }
             }
         }
-    }, [highlightedWordIndex]);
+    }, [highlightedWordIndex, smoothScrollContainer]);
 
     // Keep review index in sync with changing due queue to avoid blanks
     useEffect(() => {
@@ -897,34 +930,46 @@ export default function TodayPage() {
                     : [];
                 const lastRevealed = visibleChunks[visibleChunks.length - 1] || activeVerse;
 
-                const chunkTop = lastRevealed.offsetTop;
-                const chunkBottom = chunkTop + lastRevealed.offsetHeight;
-                const viewTop = container.scrollTop;
-                const viewBottom = viewTop + containerHeight;
-                const margin = 8;
+                const targetEl = lastRevealed || activeVerse;
+                const nextChunkEl = textEl?.querySelector('.next-blur') as HTMLElement | null;
+                const nextVerseEl = activeVerse.nextElementSibling as HTMLElement | null;
+                const nextVerseBlock = nextVerseEl && nextVerseEl.classList.contains('grouped-verse-block') ? nextVerseEl : null;
+                const containerRect = container.getBoundingClientRect();
+                const targetRect = targetEl.getBoundingClientRect();
+                const nextRect = nextChunkEl?.getBoundingClientRect();
+                const nextVerseRect = nextVerseBlock?.getBoundingClientRect();
+                const styles = window.getComputedStyle(container);
+                const paddingBottom = Number.parseFloat(styles.paddingBottom || '0') || 0;
+                const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0;
+                const marginTop = Math.max(8, paddingTop);
+                const marginBottom = Math.max(24, paddingBottom);
 
-                if (chunkTop < viewTop + margin || chunkBottom > viewBottom - margin) {
-                    let desiredTop = viewTop;
+                const targetTop = targetRect.top - containerRect.top;
+                const targetBottom = targetRect.bottom - containerRect.top;
+                const nextTop = nextRect ? nextRect.top - containerRect.top : targetTop;
+                const nextBottom = nextRect ? nextRect.bottom - containerRect.top : targetBottom;
+                const nextVerseTop = nextVerseRect ? nextVerseRect.top - containerRect.top : targetTop;
+                const nextVerseBottom = nextVerseRect ? nextVerseRect.bottom - containerRect.top : targetBottom;
+                const combinedTop = Math.min(targetTop, nextTop, nextVerseTop);
+                const combinedBottom = Math.max(targetBottom, nextBottom, nextVerseBottom);
 
-                    if (chunkTop < viewTop + margin) {
-                        desiredTop = chunkTop - margin;
-                    } else if (chunkBottom > viewBottom - margin) {
-                        desiredTop = chunkBottom - containerHeight + margin;
+                if (combinedTop < marginTop || combinedBottom > containerHeight - marginBottom) {
+                    let desiredTop = container.scrollTop;
+                    if (combinedTop < marginTop) {
+                        desiredTop = container.scrollTop + combinedTop - marginTop;
+                    } else if (combinedBottom > containerHeight - marginBottom) {
+                        desiredTop = container.scrollTop + (combinedBottom - containerHeight + marginBottom);
                     }
-
-                    container.scrollTo({
-                        top: Math.max(0, desiredTop),
-                        behavior: 'smooth'
-                    });
+                    smoothScrollContainer(container, desiredTop, 420);
                 }
                 return;
             }
 
             if (showGrading) {
-                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                smoothScrollContainer(container, container.scrollHeight, 420);
             }
         });
-    }, [revealedChunks, currentVerseInReview, showGrading]);
+    }, [revealedChunks, currentVerseInReview, showGrading, smoothScrollContainer]);
 
     // Move isLoaded check to AFTER all hooks
     const moveMindmapToInProgress = async (itemId: string) => {
@@ -945,35 +990,33 @@ export default function TodayPage() {
         await saveSettings({ kanbanColumns: nextCols });
     };
 
-    const handleMindmapIncomplete = (surahId: number) => {
+    const handleMindmapIncomplete = async (surahId: number) => {
         if (!window.confirm("Are you sure you want to mark this mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
         const mm = mindmaps.find(m => m.surahId === surahId);
         if (mm) {
             const updated = { ...mm, isComplete: false };
-            saveMindMap(surahId, updated);
-            addToast(
-                'success',
-                'Mindmap marked as incomplete',
-                `${getSurah(surahId)?.name || 'Surah'}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
-            );
-            void moveMindmapToInProgress(`surah-${surahId}`);
+            try {
+                await saveMindMap(surahId, updated);
+                await moveMindmapToInProgress(`surah-${surahId}`);
+            } catch (err) {
+                console.error('Failed to mark mindmap incomplete', err);
+            }
         }
     };
 
-    const handlePartMindmapIncomplete = (partId: QuranPart) => {
+    const handlePartMindmapIncomplete = async (partId: QuranPart) => {
         if (!window.confirm("Are you sure you want to mark this part mindmap as INCOMPLETE? It will be removed from the review section until you mark it as complete again.")) return;
 
         const mm = partMindMaps.find(m => m.partId === partId);
         if (mm) {
             const updated = { ...mm, isComplete: false };
-            savePartMindMap(partId, updated);
-            addToast(
-                'success',
-                'Part mindmap marked as incomplete',
-                `Part ${partId}\nMoved to In Progress and removed from the review queue. Verse reviews are unchanged.`
-            );
-            void moveMindmapToInProgress(`part-${partId}`);
+            try {
+                await savePartMindMap(partId, updated);
+                await moveMindmapToInProgress(`part-${partId}`);
+            } catch (err) {
+                console.error('Failed to mark part mindmap incomplete', err);
+            }
         }
     };
 
@@ -1273,6 +1316,7 @@ export default function TodayPage() {
                                                     <AudioPlayer
                                                         verses={todaysPortion}
                                                         currentVerseIndex={currentVerseIndex}
+                                                        currentVerseWordCount={todaysPortion[currentVerseIndex]?.text.split(' ').length || 0}
                                                         onVerseChange={setCurrentVerseIndex}
                                                         onWordIndexChange={setHighlightedWordIndex}
                                                     />
@@ -1310,11 +1354,11 @@ export default function TodayPage() {
                                                             )}
                                                             <div className="arabic-text">
                                                                 {todaysPortion[currentVerseIndex].text.split(' ').map((word, i) => (
-                                                                    <span key={i} id={`word-${i}`} style={{
-                                                                        backgroundColor: i === highlightedWordIndex ? 'color-mix(in srgb, var(--accent), transparent 85%)' : 'transparent',
-                                                                        borderRadius: '4px',
-                                                                        transition: 'background-color 0.2s'
-                                                                    }}>
+                                                                    <span
+                                                                        key={i}
+                                                                        id={`word-${i}`}
+                                                                        className={`audio-word ${i === highlightedWordIndex ? 'audio-word--active' : ''}`}
+                                                                    >
                                                                         {word} {' '}
                                                                     </span>
                                                                 ))}
@@ -1383,10 +1427,13 @@ export default function TodayPage() {
                         gap: 4,
                         boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
                         animation: 'slideInRight 0.3s ease-out',
-                        background: t.type === 'success' ? 'var(--success)' :
-                            t.type === 'postpone' ? 'var(--background-secondary)' : 'var(--danger)',
+                        background: t.type === 'success'
+                            ? 'color-mix(in srgb, var(--success) 18%, var(--background-secondary))'
+                            : t.type === 'postpone'
+                                ? 'color-mix(in srgb, var(--warning) 16%, var(--background-secondary))'
+                                : 'color-mix(in srgb, var(--danger) 16%, var(--background-secondary))',
                         border: '1px solid var(--border)',
-                        color: t.type === 'postpone' ? 'var(--foreground)' : 'white',
+                        color: 'var(--foreground)',
                         minWidth: '180px',
                         fontSize: '0.85rem',
                         pointerEvents: 'auto',
@@ -1400,8 +1447,8 @@ export default function TodayPage() {
                             <button
                                 onClick={handleUndo}
                                 style={{
-                                    background: 'rgba(255,255,255,0.2)',
-                                    border: 'none',
+                                    background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                    border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
                                     color: 'inherit',
                                     padding: '0.2rem 0.5rem',
                                     borderRadius: '4px',
@@ -1411,6 +1458,23 @@ export default function TodayPage() {
                                 }}
                             >
                                 Undo
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                }}
+                                style={{
+                                    background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                    border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                    color: 'inherit',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    marginLeft: 0
+                                }}
+                            >
+                                Skip
                             </button>
                         </div>
                         {t.info && (
@@ -1426,7 +1490,7 @@ export default function TodayPage() {
                         <div
                             className="toast-countdown"
                             style={{
-                                background: t.type === 'postpone' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.7)',
+                                background: 'color-mix(in srgb, var(--foreground) 20%, transparent)',
                                 ['--toast-duration' as any]: '6s'
                             }}
                         />

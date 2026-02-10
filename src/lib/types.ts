@@ -58,7 +58,7 @@ export interface SM2State {
 }
 
 // MemoryNode types
-export type MemoryNodeType = 'verse_segment' | 'transition' | 'mindmap' | 'part_mindmap';
+export type MemoryNodeType = 'verse_segment' | 'mindmap' | 'part_mindmap';
 
 // MemoryNode (ONLY thing scheduled by SM-2/FSRS)
 export interface MemoryNode {
@@ -68,7 +68,7 @@ export interface MemoryNode {
     partId?: QuranPart; // Optional context
     startVerse?: number; // Optional context
     endVerse?: number; // Optional context
-    targetId?: string;      // Legacy: VerseSegment.id or Transition.id
+    targetId?: string;      // Legacy: VerseSegment.id
     scheduler: SM2State | FSRSState;
     createdAt?: string;
 }
@@ -143,14 +143,6 @@ export interface PartMindMap {
     premadeEdited?: boolean;
 }
 
-// Transition (optional, for continuity issues)
-export interface Transition {
-    id: string;
-    fromSegmentId: string;
-    toSegmentId: string;
-    cue: string;            // Phonetic or semantic anchor
-}
-
 // ListeningStats (per-surah, no scheduler)
 export interface ListeningStats {
     surahId: number;
@@ -200,7 +192,6 @@ export interface AppState {
     memoryNodes: MemoryNode[];
     mindMaps: Record<number, MindMap>;        // keyed by surahId
     listeningStats: Record<number, ListeningStats>;  // keyed by surahId
-    transitions: Transition[];
     recitationLogs: RecitationLog[];
     learningScope: LearningScope;
 }

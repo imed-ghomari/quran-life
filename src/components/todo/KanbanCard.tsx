@@ -315,7 +315,7 @@ function renderCardZones({
                         </h4>
                         {showSplitsAlert && (
                             <span
-                                className="inline-flex items-center shrink-0 text-amber-500"
+                                className="inline-flex items-center shrink-0 text-amber-500 kanban-title-icon"
                                 title="Splits missing"
                                 aria-label="Splits missing"
                             >
@@ -332,27 +332,27 @@ function renderCardZones({
 
                                 if (hasResetAvailable) {
                                     return (
-                                        <span className="inline-flex items-center shrink-0" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
+                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
                                             <Layers size={14} className={iconClass} />
                                         </span>
                                     );
                                 }
                                 if (isEdited) {
                                     return (
-                                        <span className="inline-flex items-center shrink-0" title="Official map (edited)" aria-label="Official map (edited)">
+                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map (edited)" aria-label="Official map (edited)">
                                             <PenSquare size={14} className={iconClass} />
                                         </span>
                                     );
                                 }
                                 if (isPremade) {
                                     return (
-                                        <span className="inline-flex items-center shrink-0" title="Official map" aria-label="Official map">
+                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map" aria-label="Official map">
                                             <BadgeCheck size={14} className={iconClass} />
                                         </span>
                                     );
                                 }
                                 return (
-                                    <span className="inline-flex items-center shrink-0" title="Custom map" aria-label="Custom map">
+                                    <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map" aria-label="Custom map">
                                         <Brain size={14} className={iconClass} />
                                     </span>
                                 );

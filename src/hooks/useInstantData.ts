@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { db } from '@/lib/instant';
 import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
 
@@ -80,7 +80,21 @@ export function useInstantNodes() {
         }
     });
 
-    const nodes = useMemo(() => (data?.memoryNodes || []) as unknown as MemoryNode[], [data?.memoryNodes]);
+    const nodes = useMemo(() => {
+        const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
+        return raw.filter(node => (node as any).type !== 'transition');
+    }, [data?.memoryNodes]);
+
+    const transitionIds = useMemo(() => {
+        const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
+        return raw.filter(node => (node as any).type === 'transition').map(node => node.id);
+    }, [data?.memoryNodes]);
+
+    useEffect(() => {
+        if (!user || transitionIds.length === 0) return;
+        const tx = transitionIds.map(id => db.tx.memoryNodes[id].delete());
+        void db.transact(tx);
+    }, [user, transitionIds]);
 
     const dueNodes = useMemo(() => nodes.filter(node => {
         if (!node.scheduler) return false;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SURAHS } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -11,7 +11,7 @@ import {
     useInstantReviewLogs,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { getNodeStability, getNodeDueDate } from '@/lib/types';
+import { getNodeStability, getNodeDueDate, MemoryNode } from '@/lib/types';
 
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
 
@@ -344,7 +344,37 @@ export default function StatisticsPage() {
         today.setHours(0, 0, 0, 0);
 
         const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
-        const nodes = memoryNodes.filter(n => !n.surahId || targetSurahs.has(n.surahId));
+        const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
+        const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
+
+        const hasAnchorForNode = (node: MemoryNode) => {
+            if (node.type !== 'verse_segment' || !node.surahId) return true;
+            const mm = mindmaps.find(m => m.surahId === node.surahId);
+            const anchors = mm?.anchors || [];
+            if (anchors.length === 0) return false;
+            return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+        };
+
+        const nodes = memoryNodes.filter(node => {
+            if (node.type !== 'verse_segment' && node.type !== 'mindmap' && node.type !== 'part_mindmap') return false;
+
+            if (node.type === 'part_mindmap') {
+                if (activePart !== 5 && node.partId !== activePart) return false;
+                if (hasKanbanState && node.partId && !completeIds.has(`part-${node.partId}`)) return false;
+                return true;
+            }
+
+            if (!node.surahId) return false;
+            if (!targetSurahs.has(node.surahId)) return false;
+            if (skippedSurahs.has(node.surahId)) return false;
+
+            if (node.type === 'mindmap') {
+                if (hasKanbanState && !completeIds.has(`surah-${node.surahId}`)) return false;
+                return true;
+            }
+
+            return hasAnchorForNode(node);
+        });
 
         const dayCounts: Record<number, number> = {};
         let totalReviews = 0;
@@ -406,8 +436,48 @@ export default function StatisticsPage() {
         const totalDays = Math.max(1, maxDay - minDay + 1);
         const futureStart = Math.max(0, minDay);
         const futureDays = Math.max(1, maxDay - futureStart + 1);
-        const average = totalReviews / totalDays;
         const dailyLoad = totalFutureReviews / futureDays;
+
+        const filterLogByActivePart = (log: any) => {
+            if (!log.review_time) return false;
+            if (activePart === 5) return true;
+            const node = nodeById.get(log.nodeId);
+            if (!node) return false;
+            if (!node.surahId) return true;
+            return targetSurahs.has(node.surahId);
+        };
+
+        const validLogs = reviewLogs.filter(filterLogByActivePart).filter(log => {
+            const reviewDate = new Date(log.review_time);
+            return !isNaN(reviewDate.getTime());
+        });
+
+        let historyStartDate = new Date(today);
+        let historyDays = 1;
+        if (timeRange === 'all') {
+            const earliest = validLogs.reduce<Date | null>((min, log) => {
+                const d = new Date(log.review_time);
+                if (!min || d < min) return d;
+                return min;
+            }, null);
+            if (earliest) {
+                earliest.setHours(0, 0, 0, 0);
+                historyStartDate = earliest;
+                historyDays = Math.max(1, Math.ceil((today.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            }
+        } else {
+            historyDays = rangeDays;
+            historyStartDate = new Date(today);
+            historyStartDate.setDate(historyStartDate.getDate() - rangeDays + 1);
+        }
+
+        const historyCount = validLogs.filter(log => {
+            const reviewDate = new Date(log.review_time);
+            reviewDate.setHours(0, 0, 0, 0);
+            return reviewDate >= historyStartDate && reviewDate <= today;
+        }).length;
+
+        const average = historyCount / historyDays;
 
         const reviewsToday = reviewLogs.filter(log => {
             if (!log.review_time) return false;
@@ -432,7 +502,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, reviewLogs, showBacklog, timeRange]);
+    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, showBacklog, skippedSurahs, timeRange]);
 
     if (isLoading) {
         return (
@@ -454,7 +524,7 @@ export default function StatisticsPage() {
                     </div>
                 </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 items-start">
                     <ProgressBarSection
                         title="Part Mindmaps"
                         icon={<MapIcon size={20} />}
@@ -518,18 +588,16 @@ export default function StatisticsPage() {
                     />
 
                     <ProgressBarSection
-    title="Daily Portion"
-    icon={<Repeat size={20} />}
-    stats={dailyPortionStats}
-    className="daily-portion-card"
-    minHeight={100}  // Add this line - adjust value as needed
-    headerSuffix={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
-            <Repeat size={14} />
-            <span>{dailyPortionStats.completions} cycles</span>
-        </div>
-    }
-/>
+                        title="Daily Portion"
+                        icon={<Repeat size={20} />}
+                        stats={dailyPortionStats}
+                        headerSuffix={
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                <Repeat size={14} />
+                                <span>{dailyPortionStats.completions} cycles</span>
+                            </div>
+                        }
+                    />
 
                     <FutureDueSection
                         stats={futureDueStats}
@@ -603,6 +671,8 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
 
     const chartHeight = 210;
     const padding = { top: 12, right: 28, bottom: 38, left: 36 };
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [chartWidth, setChartWidth] = useState(0);
 
     const nonZeroData = data.filter(d => d.count > 0);
     if (nonZeroData.length === 0) {
@@ -621,21 +691,33 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
         clip: `reviews-chart-clip-${gradientSeed}`,
     };
 
-    // Use a ref to get the container width for responsiveness
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const el = containerRef.current;
+        const update = () => setChartWidth(Math.max(0, Math.floor(el.clientWidth)));
+        update();
+        const ro = new ResizeObserver(() => update());
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
     return (
-        <div className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
-            <svg width="100%" height={chartHeight} style={{ overflow: 'visible' }} preserveAspectRatio="none">
-                {/* We use percentage-based coordinates or just let SVG handle scaling if possible, 
-                    but for precise mapping we need the actual width. 
-                    Actually, we can use viewBox for responsiveness. */}
-                <svg viewBox={`0 0 500 ${chartHeight}`} width="100%" height="100%" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+        <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
+            {chartWidth > 0 && (
+                <svg
+                    width={chartWidth}
+                    height={chartHeight}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{ overflow: 'visible', display: 'block', width: '100%', height: chartHeight }}
+                >
                     <defs>
                         <clipPath id={ids.clip}>
-                            <rect x={padding.left} y={padding.top} width={500 - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
+                            <rect x={padding.left} y={padding.top} width={chartWidth - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
                         </clipPath>
                     </defs>
                     {(() => {
-                        const vWidth = 500;
+                        const vWidth = chartWidth;
                         const plotWidth = vWidth - padding.left - padding.right;
                         const plotHeight = chartHeight - padding.top - padding.bottom;
                         const span = Math.max(1, nonZeroData.length);
@@ -747,7 +829,7 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                         );
                     })()}
                 </svg>
-            </svg>
+            )}
         </div>
     );
 }

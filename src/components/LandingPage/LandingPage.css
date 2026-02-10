@@ -440,7 +440,7 @@
 
 /* Pricing Section */
 .pricing {
-  padding: 6rem 0;
+  padding: 4rem 0;
   position: relative;
 }
 
@@ -454,7 +454,7 @@
 .price-card {
   background: var(--glass-bg);
   backdrop-filter: var(--blur);
-  padding: 3.5rem 2.5rem;
+  padding: 2.5rem 2.25rem;
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
@@ -489,9 +489,9 @@
 }
 
 .price {
-  font-size: 3.5rem;
+  font-size: 3rem;
   font-weight: 800;
-  margin: 1.5rem 0 0.5rem;
+  margin: 1rem 0 0.35rem;
   color: var(--foreground);
 }
 
@@ -503,7 +503,7 @@
 
 .features-list {
   list-style: none;
-  margin: 2.5rem 0;
+  margin: 1.5rem 0 2rem;
   text-align: left;
   /* Keep bullets aligned left even if card is centered */
 }
@@ -512,9 +512,9 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.75rem;
   color: var(--foreground);
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .check-icon {
@@ -713,23 +713,24 @@
 
   /* Pricing Section */
   .pricing {
-    padding: 3rem 0;
+    padding: 2.5rem 0;
   }
 
   .price-card {
-    padding: 2rem 1.5rem;
+    padding: 1.75rem 1.25rem;
   }
 
   .price {
-    font-size: 2.5rem;
+    font-size: 2.25rem;
   }
 
   .features-list {
-    margin: 2rem 0;
+    margin: 1.25rem 0 1.5rem;
   }
 
   .features-list li {
     font-size: 0.95rem;
+    margin-bottom: 0.6rem;
   }
 
   .btn-lg {
@@ -742,7 +743,7 @@
 .billing-toggle-container {
   display: flex;
   justify-content: center;
-  margin-top: 2rem;
+  margin-top: 1.25rem;
 }
 
 .billing-toggle {

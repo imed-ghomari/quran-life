@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { PlaybackSpeed, getAudioPath, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
 import { useInstantSettings } from '@/hooks/useInstantData';
@@ -10,6 +10,7 @@ import Spinner from '@/components/ui/Spinner';
 interface AudioPlayerProps {
     verses: Verse[];
     currentVerseIndex: number;
+    currentVerseWordCount?: number;
     onVerseChange: (index: number) => void;
     onPlayStateChange?: (isPlaying: boolean) => void;
     onWordIndexChange?: (index: number) => void;
@@ -21,6 +22,7 @@ const SPEED_STORAGE_KEY = 'audio_playback_speed';
 export default function AudioPlayer({
     verses,
     currentVerseIndex,
+    currentVerseWordCount,
     onVerseChange,
     onPlayStateChange,
     onWordIndexChange
@@ -34,13 +36,16 @@ export default function AudioPlayer({
     const [reciters, setReciters] = useState<Reciter[]>([]);
     const [selectedReciter, setSelectedReciter] = useState<Reciter | null>(null);
     const [recitationData, setRecitationData] = useState<any>(null);
+    const [recitationDataMap, setRecitationDataMap] = useState<Record<number, any>>({});
     const [isLoadingReciter, setIsLoadingReciter] = useState(false);
 
     // Audio State
     const [useFallback, setUseFallback] = useState(false);
     const [verseEndTime, setVerseEndTime] = useState<number | null>(null);
+    const [verseStartTime, setVerseStartTime] = useState(0);
     const [activeSegments, setActiveSegments] = useState<number[][] | null>(null);
     const [showIsti3atah, setShowIsti3atah] = useState(false);
+    const lastWordIndexRef = useRef<number>(-1);
     
     // Progress
     const [progress, setProgress] = useState(0);
@@ -74,7 +79,8 @@ export default function AudioPlayer({
     // Initialize Reciters
     useEffect(() => {
         getReciters().then(list => {
-            setReciters(list);
+            const filtered = list.filter(r => r.hasSegments);
+            setReciters(filtered);
             
             // Try to load from synced settings first, then localStorage
             const audioSettings = settings?.audioSettings;
@@ -84,7 +90,7 @@ export default function AudioPlayer({
                 savedId = localStorage.getItem('selected_reciter_id') || undefined;
             }
             
-            const defaultReciter = list.find(r => r.id === savedId) || list[0];
+            const defaultReciter = filtered.find(r => r.id === savedId) || filtered[0];
             setSelectedReciter(defaultReciter);
 
             // Restore playback position if available and applicable
@@ -130,6 +136,34 @@ export default function AudioPlayer({
 
         load();
     }, [selectedReciter, currentVerse?.surahId]);
+
+    useEffect(() => {
+        if (!selectedReciter || selectedReciter.type !== 'surah-based' || verses.length === 0) return;
+        const surahIds = Array.from(new Set(verses.map(v => v.surahId)));
+
+        let isActive = true;
+        const loadAll = async () => {
+            setIsLoadingReciter(true);
+            const entries = await Promise.all(
+                surahIds.map(async (surahId) => {
+                    const data = await loadRecitationData(selectedReciter, surahId);
+                    return [surahId, data] as const;
+                })
+            );
+            if (!isActive) return;
+            const nextMap: Record<number, any> = {};
+            entries.forEach(([surahId, data]) => {
+                if (data) nextMap[surahId] = data;
+            });
+            setRecitationDataMap(nextMap);
+            setIsLoadingReciter(false);
+        };
+
+        loadAll();
+        return () => {
+            isActive = false;
+        };
+    }, [selectedReciter, verses]);
 
     // Reset fallback on verse/reciter change
     useEffect(() => {
@@ -207,9 +241,11 @@ export default function AudioPlayer({
                     safePlay();
                 }
             }
+            setVerseStartTime(startTime);
             setVerseEndTime(endTime);
             setActiveSegments(segments);
             onWordIndexChange?.(-1);
+            lastWordIndexRef.current = -1;
         }
     }, [currentVerse, selectedReciter, recitationData, speed, useFallback]); 
 
@@ -260,16 +296,74 @@ export default function AudioPlayer({
             setElapsedTime(current);
 
             // Word Highlighting
+            let nextIndex: number | null = null;
             if (activeSegments && onWordIndexChange) {
                 const timeMs = current * 1000;
+                const maxEnd = activeSegments.reduce((max, s) => Math.max(max, s[2] ?? 0), 0);
+                const segmentRangeMs = verseEndTime !== null
+                    ? Math.max(0, (verseEndTime - verseStartTime) * 1000)
+                    : 0;
+                const segmentsAreRelative = verseStartTime > 0 && segmentRangeMs > 0 && maxEnd <= segmentRangeMs + 50;
+
+                const maxWordIndex = activeSegments.reduce((max, s) => Math.max(max, s[0] ?? 0), 0);
+                const indexOffset = (currentVerseWordCount && maxWordIndex === currentVerseWordCount)
+                    ? -1
+                    : 0;
+
+                const resolveSegmentIndex = (segment: number[], segmentIdx: number) => {
+                    const rawIndex = segment[0] + indexOffset;
+                    if (currentVerseWordCount && currentVerseWordCount > 0) {
+                        if (rawIndex >= 0 && rawIndex < currentVerseWordCount) return rawIndex;
+                        // Fallback mapping by segment order if indexes don't align with text split
+                        return Math.min(currentVerseWordCount - 1, Math.floor((segmentIdx / Math.max(1, activeSegments.length - 1)) * (currentVerseWordCount - 1)));
+                    }
+                    return Math.max(0, rawIndex);
+                };
+
                 // Find active segment
-                const activeSegment = activeSegments.find(s => timeMs >= s[1] && timeMs <= s[2]);
-                if (activeSegment) {
-                    onWordIndexChange(activeSegment[0] - 1);
+                const activeSegmentIdx = activeSegments.findIndex(s => {
+                    const start = segmentsAreRelative ? s[1] + (verseStartTime * 1000) : s[1];
+                    const end = segmentsAreRelative ? s[2] + (verseStartTime * 1000) : s[2];
+                    return timeMs >= start && timeMs <= end;
+                });
+                if (activeSegmentIdx !== -1) {
+                    nextIndex = resolveSegmentIndex(activeSegments[activeSegmentIdx], activeSegmentIdx);
+                } else {
+                    // If no exact match, keep the closest previous segment so highlight doesn't disappear
+                    let lastSeenIdx: number | null = null;
+                    for (let i = 0; i < activeSegments.length; i++) {
+                        const s = activeSegments[i];
+                        const start = segmentsAreRelative ? s[1] + (verseStartTime * 1000) : s[1];
+                        if (timeMs >= start) {
+                            lastSeenIdx = i;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (lastSeenIdx !== null) {
+                        nextIndex = resolveSegmentIndex(activeSegments[lastSeenIdx], lastSeenIdx);
+                    }
                 }
             }
+
+            // Fallback highlighting when no segment matches
+            if (nextIndex === null && onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0) {
+                const duration = verseEndTime !== null
+                    ? Math.max(0.001, verseEndTime - verseStartTime)
+                    : (Number.isFinite(audioRef.current?.duration ?? NaN) ? (audioRef.current?.duration || 0) : 0);
+                if (duration > 0) {
+                    const relative = Math.max(0, current - verseStartTime);
+                    const ratio = Math.min(1, Math.max(0, relative / duration));
+                    nextIndex = Math.min(currentVerseWordCount - 1, Math.floor(ratio * currentVerseWordCount));
+                }
+            }
+
+            if (nextIndex !== null && nextIndex !== lastWordIndexRef.current) {
+                lastWordIndexRef.current = nextIndex;
+                onWordIndexChange?.(nextIndex);
+            }
         }
-    }, [verseEndTime, currentVerseIndex, totalVerses, onVerseChange, activeSegments, onWordIndexChange]);
+    }, [verseEndTime, verseStartTime, currentVerseIndex, totalVerses, onVerseChange, activeSegments, onWordIndexChange, currentVerseWordCount]);
 
     const handleEnded = useCallback(() => {
         // This triggers for Ayah-mode files (end of file)
@@ -309,8 +403,13 @@ export default function AudioPlayer({
 
     // Format time as MM:SS
     const formatTime = (seconds: number): string => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
+        const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+        const hrs = Math.floor(safeSeconds / 3600);
+        const mins = Math.floor((safeSeconds % 3600) / 60);
+        const secs = Math.floor(safeSeconds % 60);
+        if (hrs > 0) {
+            return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
@@ -334,6 +433,55 @@ export default function AudioPlayer({
             });
         }
     };
+
+    const verseDurationsSec = useMemo(() => {
+        if (!selectedReciter || verses.length === 0) return null;
+
+        if (selectedReciter.type === 'ayah-based') {
+            const versesMap = recitationData?.verses || {};
+            return verses.map(v => {
+                const key = `${v.surahId}:${v.ayahId}`;
+                const info = versesMap[key];
+                if (!info) return null;
+                if (typeof info.duration === 'number' && Number.isFinite(info.duration)) {
+                    return info.duration;
+                }
+                if (Array.isArray(info.segments) && info.segments.length > 0) {
+                    const last = info.segments[info.segments.length - 1];
+                    return (last?.[2] || 0) / 1000;
+                }
+                return null;
+            });
+        }
+
+        return verses.map(v => {
+            const data = recitationDataMap[v.surahId];
+            const timing = data?.timings?.[`${v.surahId}:${v.ayahId}`];
+            if (!timing) return null;
+            if (typeof timing.timestamp_from === 'number' && typeof timing.timestamp_to === 'number') {
+                return Math.max(0, (timing.timestamp_to - timing.timestamp_from) / 1000);
+            }
+            if (Array.isArray(timing.segments) && timing.segments.length > 0) {
+                const last = timing.segments[timing.segments.length - 1];
+                return (last?.[2] || 0) / 1000;
+            }
+            return null;
+        });
+    }, [selectedReciter, verses, recitationData, recitationDataMap]);
+
+    const totalDurationSec = useMemo(() => {
+        if (!verseDurationsSec) return null;
+        if (verseDurationsSec.some(d => d === null)) return null;
+        return verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0);
+    }, [verseDurationsSec]);
+
+    const elapsedTotalSec = useMemo(() => {
+        if (!verseDurationsSec) return null;
+        const prior = verseDurationsSec.slice(0, currentVerseIndex).reduce((sum, d) => sum + (d || 0), 0);
+        const currentDuration = verseDurationsSec[currentVerseIndex] || 0;
+        const currentElapsed = Math.min(elapsedTime, currentDuration || elapsedTime);
+        return prior + currentElapsed;
+    }, [verseDurationsSec, currentVerseIndex, elapsedTime]);
 
     return (
         <div className="audio-player">
@@ -375,7 +523,11 @@ export default function AudioPlayer({
                             (Isti'aatha)
                         </span>
                     )}
-                    <span>{formatTime(elapsedTime)}</span>
+                    <span>
+                        {totalDurationSec !== null && elapsedTotalSec !== null
+                            ? `${formatTime(elapsedTotalSec)} / ${formatTime(totalDurationSec)}`
+                            : formatTime(elapsedTime)}
+                    </span>
                 </div>
             </div>
 
