@@ -85,7 +85,6 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                     const nodeId = id();
                     transactions.push(
                         db.tx.memoryNodes[nodeId].update({
-                            id: nodeId,
                             type: 'verse_segment',
                             surahId: surahId,
                             startVerse: i,

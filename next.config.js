@@ -16,7 +16,6 @@ try {
                 handler: 'NetworkFirst',
                 options: {
                     cacheName: 'pages',
-                    networkTimeoutSeconds: 4,
                     expiration: {
                         maxEntries: 50,
                         maxAgeSeconds: 24 * 60 * 60,
