@@ -14,8 +14,13 @@ declare const self: ServiceWorkerGlobalScope & {
 };
 
 const serwist = new Serwist({
-  // Bump when runtime cache semantics change to avoid serving stale app shell/data.
-  // Precache is already revisioned separately by Serwist.
+  precacheEntries: self.__SW_MANIFEST,
+  precacheOptions: {
+    cleanupOutdatedCaches: true,
+    navigateFallback: "/offline",
+  },
+  skipWaiting: true,
+  clientsClaim: true,
   runtimeCaching: [
     {
       matcher: ({ request }) => request.mode === "navigate",
@@ -76,13 +81,6 @@ const serwist = new Serwist({
       }),
     },
   ],
-  precacheEntries: self.__SW_MANIFEST,
-  precacheOptions: {
-    cleanupOutdatedCaches: true,
-    navigateFallback: "/offline",
-  },
-  skipWaiting: true,
-  clientsClaim: true,
 });
 
 serwist.setCatchHandler(async ({ request }) => {

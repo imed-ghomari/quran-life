@@ -12,38 +12,31 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const [theme, setThemeState] = useState<Theme>('system');
-    const [mounted, setMounted] = useState(false);
+    const [theme, setThemeState] = useState<Theme>(() => {
+        if (typeof window === 'undefined') return 'system';
+        const stored = localStorage.getItem('theme') as Theme | null;
+        if (stored && ['light', 'dark', 'system'].includes(stored)) return stored;
+        return 'system';
+    });
 
     useEffect(() => {
-        // Load stored theme on mount
-        const stored = localStorage.getItem('theme') as Theme;
-        if (stored && ['light', 'dark', 'system'].includes(stored)) {
-            setThemeState(stored);
-        }
-        setMounted(true);
-    }, []);
-
-    useEffect(() => {
-        if (!mounted) return;
-        
+        if (typeof window === 'undefined') return;
         const root = window.document.documentElement;
-        
-        // Remove existing theme attributes
-        root.removeAttribute('data-theme');
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
 
-        if (theme === 'system') {
-            localStorage.setItem('theme', 'system');
-        } else {
-            root.setAttribute('data-theme', theme);
+        const applyTheme = () => {
+            const resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
+            root.setAttribute('data-theme', resolved);
             localStorage.setItem('theme', theme);
-        }
-    }, [theme, mounted]);
+        };
 
-    // Avoid hydration mismatch by rendering children only after mount if needed, 
-    // but here we just render children. The theme effect happens on client.
-    // However, for SSR we might want to inject a script to avoid flash.
-    // For now, simple effect is fine.
+        applyTheme();
+        const handleChange = () => {
+            if (theme === 'system') applyTheme();
+        };
+        mq.addEventListener('change', handleChange);
+        return () => mq.removeEventListener('change', handleChange);
+    }, [theme]);
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme: setThemeState }}>

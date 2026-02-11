@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Outfit } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
@@ -44,9 +45,26 @@ export default function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const themeBootstrapScript = `
+(() => {
+  try {
+    const stored = window.localStorage.getItem('theme');
+    const root = window.document.documentElement;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const resolved = stored === 'dark' || stored === 'light'
+      ? stored
+      : (prefersDark ? 'dark' : 'light');
+    root.setAttribute('data-theme', resolved);
+  } catch (_) {}
+})();
+`;
+
     return (
         <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
+                <Script id="theme-bootstrap" strategy="beforeInteractive">
+                    {themeBootstrapScript}
+                </Script>
                 <Providers>
                     <ErrorBoundary>
                         <AppShell>

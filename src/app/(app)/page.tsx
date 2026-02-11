@@ -1,10 +1,14 @@
 'use client';
 
 import { db } from '@/lib/instant';
-import LandingPage from '@/components/LandingPage/LandingPage';
 import Spinner from '@/components/ui/Spinner';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const LandingPage = dynamic(() => import('@/components/LandingPage/LandingPage'), {
+    ssr: false,
+});
 
 export default function Home() {
     const { user, isLoading: isAuthLoading } = db.useAuth();
