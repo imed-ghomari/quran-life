@@ -3,7 +3,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
@@ -44,6 +44,7 @@ import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs
 import { optimizeWeights } from '../../actions';
 import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
 import { useTheme } from '@/components/ThemeProvider';
+import { OnlineStatusContext } from '@/components/Providers';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -67,6 +68,7 @@ export default function TodayPage() {
     const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
+    const isOnline = useContext(OnlineStatusContext);
 
     // Debug: Log nodes and due nodes
     useEffect(() => {
@@ -356,9 +358,13 @@ export default function TodayPage() {
     }, [highlightedWordIndex, smoothScrollContainer]);
 
     useEffect(() => {
-        const mode = settings?.dailyPortionMode ?? 'audio';
-        setReadOnlyMode(mode === 'reading');
-    }, [settings?.dailyPortionMode]);
+        const defaultMode = settings?.dailyPortionMode ?? 'audio';
+        if (!isOnline) {
+            setReadOnlyMode(true);
+            return;
+        }
+        setReadOnlyMode(defaultMode === 'reading');
+    }, [settings?.dailyPortionMode, isOnline]);
 
     // Keep review index in sync with changing due queue to avoid blanks
     useEffect(() => {
@@ -1758,6 +1764,33 @@ export default function TodayPage() {
                                 <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
                             ) : (
                                 <>
+                                    <div className="adv-segmented" role="radiogroup" aria-label="Daily portion mode" style={{ marginBottom: '0.75rem' }}>
+                                        <button
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={readOnlyMode}
+                                            className={`adv-seg-btn ${readOnlyMode ? 'adv-seg-active' : ''}`}
+                                            onClick={() => setReadOnlyMode(true)}
+                                        >
+                                            <span>Reading</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={!readOnlyMode}
+                                            aria-disabled={!isOnline}
+                                            disabled={!isOnline}
+                                            className={`adv-seg-btn ${!readOnlyMode ? 'adv-seg-active' : ''}`}
+                                            onClick={() => {
+                                                if (!isOnline) return;
+                                                setReadOnlyMode(false);
+                                            }}
+                                            style={!isOnline ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                                            title={!isOnline ? 'Listening mode is unavailable offline' : 'Switch to listening mode'}
+                                        >
+                                            <span>Listening</span>
+                                        </button>
+                                    </div>
                                     <div className={`today-card-content ${readOnlyMode ? 'today-card-content--read' : 'today-card-content--audio'}`}>
                                         {!readOnlyMode ? (
                                             <div className="audio-mode-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>

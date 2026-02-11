@@ -5,6 +5,15 @@ try {
         register: true,
         skipWaiting: true,
         cleanupOutdatedCaches: true,
+        cacheStartUrl: false,
+        // Avoid giant precache manifests that can break SW installs on lower-storage devices.
+        publicExcludes: [
+            '!audio/**/*',
+            '!recitations/**/*',
+            '!qpc-hafs-word-by-word.json',
+            '!quran-bg.jpg',
+        ],
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
         disable: process.env.NODE_ENV === 'development',
         fallbacks: {
             document: '/offline',
@@ -51,6 +60,21 @@ try {
                     },
                 },
             },
+            // Audio: cache on demand so offline playback still works for recently used files.
+            {
+                urlPattern: ({ request, url }) =>
+                    request.destination === 'audio' ||
+                    (url.origin === self.location.origin && url.pathname.endsWith('.mp3')),
+                handler: 'CacheFirst',
+                options: {
+                    cacheName: 'audio-runtime',
+                    rangeRequests: true,
+                    expiration: {
+                        maxEntries: 120,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                    },
+                },
+            },
         ],
     });
 } catch (error) {
@@ -71,6 +95,24 @@ const nextConfig = {
     // Add security headers to all responses
     async headers() {
         return [
+            {
+                source: '/sw.js',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'no-cache, no-store, must-revalidate'
+                    }
+                ]
+            },
+            {
+                source: '/manifest.json',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'no-cache, no-store, must-revalidate'
+                    }
+                ]
+            },
             {
                 source: '/:path*',
                 headers: [
