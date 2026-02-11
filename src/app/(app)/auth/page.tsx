@@ -21,7 +21,7 @@ import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
 
 const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
 const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 // Main authentication content component
 function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
@@ -81,21 +81,13 @@ function AuthContent() {
         setForceCheckoutBlur(false);
     }, [forceCheckoutBlur, user?.email]);
 
-    const latestSubscription = useMemo(() => {
-        const subscriptions = subscriptionData?.subscriptions ?? [];
-        if (subscriptions.length === 0) return null;
-        return [...subscriptions].sort((a, b) => {
-            const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-            const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-            return bTime - aTime;
-        })[0];
-    }, [subscriptionData?.subscriptions]);
-
     const hasActiveSubscription = useMemo(() => {
-        const status = latestSubscription?.status;
-        if (!status) return false;
-        return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
-    }, [latestSubscription?.status]);
+        const subscriptions = subscriptionData?.subscriptions ?? [];
+        return subscriptions.some((subscription) => {
+            const status = subscription?.status;
+            return Boolean(status && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
+        });
+    }, [subscriptionData?.subscriptions]);
     const isPaymentBypass = useMemo(
         () => isPaymentBypassEmail(user?.email),
         [user?.email]
@@ -106,7 +98,7 @@ function AuthContent() {
         if (!user) return;
         if (isSubscriptionLoading) return;
         if (hasActiveSubscription || isPaymentBypass) {
-            router.push('/dashboard');
+            router.replace('/dashboard');
         }
     }, [user, isSubscriptionLoading, hasActiveSubscription, isPaymentBypass, router]);
 
@@ -203,6 +195,20 @@ function AuthContent() {
                     <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem' }}>{authStateError.message}</p>
                     <button onClick={() => window.location.reload()} className="btn btn-primary">Try Again</button>
                 </div>
+            </div>
+        );
+    }
+
+    if (user && (isSubscriptionLoading || hasActiveSubscription || isPaymentBypass)) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--background)'
+            }}>
+                <Spinner text={isSubscriptionLoading ? 'Checking subscription...' : 'Redirecting to dashboard...'} />
             </div>
         );
     }

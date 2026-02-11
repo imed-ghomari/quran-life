@@ -475,7 +475,8 @@ export default function TodoPage() {
                     imageUrl: undefined,
                     imageUrlDark: undefined,
                     tldrawSnapshot: data,
-                    isComplete: true,
+                    // Importing a premade map should not change kanban completion state.
+                    isComplete: !!existing.isComplete,
                     source: 'premade' as const,
                     premadeId: `surah-${id}`,
                     premadeImportedAt: new Date().toISOString(),
@@ -491,7 +492,8 @@ export default function TodoPage() {
                     imageUrl: undefined,
                     imageUrlDark: undefined,
                     tldrawSnapshot: data,
-                    isComplete: true,
+                    // Importing a premade map should not change kanban completion state.
+                    isComplete: !!existing.isComplete,
                     source: 'premade' as const,
                     premadeId: `part-${id}`,
                     premadeImportedAt: new Date().toISOString(),
