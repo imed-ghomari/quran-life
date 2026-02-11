@@ -1191,7 +1191,8 @@ export default function TodoKanban({
                 const surah = getSurah(surahId);
                 const surahMeta = SURAHS.find(s => s.id === surahId);
                 const total = surahMeta?.verseCount || 1;
-                const target = Math.min(Math.max(1, issue.startVerse || 1), total);
+                const targetAyah = issue.focusAyah || issue.startVerse || 1;
+                const target = Math.min(Math.max(1, targetAyah), total);
                 const prev = target > 1 ? target - 1 : null;
                 const next = target < total ? target + 1 : null;
                 const getVerseText = (ayahId: number) => verses.find((v: any) => v.surahId === surahId && v.ayahId === ayahId)?.text || '';

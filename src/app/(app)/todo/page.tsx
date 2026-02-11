@@ -8,7 +8,8 @@ import {
     useInstantNodes,
     useInstantMindMaps,
     useInstantMutashabihat,
-    useInstantReviewErrors
+    useInstantReviewErrors,
+    useInstantReviewLogs
 } from '@/hooks/useInstantData';
 import { MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
@@ -50,6 +51,7 @@ export default function TodoPage() {
     }, [mindmapsList]);
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
+    const { logs: reviewLogs } = useInstantReviewLogs();
 
     const { user } = db.useAuth();
     const appMode = useMemo(() => getAppModeForEmail(user?.email), [user?.email]);
@@ -186,6 +188,122 @@ export default function TodoPage() {
             count: items.length
         })).filter(g => g.surah);
     }, [similarityItems]);
+
+    const suspendedNodeIds = useMemo(() => {
+        const logsByNode = new Map<string, any[]>();
+
+        reviewLogs.forEach(log => {
+            if (!log?.nodeId) return;
+            const existing = logsByNode.get(log.nodeId) || [];
+            existing.push(log);
+            logsByNode.set(log.nodeId, existing);
+        });
+
+        const suspended = new Set<string>();
+
+        logsByNode.forEach((nodeLogs, nodeId) => {
+            const sorted = [...nodeLogs].sort((a, b) => {
+                const aTime = a.review_time ? new Date(a.review_time).getTime() : 0;
+                const bTime = b.review_time ? new Date(b.review_time).getTime() : 0;
+                return aTime - bTime;
+            });
+
+            let trailingFailures = 0;
+            for (let i = sorted.length - 1; i >= 0; i -= 1) {
+                const raw = sorted[i]?.rating;
+                const rating = typeof raw === 'string'
+                    ? (raw.toLowerCase() === 'good' ? 3 : 1)
+                    : Number(raw);
+                if (rating === 1) {
+                    trailingFailures += 1;
+                } else {
+                    break;
+                }
+            }
+
+            if (trailingFailures >= 3) {
+                suspended.add(nodeId);
+            }
+        });
+
+        return suspended;
+    }, [reviewLogs]);
+
+    const suspendedAnchors = useMemo(() => {
+        const byKey = new Map<string, any>();
+        const legacyFailureCounts = new Map<string, number>();
+
+        // Legacy fallback: old rows can miss nodeId. Require at least 3 failures for that anchor key.
+        errors
+            .filter(e => e.nodeType === 'verse_segment' && e.surahId && !e.nodeId)
+            .forEach(error => {
+                const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
+                const focusAyah =
+                    absoluteRef && absoluteRef.surahId === error.surahId
+                        ? absoluteRef.ayahId
+                        : (error.startVerse ?? 1);
+                const startVerse = error.startVerse ?? focusAyah;
+                const endVerse = error.endVerse ?? startVerse;
+                const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
+                const anchorId = error.anchorId || fallbackAnchorId;
+                const key = `${error.surahId}-${anchorId}`;
+                legacyFailureCounts.set(key, (legacyFailureCounts.get(key) || 0) + 1);
+            });
+
+        errors
+            .filter(e => {
+                if (!(e.nodeType === 'verse_segment' && e.surahId)) return false;
+                if (e.nodeId) {
+                    return suspendedNodeIds.has(e.nodeId);
+                }
+
+                const absoluteRef = e.absoluteAyah ? absoluteToSurahAyah(e.absoluteAyah) : null;
+                const focusAyah =
+                    absoluteRef && absoluteRef.surahId === e.surahId
+                        ? absoluteRef.ayahId
+                        : (e.startVerse ?? 1);
+                const startVerse = e.startVerse ?? focusAyah;
+                const endVerse = e.endVerse ?? startVerse;
+                const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
+                const anchorId = e.anchorId || fallbackAnchorId;
+                const key = `${e.surahId}-${anchorId}`;
+                return (legacyFailureCounts.get(key) || 0) >= 3;
+            })
+            .forEach(error => {
+                const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
+                const focusAyah =
+                    absoluteRef && absoluteRef.surahId === error.surahId
+                        ? absoluteRef.ayahId
+                        : (error.startVerse ?? 1);
+                const startVerse = error.startVerse ?? focusAyah;
+                const endVerse = error.endVerse ?? startVerse;
+                const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
+                const anchorId = error.anchorId || fallbackAnchorId;
+                const key = `${error.surahId}-${anchorId}`;
+                const timestamp = error.timestamp ? new Date(error.timestamp).getTime() : 0;
+
+                const existing = byKey.get(key);
+                const existingTimestamp = existing?.timestamp ? new Date(existing.timestamp).getTime() : -1;
+
+                if (!existing || timestamp >= existingTimestamp) {
+                    byKey.set(key, {
+                        surahId: error.surahId,
+                        anchorId,
+                        label: error.anchorLabel || `Verses ${startVerse}-${endVerse}`,
+                        startVerse,
+                        endVerse,
+                        focusAyah,
+                        timestamp: error.timestamp
+                    });
+                }
+            });
+
+        return Array.from(byKey.values()).sort((a, b) => {
+            if (a.surahId !== b.surahId) return a.surahId - b.surahId;
+            if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
+            return a.endVerse - b.endVerse;
+        });
+    }, [errors, suspendedNodeIds]);
 
 
 
@@ -685,7 +803,7 @@ export default function TodoPage() {
             {/* Kanban Board Replacement */}
             <div className="w-full h-full flex flex-col px-2 sm:px-4 md:px-6 py-2 sm:py-4">
                 <TodoKanban
-                    suspendedAnchors={[]}
+                    suspendedAnchors={suspendedAnchors}
                     similarityGroups={groupedSimilarity}
                     partTasks={partTasks}
                     surahTasks={surahTasks}

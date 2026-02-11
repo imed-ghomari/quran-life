@@ -82,6 +82,7 @@ function AppearanceCard() {
                     ].map((mode) => (
                         <button
                             key={mode.id}
+                            className="appearance-choice-btn"
                             onClick={() => setTheme(mode.id as any)}
                             style={{
                                 flex: 1,
@@ -91,11 +92,12 @@ function AppearanceCard() {
                                 gap: '0.5rem',
                                 padding: '0.75rem 0.5rem',
                                 borderRadius: '12px',
-                                border: theme === mode.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                border: theme === mode.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                                 background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
                                 color: theme === mode.id ? 'var(--accent)' : 'var(--foreground-secondary)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease',
+                                boxShadow: theme === mode.id ? '0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent)' : 'none',
                             }}
                         >
                             <mode.icon size={20} />
@@ -538,7 +540,7 @@ export default function SettingsPage() {
 
                                     <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                         <button
-                                            className="btn btn-secondary"
+                                            className="btn btn-secondary std-normal-btn"
                                             onClick={async () => {
                                                 // InstantDB handles sync automatically
                                                 const ok = await confirm({
@@ -555,7 +557,7 @@ export default function SettingsPage() {
                                                 await db.auth.signOut();
                                                 router.replace('/');
                                             }}
-                                            style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                         >
                                             Sign Out
                                         </button>
@@ -654,6 +656,7 @@ export default function SettingsPage() {
                             ].map((mode) => (
                                 <button
                                     key={mode.id}
+                                    className="appearance-choice-btn"
                                     onClick={() => setTheme(mode.id as any)}
                                     style={{
                                         display: 'flex',
@@ -661,13 +664,14 @@ export default function SettingsPage() {
                                         gap: '1rem',
                                         padding: '1rem',
                                         borderRadius: '12px',
-                                        border: theme === mode.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                        border: theme === mode.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                                         background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
-                                        color: theme === mode.id ? 'var(--accent)' : 'var(--foreground)',
+                                        color: theme === mode.id ? 'var(--accent)' : 'var(--foreground-secondary)',
                                         cursor: 'pointer',
                                         width: '100%',
                                         transition: 'all 0.2s ease',
-                                        fontWeight: theme === mode.id ? 600 : 400
+                                        fontWeight: theme === mode.id ? 600 : 400,
+                                        boxShadow: theme === mode.id ? '0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent)' : 'none',
                                     }}
                                 >
                                     <mode.icon size={20} />
@@ -739,17 +743,15 @@ export default function SettingsPage() {
                                     style={{
                                         padding: '1.25rem 0.75rem',
                                         borderRadius: '16px',
-                                        border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
-                                        background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
                                         transition: 'all 0.2s',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
                                         textAlign: 'center',
-                                        gap: '0.25rem'
+                                        gap: '0.25rem',
                                     }}
                                 >
-                                    <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>
+                                    <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>
                                         {p.id === 5 ? '∞' : p.id}
                                     </div>
                                     <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
@@ -805,15 +807,13 @@ export default function SettingsPage() {
                                 ))}
                             </select>
                             <button
+                                className="std-normal-btn"
                                 onClick={handleAddSkippedSurah}
                                 disabled={!surahToSkipId}
                                 style={{
                                     padding: '0 1.25rem',
                                     borderRadius: '12px',
-                                    background: surahToSkipId ? 'var(--accent)' : 'var(--border)',
-                                    color: 'white',
                                     fontWeight: 600,
-                                    border: 'none',
                                     cursor: surahToSkipId ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.2s'
                                 }}
@@ -1785,7 +1785,7 @@ export default function SettingsPage() {
 
                                                     <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                                                         <button
-                                                            className="btn btn-secondary"
+                                                            className="btn btn-secondary std-normal-btn"
                                                             onClick={async () => {
                                                                 // InstantDB handles sync automatically
                                                                 const ok = await confirm({
@@ -1802,7 +1802,7 @@ export default function SettingsPage() {
                                                                 await db.auth.signOut();
                                                                 router.replace('/');
                                                             }}
-                                                            style={{ width: '100%', padding: '0.85rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+                                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
                                                         >
                                                             Sign Out
                                                         </button>
@@ -1984,18 +1984,16 @@ export default function SettingsPage() {
                                                 style={{
                                                     padding: '1.25rem 0.75rem',
                                                     borderRadius: '16px',
-                                                    border: settings.activePart === p.id ? '2px solid var(--accent)' : '2px solid var(--border)',
-                                                    background: settings.activePart === p.id ? 'var(--verse-bg)' : 'var(--background-secondary)',
                                                     transition: 'all 0.2s',
                                                     display: 'flex',
                                                     flexDirection: 'column',
                                                     alignItems: 'center',
                                                     textAlign: 'center',
                                                     gap: '0.25rem',
-                                                    gridColumn: p.id === 5 ? '1 / -1' : 'auto'
+                                                    gridColumn: p.id === 5 ? '1 / -1' : 'auto',
                                                 }}
                                             >
-                                                <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground)' }}>
+                                                <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>
                                                     {p.id === 5 ? '∞' : p.id}
                                                 </div>
                                                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
@@ -2065,15 +2063,13 @@ export default function SettingsPage() {
                                                 ))}
                                             </select>
                                             <button
+                                                className="std-normal-btn"
                                                 onClick={handleAddSkippedSurah}
                                                 disabled={!surahToSkipId}
                                                 style={{
                                                     padding: '0 1.25rem',
                                                     borderRadius: '12px',
-                                                    background: surahToSkipId ? 'var(--accent)' : 'var(--border)',
-                                                    color: 'white',
                                                     fontWeight: 600,
-                                                    border: 'none',
                                                     cursor: surahToSkipId ? 'pointer' : 'not-allowed',
                                                     transition: 'all 0.2s'
                                                 }}
@@ -2959,7 +2955,7 @@ export default function SettingsPage() {
                                                                                         </td>
                                                                                         <td>
                                                                                             <button
-    className={`bulk-btn mutashabihat-resolve-btn ${isConfirmed ? 'learned' : ''}`}
+    className={`bulk-btn std-normal-btn mutashabihat-resolve-btn ${isConfirmed ? 'learned' : ''}`}
     onClick={(e) => {
         e.stopPropagation();
         const update = isConfirmed 
@@ -2995,7 +2991,7 @@ export default function SettingsPage() {
                                                                                                     </button>
                                                                                                 )}
                                                                                                 <button
-                                                                                                    className="bulk-btn mutashabihat-note-btn"
+                                                                                                    className="bulk-btn std-normal-btn mutashabihat-note-btn"
                                                                                                     onClick={(e) => {
                                                                                                         e.stopPropagation();
                                                                                                         setNoteModal({
@@ -3323,7 +3319,7 @@ export default function SettingsPage() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                                         <button
-                                        className={`bulk-btn ${isConfirmed ? 'learned' : ''}`}
+                                        className={`bulk-btn std-normal-btn ${isConfirmed ? 'learned' : ''}`}
                                         onClick={() => {
                                             const update = isConfirmed 
                                                 ? { ...existing, confirmedAt: undefined, status: 'pending' as const }

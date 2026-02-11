@@ -625,6 +625,8 @@ export default function TodayPage() {
     }, [addToast, reviewLogs, optimizationMeta, saveCustomWeights, saveOptimizationMeta]);
 
     const targetBoxRef = useRef<HTMLDivElement>(null);
+    const [reviewLayoutVersion, setReviewLayoutVersion] = useState(0);
+    const lastRevealPositionRef = useRef<{ verse: number; chunks: number; scrollTop: number } | null>(null);
 
     // Load data
     useEffect(() => {
@@ -819,6 +821,11 @@ export default function TodayPage() {
         saveInstantReviewLog(logToSave);
 
         if (!remembered) {
+            const failedAyahId =
+                node.type === 'verse_segment' && node.startVerse !== undefined
+                    ? Math.min(node.endVerse ?? node.startVerse, node.startVerse + currentVerseInReview)
+                    : node.startVerse;
+
             const errorToSave: any = {
                 id: errorId!,
                 timestamp: new Date().toISOString(),
@@ -840,7 +847,7 @@ export default function TodayPage() {
             if (anchor?.label) errorToSave.anchorLabel = anchor.label;
             if (anchor?.id) errorToSave.anchorId = anchor.id;
 
-            const abs = node.startVerse && node.surahId ? surahAyahToAbsolute(node.surahId, node.startVerse) : undefined;
+            const abs = failedAyahId && node.surahId ? surahAyahToAbsolute(node.surahId, failedAyahId) : undefined;
             if (abs !== undefined) errorToSave.absoluteAyah = abs;
 
             errorPayload = errorToSave;
@@ -876,7 +883,7 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview]);
 
     const handlePostpone = useCallback(() => {
         const node = orderedDueNodes[currentReviewIndex];
@@ -945,7 +952,7 @@ export default function TodayPage() {
             setCurrentReviewIndex(last.beforeIndex);
             setRevealedChunks(0);
             setCurrentVerseInReview(0);
-            setShowGrading(true); // Return to grading view of the undone card
+            setShowGrading(last.beforeNode.type !== 'verse_segment');
         } else {
             if (last.beforeProgress) {
                 saveListeningProgress(last.partId, last.beforeProgress.lastVerseIndex, last.beforeProgress.cycles, last.beforeUpdatedAt);
@@ -1174,15 +1181,8 @@ export default function TodayPage() {
         } else if (currentVerseInReview < totalVerses - 1) {
             setCurrentVerseInReview(prev => prev + 1);
             setRevealedChunks(1); // One click moves and reveals first chunk
-        } else {
-            // For mindmap reviews, after all verses are revealed, show the mindmap
-            if (activeContent?.type === 'mindmap' && activeContent.verses && activeContent.verses.length > 0 && !showGrading) {
-                setShowGrading(true); // Show the mindmap after verses
-            } else {
-                setShowGrading(true);
-            }
         }
-    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent, showGrading]);
+    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent]);
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -1193,7 +1193,27 @@ export default function TodayPage() {
 
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-            if (showGrading) {
+            if (activeContent?.type === 'verse') {
+                const isVerseFullyRevealed =
+                    totalVerses > 0 &&
+                    revealedChunks >= totalChunks &&
+                    currentVerseInReview >= totalVerses - 1;
+
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    handlePostpone();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    handleGrade(false);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    if (isVerseFullyRevealed) {
+                        handleGrade(true);
+                    } else {
+                        handleRevealNext();
+                    }
+                }
+            } else if (showGrading) {
                 if (e.key === 'ArrowLeft') {
                     e.preventDefault();
                     handlePostpone();
@@ -1214,7 +1234,29 @@ export default function TodayPage() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext]);
+    }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext, activeContent?.type, totalVerses, revealedChunks, totalChunks, currentVerseInReview]);
+
+    useEffect(() => {
+        const container = targetBoxRef.current;
+        if (!container) return;
+
+        const reviewContainer = container.closest('.review-verse-container') as HTMLElement | null;
+        const contextBox = reviewContainer?.querySelector('.context-box') as HTMLElement | null;
+
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(() => {
+                setReviewLayoutVersion(prev => prev + 1);
+            });
+            observer.observe(container);
+            if (reviewContainer) observer.observe(reviewContainer);
+            if (contextBox) observer.observe(contextBox);
+            return () => observer.disconnect();
+        }
+
+        const onResize = () => setReviewLayoutVersion(prev => prev + 1);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, [currentReviewIndex, activeContent?.type]);
 
     useEffect(() => {
         if (!targetBoxRef.current) return;
@@ -1234,36 +1276,51 @@ export default function TodayPage() {
 
                 const targetEl = lastRevealed || activeVerse;
                 const nextChunkEl = textEl?.querySelector('.next-blur') as HTMLElement | null;
-                const nextVerseEl = activeVerse.nextElementSibling as HTMLElement | null;
-                const nextVerseBlock = nextVerseEl && nextVerseEl.classList.contains('grouped-verse-block') ? nextVerseEl : null;
                 const containerRect = container.getBoundingClientRect();
                 const targetRect = targetEl.getBoundingClientRect();
                 const nextRect = nextChunkEl?.getBoundingClientRect();
-                const nextVerseRect = nextVerseBlock?.getBoundingClientRect();
                 const styles = window.getComputedStyle(container);
                 const paddingBottom = Number.parseFloat(styles.paddingBottom || '0') || 0;
                 const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0;
-                const marginTop = Math.max(8, paddingTop);
-                const marginBottom = Math.max(24, paddingBottom);
+                const marginTop = Math.max(10, paddingTop);
+                const marginBottom = Math.max(20, paddingBottom);
+                const tolerance = 6;
 
                 const targetTop = targetRect.top - containerRect.top;
                 const targetBottom = targetRect.bottom - containerRect.top;
                 const nextTop = nextRect ? nextRect.top - containerRect.top : targetTop;
                 const nextBottom = nextRect ? nextRect.bottom - containerRect.top : targetBottom;
-                const nextVerseTop = nextVerseRect ? nextVerseRect.top - containerRect.top : targetTop;
-                const nextVerseBottom = nextVerseRect ? nextVerseRect.bottom - containerRect.top : targetBottom;
-                const combinedTop = Math.min(targetTop, nextTop, nextVerseTop);
-                const combinedBottom = Math.max(targetBottom, nextBottom, nextVerseBottom);
+                const combinedTop = Math.min(targetTop, nextTop);
+                const combinedBottom = Math.max(targetBottom, nextBottom);
 
-                if (combinedTop < marginTop || combinedBottom > containerHeight - marginBottom) {
+                if (combinedTop < marginTop - tolerance || combinedBottom > containerHeight - marginBottom + tolerance) {
                     let desiredTop = container.scrollTop;
-                    if (combinedTop < marginTop) {
+                    if (combinedTop < marginTop - tolerance) {
                         desiredTop = container.scrollTop + combinedTop - marginTop;
-                    } else if (combinedBottom > containerHeight - marginBottom) {
+                    } else if (combinedBottom > containerHeight - marginBottom + tolerance) {
                         desiredTop = container.scrollTop + (combinedBottom - containerHeight + marginBottom);
+                    }
+
+                    const lastPos = lastRevealPositionRef.current;
+                    const isForwardReveal =
+                        !showGrading &&
+                        !!lastPos &&
+                        (
+                            currentVerseInReview > lastPos.verse ||
+                            (currentVerseInReview === lastPos.verse && revealedChunks > lastPos.chunks)
+                        );
+                    // During forward reveal progression, never auto-scroll upward.
+                    if (isForwardReveal && desiredTop < container.scrollTop) {
+                        desiredTop = container.scrollTop;
                     }
                     smoothScrollContainer(container, desiredTop, 420);
                 }
+
+                lastRevealPositionRef.current = {
+                    verse: currentVerseInReview,
+                    chunks: revealedChunks,
+                    scrollTop: container.scrollTop
+                };
                 return;
             }
 
@@ -1271,7 +1328,7 @@ export default function TodayPage() {
                 smoothScrollContainer(container, container.scrollHeight, 420);
             }
         });
-    }, [revealedChunks, currentVerseInReview, showGrading, smoothScrollContainer]);
+    }, [revealedChunks, currentVerseInReview, showGrading, smoothScrollContainer, reviewLayoutVersion]);
 
     // Move isLoaded check to AFTER all hooks
     const moveMindmapToInProgress = async (itemId: string) => {
@@ -1473,10 +1530,13 @@ export default function TodayPage() {
 
                                         {/* Verse type content */}
                                         {activeContent.type === 'verse' && (
-                                            <div className="review-verse-container" style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0 }}>
+                                            <div
+                                                className={`review-verse-container ${activeContent.contextVerses && activeContent.contextVerses.length > 0 ? 'has-context' : ''}`}
+                                                style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0, gap: '0.75rem' }}
+                                            >
                                                 {/* Context */}
                                                 {activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
-                                                    <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
+                                                    <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
                                                         {activeContent.contextVerses.map(c => <p key={c.ayahId} className="arabic-text" style={{ fontSize: '1rem' }}>{c.text}</p>)}
                                                     </div>
                                                 )}
@@ -1568,47 +1628,60 @@ export default function TodayPage() {
                             {orderedDueNodes.length > 0 && activeContent && (
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
-                                        !showGrading ? (
-                                            <button className="btn btn-primary btn-full review-reveal-btn" onClick={handleRevealNext}>
-                                                {revealedChunks >= totalChunks && currentVerseInReview >= totalVerses - 1 ? 'Finish Reciting' : 'Reveal Chunk'}
+                                        <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                                            <button className="review-btn postpone std-normal-btn" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={handlePostpone}>
+                                                <span style={{ fontSize: '0.85rem' }}>Not sure</span>
+                                                <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
                                             </button>
-                                        ) : (
-                                            <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: 'var(--foreground)' }} onClick={handlePostpone}>
-                                                    <span style={{ fontSize: '0.85rem' }}>Not sure</span>
-                                                    <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
-                                                </button>
-                                                <button className="review-btn not-remembered" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
-                                                    <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                                                        Next: {(() => {
-                                                            const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
-                                                            return preview.again;
-                                                        })()}
-                                                    </span>
-                                                </button>
-                                                <button className="review-btn remembered" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(true)}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
-                                                    <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                                                        Next: {(() => {
-                                                            const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
-                                                            return preview.good;
-                                                        })()}
-                                                    </span>
-                                                </button>
-                                            </div>
-                                        )
+                                            <button className="review-btn not-remembered std-normal-btn" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Not remembered</span></div>
+                                                <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                    Next: {(() => {
+                                                        const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                        return preview.again;
+                                                    })()}
+                                                </span>
+                                            </button>
+                                            <button
+                                                className="review-btn remembered std-normal-btn"
+                                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
+                                                onClick={() => {
+                                                    const isVerseFullyRevealed =
+                                                        totalVerses > 0 &&
+                                                        revealedChunks >= totalChunks &&
+                                                        currentVerseInReview >= totalVerses - 1;
+                                                    if (isVerseFullyRevealed) {
+                                                        handleGrade(true);
+                                                    } else {
+                                                        handleRevealNext();
+                                                    }
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Reveal / Good</span></div>
+                                                <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                    {(() => {
+                                                        const isVerseFullyRevealed =
+                                                            totalVerses > 0 &&
+                                                            revealedChunks >= totalChunks &&
+                                                            currentVerseInReview >= totalVerses - 1;
+                                                        if (!isVerseFullyRevealed) return 'Reveal next chunk';
+                                                        const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                        return `Next: ${preview.good}`;
+                                                    })()}
+                                                </span>
+                                            </button>
+                                        </div>
                                     )}
                                     {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
                                         !showGrading ? (
-                                            <button className="btn btn-primary btn-full" onClick={() => setShowGrading(true)}>
+                                            <button className="btn btn-primary btn-full std-normal-btn" onClick={() => setShowGrading(true)}>
                                                 Reveal Mindmap
                                             </button>
                                         ) : (
                                             <>
                                                 <div className="mindmap-quick-actions">
                                                     <button
-                                                        className="btn btn-secondary"
+                                                        className="btn btn-secondary std-normal-btn"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             if (activeContent.type === 'mindmap') {
@@ -1621,8 +1694,7 @@ export default function TodayPage() {
                                                         <PenTool size={14} /> Edit Mindmap
                                                     </button>
                                                     <button
-                                                        className="btn btn-secondary"
-                                                        style={{ color: 'var(--danger)' }}
+                                                        className="btn btn-secondary std-normal-btn std-normal-danger"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             if (activeContent.type === 'mindmap') {
@@ -1636,9 +1708,9 @@ export default function TodayPage() {
                                                     </button>
                                                 </div>
                                                 <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                    <button className="review-btn postpone" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', color: 'var(--foreground)' }} onClick={handlePostpone}>Not sure</button>
-                                                    <button className="review-btn not-remembered" onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
-                                                    <button className="review-btn remembered" onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
+                                                    <button className="review-btn postpone std-normal-btn" onClick={handlePostpone}>Not sure</button>
+                                                    <button className="review-btn not-remembered std-normal-btn" onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
+                                                    <button className="review-btn remembered std-normal-btn" onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
                                                 </div>
                                             </>
                                         )
@@ -1757,7 +1829,7 @@ export default function TodayPage() {
                                     </div>
 
                                     <div className="today-card-footer">
-                                        <button className="btn btn-success btn-full" onClick={handleCompleteListening}><Check size={20} /> Complete</button>
+                                        <button className="btn btn-success btn-full std-normal-btn" onClick={handleCompleteListening}><Check size={20} /> Complete</button>
                                     </div>
                                 </>
                             )}

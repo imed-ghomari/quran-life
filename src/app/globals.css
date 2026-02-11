@@ -1319,6 +1319,50 @@ h3 {
   cursor: not-allowed;
 }
 
+/* Reference normal button style (from Settings reset action) */
+.std-normal-btn {
+  --std-btn-highlight: var(--accent);
+  border: 1px solid var(--border) !important;
+  background: var(--background) !important;
+  color: var(--foreground-secondary) !important;
+  transition: all 0.2s ease !important;
+}
+
+.std-normal-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--std-btn-highlight) 42%, var(--border)) !important;
+  background: color-mix(in srgb, var(--std-btn-highlight) 10%, var(--background)) !important;
+  color: var(--std-btn-highlight) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--std-btn-highlight) 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.std-normal-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+.std-normal-btn:disabled {
+  border-color: var(--border) !important;
+  background: var(--background) !important;
+  color: var(--foreground-secondary) !important;
+  opacity: 0.5;
+  transform: none;
+}
+
+/* Color-aware normal-button variants */
+.std-normal-btn.remembered,
+.std-normal-btn.learned,
+.std-normal-btn.std-normal-success {
+  --std-btn-highlight: var(--success);
+  color: var(--success) !important;
+}
+
+.std-normal-btn.not-remembered,
+.std-normal-btn.std-normal-danger {
+  --std-btn-highlight: var(--danger);
+  color: var(--danger) !important;
+}
+
 .review-btn {
   display: flex;
   align-items: center;
@@ -1355,6 +1399,20 @@ h3 {
 .review-target-box {
   padding-bottom: 3.5rem;
   scroll-padding-bottom: 3.5rem;
+}
+
+.review-verse-container.has-context .context-box {
+  flex: 0 0 40%;
+  max-height: 40%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.review-verse-container.has-context .review-target-box {
+  flex: 0 0 60%;
+  max-height: 60%;
+  min-height: 0;
 }
 
 /* Inputs */
@@ -1580,22 +1638,24 @@ input:focus {
 
 .part-option {
   padding: 0.75rem 0.5rem;
-  border: 2px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--background);
   cursor: pointer;
   text-align: center;
   transition: all 0.2s ease;
-  color: var(--foreground);
+  color: var(--foreground-secondary);
 }
 
 .part-option.active {
   border-color: var(--accent);
   background: var(--verse-bg);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .part-option:hover {
-  border-color: var(--accent);
+  background: var(--verse-bg);
 }
 
 .part-number {
@@ -3231,6 +3291,26 @@ input:focus {
 /* Align kanban title icons with text */
 .kanban-title-icon {
   transform: translateY(5px);
+}
+
+/* Stronger hover/press highlight for Kanban card action menu rows */
+.card-action-menu-item.is-neutral {
+  color: var(--foreground);
+}
+
+.card-action-menu-item.is-neutral:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, var(--verse-bg));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  color: color-mix(in srgb, var(--accent) 84%, var(--foreground));
+}
+
+.card-action-menu-item.is-neutral:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 26%, var(--verse-bg));
+}
+
+/* Keep Appearance choice buttons on the same hover token as reference choice buttons */
+.appearance-choice-btn:hover:not(:disabled) {
+  background: var(--verse-bg) !important;
 }
 
 /* Desktop Left Toolbar */

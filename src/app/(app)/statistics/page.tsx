@@ -608,10 +608,14 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Reviews</h2>
                 </div>
                 <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem' }}>
-                    <label className="future-due-toggle" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', background: 'var(--background)', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--foreground)' }}>
-                        <input type="checkbox" checked={showBacklog} onChange={e => setShowBacklog(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
-                        Include Overdue
-                    </label>
+                    <button
+                        type="button"
+                        className="future-due-toggle std-normal-btn"
+                        onClick={() => setShowBacklog(!showBacklog)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '6px' }}
+                    >
+                        {showBacklog ? 'Exclude Overdue' : 'Include Overdue'}
+                    </button>
                     <select
                         className="future-due-range"
                         value={timeRange}

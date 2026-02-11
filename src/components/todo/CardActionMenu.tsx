@@ -236,7 +236,7 @@ export default function CardActionMenu({
                     style={{ top: position.top, left: position.left }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="p-4 flex flex-col gap-2">
+                    <div className="p-4 flex flex-col gap-1">
                         {menuItems.map((item, idx) => {
                             if (item.type === 'divider') {
                                 return <div key={idx} className="h-px bg-[var(--border)] my-1 mx-3" />;
@@ -246,14 +246,15 @@ export default function CardActionMenu({
                             const isLastItem = item.isLast;
 
                             const className = `
-                                w-full flex items-center gap-2 pl-10 pr-4 py-3.5 text-[13px] font-medium text-left rounded-xl transition-colors
+                                card-action-menu-item adv-seg-btn w-full !flex !items-center !justify-start gap-2 pl-8 pr-4 py-3 text-left
+                                ${item.danger ? 'is-danger' : 'is-neutral'}
                                 ${isFirstItem ? 'mt-1' : ''}
                                 ${isLastItem ? 'mb-1' : ''}
                                 ${item.disabled
                                     ? 'text-[var(--foreground-secondary)] opacity-50 cursor-not-allowed'
                                     : item.danger
                                         ? 'text-red-500 hover:bg-red-500/10 active:bg-red-500/15'
-                                        : 'text-[var(--foreground)] hover:bg-[var(--foreground)]/5 active:bg-[var(--foreground)]/10'}
+                                        : ''}
                             `;
 
                             if (item.isLink) {
@@ -284,7 +285,7 @@ export default function CardActionMenu({
 
                 <div
                     ref={menuRef}
-                    className="relative w-full bg-[var(--background)] rounded-t-[28px] border-2 border-[var(--border)] p-6 pt-8 pb-16 shadow-2xl"
+                    className="relative w-full bg-[var(--background)] rounded-t-[14px] border-2 border-[var(--border)] p-6 pt-8 pb-16 shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                     style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
                 >
@@ -293,7 +294,7 @@ export default function CardActionMenu({
                         <div className="w-12 h-1.5 bg-[var(--foreground-secondary)]/20 rounded-full" />
                     </div>
 
-                    <div className="flex flex-col gap-2 pb-6">
+                    <div className="flex flex-col gap-1 pb-6">
                         {menuItems.map((item, idx) => {
                             if (item.type === 'divider') {
                                 return <div key={idx} className="h-px bg-[var(--border)] my-2" />;
@@ -303,7 +304,8 @@ export default function CardActionMenu({
                             const isLastItem = item.isLast;
 
                             const className = `
-                                w-full flex items-center gap-4 pl-12 pr-6 py-5 text-[17px] font-medium text-left rounded-2xl transition-colors
+                                card-action-menu-item adv-seg-btn w-full !rounded-[14px] !flex !items-center !justify-start gap-4 pl-10 pr-6 py-4 text-left
+                                ${item.danger ? 'is-danger' : 'is-neutral'}
                                 ${isFirstItem ? 'mt-1' : ''}
                                 ${isLastItem ? 'mb-1' : ''}
                                 ${item.disabled
