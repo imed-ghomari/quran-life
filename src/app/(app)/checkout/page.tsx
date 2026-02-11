@@ -3,10 +3,8 @@
 import { useState } from 'react';
 import { db } from '@/lib/instant';
 import { usePaddle } from '@/lib/paddle/checkout';
+import { paddlePriceIds } from '@/lib/paddle/prices';
 import Spinner from '@/components/ui/Spinner';
-
-const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
-const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
 
 export default function CheckoutPage() {
   const paddle = usePaddle();
@@ -15,7 +13,7 @@ export default function CheckoutPage() {
   const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
-  const priceId = plan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+  const priceId = plan === 'monthly' ? paddlePriceIds.monthly : paddlePriceIds.yearly;
 
   const handleCheckout = () => {
     if (!paddle || !user) return;
@@ -34,7 +32,7 @@ export default function CheckoutPage() {
   const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
     setPlan(nextPlan);
     if (!paddle || !isCheckoutOpen) return;
-    const nextPriceId = nextPlan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+    const nextPriceId = nextPlan === 'monthly' ? paddlePriceIds.monthly : paddlePriceIds.yearly;
     paddle.Checkout.updateCheckout({
       items: [{ priceId: nextPriceId, quantity: 1 }],
     });

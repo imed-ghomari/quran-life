@@ -17,10 +17,9 @@ import { Suspense } from 'react';
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
+import { paddlePriceIds } from '@/lib/paddle/prices';
 import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
 
-const PRICE_MONTHLY_ID = 'pri_01kgvka6b5ddgjzstxesj208cz';
-const PRICE_YEARLY_ID = 'pri_01kgvkaxewf2awdc5xr906jxsc';
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 // Main authentication content component
 function AuthContent() {
@@ -68,7 +67,7 @@ function AuthContent() {
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
 
-    const priceId = plan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+    const priceId = plan === 'monthly' ? paddlePriceIds.monthly : paddlePriceIds.yearly;
 
     useEffect(() => {
         if (!planFromQuery) return;
@@ -123,7 +122,7 @@ function AuthContent() {
     const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
         setPlan(nextPlan);
         if (!paddle || !isCheckoutOpen) return;
-        const nextPriceId = nextPlan === 'monthly' ? PRICE_MONTHLY_ID : PRICE_YEARLY_ID;
+        const nextPriceId = nextPlan === 'monthly' ? paddlePriceIds.monthly : paddlePriceIds.yearly;
         paddle.Checkout.updateCheckout({
             items: [{ priceId: nextPriceId, quantity: 1 }],
         });
