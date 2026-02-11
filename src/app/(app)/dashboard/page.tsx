@@ -1264,27 +1264,32 @@ export default function TodayPage() {
         requestAnimationFrame(() => {
             if (!targetBoxRef.current) return;
             const container = targetBoxRef.current;
-            const containerHeight = container.offsetHeight;
+            const containerHeight = container.clientHeight;
             const activeVerse = container.querySelector('.active-verse') as HTMLElement | null;
 
             if (activeVerse) {
                 const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
+                const nextChunkEl = textEl?.querySelector('.next-blur') as HTMLElement | null;
                 const visibleChunks = textEl
                     ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
                     : [];
-                const lastRevealed = visibleChunks[visibleChunks.length - 1] || activeVerse;
-
-                const targetEl = lastRevealed || activeVerse;
-                const nextChunkEl = textEl?.querySelector('.next-blur') as HTMLElement | null;
+                const lastRevealed = visibleChunks[visibleChunks.length - 1] as HTMLElement | undefined;
+                const targetEl = lastRevealed || nextChunkEl || activeVerse;
                 const containerRect = container.getBoundingClientRect();
                 const targetRect = targetEl.getBoundingClientRect();
                 const nextRect = nextChunkEl?.getBoundingClientRect();
                 const styles = window.getComputedStyle(container);
                 const paddingBottom = Number.parseFloat(styles.paddingBottom || '0') || 0;
                 const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0;
-                const marginTop = Math.max(10, paddingTop);
-                const marginBottom = Math.max(20, paddingBottom);
+                // Use almost the entire container viewport now that context is merged.
+                const marginTop = Math.max(4, paddingTop);
+                const marginBottom = Math.max(4, paddingBottom);
                 const tolerance = 6;
+                const topLimit = marginTop;
+                const bottomSafetyZone = Math.max(56, marginBottom);
+                const bottomLimit = containerHeight - bottomSafetyZone;
+                const blurVisibilityBuffer = 36;
+                const proactiveBottomThreshold = 22;
 
                 const targetTop = targetRect.top - containerRect.top;
                 const targetBottom = targetRect.bottom - containerRect.top;
@@ -1292,13 +1297,24 @@ export default function TodayPage() {
                 const nextBottom = nextRect ? nextRect.bottom - containerRect.top : targetBottom;
                 const combinedTop = Math.min(targetTop, nextTop);
                 const combinedBottom = Math.max(targetBottom, nextBottom);
+                const nextOutOfView = !!nextRect && (
+                    nextTop < topLimit - tolerance ||
+                    nextBottom > bottomLimit - proactiveBottomThreshold
+                );
 
-                if (combinedTop < marginTop - tolerance || combinedBottom > containerHeight - marginBottom + tolerance) {
+                if (combinedTop < topLimit - tolerance || combinedBottom > bottomLimit + tolerance || nextOutOfView) {
                     let desiredTop = container.scrollTop;
-                    if (combinedTop < marginTop - tolerance) {
-                        desiredTop = container.scrollTop + combinedTop - marginTop;
-                    } else if (combinedBottom > containerHeight - marginBottom + tolerance) {
-                        desiredTop = container.scrollTop + (combinedBottom - containerHeight + marginBottom);
+                    // Keep the first next blurred chunk always visible inside explicit viewport limits.
+                    if (nextRect) {
+                        if (nextTop < topLimit - tolerance) {
+                            desiredTop = container.scrollTop + (nextTop - topLimit) - 8;
+                        } else if (nextBottom > bottomLimit - proactiveBottomThreshold) {
+                            desiredTop = container.scrollTop + (nextBottom - bottomLimit) + blurVisibilityBuffer;
+                        }
+                    } else if (combinedTop < topLimit - tolerance) {
+                        desiredTop = container.scrollTop + combinedTop - topLimit;
+                    } else if (combinedBottom > bottomLimit + tolerance) {
+                        desiredTop = container.scrollTop + (combinedBottom - bottomLimit);
                     }
 
                     const lastPos = lastRevealPositionRef.current;
@@ -1310,7 +1326,8 @@ export default function TodayPage() {
                             (currentVerseInReview === lastPos.verse && revealedChunks > lastPos.chunks)
                         );
                     // During forward reveal progression, never auto-scroll upward.
-                    if (isForwardReveal && desiredTop < container.scrollTop) {
+                    // Exception: allow upward motion if needed to keep next blurred chunk visible.
+                    if (isForwardReveal && desiredTop < container.scrollTop && !nextOutOfView) {
                         desiredTop = container.scrollTop;
                     }
                     smoothScrollContainer(container, desiredTop, 420);
@@ -1531,19 +1548,20 @@ export default function TodayPage() {
                                         {/* Verse type content */}
                                         {activeContent.type === 'verse' && (
                                             <div
-                                                className={`review-verse-container ${activeContent.contextVerses && activeContent.contextVerses.length > 0 ? 'has-context' : ''}`}
-                                                style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0, gap: '0.75rem' }}
+                                                className="review-verse-container"
+                                                style={{ display: 'flex', flexDirection: 'column', height: '60vh', minHeight: 0 }}
                                             >
-                                                {/* Context */}
-                                                {activeContent.contextVerses && activeContent.contextVerses.length > 0 && (
-                                                    <div className="context-box" style={{ opacity: 0.6, fontSize: '0.75rem', padding: '0.5rem', borderLeft: '3px solid var(--border)' }}>
-                                                        {activeContent.contextVerses.map(c => <p key={c.ayahId} className="arabic-text" style={{ fontSize: '1rem' }}>{c.text}</p>)}
-                                                    </div>
-                                                )}
-
                                                 {/* Scrollable verse content */}
                                                 <div ref={targetBoxRef} className="target-box custom-scrollbar review-target-box" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                                                     <div className="grouped-verse" style={{ direction: 'rtl', fontSize: '1.2rem' }}>
+                                                        {activeContent.contextVerses?.map((v) => (
+                                                            <span key={`context-${v.ayahId}`} className="grouped-verse-block">
+                                                                <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px', opacity: 0.8 }}>{v.ayahId}</span>
+                                                                <span className="grouped-verse-text arabic-text" style={{ opacity: 0.65 }}>
+                                                                    {v.text}
+                                                                </span>
+                                                            </span>
+                                                        ))}
                                                         {activeContent.verses?.map((v, idx) => {
                                                             const chunks = verseChunkMap[idx] || [];
                                                             const isPast = idx < currentVerseInReview;

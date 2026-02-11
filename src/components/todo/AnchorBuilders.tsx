@@ -203,7 +203,7 @@ export function MobileAnchorBuilder({
                         </div>
                     )}
                     <button
-                        className="btn btn-secondary btn-full"
+                        className="btn btn-secondary btn-full std-normal-btn"
                         onClick={async () => {
                             if (hasReviewedHistory) {
                                 const ok = await confirm({
@@ -296,7 +296,7 @@ export function MobileAnchorBuilder({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontWeight: 600 }}>Editing Splits</span>
                     <button
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm std-normal-btn"
                         onClick={() => {
                             setIsEditing(false);
                             onSave();
@@ -570,7 +570,7 @@ export function DesktopAnchorBuilder({
                 </div>
                 {!isEditing ? (
                     <button
-                        className="btn btn-secondary"
+                        className="btn btn-secondary std-normal-btn"
                         style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                         onClick={async () => {
                             if (hasReviewedHistory) {
@@ -588,7 +588,7 @@ export function DesktopAnchorBuilder({
                         Edit Splits
                     </button>
                 ) : (
-                    <button className="btn btn-primary" onClick={() => {
+                    <button className="btn btn-primary std-normal-btn" onClick={() => {
                         setIsEditing(false);
                         onSave();
                     }}>

@@ -43,8 +43,8 @@ export default function MutashabihNoteModal({ isOpen, title, initialNote, onClos
                 </div>
 
                 <div className="modal-footer">
-                    <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                    <button className="btn btn-primary" onClick={() => onSave(note)}>Save Note</button>
+                    <button className="btn std-normal-btn" onClick={onClose}>Cancel</button>
+                    <button className="btn std-normal-btn" onClick={() => onSave(note)}>Save Note</button>
                 </div>
             </div>
 
@@ -150,19 +150,6 @@ export default function MutashabihNoteModal({ isOpen, title, initialNote, onClos
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
-                }
-                .btn-primary {
-                    background: var(--accent);
-                    color: white;
-                    border: none;
-                }
-                .btn-secondary {
-                    background: transparent;
-                    color: var(--foreground-secondary);
-                    border: 1px solid var(--border);
-                }
-                .btn:hover {
-                    transform: translateY(-1px);
                 }
             `}</style>
         </div>

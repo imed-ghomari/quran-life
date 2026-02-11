@@ -61,7 +61,7 @@ export default function ConfirmationModal({
                         <button 
                             onClick={onCancel}
                             disabled={isProcessing}
-                            className="btn btn-secondary"
+                            className="btn std-normal-btn"
                             style={{ padding: '0.55rem 1rem', fontSize: '0.85rem' }}
                         >
                             {cancelLabel}
@@ -70,10 +70,10 @@ export default function ConfirmationModal({
                     <button 
                         onClick={onConfirm}
                         disabled={isProcessing}
-                        className={`btn ${isDestructive ? 'btn-danger' : 'btn-primary'}`}
+                        className={`btn std-normal-btn ${isDestructive ? 'std-normal-danger' : ''}`}
                         style={{ padding: '0.6rem 1.05rem', fontSize: '0.85rem' }}
                     >
-                        {isProcessing && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                        {isProcessing && <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />}
                         {isProcessing ? 'Processing...' : confirmLabel}
                     </button>
                 </div>

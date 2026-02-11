@@ -1397,8 +1397,8 @@ h3 {
 }
 
 .review-target-box {
-  padding-bottom: 3.5rem;
-  scroll-padding-bottom: 3.5rem;
+  padding-bottom: 5rem;
+  scroll-padding-bottom: 5rem;
 }
 
 .review-verse-container.has-context .context-box {
@@ -1520,36 +1520,38 @@ input:focus {
 
 /* Grouped verse styling */
 .grouped-verse {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  line-height: 1.8;
-  justify-content: flex-start;
+  display: block;
+  line-height: 2.05;
   direction: rtl;
   text-align: right;
 }
 
 .grouped-verse-block {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: rgba(14, 165, 233, 0.05);
-  padding: 0.35rem 0.5rem;
-  border-radius: 10px;
+  display: inline;
+  margin-inline-end: 0.45rem;
 }
 
 .verse-badge {
   background: var(--accent);
   color: white;
+  display: inline-block;
   border-radius: 8px;
   padding: 0.1rem 0.4rem;
   font-size: 0.75rem;
   font-weight: 700;
+  vertical-align: middle;
+  margin-inline: 0.2rem 0.35rem;
 }
 
 .grouped-verse-text {
   display: inline;
   text-align: right;
+}
+
+/* Reviews: revealed verse text size override (do not affect other arabic text blocks) */
+.review-target-box .grouped-verse-text.arabic-text {
+  font-size: inherit;
+  line-height: 1.9;
 }
 
 .blurred-chunk {

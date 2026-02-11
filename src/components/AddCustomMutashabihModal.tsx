@@ -126,8 +126,8 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                 </div>
 
                 <div className="modal-footer">
-                    <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                    <button className="btn btn-primary" onClick={handleSave}>Save Mutashabih</button>
+                    <button className="btn std-normal-btn" onClick={onClose}>Cancel</button>
+                    <button className="btn std-normal-btn" onClick={handleSave}>Save Mutashabih</button>
                 </div>
             </div>
 
@@ -241,19 +241,6 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
-                }
-                .btn-secondary {
-                    background: transparent;
-                    border: 1px solid var(--border);
-                    color: var(--foreground);
-                }
-                .btn-primary {
-                    background: var(--accent);
-                    border: 1px solid var(--accent);
-                    color: white;
-                }
-                .btn:hover {
-                    opacity: 0.9;
                 }
             `}</style>
         </div>
