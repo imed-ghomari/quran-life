@@ -8,7 +8,7 @@ import { OnlineStatusContext } from '@/components/Providers';
 import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const CHECKOUT_GRACE_PERIOD_MS = 10 * 60 * 1000;
 type AuthGateProps = {
   children: React.ReactNode;
@@ -31,20 +31,13 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
-  const latestSubscription = useMemo(() => {
-    const subscriptions = subscriptionData?.subscriptions ?? [];
-    if (subscriptions.length === 0) return null;
-    return [...subscriptions].sort((a, b) => {
-      const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return bTime - aTime;
-    })[0];
-  }, [subscriptionData?.subscriptions]);
   const hasActiveSubscription = useMemo(() => {
-    const status = latestSubscription?.status;
-    if (!status) return false;
-    return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
-  }, [latestSubscription?.status]);
+    const subscriptions = subscriptionData?.subscriptions ?? [];
+    return subscriptions.some((subscription) => {
+      const status = subscription?.status;
+      return Boolean(status && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
+    });
+  }, [subscriptionData?.subscriptions]);
   const isPaymentBypass = useMemo(
     () => isPaymentBypassEmail(user?.email),
     [user?.email]

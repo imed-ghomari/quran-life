@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import { createHash } from 'crypto';
 import { paddle } from '@/lib/paddle/server';
 import { keys } from '@/lib/keys';
 import { db as instantAdmin } from '@/lib/instant-admin';
 
 const { PADDLE_WEBHOOK_SECRET, INSTANT_ADMIN_TOKEN } = keys();
 
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
+
+function deterministicUuid(input: string) {
+  const hash = createHash('sha256').update(input).digest('hex');
+  const part1 = hash.slice(0, 8);
+  const part2 = hash.slice(8, 12);
+  const part3 = `4${hash.slice(13, 16)}`;
+  const part4 = `${((parseInt(hash.slice(16, 18), 16) & 0x3f) | 0x80).toString(16)}${hash.slice(18, 20)}`;
+  const part5 = hash.slice(20, 32);
+  return `${part1}-${part2}-${part3}-${part4}-${part5}`;
+}
 
 async function hasProcessedEvent(eventId: string) {
   const result = await instantAdmin.query({
@@ -37,7 +48,7 @@ async function recordEvent({
   priceId?: string | null;
 }) {
   await instantAdmin.transact(
-    instantAdmin.tx.paddleWebhookEvents[eventId].update({
+    instantAdmin.tx.paddleWebhookEvents[deterministicUuid(`event:${eventId}`)].update({
       eventId,
       eventType,
       userId: userId ?? '',
@@ -66,7 +77,7 @@ async function upsertSubscription({
   customData?: Record<string, unknown> | null;
 }) {
   await instantAdmin.transact(
-    instantAdmin.tx.subscriptions[subscriptionId].update({
+    instantAdmin.tx.subscriptions[deterministicUuid(`sub:${subscriptionId}`)].update({
       userId,
       status,
       paddleSubscriptionId: subscriptionId,
@@ -100,9 +111,17 @@ export const POST = async (request: Request) => {
     return NextResponse.json({ ok: false, error: 'missing paddle-signature header' }, { status: 400 });
   }
 
+  let eventData;
   try {
-    const eventData = await paddle.webhooks.unmarshal(body, PADDLE_WEBHOOK_SECRET, signature);
+    eventData = await paddle.webhooks.unmarshal(body, PADDLE_WEBHOOK_SECRET, signature);
+  } catch (error) {
+    console.error('Paddle webhook signature error', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ ok: false, error: 'invalid signature' }, { status: 400 });
+  }
 
+  try {
     if (await hasProcessedEvent(eventData.eventId)) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
@@ -159,9 +178,9 @@ export const POST = async (request: Request) => {
       }
     }
   } catch (error) {
-    console.error('Paddle webhook error', {
+    console.error('Paddle webhook processing error', {
       message: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json({ ok: false, error: 'invalid signature' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'processing failure' }, { status: 500 });
   }
 };

@@ -26,6 +26,8 @@ interface OnboardingModalProps {
     onComplete: () => void;
 }
 
+const ONBOARDING_TX_BATCH_SIZE = 100;
+
 export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const [step, setStep] = useState(0);
     const { settings, user } = useInstantSettings();
@@ -102,7 +104,11 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
             }
         }
         
-        await db.transact(transactions);
+        // Large first-time setups can timeout if sent as one mutation; commit in batches.
+        for (let i = 0; i < transactions.length; i += ONBOARDING_TX_BATCH_SIZE) {
+            const batch = transactions.slice(i, i + ONBOARDING_TX_BATCH_SIZE);
+            await db.transact(batch);
+        }
         onComplete();
     };
 
