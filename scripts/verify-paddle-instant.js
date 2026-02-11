@@ -1,10 +1,22 @@
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 const { init } = require('@instantdb/admin');
 
+const isProduction = process.env.PADDLE_ENV === 'production';
+const paddleApiKey = (isProduction ? process.env.PADDLE_SECRET_KEY_PRODUCTION : process.env.PADDLE_SECRET_KEY_SANDBOX)
+  || process.env.PADDLE_SECRET_KEY;
+
 const MONTHLY_PRICE_ID =
-  process.env.NEXT_PUBLIC_PADDLE_PRICE_MONTHLY_ID || 'pri_01kgvka6b5ddgjzstxesj208cz';
+  (isProduction
+    ? process.env.NEXT_PUBLIC_PADDLE_PRICE_MONTHLY_ID_PRODUCTION
+    : process.env.NEXT_PUBLIC_PADDLE_PRICE_MONTHLY_ID_SANDBOX)
+  || process.env.NEXT_PUBLIC_PADDLE_PRICE_MONTHLY_ID
+  || 'pri_01kgvka6b5ddgjzstxesj208cz';
 const YEARLY_PRICE_ID =
-  process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID || 'pri_01kgvkaxewf2awdc5xr906jxsc';
+  (isProduction
+    ? process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID_PRODUCTION
+    : process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID_SANDBOX)
+  || process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID
+  || 'pri_01kgvkaxewf2awdc5xr906jxsc';
 
 const REQUIRED_SUBSCRIPTION_EVENTS = new Set([
   'subscription.created',
@@ -32,8 +44,7 @@ function summarize() {
 }
 
 async function getPaddleClient() {
-  const apiKey = process.env.PADDLE_SECRET_KEY;
-  if (!apiKey) {
+  if (!paddleApiKey) {
     pushCheck('FAIL', 'Missing `PADDLE_SECRET_KEY`', 'Set Paddle API key in your environment.');
     return null;
   }
@@ -42,7 +53,7 @@ async function getPaddleClient() {
     ? Environment.production
     : Environment.sandbox;
 
-  return new Paddle(apiKey, { environment });
+  return new Paddle(paddleApiKey, { environment });
 }
 
 async function verifyCatalog(paddle) {
@@ -137,7 +148,7 @@ async function verifyWebhookSettings(paddle) {
     pushCheck(
       'WARN',
       'No recent webhook notifications found',
-      'Run a sandbox checkout to produce test events.'
+      'Run a checkout to produce test events.'
     );
     return;
   }
