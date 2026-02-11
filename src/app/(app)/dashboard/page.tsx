@@ -1764,33 +1764,6 @@ export default function TodayPage() {
                                 <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
                             ) : (
                                 <>
-                                    <div className="adv-segmented" role="radiogroup" aria-label="Daily portion mode" style={{ marginBottom: '0.75rem' }}>
-                                        <button
-                                            type="button"
-                                            role="radio"
-                                            aria-checked={readOnlyMode}
-                                            className={`adv-seg-btn ${readOnlyMode ? 'adv-seg-active' : ''}`}
-                                            onClick={() => setReadOnlyMode(true)}
-                                        >
-                                            <span>Reading</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            role="radio"
-                                            aria-checked={!readOnlyMode}
-                                            aria-disabled={!isOnline}
-                                            disabled={!isOnline}
-                                            className={`adv-seg-btn ${!readOnlyMode ? 'adv-seg-active' : ''}`}
-                                            onClick={() => {
-                                                if (!isOnline) return;
-                                                setReadOnlyMode(false);
-                                            }}
-                                            style={!isOnline ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-                                            title={!isOnline ? 'Listening mode is unavailable offline' : 'Switch to listening mode'}
-                                        >
-                                            <span>Listening</span>
-                                        </button>
-                                    </div>
                                     <div className={`today-card-content ${readOnlyMode ? 'today-card-content--read' : 'today-card-content--audio'}`}>
                                         {!readOnlyMode ? (
                                             <div className="audio-mode-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>

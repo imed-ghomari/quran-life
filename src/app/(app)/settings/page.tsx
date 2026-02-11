@@ -496,8 +496,12 @@ export default function SettingsPage() {
     }, [settings.kanbanSortOrder]);
 
     useEffect(() => {
+        if (!isOnline) {
+            setDailyPortionMode('reading');
+            return;
+        }
         setDailyPortionMode(settings.dailyPortionMode ?? 'audio');
-    }, [settings.dailyPortionMode]);
+    }, [isOnline, settings.dailyPortionMode]);
 
     const renderMobileView = () => {
 
@@ -1296,15 +1300,22 @@ export default function SettingsPage() {
                                     <div className="adv-segmented">
                                         {dailyPortionModeOptions.map((option) => {
                                             const isActive = (dailyPortionMode ?? 'audio') === option.id;
+                                            const isListeningOption = option.id === 'audio';
+                                            const disableListeningOption = !isOnline && isListeningOption;
                                             return (
                                                 <button
                                                     key={option.id}
                                                     type="button"
+                                                    aria-disabled={disableListeningOption}
+                                                    disabled={disableListeningOption}
                                                     onClick={() => {
+                                                        if (disableListeningOption) return;
                                                         setDailyPortionMode(option.id);
                                                         saveSettings({ dailyPortionMode: option.id });
                                                     }}
                                                     className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                    style={disableListeningOption ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                                                    title={disableListeningOption ? 'Listening mode is unavailable offline' : undefined}
                                                 >
                                                     {isActive && <Check size={14} className="adv-check" />}
                                                     <span>{option.label}</span>
@@ -3254,15 +3265,22 @@ export default function SettingsPage() {
                                                 <div className="adv-segmented">
                                                     {dailyPortionModeOptions.map((option) => {
                                                         const isActive = (dailyPortionMode ?? 'audio') === option.id;
+                                                        const isListeningOption = option.id === 'audio';
+                                                        const disableListeningOption = !isOnline && isListeningOption;
                                                         return (
                                                             <button
                                                                 key={option.id}
                                                                 type="button"
+                                                                aria-disabled={disableListeningOption}
+                                                                disabled={disableListeningOption}
                                                                 onClick={() => {
+                                                                    if (disableListeningOption) return;
                                                                     setDailyPortionMode(option.id);
                                                                     saveSettings({ dailyPortionMode: option.id });
                                                                 }}
                                                                 className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                                style={disableListeningOption ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                                                                title={disableListeningOption ? 'Listening mode is unavailable offline' : undefined}
                                                             >
                                                                 {isActive && <Check size={14} className="adv-check" />}
                                                                 <span>{option.label}</span>

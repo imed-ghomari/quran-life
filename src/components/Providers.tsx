@@ -48,6 +48,27 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    let hasReloadedForNewSW = false;
+    const handleControllerChange = () => {
+      if (hasReloadedForNewSW) return;
+      hasReloadedForNewSW = true;
+      window.location.reload();
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+    void navigator.serviceWorker.getRegistration().then((registration) => {
+      if (!registration) return;
+      void registration.update();
+    });
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+    };
+  }, []);
+
   return (
     <OnlineStatusContext.Provider value={isOnline}>
       <SyncProvider>

@@ -504,7 +504,16 @@ export default function StatisticsPage() {
         };
     }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, showBacklog, skippedSurahs, timeRange]);
 
-    if (isLoading) {
+    const hasRenderableData =
+        Boolean(settings) ||
+        mindmaps.length > 0 ||
+        partMindMaps.length > 0 ||
+        memoryNodes.length > 0 ||
+        listeningProgress.length > 0 ||
+        mutashabihatDecisions.length > 0 ||
+        reviewLogs.length > 0;
+
+    if (isLoading && !hasRenderableData) {
         return (
             <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
