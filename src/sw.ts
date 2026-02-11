@@ -14,18 +14,13 @@ declare const self: ServiceWorkerGlobalScope & {
 };
 
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
-  precacheOptions: {
-    cleanupOutdatedCaches: true,
-    navigateFallback: "/offline",
-  },
-  skipWaiting: true,
-  clientsClaim: true,
+  // Bump when runtime cache semantics change to avoid serving stale app shell/data.
+  // Precache is already revisioned separately by Serwist.
   runtimeCaching: [
     {
       matcher: ({ request }) => request.mode === "navigate",
       handler: new NetworkFirst({
-        cacheName: "pages",
+        cacheName: "pages-v2",
         networkTimeoutSeconds: 3,
         plugins: [
           new ExpirationPlugin({
@@ -42,7 +37,7 @@ const serwist = new Serwist({
         request.destination === "font" ||
         request.destination === "image",
       handler: new StaleWhileRevalidate({
-        cacheName: "static-assets",
+        cacheName: "static-assets-v2",
         plugins: [
           new ExpirationPlugin({
             maxEntries: 200,
@@ -55,7 +50,7 @@ const serwist = new Serwist({
       matcher: ({ url }) =>
         url.origin === self.location.origin && url.pathname.endsWith(".json"),
       handler: new NetworkFirst({
-        cacheName: "data-json",
+        cacheName: "data-json-v2",
         networkTimeoutSeconds: 3,
         plugins: [
           new ExpirationPlugin({
@@ -81,6 +76,13 @@ const serwist = new Serwist({
       }),
     },
   ],
+  precacheEntries: self.__SW_MANIFEST,
+  precacheOptions: {
+    cleanupOutdatedCaches: true,
+    navigateFallback: "/offline",
+  },
+  skipWaiting: true,
+  clientsClaim: true,
 });
 
 serwist.setCatchHandler(async ({ request }) => {
