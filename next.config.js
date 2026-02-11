@@ -1,88 +1,18 @@
-let withPWA = (config) => config;
-try {
-    withPWA = require('next-pwa')({
-        dest: 'public',
-        register: true,
-        skipWaiting: true,
-        cleanupOutdatedCaches: true,
-        cacheStartUrl: false,
-        // Avoid giant precache manifests that can break SW installs on lower-storage devices.
-        publicExcludes: [
-            '!audio/**/*',
-            '!recitations/**/*',
-            '!qpc-hafs-word-by-word.json',
-            '!quran-bg.jpg',
-        ],
-        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
-        disable: process.env.NODE_ENV === 'development',
-        fallbacks: {
-            document: '/offline',
-        },
-        runtimeCaching: [
-            // HTML navigations: prefer network, but allow fast fallback if network is slow.
-            {
-                urlPattern: ({ request }) => request.mode === 'navigate',
-                handler: 'NetworkFirst',
-                options: {
-                    cacheName: 'pages',
-                    expiration: {
-                        maxEntries: 50,
-                        maxAgeSeconds: 24 * 60 * 60,
-                    },
-                },
-            },
-            // Static assets: update in background to reduce stale UI.
-            {
-                urlPattern: ({ request }) =>
-                    request.destination === 'style' ||
-                    request.destination === 'script' ||
-                    request.destination === 'font' ||
-                    request.destination === 'image',
-                handler: 'StaleWhileRevalidate',
-                options: {
-                    cacheName: 'static-assets',
-                    expiration: {
-                        maxEntries: 200,
-                        maxAgeSeconds: 7 * 24 * 60 * 60,
-                    },
-                },
-            },
-            // JSON data: keep short-lived cache to avoid long-lived stale data.
-            {
-                urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.endsWith('.json'),
-                handler: 'NetworkFirst',
-                options: {
-                    cacheName: 'data-json',
-                    networkTimeoutSeconds: 3,
-                    expiration: {
-                        maxEntries: 50,
-                        maxAgeSeconds: 24 * 60 * 60,
-                    },
-                },
-            },
-            // Audio: cache on demand so offline playback still works for recently used files.
-            {
-                urlPattern: ({ request, url }) =>
-                    request.destination === 'audio' ||
-                    (url.origin === self.location.origin && url.pathname.endsWith('.mp3')),
-                handler: 'CacheFirst',
-                options: {
-                    cacheName: 'audio-runtime',
-                    rangeRequests: true,
-                    expiration: {
-                        maxEntries: 120,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                    },
-                },
-            },
-        ],
-    });
-} catch (error) {
-    if (process.env.NODE_ENV === 'production') {
-        // Avoid failing the build if next-pwa is not installed.
-        console.warn('next-pwa is not installed; skipping PWA setup.');
-    }
-}
+const withSerwist = require('@serwist/next').default({
+    swSrc: 'src/sw.ts',
+    swDest: 'public/sw.js',
+    register: true,
+    disable: process.env.NODE_ENV === 'development',
+    // Avoid giant precache manifests that can break SW installs on lower-storage devices.
+    globPublicPatterns: [
+        '**/*.{js,css,html,ico,png,svg,webp,jpg,jpeg,gif,webmanifest}',
+        'search-index.json',
+        'assets/premade-mindmaps/index.json',
+        'assets/premade-mindmaps/*.chunks.txt',
+        'assets/premade-mindmaps/*.tldraw',
+    ],
+    maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -106,6 +36,33 @@ const nextConfig = {
             },
             {
                 source: '/manifest.json',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'no-cache, no-store, must-revalidate'
+                    }
+                ]
+            },
+            {
+                source: '/workbox-:path(.*)',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'no-cache, no-store, must-revalidate'
+                    }
+                ]
+            },
+            {
+                source: '/fallback-:path(.*)',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'no-cache, no-store, must-revalidate'
+                    }
+                ]
+            },
+            {
+                source: '/worker-:path(.*)',
                 headers: [
                     {
                         key: 'Cache-Control',
@@ -164,4 +121,4 @@ const nextConfig = {
     }
 };
 
-module.exports = withPWA(nextConfig);
+module.exports = withSerwist(nextConfig);
