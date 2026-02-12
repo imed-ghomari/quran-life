@@ -10,6 +10,10 @@ export function usePaddle() {
   useEffect(() => {
     let isMounted = true;
 
+    if (typeof window === 'undefined') return;
+    if (!window.navigator.onLine) return;
+    if (!clientEnv.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN) return;
+
     const successUrl = `${window.location.origin}/dashboard`;
 
     initializePaddle({
@@ -27,12 +31,17 @@ export function usePaddle() {
           successUrl,
         },
       },
-    }).then((paddleInstance) => {
-      if (!isMounted) return;
-      if (paddleInstance) {
-        setPaddle(paddleInstance);
-      }
-    });
+    })
+      .then((paddleInstance) => {
+        if (!isMounted) return;
+        if (paddleInstance) {
+          setPaddle(paddleInstance);
+        }
+      })
+      .catch((error) => {
+        // Offline or blocked third-party scripts should not crash auth/checkout UI.
+        console.warn('Paddle initialization skipped:', error);
+      });
 
     return () => {
       isMounted = false;

@@ -4,7 +4,7 @@
 import { db } from '@/lib/instant';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
@@ -19,6 +19,7 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
+import { OnlineStatusContext } from '@/components/Providers';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 // Main authentication content component
@@ -30,6 +31,7 @@ function AuthContent() {
         error?: { message: string } | undefined;
     };
     const { user, isLoading: isAuthLoading, error: authStateError } = authState;
+    const isOnline = useContext(OnlineStatusContext);
     const userEmail = user?.email ?? 'your account';
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -62,6 +64,7 @@ function AuthContent() {
     const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+    const [subscriptionCheckTimedOut, setSubscriptionCheckTimedOut] = useState(false);
 
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -73,6 +76,19 @@ function AuthContent() {
         if (!planFromQuery) return;
         setPlan(planFromQuery);
     }, [planFromQuery]);
+
+    useEffect(() => {
+        if (!user || !isSubscriptionLoading) {
+            setSubscriptionCheckTimedOut(false);
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setSubscriptionCheckTimedOut(true);
+        }, 4000);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [user, isSubscriptionLoading]);
 
     useEffect(() => {
         if (!forceCheckoutBlur) return;
@@ -91,15 +107,17 @@ function AuthContent() {
         () => isPaymentBypassEmail(user?.email),
         [user?.email]
     );
-    const isCheckoutLocked = !user || isSubscriptionLoading || forceCheckoutBlur || hasActiveSubscription;
+    const shouldBlockOnSubscriptionLoad =
+        isOnline && isSubscriptionLoading && !subscriptionCheckTimedOut;
+    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
         if (!user) return;
-        if (isSubscriptionLoading) return;
+        if (shouldBlockOnSubscriptionLoad) return;
         if (hasActiveSubscription || isPaymentBypass) {
             router.replace('/dashboard');
         }
-    }, [user, isSubscriptionLoading, hasActiveSubscription, isPaymentBypass, router]);
+    }, [user, shouldBlockOnSubscriptionLoad, hasActiveSubscription, isPaymentBypass, router]);
 
     const handleCheckout = () => {
         if (!user) {
@@ -198,7 +216,7 @@ function AuthContent() {
         );
     }
 
-    if (user && (isSubscriptionLoading || hasActiveSubscription || isPaymentBypass)) {
+    if (user && (shouldBlockOnSubscriptionLoad || hasActiveSubscription || isPaymentBypass)) {
         return (
             <div style={{
                 minHeight: '100vh',
@@ -207,7 +225,7 @@ function AuthContent() {
                 justifyContent: 'center',
                 background: 'var(--background)'
             }}>
-                <Spinner text={isSubscriptionLoading ? 'Checking subscription...' : 'Redirecting to dashboard...'} />
+                <Spinner text={shouldBlockOnSubscriptionLoad ? 'Checking subscription...' : 'Redirecting to dashboard...'} />
             </div>
         );
     }

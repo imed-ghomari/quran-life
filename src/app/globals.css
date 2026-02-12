@@ -1098,13 +1098,9 @@ h3 {
   min-height: 0;
 }
 
-.review-queue-progress {
-  margin-bottom: 0.35rem;
-  padding: 0;
-}
-
 .review-queue-progress-track {
   height: 4px;
+  margin-bottom: 0.35rem;
   border-radius: 999px;
   border: none;
   background: color-mix(in srgb, var(--border) 62%, var(--background-secondary));

@@ -1627,17 +1627,15 @@ export default function TodayPage() {
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
                             {reviewQueueTotal > 0 && (
-                                <div className="review-queue-progress">
-                                    <div
-                                        className="review-queue-progress-track"
-                                        role="progressbar"
-                                        aria-label="Review queue progress"
-                                        aria-valuemin={0}
-                                        aria-valuemax={reviewQueueTotal}
-                                        aria-valuenow={reviewQueueCompleted}
-                                    >
-                                        <span className="review-queue-progress-fill" style={{ width: `${reviewQueueProgress}%` }} />
-                                    </div>
+                                <div
+                                    className="review-queue-progress-track"
+                                    role="progressbar"
+                                    aria-label="Review queue progress"
+                                    aria-valuemin={0}
+                                    aria-valuemax={reviewQueueTotal}
+                                    aria-valuenow={reviewQueueCompleted}
+                                >
+                                    <span className="review-queue-progress-fill" style={{ width: `${reviewQueueProgress}%` }} />
                                 </div>
                             )}
                             <div className="today-card-content">

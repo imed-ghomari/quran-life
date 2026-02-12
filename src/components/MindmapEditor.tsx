@@ -594,8 +594,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         <a
                             className="mindmap-editor-doclink"
                             href={docLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             style={{
                                 fontSize: '0.75rem',
                                 color: 'var(--accent)',

@@ -138,6 +138,10 @@ export default function AuthGate({ children }: AuthGateProps) {
     );
   }
 
+  if (!isOnline) {
+    return <>{children}</>;
+  }
+
   if (!user) {
     return (
       <div style={{
@@ -150,10 +154,6 @@ export default function AuthGate({ children }: AuthGateProps) {
         <Spinner text="Redirecting to sign in..." />
       </div>
     );
-  }
-
-  if (!isOnline) {
-    return <>{children}</>;
   }
 
   return <>{children}</>;
