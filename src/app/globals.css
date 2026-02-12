@@ -1000,6 +1000,11 @@ h3 {
   font-weight: 600;
   font-size: 0.85rem;
   color: var(--foreground);
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  line-height: 1.35;
+  -webkit-text-fill-color: currentColor;
 }
 
 .adv-chip-row {

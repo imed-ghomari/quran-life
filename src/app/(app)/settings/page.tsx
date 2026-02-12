@@ -3165,7 +3165,7 @@ export default function SettingsPage() {
                                             <div className="adv-card-title">Sorting & Filters</div>
 
                                             <div className="adv-group">
-                                                <div className="adv-label">Default Todo Filter</div>
+                                                <div className="adv-label" style={{ display: 'block', visibility: 'visible', opacity: 1, color: 'var(--foreground)' }}>Default Todo Filter</div>
                                                 <div className="adv-chip-row">
                                                     {todoFilterOptions.map((option) => {
                                                         const isActive = (todoDefaultFilter ?? 'all') === option.id;
@@ -3188,7 +3188,7 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="adv-group">
-                                                <div className="adv-label">Review Sorting</div>
+                                                <div className="adv-label" style={{ display: 'block', visibility: 'visible', opacity: 1, color: 'var(--foreground)' }}>Review Sorting</div>
                                                 <div className="adv-chip-row">
                                                     {reviewSortOptions.map((option) => {
                                                         const isActive = (reviewSortOrder ?? 'surah_grouped') === option.id;
@@ -3211,7 +3211,7 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="adv-group">
-                                                <div className="adv-label">Kanban Card Sorting</div>
+                                                <div className="adv-label" style={{ display: 'block', visibility: 'visible', opacity: 1, color: 'var(--foreground)' }}>Kanban Card Sorting</div>
                                                 <div className="adv-chip-row">
                                                     {kanbanSortOptions.map((option) => {
                                                         const isActive = (kanbanSortOrder ?? 'type_then_number') === option.id;
@@ -3238,7 +3238,7 @@ export default function SettingsPage() {
                                             <div className="adv-card-title">Workflow Behaviors</div>
 
                                             <div className="adv-group">
-                                                <div className="adv-label">When Moving Out of Complete</div>
+                                                <div className="adv-label" style={{ display: 'block', visibility: 'visible', opacity: 1, color: 'var(--foreground)' }}>When Moving Out of Complete</div>
                                                 <div className="adv-segmented">
                                                     {completeExitOptions.map((option) => {
                                                         const isActive = (completeExitBehavior ?? 'mindmap_only') === option.id;
@@ -3261,7 +3261,7 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="adv-group">
-                                                <div className="adv-label">Daily Portion Default Mode</div>
+                                                <div className="adv-label" style={{ display: 'block', visibility: 'visible', opacity: 1, color: 'var(--foreground)' }}>Daily Portion Default Mode</div>
                                                 <div className="adv-segmented">
                                                     {dailyPortionModeOptions.map((option) => {
                                                         const isActive = (dailyPortionMode ?? 'audio') === option.id;
