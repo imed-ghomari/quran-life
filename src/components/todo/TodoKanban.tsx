@@ -737,14 +737,6 @@ export default function TodoKanban({
         }
     }, [onEditMindmap, mindmaps]);
 
-    const handleCardImportMindmap = useCallback((item: KanbanItem) => {
-        if (item.type === 'surah') {
-            onImportPremade('surah', item.data.surah.id);
-        } else if (item.type === 'part') {
-            onImportPremade('part', item.data.part);
-        }
-    }, [onImportPremade]);
-
     const handleCardDeleteMindmap = useCallback((item: KanbanItem) => {
         if (onDeleteMindmap) {
             if (item.type === 'surah') {
@@ -1140,7 +1132,6 @@ export default function TodoKanban({
                             appMode={appMode}
                             onCardClick={(item) => setActiveItem(item)}
                             onEditMindmap={handleCardEditMindmap}
-                            onImportMindmap={handleCardImportMindmap}
                             onDeleteMindmap={handleCardDeleteMindmap}
                             onExportMindmap={handleCardExportMindmap}
                             onResetMindmap={handleCardResetMindmap}

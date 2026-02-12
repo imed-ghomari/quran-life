@@ -18,7 +18,6 @@ interface KanbanCardProps {
     appMode: 'owner' | 'user';
     docLink?: string;
     onEditMindmap: () => void;
-    onImportMindmap: () => void;
     onDeleteMindmap: () => void;
     onExportMindmap?: () => void;
     onResetMindmap?: (resetMemoryNodes: boolean) => void;
@@ -37,7 +36,6 @@ const KanbanCard = ({
     appMode,
     docLink,
     onEditMindmap,
-    onImportMindmap,
     onDeleteMindmap,
     onExportMindmap,
     onResetMindmap,
@@ -154,7 +152,6 @@ const KanbanCard = ({
                             handleMenuClick,
                             isMobile,
                             onEditMindmap,
-                            onImportMindmap,
                             onDeleteMindmap: handleDeleteClick,
                             onExportMindmap,
                             onResetMindmap: handleResetClick,
@@ -187,7 +184,6 @@ interface RenderZoneProps {
     handleMenuClick: (e: React.MouseEvent) => void;
     isMobile: boolean;
     onEditMindmap: () => void;
-    onImportMindmap: () => void;
     onDeleteMindmap: () => void;
     onExportMindmap?: () => void;
     onResetMindmap?: () => void;
@@ -213,7 +209,6 @@ function renderCardZones({
     handleMenuClick,
     isMobile,
     onEditMindmap,
-    onImportMindmap,
     onDeleteMindmap,
     onExportMindmap,
     onResetMindmap,
@@ -312,7 +307,6 @@ function renderCardZones({
                         isOpen={menuOpen}
                         onClose={() => setMenuOpen(false)}
                         onEditMindmap={onEditMindmap}
-                        onImportMindmap={onImportMindmap}
                         onDeleteMindmap={onDeleteMindmap}
                         onExportMindmap={onExportMindmap}
                         onResetMindmap={onResetMindmap}

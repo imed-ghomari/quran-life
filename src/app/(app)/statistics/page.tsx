@@ -547,7 +547,7 @@ export default function StatisticsPage() {
                     />
 
                     <ProgressBarSection
-                        title="Verse Chunks"
+                        title="Verse Progress"
                         icon={<RotateCcw size={20} />}
                         stats={verseChunkStats}
                         headerSuffix={
@@ -661,7 +661,7 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
     if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
 
     const chartHeight = 210;
-    const padding = { top: 12, right: 28, bottom: 38, left: 36 };
+    const padding = { top: 8, right: 28, bottom: 38, left: 36 };
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
 
@@ -671,11 +671,11 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
     }
 
     const maxCount = Math.max(...nonZeroData.map(d => d.count), 1);
-    const niceStep = (val: number) => {
-        if (val <= 10) return 10;
-        return Math.ceil(val / 50) * 50;
-    };
-    const maxNice = niceStep(maxCount);
+    const isSmallRange = maxCount <= 8;
+    const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
+    const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
+    const maxNice = Math.max(1, tickStep * tickCount);
+    const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
     const gradientSeed = useId();
     const ids = {
         bar: `reviews-bar-${gradientSeed}`,
@@ -789,12 +789,11 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
 
                                 {/* Left Y-axis (Daily Count) */}
                                 <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.35" />
-                                {[0, 0.5, 1].map((p, i) => {
-                                    const val = p * maxNice;
+                                {yTicks.map((val, i) => {
                                     const y = getYCount(val);
                                     return (
                                         <g key={i}>
-                                            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{Math.round(val)}</text>
+                                            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{val}</text>
                                         </g>
                                     );
                                 })}

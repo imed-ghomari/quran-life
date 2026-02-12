@@ -12,6 +12,7 @@ import {
     Check, Clock, PauseCircle, RotateCcw, Download,
     Upload,
     Database,
+    CreditCard,
     Brain,
     Plus,
     Trash2,
@@ -35,6 +36,7 @@ import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
+import { paddlePriceIds } from '@/lib/paddle/prices';
 
 interface MutashabihatDecision {
     id: string; // absoluteAyah or absoluteAyah-phraseId
@@ -116,6 +118,7 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_mindmap', label: 'Solved by Mindmap' },
     { value: 'solved_note', label: 'Solved by Note' },
 ];
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 
 const formatKnowledgeTrackingDueDate = (due: string | null): string => {
     if (!due) return '-';
@@ -166,6 +169,13 @@ export default function SettingsPage() {
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme } = useTheme();
     const { confirm, alert } = useConfirmDialog();
+    const { data: subscriptionData } = db.useQuery({
+        subscriptions: {
+            $: {
+                where: { userId: user?.id || '' },
+            },
+        },
+    });
 
     const todoFilterOptions = [
         { id: 'all', label: 'All Items' },
@@ -187,7 +197,7 @@ export default function SettingsPage() {
         { id: 'manual', label: 'Manual (Drag to Sort)' }
     ] as const;
     const dailyPortionModeOptions = [
-        { id: 'audio', label: 'Audio' },
+        { id: 'audio', label: 'Listening' },
         { id: 'reading', label: 'Reading' }
     ] as const;
 
@@ -503,6 +513,66 @@ export default function SettingsPage() {
         setDailyPortionMode(settings.dailyPortionMode ?? 'audio');
     }, [isOnline, settings.dailyPortionMode]);
 
+    const latestSubscription = useMemo(() => {
+        const subscriptions = (subscriptionData?.subscriptions ?? []) as any[];
+        if (!subscriptions.length) return null;
+
+        const sorted = [...subscriptions].sort((a, b) => {
+            const aTime = Date.parse(a?.updatedAt ?? '') || 0;
+            const bTime = Date.parse(b?.updatedAt ?? '') || 0;
+            return bTime - aTime;
+        });
+        return sorted[0] ?? null;
+    }, [subscriptionData?.subscriptions]);
+
+    const billingStatus = latestSubscription?.status ?? 'none';
+    const isActiveBilling = ACTIVE_SUBSCRIPTION_STATUSES.has(billingStatus);
+    const billingPlan =
+        latestSubscription?.priceId === paddlePriceIds.monthly
+            ? 'Monthly'
+            : latestSubscription?.priceId === paddlePriceIds.yearly
+                ? 'Yearly'
+                : latestSubscription?.priceId
+                    ? 'Custom'
+                    : 'N/A';
+    const billingLastUpdated = latestSubscription?.updatedAt
+        ? new Date(latestSubscription.updatedAt).toLocaleString()
+        : 'N/A';
+
+    const renderBillingInfo = () => (
+        <div
+            className="billing-info-card"
+            style={{
+                marginBottom: '1rem',
+                padding: '0.9rem',
+                borderRadius: '12px',
+                border: '1px solid var(--border)',
+                background: 'var(--background)',
+            }}
+        >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.65rem' }}>
+                <CreditCard size={16} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Billing Information</span>
+            </div>
+            <div style={{ display: 'grid', gap: '0.4rem', fontSize: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <span style={{ color: 'var(--foreground-secondary)' }}>Status</span>
+                    <span style={{ fontWeight: 600, color: isActiveBilling ? '#16a34a' : 'var(--foreground)' }}>
+                        {billingStatus === 'none' ? 'No subscription' : billingStatus}
+                    </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <span style={{ color: 'var(--foreground-secondary)' }}>Plan</span>
+                    <span style={{ fontWeight: 600 }}>{billingPlan}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Updated</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{billingLastUpdated}</span>
+                </div>
+            </div>
+        </div>
+    );
+
     const renderMobileView = () => {
 
         if (activeMobilePage === 'account') {
@@ -527,6 +597,7 @@ export default function SettingsPage() {
                                 ? `Signed in as ${user.email}. Your data is synced automatically.`
                                 : "Sign in to sync your progress across devices."}
                         </p>
+                        {user && renderBillingInfo()}
 
                         <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
                             {!isOnline && (
@@ -1179,6 +1250,9 @@ export default function SettingsPage() {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <p style={{ color: 'var(--foreground-secondary)', margin: 0, fontSize: '0.9rem' }}>
+                            Choose defaults and behaviors for your workflow.
+                        </p>
                         <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                             <h2 className="adv-section-title" style={{ marginBottom: '0.5rem' }}>
                                 <span className="adv-section-icon">
@@ -1186,9 +1260,6 @@ export default function SettingsPage() {
                                 </span>
                                 <span>Sorting & Filters</span>
                             </h2>
-                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
-                                Choose defaults and behaviors for your workflow.
-                            </p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                                 <div>
                                     <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Default Todo Filter</div>
@@ -1268,9 +1339,6 @@ export default function SettingsPage() {
                                 </span>
                                 <span>Workflow Behaviors</span>
                             </h2>
-                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
-                                Choose defaults and behaviors for your workflow.
-                            </p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                                 <div>
                                     <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>When Moving Out of Complete</div>
@@ -1779,6 +1847,7 @@ export default function SettingsPage() {
                                                 ? `Signed in as ${user.email}. Your data is synced automatically.`
                                                 : "Sign in to sync your progress across devices."}
                                         </p>
+                                        {user && renderBillingInfo()}
 
                                         <div style={{ opacity: isOnline ? 1 : 0.45, pointerEvents: isOnline ? 'auto' : 'none' }}>
                                             {!isOnline && (

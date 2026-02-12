@@ -12,6 +12,12 @@ const parseEmails = (raw: string) =>
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
 
+const parseBool = (value: string | undefined, fallback: boolean = false) => {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+};
+
 export const serverEnv = {
   PADDLE_ENV: paddleEnv,
   PADDLE_SECRET_KEY:
@@ -26,6 +32,10 @@ export const serverEnv = {
     '',
   INSTANT_ADMIN_TOKEN: process.env.INSTANT_APP_ADMIN_TOKEN ?? process.env.INSTANT_ADMIN_TOKEN ?? '',
   INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? 'pr-quran-life',
+  E2E_MODE: parseBool(process.env.E2E_MODE, false),
+  E2E_AUTH_SECRET: process.env.E2E_AUTH_SECRET ?? '',
+  E2E_DEFAULT_EMAIL: process.env.E2E_DEFAULT_EMAIL ?? 'e2e@local.test',
+  E2E_ALLOWED_EMAILS: parseEmails(process.env.E2E_ALLOWED_EMAILS ?? ''),
   APP_MODE: (process.env.APP_MODE ?? process.env.NEXT_PUBLIC_APP_MODE ?? 'user').toLowerCase(),
   EDITOR_EMAILS: Array.from(
     new Set(

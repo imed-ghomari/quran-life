@@ -94,6 +94,7 @@ export default function TodayPage() {
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
     const [isMobile, setIsMobile] = useState(false);
     const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
+    const [reviewQueueStartCount, setReviewQueueStartCount] = useState(0);
     const lastPortionKeyRef = useRef<string>('');
 
     // Local helper to find anchor for range using InstantDB mindmaps
@@ -382,6 +383,19 @@ export default function TodayPage() {
             setShowGrading(false);
         }
     }, [orderedDueNodes.length, currentReviewIndex]);
+
+    // Keep a baseline of the active queue length to show progress in this queue.
+    useEffect(() => {
+        if (orderedDueNodes.length === 0) {
+            setReviewQueueStartCount(0);
+            return;
+        }
+        setReviewQueueStartCount(prev => {
+            if (prev === 0) return orderedDueNodes.length;
+            if (orderedDueNodes.length > prev) return orderedDueNodes.length;
+            return prev;
+        });
+    }, [orderedDueNodes.length]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -1229,6 +1243,9 @@ export default function TodayPage() {
 
     const reviewContent = getCurrentReviewContent();
     const activeContent = reviewContent;
+    const reviewQueueTotal = reviewQueueStartCount || orderedDueNodes.length;
+    const reviewQueueCompleted = Math.max(0, reviewQueueTotal - orderedDueNodes.length);
+    const reviewQueueProgress = reviewQueueTotal > 0 ? (reviewQueueCompleted / reviewQueueTotal) * 100 : 0;
 
     // Reveal Logic
     const getCurrentVerseChunks = () => {
@@ -1609,6 +1626,20 @@ export default function TodayPage() {
 
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
+                            {reviewQueueTotal > 0 && (
+                                <div className="review-queue-progress">
+                                    <div
+                                        className="review-queue-progress-track"
+                                        role="progressbar"
+                                        aria-label="Review queue progress"
+                                        aria-valuemin={0}
+                                        aria-valuemax={reviewQueueTotal}
+                                        aria-valuenow={reviewQueueCompleted}
+                                    >
+                                        <span className="review-queue-progress-fill" style={{ width: `${reviewQueueProgress}%` }} />
+                                    </div>
+                                </div>
+                            )}
                             <div className="today-card-content">
                                 {/* Empty state */}
                                 {orderedDueNodes.length === 0 ? (

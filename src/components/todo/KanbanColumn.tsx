@@ -16,7 +16,6 @@ interface KanbanColumnProps {
     onCardClick: (item: KanbanItem) => void;
     // New props for card actions
     onEditMindmap: (item: KanbanItem) => void;
-    onImportMindmap: (item: KanbanItem) => void;
     onDeleteMindmap: (item: KanbanItem) => void;
     onExportMindmap?: (item: KanbanItem) => void;
     onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => void;
@@ -47,7 +46,6 @@ const KanbanColumn = ({
     appMode,
     onCardClick,
     onEditMindmap,
-    onImportMindmap,
     onDeleteMindmap,
     onExportMindmap,
     onResetMindmap,
@@ -130,7 +128,6 @@ const KanbanColumn = ({
                                 appMode={appMode}
                                 docLink={getDocLink(item)}
                                 onEditMindmap={() => onEditMindmap(item)}
-                                onImportMindmap={() => onImportMindmap(item)}
                                 onDeleteMindmap={() => onDeleteMindmap(item)}
                                 onExportMindmap={onExportMindmap ? () => onExportMindmap(item) : undefined}
                                 onResetMindmap={onResetMindmap ? (resetMemoryNodes) => onResetMindmap(item, resetMemoryNodes) : undefined}
