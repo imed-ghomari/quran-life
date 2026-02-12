@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 
 export const OnlineStatusContext = createContext(true);
+const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v1";
 
 function OnboardingWrapper() {
   const pathname = usePathname();
@@ -47,6 +48,32 @@ export function Providers({ children }: { children: React.ReactNode }) {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    const runServiceWorkerMigration = async () => {
+      try {
+        if (window.localStorage.getItem(SW_MIGRATION_KEY) === "done") return;
+
+        window.localStorage.setItem(SW_MIGRATION_KEY, "done");
+
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+
+        if ("caches" in window) {
+          const cacheKeys = await caches.keys();
+          await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+        }
+
+        window.location.reload();
+      } catch (error) {
+        console.warn("Service worker migration failed", error);
+      }
+    };
+
+    runServiceWorkerMigration();
+  }, [SW_MIGRATION_KEY]);
 
   return (
     <OnlineStatusContext.Provider value={isOnline}>
