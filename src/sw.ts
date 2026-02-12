@@ -8,7 +8,7 @@ const injectedManifest = self.__SW_MANIFEST as
   | Array<string | { url: string; revision?: string | null }>
   | undefined;
 
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const PRECACHE_NAME = `precache-${CACHE_VERSION}`;
 const PAGES_CACHE = `pages-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
@@ -30,6 +30,10 @@ const OLD_CACHE_PREFIXES = [
   "static-assets-v4",
   "data-json-v4",
   "offline-content-v1",
+  "pages-v5",
+  "static-v5",
+  "data-v5",
+  "offline-content-v5",
 ];
 
 const toManifestUrl = (entry: string | { url: string }) =>
@@ -85,11 +89,16 @@ async function staleWhileRevalidate(request: Request, cacheName: string) {
   return (await networkPromise) ?? Response.error();
 }
 
-async function networkFirst(request: Request, cacheName: string, timeoutMs = 3000) {
+async function networkFirst(
+  request: Request,
+  cacheName: string,
+  timeoutMs = 3000,
+  canCache: (response: Response) => boolean = (response) => response.ok
+) {
   const cache = await caches.open(cacheName);
   const networkPromise = fetch(request)
     .then(async (response) => {
-      if (response.ok) await cache.put(request, response.clone());
+      if (canCache(response)) await cache.put(request, response.clone());
       return response;
     })
     .catch(() => undefined);
@@ -164,9 +173,20 @@ swSelf.addEventListener("fetch", (event: FetchEvent) => {
   }
 
   if (request.mode === "navigate") {
+    const requestPath = url.pathname;
     event.respondWith(
       (async () => {
-        const response = await networkFirst(request, PAGES_CACHE, 3000);
+        const response = await networkFirst(
+          request,
+          PAGES_CACHE,
+          3000,
+          (networkResponse) => {
+            if (!networkResponse.ok) return false;
+            if (networkResponse.redirected) return false;
+            const responsePath = new URL(networkResponse.url).pathname;
+            return responsePath === requestPath;
+          }
+        );
         if (response && response.type !== "error") return response;
 
         const precache = await caches.open(PRECACHE_NAME);

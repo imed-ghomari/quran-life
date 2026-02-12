@@ -10,6 +10,8 @@ import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
 const PUBLIC_PATHS = new Set(['/', '/auth']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const CHECKOUT_GRACE_PERIOD_MS = 10 * 60 * 1000;
+const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 type AuthGateProps = {
   children: React.ReactNode;
 };
@@ -21,6 +23,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
+  const [hasOfflineAccess, setHasOfflineAccess] = useState(false);
   const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
     subscriptions: {
       $: {
@@ -71,6 +74,38 @@ export default function AuthGate({ children }: AuthGateProps) {
   }, [hasActiveSubscription]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (user?.id) {
+      const marker = JSON.stringify({ userId: user.id, updatedAt: Date.now() });
+      window.localStorage.setItem(OFFLINE_ACCESS_KEY, marker);
+      setHasOfflineAccess(true);
+      return;
+    }
+
+    const raw = window.localStorage.getItem(OFFLINE_ACCESS_KEY);
+    if (!raw) {
+      setHasOfflineAccess(false);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+      const updatedAt = Number(parsed?.updatedAt ?? 0);
+      const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
+      const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
+      const valid = hasValidTimestamp && hasUserId;
+      setHasOfflineAccess(valid);
+      if (!valid) {
+        window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
+      }
+    } catch {
+      window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
+      setHasOfflineAccess(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
     if (!hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout) return;
@@ -118,13 +153,15 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   const needsCheckoutDecision =
     !hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout;
+  const shouldBlockOnCheckoutDecision = isOnline && needsCheckoutDecision;
+  const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
   const isRedirecting =
     isOnline
     && user
-    && !needsCheckoutDecision
+    && !shouldBlockOnCheckoutDecision
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
 
-  if (isAuthLoading || isSubscriptionLoading || needsCheckoutDecision || isRedirecting) {
+  if (isAuthLoading || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -139,6 +176,19 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   if (!isOnline) {
+    if (!user && !hasOfflineAccess) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--background)',
+        }}>
+          <Spinner text="Offline access unavailable. Connect once to sign in." />
+        </div>
+      );
+    }
     return <>{children}</>;
   }
 
