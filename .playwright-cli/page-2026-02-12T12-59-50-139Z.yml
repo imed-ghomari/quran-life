@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - heading "Sign in to Quran Life" [level=2] [ref=e9]
+        - paragraph [ref=e10]: We'll send you a magic link to sign in instantly.
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - img [ref=e13]
+          - textbox "name@example.com" [ref=e16]
+        - button "Send Magic Link" [ref=e17] [cursor=pointer]:
+          - text: Send Magic Link
+          - img [ref=e18]
+      - generic [ref=e22]: or
+    - img "Quran Life authentication" [ref=e28]
+  - button [ref=e29] [cursor=pointer]:
+    - img [ref=e30]
+  - button "Open Next.js Dev Tools" [ref=e38] [cursor=pointer]:
+    - img [ref=e39]
+  - alert [ref=e42]

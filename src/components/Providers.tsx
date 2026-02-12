@@ -12,7 +12,7 @@ import { db } from "@/lib/instant";
 import { clientEnv } from "@/lib/env/client";
 
 export const OnlineStatusContext = createContext(true);
-const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v3";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v4";
 const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
   "workbox",
@@ -48,10 +48,13 @@ function OnboardingWrapper() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine
+  );
   const { user, isLoading: isAuthLoading } = db.useAuth();
 
   useEffect(() => {
+    setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);

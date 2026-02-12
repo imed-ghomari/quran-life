@@ -4,7 +4,7 @@
 import { db } from '@/lib/instant';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
@@ -19,6 +19,8 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
+import { OnlineStatusContext } from '@/components/Providers';
+import { clientEnv } from '@/lib/env/client';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 // Main authentication content component
@@ -30,6 +32,7 @@ function AuthContent() {
         error?: { message: string } | undefined;
     };
     const { user, isLoading: isAuthLoading, error: authStateError } = authState;
+    const isOnline = useContext(OnlineStatusContext);
     const userEmail = user?.email ?? 'your account';
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -62,6 +65,10 @@ function AuthContent() {
     const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+    const [subscriptionCheckTimedOut, setSubscriptionCheckTimedOut] = useState(false);
+    const [isRedirectingToDashboard, setIsRedirectingToDashboard] = useState(false);
+    const [hasTriedDashboardRedirect, setHasTriedDashboardRedirect] = useState(false);
+    const [hasTriedOfflineDashboardRedirect, setHasTriedOfflineDashboardRedirect] = useState(false);
 
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -73,6 +80,19 @@ function AuthContent() {
         if (!planFromQuery) return;
         setPlan(planFromQuery);
     }, [planFromQuery]);
+
+    useEffect(() => {
+        if (!user || !isSubscriptionLoading) {
+            setSubscriptionCheckTimedOut(false);
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setSubscriptionCheckTimedOut(true);
+        }, 4000);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [user, isSubscriptionLoading]);
 
     useEffect(() => {
         if (!forceCheckoutBlur) return;
@@ -91,15 +111,61 @@ function AuthContent() {
         () => isPaymentBypassEmail(user?.email),
         [user?.email]
     );
-    const isCheckoutLocked = !user || isSubscriptionLoading || forceCheckoutBlur || hasActiveSubscription;
+    const shouldBlockOnSubscriptionLoad =
+        isOnline && isSubscriptionLoading && !subscriptionCheckTimedOut;
+    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
+
+    useEffect(() => {
+        if (!user || (!hasActiveSubscription && !isPaymentBypass)) {
+            if (hasTriedDashboardRedirect) {
+                setHasTriedDashboardRedirect(false);
+            }
+        }
+    }, [user, hasActiveSubscription, isPaymentBypass, hasTriedDashboardRedirect]);
+
+    useEffect(() => {
+        if (!user || isOnline) {
+            if (hasTriedOfflineDashboardRedirect) {
+                setHasTriedOfflineDashboardRedirect(false);
+            }
+            return;
+        }
+        if (hasTriedOfflineDashboardRedirect) return;
+        setHasTriedOfflineDashboardRedirect(true);
+        router.replace('/dashboard');
+    }, [user, isOnline, hasTriedOfflineDashboardRedirect, router]);
 
     useEffect(() => {
         if (!user) return;
-        if (isSubscriptionLoading) return;
+        if (shouldBlockOnSubscriptionLoad) return;
+        if (hasTriedDashboardRedirect) return;
         if (hasActiveSubscription || isPaymentBypass) {
-            router.replace('/dashboard');
+            const syncAuthCookie = async () => {
+                if (!isOnline) return;
+                setHasTriedDashboardRedirect(true);
+                setIsRedirectingToDashboard(true);
+                try {
+                    const response = await fetch('/api/instant-auth', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            type: 'sync-user',
+                            appId: clientEnv.NEXT_PUBLIC_INSTANT_APP_ID,
+                            user: user ?? null,
+                        }),
+                    });
+                    if (!response.ok) return;
+                    router.replace('/dashboard');
+                } catch {
+                    // Keep user on the current screen if sync fails to avoid redirect loops.
+                } finally {
+                    setIsRedirectingToDashboard(false);
+                }
+            };
+            void syncAuthCookie();
         }
-    }, [user, isSubscriptionLoading, hasActiveSubscription, isPaymentBypass, router]);
+    }, [user, isOnline, shouldBlockOnSubscriptionLoad, hasActiveSubscription, isPaymentBypass, hasTriedDashboardRedirect, router]);
 
     const handleCheckout = () => {
         if (!user) {
@@ -198,7 +264,7 @@ function AuthContent() {
         );
     }
 
-    if (user && (isSubscriptionLoading || hasActiveSubscription || isPaymentBypass)) {
+    if (user && (shouldBlockOnSubscriptionLoad || isRedirectingToDashboard)) {
         return (
             <div style={{
                 minHeight: '100vh',
@@ -207,7 +273,21 @@ function AuthContent() {
                 justifyContent: 'center',
                 background: 'var(--background)'
             }}>
-                <Spinner text={isSubscriptionLoading ? 'Checking subscription...' : 'Redirecting to dashboard...'} />
+                <Spinner text={shouldBlockOnSubscriptionLoad ? 'Checking subscription...' : 'Redirecting to dashboard...'} />
+            </div>
+        );
+    }
+
+    if (user && !isOnline) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--background)'
+            }}>
+                <Spinner text="Opening offline mode..." />
             </div>
         );
     }

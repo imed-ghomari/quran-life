@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, PenTool, Download, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
+import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 
 interface CardActionMenuProps {
@@ -22,7 +22,6 @@ interface CardActionMenuProps {
 
     // Actions
     onEditMindmap: () => void;
-    onImportMindmap: () => void;
     onDeleteMindmap: () => void;
     onExportMindmap?: () => void;
     onResetMindmap?: () => void;
@@ -42,7 +41,6 @@ export default function CardActionMenu({
     onClose,
     anchorRef,
     onEditMindmap,
-    onImportMindmap,
     onDeleteMindmap,
     onExportMindmap,
     onResetMindmap,
@@ -120,15 +118,6 @@ export default function CardActionMenu({
                     icon: <Upload size={20} />,
                     onClick: onExportMindmap,
                     disabled: isProcessing || !hasMindmap
-                });
-            }
-
-            if (!hasMindmap) {
-                items.push({
-                    label: 'Import Template',
-                    icon: <Download size={20} />,
-                    onClick: onImportMindmap,
-                    disabled: isProcessing
                 });
             }
 

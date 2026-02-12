@@ -44,4 +44,18 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 ## Build & deploy
 - Run `npm run build` to verify production readiness.
 - Static assets served from `/public`.
+
+## E2E Auth Bootstrap (Playwright)
+- Goal: enable UI automation in non-production without bypassing production auth rules.
+- Required env vars:
+  - `E2E_MODE=true`
+  - `E2E_AUTH_SECRET=<long-random-secret>`
+  - Optional: `E2E_DEFAULT_EMAIL`, `E2E_ALLOWED_EMAILS` (comma-separated allowlist), `E2E_BASE_URL`
+- Flow:
+  1) Start app in non-production environment.
+  2) Generate login URL: `npm run e2e:auth:url`
+  3) Open that URL in browser automation (it sets `instant_user_<appId>` cookie and redirects to dashboard).
+- Endpoint: `GET /api/e2e/session`
+  - Hard guards: disabled unless `E2E_MODE=true`, requires secret, blocked in `NODE_ENV=production`.
+  - Cookie TTL: 1 hour, `HttpOnly`, `SameSite=Strict`.
 # quran-life

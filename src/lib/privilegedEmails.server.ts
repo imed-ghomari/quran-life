@@ -3,6 +3,7 @@ import 'server-only';
 import { serverEnv } from '@/lib/env/server';
 
 export function isServerPaymentBypassEmail(email?: string | null) {
+  if (isServerOwnerMode()) return true;
   if (!email) return false;
   return serverEnv.PAYMENT_BYPASS_EMAILS.includes(email.trim().toLowerCase());
 }

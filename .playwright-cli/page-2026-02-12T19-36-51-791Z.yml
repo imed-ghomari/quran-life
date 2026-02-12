@@ -1,0 +1,9 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e5]:
+    - img [ref=e6]
+    - generic [ref=e8]: Redirecting to sign in...
+  - button "Open Next.js Dev Tools" [ref=e14] [cursor=pointer]:
+    - img [ref=e15]
+  - button [ref=e18] [cursor=pointer]:
+    - img [ref=e19]
+  - alert [ref=e22]

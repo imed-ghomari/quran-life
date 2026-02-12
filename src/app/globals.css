@@ -1098,6 +1098,25 @@ h3 {
   min-height: 0;
 }
 
+.review-queue-progress-track {
+  height: 4px;
+  margin-bottom: 0.35rem;
+  border-radius: 999px;
+  border: none;
+  background: color-mix(in srgb, var(--border) 62%, var(--background-secondary));
+  overflow: hidden;
+}
+
+.review-queue-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+      color-mix(in srgb, var(--accent) 72%, transparent),
+      color-mix(in srgb, var(--accent) 92%, var(--foreground)));
+  transition: width 220ms ease;
+}
+
 .today-card-content {
   flex: 1;
   min-height: 0;
@@ -1342,7 +1361,6 @@ h3 {
   border-color: color-mix(in srgb, var(--std-btn-highlight) 42%, var(--border)) !important;
   background: color-mix(in srgb, var(--std-btn-highlight) 10%, var(--background)) !important;
   color: var(--std-btn-highlight) !important;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--std-btn-highlight) 16%, transparent);
   transform: translateY(-1px);
 }
 

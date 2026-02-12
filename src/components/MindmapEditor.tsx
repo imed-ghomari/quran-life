@@ -182,6 +182,7 @@ interface MindmapEditorProps {
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
     const editorRef = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const { theme } = useTheme();
 
     useEffect(() => {
@@ -250,6 +251,24 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             document.body.style.overscrollBehaviorX = originalBodyOverscroll;
             document.documentElement.style.overscrollBehaviorX = originalHtmlOverscroll;
         };
+    }, []);
+
+    useEffect(() => {
+        const handleWheel = (event: WheelEvent) => {
+            const container = containerRef.current;
+            if (!container) return;
+
+            const target = event.target;
+            const targetNode = target instanceof Node ? target : null;
+            if (!targetNode || !container.contains(targetNode)) return;
+
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                event.preventDefault();
+            }
+        };
+
+        window.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+        return () => window.removeEventListener('wheel', handleWheel, { capture: true });
     }, []);
 
     useEffect(() => {
@@ -574,7 +593,11 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
     }), []);
 
     return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}>
+        <div
+            ref={containerRef}
+            data-mindmap-swipe-guard="true"
+            style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}
+        >
             <div
                 className="mindmap-editor-header"
                 style={{
@@ -594,8 +617,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         <a
                             className="mindmap-editor-doclink"
                             href={docLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             style={{
                                 fontSize: '0.75rem',
                                 color: 'var(--accent)',
