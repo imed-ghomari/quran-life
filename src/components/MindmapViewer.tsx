@@ -106,6 +106,29 @@ export default function MindmapViewer({
     }, [isFullScreen]);
 
     useEffect(() => {
+        const handleWheel = (event: WheelEvent) => {
+            const target = event.target;
+            const targetElement =
+                target instanceof Element
+                    ? target
+                    : target instanceof Node
+                        ? target.parentElement
+                        : null;
+
+            if (!targetElement?.closest('[data-mindmap-swipe-guard="true"]')) {
+                return;
+            }
+
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                event.preventDefault();
+            }
+        };
+
+        window.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+        return () => window.removeEventListener('wheel', handleWheel, { capture: true });
+    }, []);
+
+    useEffect(() => {
         if (!inlineEditor || !activeSnapshot) {
             setShowInlineBackToContent(false);
             return;
@@ -241,6 +264,7 @@ export default function MindmapViewer({
                 <div 
                     className={`relative w-full h-full group cursor-pointer overflow-hidden rounded-xl bg-[var(--background-secondary)] ${className || ''}`}
                     onClick={() => setIsFullScreen(true)}
+                    data-mindmap-swipe-guard="true"
                     style={{ minHeight: height, ...style }}
                 >
                     <Image
@@ -296,6 +320,7 @@ export default function MindmapViewer({
             return (
                 <div 
                     className={`w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] relative ${className || ''}`} 
+                    data-mindmap-swipe-guard="true"
                     style={{ height: height, minHeight: height, ...style }}
                 >
                     <div className="absolute top-3 right-3 z-10">
@@ -337,7 +362,7 @@ export default function MindmapViewer({
             {renderInline()}
 
             {isFullScreen && createPortal(
-                <div className="fixed inset-0 z-[9999] bg-[var(--background)] flex flex-col animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--background)] shadow-sm">
                         <h3 className="font-bold text-lg text-[var(--foreground)]">{title || "Mindmap Viewer"}</h3>
                         <button 
