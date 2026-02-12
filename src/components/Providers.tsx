@@ -10,7 +10,17 @@ import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 
 export const OnlineStatusContext = createContext(true);
-const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v2";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v3";
+const SW_CACHE_PREFIXES_TO_CLEAR = [
+  "serwist",
+  "workbox",
+  "pages-",
+  "static-code-",
+  "static-assets-",
+  "data-json-",
+  "audio-runtime",
+  "offline-content-",
+];
 
 function OnboardingWrapper() {
   const pathname = usePathname();
@@ -53,27 +63,52 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const runServiceWorkerMigration = async () => {
       try {
         if (window.localStorage.getItem(SW_MIGRATION_KEY) === "done") return;
-
-        window.localStorage.setItem(SW_MIGRATION_KEY, "done");
+        if (!navigator.onLine) return;
 
         if ("serviceWorker" in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map((registration) => registration.unregister()));
+          await Promise.all(
+            registrations.map(async (registration) => {
+              const scriptUrl =
+                registration.active?.scriptURL ||
+                registration.waiting?.scriptURL ||
+                registration.installing?.scriptURL ||
+                "";
+
+              if (scriptUrl.includes("/sw.js")) {
+                await registration.unregister();
+              }
+            })
+          );
         }
 
         if ("caches" in window) {
           const cacheKeys = await caches.keys();
-          await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+          const cacheKeysToDelete = cacheKeys.filter((key) =>
+            SW_CACHE_PREFIXES_TO_CLEAR.some((prefix) => key.startsWith(prefix))
+          );
+          await Promise.all(cacheKeysToDelete.map((key) => caches.delete(key)));
         }
 
+        window.localStorage.setItem(SW_MIGRATION_KEY, "done");
         window.location.reload();
       } catch (error) {
         console.warn("Service worker migration failed", error);
+        window.localStorage.removeItem(SW_MIGRATION_KEY);
       }
     };
 
-    runServiceWorkerMigration();
-  }, [SW_MIGRATION_KEY]);
+    const handleOnline = () => {
+      void runServiceWorkerMigration();
+    };
+
+    void runServiceWorkerMigration();
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
 
   return (
     <OnlineStatusContext.Provider value={isOnline}>
