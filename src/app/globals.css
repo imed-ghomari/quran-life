@@ -1063,6 +1063,11 @@ h3 {
   background: var(--verse-bg);
 }
 
+.today-segmented {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-auto-flow: row !important;
+}
+
 .adv-seg-active {
   border-color: var(--accent);
   color: var(--accent);
