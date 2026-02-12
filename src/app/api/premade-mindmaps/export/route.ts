@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { isEditorEmail } from '@/lib/privilegedEmails';
+import { getVerifiedInstantUser } from '@/lib/server/auth';
+import { isServerEditorEmail, isServerOwnerMode } from '@/lib/privilegedEmails.server';
 
 type ExportPayload = {
     type: 'surah' | 'part';
@@ -23,13 +24,13 @@ type PremadeIndex = {
 const premadeDir = path.join(process.cwd(), 'public', 'assets', 'premade-mindmaps');
 const indexPath = path.join(premadeDir, 'index.json');
 
-function isOwnerMode(req?: Request) {
-    if ((process.env.NEXT_PUBLIC_APP_MODE || 'user').toLowerCase() === 'owner') {
+async function canExportPremades() {
+    if (isServerOwnerMode()) {
         return true;
     }
-    if (!req) return false;
-    const email = req.headers.get('x-user-email') || req.headers.get('x-editor-email');
-    return isEditorEmail(email);
+
+    const user = await getVerifiedInstantUser();
+    return isServerEditorEmail(user?.email);
 }
 
 async function readIndex(): Promise<PremadeIndex> {
@@ -51,7 +52,7 @@ async function writeIndex(nextIndex: PremadeIndex) {
 }
 
 export async function POST(req: Request) {
-    if (!isOwnerMode(req)) {
+    if (!(await canExportPremades())) {
         return NextResponse.json({ error: 'Not allowed in user mode.' }, { status: 403 });
     }
 

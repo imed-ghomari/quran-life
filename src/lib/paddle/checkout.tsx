@@ -2,9 +2,7 @@
 
 import { CheckoutEventNames, initializePaddle, type Paddle } from '@paddle/paddle-js';
 import { useEffect, useState } from 'react';
-import { keys } from '@/lib/keys';
-
-const { NEXT_PUBLIC_PADDLE_CLIENT_TOKEN, NEXT_PUBLIC_PADDLE_ENV } = keys();
+import { clientEnv } from '@/lib/env/client';
 
 export function usePaddle() {
   const [paddle, setPaddle] = useState<Paddle>();
@@ -15,8 +13,8 @@ export function usePaddle() {
     const successUrl = `${window.location.origin}/dashboard`;
 
     initializePaddle({
-      environment: NEXT_PUBLIC_PADDLE_ENV ?? 'sandbox',
-      token: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN,
+      environment: clientEnv.NEXT_PUBLIC_PADDLE_ENV ?? 'sandbox',
+      token: clientEnv.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN,
       eventCallback: (event) => {
         if (event?.name === CheckoutEventNames.CHECKOUT_COMPLETED) {
           window.localStorage.setItem('checkout:completed', Date.now().toString());
