@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 
 export const OnlineStatusContext = createContext(true);
-const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v1";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v2";
 
 function OnboardingWrapper() {
   const pathname = usePathname();
