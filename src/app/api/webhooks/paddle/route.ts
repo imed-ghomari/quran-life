@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createHash } from 'crypto';
 import { paddle } from '@/lib/paddle/server';
-import { keys } from '@/lib/keys';
 import { db as instantAdmin } from '@/lib/instant-admin';
+import { serverEnv } from '@/lib/env/server';
 
-const { PADDLE_WEBHOOK_SECRET, INSTANT_ADMIN_TOKEN } = keys();
+const PADDLE_WEBHOOK_SECRET = serverEnv.PADDLE_WEBHOOK_SECRET;
+const INSTANT_ADMIN_TOKEN = serverEnv.INSTANT_ADMIN_TOKEN;
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 

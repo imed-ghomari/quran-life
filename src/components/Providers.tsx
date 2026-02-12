@@ -8,6 +8,8 @@ import { ThemeProvider } from "./ThemeProvider";
 import { useInstantSettings } from "@/hooks/useInstantData";
 import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
+import { db } from "@/lib/instant";
+import { clientEnv } from "@/lib/env/client";
 
 export const OnlineStatusContext = createContext(true);
 const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v3";
@@ -47,6 +49,7 @@ function OnboardingWrapper() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
+  const { user, isLoading: isAuthLoading } = db.useAuth();
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -58,6 +61,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    const syncAuthCookie = async () => {
+      try {
+        await fetch("/api/instant-auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            type: "sync-user",
+            appId: clientEnv.NEXT_PUBLIC_INSTANT_APP_ID,
+            user: user ?? null,
+          }),
+        });
+      } catch {
+        // Non-blocking: client auth still works if cookie sync fails.
+      }
+    };
+
+    void syncAuthCookie();
+  }, [user, isAuthLoading]);
 
   useEffect(() => {
     const runServiceWorkerMigration = async () => {

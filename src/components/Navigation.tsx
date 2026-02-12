@@ -219,6 +219,7 @@ export default function Navigation() {
     const pathname = usePathname();
     const isAuthOrHome = pathname === '/'
         || pathname === '/auth'
+        || pathname === '/checkout'
         || pathname === '/terms'
         || pathname === '/privacy';
 

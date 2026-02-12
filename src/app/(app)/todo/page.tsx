@@ -534,7 +534,6 @@ export default function TodoPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-user-email': user?.email ?? ''
                 },
                 body: JSON.stringify({
                     type,
@@ -565,7 +564,7 @@ export default function TodoPage() {
                 message: 'Failed to export mindmap. Please try again.',
             });
         }
-    }, [mindmaps, partMindmapsMap, user?.email, alert]);
+    }, [mindmaps, partMindmapsMap, alert]);
 
     const resetMindmapNodes = useCallback(async (type: 'surah' | 'part', id: number) => {
         const matching = nodes.filter(node => {
