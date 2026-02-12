@@ -485,12 +485,47 @@ export default function TodayPage() {
     type UndoEntry = ReviewUndoEntry | DailyUndoEntry;
     const UNDO_STACK_STORAGE_KEY = 'review_undo_stack_v1';
     const REDO_STACK_STORAGE_KEY = 'review_redo_stack_v1';
+    const UNDO_REDO_DAY_KEY_STORAGE_KEY = 'review_undo_redo_day_key_v1';
     const UNDO_STACK_LIMIT = 10;
+
+    const getLocalDayKey = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
 
     const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
     const undoStackRef = useRef<UndoEntry[]>([]);
     const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
     const redoStackRef = useRef<UndoEntry[]>([]);
+    const historyDayKeyRef = useRef<string>(getLocalDayKey());
+
+    const clearUndoRedoHistoryForNewDay = useCallback((nextDayKey: string) => {
+        undoStackRef.current = [];
+        redoStackRef.current = [];
+        setUndoStack([]);
+        setRedoStack([]);
+        historyDayKeyRef.current = nextDayKey;
+        try {
+            localStorage.setItem(UNDO_REDO_DAY_KEY_STORAGE_KEY, nextDayKey);
+            localStorage.removeItem(UNDO_STACK_STORAGE_KEY);
+            localStorage.removeItem(REDO_STACK_STORAGE_KEY);
+        } catch (e) {
+            console.warn('Failed to reset undo/redo history for new day', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        const todayKey = getLocalDayKey();
+        const storedDayKey = localStorage.getItem(UNDO_REDO_DAY_KEY_STORAGE_KEY);
+        if (storedDayKey !== todayKey) {
+            clearUndoRedoHistoryForNewDay(todayKey);
+        } else {
+            historyDayKeyRef.current = todayKey;
+        }
+    }, [clearUndoRedoHistoryForNewDay]);
 
     useEffect(() => {
         const stored = localStorage.getItem(UNDO_STACK_STORAGE_KEY);
@@ -542,10 +577,36 @@ export default function TodayPage() {
         }
     }, []);
 
+    useEffect(() => {
+        const maybeResetForNewDay = () => {
+            const todayKey = getLocalDayKey();
+            if (todayKey !== historyDayKeyRef.current) {
+                clearUndoRedoHistoryForNewDay(todayKey);
+            }
+        };
+
+        const intervalId = window.setInterval(maybeResetForNewDay, 60_000);
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                maybeResetForNewDay();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => {
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        };
+    }, [clearUndoRedoHistoryForNewDay]);
+
     const persistUndoStack = useCallback((nextStack: UndoEntry[]) => {
+        const todayKey = getLocalDayKey();
+        if (todayKey !== historyDayKeyRef.current) {
+            historyDayKeyRef.current = todayKey;
+        }
         undoStackRef.current = nextStack;
         setUndoStack(nextStack);
         try {
+            localStorage.setItem(UNDO_REDO_DAY_KEY_STORAGE_KEY, historyDayKeyRef.current);
             localStorage.setItem(UNDO_STACK_STORAGE_KEY, JSON.stringify(nextStack));
         } catch (e) {
             console.warn('Failed to persist undo history', e);
@@ -553,9 +614,14 @@ export default function TodayPage() {
     }, []);
 
     const persistRedoStack = useCallback((nextStack: UndoEntry[]) => {
+        const todayKey = getLocalDayKey();
+        if (todayKey !== historyDayKeyRef.current) {
+            historyDayKeyRef.current = todayKey;
+        }
         redoStackRef.current = nextStack;
         setRedoStack(nextStack);
         try {
+            localStorage.setItem(UNDO_REDO_DAY_KEY_STORAGE_KEY, historyDayKeyRef.current);
             localStorage.setItem(REDO_STACK_STORAGE_KEY, JSON.stringify(nextStack));
         } catch (e) {
             console.warn('Failed to persist redo history', e);
@@ -1176,6 +1242,14 @@ export default function TodayPage() {
     const totalVerses = activeContent?.verses?.length || 0;
 
     const verseChunkMap = activeContent?.verses?.map(v => splitIntoChunks(v.text)) || [];
+    const hasCurrentVerseNextChunk = revealedChunks < totalChunks;
+    const nextRevealVerseIndex =
+        totalVerses > 0
+            ? (hasCurrentVerseNextChunk
+                ? currentVerseInReview
+                : (currentVerseInReview < totalVerses - 1 ? currentVerseInReview + 1 : -1))
+            : -1;
+    const nextRevealChunkIndex = hasCurrentVerseNextChunk ? revealedChunks : 0;
 
     const handleRevealNext = useCallback(() => {
         if (activeContent && (activeContent.type === 'mindmap' || activeContent.type === 'part_mindmap')) {
@@ -1275,7 +1349,9 @@ export default function TodayPage() {
 
             if (activeVerse) {
                 const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
-                const nextChunkEl = textEl?.querySelector('.next-blur') as HTMLElement | null;
+                const nextChunkEl =
+                    (textEl?.querySelector('.next-blur') as HTMLElement | null) ||
+                    (container.querySelector('.next-blur') as HTMLElement | null);
                 const visibleChunks = textEl
                     ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
                     : [];
@@ -1573,9 +1649,19 @@ export default function TodayPage() {
                                                             const isPast = idx < currentVerseInReview;
                                                             const isCurrent = idx === currentVerseInReview;
                                                             const showAll = showGrading || isPast;
-                                                            const visibleChunks = showAll ? chunks : isCurrent ? chunks.slice(0, revealedChunks) : [];
-                                                            const nextChunk = (!showAll && isCurrent) ? chunks[revealedChunks] : undefined;
-                                                            const remainingHidden = showAll ? '' : (isCurrent ? chunks.slice(revealedChunks + 1).join(' ') : v.text);
+                                                            const safeRevealedChunks = Math.max(0, Math.min(revealedChunks, chunks.length));
+                                                            const isNextRevealVerse = !showAll && idx === nextRevealVerseIndex;
+                                                            const nextChunk = isNextRevealVerse ? chunks[nextRevealChunkIndex] : undefined;
+                                                            const visibleChunks = showAll
+                                                                ? chunks
+                                                                : isCurrent
+                                                                    ? chunks.slice(0, safeRevealedChunks)
+                                                                    : [];
+                                                            const remainingHidden = showAll
+                                                                ? ''
+                                                                : (isNextRevealVerse
+                                                                    ? chunks.slice(nextRevealChunkIndex + 1).join(' ')
+                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : v.text));
 
                                                             return (
                                                                 <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>

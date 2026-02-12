@@ -25,8 +25,7 @@ const serwist = new Serwist({
     {
       matcher: ({ request }) => request.mode === "navigate",
       handler: new NetworkFirst({
-        cacheName: "pages-v2",
-        networkTimeoutSeconds: 3,
+        cacheName: "pages-v3",
         plugins: [
           new ExpirationPlugin({
             maxEntries: 50,
@@ -36,13 +35,25 @@ const serwist = new Serwist({
       }),
     },
     {
+      matcher: ({ request, url }) =>
+        url.origin === self.location.origin &&
+        (request.destination === "style" || request.destination === "script"),
+      handler: new NetworkFirst({
+        cacheName: "static-code-v3",
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 200,
+            maxAgeSeconds: 24 * 60 * 60,
+          }),
+        ],
+      }),
+    },
+    {
       matcher: ({ request }) =>
-        request.destination === "style" ||
-        request.destination === "script" ||
         request.destination === "font" ||
         request.destination === "image",
       handler: new StaleWhileRevalidate({
-        cacheName: "static-assets-v2",
+        cacheName: "static-assets-v3",
         plugins: [
           new ExpirationPlugin({
             maxEntries: 200,
@@ -55,7 +66,7 @@ const serwist = new Serwist({
       matcher: ({ url }) =>
         url.origin === self.location.origin && url.pathname.endsWith(".json"),
       handler: new NetworkFirst({
-        cacheName: "data-json-v2",
+        cacheName: "data-json-v3",
         networkTimeoutSeconds: 3,
         plugins: [
           new ExpirationPlugin({
@@ -92,3 +103,17 @@ serwist.setCatchHandler(async ({ request }) => {
 });
 
 serwist.addEventListeners();
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) =>
+            ["pages-v2", "static-assets-v2", "data-json-v2"].includes(key)
+          )
+          .map((key) => caches.delete(key))
+      )
+    )
+  );
+});
