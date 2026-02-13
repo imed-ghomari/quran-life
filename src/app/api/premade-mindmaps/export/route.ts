@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getVerifiedInstantUser } from '@/lib/server/auth';
-import { isServerEditorEmail, isServerOwnerMode } from '@/lib/privilegedEmails.server';
+import { isServerEditorEmail } from '@/lib/privilegedEmails.server';
 
 type ExportPayload = {
     type: 'surah' | 'part';
@@ -25,10 +25,6 @@ const premadeDir = path.join(process.cwd(), 'public', 'assets', 'premade-mindmap
 const indexPath = path.join(premadeDir, 'index.json');
 
 async function canExportPremades() {
-    if (isServerOwnerMode()) {
-        return true;
-    }
-
     const user = await getVerifiedInstantUser();
     return isServerEditorEmail(user?.email);
 }

@@ -18,6 +18,40 @@ const parseBool = (value: string | undefined, fallback: boolean = false) => {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 };
 
+const warnedDeprecatedKeys = new Set<string>();
+
+function warnDeprecated(key: string, replacement: string) {
+  if (warnedDeprecatedKeys.has(key)) return;
+  warnedDeprecatedKeys.add(key);
+  console.warn(`[config] Deprecated env "${key}" is in use. Migrate to "${replacement}".`);
+}
+
+const legacyEditorRaw = process.env.NEXT_PUBLIC_EDITOR_EMAILS ?? process.env.NEXT_PUBLIC_EDITOR_EMAIL ?? '';
+const legacyBypassRaw = process.env.NEXT_PUBLIC_BYPASS_EMAILS ?? '';
+
+if (legacyEditorRaw) {
+  warnDeprecated('NEXT_PUBLIC_EDITOR_EMAILS/NEXT_PUBLIC_EDITOR_EMAIL', 'EDITOR_EMAILS');
+}
+if (legacyBypassRaw) {
+  warnDeprecated('NEXT_PUBLIC_BYPASS_EMAILS', 'BYPASS_EMAILS');
+}
+if (process.env.NEXT_PUBLIC_APP_MODE) {
+  warnDeprecated('NEXT_PUBLIC_APP_MODE', 'Use email-based roles via EDITOR_EMAILS/BYPASS_EMAILS');
+}
+if (process.env.APP_MODE) {
+  warnDeprecated('APP_MODE', 'Use email-based roles via EDITOR_EMAILS/BYPASS_EMAILS');
+}
+
+const canonicalEditorEmails = parseEmails(process.env.EDITOR_EMAILS ?? process.env.EDITOR_EMAIL ?? '');
+const legacyEditorEmails = parseEmails(legacyEditorRaw);
+const canonicalBypassEmails = parseEmails(process.env.BYPASS_EMAILS ?? '');
+const legacyBypassEmails = parseEmails(legacyBypassRaw);
+
+const editorEmails = Array.from(new Set([...canonicalEditorEmails, ...legacyEditorEmails]));
+const paymentBypassEmails = Array.from(
+  new Set([...canonicalBypassEmails, ...legacyBypassEmails, ...editorEmails])
+);
+
 export const serverEnv = {
   PADDLE_ENV: paddleEnv,
   PADDLE_SECRET_KEY:
@@ -36,23 +70,8 @@ export const serverEnv = {
   E2E_AUTH_SECRET: process.env.E2E_AUTH_SECRET ?? '',
   E2E_DEFAULT_EMAIL: process.env.E2E_DEFAULT_EMAIL ?? 'e2e@local.test',
   E2E_ALLOWED_EMAILS: parseEmails(process.env.E2E_ALLOWED_EMAILS ?? ''),
-  APP_MODE: (process.env.APP_MODE ?? process.env.NEXT_PUBLIC_APP_MODE ?? 'user').toLowerCase(),
-  EDITOR_EMAILS: Array.from(
-    new Set(
-      parseEmails(process.env.EDITOR_EMAILS ?? process.env.EDITOR_EMAIL ?? '').concat(
-        parseEmails(process.env.NEXT_PUBLIC_EDITOR_EMAILS ?? process.env.NEXT_PUBLIC_EDITOR_EMAIL ?? '')
-      )
-    )
-  ),
-  PAYMENT_BYPASS_EMAILS: Array.from(
-    new Set(
-      parseEmails(process.env.BYPASS_EMAILS ?? '').concat(
-        parseEmails(process.env.NEXT_PUBLIC_BYPASS_EMAILS ?? ''),
-        parseEmails(process.env.EDITOR_EMAILS ?? process.env.EDITOR_EMAIL ?? ''),
-        parseEmails(process.env.NEXT_PUBLIC_EDITOR_EMAILS ?? process.env.NEXT_PUBLIC_EDITOR_EMAIL ?? '')
-      )
-    )
-  ),
+  EDITOR_EMAILS: editorEmails,
+  PAYMENT_BYPASS_EMAILS: paymentBypassEmails,
 } as const;
 
 export function requireServerEnv(value: string, name: string) {

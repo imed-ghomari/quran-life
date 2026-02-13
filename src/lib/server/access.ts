@@ -2,7 +2,7 @@ import 'server-only';
 
 import { db as instantAdmin } from '@/lib/instant-admin';
 import { getVerifiedInstantUser } from '@/lib/server/auth';
-import { isServerPaymentBypassEmail } from '@/lib/privilegedEmails.server';
+import { isServerEditorEmail, isServerPaymentBypassEmail } from '@/lib/privilegedEmails.server';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 
@@ -15,10 +15,12 @@ export async function getServerAccessState() {
       hasActiveSubscription: false,
       isPaymentBypass: false,
       hasPremiumAccess: false,
+      isEditor: false,
       user: null,
     } as const;
   }
 
+  const isEditor = isServerEditorEmail(user.email);
   const isPaymentBypass = isServerPaymentBypassEmail(user.email);
 
   let hasActiveSubscription = false;
@@ -46,6 +48,7 @@ export async function getServerAccessState() {
     hasActiveSubscription,
     isPaymentBypass,
     hasPremiumAccess: hasActiveSubscription || isPaymentBypass,
+    isEditor,
     user,
   } as const;
 }
