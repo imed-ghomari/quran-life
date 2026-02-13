@@ -497,6 +497,7 @@ export default function StatisticsPage() {
             total: totalReviews,
             average: average.toFixed(1),
             dueTomorrow,
+            overdueCount: backlogCount,
             dailyLoad: dailyLoad.toFixed(1),
             reviewsToday,
             minDay,
@@ -607,6 +608,8 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
     timeRange: '1m' | '3m' | '1y' | 'all';
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
+    const hasOverdueReviews = (stats?.overdueCount || 0) > 0;
+
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -621,7 +624,17 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                         type="button"
                         className="future-due-toggle std-normal-btn"
                         onClick={() => setShowBacklog(!showBacklog)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '6px' }}
+                        disabled={!hasOverdueReviews}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            cursor: hasOverdueReviews ? 'pointer' : 'not-allowed',
+                            fontSize: '0.75rem',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            opacity: hasOverdueReviews ? 1 : 0.45,
+                        }}
                     >
                         {showBacklog ? 'Exclude Overdue' : 'Include Overdue'}
                     </button>

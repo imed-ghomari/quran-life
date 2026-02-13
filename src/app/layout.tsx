@@ -6,6 +6,7 @@ import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { getSiteUrl } from '@/lib/siteUrl';
 
 const outfit = Outfit({ 
     subsets: ['latin'],
@@ -23,14 +24,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+    metadataBase: new URL(getSiteUrl()),
     title: 'Quran Life',
     description: 'Complete your learned Quran portions in manageable daily readings',
     manifest: '/manifest.json',
     icons: {
-        icon: [
-            { url: '/pwa-icon-mobile-192.png', sizes: '192x192', type: 'image/png' },
-            { url: '/pwa-icon-desktop-512.png', sizes: '512x512', type: 'image/png' },
-        ],
+        icon: [{ url: '/logo.png', type: 'image/png' }],
+        shortcut: [{ url: '/logo.png', type: 'image/png' }],
         apple: [
             { url: '/pwa-icon-mobile-192.png', sizes: '192x192', type: 'image/png' },
         ],

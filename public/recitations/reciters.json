@@ -35,13 +35,6 @@
     "hasSegments": true
   },
   {
-    "id": "surah-recitation-ahmad-alnufais",
-    "name": "Ahmad Alnufais",
-    "type": "surah-based",
-    "relativePath": "/recitations/surah-recitation-ahmad-alnufais",
-    "hasSegments": true
-  },
-  {
     "id": "surah-recitation-hady-toure",
     "name": "Hady Toure",
     "type": "surah-based",
@@ -70,24 +63,10 @@
     "hasSegments": true
   },
   {
-    "id": "surah-recitation-khalifah-taniji",
-    "name": "Khalifah Taniji",
-    "type": "surah-based",
-    "relativePath": "/recitations/surah-recitation-khalifah-taniji",
-    "hasSegments": true
-  },
-  {
     "id": "ayah-recitation-maher-al-mu-aiqly-murattal-hafs-948",
     "name": "Maher Al Mu Aiqly Murattal",
     "type": "ayah-based",
     "relativePath": "/recitations/ayah-recitation-maher-al-mu-aiqly-murattal-hafs-948.json",
-    "hasSegments": true
-  },
-  {
-    "id": "surah-recitation-maher-al-muaiqly",
-    "name": "Maher Al Muaiqly",
-    "type": "surah-based",
-    "relativePath": "/recitations/surah-recitation-maher-al-muaiqly",
     "hasSegments": true
   },
   {
@@ -140,13 +119,6 @@
     "hasSegments": true
   },
   {
-    "id": "surah-recitation-sa-ud-ash-shuraym",
-    "name": "Sa Ud Ash Shuraym",
-    "type": "surah-based",
-    "relativePath": "/recitations/surah-recitation-sa-ud-ash-shuraym",
-    "hasSegments": true
-  },
-  {
     "id": "ayah-recitation-saad-al-ghamdi-murattal-hafs-954",
     "name": "Saad Al Ghamdi Murattal",
     "type": "ayah-based",
@@ -158,13 +130,6 @@
     "name": "Saud Al Shuraim Murattal",
     "type": "ayah-based",
     "relativePath": "/recitations/ayah-recitation-saud-al-shuraim-murattal-hafs-960.json",
-    "hasSegments": true
-  },
-  {
-    "id": "surah-recitation-yasser-ad-dussary",
-    "name": "Yasser Ad Dussary",
-    "type": "surah-based",
-    "relativePath": "/recitations/surah-recitation-yasser-ad-dussary",
     "hasSegments": true
   },
   {

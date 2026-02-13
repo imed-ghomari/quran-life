@@ -221,7 +221,7 @@ export default function CardActionMenu({
             return (
                 <div
                     ref={menuRef}
-                    className="fixed z-[9990] min-w-[270px] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-xl ring-1 ring-black/5 overflow-hidden"
+                    className="fixed z-[9990] min-w-[270px] bg-[var(--background)] border border-[var(--border)] rounded-[14px] shadow-xl ring-1 ring-black/5 overflow-hidden"
                     style={{ top: position.top, left: position.left }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -242,7 +242,7 @@ export default function CardActionMenu({
                                 ${item.disabled
                                     ? 'text-[var(--foreground-secondary)] opacity-50 cursor-not-allowed'
                                     : item.danger
-                                        ? 'text-red-500 hover:bg-red-500/10 active:bg-red-500/15'
+                                        ? 'text-[var(--danger)]'
                                         : ''}
                             `;
 
@@ -300,7 +300,7 @@ export default function CardActionMenu({
                                 ${item.disabled
                                     ? 'text-[var(--foreground-secondary)] opacity-50'
                                     : item.danger
-                                        ? 'text-red-500 active:bg-red-500/10'
+                                        ? 'text-[var(--danger)]'
                                         : 'text-[var(--foreground)] active:bg-[var(--foreground)]/5'}
                             `;
 

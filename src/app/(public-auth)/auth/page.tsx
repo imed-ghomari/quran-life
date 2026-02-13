@@ -18,11 +18,8 @@ import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
 import { paddlePriceIds } from '@/lib/paddle/prices';
-import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
-import { OnlineStatusContext } from '@/components/Providers';
-import { clientEnv } from '@/lib/env/client';
+import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 // Main authentication content component
 function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
@@ -33,17 +30,11 @@ function AuthContent() {
     };
     const { user, isLoading: isAuthLoading, error: authStateError } = authState;
     const isOnline = useContext(OnlineStatusContext);
+    const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
     const userEmail = user?.email ?? 'your account';
     const router = useRouter();
     const searchParams = useSearchParams();
     const paddle = usePaddle();
-    const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
-        subscriptions: {
-            $: {
-                where: { userId: user?.id || '' },
-            },
-        },
-    });
     // State for managing email and magic code inputs
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
@@ -100,17 +91,6 @@ function AuthContent() {
         setForceCheckoutBlur(false);
     }, [forceCheckoutBlur, user?.email]);
 
-    const hasActiveSubscription = useMemo(() => {
-        const subscriptions = subscriptionData?.subscriptions ?? [];
-        return subscriptions.some((subscription) => {
-            const status = subscription?.status;
-            return Boolean(status && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
-        });
-    }, [subscriptionData?.subscriptions]);
-    const isPaymentBypass = useMemo(
-        () => isPaymentBypassEmail(user?.email),
-        [user?.email]
-    );
     const shouldBlockOnSubscriptionLoad =
         isOnline && isSubscriptionLoading && !subscriptionCheckTimedOut;
     const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
@@ -140,30 +120,10 @@ function AuthContent() {
         if (shouldBlockOnSubscriptionLoad) return;
         if (hasTriedDashboardRedirect) return;
         if (hasActiveSubscription || isPaymentBypass) {
-            const syncAuthCookie = async () => {
-                if (!isOnline) return;
-                setHasTriedDashboardRedirect(true);
-                setIsRedirectingToDashboard(true);
-                try {
-                    const response = await fetch('/api/instant-auth', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            type: 'sync-user',
-                            appId: clientEnv.NEXT_PUBLIC_INSTANT_APP_ID,
-                            user: user ?? null,
-                        }),
-                    });
-                    if (!response.ok) return;
-                    router.replace('/dashboard');
-                } catch {
-                    // Keep user on the current screen if sync fails to avoid redirect loops.
-                } finally {
-                    setIsRedirectingToDashboard(false);
-                }
-            };
-            void syncAuthCookie();
+            if (!isOnline) return;
+            setHasTriedDashboardRedirect(true);
+            setIsRedirectingToDashboard(true);
+            router.replace('/dashboard');
         }
     }, [user, isOnline, shouldBlockOnSubscriptionLoad, hasActiveSubscription, isPaymentBypass, hasTriedDashboardRedirect, router]);
 

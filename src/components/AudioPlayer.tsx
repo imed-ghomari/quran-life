@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { PlaybackSpeed, getAudioPath, Verse } from '@/lib/types';
+import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
 import { useInstantSettings } from '@/hooks/useInstantData';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
@@ -40,7 +40,6 @@ export default function AudioPlayer({
     const [isLoadingReciter, setIsLoadingReciter] = useState(false);
 
     // Audio State
-    const [useFallback, setUseFallback] = useState(false);
     const [verseEndTime, setVerseEndTime] = useState<number | null>(null);
     const [verseStartTime, setVerseStartTime] = useState(0);
     const [activeSegments, setActiveSegments] = useState<number[][] | null>(null);
@@ -50,8 +49,11 @@ export default function AudioPlayer({
     // Progress
     const [progress, setProgress] = useState(0);
     const [elapsedTime, setElapsedTime] = useState(0);
-    const savedPlaybackStateRef = useRef<{ surahId: number; ayahId: number; timestamp: number } | null>(null);
     const [isCompleted, setIsCompleted] = useState(false);
+    const pendingSeekTimeRef = useRef<number | null>(null);
+    const pendingAutoplayRef = useRef(false);
+    const isPlayingRef = useRef(false);
+    const prevIsPlayingRef = useRef(false);
 
     const currentVerse = verses[currentVerseIndex];
     const totalVerses = verses.length;
@@ -77,38 +79,34 @@ export default function AudioPlayer({
         }
     }, [currentVerseIndex]);
 
-    // Initialize Reciters
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
+
+    // Initialize reciters list once.
     useEffect(() => {
         getReciters().then(list => {
             const filtered = list.filter(r => r.hasSegments);
             setReciters(filtered);
-            
-            // Try to load from synced settings first, then localStorage
-            const audioSettings = settings?.audioSettings;
-            let savedId = audioSettings?.selectedReciterId;
-            
-            if (!savedId) {
-                savedId = localStorage.getItem('selected_reciter_id') || undefined;
-            }
-            
-            const defaultReciter = filtered.find(r => r.id === savedId) || filtered[0];
-            setSelectedReciter(defaultReciter);
-
-            // Restore playback position if available and applicable
-            if (audioSettings?.playbackState && verses.length > 0) {
-                const { surahId, ayahId } = audioSettings.playbackState;
-                // Find if this verse exists in current portion
-                const index = verses.findIndex(v => v.surahId === surahId && v.ayahId === ayahId);
-                if (index !== -1 && index !== currentVerseIndex) {
-                    onVerseChange(index);
-                }
-            }
         });
-    }, [verses, settings?.audioSettings]); // Add verses and audioSettings dependency
+    }, []);
 
+    // Sync selected reciter from saved preference without reacting to unrelated audioSettings writes.
     useEffect(() => {
-        savedPlaybackStateRef.current = settings?.audioSettings?.playbackState ?? null;
-    }, [settings?.audioSettings?.playbackState]);
+        if (reciters.length === 0) return;
+
+        let savedId = settings?.audioSettings?.selectedReciterId;
+        if (!savedId) {
+            savedId = localStorage.getItem('selected_reciter_id') || undefined;
+        }
+
+        const preferred = reciters.find(r => r.id === savedId) || reciters[0];
+        if (!preferred) return;
+
+        if (!selectedReciter || selectedReciter.id !== preferred.id) {
+            setSelectedReciter(preferred);
+        }
+    }, [reciters, settings?.audioSettings?.selectedReciterId, selectedReciter?.id]);
 
     useEffect(() => {
         const stored = settings?.audioSettings?.playbackSpeed ?? (() => {
@@ -175,11 +173,6 @@ export default function AudioPlayer({
         };
     }, [selectedReciter, verses]);
 
-    // Reset fallback on verse/reciter change
-    useEffect(() => {
-        setUseFallback(false);
-    }, [currentVerse, selectedReciter]);
-
     useEffect(() => {
         if (currentVerseIndex < totalVerses - 1) {
             setIsCompleted(false);
@@ -204,64 +197,61 @@ export default function AudioPlayer({
         if (!currentVerse || !selectedReciter) return;
         if (isLoadingReciter && !recitationData) return;
 
-        let url = '';
-        let startTime = 0;
-        let endTime: number | null = null;
-        let segments: number[][] | null = null;
-
-        // Try to get from selected reciter
         const info = getAudioInfoForVerse(selectedReciter, recitationData, currentVerse.surahId, currentVerse.ayahId);
-        
-        if (info && !useFallback) {
-            url = info.url;
-            startTime = info.startTime || 0;
-            endTime = info.endTime || null;
-            segments = info.segments || null;
-        } else {
-            // Fallback to local
-            url = getAudioPath(currentVerse.surahId, currentVerse.ayahId);
+
+        if (!info) {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.removeAttribute('src');
+                audioRef.current.load();
+            }
+            setIsPlaying(false);
+            setActiveSegments(null);
+            setVerseEndTime(null);
+            setVerseStartTime(0);
+            setElapsedTime(0);
+            onWordIndexChange?.(-1);
+            lastWordIndexRef.current = -1;
+            return;
         }
+
+        const url = info.url;
+        const startTime = info.startTime || 0;
+        const endTime = info.endTime || null;
+        const segments = info.segments || null;
 
         if (url) {
             if (audioRef.current) {
                 const currentSrcPath = audioRef.current.src.split('?')[0]; // basic check
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
 
-                let desiredStartTime = startTime;
-                const saved = savedPlaybackStateRef.current as (typeof savedPlaybackStateRef.current & { reciterId?: string }) | null;
-                if (
-                    saved &&
-                    saved.surahId === currentVerse.surahId &&
-                    saved.ayahId === currentVerse.ayahId &&
-                    Number.isFinite(saved.timestamp)
-                ) {
-                    const savedReciterId = saved.reciterId ?? settings?.audioSettings?.selectedReciterId;
-                    if (savedReciterId && savedReciterId === selectedReciter.id) {
-                        desiredStartTime = saved.timestamp;
-                    }
-                    if (endTime !== null) {
-                        const clamped = Math.min(Math.max(desiredStartTime, startTime), Math.max(startTime, endTime - 0.05));
-                        desiredStartTime = clamped;
-                    }
+                const desiredStartTime = startTime;
+                const shouldAutoplay = isPlayingRef.current;
+                pendingSeekTimeRef.current = desiredStartTime;
+                pendingAutoplayRef.current = shouldAutoplay;
+
+                if (endTime !== null) {
+                    const clamped = Math.min(Math.max(desiredStartTime, startTime), Math.max(startTime, endTime - 0.05));
+                    pendingSeekTimeRef.current = clamped;
                 }
 
                 if (currentSrcPath !== newSrcPath) {
                     audioRef.current.pause();
                     audioRef.current.src = url;
                     audioRef.current.load();
-                    audioRef.current.currentTime = desiredStartTime;
                 } else {
                     // Same src (Surah mode), just seek
                     // Only seek if significantly different (to avoid jitter)
-                    if (Math.abs(audioRef.current.currentTime - desiredStartTime) > 0.5) {
-                        audioRef.current.currentTime = desiredStartTime;
+                    if (Math.abs(audioRef.current.currentTime - (pendingSeekTimeRef.current ?? desiredStartTime)) > 0.15) {
+                        audioRef.current.currentTime = pendingSeekTimeRef.current ?? desiredStartTime;
                     }
+                    pendingSeekTimeRef.current = null;
                 }
                 
                 audioRef.current.playbackRate = speed;
                 setElapsedTime(desiredStartTime);
                 
-                if (isPlaying) {
+                if (shouldAutoplay && currentSrcPath === newSrcPath) {
                     safePlay();
                 }
             }
@@ -281,10 +271,12 @@ export default function AudioPlayer({
                 }
             }
 
-            onWordIndexChange?.(initialIndex);
-            lastWordIndexRef.current = initialIndex;
+            if (initialIndex !== lastWordIndexRef.current) {
+                onWordIndexChange?.(initialIndex);
+                lastWordIndexRef.current = initialIndex;
+            }
         }
-    }, [currentVerse, selectedReciter, recitationData, speed, useFallback, isLoadingReciter, settings?.audioSettings?.selectedReciterId, currentVerseWordCount, isPlaying]); 
+    }, [currentVerse, selectedReciter, recitationData, speed, isLoadingReciter, currentVerseWordCount, safePlay, onWordIndexChange]); 
 
     // Handle Play/Pause effect
     useEffect(() => {
@@ -294,8 +286,8 @@ export default function AudioPlayer({
             } else {
                 audioRef.current.pause();
                 
-                // Save playback state when paused
-                if (selectedReciter && currentVerse) {
+                // Save playback state only on actual play -> pause transitions.
+                if (prevIsPlayingRef.current && selectedReciter && currentVerse) {
                     saveSettings({
                         audioSettings: {
                             selectedReciterId: selectedReciter.id,
@@ -313,7 +305,8 @@ export default function AudioPlayer({
             }
         }
         onPlayStateChange?.(isPlaying);
-    }, [isPlaying, onPlayStateChange, selectedReciter, currentVerse]);
+        prevIsPlayingRef.current = isPlaying;
+    }, [isPlaying, onPlayStateChange, selectedReciter, currentVerse, saveSettings, speed, safePlay]);
 
 
     const handleTimeUpdate = useCallback(() => {
@@ -414,17 +407,32 @@ export default function AudioPlayer({
         }
     }, [currentVerseIndex, totalVerses, onVerseChange]);
 
-    const handleError = () => {
-        if (!useFallback) {
-            console.warn('Audio load error, switching to fallback');
-            setUseFallback(true);
+    const handleLoadedMetadata = useCallback(() => {
+        if (!audioRef.current) return;
+
+        if (pendingSeekTimeRef.current !== null) {
+            audioRef.current.currentTime = pendingSeekTimeRef.current;
+            setElapsedTime(pendingSeekTimeRef.current);
+            pendingSeekTimeRef.current = null;
         }
-    };
+
+        if (pendingAutoplayRef.current) {
+            pendingAutoplayRef.current = false;
+            safePlay();
+        }
+    }, [safePlay]);
+
+    const handleError = useCallback(() => {
+        setIsPlaying(false);
+        onWordIndexChange?.(-1);
+        lastWordIndexRef.current = -1;
+    }, [onWordIndexChange]);
 
     const handleReciterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const id = e.target.value;
         const reciter = reciters.find(r => r.id === id);
         if (reciter) {
+            audioRef.current?.pause();
             setRecitationData(null);
             setRecitationDataMap({});
             setActiveSegments(null);
@@ -579,6 +587,7 @@ export default function AudioPlayer({
                 onEnded={handleEnded}
                 onTimeUpdate={handleTimeUpdate}
                 onError={handleError}
+                onLoadedMetadata={handleLoadedMetadata}
                 preload="auto"
             />
 

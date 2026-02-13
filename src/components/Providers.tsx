@@ -10,8 +10,24 @@ import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 import { db } from "@/lib/instant";
 import { clientEnv } from "@/lib/env/client";
+import { isPaymentBypassEmail } from "@/lib/privilegedEmails";
 
 export const OnlineStatusContext = createContext(true);
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "past_due", "trialing"]);
+type AccessState = {
+  subscriptions: any[];
+  isSubscriptionLoading: boolean;
+  hasActiveSubscription: boolean;
+  isPaymentBypass: boolean;
+  hasPremiumAccess: boolean;
+};
+export const AccessStateContext = createContext<AccessState>({
+  subscriptions: [],
+  isSubscriptionLoading: false,
+  hasActiveSubscription: false,
+  isPaymentBypass: false,
+  hasPremiumAccess: false,
+});
 const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v4";
 const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
@@ -52,6 +68,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     typeof navigator === "undefined" ? true : navigator.onLine
   );
   const { user, isLoading: isAuthLoading } = db.useAuth();
+  const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
+    subscriptions: {
+      $: {
+        where: { userId: user?.id || "" },
+      },
+    },
+  });
+  const subscriptions = subscriptionData?.subscriptions ?? [];
+  const hasActiveSubscription = subscriptions.some((subscription) => {
+    const status = subscription?.status;
+    return Boolean(status && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
+  });
+  const isPaymentBypass = isPaymentBypassEmail(user?.email);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -140,14 +169,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <OnlineStatusContext.Provider value={isOnline}>
-      <SyncProvider>
-        <ThemeProvider>
-          <ConfirmDialogProvider>
-            {children}
-            <OnboardingWrapper />
-          </ConfirmDialogProvider>
-        </ThemeProvider>
-      </SyncProvider>
+      <AccessStateContext.Provider
+        value={{
+          subscriptions,
+          isSubscriptionLoading,
+          hasActiveSubscription,
+          isPaymentBypass,
+          hasPremiumAccess: hasActiveSubscription || isPaymentBypass,
+        }}
+      >
+        <SyncProvider>
+          <ThemeProvider>
+            <ConfirmDialogProvider>
+              {children}
+              <OnboardingWrapper />
+            </ConfirmDialogProvider>
+          </ThemeProvider>
+        </SyncProvider>
+      </AccessStateContext.Provider>
     </OnlineStatusContext.Provider>
   );
 }
