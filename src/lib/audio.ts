@@ -36,7 +36,9 @@ export async function getReciters(): Promise<Reciter[]> {
 }
 
 export async function loadRecitationData(reciter: Reciter, surahId: number) {
-    const cacheKey = `${reciter.id}-${surahId}`;
+    const cacheKey = reciter.type === 'surah-based'
+        ? reciter.id
+        : `${reciter.id}-${surahId}`;
     if (recitationCache[cacheKey]) return recitationCache[cacheKey];
 
     let data: any = {};

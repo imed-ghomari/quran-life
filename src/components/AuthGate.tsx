@@ -4,11 +4,9 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
 import Spinner from '@/components/ui/Spinner';
-import { OnlineStatusContext } from '@/components/Providers';
-import { isPaymentBypassEmail } from '@/lib/privilegedEmails';
+import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const CHECKOUT_GRACE_PERIOD_MS = 10 * 60 * 1000;
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
@@ -20,31 +18,14 @@ export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isOnline = useContext(OnlineStatusContext);
+  const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
   const [hasOfflineAccess, setHasOfflineAccess] = useState(false);
-  const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
-    subscriptions: {
-      $: {
-        where: { userId: user?.id || '' },
-      },
-    },
-  });
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
-  const hasActiveSubscription = useMemo(() => {
-    const subscriptions = subscriptionData?.subscriptions ?? [];
-    return subscriptions.some((subscription) => {
-      const status = subscription?.status;
-      return Boolean(status && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
-    });
-  }, [subscriptionData?.subscriptions]);
-  const isPaymentBypass = useMemo(
-    () => isPaymentBypassEmail(user?.email),
-    [user?.email]
-  );
   const hasAccess = hasActiveSubscription || isPaymentBypass || hasRecentCheckout;
 
   useEffect(() => {

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState, useContext, useRef } from 'react';
 import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
-import { OnlineStatusContext } from '@/components/Providers';
+import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import { QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
 import { db } from '@/lib/instant';
@@ -162,6 +162,7 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 export default function SettingsPage() {
     const router = useRouter();
     const isOnline = useContext(OnlineStatusContext);
+    const { subscriptions } = useContext(AccessStateContext);
     const { user } = db.useAuth();
     const { settings, saveSettings } = useInstantSettings();
     const { nodes: instantNodes } = useInstantNodes();
@@ -169,13 +170,6 @@ export default function SettingsPage() {
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme } = useTheme();
     const { confirm, alert } = useConfirmDialog();
-    const { data: subscriptionData } = db.useQuery({
-        subscriptions: {
-            $: {
-                where: { userId: user?.id || '' },
-            },
-        },
-    });
 
     const todoFilterOptions = [
         { id: 'all', label: 'All Items' },
@@ -514,7 +508,6 @@ export default function SettingsPage() {
     }, [isOnline, settings.dailyPortionMode]);
 
     const latestSubscription = useMemo(() => {
-        const subscriptions = (subscriptionData?.subscriptions ?? []) as any[];
         if (!subscriptions.length) return null;
 
         const sorted = [...subscriptions].sort((a, b) => {
@@ -523,7 +516,7 @@ export default function SettingsPage() {
             return bTime - aTime;
         });
         return sorted[0] ?? null;
-    }, [subscriptionData?.subscriptions]);
+    }, [subscriptions]);
 
     const billingStatus = latestSubscription?.status ?? 'none';
     const isActiveBilling = ACTIVE_SUBSCRIPTION_STATUSES.has(billingStatus);
@@ -1415,7 +1408,7 @@ export default function SettingsPage() {
                             </div>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Account & Appearance</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Sync, Backup, Themes</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginTop: '2px' }}>Sync, Billing, Themes</div>
                             </div>
                         </div>
                         <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
@@ -3234,7 +3227,7 @@ export default function SettingsPage() {
                                             <div className="adv-card-title">Sorting & Filters</div>
 
                                             <div className="adv-group">
-                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: '#2f343b' }}>Default Todo Filter</h4>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Default Todo Filter</h4>
                                                 <div className="adv-chip-row">
                                                     {todoFilterOptions.map((option) => {
                                                         const isActive = (todoDefaultFilter ?? 'all') === option.id;
@@ -3257,7 +3250,7 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="adv-group">
-                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: '#2f343b' }}>Review Sorting</h4>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Review Sorting</h4>
                                                 <div className="adv-chip-row">
                                                     {reviewSortOptions.map((option) => {
                                                         const isActive = (reviewSortOrder ?? 'surah_grouped') === option.id;
@@ -3280,7 +3273,7 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="adv-group">
-                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: '#2f343b' }}>Kanban Card Sorting</h4>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Kanban Card Sorting</h4>
                                                 <div className="adv-chip-row">
                                                     {kanbanSortOptions.map((option) => {
                                                         const isActive = (kanbanSortOrder ?? 'type_then_number') === option.id;
@@ -3307,7 +3300,7 @@ export default function SettingsPage() {
                                             <div className="adv-card-title">Workflow Behaviors</div>
 
                                             <div className="adv-group">
-                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: '#2f343b' }}>When Moving Out of Complete</h4>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>When Moving Out of Complete</h4>
                                                 <div className="adv-segmented">
                                                     {completeExitOptions.map((option) => {
                                                         const isActive = (completeExitBehavior ?? 'mindmap_only') === option.id;
@@ -3330,7 +3323,7 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="adv-group">
-                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: '#2f343b' }}>Daily Portion Default Mode</h4>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Daily Portion Default Mode</h4>
                                                 <div className="adv-segmented">
                                                     {dailyPortionModeOptions.map((option) => {
                                                         const isActive = (dailyPortionMode ?? 'audio') === option.id;

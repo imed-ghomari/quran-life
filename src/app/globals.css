@@ -3338,6 +3338,20 @@ input:focus {
   background: color-mix(in srgb, var(--accent) 26%, var(--verse-bg));
 }
 
+.card-action-menu-item.is-danger {
+  color: var(--danger);
+}
+
+.card-action-menu-item.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--verse-bg));
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+  color: color-mix(in srgb, var(--danger) 84%, var(--foreground));
+}
+
+.card-action-menu-item.is-danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 26%, var(--verse-bg));
+}
+
 /* Keep Appearance choice buttons on the same hover token as reference choice buttons */
 .appearance-choice-btn:hover:not(:disabled) {
   background: var(--verse-bg) !important;

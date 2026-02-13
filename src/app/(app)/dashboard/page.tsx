@@ -60,6 +60,14 @@ function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
     return chunks;
 }
 
+function getLocalDayKeyNow() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 export default function TodayPage() {
     const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
@@ -94,7 +102,6 @@ export default function TodayPage() {
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
     const [isMobile, setIsMobile] = useState(false);
     const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
-    const [reviewQueueStartCount, setReviewQueueStartCount] = useState(0);
     const lastPortionKeyRef = useRef<string>('');
 
     // Local helper to find anchor for range using InstantDB mindmaps
@@ -384,19 +391,6 @@ export default function TodayPage() {
         }
     }, [orderedDueNodes.length, currentReviewIndex]);
 
-    // Keep a baseline of the active queue length to show progress in this queue.
-    useEffect(() => {
-        if (orderedDueNodes.length === 0) {
-            setReviewQueueStartCount(0);
-            return;
-        }
-        setReviewQueueStartCount(prev => {
-            if (prev === 0) return orderedDueNodes.length;
-            if (orderedDueNodes.length > prev) return orderedDueNodes.length;
-            return prev;
-        });
-    }, [orderedDueNodes.length]);
-
     useEffect(() => {
         if (theme === 'dark') {
             setIsDark(true);
@@ -502,13 +496,7 @@ export default function TodayPage() {
     const UNDO_REDO_DAY_KEY_STORAGE_KEY = 'review_undo_redo_day_key_v1';
     const UNDO_STACK_LIMIT = 10;
 
-    const getLocalDayKey = () => {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const d = String(now.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    };
+    const getLocalDayKey = () => getLocalDayKeyNow();
 
     const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
     const undoStackRef = useRef<UndoEntry[]>([]);
@@ -1243,10 +1231,6 @@ export default function TodayPage() {
 
     const reviewContent = getCurrentReviewContent();
     const activeContent = reviewContent;
-    const reviewQueueTotal = reviewQueueStartCount || orderedDueNodes.length;
-    const reviewQueueCompleted = Math.max(0, reviewQueueTotal - orderedDueNodes.length);
-    const reviewQueueProgress = reviewQueueTotal > 0 ? (reviewQueueCompleted / reviewQueueTotal) * 100 : 0;
-
     // Reveal Logic
     const getCurrentVerseChunks = () => {
         if (!activeContent || !activeContent.verses || !activeContent.verses.length) return [];
@@ -1626,18 +1610,6 @@ export default function TodayPage() {
 
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
-                            {reviewQueueTotal > 0 && (
-                                <div
-                                    className="review-queue-progress-track"
-                                    role="progressbar"
-                                    aria-label="Review queue progress"
-                                    aria-valuemin={0}
-                                    aria-valuemax={reviewQueueTotal}
-                                    aria-valuenow={reviewQueueCompleted}
-                                >
-                                    <span className="review-queue-progress-fill" style={{ width: `${reviewQueueProgress}%` }} />
-                                </div>
-                            )}
                             <div className="today-card-content">
                                 {/* Empty state */}
                                 {orderedDueNodes.length === 0 ? (
@@ -1843,7 +1815,7 @@ export default function TodayPage() {
                                                             }
                                                         }}
                                                     >
-                                                        <RotateCcw size={14} /> Mark as Incomplete
+                                                        <RotateCcw size={14} /> Edit later
                                                     </button>
                                                 </div>
                                                 <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
