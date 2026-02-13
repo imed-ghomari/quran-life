@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, useContext } from 'react';
 import { id } from '@instantdb/react';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
@@ -20,8 +20,7 @@ import MindmapViewer from '@/components/MindmapViewer';
 import TodoKanban from '@/components/todo/TodoKanban';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
-import { getAppModeForEmail } from '@/lib/appMode';
-import { db } from '@/lib/instant';
+import { AccessStateContext } from '@/components/Providers';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
@@ -53,9 +52,8 @@ export default function TodoPage() {
     const { errors } = useInstantReviewErrors();
     const { logs: reviewLogs } = useInstantReviewLogs();
 
-    const { user } = db.useAuth();
-    const appMode = useMemo(() => getAppModeForEmail(user?.email), [user?.email]);
-    const isOwnerMode = appMode === 'owner';
+    const { isEditor } = useContext(AccessStateContext);
+    const appMode = isEditor ? 'owner' : 'user';
     const [premadeIndex, setPremadeIndex] = useState<{ surah: number[]; part: number[]; updatedAt?: string } | null>(null);
     const autoImportedRef = useRef<Set<string>>(new Set());
     const { alert } = useConfirmDialog();
@@ -590,7 +588,7 @@ export default function TodoPage() {
     }, [handleImportPremade, resetMindmapNodes]);
 
     useEffect(() => {
-        if (isOwnerMode) return;
+        if (isEditor) return;
         fetch('/assets/premade-mindmaps/index.json', { cache: 'no-store' })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
@@ -601,10 +599,10 @@ export default function TodoPage() {
                 }
             })
             .catch(() => setPremadeIndex({ surah: [], part: [] }));
-    }, [isOwnerMode]);
+    }, [isEditor]);
 
     useEffect(() => {
-        if (isOwnerMode) return;
+        if (isEditor) return;
         if (mindmapsLoading) return;
         if (!premadeIndex) return;
 
@@ -636,7 +634,7 @@ export default function TodoPage() {
                 appLogger.addLog('Auto-imported premade mindmaps (per missing item)', 'info');
             }
         })();
-    }, [isOwnerMode, premadeIndex, mindmaps, partMindmapsMap, mindmapsLoading, handleImportPremade]);
+    }, [isEditor, premadeIndex, mindmaps, partMindmapsMap, mindmapsLoading, handleImportPremade]);
 
     const hasPremadeMindmap = useCallback((type: 'surah' | 'part', id: number) => {
         if (!premadeIndex) return false;
@@ -826,8 +824,8 @@ export default function TodoPage() {
                     onPartComplete={handlePartComplete}
                     onSurahComplete={handleMarkComplete}
                     onImportPremade={handleImportPremade}
-                    onExportPremade={isOwnerMode ? handleExportPremade : undefined}
-                    onResetMindmap={!isOwnerMode ? handleResetMindmap : undefined}
+                    onExportPremade={isEditor ? handleExportPremade : undefined}
+                    onResetMindmap={!isEditor ? handleResetMindmap : undefined}
                     onEditMindmap={(id, snapshot, isPart) => {
                         if (isPart) {
                             setActivePartEditor({ partId: id as any, snapshot });

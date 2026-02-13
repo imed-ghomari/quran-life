@@ -10,23 +10,23 @@ import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 import { db } from "@/lib/instant";
 import { clientEnv } from "@/lib/env/client";
-import { isPaymentBypassEmail } from "@/lib/privilegedEmails";
 
 export const OnlineStatusContext = createContext(true);
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "past_due", "trialing"]);
 type AccessState = {
-  subscriptions: any[];
   isSubscriptionLoading: boolean;
+  isAuthenticated: boolean;
   hasActiveSubscription: boolean;
   isPaymentBypass: boolean;
   hasPremiumAccess: boolean;
+  isEditor: boolean;
 };
 export const AccessStateContext = createContext<AccessState>({
-  subscriptions: [],
   isSubscriptionLoading: false,
+  isAuthenticated: false,
   hasActiveSubscription: false,
   isPaymentBypass: false,
   hasPremiumAccess: false,
+  isEditor: false,
 });
 const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v4";
 const SW_CACHE_PREFIXES_TO_CLEAR = [
@@ -68,19 +68,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     typeof navigator === "undefined" ? true : navigator.onLine
   );
   const { user, isLoading: isAuthLoading } = db.useAuth();
-  const { data: subscriptionData, isLoading: isSubscriptionLoading } = db.useQuery({
-    subscriptions: {
-      $: {
-        where: { userId: user?.id || "" },
-      },
-    },
+  const [accessState, setAccessState] = useState<Omit<AccessState, "isSubscriptionLoading">>({
+    isAuthenticated: false,
+    hasActiveSubscription: false,
+    isPaymentBypass: false,
+    hasPremiumAccess: false,
+    isEditor: false,
   });
-  const subscriptions = subscriptionData?.subscriptions ?? [];
-  const hasActiveSubscription = subscriptions.some((subscription) => {
-    const status = subscription?.status;
-    return Boolean(status && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
-  });
-  const isPaymentBypass = isPaymentBypassEmail(user?.email);
+  const [isAccessLoading, setIsAccessLoading] = useState(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -96,7 +91,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthLoading) return;
-    const syncAuthCookie = async () => {
+    let isCancelled = false;
+
+    const syncAndRefreshAccessState = async () => {
       try {
         await fetch("/api/instant-auth", {
           method: "POST",
@@ -108,13 +105,42 @@ export function Providers({ children }: { children: React.ReactNode }) {
             user: user ?? null,
           }),
         });
+
+        if (!navigator.onLine) return;
+        if (isCancelled) return;
+
+        setIsAccessLoading(true);
+        const response = await fetch("/api/access-state", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (isCancelled) return;
+
+        setAccessState({
+          isAuthenticated: Boolean(data?.isAuthenticated),
+          hasActiveSubscription: Boolean(data?.hasActiveSubscription),
+          isPaymentBypass: Boolean(data?.isPaymentBypass),
+          hasPremiumAccess: Boolean(data?.hasPremiumAccess),
+          isEditor: Boolean(data?.isEditor),
+        });
       } catch {
-        // Non-blocking: client auth still works if cookie sync fails.
+        // Non-blocking: auth and local UI can still function if this check fails.
+      } finally {
+        if (!isCancelled) {
+          setIsAccessLoading(false);
+        }
       }
     };
 
-    void syncAuthCookie();
-  }, [user, isAuthLoading]);
+    void syncAndRefreshAccessState();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user, isAuthLoading, isOnline]);
 
   useEffect(() => {
     const runServiceWorkerMigration = async () => {
@@ -171,11 +197,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <OnlineStatusContext.Provider value={isOnline}>
       <AccessStateContext.Provider
         value={{
-          subscriptions,
-          isSubscriptionLoading,
-          hasActiveSubscription,
-          isPaymentBypass,
-          hasPremiumAccess: hasActiveSubscription || isPaymentBypass,
+          ...accessState,
+          isSubscriptionLoading: isAccessLoading || isAuthLoading,
         }}
       >
         <SyncProvider>

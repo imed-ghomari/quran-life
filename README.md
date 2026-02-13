@@ -45,6 +45,24 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - Run `npm run build` to verify production readiness.
 - Static assets served from `/public`.
 
+## Access Configuration (Canonical)
+- Role and checkout bypass are server-authoritative.
+- Canonical vars:
+  - `EDITOR_EMAILS` (maintainer/editor features; also bypasses checkout)
+  - `BYPASS_EMAILS` (checkout bypass only)
+- Example:
+  - `EDITOR_EMAILS=maintainer@example.com`
+  - `BYPASS_EMAILS=viewer@example.com`
+
+### Migration Window (Release N)
+- Deprecated but still supported with warnings:
+  - `NEXT_PUBLIC_EDITOR_EMAILS`
+  - `NEXT_PUBLIC_EDITOR_EMAIL`
+  - `NEXT_PUBLIC_BYPASS_EMAILS`
+  - `NEXT_PUBLIC_APP_MODE`
+  - `APP_MODE`
+- Release N+1 will remove deprecated vars from access-control logic.
+
 ## E2E Auth Bootstrap (Playwright)
 - Goal: enable UI automation in non-production without bypassing production auth rules.
 - Required env vars:

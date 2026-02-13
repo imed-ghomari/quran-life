@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState, useContext, useRef } from 'react';
 import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
-import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
+import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import { QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
 import { db } from '@/lib/instant';
@@ -162,8 +162,15 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 export default function SettingsPage() {
     const router = useRouter();
     const isOnline = useContext(OnlineStatusContext);
-    const { subscriptions } = useContext(AccessStateContext);
     const { user } = db.useAuth();
+    const { data: subscriptionData } = db.useQuery({
+        subscriptions: {
+            $: {
+                where: { userId: user?.id || '' },
+            },
+        },
+    });
+    const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
     const { settings, saveSettings } = useInstantSettings();
     const { nodes: instantNodes } = useInstantNodes();
     const { progress: listeningProgress } = useInstantListeningProgress();
