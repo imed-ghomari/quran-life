@@ -81,6 +81,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     typeof navigator === "undefined" ? true : navigator.onLine
   );
   const { user, isLoading: isAuthLoading } = db.useAuth();
+  const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
   const [accessState, setAccessState] = useState<Omit<AccessState, "isSubscriptionLoading">>({
     isAuthenticated: false,
     hasActiveSubscription: false,
@@ -196,6 +197,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     void syncAndRefreshAccessState();
   }, [authIdentity, authIdentityKey, hasLoadedAccessState, isAuthLoading, isOnline]);
+
+  useEffect(() => {
+    if (!isAuthLoading) {
+      setHasResolvedAuthOnce(true);
+    }
+  }, [isAuthLoading]);
 
   useEffect(() => {
     const runServiceWorkerMigration = async () => {
@@ -324,7 +331,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AccessStateContext.Provider
         value={{
           ...accessState,
-          isSubscriptionLoading: isAuthLoading || (isOnline && (!hasLoadedAccessState || isAccessLoading)),
+          isSubscriptionLoading:
+            (isAuthLoading && !hasResolvedAuthOnce)
+            || (isOnline && (!hasLoadedAccessState || isAccessLoading)),
         }}
       >
         <SyncProvider>
