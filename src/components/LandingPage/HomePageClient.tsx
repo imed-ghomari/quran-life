@@ -14,6 +14,24 @@ export default function HomePageClient() {
   const router = useRouter();
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isSigningOut = window.localStorage.getItem('auth:signingOut') === '1';
+      const postSignOutUntil = Number(window.localStorage.getItem('auth:postSignOutUntil') ?? 0);
+      const hasPostSignOutWindow = Number.isFinite(postSignOutUntil) && postSignOutUntil > Date.now();
+      if (isSigningOut || hasPostSignOutWindow) {
+        if (!isAuthLoading && !user) {
+          window.localStorage.removeItem('auth:signingOut');
+          window.localStorage.removeItem('auth:postSignOutUntil');
+        }
+        return;
+      }
+
+      if (Number.isFinite(postSignOutUntil) && postSignOutUntil <= Date.now()) {
+        window.localStorage.removeItem('auth:signingOut');
+        window.localStorage.removeItem('auth:postSignOutUntil');
+      }
+    }
+
     if (isAuthLoading) return;
     if (user) {
       router.replace('/dashboard');

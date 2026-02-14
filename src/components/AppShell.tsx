@@ -11,8 +11,22 @@ interface AppShellProps {
 export default function AppShell({ children }: AppShellProps) {
     const pathname = usePathname();
 
-    const isAuthOrHome = pathname === '/' || pathname === '/auth';
-    const isFixedLayout = pathname === '/dashboard' || pathname === '/todo' || pathname === '/statistics' || pathname === '/settings' || pathname?.startsWith('/docs');
+    const isAppRoute =
+        pathname === '/dashboard'
+        || pathname === '/todo'
+        || pathname === '/statistics'
+        || pathname === '/settings'
+        || pathname?.startsWith('/docs');
+
+    if (!isAppRoute) {
+        return <>{children}</>;
+    }
+
+    const isFixedLayout = pathname === '/dashboard'
+        || pathname === '/todo'
+        || pathname === '/statistics'
+        || pathname === '/settings'
+        || pathname?.startsWith('/docs');
 
     return (
         <div className="app-shell">

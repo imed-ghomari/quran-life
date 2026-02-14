@@ -626,8 +626,9 @@ export default function SettingsPage() {
                                                 });
                                                 if (!ok) return;
 
-                                                // Flag sign-out so AuthGate routes to landing instead of /auth
+                                                // Flag sign-out so all guards route to landing instead of /auth.
                                                 window.localStorage.setItem('auth:signingOut', '1');
+                                                window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
                                                 // Sign out from InstantDB (it clears local storage token)
                                                 await db.auth.signOut();
                                                 router.replace('/');
@@ -1876,8 +1877,9 @@ export default function SettingsPage() {
                                                                 });
                                                                 if (!ok) return;
 
-                                                                // Flag sign-out so AuthGate routes to landing instead of /auth
+                                                                // Flag sign-out so all guards route to landing instead of /auth.
                                                                 window.localStorage.setItem('auth:signingOut', '1');
+                                                                window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
                                                                 // Sign out from InstantDB (it clears local storage token)
                                                                 await db.auth.signOut();
                                                                 router.replace('/');

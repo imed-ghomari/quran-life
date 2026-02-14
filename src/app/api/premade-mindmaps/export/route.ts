@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getVerifiedInstantUser } from '@/lib/server/auth';
-import { isServerEditorEmail } from '@/lib/privilegedEmails.server';
+import { isServerEditorUser } from '@/lib/privilegedEmails.server';
 
 type ExportPayload = {
     type: 'surah' | 'part';
@@ -26,7 +26,7 @@ const indexPath = path.join(premadeDir, 'index.json');
 
 async function canExportPremades() {
     const user = await getVerifiedInstantUser();
-    return isServerEditorEmail(user?.email);
+    return isServerEditorUser(user);
 }
 
 async function readIndex(): Promise<PremadeIndex> {

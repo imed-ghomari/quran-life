@@ -140,6 +140,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Start by listening. Your "Daily Portion" builds a natural familiarity with the verses' sound and flow before you even try to memorize.
                 </p>
+                <div className="card-preview card-preview-placeholder card-preview-audio" aria-hidden="true">
+                  <div className="audio-wave">
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <div className="audio-track-meta">
+                    <div className="meta-pill" />
+                    <div className="meta-pill short" />
+                  </div>
+                </div>
               </div>
 
               {/* Phase 2 */}
@@ -151,6 +169,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Don't just repeat. Use the <strong>AnchorBuilder</strong> to chunk verses and place them on a visual map, creating powerful mental hooks.
                 </p>
+                <div className="card-preview card-preview-placeholder card-preview-map" aria-hidden="true">
+                  <div className="map-node node-main" />
+                  <div className="map-node node-a" />
+                  <div className="map-node node-b" />
+                  <div className="map-node node-c" />
+                  <div className="map-node node-d" />
+                  <div className="map-link link-1" />
+                  <div className="map-link link-2" />
+                  <div className="map-link link-3" />
+                  <div className="map-link link-4" />
+                </div>
               </div>
 
               {/* Phase 3 */}
@@ -162,6 +191,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Lock it in. Our algorithm tracks every verse and notifies you to review exactly when your memory is about to fade.
                 </p>
+                <div className="card-preview card-preview-smart-review">
+                  <img
+                    src="/landing/smart-review-light.png"
+                    alt="Smart Review screen preview in light mode"
+                    className="card-preview-image card-preview-image-light"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
+                  <img
+                    src="/landing/smart-review-dark.png"
+                    alt="Smart Review screen preview in dark mode"
+                    className="card-preview-image card-preview-image-dark"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -187,6 +236,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   A distraction-free space to build your maps. Import templates or draw your own connections to visualize the Surah's structure.
                 </p>
+                <div className="card-preview card-preview-placeholder card-preview-canvas" aria-hidden="true">
+                  <div className="canvas-grid" />
+                  <div className="canvas-sticky sticky-a" />
+                  <div className="canvas-sticky sticky-b" />
+                  <div className="canvas-sticky sticky-c" />
+                </div>
               </div>
 
               {/* Feature 2: Similar Verses */}
@@ -198,6 +253,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.
                 </p>
+                <div className="card-preview card-preview-placeholder card-preview-compare" aria-hidden="true">
+                  <div className="compare-chip chip-a" />
+                  <div className="compare-chip chip-b" />
+                  <div className="compare-chip chip-c" />
+                  <div className="compare-chip chip-d" />
+                </div>
               </div>
 
               {/* Feature 3: Offline */}
@@ -209,6 +270,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.
                 </p>
+                <div className="card-preview card-preview-placeholder card-preview-mobile" aria-hidden="true">
+                  <div className="phone-frame">
+                    <div className="phone-notch" />
+                    <div className="phone-lines" />
+                    <div className="phone-lines short" />
+                    <div className="phone-lines" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

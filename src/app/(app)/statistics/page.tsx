@@ -671,29 +671,28 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 }
 
 function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number; maxDay: number }) {
-    if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
-
-    const chartHeight = 210;
-    const padding = { top: 8, right: 28, bottom: 38, left: 36 };
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
+    const gradientSeed = useId();
+    const chartHeight = 210;
+    const padding = { top: 8, right: 28, bottom: 38, left: 36 };
 
     const nonZeroData = data.filter(d => d.count > 0);
-    if (nonZeroData.length === 0) {
-        return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
-    }
-
     const maxCount = Math.max(...nonZeroData.map(d => d.count), 1);
     const isSmallRange = maxCount <= 8;
     const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
     const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
     const maxNice = Math.max(1, tickStep * tickCount);
     const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
-    const gradientSeed = useId();
     const ids = {
         bar: `reviews-bar-${gradientSeed}`,
         clip: `reviews-chart-clip-${gradientSeed}`,
     };
+
+    if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+    if (nonZeroData.length === 0) {
+        return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+    }
 
     useEffect(() => {
         if (!containerRef.current) return;

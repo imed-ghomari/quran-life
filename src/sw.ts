@@ -8,14 +8,14 @@ const injectedManifest = self.__SW_MANIFEST as
   | Array<string | { url: string; revision?: string | null }>
   | undefined;
 
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v8";
 const PRECACHE_NAME = `precache-${CACHE_VERSION}`;
 const PAGES_CACHE = `pages-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DATA_CACHE = `data-${CACHE_VERSION}`;
 const OFFLINE_CONTENT_CACHE = `offline-content-${CACHE_VERSION}`;
 
-const PRECACHE_REQUIRED = ["/", "/offline", "/manifest.json"];
+const PRECACHE_REQUIRED = ["/", "/auth", "/dashboard", "/offline-app", "/offline", "/manifest.json"];
 
 const OLD_CACHE_PREFIXES = [
   "pages-v2",
@@ -34,6 +34,14 @@ const OLD_CACHE_PREFIXES = [
   "static-v5",
   "data-v5",
   "offline-content-v5",
+  "pages-v6",
+  "static-v6",
+  "data-v6",
+  "offline-content-v6",
+  "pages-v7",
+  "static-v7",
+  "data-v7",
+  "offline-content-v7",
 ];
 
 const toManifestUrl = (entry: string | { url: string }) =>
@@ -190,6 +198,8 @@ swSelf.addEventListener("fetch", (event: FetchEvent) => {
         if (response && response.type !== "error") return response;
 
         const precache = await caches.open(PRECACHE_NAME);
+        const offlineRequestedRoute = await precache.match(normalizeUrl(requestPath));
+        if (offlineRequestedRoute) return offlineRequestedRoute;
         const offlineHome = await precache.match(normalizeUrl("/"));
         if (offlineHome) return offlineHome;
         const offlinePage = await precache.match(normalizeUrl("/offline"));

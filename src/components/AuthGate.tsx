@@ -10,6 +10,26 @@ const PUBLIC_PATHS = new Set(['/', '/auth']);
 const CHECKOUT_GRACE_PERIOD_MS = 10 * 60 * 1000;
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
+const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
+const FORCE_OFFLINE_OPEN_TTL_MS = 20 * 1000;
+const SIGNING_OUT_KEY = 'auth:signingOut';
+const POST_SIGN_OUT_UNTIL_KEY = 'auth:postSignOutUntil';
+
+function hasValidOfflineAccessMarker() {
+  if (typeof window === 'undefined') return false;
+  const raw = window.localStorage.getItem(OFFLINE_ACCESS_KEY);
+  if (!raw) return false;
+
+  try {
+    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+    const updatedAt = Number(parsed?.updatedAt ?? 0);
+    const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
+    const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
+    return hasValidTimestamp && hasUserId;
+  } catch {
+    return false;
+  }
+}
 type AuthGateProps = {
   children: React.ReactNode;
 };
@@ -22,7 +42,8 @@ export default function AuthGate({ children }: AuthGateProps) {
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
-  const [hasOfflineAccess, setHasOfflineAccess] = useState(false);
+  const [hasOfflineAccess, setHasOfflineAccess] = useState(() => hasValidOfflineAccessMarker());
+  const [hasForcedOfflineOpen, setHasForcedOfflineOpen] = useState(false);
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
@@ -64,40 +85,49 @@ export default function AuthGate({ children }: AuthGateProps) {
       return;
     }
 
-    const raw = window.localStorage.getItem(OFFLINE_ACCESS_KEY);
-    if (!raw) {
-      setHasOfflineAccess(false);
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
-      const updatedAt = Number(parsed?.updatedAt ?? 0);
-      const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
-      const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
-      const valid = hasValidTimestamp && hasUserId;
-      setHasOfflineAccess(valid);
-      if (!valid) {
-        window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
-      }
-    } catch {
+    const valid = hasValidOfflineAccessMarker();
+    setHasOfflineAccess(valid);
+    if (!valid) {
       window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
-      setHasOfflineAccess(false);
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(FORCE_OFFLINE_OPEN_KEY);
+    if (!raw) {
+      setHasForcedOfflineOpen(false);
+      return;
+    }
+    const timestamp = Number(raw);
+    const valid = Number.isFinite(timestamp) && Date.now() - timestamp <= FORCE_OFFLINE_OPEN_TTL_MS;
+    setHasForcedOfflineOpen(valid);
+    if (!valid) {
+      window.localStorage.removeItem(FORCE_OFFLINE_OPEN_KEY);
+    }
+  }, [pathname]);
+
+  const shouldTreatAsOffline = !isOnline || (hasOfflineAccess && hasForcedOfflineOpen);
 
   useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
     if (!hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout) return;
-    if (!isOnline) return;
+    if (!isOnline || (hasOfflineAccess && hasForcedOfflineOpen)) return;
 
     if (typeof window !== 'undefined') {
-      const isSigningOut = window.localStorage.getItem('auth:signingOut') === '1';
-      if (isSigningOut) {
-        window.localStorage.removeItem('auth:signingOut');
+      const isSigningOut = window.localStorage.getItem(SIGNING_OUT_KEY) === '1';
+      const postSignOutUntil = Number(window.localStorage.getItem(POST_SIGN_OUT_UNTIL_KEY) ?? 0);
+      const hasPostSignOutWindow = Number.isFinite(postSignOutUntil) && postSignOutUntil > Date.now();
+
+      if (isSigningOut || hasPostSignOutWindow) {
         router.replace('/');
         return;
+      }
+
+      if (Number.isFinite(postSignOutUntil) && postSignOutUntil <= Date.now()) {
+        window.localStorage.removeItem(SIGNING_OUT_KEY);
+        window.localStorage.removeItem(POST_SIGN_OUT_UNTIL_KEY);
       }
     }
 
@@ -109,7 +139,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (isSubscriptionLoading) return;
 
     if (!hasAccess && !isCheckoutRoute) {
-      router.replace('/checkout');
+      router.replace('/auth');
       return;
     }
 
@@ -125,6 +155,8 @@ export default function AuthGate({ children }: AuthGateProps) {
     isPaymentBypass,
     hasCheckedCheckout,
     isOnline,
+    hasOfflineAccess,
+    hasForcedOfflineOpen,
     user,
     hasAccess,
     isCheckoutRoute,
@@ -137,10 +169,10 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   const needsCheckoutDecision =
     !hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout;
-  const shouldBlockOnCheckoutDecision = isOnline && needsCheckoutDecision;
-  const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
+  const shouldBlockOnCheckoutDecision = !shouldTreatAsOffline && needsCheckoutDecision;
+  const shouldBlockOnSubscriptionLoad = !shouldTreatAsOffline && isSubscriptionLoading;
   const isRedirecting =
-    isOnline
+    !shouldTreatAsOffline
     && user
     && !shouldBlockOnCheckoutDecision
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
@@ -159,7 +191,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  if (!isOnline) {
+  if (shouldTreatAsOffline) {
     if (!user && !hasOfflineAccess) {
       return (
         <div style={{
