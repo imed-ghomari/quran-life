@@ -65,7 +65,7 @@ export const serverEnv = {
     process.env.PADDLE_WEBHOOK_SECRET ??
     '',
   INSTANT_ADMIN_TOKEN: process.env.INSTANT_APP_ADMIN_TOKEN ?? process.env.INSTANT_ADMIN_TOKEN ?? '',
-  INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? 'pr-quran-life',
+  INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? '',
   E2E_MODE: parseBool(process.env.E2E_MODE, false),
   E2E_AUTH_SECRET: process.env.E2E_AUTH_SECRET ?? '',
   E2E_DEFAULT_EMAIL: process.env.E2E_DEFAULT_EMAIL ?? 'e2e@local.test',

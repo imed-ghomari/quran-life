@@ -113,17 +113,17 @@ export default {
   subscriptions: {
     allow: {
       view: "auth.id == data.userId",
-      create: "auth.id == data.userId",
-      update: "auth.id == data.userId",
-      delete: "auth.id == data.userId",
+      create: "false",
+      update: "false",
+      delete: "false",
     },
   },
   paddleWebhookEvents: {
     allow: {
-      view: "auth.id == data.userId",
-      create: "auth.id == data.userId",
-      update: "auth.id == data.userId",
-      delete: "auth.id == data.userId",
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
     },
   },
 };

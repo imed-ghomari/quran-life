@@ -5,7 +5,7 @@ import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
-import { QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
+import { AppSettings, QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
 import { db } from '@/lib/instant';
 import { useInstantSettings, useInstantNodes, useInstantMutashabihat, useInstantListeningProgress } from '@/hooks/useInstantData';
 import {
@@ -29,7 +29,7 @@ import {
     Palette,
     Sliders
 } from 'lucide-react';
-import { useTheme } from '@/components/ThemeProvider';
+import { Theme, useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
@@ -45,8 +45,8 @@ interface MutashabihatDecision {
     notes?: string;
 }
 
-function AppearanceCard() {
-    const { theme, setTheme } = useTheme();
+function AppearanceCard({ onSelectTheme }: { onSelectTheme: (nextTheme: Theme) => void }) {
+    const { theme } = useTheme();
 
     return (
         <div className="card modern-card" style={{
@@ -85,7 +85,7 @@ function AppearanceCard() {
                         <button
                             key={mode.id}
                             className="appearance-choice-btn"
-                            onClick={() => setTheme(mode.id as any)}
+                            onClick={() => onSelectTheme(mode.id as Theme)}
                             style={{
                                 flex: 1,
                                 display: 'flex',
@@ -733,7 +733,7 @@ export default function SettingsPage() {
                                 <button
                                     key={mode.id}
                                     className="appearance-choice-btn"
-                                    onClick={() => setTheme(mode.id as any)}
+                                    onClick={() => handleThemeSelect(mode.id as Theme)}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -1273,7 +1273,7 @@ export default function SettingsPage() {
                                                     type="button"
                                                     onClick={() => {
                                                         setTodoDefaultFilter(option.id);
-                                                        saveSettings({ todoDefaultFilter: option.id });
+                                                        persistSettingsUpdate({ todoDefaultFilter: option.id }, 'default todo filter');
                                                     }}
                                                     className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
                                                 >
@@ -1296,7 +1296,7 @@ export default function SettingsPage() {
                                                     type="button"
                                                     onClick={() => {
                                                         setReviewSortOrder(option.id);
-                                                        saveSettings({ reviewSortOrder: option.id });
+                                                        persistSettingsUpdate({ reviewSortOrder: option.id }, 'review sorting');
                                                     }}
                                                     className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
                                                 >
@@ -1319,7 +1319,7 @@ export default function SettingsPage() {
                                                     type="button"
                                                     onClick={() => {
                                                         setKanbanSortOrder(option.id);
-                                                        saveSettings({ kanbanSortOrder: option.id });
+                                                        persistSettingsUpdate({ kanbanSortOrder: option.id }, 'kanban sorting');
                                                     }}
                                                     className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
                                                 >
@@ -1352,7 +1352,7 @@ export default function SettingsPage() {
                                                     type="button"
                                                     onClick={() => {
                                                         setCompleteExitBehavior(option.id);
-                                                        saveSettings({ completeExitBehavior: option.id });
+                                                        persistSettingsUpdate({ completeExitBehavior: option.id }, 'complete-exit behavior');
                                                     }}
                                                     className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                 >
@@ -1380,7 +1380,7 @@ export default function SettingsPage() {
                                                     onClick={() => {
                                                         if (disableListeningOption) return;
                                                         setDailyPortionMode(option.id);
-                                                        saveSettings({ dailyPortionMode: option.id });
+                                                        persistSettingsUpdate({ dailyPortionMode: option.id }, 'daily portion default mode');
                                                     }}
                                                     className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                     style={disableListeningOption ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
@@ -1539,9 +1539,17 @@ export default function SettingsPage() {
         if (!node) return;
 
         const newState = getMaturityState(level);
-        await db.transact(db.tx.memoryNodes[nodeId].update({
-            scheduler: { ...node.scheduler, ...newState }
-        }));
+        try {
+            await db.transact(db.tx.memoryNodes[nodeId].update({
+                scheduler: { ...node.scheduler, ...newState }
+            }));
+        } catch (error) {
+            console.error('Failed to save node maturity', error);
+            await alert({
+                title: 'Save Failed',
+                message: 'Could not update maturity. Please try again.',
+            });
+        }
     };
 
     const handleGroupMaturityReset = async (type: 'verse_segment' | 'mindmap' | 'part_mindmap' | 'verse', level: 'reset' | 'medium' | 'strong' | 'mastered', surahId?: number, surahName?: string) => {
@@ -1583,7 +1591,15 @@ export default function SettingsPage() {
             })
         );
 
-        await db.transact(transactions);
+        try {
+            await db.transact(transactions);
+        } catch (error) {
+            console.error('Failed to save group maturity', error);
+            await alert({
+                title: 'Save Failed',
+                message: 'Could not update group maturity. Please try again.',
+            });
+        }
     };
 
     useEffect(() => {
@@ -1591,11 +1607,29 @@ export default function SettingsPage() {
     }, []);
 
     const handleCompletionDays = (days: number) => {
-        saveSettings({ completionDays: Math.max(5, Math.min(120, days)) });
+        const clamped = Math.max(7, Math.min(120, days));
+        void saveSettings({ completionDays: clamped }).catch((error) => {
+            console.error('Failed to save completion schedule', error);
+        });
     };
 
     const handleActivePart = (part: QuranPart) => {
-        saveSettings({ activePart: part });
+        void saveSettings({ activePart: part }).catch((error) => {
+            console.error('Failed to save active part', error);
+        });
+    };
+
+    const handleThemeSelect = (nextTheme: Theme) => {
+        setTheme(nextTheme);
+        void saveSettings({ theme: nextTheme }).catch((error) => {
+            console.error('Failed to save theme mode', error);
+        });
+    };
+
+    const persistSettingsUpdate = (update: Partial<AppSettings>, context: string) => {
+        void saveSettings(update).catch((error) => {
+            console.error(`Failed to save ${context}`, error);
+        });
     };
 
     const handleResetDailyPortion = async () => {
@@ -1640,7 +1674,15 @@ export default function SettingsPage() {
         });
 
         if (decisionsToDelete.length > 0) {
-            await db.transact(decisionsToDelete.map(d => db.tx.mutashabihatDecisions[d.id].delete()));
+            try {
+                await db.transact(decisionsToDelete.map(d => db.tx.mutashabihatDecisions[d.id].delete()));
+            } catch (error) {
+                console.error('Failed to reset mutashabihat decisions', error);
+                await alert({
+                    title: 'Reset Failed',
+                    message: 'Could not reset similar verse coverage. Please try again.',
+                });
+            }
         }
     };
 
@@ -1650,18 +1692,19 @@ export default function SettingsPage() {
         if (!surahToSkipId) return;
         const currentSkipped = settings?.skippedSurahs || [];
         if (!currentSkipped.includes(Number(surahToSkipId))) {
-            saveSettings({ skippedSurahs: [...currentSkipped, Number(surahToSkipId)] });
+            persistSettingsUpdate({ skippedSurahs: [...currentSkipped, Number(surahToSkipId)] }, 'skipped surah list');
         }
         setSurahToSkipId('');
     };
 
     const handleRemoveSkippedSurah = (id: number) => {
         const currentSkipped = settings?.skippedSurahs || [];
-        saveSettings({ skippedSurahs: currentSkipped.filter(s => s !== id) });
+        persistSettingsUpdate({ skippedSurahs: currentSkipped.filter(s => s !== id) }, 'skipped surah list');
     };
 
   const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
     const { id: _ignored, ...updateWithoutId } = update;
+    const previousDecision = decisions[phraseId];
 
     // Convert undefined to null for database compatibility
     const cleanUpdate = {
@@ -1679,7 +1722,24 @@ export default function SettingsPage() {
         } as MutashabihatDecision
     }));
 
-    await updateInstantDecision(phraseId, cleanUpdate);
+    try {
+        await updateInstantDecision(phraseId, cleanUpdate);
+    } catch (error) {
+        console.error('Failed to save similar verse decision', error);
+        setDecisions(prev => {
+            const next = { ...prev };
+            if (previousDecision) {
+                next[phraseId] = previousDecision;
+            } else {
+                delete next[phraseId];
+            }
+            return next;
+        });
+        await alert({
+            title: 'Save Failed',
+            message: 'Could not save similar verse update. Please try again.',
+        });
+    }
 };
 
     const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -1701,7 +1761,15 @@ export default function SettingsPage() {
             createdAt: new Date().toISOString()
         };
 
-        await updateInstantCustom(customItem);
+        try {
+            await updateInstantCustom(customItem);
+        } catch (error) {
+            console.error('Failed to save custom mutashabih', error);
+            await alert({
+                title: 'Save Failed',
+                message: 'Could not save custom similar verse. Please try again.',
+            });
+        }
     };
 
     const handleDeleteCustomMutashabih = async (customId: string) => {
@@ -1719,7 +1787,15 @@ export default function SettingsPage() {
             ...relatedDecisions.map(d => db.tx.mutashabihatDecisions[d.id].delete())
         ];
 
-        await db.transact(deletes);
+        try {
+            await db.transact(deletes);
+        } catch (error) {
+            console.error('Failed to delete custom mutashabih', error);
+            await alert({
+                title: 'Delete Failed',
+                message: 'Could not delete custom similar verse. Please try again.',
+            });
+        }
     };
 
     const handleExport = async () => {
@@ -1970,7 +2046,7 @@ export default function SettingsPage() {
                                     </>
                                 )}
                             </div>
-                            <AppearanceCard />
+                            <AppearanceCard onSelectTheme={handleThemeSelect} />
                             <div className="card modern-card" style={{
                                 background: 'var(--background-secondary)',
                                 border: '1px solid var(--border)',
@@ -3246,7 +3322,7 @@ export default function SettingsPage() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setTodoDefaultFilter(option.id);
-                                                                    saveSettings({ todoDefaultFilter: option.id });
+                                                                    persistSettingsUpdate({ todoDefaultFilter: option.id }, 'default todo filter');
                                                                 }}
                                                                 className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
                                                             >
@@ -3269,7 +3345,7 @@ export default function SettingsPage() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setReviewSortOrder(option.id);
-                                                                    saveSettings({ reviewSortOrder: option.id });
+                                                                    persistSettingsUpdate({ reviewSortOrder: option.id }, 'review sorting');
                                                                 }}
                                                                 className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
                                                             >
@@ -3292,7 +3368,7 @@ export default function SettingsPage() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setKanbanSortOrder(option.id);
-                                                                    saveSettings({ kanbanSortOrder: option.id });
+                                                                    persistSettingsUpdate({ kanbanSortOrder: option.id }, 'kanban sorting');
                                                                 }}
                                                                 className={`adv-chip ${isActive ? 'adv-chip-active' : ''}`}
                                                             >
@@ -3319,7 +3395,7 @@ export default function SettingsPage() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setCompleteExitBehavior(option.id);
-                                                                    saveSettings({ completeExitBehavior: option.id });
+                                                                    persistSettingsUpdate({ completeExitBehavior: option.id }, 'complete-exit behavior');
                                                                 }}
                                                                 className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                             >
@@ -3347,7 +3423,7 @@ export default function SettingsPage() {
                                                                 onClick={() => {
                                                                     if (disableListeningOption) return;
                                                                     setDailyPortionMode(option.id);
-                                                                    saveSettings({ dailyPortionMode: option.id });
+                                                                    persistSettingsUpdate({ dailyPortionMode: option.id }, 'daily portion default mode');
                                                                 }}
                                                                 className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                                 style={disableListeningOption ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}

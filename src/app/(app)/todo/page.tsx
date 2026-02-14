@@ -408,62 +408,62 @@ export default function TodoPage() {
     };
 
     const handleImportPremade = useCallback(async (type: 'surah' | 'part', id: number, options?: { silent?: boolean }) => {
+        const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                if (!options?.silent) {
+                    await alert({
+                        title: 'Premade Mindmap Not Available',
+                        message: `Premade mindmap for this ${type} is not available yet.`,
+                    });
+                }
+                throw new Error(`Premade not available for ${type} ${id}`);
+            }
+            if (!options?.silent) {
+                await alert({
+                    title: 'Import Failed',
+                    message: `Failed to import mindmap: ${response.statusText}`,
+                });
+            }
+            throw new Error(`Failed to import premade ${type} ${id}: ${response.statusText}`);
+        }
+        const data = await response.json();
+
+        // Try to fetch premade anchors for surahs
+        let importedAnchors: any[] = [];
+        if (type === 'surah') {
+            try {
+                const anchorResponse = await fetch(`/assets/premade-mindmaps/surah-${id}.chunks.txt`);
+                if (anchorResponse.ok) {
+                    const text = await anchorResponse.text();
+                    importedAnchors = text.split('\n')
+                        .filter(line => line.trim())
+                        .map((line, idx) => {
+                            const parts = line.split('|').map(s => s.trim());
+                            const range = parts[0];
+                            const label = parts[1]; // Might be undefined
+                            const [start, end] = range.split('-').map(n => parseInt(n.trim()));
+
+                            // Skip if invalid range
+                            if (isNaN(start)) return null;
+
+                            return {
+                                id: `imported-${id}-${idx}-${Date.now()}`,
+                                surahId: id,
+                                startVerse: start,
+                                endVerse: end || start,
+                                label: label || `Chunk ${idx + 1}`
+                            };
+                        })
+                        .filter(Boolean); // Filter out nulls
+                    appLogger.addLog(`Found and parsed ${importedAnchors.length} anchors for surah ${id}`, 'info');
+                }
+            } catch (anchorError) {
+                console.warn('Error fetching or parsing premade anchors:', anchorError);
+            }
+        }
+
         try {
-            const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
-            if (!response.ok) {
-                if (response.status === 404) {
-                    if (!options?.silent) {
-                        await alert({
-                            title: 'Premade Mindmap Not Available',
-                            message: `Premade mindmap for this ${type} is not available yet.`,
-                        });
-                    }
-                } else {
-                    if (!options?.silent) {
-                        await alert({
-                            title: 'Import Failed',
-                            message: `Failed to import mindmap: ${response.statusText}`,
-                        });
-                    }
-                }
-                return;
-            }
-            const data = await response.json();
-
-            // Try to fetch premade anchors for surahs
-            let importedAnchors: any[] = [];
-            if (type === 'surah') {
-                try {
-                    const anchorResponse = await fetch(`/assets/premade-mindmaps/surah-${id}.chunks.txt`);
-                    if (anchorResponse.ok) {
-                        const text = await anchorResponse.text();
-                        importedAnchors = text.split('\n')
-                            .filter(line => line.trim())
-                            .map((line, idx) => {
-                                const parts = line.split('|').map(s => s.trim());
-                                const range = parts[0];
-                                const label = parts[1]; // Might be undefined
-                                const [start, end] = range.split('-').map(n => parseInt(n.trim()));
-
-                                // Skip if invalid range
-                                if (isNaN(start)) return null;
-
-                                return {
-                                    id: `imported-${id}-${idx}-${Date.now()}`,
-                                    surahId: id,
-                                    startVerse: start,
-                                    endVerse: end || start,
-                                    label: label || `Chunk ${idx + 1}`
-                                };
-                            })
-                            .filter(Boolean); // Filter out nulls
-                        appLogger.addLog(`Found and parsed ${importedAnchors.length} anchors for surah ${id}`, 'info');
-                    }
-                } catch (anchorError) {
-                    console.warn('Error fetching or parsing premade anchors:', anchorError);
-                }
-            }
-
             if (type === 'surah') {
                 const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
                 const updated = {
@@ -514,6 +514,7 @@ export default function TodoPage() {
                     message: 'Failed to import mindmap. Please try again.',
                 });
             }
+            throw error;
         }
     }, [mindmaps, partMindmapsMap, saveMindMap, savePartMindMap, alert]);
 
@@ -616,18 +617,26 @@ export default function TodoPage() {
                 const key = `surah-${id}`;
                 if (autoImportedRef.current.has(key)) continue;
                 if (mindmaps[id]) continue; // preserve user-created mindmap
-                await handleImportPremade('surah', id, { silent: true });
-                autoImportedRef.current.add(key);
-                importedAny = true;
+                try {
+                    await handleImportPremade('surah', id, { silent: true });
+                    autoImportedRef.current.add(key);
+                    importedAny = true;
+                } catch (error) {
+                    console.warn(`Auto-import failed for surah ${id}`, error);
+                }
             }
 
             for (const id of premadeIndex.part) {
                 const key = `part-${id}`;
                 if (autoImportedRef.current.has(key)) continue;
                 if (partMindmapsMap[id]) continue; // preserve user-created mindmap
-                await handleImportPremade('part', id, { silent: true });
-                autoImportedRef.current.add(key);
-                importedAny = true;
+                try {
+                    await handleImportPremade('part', id, { silent: true });
+                    autoImportedRef.current.add(key);
+                    importedAny = true;
+                } catch (error) {
+                    console.warn(`Auto-import failed for part ${id}`, error);
+                }
             }
 
             if (importedAny) {
@@ -694,7 +703,9 @@ export default function TodoPage() {
             notes: update.notes ?? existing.notes ?? existing.note ?? '',
             phraseId: decisionKey
         };
-        saveDecision(decisionKey, normalized);
+        void saveDecision(decisionKey, normalized).catch((error) => {
+            console.error('Failed to save mutashabihat decision update', error);
+        });
     }, [decisions, saveDecision]);
 
     // Handles saving from the Mindmap Editor modal (Surah)
@@ -814,8 +825,8 @@ export default function TodoPage() {
                     defaultFilter={settings.todoDefaultFilter ?? 'all'}
                     completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
                     kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
-                    onKanbanStateChange={(cols) => {
-                        saveSettings({
+                    onKanbanStateChange={async (cols) => {
+                        await saveSettings({
                             kanbanColumns: cols
                         });
                     }}

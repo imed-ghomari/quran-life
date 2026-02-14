@@ -19,7 +19,7 @@ interface SplitsModalProps {
     isDark?: boolean;
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
-    onSave: () => void;
+    onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
 }
 
@@ -41,6 +41,20 @@ export default function SplitsModal({
 }: SplitsModalProps) {
     const [visible, setVisible] = useState(isOpen);
     const [useSlideOver, setUseSlideOver] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSaveAndClose = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            await onSave();
+            onClose();
+        } catch (err) {
+            console.error('Failed to save splits', err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -93,7 +107,7 @@ export default function SplitsModal({
                                 showMindmapPreview={true}
                                 onAddBreak={onAddBreak}
                                 onRemoveBreak={onRemoveBreak}
-                                onSave={() => { onSave(); onClose(); }}
+                                onSave={handleSaveAndClose}
                                 hasReviewedHistory={hasReviewedHistory}
                             />
                         </div>
@@ -163,16 +177,13 @@ return (
                     </div>
                 )}
 
-                <DesktopAnchorBuilder
+                    <DesktopAnchorBuilder
                     surahId={surahId}
                     verseCount={verseCount}
                     builderState={builderState}
                     onAddBreak={onAddBreak}
                     onRemoveBreak={onRemoveBreak}
-                    onSave={() => {
-                        onSave();
-                        onClose();
-                    }}
+                    onSave={handleSaveAndClose}
                     hasReviewedHistory={hasReviewedHistory}
                 />
             </div>

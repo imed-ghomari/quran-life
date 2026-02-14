@@ -1,9 +1,11 @@
 import { init } from '@instantdb/react';
+import { clientEnv } from '@/lib/env/client';
 import { schema } from '@/lib/instant-schema';
 
-// InstantDB app identifier (public env var in Next.js)
-// TODO: Replace with your actual App ID from InstantDB dashboard
-export const APP_ID = process.env.NEXT_PUBLIC_INSTANT_APP_ID || 'pr-quran-life';
+export const APP_ID = clientEnv.NEXT_PUBLIC_INSTANT_APP_ID;
+if (!APP_ID) {
+  throw new Error('Missing NEXT_PUBLIC_INSTANT_APP_ID');
+}
 
 export { schema } from '@/lib/instant-schema';
 

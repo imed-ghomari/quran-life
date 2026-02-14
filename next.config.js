@@ -1,17 +1,124 @@
-const withSerwist = require('@serwist/next').default({
-    swSrc: 'src/sw.ts',
-    swDest: 'public/sw.js',
+const withPWA = require('@ducanh2912/next-pwa').default({
+    dest: 'public',
     register: true,
     disable: process.env.NODE_ENV === 'development',
-    // Avoid giant precache manifests that can break SW installs on lower-storage devices.
-    globPublicPatterns: [
-        '**/*.{js,css,html,ico,png,svg,webp,jpg,jpeg,gif,webmanifest}',
-        'search-index.json',
-        'assets/premade-mindmaps/index.json',
-        'assets/premade-mindmaps/*.chunks.txt',
-        'assets/premade-mindmaps/*.tldraw',
+    cacheOnFrontEndNav: true,
+    reloadOnOnline: false,
+    dynamicStartUrl: true,
+    dynamicStartUrlRedirect: '/auth',
+    publicExcludes: [
+        '!recitations/**/*',
+        '!qpc-hafs-word-by-word.json',
+        '!assets/premade-mindmaps/**/*.tldraw',
+        '!assets/premade-mindmaps/**/*.chunks.txt',
     ],
-    maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+    fallbacks: {
+        document: '/offline',
+    },
+    workboxOptions: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        navigateFallback: '/offline',
+        // Keep auth/checkouts network-only and avoid serving stale auth screens.
+        navigateFallbackDenylist: [/^\/api\//, /^\/auth(?:\/|$)/, /^\/checkout(?:\/|$)/],
+        runtimeCaching: [
+            {
+                urlPattern: ({ request, url }) =>
+                    request.mode === 'navigate'
+                    && !url.pathname.startsWith('/auth')
+                    && !url.pathname.startsWith('/checkout')
+                    && !url.pathname.startsWith('/api/'),
+                handler: 'NetworkFirst',
+                options: {
+                    cacheName: 'pages-v10',
+                    networkTimeoutSeconds: 3,
+                    cacheableResponse: {
+                        statuses: [200],
+                    },
+                    expiration: {
+                        maxEntries: 64,
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    },
+                },
+            },
+            {
+                urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
+                handler: 'CacheFirst',
+                options: {
+                    cacheName: 'google-fonts-webfonts',
+                    expiration: {
+                        maxEntries: 4,
+                        maxAgeSeconds: 365 * 24 * 60 * 60,
+                    },
+                    cacheableResponse: {
+                        statuses: [0, 200],
+                    },
+                },
+            },
+            {
+                urlPattern: /^https:\/\/fonts\.(?:googleapis)\.com\/.*/i,
+                handler: 'StaleWhileRevalidate',
+                options: {
+                    cacheName: 'google-fonts-stylesheets',
+                    expiration: {
+                        maxEntries: 4,
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    },
+                    cacheableResponse: {
+                        statuses: [0, 200],
+                    },
+                },
+            },
+            {
+                urlPattern: /\/_next\/static\/.*/i,
+                handler: 'StaleWhileRevalidate',
+                options: {
+                    cacheName: 'static-assets-v10',
+                    expiration: {
+                        maxEntries: 256,
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    },
+                    cacheableResponse: {
+                        statuses: [0, 200],
+                    },
+                },
+            },
+            {
+                urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg|ico)$/i,
+                handler: 'StaleWhileRevalidate',
+                options: {
+                    cacheName: 'image-assets-v10',
+                    expiration: {
+                        maxEntries: 200,
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    },
+                    cacheableResponse: {
+                        statuses: [0, 200],
+                    },
+                },
+            },
+            {
+                urlPattern: /\/(search-index\.json|qpc-hafs-word-by-word\.json|assets\/premade-mindmaps\/.*)/i,
+                handler: 'StaleWhileRevalidate',
+                options: {
+                    cacheName: 'offline-content-v10',
+                    expiration: {
+                        maxEntries: 128,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                    },
+                    cacheableResponse: {
+                        statuses: [0, 200],
+                    },
+                },
+            },
+            {
+                urlPattern: /^https?.*\/api\/.*/i,
+                handler: 'NetworkOnly',
+            },
+        ],
+    },
 });
 
 /** @type {import('next').NextConfig} */
@@ -121,4 +228,4 @@ const nextConfig = {
     }
 };
 
-module.exports = withSerwist(nextConfig);
+module.exports = withPWA(nextConfig);

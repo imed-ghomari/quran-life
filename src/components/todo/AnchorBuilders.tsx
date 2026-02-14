@@ -32,7 +32,7 @@ export function MobileAnchorBuilder({
     showMindmapPreview?: boolean;
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
-    onSave: () => void;
+    onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
 }) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -41,6 +41,7 @@ export function MobileAnchorBuilder({
     const [showFullMindmap, setShowFullMindmap] = useState(false);
     const { confirm } = useConfirmDialog();
     const [zoomLevel, setZoomLevel] = useState(1);
+    const [isSaving, setIsSaving] = useState(false);
     const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
     const shouldShowPreview = showMindmapPreview && !!displayUrl;
     const hasMindmap = !!(snapshot || displayUrl);
@@ -297,13 +298,22 @@ export function MobileAnchorBuilder({
                     <span style={{ fontWeight: 600 }}>Editing Splits</span>
                     <button
                         className="btn btn-primary btn-sm std-normal-btn"
-                        onClick={() => {
-                            setIsEditing(false);
-                            onSave();
+                        onClick={async () => {
+                            if (isSaving) return;
+                            setIsSaving(true);
+                            try {
+                                await onSave();
+                                setIsEditing(false);
+                            } catch (err) {
+                                console.error('Failed to save splits', err);
+                            } finally {
+                                setIsSaving(false);
+                            }
                         }}
+                        disabled={isSaving}
                     >
                         <Check size={16} style={{ marginRight: 6 }} />
-                        Confirm
+                        {isSaving ? 'Saving...' : 'Confirm'}
                     </button>
                 </div>
 
@@ -517,11 +527,12 @@ export function DesktopAnchorBuilder({
     builderState: AnchorBuilderState;
     onAddBreak: (val: number) => void;
     onRemoveBreak: (val: number) => void;
-    onSave: () => void;
+    onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [hoverVal, setHoverVal] = useState<number | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const barRef = useRef<HTMLDivElement>(null);
     const { confirm } = useConfirmDialog();
 
@@ -588,11 +599,19 @@ export function DesktopAnchorBuilder({
                         Edit Splits
                     </button>
                 ) : (
-                    <button className="btn btn-primary std-normal-btn" onClick={() => {
-                        setIsEditing(false);
-                        onSave();
-                    }}>
-                        Confirm Changes
+                    <button className="btn btn-primary std-normal-btn" onClick={async () => {
+                        if (isSaving) return;
+                        setIsSaving(true);
+                        try {
+                            await onSave();
+                            setIsEditing(false);
+                        } catch (err) {
+                            console.error('Failed to save splits', err);
+                        } finally {
+                            setIsSaving(false);
+                        }
+                    }} disabled={isSaving}>
+                        {isSaving ? 'Saving...' : 'Confirm Changes'}
                     </button>
                 )}
             </div>

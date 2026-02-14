@@ -99,6 +99,9 @@ export default function TodayPage() {
     const [isVersesLoaded, setIsVersesLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
+    const [isPersistingReviewAction, setIsPersistingReviewAction] = useState(false);
+    const [isPersistingDailyComplete, setIsPersistingDailyComplete] = useState(false);
+    const [isApplyingHistoryAction, setIsApplyingHistoryAction] = useState(false);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
     const [isMobile, setIsMobile] = useState(false);
     const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
@@ -871,9 +874,11 @@ export default function TodayPage() {
 
 
     // Grade review
-    const handleGrade = useCallback((remembered: boolean) => {
+    const handleGrade = useCallback(async (remembered: boolean) => {
+        if (isPersistingReviewAction || isApplyingHistoryAction) return;
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
+        setIsPersistingReviewAction(true);
 
         const errorId = !remembered ? id() : undefined;
         let errorPayload: any | undefined;
@@ -888,9 +893,6 @@ export default function TodayPage() {
         const customWeightsFromInstant = customWeights;
         const result = reviewCard(node.scheduler as any, remembered, node.id, customWeightsFromInstant);
         const afterNode = { ...node, scheduler: result.newState };
-
-        // Save updated node with new FSRS state
-        updateInstantNode(afterNode);
 
         // Sanitize log to remove undefined and convert types
         const stateToNumber = (state: string): number => {
@@ -914,7 +916,6 @@ export default function TodayPage() {
         Object.keys(logToSave).forEach(key => logToSave[key] === undefined && delete logToSave[key]);
         // Remove timestamp field since it's not in the schema
         delete logToSave.timestamp;
-        saveInstantReviewLog(logToSave);
 
         if (!remembered) {
             const failedAyahId =
@@ -947,7 +948,28 @@ export default function TodayPage() {
             if (abs !== undefined) errorToSave.absoluteAyah = abs;
 
             errorPayload = errorToSave;
-            saveInstantReviewError(errorToSave);
+            try {
+                await updateInstantNode(afterNode);
+                await saveInstantReviewLog(logToSave);
+                await saveInstantReviewError(errorToSave);
+            } catch (err) {
+                console.error('Failed to persist forgot grading action', err);
+                addToast('error', 'Failed to save grade', 'Please try again.');
+                return;
+            } finally {
+                setIsPersistingReviewAction(false);
+            }
+        } else {
+            try {
+                await updateInstantNode(afterNode);
+                await saveInstantReviewLog(logToSave);
+            } catch (err) {
+                console.error('Failed to persist remembered grading action', err);
+                addToast('error', 'Failed to save grade', 'Please try again.');
+                return;
+            } finally {
+                setIsPersistingReviewAction(false);
+            }
         }
 
         const afterIndex = currentReviewIndex < orderedDueNodes.length - 1 ? currentReviewIndex + 1 : currentReviewIndex;
@@ -979,11 +1001,13 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, isPersistingReviewAction, isApplyingHistoryAction]);
 
-    const handlePostpone = useCallback(() => {
+    const handlePostpone = useCallback(async () => {
+        if (isPersistingReviewAction || isApplyingHistoryAction) return;
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
+        setIsPersistingReviewAction(true);
 
         const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
             node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
@@ -1002,7 +1026,14 @@ export default function TodayPage() {
             }
         };
 
-        updateInstantNode(afterNode);
+        try {
+            await updateInstantNode(afterNode);
+        } catch (err) {
+            console.error('Failed to persist postpone action', err);
+            addToast('error', 'Failed to save postpone', 'Please try again.');
+            setIsPersistingReviewAction(false);
+            return;
+        }
 
         const afterIndex = currentReviewIndex < orderedDueNodes.length - 1 ? currentReviewIndex + 1 : currentReviewIndex;
 
@@ -1029,90 +1060,122 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode]);
+        setIsPersistingReviewAction(false);
+    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction]);
 
-    const handleUndo = useCallback((source: 'toast' | 'keyboard', toastId?: string) => {
+    const handleUndo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
+        if (isApplyingHistoryAction) return;
         const stack = undoStackRef.current;
         if (!stack.length) return;
         const last = stack[stack.length - 1];
         const nextStack = stack.slice(0, -1);
-        persistUndoStack(nextStack);
         const nextRedo = [...redoStackRef.current, last].slice(-UNDO_STACK_LIMIT);
-        persistRedoStack(nextRedo);
 
-        if (last.kind === 'review') {
-            updateInstantNode(last.beforeNode);
-            if (last.errorId) {
-                removeInstantReviewError(last.errorId);
-            }
-            setCurrentReviewIndex(last.beforeIndex);
-            setRevealedChunks(0);
-            setCurrentVerseInReview(0);
-            setShowGrading(last.beforeNode.type !== 'verse_segment');
-        } else {
-            if (last.beforeProgress) {
-                saveListeningProgress(last.partId, last.beforeProgress.lastVerseIndex, last.beforeProgress.cycles, last.beforeUpdatedAt);
-            } else {
-                deleteListeningProgress(last.partId);
-            }
-            Object.entries(last.beforeStats).forEach(([surahIdStr, stats]) => {
-                const surahId = Number(surahIdStr);
-                if (!Number.isFinite(surahId)) return;
-                if (stats) {
-                    saveListeningStats(surahId, stats);
-                } else {
-                    deleteListeningStats(surahId);
+        setIsApplyingHistoryAction(true);
+        try {
+            if (last.kind === 'review') {
+                await updateInstantNode(last.beforeNode);
+                if (last.errorId) {
+                    await removeInstantReviewError(last.errorId);
                 }
-            });
-            setListeningComplete(last.beforeListeningComplete);
+                setCurrentReviewIndex(last.beforeIndex);
+                setRevealedChunks(0);
+                setCurrentVerseInReview(0);
+                setShowGrading(last.beforeNode.type !== 'verse_segment');
+            } else {
+                const writes: Promise<any>[] = [];
+                if (last.beforeProgress) {
+                    writes.push(saveListeningProgress(last.partId, last.beforeProgress.lastVerseIndex, last.beforeProgress.cycles, last.beforeUpdatedAt));
+                } else {
+                    writes.push(deleteListeningProgress(last.partId));
+                }
+                Object.entries(last.beforeStats).forEach(([surahIdStr, stats]) => {
+                    const surahId = Number(surahIdStr);
+                    if (!Number.isFinite(surahId)) return;
+                    if (stats) {
+                        writes.push(saveListeningStats(surahId, stats));
+                    } else {
+                        writes.push(deleteListeningStats(surahId));
+                    }
+                });
+                await Promise.all(writes);
+                setListeningComplete(last.beforeListeningComplete);
+            }
+        } catch (err) {
+            console.error('Failed to persist undo action', err);
+            addToast('error', 'Undo failed', 'Please try again.');
+            setIsApplyingHistoryAction(false);
+            return;
         }
+
+        persistUndoStack(nextStack);
+        persistRedoStack(nextRedo);
         if (source === 'toast' && toastId) {
             setToasts(prev => prev.filter(t => t.id !== toastId));
         }
         addToast(last.toastType, `Undid ${last.toastMessage}`, last.toastInfo);
-    }, [persistUndoStack, persistRedoStack, updateInstantNode, removeInstantReviewError, addToast, saveListeningProgress, deleteListeningProgress, saveListeningStats, deleteListeningStats]);
+        setIsApplyingHistoryAction(false);
+    }, [persistUndoStack, persistRedoStack, updateInstantNode, removeInstantReviewError, addToast, saveListeningProgress, deleteListeningProgress, saveListeningStats, deleteListeningStats, isApplyingHistoryAction]);
 
-    const handleRedo = useCallback((source: 'toast' | 'keyboard', toastId?: string) => {
+    const handleRedo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
+        if (isApplyingHistoryAction) return;
         const stack = redoStackRef.current;
         if (!stack.length) return;
         const last = stack[stack.length - 1];
         const nextStack = stack.slice(0, -1);
-        persistRedoStack(nextStack);
         const nextUndo = [...undoStackRef.current, last].slice(-UNDO_STACK_LIMIT);
-        persistUndoStack(nextUndo);
 
-        if (last.kind === 'review') {
-            updateInstantNode(last.afterNode);
-            if (last.errorPayload) {
-                saveInstantReviewError(last.errorPayload);
+        setIsApplyingHistoryAction(true);
+        try {
+            if (last.kind === 'review') {
+                await updateInstantNode(last.afterNode);
+                if (last.errorPayload) {
+                    await saveInstantReviewError(last.errorPayload);
+                }
+                setCurrentReviewIndex(last.afterIndex);
+                setRevealedChunks(0);
+                setCurrentVerseInReview(0);
+                setShowGrading(false);
+            } else {
+                const writes: Promise<any>[] = [
+                    saveListeningProgress(last.partId, last.afterProgress.lastVerseIndex, last.afterProgress.cycles, last.afterUpdatedAt)
+                ];
+                Object.entries(last.afterStats).forEach(([surahIdStr, stats]) => {
+                    const surahId = Number(surahIdStr);
+                    if (!Number.isFinite(surahId)) return;
+                    writes.push(saveListeningStats(surahId, stats));
+                });
+                await Promise.all(writes);
+                setListeningComplete(last.afterListeningComplete);
             }
-            setCurrentReviewIndex(last.afterIndex);
-            setRevealedChunks(0);
-            setCurrentVerseInReview(0);
-            setShowGrading(false);
-        } else {
-            saveListeningProgress(last.partId, last.afterProgress.lastVerseIndex, last.afterProgress.cycles, last.afterUpdatedAt);
-            Object.entries(last.afterStats).forEach(([surahIdStr, stats]) => {
-                const surahId = Number(surahIdStr);
-                if (!Number.isFinite(surahId)) return;
-                saveListeningStats(surahId, stats);
-            });
-            setListeningComplete(last.afterListeningComplete);
+        } catch (err) {
+            console.error('Failed to persist redo action', err);
+            addToast('error', 'Redo failed', 'Please try again.');
+            setIsApplyingHistoryAction(false);
+            return;
         }
+
+        persistRedoStack(nextStack);
+        persistUndoStack(nextUndo);
         if (source === 'toast' && toastId) {
             setToasts(prev => prev.filter(t => t.id !== toastId));
         }
         addToast(last.toastType, `Redid ${last.toastMessage}`, last.toastInfo);
-    }, [persistRedoStack, persistUndoStack, updateInstantNode, saveInstantReviewError, addToast, saveListeningProgress, saveListeningStats]);
+        setIsApplyingHistoryAction(false);
+    }, [persistRedoStack, persistUndoStack, updateInstantNode, saveInstantReviewError, addToast, saveListeningProgress, saveListeningStats, isApplyingHistoryAction]);
 
 
-    const handleCompleteListening = () => {
+    const handleCompleteListening = async () => {
         if (!settings) return;
+        if (isPersistingDailyComplete) return;
+        if (isApplyingHistoryAction) return;
 
         // Use InstantDB listening progress
         const partProgress = listeningProgress.find(p => p.partId === settings.activePart);
         const current = partProgress?.lastVerseIndex || 0;
         const totalInPart = portionData.totalVerses;
+        if (totalInPart <= 0) return;
+        setIsPersistingDailyComplete(true);
 
         let next = current + portionData.versesPerDay;
         let cycles = partProgress?.cycles || 0;
@@ -1130,13 +1193,12 @@ export default function TodayPage() {
         const afterProgress = { lastVerseIndex: next, cycles };
         const afterUpdatedAt = new Date().toISOString();
 
-        saveListeningProgress(settings.activePart, next, cycles, afterUpdatedAt);
-
         // Update stats for each surah in the portion
         const surahsInPortion = new Set(todaysPortion.map(v => v.surahId));
         const beforeStats: Record<number, any | null> = {};
         const afterStats: Record<number, any> = {};
         const nowIso = afterUpdatedAt;
+        const statsWrites: Promise<any>[] = [];
 
         surahsInPortion.forEach(surahId => {
             const existing = listeningStats.find(s => s.surahId === surahId);
@@ -1156,11 +1218,23 @@ export default function TodayPage() {
             const { id, userId, ...restNext } = nextStats as any;
             afterStats[surahId] = restNext;
 
-            saveListeningStats(surahId, {
+            statsWrites.push(saveListeningStats(surahId, {
                 ...restNext,
                 surahId
-            });
+            }));
         });
+
+        try {
+            await Promise.all([
+                saveListeningProgress(settings.activePart, next, cycles, afterUpdatedAt),
+                ...statsWrites
+            ]);
+        } catch (err) {
+            console.error('Failed to persist daily completion', err);
+            addToast('error', 'Failed to save completion', 'Please try again.');
+            setIsPersistingDailyComplete(false);
+            return;
+        }
 
         pushUndoEntry({
             kind: 'daily_complete',
@@ -1180,6 +1254,7 @@ export default function TodayPage() {
         });
 
         setListeningComplete(true);
+        setIsPersistingDailyComplete(false);
     };
 
     useEffect(() => {
@@ -1293,6 +1368,7 @@ export default function TodayPage() {
             // Check if we have any items to review
             const hasItems = orderedDueNodes.length > 0;
             if (!hasItems) return;
+            if (isPersistingReviewAction || isApplyingHistoryAction) return;
 
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -1337,7 +1413,7 @@ export default function TodayPage() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext, activeContent?.type, totalVerses, revealedChunks, totalChunks, currentVerseInReview]);
+    }, [orderedDueNodes, showGrading, handlePostpone, handleGrade, handleRevealNext, activeContent?.type, totalVerses, revealedChunks, totalChunks, currentVerseInReview, isPersistingReviewAction, isApplyingHistoryAction]);
 
     useEffect(() => {
         const container = targetBoxRef.current;
@@ -1526,9 +1602,14 @@ export default function TodayPage() {
             tldrawSnapshot: snapshot,
             isComplete: true // If we are editing and saving, we assume it's part of completion flow or just an update
         };
-        saveMindMap(surahId, newMindMap);
-        if (shouldClose) {
-            setActiveMindmapEditor(null);
+        try {
+            await saveMindMap(surahId, newMindMap);
+            if (shouldClose) {
+                setActiveMindmapEditor(null);
+            }
+        } catch (error) {
+            console.error('Failed to save mindmap editor changes', error);
+            throw error;
         }
     }, [activeMindmapEditor, mindmaps, saveMindMap]);
 
@@ -1545,9 +1626,14 @@ export default function TodayPage() {
             tldrawSnapshot: snapshot,
             isComplete: true
         };
-        savePartMindMap(partId, newMindMap);
-        if (shouldClose) {
-            setActivePartEditor(null);
+        try {
+            await savePartMindMap(partId, newMindMap);
+            if (shouldClose) {
+                setActivePartEditor(null);
+            }
+        } catch (error) {
+            console.error('Failed to save part mindmap editor changes', error);
+            throw error;
         }
     }, [activePartEditor, partMindMaps, savePartMindMap]);
 
@@ -1577,7 +1663,7 @@ export default function TodayPage() {
                     <button
                         className="today-header-btn"
                         onClick={() => handleUndo('keyboard')}
-                        disabled={undoStack.length === 0}
+                        disabled={undoStack.length === 0 || isApplyingHistoryAction}
                         title="Undo (⌘/Ctrl+Z)"
                         aria-label="Undo"
                     >
@@ -1608,7 +1694,7 @@ export default function TodayPage() {
                     <button
                         className="today-header-btn"
                         onClick={() => handleRedo('keyboard')}
-                        disabled={redoStack.length === 0}
+                        disabled={redoStack.length === 0 || isApplyingHistoryAction}
                         title="Redo (⌘/Ctrl+Shift+Z)"
                         aria-label="Redo"
                     >
@@ -1762,11 +1848,11 @@ export default function TodayPage() {
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
                                         <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                            <button className="review-btn postpone std-normal-btn" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={handlePostpone}>
+                                            <button className="review-btn postpone std-normal-btn" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={handlePostpone} disabled={isPersistingReviewAction}>
                                                 <span style={{ fontSize: '0.85rem' }}>Not sure</span>
                                                 <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
                                             </button>
-                                            <button className="review-btn not-remembered std-normal-btn" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)}>
+                                            <button className="review-btn not-remembered std-normal-btn" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }} onClick={() => handleGrade(false)} disabled={isPersistingReviewAction}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Not remembered</span></div>
                                                 <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                                                     Next: {(() => {
@@ -1789,6 +1875,7 @@ export default function TodayPage() {
                                                         handleRevealNext();
                                                     }
                                                 }}
+                                                disabled={isPersistingReviewAction}
                                             >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Reveal / Good</span></div>
                                                 <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
@@ -1845,6 +1932,7 @@ export default function TodayPage() {
                                                         className="review-btn postpone std-normal-btn"
                                                         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
                                                         onClick={handlePostpone}
+                                                        disabled={isPersistingReviewAction}
                                                     >
                                                         <span style={{ fontSize: '0.85rem' }}>Not sure</span>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
@@ -1853,6 +1941,7 @@ export default function TodayPage() {
                                                         className="review-btn not-remembered std-normal-btn"
                                                         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
                                                         onClick={() => handleGrade(false)}
+                                                        disabled={isPersistingReviewAction}
                                                     >
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
@@ -1866,6 +1955,7 @@ export default function TodayPage() {
                                                         className="review-btn remembered std-normal-btn"
                                                         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
                                                         onClick={() => handleGrade(true)}
+                                                        disabled={isPersistingReviewAction}
                                                     >
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
                                                         <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
@@ -1993,7 +2083,9 @@ export default function TodayPage() {
                                     </div>
 
                                     <div className="today-card-footer">
-                                        <button className="btn btn-success btn-full std-normal-btn" onClick={handleCompleteListening}><Check size={20} /> Complete</button>
+                                        <button className="btn btn-success btn-full std-normal-btn" onClick={handleCompleteListening} disabled={isPersistingDailyComplete || isApplyingHistoryAction}>
+                                            <Check size={20} /> {isPersistingDailyComplete ? 'Saving...' : 'Complete'}
+                                        </button>
                                     </div>
                                 </>
                             )}

@@ -19,6 +19,11 @@ const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     kanbanColumns: {},
 };
 
+const stableEntityId = (...parts: Array<string | number>) =>
+    parts
+        .map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_'))
+        .join('__');
+
 // ==========================================
 // Settings Hook
 // ==========================================
@@ -34,7 +39,16 @@ export function useInstantSettings() {
         },
     });
 
-    const settingsEntry = data?.settings?.[0];
+    const settingsEntry = useMemo(() => {
+        const entries = (data?.settings || []) as any[];
+        if (entries.length === 0) return undefined;
+        if (entries.length === 1) return entries[0];
+        return [...entries].sort((a, b) => {
+            const aTs = Date.parse(a?.lastSyncedAt || a?.updatedAt || '');
+            const bTs = Date.parse(b?.lastSyncedAt || b?.updatedAt || '');
+            return (Number.isFinite(bTs) ? bTs : 0) - (Number.isFinite(aTs) ? aTs : 0);
+        })[0];
+    }, [data?.settings]);
 
     const currentSettings = useMemo(() => {
         const base = {
@@ -56,7 +70,7 @@ export function useInstantSettings() {
                 lastSyncedAt: syncedAt
             }));
         } else {
-            const settingsId = id();
+            const settingsId = stableEntityId('settings', user.id);
             await db.transact(db.tx.settings[settingsId].update({
                 ...DEFAULT_SETTINGS_BASE,
                 ...newSettings,
@@ -203,7 +217,7 @@ export function useInstantMindMaps() {
     const saveMindMap = (surahId: number, mapData: Partial<MindMap>) => {
         if (!user) return Promise.resolve();
         const existing = mindmaps.find(m => Number((m as any).surahId) === surahId);
-        const mapId = existing ? (existing as any).id : id();
+        const mapId = existing ? (existing as any).id : stableEntityId('mindmap', user.id, surahId);
 
         // Merge existing data with new data to preserve fields like anchors
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
@@ -227,7 +241,7 @@ export function useInstantMindMaps() {
     const savePartMindMap = (partId: number, mapData: any) => {
         if (!user) return Promise.resolve();
         const existing = partMindMaps.find(m => Number((m as any).partId) === partId);
-        const mapId = existing ? existing.id : id();
+        const mapId = existing ? existing.id : stableEntityId('part_mindmap', user.id, partId);
 
         // Merge existing data with new data to preserve all fields
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
@@ -283,7 +297,7 @@ export function useInstantListeningStats() {
     const saveStats = (surahId: number, newStats: any) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
-        const statsId = existing ? existing.id : id();
+        const statsId = existing ? existing.id : stableEntityId('listening_stats', user.id, surahId);
 
         return db.transact(db.tx.listeningStats[statsId].update({
             ...newStats,
@@ -318,7 +332,7 @@ export function useInstantListeningProgress() {
     const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
-        const progressId = existing ? existing.id : id();
+        const progressId = existing ? existing.id : stableEntityId('listening_progress', user.id, partId);
 
         return db.transact(db.tx.listeningProgress[progressId].update({
             partId,
@@ -355,7 +369,7 @@ export function useInstantMutashabihat() {
     const saveDecision = (phraseId: string, update: any) => {
         if (!user) return Promise.resolve();
         const existing = decisions.find(d => d.phraseId === phraseId);
-        const decisionId = existing ? existing.id : id();
+        const decisionId = existing ? existing.id : stableEntityId('mut_decision', user.id, phraseId);
 
         return db.transact(db.tx.mutashabihatDecisions[decisionId].update({
             ...update,

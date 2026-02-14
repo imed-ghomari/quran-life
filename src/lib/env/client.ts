@@ -24,5 +24,5 @@ export const clientEnv = {
       : process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID_SANDBOX) ??
     process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID ??
     '',
-  NEXT_PUBLIC_INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? 'pr-quran-life',
+  NEXT_PUBLIC_INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? '',
 } as const;
