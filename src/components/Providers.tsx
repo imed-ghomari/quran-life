@@ -113,10 +113,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, [user?.id, user?.email, (user as { refresh_token?: string | null } | null)?.refresh_token]);
 
+  // Only block UI when the signed-in subject changes, not when tokens rotate.
   const authIdentityKey = useMemo(() => {
     if (!authIdentity) return "anon";
-    return `${authIdentity.id}:${authIdentity.email ?? ""}:${authIdentity.refresh_token ?? ""}`;
-  }, [authIdentity]);
+    return `${authIdentity.id}:${authIdentity.type ?? "user"}:${authIdentity.isGuest ? "guest" : "member"}`;
+  }, [authIdentity?.id, authIdentity?.type, authIdentity?.isGuest]);
   const lastResolvedIdentityRef = useRef<string>("boot");
 
   useEffect(() => {
