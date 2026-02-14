@@ -29,7 +29,10 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v9-next-pwa-rsc";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v10-next-pwa-navfix";
+const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
+const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
+const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
 const OFFLINE_WARMUP_KEY = `offline:warmup:${SW_MIGRATION_KEY}`;
 const OFFLINE_WARMUP_TASKS = [
   { label: "Dashboard", route: "/dashboard" },
@@ -50,6 +53,30 @@ const SW_CACHE_PREFIXES_TO_CLEAR = [
   "audio-runtime",
   "offline-content-",
 ];
+
+type AccessStateCache = {
+  identityKey: string;
+  cachedAt: number;
+  state: Omit<AccessState, "isSubscriptionLoading">;
+};
+
+function readAccessStateCache(): AccessStateCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(ACCESS_STATE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AccessStateCache;
+    if (!parsed || typeof parsed !== "object") return null;
+    const cachedAt = Number(parsed.cachedAt ?? 0);
+    if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > ACCESS_STATE_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(ACCESS_STATE_CACHE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 function OnboardingWrapper() {
   const pathname = usePathname();
@@ -81,16 +108,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
     typeof navigator === "undefined" ? true : navigator.onLine
   );
   const { user, isLoading: isAuthLoading } = db.useAuth();
-  const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
-  const [accessState, setAccessState] = useState<Omit<AccessState, "isSubscriptionLoading">>({
-    isAuthenticated: false,
-    hasActiveSubscription: false,
-    isPaymentBypass: false,
-    hasPremiumAccess: false,
-    isEditor: false,
+  const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === "1";
   });
-  const [isAccessLoading, setIsAccessLoading] = useState(true);
-  const [hasLoadedAccessState, setHasLoadedAccessState] = useState(false);
+  const [cachedAccessState] = useState<AccessStateCache | null>(() => readAccessStateCache());
+  const [accessState, setAccessState] = useState<Omit<AccessState, "isSubscriptionLoading">>(() => (
+    cachedAccessState?.state ?? {
+      isAuthenticated: false,
+      hasActiveSubscription: false,
+      isPaymentBypass: false,
+      hasPremiumAccess: false,
+      isEditor: false,
+    }
+  ));
+  const [isAccessLoading, setIsAccessLoading] = useState(() => !cachedAccessState);
+  const [hasLoadedAccessState, setHasLoadedAccessState] = useState(() => Boolean(cachedAccessState));
   const [isPwaStandalone, setIsPwaStandalone] = useState(false);
   const [showOfflineWarmup, setShowOfflineWarmup] = useState(false);
   const [warmupStatus, setWarmupStatus] = useState({
@@ -120,6 +153,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return `${authIdentity.id}:${authIdentity.type ?? "user"}:${authIdentity.isGuest ? "guest" : "member"}`;
   }, [authIdentity?.id, authIdentity?.type, authIdentity?.isGuest]);
   const lastResolvedIdentityRef = useRef<string>("boot");
+
+  useEffect(() => {
+    if (!cachedAccessState) return;
+    if (cachedAccessState.identityKey === authIdentityKey) {
+      setAccessState(cachedAccessState.state);
+      setHasLoadedAccessState(true);
+      setIsAccessLoading(false);
+      lastResolvedIdentityRef.current = authIdentityKey;
+      return;
+    }
+    setHasLoadedAccessState(false);
+    setIsAccessLoading(true);
+  }, [authIdentityKey, cachedAccessState]);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -184,6 +230,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
           hasPremiumAccess: Boolean(data?.hasPremiumAccess),
           isEditor: Boolean(data?.isEditor),
         });
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(
+            ACCESS_STATE_CACHE_KEY,
+            JSON.stringify({
+              identityKey: authIdentityKey,
+              cachedAt: Date.now(),
+              state: {
+                isAuthenticated: Boolean(data?.isAuthenticated),
+                hasActiveSubscription: Boolean(data?.hasActiveSubscription),
+                isPaymentBypass: Boolean(data?.isPaymentBypass),
+                hasPremiumAccess: Boolean(data?.hasPremiumAccess),
+                isEditor: Boolean(data?.isEditor),
+              },
+            } satisfies AccessStateCache)
+          );
+        }
         lastResolvedIdentityRef.current = authIdentityKey;
       } catch {
         // Non-blocking: auth and local UI can still function if this check fails.
@@ -201,6 +263,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthLoading) {
       setHasResolvedAuthOnce(true);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(AUTH_RESOLVED_ONCE_KEY, "1");
+      }
     }
   }, [isAuthLoading]);
 

@@ -14,6 +14,7 @@ const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
 const FORCE_OFFLINE_OPEN_TTL_MS = 20 * 1000;
 const SIGNING_OUT_KEY = 'auth:signingOut';
 const POST_SIGN_OUT_UNTIL_KEY = 'auth:postSignOutUntil';
+const AUTH_RESOLVED_ONCE_KEY = 'auth:resolvedOnce';
 
 function hasValidOfflineAccessMarker() {
   if (typeof window === 'undefined') return false;
@@ -40,7 +41,10 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isOnline = useContext(OnlineStatusContext);
   const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
-  const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
+  const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.sessionStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === '1';
+  });
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
   const [hasOfflineAccess, setHasOfflineAccess] = useState(() => hasValidOfflineAccessMarker());
@@ -114,6 +118,9 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (!isAuthLoading) {
       setHasResolvedAuthOnce(true);
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(AUTH_RESOLVED_ONCE_KEY, '1');
+      }
     }
   }, [isAuthLoading]);
 
@@ -177,7 +184,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   const needsCheckoutDecision =
     !hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout;
-  const shouldBlockOnCheckoutDecision = !shouldTreatAsOffline && needsCheckoutDecision;
+  const shouldBlockOnCheckoutDecision = !shouldTreatAsOffline && needsCheckoutDecision && !hasResolvedAuthOnce;
   const shouldBlockOnSubscriptionLoad = !shouldTreatAsOffline && isSubscriptionLoading;
   const isRedirecting =
     !shouldTreatAsOffline
