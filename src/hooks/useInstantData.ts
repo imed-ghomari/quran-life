@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
@@ -82,6 +82,7 @@ export function useInstantSettings() {
 // ==========================================
 export function useInstantNodes() {
     const { user } = db.useAuth();
+    const [dueNowMs, setDueNowMs] = useState(() => Date.now());
 
     const { isLoading, error, data } = db.useQuery({
         memoryNodes: {
@@ -107,13 +108,53 @@ export function useInstantNodes() {
         void db.transact(tx);
     }, [user, transitionIds]);
 
+    useEffect(() => {
+        let timeoutId: number | null = null;
+
+        const scheduleAdaptiveRefresh = () => {
+            const now = Date.now();
+            let nextWakeMs = Number.POSITIVE_INFINITY;
+
+            // Find the nearest future due with time precision.
+            for (const node of nodes) {
+                const dueString = (node.scheduler as any)?.due || (node.scheduler as any)?.dueDate;
+                if (!dueString || !dueString.includes('T')) continue;
+                const dueMs = new Date(dueString).getTime();
+                if (!Number.isFinite(dueMs) || dueMs <= now) continue;
+                if (dueMs < nextWakeMs) nextWakeMs = dueMs;
+            }
+
+            // Always wake at local day rollover for date-based due cards.
+            const nextMidnight = new Date();
+            nextMidnight.setHours(24, 0, 0, 0);
+            nextWakeMs = Math.min(nextWakeMs, nextMidnight.getTime());
+
+            const delay = Math.max(1000, nextWakeMs - now + 250);
+            timeoutId = window.setTimeout(() => {
+                setDueNowMs(Date.now());
+            }, delay);
+        };
+
+        const refreshDueClock = () => setDueNowMs(Date.now());
+        window.addEventListener('focus', refreshDueClock);
+        document.addEventListener('visibilitychange', refreshDueClock);
+        scheduleAdaptiveRefresh();
+
+        return () => {
+            if (timeoutId !== null) window.clearTimeout(timeoutId);
+            window.removeEventListener('focus', refreshDueClock);
+            document.removeEventListener('visibilitychange', refreshDueClock);
+        };
+    }, [nodes, dueNowMs]);
+
     const dueNodes = useMemo(() => nodes.filter(node => {
         if (!node.scheduler) return false;
         const dueString = (node.scheduler as any).due || (node.scheduler as any).dueDate;
         if (!dueString) return true;
         const due = new Date(dueString);
-        return due <= new Date();
-    }), [nodes]);
+        if (Number.isNaN(due.getTime())) return false;
+        return due.getTime() <= dueNowMs;
+    }), [nodes, dueNowMs]);
 
     const saveNode = (node: MemoryNode) => {
         if (!user) return Promise.resolve();

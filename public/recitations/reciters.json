@@ -21,13 +21,6 @@
     "hasSegments": true
   },
   {
-    "id": "surah-recitation-abdur-rahman-as-sudais",
-    "name": "Abdur Rahman As Sudais",
-    "type": "surah-based",
-    "relativePath": "/recitations/surah-recitation-abdur-rahman-as-sudais",
-    "hasSegments": true
-  },
-  {
     "id": "ayah-recitation-abu-bakr-al-shatri-murattal-hafs-952",
     "name": "Abu Bakr Al Shatri Murattal",
     "type": "ayah-based",

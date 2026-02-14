@@ -117,6 +117,38 @@ export default function TodayPage() {
 
         const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
+        const typeRank: Record<string, number> = {
+            part_mindmap: 0,
+            mindmap: 1,
+            verse_segment: 2
+        };
+        const compareNodeIdentity = (a: MemoryNode, b: MemoryNode) => {
+            const aType = typeRank[a.type] ?? 99;
+            const bType = typeRank[b.type] ?? 99;
+            if (aType !== bType) return aType - bType;
+
+            const aPart = a.partId ?? 0;
+            const bPart = b.partId ?? 0;
+            if (aPart !== bPart) return aPart - bPart;
+
+            const aSurah = a.surahId ?? 0;
+            const bSurah = b.surahId ?? 0;
+            if (aSurah !== bSurah) return aSurah - bSurah;
+
+            const aStart = a.startVerse ?? 0;
+            const bStart = b.startVerse ?? 0;
+            if (aStart !== bStart) return aStart - bStart;
+
+            const aEnd = a.endVerse ?? 0;
+            const bEnd = b.endVerse ?? 0;
+            if (aEnd !== bEnd) return aEnd - bEnd;
+
+            const aTarget = a.targetId ?? '';
+            const bTarget = b.targetId ?? '';
+            if (aTarget !== bTarget) return aTarget.localeCompare(bTarget);
+
+            return a.id.localeCompare(b.id);
+        };
 
         const filteredDueNodes = hasKanbanState
             ? dueNodes.filter(node => {
@@ -147,8 +179,6 @@ export default function TodayPage() {
         if (!filteredDueNodes.length) return [];
 
         const reviewSortOrder = settings?.reviewSortOrder ?? 'surah_grouped';
-        const originalIndex = new Map<string, number>();
-        filteredDueNodes.forEach((n, idx) => originalIndex.set(n.id, idx));
 
         if (reviewSortOrder === 'due_date') {
             return [...filteredDueNodes].sort((a, b) => {
@@ -157,21 +187,13 @@ export default function TodayPage() {
                 const aTime = aDue ? new Date(aDue).getTime() : 0;
                 const bTime = bDue ? new Date(bDue).getTime() : 0;
                 if (aTime !== bTime) return aTime - bTime;
-                return (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0);
+                return compareNodeIdentity(a, b);
             });
         }
 
         if (reviewSortOrder === 'type_grouped') {
-            const typeRank: Record<string, number> = {
-                part_mindmap: 0,
-                mindmap: 1,
-                verse_segment: 2
-            };
             return [...filteredDueNodes].sort((a, b) => {
-                const aRank = typeRank[a.type] ?? 99;
-                const bRank = typeRank[b.type] ?? 99;
-                if (aRank !== bRank) return aRank - bRank;
-                return (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0);
+                return compareNodeIdentity(a, b);
             });
         }
 
@@ -210,13 +232,13 @@ export default function TodayPage() {
             if (group.mindmap) ordered.push(group.mindmap);
             if (group.fullSurah) ordered.push(group.fullSurah);
             if (group.others.length) {
-                group.others.sort((a, b) => (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0));
+                group.others.sort((a, b) => compareNodeIdentity(a, b));
                 ordered.push(...group.others);
             }
         });
 
         if (otherNodes.length) {
-            otherNodes.sort((a, b) => (originalIndex.get(a.id) ?? 0) - (originalIndex.get(b.id) ?? 0));
+            otherNodes.sort((a, b) => compareNodeIdentity(a, b));
             ordered.push(...otherNodes);
         }
 

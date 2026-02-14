@@ -8,14 +8,25 @@ const injectedManifest = self.__SW_MANIFEST as
   | Array<string | { url: string; revision?: string | null }>
   | undefined;
 
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v10";
 const PRECACHE_NAME = `precache-${CACHE_VERSION}`;
 const PAGES_CACHE = `pages-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DATA_CACHE = `data-${CACHE_VERSION}`;
 const OFFLINE_CONTENT_CACHE = `offline-content-${CACHE_VERSION}`;
 
-const PRECACHE_REQUIRED = ["/", "/auth", "/dashboard", "/offline-app", "/offline", "/manifest.json"];
+const PRECACHE_REQUIRED = [
+  "/",
+  "/auth",
+  "/dashboard",
+  "/todo",
+  "/statistics",
+  "/settings",
+  "/docs",
+  "/offline-app",
+  "/offline",
+  "/manifest.json",
+];
 
 const OLD_CACHE_PREFIXES = [
   "pages-v2",
@@ -42,6 +53,14 @@ const OLD_CACHE_PREFIXES = [
   "static-v7",
   "data-v7",
   "offline-content-v7",
+  "pages-v8",
+  "static-v8",
+  "data-v8",
+  "offline-content-v8",
+  "pages-v9",
+  "static-v9",
+  "data-v9",
+  "offline-content-v9",
 ];
 
 const toManifestUrl = (entry: string | { url: string }) =>
