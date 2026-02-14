@@ -24,6 +24,25 @@ const stableEntityId = (...parts: Array<string | number>) =>
         .map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_'))
         .join('__');
 
+const memoryNodeLogicalKey = (node: MemoryNode) => {
+    if (node.type === 'mindmap') return stableEntityId('memory_node', 'mindmap', node.surahId ?? 'na');
+    if (node.type === 'part_mindmap') return stableEntityId('memory_node', 'part_mindmap', node.partId ?? 'na');
+    if (node.type === 'verse_segment') return stableEntityId('memory_node', 'verse_segment', node.surahId ?? 'na', node.startVerse ?? 'na', node.endVerse ?? 'na');
+    return stableEntityId('memory_node', 'id', node.id);
+};
+
+const getNodeFreshnessScore = (node: MemoryNode) => {
+    const scheduler = (node.scheduler as any) || {};
+    const lastReview = scheduler.last_review ? Date.parse(String(scheduler.last_review)) : NaN;
+    if (Number.isFinite(lastReview)) return lastReview;
+    const due = scheduler.due || scheduler.dueDate;
+    const dueMs = due ? Date.parse(String(due)) : NaN;
+    if (Number.isFinite(dueMs)) return dueMs;
+    const createdAt = node.createdAt ? Date.parse(String(node.createdAt)) : NaN;
+    if (Number.isFinite(createdAt)) return createdAt;
+    return 0;
+};
+
 // ==========================================
 // Settings Hook
 // ==========================================
@@ -111,6 +130,29 @@ export function useInstantNodes() {
         return raw.filter(node => (node as any).type !== 'transition');
     }, [data?.memoryNodes]);
 
+    const canonicalNodes = useMemo(() => {
+        const byKey = new Map<string, MemoryNode>();
+        for (const node of nodes) {
+            const key = memoryNodeLogicalKey(node);
+            const existing = byKey.get(key);
+            if (!existing) {
+                byKey.set(key, node);
+                continue;
+            }
+
+            const nodeScore = getNodeFreshnessScore(node);
+            const existingScore = getNodeFreshnessScore(existing);
+            if (nodeScore > existingScore) {
+                byKey.set(key, node);
+                continue;
+            }
+            if (nodeScore === existingScore && node.id > existing.id) {
+                byKey.set(key, node);
+            }
+        }
+        return Array.from(byKey.values());
+    }, [nodes]);
+
     const transitionIds = useMemo(() => {
         const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
         return raw.filter(node => (node as any).type === 'transition').map(node => node.id);
@@ -161,7 +203,7 @@ export function useInstantNodes() {
         };
     }, [nodes, dueNowMs]);
 
-    const dueNodes = useMemo(() => nodes.filter(node => {
+    const dueNodes = useMemo(() => canonicalNodes.filter(node => {
         if (!node.scheduler) return false;
         const dueString = (node.scheduler as any).due || (node.scheduler as any).dueDate;
         if (!dueString) return true;
@@ -175,7 +217,7 @@ export function useInstantNodes() {
         const due = new Date(dueString);
         if (Number.isNaN(due.getTime())) return false;
         return due.getTime() <= dueNowMs;
-    }), [nodes, dueNowMs]);
+    }), [canonicalNodes, dueNowMs]);
 
     const saveNode = (node: MemoryNode) => {
         if (!user) return Promise.resolve();
@@ -191,13 +233,13 @@ export function useInstantNodes() {
     };
 
     return useMemo(() => ({
-        nodes,
+        nodes: canonicalNodes,
         dueNodes,
         saveNode,
         deleteNode,
         isLoading,
         error
-    }), [nodes, dueNodes, isLoading, error]);
+    }), [canonicalNodes, dueNodes, isLoading, error]);
 }
 
 // ==========================================
