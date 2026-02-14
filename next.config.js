@@ -2,7 +2,9 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     dest: 'public',
     register: true,
     disable: process.env.NODE_ENV === 'development',
-    cacheOnFrontEndNav: true,
+    // Avoid forcing navigation caching on App Router transitions.
+    // This can make client transitions behave like fresh page loads.
+    cacheOnFrontEndNav: false,
     reloadOnOnline: false,
     dynamicStartUrl: true,
     dynamicStartUrlRedirect: '/auth',
