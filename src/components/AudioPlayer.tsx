@@ -69,8 +69,7 @@ export default function AudioPlayer({
     // Initialize reciters list once.
     useEffect(() => {
         getReciters().then(list => {
-            const filtered = list.filter(r => r.hasSegments);
-            setReciters(filtered);
+            setReciters(list);
         });
     }, []);
 
