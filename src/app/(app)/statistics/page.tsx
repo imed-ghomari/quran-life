@@ -671,6 +671,8 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 }
 
 function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number; maxDay: number }) {
+    const MAX_X_AXIS_LEGENDS = 6;
+    const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
     const gradientSeed = useId();
@@ -683,7 +685,9 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
     const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
     const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
     const maxNice = Math.max(1, tickStep * tickCount);
-    const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
+    const allYTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
+    const yLegendStep = Math.max(1, Math.ceil((allYTicks.length - 1) / Math.max(1, MAX_Y_AXIS_LEGENDS - 1)));
+    const yTicks = allYTicks.filter((_, i) => i % yLegendStep === 0 || i === allYTicks.length - 1);
     const ids = {
         bar: `reviews-bar-${gradientSeed}`,
         clip: `reviews-chart-clip-${gradientSeed}`,
@@ -729,7 +733,7 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                         const step = groupWidth / span;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
-                        const labelStep = Math.max(1, Math.ceil(nonZeroData.length / 6));
+                        const labelStep = Math.max(1, Math.ceil(nonZeroData.length / MAX_X_AXIS_LEGENDS));
                         const formatDayLabel = (day: number) => {
                             if (day === 0) return 'Today';
                             if (day === 1) return '1d';

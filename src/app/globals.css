@@ -1130,6 +1130,15 @@ h3 {
   padding-bottom: 1rem;
 }
 
+.review-section-content .today-card-content--mindmap-grading {
+  /* Reserve enough room for the sticky grading row so quick actions stay fully visible */
+  padding-bottom: 9.5rem;
+}
+
+.review-section-content .today-card-content--mindmap-grading .mindmap-quick-actions {
+  margin-bottom: 0;
+}
+
 /* Daily: keep player fixed, only verse preview scrolls */
 .daily-section-content .today-card-content {
   overflow: hidden;

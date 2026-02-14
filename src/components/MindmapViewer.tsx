@@ -363,7 +363,10 @@ export default function MindmapViewer({
 
             {isFullScreen && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--background)] shadow-sm">
+                    <div
+                        className="mindmap-editor-header flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
+                        style={{ height: '50px', padding: '0 1rem' }}
+                    >
                         <h3 className="font-bold text-lg text-[var(--foreground)]">{title || "Mindmap Viewer"}</h3>
                         <button 
                             onClick={() => setIsFullScreen(false)}
