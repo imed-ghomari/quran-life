@@ -53,15 +53,15 @@ interface TodoKanbanProps {
     isDark: boolean;
 
     // Callbacks
-    onFixConfirm: (surahId: number, anchorId: string) => void;
-    onSimilarityDecision: (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm?: boolean) => void;
-    onPartComplete: (part: QuranPart, forceState?: boolean) => void;
-    onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => void;
-    onImportPremade: (type: 'surah' | 'part', id: number) => void;
-    onExportPremade?: (type: 'surah' | 'part', id: number) => void;
-    onResetMindmap?: (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => void;
-    onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => void;
-    onDeleteMindmap?: (type: 'surah' | 'part', id: number) => void;
+    onFixConfirm: (surahId: number, anchorId: string) => Promise<void> | void;
+    onSimilarityDecision: (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm?: boolean) => Promise<void> | void;
+    onPartComplete: (part: QuranPart, forceState?: boolean) => Promise<void> | void;
+    onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => Promise<void> | void;
+    onImportPremade: (type: 'surah' | 'part', id: number) => Promise<void> | void;
+    onExportPremade?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
+    onResetMindmap?: (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => Promise<void> | void;
+    onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => Promise<void> | void;
+    onDeleteMindmap?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     appMode: 'owner' | 'user';
     getHasPremade?: (type: 'surah' | 'part', id: number) => boolean;
     mutashabihatDecisions?: any[];
@@ -76,7 +76,7 @@ interface TodoKanbanProps {
 
     // Persistence
     kanbanState?: Record<string, string[]>;
-    onKanbanStateChange?: (state: Record<string, string[]>) => void;
+    onKanbanStateChange?: (state: Record<string, string[]>) => Promise<void> | void;
     defaultFilter?: 'all' | 'maintenance' | 'construction';
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
     kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
@@ -154,6 +154,7 @@ export default function TodoKanban({
     const removalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
     const pendingToastIdsRef = useRef<Map<string, string>>(new Map());
     const [hiddenItemIds, setHiddenItemIds] = useState<Set<string>>(new Set());
+    const persistMoveSeqRef = useRef(0);
 
     const addToast = useCallback((type: TodoToastType, message: string, info?: string, onUndo?: () => void, onExpire?: () => void) => {
         const key = `${type}|${message}|${info || ''}`;
@@ -170,6 +171,23 @@ export default function TodoKanban({
         }, 6000);
         return id;
     }, []);
+
+    const persistKanbanState = useCallback((
+        nextState: Record<string, string[]>,
+        options?: {
+            rollbackColumns?: Record<string, KanbanColumnData>;
+            seq?: number;
+        }
+    ) => {
+        if (!onKanbanStateChange) return;
+        void Promise.resolve(onKanbanStateChange(nextState)).catch((err) => {
+            console.error('Failed to persist kanban board state', err);
+            if (options?.rollbackColumns && options?.seq && persistMoveSeqRef.current === options.seq) {
+                setColumns(options.rollbackColumns);
+            }
+            addToast('surah', 'Failed to save board change', options?.rollbackColumns ? 'Change was reverted.' : 'Please try again.');
+        });
+    }, [onKanbanStateChange, addToast]);
 
     const getMindmapCompletionInfo = useCallback((item: KanbanItem): string => {
         if (item.type === 'part') {
@@ -263,6 +281,10 @@ export default function TodoKanban({
     const lastRemovalRef = useRef<{ itemId: string; at: number } | null>(null);
 
     const restoreItemToColumn = useCallback((item: KanbanItem, colId: string, index: number) => {
+        const persistSeq = ++persistMoveSeqRef.current;
+        let nextStateToPersist: Record<string, string[]> | null = null;
+        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
+
         setColumns(prev => {
             const next: Record<string, KanbanColumnData> = { ...prev };
             Object.values(next).forEach(col => {
@@ -277,12 +299,16 @@ export default function TodoKanban({
                 Object.values(next).forEach(col => {
                     state[col.id] = col.items.map(i => i.id);
                 });
-                setTimeout(() => onKanbanStateChange(state), 0);
+                nextStateToPersist = state;
+                rollbackColumns = prev;
             }
 
             return { ...next };
         });
-    }, [onKanbanStateChange]);
+        if (nextStateToPersist) {
+            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
+        }
+    }, [onKanbanStateChange, persistKanbanState]);
 
     const clearPendingRemoval = useCallback((itemId: string) => {
         const timer = removalTimersRef.current.get(itemId);
@@ -303,6 +329,10 @@ export default function TodoKanban({
             next.add(item.id);
             return next;
         });
+        const persistSeq = ++persistMoveSeqRef.current;
+        let nextStateToPersist: Record<string, string[]> | null = null;
+        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
+
         setColumns(prev => {
             const next: Record<string, KanbanColumnData> = { ...prev };
             Object.values(next).forEach(col => {
@@ -313,11 +343,15 @@ export default function TodoKanban({
                 Object.values(next).forEach(col => {
                     state[col.id] = col.items.map(i => i.id);
                 });
-                setTimeout(() => onKanbanStateChange(state), 0);
+                nextStateToPersist = state;
+                rollbackColumns = prev;
             }
             return { ...next };
         });
-    }, [onKanbanStateChange]);
+        if (nextStateToPersist) {
+            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
+        }
+    }, [onKanbanStateChange, persistKanbanState]);
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -521,10 +555,10 @@ export default function TodoKanban({
 
     }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, hiddenItemIds, kanbanSortOrder]);
 
-    const handleCompletionTrigger = useCallback((item: KanbanItem, forceState?: boolean) => {
+    const handleCompletionTrigger = useCallback(async (item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
             if (item.data?.isDummy) return;
-            onFixConfirm(item.data.surahId, item.data.anchorId);
+            await onFixConfirm(item.data.surahId, item.data.anchorId);
         } else if (item.type === 'similarity') {
             if (item.data?.isDummy) return;
             const group = item.data;
@@ -534,9 +568,9 @@ export default function TodoKanban({
                 });
             });
         } else if (item.type === 'part') {
-            onPartComplete(item.data.part, forceState);
+            await onPartComplete(item.data.part, forceState);
         } else if (item.type === 'surah') {
-            onSurahComplete(item.data.surah.id, item.data.mindmap, forceState);
+            await onSurahComplete(item.data.surah.id, item.data.mindmap, forceState);
         }
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
@@ -565,6 +599,10 @@ export default function TodoKanban({
         const { source, destination, draggableId } = result;
 
         if (!destination) return;
+
+        const persistSeq = ++persistMoveSeqRef.current;
+        let nextStateToPersist: Record<string, string[]> | null = null;
+        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
 
         setColumns(prev => {
             const sourceCol = prev[source.droppableId];
@@ -636,24 +674,31 @@ export default function TodoKanban({
                 Object.values(newColsMap).forEach(col => {
                     state[col.id] = col.items.map(i => i.id);
                 });
-                // Wrap in timeout to prevent "Cannot update a component while rendering a different component"
-                setTimeout(() => {
-                    onKanbanStateChange(state);
-                }, 0);
+                nextStateToPersist = state;
+                rollbackColumns = prev;
             }
 
             if (destination.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
                     if (movedItem.status !== 'complete') {
-                        handleCompletionTrigger(movedItem, true);
+                        void handleCompletionTrigger(movedItem, true).catch((err) => {
+                            console.error('Failed to persist completion trigger', err);
+                            addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                        });
                         addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                     }
                 } else if (source.droppableId !== 'complete') {
-                    handleCompletionTrigger(movedItem);
+                    void handleCompletionTrigger(movedItem).catch((err) => {
+                        console.error('Failed to persist completion trigger', err);
+                        addToast(movedItem.type === 'similarity' ? 'similarity' : 'suspended', 'Failed to save completion', 'Please try again.');
+                    });
                 }
             } else if (source.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
-                    handleCompletionTrigger(movedItem, false);
+                    void handleCompletionTrigger(movedItem, false).catch((err) => {
+                        console.error('Failed to persist completion trigger', err);
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                    });
                     if (hasMindmapForItem(movedItem)) {
                         addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
                     }
@@ -722,46 +767,50 @@ export default function TodoKanban({
 
             return newColsMap;
         });
-    }, [onKanbanStateChange, handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, hasMindmapForItem, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval, filteredItem]);
+
+        if (nextStateToPersist) {
+            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
+        }
+    }, [handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, hasMindmapForItem, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval, filteredItem, persistKanbanState]);
 
     // Card Action Handlers
-    const handleCardEditMindmap = useCallback((item: KanbanItem) => {
+    const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
         if (item.type === 'surah') {
-            onEditMindmap(item.data.surah.id, item.data.mindmap?.tldrawSnapshot, false);
+            await onEditMindmap(item.data.surah.id, item.data.mindmap?.tldrawSnapshot, false);
         } else if (item.type === 'part') {
-            onEditMindmap(item.data.part, item.data.mindmap?.tldrawSnapshot, true);
+            await onEditMindmap(item.data.part, item.data.mindmap?.tldrawSnapshot, true);
         } else if (item.type === 'suspended') {
-            onEditMindmap(item.data.surahId, mindmaps[item.data.surahId]?.tldrawSnapshot, false);
+            await onEditMindmap(item.data.surahId, mindmaps[item.data.surahId]?.tldrawSnapshot, false);
         } else if (item.type === 'similarity') {
-            onEditMindmap(item.data.surah.id, mindmaps[item.data.surah.id]?.tldrawSnapshot, false);
+            await onEditMindmap(item.data.surah.id, mindmaps[item.data.surah.id]?.tldrawSnapshot, false);
         }
     }, [onEditMindmap, mindmaps]);
 
-    const handleCardDeleteMindmap = useCallback((item: KanbanItem) => {
+    const handleCardDeleteMindmap = useCallback(async (item: KanbanItem) => {
         if (onDeleteMindmap) {
             if (item.type === 'surah') {
-                onDeleteMindmap('surah', item.data.surah.id);
+                await onDeleteMindmap('surah', item.data.surah.id);
             } else if (item.type === 'part') {
-                onDeleteMindmap('part', item.data.part);
+                await onDeleteMindmap('part', item.data.part);
             }
         }
     }, [onDeleteMindmap]);
 
-    const handleCardExportMindmap = useCallback((item: KanbanItem) => {
+    const handleCardExportMindmap = useCallback(async (item: KanbanItem) => {
         if (!onExportPremade) return;
         if (item.type === 'surah') {
-            onExportPremade('surah', item.data.surah.id);
+            await onExportPremade('surah', item.data.surah.id);
         } else if (item.type === 'part') {
-            onExportPremade('part', item.data.part);
+            await onExportPremade('part', item.data.part);
         }
     }, [onExportPremade]);
 
-    const handleCardResetMindmap = useCallback((item: KanbanItem, resetMemoryNodes: boolean) => {
+    const handleCardResetMindmap = useCallback(async (item: KanbanItem, resetMemoryNodes: boolean) => {
         if (!onResetMindmap) return;
         if (item.type === 'surah') {
-            onResetMindmap('surah', item.data.surah.id, { resetMemoryNodes });
+            await onResetMindmap('surah', item.data.surah.id, { resetMemoryNodes });
         } else if (item.type === 'part') {
-            onResetMindmap('part', item.data.part, { resetMemoryNodes });
+            await onResetMindmap('part', item.data.part, { resetMemoryNodes });
         }
     }, [onResetMindmap]);
 

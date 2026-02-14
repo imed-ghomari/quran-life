@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (mut: CustomMutashabih) => void;
+    onSave: (mut: CustomMutashabih) => Promise<void> | void;
     initialSurahId?: number;
 }
 
@@ -40,7 +40,7 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
     const s1Data = SURAHS.find(s => s.id === surah1);
     const s2Data = SURAHS.find(s => s.id === surah2);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const newMut: CustomMutashabih = {
             id: id(),
             verseId: `${surah1}:${ayah1}`,
@@ -54,8 +54,12 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
             notes: note,
             createdAt: new Date().toISOString(),
         };
-        onSave(newMut);
-        onClose();
+        try {
+            await onSave(newMut);
+            onClose();
+        } catch (error) {
+            console.error('Failed to save custom mutashabih', error);
+        }
     };
 
     return (

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "e2e:auth:url": "node scripts/e2e-auth-url.js",
+    "instant:cleanup:duplicates": "node scripts/cleanup-instant-duplicates.js",
+    "instant:cleanup:duplicates:apply": "node scripts/cleanup-instant-duplicates.js --apply",
     "mcp:paddle:read-only": "sh -c 'ENV=${PADDLE_ENV:-sandbox}; if [ \"$ENV\" = \"production\" ]; then KEY=${PADDLE_SECRET_KEY_PRODUCTION:-$PADDLE_SECRET_KEY}; else KEY=${PADDLE_SECRET_KEY_SANDBOX:-$PADDLE_SECRET_KEY}; fi; npx @paddle/paddle-mcp --api-key=\"$KEY\" --environment=\"$ENV\" --tools=read-only'",
     "verify:paddle:instant": "node scripts/verify-paddle-instant.js"
   },
@@ -51,16 +53,16 @@
     ]
   },
   "devDependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@paddle/paddle-mcp": "^0.1.3",
     "@playwright/test": "^1.57.0",
-    "@serwist/next": "^9.5.5",
     "@types/node": "^20.14.12",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.0.0",
     "minimatch": "^9.0.3",
-    "serwist": "^9.5.5",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "webpack": "^5.105.2"
   }
 }

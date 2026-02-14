@@ -17,13 +17,13 @@ interface KanbanCardProps {
     hasSplits: boolean;
     appMode: 'owner' | 'user';
     docLink?: string;
-    onEditMindmap: () => void;
-    onDeleteMindmap: () => void;
-    onExportMindmap?: () => void;
-    onResetMindmap?: (resetMemoryNodes: boolean) => void;
-    onChangeSplits: () => void;
-    onViewVerseContext?: () => void;
-    onViewSimilarityContext?: () => void;
+    onEditMindmap: () => Promise<void> | void;
+    onDeleteMindmap: () => Promise<void> | void;
+    onExportMindmap?: () => Promise<void> | void;
+    onResetMindmap?: (resetMemoryNodes: boolean) => Promise<void> | void;
+    onChangeSplits: () => Promise<void> | void;
+    onViewVerseContext?: () => Promise<void> | void;
+    onViewSimilarityContext?: () => Promise<void> | void;
 }
 
 const KanbanCard = ({
@@ -66,8 +66,6 @@ const KanbanCard = ({
 
         setIsDeleting(true);
         try {
-            // Simulate network delay for better UX if needed, or just await the prop
-            await new Promise(resolve => setTimeout(resolve, 500));
             await onDeleteMindmap();
         } catch (e) {
             console.error("Delete failed", e);
@@ -98,7 +96,6 @@ const KanbanCard = ({
 
         setIsDeleting(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
             await onResetMindmap?.(resetMemoryNodes);
         } catch (e) {
             console.error("Reset failed", e);
@@ -183,13 +180,13 @@ interface RenderZoneProps {
     menuButtonRef: React.RefObject<HTMLButtonElement | null>;
     handleMenuClick: (e: React.MouseEvent) => void;
     isMobile: boolean;
-    onEditMindmap: () => void;
-    onDeleteMindmap: () => void;
-    onExportMindmap?: () => void;
-    onResetMindmap?: () => void;
-    onChangeSplits: () => void;
-    onViewVerseContext?: () => void;
-    onViewSimilarityContext?: () => void;
+    onEditMindmap: () => Promise<void> | void;
+    onDeleteMindmap: () => Promise<void> | void;
+    onExportMindmap?: () => Promise<void> | void;
+    onResetMindmap?: () => Promise<void> | void;
+    onChangeSplits: () => Promise<void> | void;
+    onViewVerseContext?: () => Promise<void> | void;
+    onViewSimilarityContext?: () => Promise<void> | void;
     footerPad: string;
     docLink?: string;
 }

@@ -481,6 +481,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         // Save only if user actually changed something
         if (isDirty.current) {
             await saveContent(false);
+            if (isDirty.current) {
+                console.error('Mindmap editor close prevented because latest save did not complete.');
+                return;
+            }
         }
         onClose();
     };

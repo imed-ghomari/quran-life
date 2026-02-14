@@ -15,13 +15,13 @@ interface KanbanColumnProps {
     appMode: 'owner' | 'user';
     onCardClick: (item: KanbanItem) => void;
     // New props for card actions
-    onEditMindmap: (item: KanbanItem) => void;
-    onDeleteMindmap: (item: KanbanItem) => void;
-    onExportMindmap?: (item: KanbanItem) => void;
-    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => void;
-    onChangeSplits: (item: KanbanItem) => void;
-    onViewVerseContext?: (item: KanbanItem) => void;
-    onViewSimilarityContext?: (item: KanbanItem) => void;
+    onEditMindmap: (item: KanbanItem) => Promise<void> | void;
+    onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
+    onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onChangeSplits: (item: KanbanItem) => Promise<void> | void;
+    onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
+    onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
     getHasMindmap: (item: KanbanItem) => boolean;
     getHasSplits: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;

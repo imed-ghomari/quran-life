@@ -21,13 +21,13 @@ interface CardActionMenuProps {
     anchorRef: React.RefObject<HTMLButtonElement | null>;
 
     // Actions
-    onEditMindmap: () => void;
-    onDeleteMindmap: () => void;
-    onExportMindmap?: () => void;
-    onResetMindmap?: () => void;
-    onChangeSplits: () => void;
-    onViewVerseContext?: () => void; // For Suspended
-    onViewSimilarityContext?: () => void; // For Similarity
+    onEditMindmap: () => Promise<void> | void;
+    onDeleteMindmap: () => Promise<void> | void;
+    onExportMindmap?: () => Promise<void> | void;
+    onResetMindmap?: () => Promise<void> | void;
+    onChangeSplits: () => Promise<void> | void;
+    onViewVerseContext?: () => Promise<void> | void; // For Suspended
+    onViewSimilarityContext?: () => Promise<void> | void; // For Similarity
 
     docLink?: string;
 }
@@ -54,6 +54,20 @@ export default function CardActionMenu({
 }: CardActionMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+    const [isActionPending, setIsActionPending] = useState(false);
+
+    const runMenuAction = async (action?: () => Promise<void> | void) => {
+        if (!action || isActionPending) return;
+        setIsActionPending(true);
+        try {
+            await action();
+            onClose();
+        } catch (err) {
+            console.error('Card action failed', err);
+        } finally {
+            setIsActionPending(false);
+        }
+    };
 
     // Calculate position for desktop dropdown - useLayoutEffect to prevent flash
     React.useLayoutEffect(() => {
@@ -255,12 +269,12 @@ export default function CardActionMenu({
                                 );
                             }
 
-                            return (
-                                <button key={idx} onClick={() => { item.onClick?.(); onClose(); }} disabled={item.disabled} className={className}>
-                                    <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
-                                    <span>{item.label}</span>
-                                </button>
-                            );
+                                return (
+                                    <button key={idx} onClick={() => { void runMenuAction(item.onClick); }} disabled={item.disabled || isActionPending} className={className}>
+                                        <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </button>
+                                );
                         })}
                     </div>
                 </div>
@@ -314,7 +328,7 @@ export default function CardActionMenu({
                             }
 
                             return (
-                                <button key={idx} onClick={() => { item.onClick?.(); onClose(); }} disabled={item.disabled} className={className}>
+                                <button key={idx} onClick={() => { void runMenuAction(item.onClick); }} disabled={item.disabled || isActionPending} className={className}>
                                     <span className="w-8 flex items-center justify-center ml-2">{item.icon}</span>
                                     <span>{item.label}</span>
                                 </button>

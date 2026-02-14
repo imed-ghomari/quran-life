@@ -89,6 +89,7 @@ export function getSyncStatusText(status: SyncStatus, pendingChangesCount: numbe
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
     const { settings, isLoading, error, user } = useInstantSettings();
+    const connectionStatus = db.useConnectionStatus();
     const [isOnline, setIsOnline] = useState(true);
 
     useEffect(() => {
@@ -102,7 +103,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
-    const status: SyncStatus = !isOnline ? 'offline' : isLoading ? 'syncing' : error ? 'error' : 'synced';
+    const status: SyncStatus = !isOnline
+        ? 'offline'
+        : (connectionStatus === 'errored' || !!error)
+            ? 'error'
+            : (connectionStatus === 'connecting' || connectionStatus === 'opened' || isLoading)
+                ? 'syncing'
+                : 'synced';
 
     const triggerSync = useCallback(async () => {
         // InstantDB handles sync automatically
