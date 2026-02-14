@@ -1,7 +1,7 @@
 
 "use client";
 
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useMemo, useRef } from "react";
 import { SyncProvider } from "@/hooks/useSyncState";
 import OnboardingModal from "./OnboardingModal";
 import { ThemeProvider } from "./ThemeProvider";
@@ -77,6 +77,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
   });
   const [isAccessLoading, setIsAccessLoading] = useState(true);
   const [hasLoadedAccessState, setHasLoadedAccessState] = useState(false);
+  const accessRequestSeqRef = useRef(0);
+
+  const authIdentity = useMemo(() => {
+    if (!user) return null;
+    return {
+      id: user.id,
+      email: user.email ?? null,
+      refresh_token: (user as { refresh_token?: string | null }).refresh_token ?? null,
+      imageURL: (user as { imageURL?: string | null }).imageURL ?? null,
+      type: (user as { type?: "user" | "guest" }).type,
+      isGuest: Boolean((user as { isGuest?: boolean }).isGuest),
+    };
+  }, [user?.id, user?.email, (user as { refresh_token?: string | null } | null)?.refresh_token]);
+
+  const authIdentityKey = useMemo(() => {
+    if (!authIdentity) return "anon";
+    return `${authIdentity.id}:${authIdentity.email ?? ""}:${authIdentity.refresh_token ?? ""}`;
+  }, [authIdentity]);
+  const lastResolvedIdentityRef = useRef<string>("boot");
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -92,11 +111,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthLoading) return;
-    let isCancelled = false;
+    const requestSeq = accessRequestSeqRef.current + 1;
+    accessRequestSeqRef.current = requestSeq;
+    const shouldBlockForThisRequest =
+      !hasLoadedAccessState || lastResolvedIdentityRef.current !== authIdentityKey;
 
     const syncAndRefreshAccessState = async () => {
       try {
-        setIsAccessLoading(true);
+        if (shouldBlockForThisRequest) {
+          setIsAccessLoading(true);
+        }
 
         await fetch("/api/instant-auth", {
           method: "POST",
@@ -105,12 +129,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             type: "sync-user",
             appId: clientEnv.NEXT_PUBLIC_INSTANT_APP_ID,
-            user: user ?? null,
+            user: authIdentity ?? null,
           }),
         });
 
         if (!navigator.onLine) return;
-        if (isCancelled) return;
 
         const response = await fetch("/api/access-state", {
           method: "GET",
@@ -119,7 +142,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         });
         if (!response.ok) return;
         const data = await response.json();
-        if (isCancelled) return;
+        if (accessRequestSeqRef.current !== requestSeq) return;
 
         setAccessState({
           isAuthenticated: Boolean(data?.isAuthenticated),
@@ -128,10 +151,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           hasPremiumAccess: Boolean(data?.hasPremiumAccess),
           isEditor: Boolean(data?.isEditor),
         });
+        lastResolvedIdentityRef.current = authIdentityKey;
       } catch {
         // Non-blocking: auth and local UI can still function if this check fails.
       } finally {
-        if (!isCancelled) {
+        if (accessRequestSeqRef.current === requestSeq) {
           setHasLoadedAccessState(true);
           setIsAccessLoading(false);
         }
@@ -139,11 +163,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
 
     void syncAndRefreshAccessState();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [user, isAuthLoading, isOnline]);
+  }, [authIdentity, authIdentityKey, hasLoadedAccessState, isAuthLoading, isOnline]);
 
   useEffect(() => {
     const runServiceWorkerMigration = async () => {
