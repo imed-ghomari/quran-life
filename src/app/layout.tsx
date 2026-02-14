@@ -32,7 +32,7 @@ export const metadata: Metadata = {
         icon: [{ url: '/logo.png', type: 'image/png' }],
         shortcut: [{ url: '/logo.png', type: 'image/png' }],
         apple: [
-            { url: '/pwa-icon-mobile-192.png', sizes: '192x192', type: 'image/png' },
+            { url: '/pwa-icon-mobile-152.png', sizes: '152x152', type: 'image/png' },
         ],
     },
     formatDetection: {

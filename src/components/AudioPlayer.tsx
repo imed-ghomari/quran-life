@@ -18,6 +18,10 @@ interface AudioPlayerProps {
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2];
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
+const sortSegmentsByStart = (segments: number[][] | null): number[][] | null => {
+    if (!segments || segments.length === 0) return segments;
+    return [...segments].sort((a, b) => (a?.[1] ?? 0) - (b?.[1] ?? 0));
+};
 
 export default function AudioPlayer({
     verses,
@@ -218,7 +222,7 @@ export default function AudioPlayer({
         const url = info.url;
         const startTime = info.startTime || 0;
         const endTime = info.endTime || null;
-        const segments = info.segments || null;
+        const segments = sortSegmentsByStart(info.segments || null);
 
         if (url) {
             if (audioRef.current) {
@@ -284,6 +288,7 @@ export default function AudioPlayer({
             if (isPlaying) {
                 safePlay();
             } else {
+                pendingAutoplayRef.current = false;
                 audioRef.current.pause();
                 
                 // Save playback state only on actual play -> pause transitions.
@@ -472,7 +477,7 @@ export default function AudioPlayer({
 
     const togglePlay = () => {
         if (isCompleted) return;
-        setIsPlaying(!isPlaying);
+        setIsPlaying(prev => !prev);
     };
 
     const restartDailyPortion = () => {

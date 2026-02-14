@@ -8,6 +8,9 @@ interface ModalWindowProps {
     header?: React.ReactNode;
     body?: React.ReactNode;
     footer?: React.ReactNode;
+    headerClassName?: string;
+    bodyClassName?: string;
+    footerClassName?: string;
     children?: React.ReactNode;
 }
 
@@ -19,6 +22,9 @@ export default function ModalWindow({
     header,
     body,
     footer,
+    headerClassName,
+    bodyClassName,
+    footerClassName,
     children,
 }: ModalWindowProps) {
     if (!isOpen) return null;
@@ -38,17 +44,17 @@ export default function ModalWindow({
                 aria-modal="true"
             >
                 {header ? (
-                    <div className="border-b border-[var(--border)] px-6 py-4 max-[480px]:px-4 max-[480px]:py-3">
+                    <div className={`border-b border-[var(--border)] px-6 py-4 max-[480px]:px-4 max-[480px]:py-3 ${headerClassName ?? ''}`}>
                         {header}
                     </div>
                 ) : null}
                 {body ? (
-                    <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-6 py-6 max-[480px]:gap-4 max-[480px]:px-4 max-[480px]:py-4">
+                    <div className={`flex min-h-0 flex-col gap-5 overflow-y-auto px-6 py-6 max-[480px]:gap-4 max-[480px]:px-4 max-[480px]:py-4 ${bodyClassName ?? ''}`}>
                         {body}
                     </div>
                 ) : null}
                 {footer ? (
-                    <div className="flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--background-secondary)] px-6 py-4 max-[480px]:px-4 max-[480px]:py-3">
+                    <div className={`flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--background-secondary)] px-6 py-4 max-[480px]:px-4 max-[480px]:py-3 ${footerClassName ?? ''}`}>
                         {footer}
                     </div>
                 ) : null}

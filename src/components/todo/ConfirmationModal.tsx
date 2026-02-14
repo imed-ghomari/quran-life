@@ -32,23 +32,28 @@ export default function ConfirmationModal({
             isOpen={isOpen}
             onClose={onCancel}
             closeOnBackdropClick={!isProcessing}
-            maxWidthClassName="max-w-[500px]"
+            maxWidthClassName="max-w-[980px]"
+            headerClassName="px-8 py-6 sm:px-10 sm:py-7"
+            bodyClassName="px-8 py-7 sm:px-10 sm:py-8"
+            footerClassName="gap-4 px-8 py-5 sm:px-10 sm:py-6"
             header={
-                <div className="flex items-start gap-5">
-                    <div className={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center ${isDestructive ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-[var(--accent)]/10 text-[var(--accent)]'}`}>
+                <div className="flex items-start gap-5 sm:gap-6">
+                    <div className={`shrink-0 flex h-16 w-16 items-center justify-center rounded-3xl ${isDestructive ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-[var(--accent)]/10 text-[var(--accent)]'}`}>
                         {isProcessing ? (
-                            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            <div className="h-6 w-6 rounded-full border-2 border-current border-t-transparent animate-spin" />
                         ) : (
-                            <AlertTriangle size={22} />
+                            <AlertTriangle size={28} />
                         )}
                     </div>
-                    <h3 className="text-[1.1rem] font-semibold text-[var(--foreground)] leading-7 mt-1">{title}</h3>
+                    <h3 className="mt-2 text-xl font-bold text-[var(--foreground)]">{title}</h3>
                 </div>
             }
             body={
-                <p className="text-[0.95rem] text-[var(--foreground-secondary)] leading-7">
-                    {message}
-                </p>
+                <div className="min-h-[7.5rem] sm:min-h-[8.5rem]">
+                    <p className="whitespace-pre-line text-base leading-8 text-[var(--foreground-secondary)]">
+                        {message}
+                    </p>
+                </div>
             }
             footer={
                 <>
