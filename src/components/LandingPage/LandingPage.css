@@ -3,7 +3,7 @@
 /* --- 1. Design System & Variables --- */
 :root {
   /* Landing Page Specific Variables */
-  
+
   /* Glassmorphism Defaults (Light) */
   --glass-bg: rgba(253, 253, 253, 0.75);
   --glass-border: rgba(255, 255, 255, 0.6);
@@ -15,16 +15,17 @@
   --radius-md: 12px;
   --font-main: var(--font-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --max-width: 1200px;
-  
+
   /* Specific accent variants for Landing Page */
   --landing-accent-light: rgba(91, 143, 185, 0.1);
-  
+
   /* Secondary Background for Landing Page */
   --landing-bg-secondary: var(--background-secondary);
-  
+
   /* Hero & Nav Colors */
   --nav-bg: rgba(240, 240, 240, 0.9);
-  --hero-overlay-bg: rgba(255, 255, 255, 0.7); /* White overlay for light mode readability */
+  --hero-overlay-bg: rgba(255, 255, 255, 0.7);
+  /* White overlay for light mode readability */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,9 +35,10 @@
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     --landing-accent-light: rgba(108, 165, 212, 0.15);
-    
+
     --nav-bg: rgba(20, 20, 20, 0.7);
-    --hero-overlay-bg: rgba(0, 0, 0, 0.6); /* Dark overlay for dark mode readability */
+    --hero-overlay-bg: rgba(0, 0, 0, 0.6);
+    /* Dark overlay for dark mode readability */
   }
 }
 
@@ -46,7 +48,7 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   --landing-accent-light: rgba(108, 165, 212, 0.15);
-  
+
   --nav-bg: rgba(20, 20, 20, 0.7);
   --hero-overlay-bg: rgba(0, 0, 0, 0.6);
 }
@@ -58,7 +60,7 @@
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
   --landing-accent-light: rgba(91, 143, 185, 0.1);
   --landing-bg-secondary: #f4f6f8;
-  
+
   --nav-bg: var(--glass-bg);
   --hero-overlay-bg: rgba(255, 255, 255, 0.7);
 }
@@ -113,7 +115,7 @@
   right: 0;
   z-index: 100;
   /* More transparent background to let hero image show through at top */
-  background: var(--nav-bg); 
+  background: var(--nav-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
@@ -390,6 +392,7 @@
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .card:hover {
@@ -421,18 +424,18 @@
 
 .card-preview {
   margin-top: auto;
-  width: min(92%, 340px);
+  width: calc(100% + 2rem);
   align-self: flex-end;
-  border-radius: 16px;
-  border: 1px solid var(--border);
+  border-radius: 20px 0 var(--radius-lg) 0;
+  border: none;
   overflow: hidden;
-  min-height: 210px;
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.08);
+  height: 240px;
+  margin-right: -2rem;
+  margin-bottom: -2rem;
 }
 
 .card-preview-smart-review {
   background: linear-gradient(180deg, rgba(127, 127, 127, 0.08), transparent 18%), var(--landing-bg-secondary);
-  min-height: 240px;
 }
 
 .card-preview-image {
@@ -496,16 +499,45 @@
   width: 100%;
 }
 
-.audio-wave span:nth-child(1) { height: 24%; }
-.audio-wave span:nth-child(2) { height: 62%; }
-.audio-wave span:nth-child(3) { height: 38%; }
-.audio-wave span:nth-child(4) { height: 86%; }
-.audio-wave span:nth-child(5) { height: 48%; }
-.audio-wave span:nth-child(6) { height: 75%; }
-.audio-wave span:nth-child(7) { height: 30%; }
-.audio-wave span:nth-child(8) { height: 68%; }
-.audio-wave span:nth-child(9) { height: 42%; }
-.audio-wave span:nth-child(10) { height: 55%; }
+.audio-wave span:nth-child(1) {
+  height: 24%;
+}
+
+.audio-wave span:nth-child(2) {
+  height: 62%;
+}
+
+.audio-wave span:nth-child(3) {
+  height: 38%;
+}
+
+.audio-wave span:nth-child(4) {
+  height: 86%;
+}
+
+.audio-wave span:nth-child(5) {
+  height: 48%;
+}
+
+.audio-wave span:nth-child(6) {
+  height: 75%;
+}
+
+.audio-wave span:nth-child(7) {
+  height: 30%;
+}
+
+.audio-wave span:nth-child(8) {
+  height: 68%;
+}
+
+.audio-wave span:nth-child(9) {
+  height: 42%;
+}
+
+.audio-wave span:nth-child(10) {
+  height: 55%;
+}
 
 .audio-track-meta {
   display: flex;
@@ -545,10 +577,25 @@
   left: 47%;
 }
 
-.node-a { top: 24%; left: 18%; }
-.node-b { top: 18%; left: 72%; }
-.node-c { top: 68%; left: 25%; }
-.node-d { top: 70%; left: 76%; }
+.node-a {
+  top: 24%;
+  left: 18%;
+}
+
+.node-b {
+  top: 18%;
+  left: 72%;
+}
+
+.node-c {
+  top: 68%;
+  left: 25%;
+}
+
+.node-d {
+  top: 70%;
+  left: 76%;
+}
 
 .map-link {
   position: absolute;
@@ -557,10 +604,33 @@
   transform-origin: left center;
 }
 
-.link-1 { width: 130px; top: 51%; left: 23%; transform: rotate(-27deg); }
-.link-2 { width: 118px; top: 49%; left: 51%; transform: rotate(-9deg); }
-.link-3 { width: 124px; top: 52%; left: 26%; transform: rotate(34deg); }
-.link-4 { width: 116px; top: 53%; left: 50%; transform: rotate(22deg); }
+.link-1 {
+  width: 130px;
+  top: 51%;
+  left: 23%;
+  transform: rotate(-27deg);
+}
+
+.link-2 {
+  width: 118px;
+  top: 49%;
+  left: 51%;
+  transform: rotate(-9deg);
+}
+
+.link-3 {
+  width: 124px;
+  top: 52%;
+  left: 26%;
+  transform: rotate(34deg);
+}
+
+.link-4 {
+  width: 116px;
+  top: 53%;
+  left: 50%;
+  transform: rotate(22deg);
+}
 
 /* Placeholder C: Infinite canvas preview */
 .card-preview-canvas {
@@ -619,10 +689,21 @@
   background: color-mix(in srgb, var(--background) 72%, var(--accent) 28%);
 }
 
-.chip-a { transform: translateY(8px); }
-.chip-b { transform: translateY(-3px); }
-.chip-c { transform: translateY(-5px); }
-.chip-d { transform: translateY(4px); }
+.chip-a {
+  transform: translateY(8px);
+}
+
+.chip-b {
+  transform: translateY(-3px);
+}
+
+.chip-c {
+  transform: translateY(-5px);
+}
+
+.chip-d {
+  transform: translateY(4px);
+}
 
 /* Placeholder E: Mobile preview */
 .card-preview-mobile {
@@ -887,7 +968,8 @@
 
   .logo {
     font-size: 1.1rem;
-    gap: 0.35rem; /* Tighter logo gap */
+    gap: 0.35rem;
+    /* Tighter logo gap */
   }
 
   .logo svg {
@@ -900,13 +982,16 @@
   }
 
   .nav-content .btn {
-    padding: 0.6rem 1rem; /* Reduced padding */
+    padding: 0.6rem 1rem;
+    /* Reduced padding */
     font-size: 0.9rem;
-    height: 40px; /* Match theme button height */
+    height: 40px;
+    /* Match theme button height */
     min-height: 40px;
-    white-space: nowrap; /* Prevent wrapping */
+    white-space: nowrap;
+    /* Prevent wrapping */
   }
-  
+
   /* Override nav theme button size for mobile */
   .nav-theme-btn {
     width: 40px;
@@ -915,7 +1000,8 @@
 
   /* Hero Section */
   .hero {
-    padding: 8rem 0 4rem; /* Increased top padding to clear fixed navbar */
+    padding: 8rem 0 4rem;
+    /* Increased top padding to clear fixed navbar */
   }
 
   .hero-title {
@@ -1050,6 +1136,7 @@
   background: rgba(255, 255, 255, 0.2);
   color: white;
 }
+
 @media (min-width: 900px) {
   .section-header p {
     white-space: nowrap;
