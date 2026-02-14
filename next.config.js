@@ -12,30 +12,33 @@ const withPWA = require('@ducanh2912/next-pwa').default({
         '!assets/premade-mindmaps/**/*.tldraw',
         '!assets/premade-mindmaps/**/*.chunks.txt',
     ],
-    fallbacks: {
-        document: '/offline',
-    },
     workboxOptions: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
-        navigateFallback: '/offline',
-        // Keep auth/checkouts network-only and avoid serving stale auth screens.
-        navigateFallbackDenylist: [/^\/api\//, /^\/auth(?:\/|$)/, /^\/checkout(?:\/|$)/],
         runtimeCaching: [
             {
                 urlPattern: ({ request, url }) =>
                     request.mode === 'navigate'
+                    && (
+                        url.pathname === '/dashboard'
+                        || url.pathname === '/todo'
+                        || url.pathname === '/statistics'
+                        || url.pathname === '/settings'
+                        || url.pathname === '/docs'
+                        || url.pathname.startsWith('/docs/')
+                        || url.pathname === '/offline-app'
+                    )
                     && !url.pathname.startsWith('/auth')
                     && !url.pathname.startsWith('/checkout')
                     && !url.pathname.startsWith('/api/'),
                 handler: 'NetworkFirst',
                 options: {
                     cacheName: 'pages-v10',
-                    networkTimeoutSeconds: 3,
+                    networkTimeoutSeconds: 8,
                     cacheableResponse: {
-                        statuses: [200],
+                        statuses: [200, 302, 307, 308],
                     },
                     expiration: {
                         maxEntries: 64,
