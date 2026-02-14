@@ -29,7 +29,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v10-next-pwa-navfix";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v11-next-pwa-redirect-purge";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
 const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -46,12 +46,15 @@ const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
   "workbox",
   "pages-",
+  "rsc-",
   "static-code-",
   "static-assets-",
   "image-assets-",
   "data-json-",
   "audio-runtime",
   "offline-content-",
+  "next-pwa",
+  "start-url",
 ];
 
 type AccessStateCache = {
@@ -277,19 +280,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
         if ("serviceWorker" in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(
-            registrations.map(async (registration) => {
-              const scriptUrl =
-                registration.active?.scriptURL ||
-                registration.waiting?.scriptURL ||
-                registration.installing?.scriptURL ||
-                "";
-
-              if (scriptUrl.includes("/sw.js")) {
-                await registration.unregister();
-              }
-            })
-          );
+          await Promise.all(registrations.map((registration) => registration.unregister()));
         }
 
         if ("caches" in window) {
@@ -297,6 +288,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
           const cacheKeysToDelete = cacheKeys.filter((key) =>
             SW_CACHE_PREFIXES_TO_CLEAR.some((prefix) => key.startsWith(prefix))
           );
+          // Safety net for migrations between PWA plugins/cache naming schemes.
+          if (cacheKeysToDelete.length !== cacheKeys.length) {
+            cacheKeysToDelete.push(
+              ...cacheKeys.filter((key) => !cacheKeysToDelete.includes(key))
+            );
+          }
           await Promise.all(cacheKeysToDelete.map((key) => caches.delete(key)));
         }
 
