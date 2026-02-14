@@ -193,8 +193,10 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
                 fetch(`${reciter.relativePath}/segments.json`)
             ]);
 
-            const surahData = await surahRes.json();
-            const segmentsData = await segmentsRes.json();
+            const [surahData, segmentsData] = await Promise.all([
+                surahRes.json(),
+                segmentsRes.json(),
+            ]);
 
             // Normalize
             data = {

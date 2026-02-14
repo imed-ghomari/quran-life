@@ -949,9 +949,11 @@ export default function TodayPage() {
 
             errorPayload = errorToSave;
             try {
-                await updateInstantNode(afterNode);
-                await saveInstantReviewLog(logToSave);
-                await saveInstantReviewError(errorToSave);
+                await Promise.all([
+                    updateInstantNode(afterNode),
+                    saveInstantReviewLog(logToSave),
+                    saveInstantReviewError(errorToSave),
+                ]);
             } catch (err) {
                 console.error('Failed to persist forgot grading action', err);
                 addToast('error', 'Failed to save grade', 'Please try again.');
@@ -961,8 +963,10 @@ export default function TodayPage() {
             }
         } else {
             try {
-                await updateInstantNode(afterNode);
-                await saveInstantReviewLog(logToSave);
+                await Promise.all([
+                    updateInstantNode(afterNode),
+                    saveInstantReviewLog(logToSave),
+                ]);
             } catch (err) {
                 console.error('Failed to persist remembered grading action', err);
                 addToast('error', 'Failed to save grade', 'Please try again.');
