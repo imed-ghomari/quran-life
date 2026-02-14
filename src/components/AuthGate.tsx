@@ -12,6 +12,8 @@ const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
 const FORCE_OFFLINE_OPEN_TTL_MS = 20 * 1000;
+const SIGNING_OUT_KEY = 'auth:signingOut';
+const POST_SIGN_OUT_UNTIL_KEY = 'auth:postSignOutUntil';
 
 function hasValidOfflineAccessMarker() {
   if (typeof window === 'undefined') return false;
@@ -114,11 +116,18 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!isOnline || (hasOfflineAccess && hasForcedOfflineOpen)) return;
 
     if (typeof window !== 'undefined') {
-      const isSigningOut = window.localStorage.getItem('auth:signingOut') === '1';
-      if (isSigningOut) {
-        window.localStorage.removeItem('auth:signingOut');
+      const isSigningOut = window.localStorage.getItem(SIGNING_OUT_KEY) === '1';
+      const postSignOutUntil = Number(window.localStorage.getItem(POST_SIGN_OUT_UNTIL_KEY) ?? 0);
+      const hasPostSignOutWindow = Number.isFinite(postSignOutUntil) && postSignOutUntil > Date.now();
+
+      if (isSigningOut || hasPostSignOutWindow) {
         router.replace('/');
         return;
+      }
+
+      if (Number.isFinite(postSignOutUntil) && postSignOutUntil <= Date.now()) {
+        window.localStorage.removeItem(SIGNING_OUT_KEY);
+        window.localStorage.removeItem(POST_SIGN_OUT_UNTIL_KEY);
       }
     }
 

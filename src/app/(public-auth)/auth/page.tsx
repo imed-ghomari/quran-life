@@ -23,6 +23,8 @@ import { AccessStateContext, OnlineStatusContext } from '@/components/Providers'
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
+const SIGNING_OUT_KEY = 'auth:signingOut';
+const POST_SIGN_OUT_UNTIL_KEY = 'auth:postSignOutUntil';
 
 // Main authentication content component
 function AuthContent() {
@@ -80,6 +82,28 @@ function AuthContent() {
 
     const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
     const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription || isPaymentBypass;
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (isAuthLoading) return;
+        if (user) return;
+
+        const isSigningOut = window.localStorage.getItem(SIGNING_OUT_KEY) === '1';
+        const postSignOutUntil = Number(window.localStorage.getItem(POST_SIGN_OUT_UNTIL_KEY) ?? 0);
+        const hasPostSignOutWindow = Number.isFinite(postSignOutUntil) && postSignOutUntil > Date.now();
+
+        if (isSigningOut || hasPostSignOutWindow) {
+            window.localStorage.removeItem(SIGNING_OUT_KEY);
+            window.localStorage.removeItem(POST_SIGN_OUT_UNTIL_KEY);
+            window.location.replace('/');
+            return;
+        }
+
+        if (Number.isFinite(postSignOutUntil) && postSignOutUntil <= Date.now()) {
+            window.localStorage.removeItem(SIGNING_OUT_KEY);
+            window.localStorage.removeItem(POST_SIGN_OUT_UNTIL_KEY);
+        }
+    }, [isAuthLoading, user]);
 
     useEffect(() => {
         if (!user) return;

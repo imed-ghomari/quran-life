@@ -1044,9 +1044,12 @@
   }
 
   .card-preview {
-    width: 100%;
-    align-self: stretch;
-    min-height: 180px;
+    width: calc(100% + 1.5rem);
+    align-self: flex-end;
+    margin-right: -1.5rem;
+    margin-bottom: -1.5rem;
+    height: 200px;
+    border-radius: 20px 0 var(--radius-lg) 0;
   }
 
   .audio-wave {
