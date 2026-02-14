@@ -1841,9 +1841,40 @@ export default function TodayPage() {
                                                     </button>
                                                 </div>
                                                 <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                                                    <button className="review-btn postpone std-normal-btn" onClick={handlePostpone}>Not sure</button>
-                                                    <button className="review-btn not-remembered std-normal-btn" onClick={() => handleGrade(false)}><X size={20} /> Forgot</button>
-                                                    <button className="review-btn remembered std-normal-btn" onClick={() => handleGrade(true)}><Check size={20} /> Remembered</button>
+                                                    <button
+                                                        className="review-btn postpone std-normal-btn"
+                                                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
+                                                        onClick={handlePostpone}
+                                                    >
+                                                        <span style={{ fontSize: '0.85rem' }}>Not sure</span>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>Next: Tomorrow</span>
+                                                    </button>
+                                                    <button
+                                                        className="review-btn not-remembered std-normal-btn"
+                                                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
+                                                        onClick={() => handleGrade(false)}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><X size={14} /> <span style={{ fontSize: '0.85rem' }}>Forgot</span></div>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                            Next: {(() => {
+                                                                const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                return preview.again;
+                                                            })()}
+                                                        </span>
+                                                    </button>
+                                                    <button
+                                                        className="review-btn remembered std-normal-btn"
+                                                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
+                                                        onClick={() => handleGrade(true)}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Check size={14} /> <span style={{ fontSize: '0.85rem' }}>Remembered</span></div>
+                                                        <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>
+                                                            Next: {(() => {
+                                                                const preview = getSchedulingPreview(orderedDueNodes[currentReviewIndex].scheduler as any, customWeights);
+                                                                return preview.good;
+                                                            })()}
+                                                        </span>
+                                                    </button>
                                                 </div>
                                             </>
                                         )

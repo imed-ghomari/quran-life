@@ -47,7 +47,6 @@ export default function AudioPlayer({
     const [verseEndTime, setVerseEndTime] = useState<number | null>(null);
     const [verseStartTime, setVerseStartTime] = useState(0);
     const [activeSegments, setActiveSegments] = useState<number[][] | null>(null);
-    const [showIsti3atah, setShowIsti3atah] = useState(false);
     const lastWordIndexRef = useRef<number>(-1);
     
     // Progress
@@ -62,26 +61,6 @@ export default function AudioPlayer({
     const currentVerse = verses[currentVerseIndex];
     const totalVerses = verses.length;
     const verseProgress = ((currentVerseIndex + 1) / totalVerses) * 100;
-
-    // Manage Isti'aatha visibility
-    useEffect(() => {
-        if (isPlaying && currentVerseIndex === 0 && currentVerse && currentVerse.ayahId !== 1) {
-            setShowIsti3atah(true);
-            const timer = setTimeout(() => {
-                setShowIsti3atah(false);
-            }, 3000); // Show for 3 seconds
-            return () => clearTimeout(timer);
-        } else if (!isPlaying) {
-             // Optional logic
-        }
-    }, [isPlaying, currentVerseIndex, currentVerse]);
-
-    // Hide Isti'aatha on verse change
-    useEffect(() => {
-        if (currentVerseIndex !== 0) {
-            setShowIsti3atah(false);
-        }
-    }, [currentVerseIndex]);
 
     useEffect(() => {
         isPlayingRef.current = isPlaying;
@@ -621,11 +600,6 @@ export default function AudioPlayer({
                 </div>
                 <div className="progress-info">
                     <span>Verse {currentVerseIndex + 1} of {totalVerses}</span>
-                    {showIsti3atah && (
-                        <span className="text-xs text-gray-500 animate-pulse">
-                            (Isti'aatha)
-                        </span>
-                    )}
                     <span>
                         {totalDurationSec !== null && elapsedTotalSec !== null
                             ? `${formatTime(elapsedTotalSec)} / ${formatTime(totalDurationSec)}`
