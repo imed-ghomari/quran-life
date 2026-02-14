@@ -40,6 +40,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isOnline = useContext(OnlineStatusContext);
   const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
+  const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
   const [hasOfflineAccess, setHasOfflineAccess] = useState(() => hasValidOfflineAccessMarker());
@@ -108,6 +109,13 @@ export default function AuthGate({ children }: AuthGateProps) {
   }, [pathname]);
 
   const shouldTreatAsOffline = !isOnline || (hasOfflineAccess && hasForcedOfflineOpen);
+  const shouldBlockOnAuthLoad = isAuthLoading && !hasResolvedAuthOnce;
+
+  useEffect(() => {
+    if (!isAuthLoading) {
+      setHasResolvedAuthOnce(true);
+    }
+  }, [isAuthLoading]);
 
   useEffect(() => {
     if (isPublic) return;
@@ -177,7 +185,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     && !shouldBlockOnCheckoutDecision
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
 
-  if (isAuthLoading || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
+  if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
     return (
       <div style={{
         minHeight: '100vh',
