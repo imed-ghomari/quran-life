@@ -165,6 +165,13 @@ export function useInstantNodes() {
         if (!node.scheduler) return false;
         const dueString = (node.scheduler as any).due || (node.scheduler as any).dueDate;
         if (!dueString) return true;
+        if (typeof dueString === 'string' && !dueString.includes('T')) {
+            const dueKeyMatch = dueString.match(/\d{4}-\d{2}-\d{2}/);
+            if (!dueKeyMatch) return false;
+            const todayKey = new Date(dueNowMs).toISOString().split('T')[0];
+            return dueKeyMatch[0] <= todayKey;
+        }
+
         const due = new Date(dueString);
         if (Number.isNaN(due.getTime())) return false;
         return due.getTime() <= dueNowMs;
