@@ -24,10 +24,57 @@ const stableEntityId = (...parts: Array<string | number>) =>
         .map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_'))
         .join('__');
 
+const parseMindmapSurahFromTarget = (targetId?: string) => {
+    if (!targetId) return undefined;
+    const m = targetId.match(/^mindmap-(\d+)$/);
+    if (!m) return undefined;
+    const parsed = Number.parseInt(m[1], 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parsePartFromTarget = (targetId?: string) => {
+    if (!targetId) return undefined;
+    const m = targetId.match(/^part-mindmap-(\d+)$/);
+    if (!m) return undefined;
+    const parsed = Number.parseInt(m[1], 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseAnchorRangeFromTarget = (targetId?: string) => {
+    if (!targetId) return undefined;
+    const m = targetId.match(/^anchor-(\d+)-(\d+)-(\d+)$/);
+    if (!m) return undefined;
+    const surahId = Number.parseInt(m[1], 10);
+    const startVerse = Number.parseInt(m[2], 10);
+    const endVerse = Number.parseInt(m[3], 10);
+    if (!Number.isFinite(surahId) || !Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return undefined;
+    return { surahId, startVerse, endVerse };
+};
+
+const getLocalDayKeyFromMs = (ms: number) => {
+    const d = new Date(ms);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
 const memoryNodeLogicalKey = (node: MemoryNode) => {
-    if (node.type === 'mindmap') return stableEntityId('memory_node', 'mindmap', node.surahId ?? 'na');
-    if (node.type === 'part_mindmap') return stableEntityId('memory_node', 'part_mindmap', node.partId ?? 'na');
-    if (node.type === 'verse_segment') return stableEntityId('memory_node', 'verse_segment', node.surahId ?? 'na', node.startVerse ?? 'na', node.endVerse ?? 'na');
+    if (node.type === 'mindmap') {
+        const surahId = node.surahId ?? parseMindmapSurahFromTarget(node.targetId);
+        return stableEntityId('memory_node', 'mindmap', surahId ?? 'na');
+    }
+    if (node.type === 'part_mindmap') {
+        const partId = node.partId ?? parsePartFromTarget(node.targetId);
+        return stableEntityId('memory_node', 'part_mindmap', partId ?? 'na');
+    }
+    if (node.type === 'verse_segment') {
+        const anchorTarget = parseAnchorRangeFromTarget(node.targetId);
+        const surahId = node.surahId ?? anchorTarget?.surahId;
+        const startVerse = node.startVerse ?? anchorTarget?.startVerse;
+        const endVerse = node.endVerse ?? anchorTarget?.endVerse;
+        return stableEntityId('memory_node', 'verse_segment', surahId ?? 'na', startVerse ?? 'na', endVerse ?? 'na');
+    }
     return stableEntityId('memory_node', 'id', node.id);
 };
 
@@ -210,7 +257,7 @@ export function useInstantNodes() {
         if (typeof dueString === 'string' && !dueString.includes('T')) {
             const dueKeyMatch = dueString.match(/\d{4}-\d{2}-\d{2}/);
             if (!dueKeyMatch) return false;
-            const todayKey = new Date(dueNowMs).toISOString().split('T')[0];
+            const todayKey = getLocalDayKeyFromMs(dueNowMs);
             return dueKeyMatch[0] <= todayKey;
         }
 
