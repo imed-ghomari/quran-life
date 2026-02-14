@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef, useContext } from 'react';
-import { id } from '@instantdb/react';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -24,6 +23,9 @@ import { AccessStateContext } from '@/components/Providers';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+
+const stableNodeId = (...parts: Array<string | number>) =>
+    parts.map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 
 
 /**
@@ -382,9 +384,10 @@ export default function TodoPage() {
             console.log('Existing node found:', existingNode);
             if (!existingNode) {
                 const newNode: MemoryNode = {
-                    id: id(),
+                    id: stableNodeId('memory_node', 'mindmap', surahId),
                     type: 'mindmap',
                     surahId: surahId,
+                    targetId: `mindmap-${surahId}`,
                     scheduler: createNewFSRSState(),
                     createdAt: new Date().toISOString()
                 };
@@ -661,9 +664,10 @@ export default function TodoPage() {
             const existingNode = nodes.find(n => n.type === 'part_mindmap' && n.partId === part);
             if (!existingNode) {
                 const newNode: MemoryNode = {
-                    id: id(),
+                    id: stableNodeId('memory_node', 'part_mindmap', part),
                     type: 'part_mindmap',
                     partId: part,
+                    targetId: `part-mindmap-${part}`,
                     scheduler: createNewFSRSState(),
                     createdAt: new Date().toISOString()
                 };

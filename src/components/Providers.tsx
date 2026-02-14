@@ -6,10 +6,11 @@ import { SyncProvider } from "@/hooks/useSyncState";
 import OnboardingModal from "./OnboardingModal";
 import { ThemeProvider } from "./ThemeProvider";
 import { useInstantSettings } from "@/hooks/useInstantData";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 import { db } from "@/lib/instant";
 import { clientEnv } from "@/lib/env/client";
+import ModalWindow from "@/components/ui/ModalWindow";
 
 export const OnlineStatusContext = createContext(true);
 type AccessState = {
@@ -29,6 +30,15 @@ export const AccessStateContext = createContext<AccessState>({
   isEditor: false,
 });
 const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v9-next-pwa-rsc";
+const OFFLINE_WARMUP_KEY = `offline:warmup:${SW_MIGRATION_KEY}`;
+const OFFLINE_WARMUP_TASKS = [
+  { label: "Dashboard", route: "/dashboard" },
+  { label: "Todo", route: "/todo" },
+  { label: "Statistics", route: "/statistics" },
+  { label: "Settings", route: "/settings" },
+  { label: "Docs", route: "/docs" },
+  { label: "Offline handoff", route: "/offline-app" },
+];
 const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
   "workbox",
@@ -65,6 +75,8 @@ function OnboardingWrapper() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine
   );
@@ -78,6 +90,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   });
   const [isAccessLoading, setIsAccessLoading] = useState(true);
   const [hasLoadedAccessState, setHasLoadedAccessState] = useState(false);
+  const [isPwaStandalone, setIsPwaStandalone] = useState(false);
+  const [showOfflineWarmup, setShowOfflineWarmup] = useState(false);
+  const [warmupStatus, setWarmupStatus] = useState({
+    completed: 0,
+    total: OFFLINE_WARMUP_TASKS.length,
+    label: "Starting...",
+    done: false,
+  });
+  const warmupInProgressRef = useRef(false);
   const accessRequestSeqRef = useRef(0);
 
   const authIdentity = useMemo(() => {
@@ -108,6 +129,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaMatch = window.matchMedia("(display-mode: standalone)").matches;
+    const iosStandalone =
+      "standalone" in window.navigator
+      && Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsPwaStandalone(mediaMatch || iosStandalone);
   }, []);
 
   useEffect(() => {
@@ -217,6 +247,77 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isPwaStandalone) return;
+    if (!isOnline) return;
+    if (!user?.id) return;
+    if (warmupInProgressRef.current) return;
+    const isAppRoute =
+      pathname === "/dashboard"
+      || pathname === "/todo"
+      || pathname === "/statistics"
+      || pathname === "/settings"
+      || pathname === "/offline-app"
+      || pathname === "/docs"
+      || pathname?.startsWith("/docs/");
+    if (!isAppRoute) return;
+    if (window.localStorage.getItem(OFFLINE_WARMUP_KEY) === "done") return;
+
+    warmupInProgressRef.current = true;
+    setShowOfflineWarmup(true);
+    setWarmupStatus({
+      completed: 0,
+      total: OFFLINE_WARMUP_TASKS.length,
+      label: "Preparing cache...",
+      done: false,
+    });
+
+    const runWarmup = async () => {
+      for (let i = 0; i < OFFLINE_WARMUP_TASKS.length; i++) {
+        const task = OFFLINE_WARMUP_TASKS[i];
+        setWarmupStatus((prev) => ({
+          ...prev,
+          label: `Downloading ${task.label}...`,
+        }));
+        try {
+          void router.prefetch(task.route);
+          await fetch(task.route, {
+            method: "GET",
+            credentials: "include",
+            cache: "reload",
+          });
+          // Warm App Router flight payload as well.
+          await fetch(`${task.route}?_rsc=warmup`, {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "RSC": "1",
+              "Next-Router-Prefetch": "1",
+            },
+            cache: "reload",
+          }).catch(() => undefined);
+        } catch {
+          // Best-effort warmup. The popup still reports progress.
+        }
+        setWarmupStatus({
+          completed: i + 1,
+          total: OFFLINE_WARMUP_TASKS.length,
+          label: i + 1 === OFFLINE_WARMUP_TASKS.length ? "Offline cache is ready" : "Processing...",
+          done: i + 1 === OFFLINE_WARMUP_TASKS.length,
+        });
+      }
+      window.localStorage.setItem(OFFLINE_WARMUP_KEY, "done");
+      window.setTimeout(() => {
+        setShowOfflineWarmup(false);
+      }, 700);
+    };
+
+    void runWarmup().finally(() => {
+      warmupInProgressRef.current = false;
+    });
+  }, [isOnline, isPwaStandalone, pathname, router, user?.id]);
+
   return (
     <OnlineStatusContext.Provider value={isOnline}>
       <AccessStateContext.Provider
@@ -230,6 +331,47 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <ConfirmDialogProvider>
               {children}
               <OnboardingWrapper />
+              <ModalWindow
+                isOpen={showOfflineWarmup}
+                closeOnBackdropClick={false}
+                maxWidthClassName="max-w-[520px]"
+                header={
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-[var(--foreground)]">Preparing offline mode</h3>
+                    <span className="text-xs font-medium text-[var(--foreground-secondary)]">
+                      {warmupStatus.completed}/{warmupStatus.total}
+                    </span>
+                  </div>
+                }
+                body={
+                  <div className="flex flex-col gap-3">
+                    <p className="text-sm text-[var(--foreground-secondary)]">
+                      Downloading required app components for offline use.
+                    </p>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "10px",
+                        background: "var(--border)",
+                        borderRadius: "999px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${Math.max(6, Math.round((warmupStatus.completed / Math.max(1, warmupStatus.total)) * 100))}%`,
+                          background: "var(--accent)",
+                          transition: "width 240ms ease",
+                        }}
+                      />
+                    </div>
+                    <p className="text-sm text-[var(--foreground-secondary)]">
+                      {warmupStatus.done ? "Completed." : warmupStatus.label}
+                    </p>
+                  </div>
+                }
+              />
             </ConfirmDialogProvider>
           </ThemeProvider>
         </SyncProvider>

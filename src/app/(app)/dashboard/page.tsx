@@ -49,6 +49,9 @@ import { OnlineStatusContext } from '@/components/Providers';
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 
+const stableNodeId = (...parts: Array<string | number>) =>
+    parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
+
 
 function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
     const words = text.split(/\s+/);
@@ -280,13 +283,14 @@ export default function TodayPage() {
                         n.endVerse === anchor.endVerse
                     );
                     if (!anchorNodeExists) {
+                        const targetId = anchor.id || `anchor-${surahId}-${anchor.startVerse}-${anchor.endVerse}`;
                         nodesToCreate.push({
-                            id: id(),
+                            id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
                             type: 'verse_segment',
                             surahId,
                             startVerse: anchor.startVerse,
                             endVerse: anchor.endVerse,
-                            targetId: anchor.id,
+                            targetId,
                             scheduler: createNewFSRSState(),
                             createdAt: new Date().toISOString()
                         });
@@ -302,7 +306,7 @@ export default function TodayPage() {
             );
             if (mindmap && !mindmapNodeExists) {
                 nodesToCreate.push({
-                    id: id(),
+                    id: stableNodeId('memory_node', 'mindmap', surahId),
                     type: 'mindmap',
                     surahId,
                     targetId: mindmapTargetId,
@@ -321,7 +325,7 @@ export default function TodayPage() {
             );
             if (partMindmap && !partMindmapNodeExists) {
                 nodesToCreate.push({
-                    id: id(),
+                    id: stableNodeId('memory_node', 'part_mindmap', partId),
                     type: 'part_mindmap',
                     partId,
                     targetId: partTargetId,
