@@ -419,6 +419,252 @@
   margin-bottom: 1rem;
 }
 
+.card-preview {
+  margin-top: auto;
+  width: min(92%, 340px);
+  align-self: flex-end;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  min-height: 210px;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.08);
+}
+
+.card-preview-smart-review {
+  background: linear-gradient(180deg, rgba(127, 127, 127, 0.08), transparent 18%), var(--landing-bg-secondary);
+  min-height: 240px;
+}
+
+.card-preview-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.card-preview-image-dark {
+  display: none;
+}
+
+[data-theme="dark"] .card-preview-image-dark {
+  display: block;
+}
+
+[data-theme="dark"] .card-preview-image-light {
+  display: none;
+}
+
+[data-theme="light"] .card-preview-image-light {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .card-preview-image-dark {
+    display: block;
+  }
+
+  :root:not([data-theme]) .card-preview-image-light {
+    display: none;
+  }
+}
+
+.card-preview-placeholder {
+  position: relative;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 10%, transparent), rgba(127, 127, 127, 0.05));
+}
+
+/* Placeholder A: Passive exposure preview */
+.card-preview-audio {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.audio-wave {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 0.4rem;
+  align-items: end;
+  height: 120px;
+}
+
+.audio-wave span {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, white), color-mix(in srgb, var(--accent) 30%, black));
+  border-radius: 999px;
+  width: 100%;
+}
+
+.audio-wave span:nth-child(1) { height: 24%; }
+.audio-wave span:nth-child(2) { height: 62%; }
+.audio-wave span:nth-child(3) { height: 38%; }
+.audio-wave span:nth-child(4) { height: 86%; }
+.audio-wave span:nth-child(5) { height: 48%; }
+.audio-wave span:nth-child(6) { height: 75%; }
+.audio-wave span:nth-child(7) { height: 30%; }
+.audio-wave span:nth-child(8) { height: 68%; }
+.audio-wave span:nth-child(9) { height: 42%; }
+.audio-wave span:nth-child(10) { height: 55%; }
+
+.audio-track-meta {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.meta-pill {
+  height: 0.55rem;
+  border-radius: 999px;
+  width: 65%;
+  background: color-mix(in srgb, var(--foreground) 20%, transparent);
+}
+
+.meta-pill.short {
+  width: 30%;
+}
+
+/* Placeholder B: Visual mapping preview */
+.card-preview-map {
+  background: radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 60%), rgba(127, 127, 127, 0.05);
+}
+
+.map-node {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 70%, white);
+  z-index: 2;
+}
+
+.node-main {
+  width: 24px;
+  height: 24px;
+  top: 45%;
+  left: 47%;
+}
+
+.node-a { top: 24%; left: 18%; }
+.node-b { top: 18%; left: 72%; }
+.node-c { top: 68%; left: 25%; }
+.node-d { top: 70%; left: 76%; }
+
+.map-link {
+  position: absolute;
+  height: 2px;
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  transform-origin: left center;
+}
+
+.link-1 { width: 130px; top: 51%; left: 23%; transform: rotate(-27deg); }
+.link-2 { width: 118px; top: 49%; left: 51%; transform: rotate(-9deg); }
+.link-3 { width: 124px; top: 52%; left: 26%; transform: rotate(34deg); }
+.link-4 { width: 116px; top: 53%; left: 50%; transform: rotate(22deg); }
+
+/* Placeholder C: Infinite canvas preview */
+.card-preview-canvas {
+  padding: 1rem;
+}
+
+.canvas-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--foreground) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--foreground) 8%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.6;
+}
+
+.canvas-sticky {
+  position: absolute;
+  width: 92px;
+  height: 64px;
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+}
+
+.sticky-a {
+  background: color-mix(in srgb, #6ca5d4 65%, white);
+  top: 20%;
+  left: 12%;
+}
+
+.sticky-b {
+  background: color-mix(in srgb, #8ab88a 65%, white);
+  top: 45%;
+  left: 42%;
+}
+
+.sticky-c {
+  background: color-mix(in srgb, #d8b35f 65%, white);
+  top: 23%;
+  left: 66%;
+}
+
+/* Placeholder D: Mutashabihat compare preview */
+.card-preview-compare {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+  align-content: center;
+}
+
+.compare-chip {
+  min-height: 62px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: color-mix(in srgb, var(--background) 72%, var(--accent) 28%);
+}
+
+.chip-a { transform: translateY(8px); }
+.chip-b { transform: translateY(-3px); }
+.chip-c { transform: translateY(-5px); }
+.chip-d { transform: translateY(4px); }
+
+/* Placeholder E: Mobile preview */
+.card-preview-mobile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.phone-frame {
+  width: min(160px, 65%);
+  height: 100%;
+  min-height: 185px;
+  border-radius: 26px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--background) 80%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.9rem 0.8rem;
+}
+
+.phone-notch {
+  width: 46%;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 28%, transparent);
+  margin-bottom: 1rem;
+}
+
+.phone-lines {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 15%, transparent);
+  margin-bottom: 0.7rem;
+}
+
+.phone-lines.short {
+  width: 75%;
+}
+
 /* Specific Style for the Note Box in Feature Card */
 .note-box {
   margin-top: auto;
@@ -709,6 +955,21 @@
 
   .card {
     padding: 1.5rem;
+  }
+
+  .card-preview {
+    width: 100%;
+    align-self: stretch;
+    min-height: 180px;
+  }
+
+  .audio-wave {
+    height: 90px;
+    gap: 0.32rem;
+  }
+
+  .phone-frame {
+    min-height: 160px;
   }
 
   /* Pricing Section */

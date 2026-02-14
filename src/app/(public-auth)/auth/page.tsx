@@ -509,6 +509,25 @@ function AuthContent() {
                         </>
                     )}
 
+                    {!user && (
+                        <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
+                            <Link
+                                href="/"
+                                style={{
+                                    display: 'inline-block',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--foreground-secondary)',
+                                    textDecoration: 'none',
+                                    fontSize: '0.85rem',
+                                    textDecorationLine: 'underline',
+                                }}
+                            >
+                                Back to landing page
+                            </Link>
+                        </div>
+                    )}
+
                     {/* Login success message (bottom of auth panel) */}
                     {user && (
                         <div style={{
