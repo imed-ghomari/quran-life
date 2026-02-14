@@ -3,7 +3,7 @@
 // Import necessary React hooks and Next.js utilities
 import { db } from '@/lib/instant';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
@@ -20,6 +20,10 @@ import { usePaddle } from '@/lib/paddle/checkout';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
+const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
+const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
+
 // Main authentication content component
 function AuthContent() {
     // Fetch user authentication status and data using InstantDB's hook
@@ -32,7 +36,6 @@ function AuthContent() {
     const isOnline = useContext(OnlineStatusContext);
     const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
     const userEmail = user?.email ?? 'your account';
-    const router = useRouter();
     const searchParams = useSearchParams();
     const paddle = usePaddle();
     // State for managing email and magic code inputs
@@ -57,9 +60,7 @@ function AuthContent() {
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [subscriptionCheckTimedOut, setSubscriptionCheckTimedOut] = useState(false);
-    const [isRedirectingToDashboard, setIsRedirectingToDashboard] = useState(false);
-    const [hasTriedDashboardRedirect, setHasTriedDashboardRedirect] = useState(false);
-    const [hasTriedOfflineDashboardRedirect, setHasTriedOfflineDashboardRedirect] = useState(false);
+    const [canOpenOfflineApp, setCanOpenOfflineApp] = useState(false);
 
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -96,36 +97,33 @@ function AuthContent() {
     const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
-        if (!user || (!hasActiveSubscription && !isPaymentBypass)) {
-            if (hasTriedDashboardRedirect) {
-                setHasTriedDashboardRedirect(false);
-            }
-        }
-    }, [user, hasActiveSubscription, isPaymentBypass, hasTriedDashboardRedirect]);
-
-    useEffect(() => {
-        if (!user || isOnline) {
-            if (hasTriedOfflineDashboardRedirect) {
-                setHasTriedOfflineDashboardRedirect(false);
-            }
+        if (typeof window === 'undefined') return;
+        if (user) {
+            setCanOpenOfflineApp(true);
             return;
         }
-        if (hasTriedOfflineDashboardRedirect) return;
-        setHasTriedOfflineDashboardRedirect(true);
-        router.replace('/dashboard');
-    }, [user, isOnline, hasTriedOfflineDashboardRedirect, router]);
 
-    useEffect(() => {
-        if (!user) return;
-        if (shouldBlockOnSubscriptionLoad) return;
-        if (hasTriedDashboardRedirect) return;
-        if (hasActiveSubscription || isPaymentBypass) {
-            if (!isOnline) return;
-            setHasTriedDashboardRedirect(true);
-            setIsRedirectingToDashboard(true);
-            router.replace('/dashboard');
+        const raw = window.localStorage.getItem(OFFLINE_ACCESS_KEY);
+        if (!raw) {
+            setCanOpenOfflineApp(false);
+            return;
         }
-    }, [user, isOnline, shouldBlockOnSubscriptionLoad, hasActiveSubscription, isPaymentBypass, hasTriedDashboardRedirect, router]);
+
+        try {
+            const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+            const updatedAt = Number(parsed?.updatedAt ?? 0);
+            const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
+            const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
+            const valid = hasValidTimestamp && hasUserId;
+            setCanOpenOfflineApp(valid);
+            if (!valid) {
+                window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
+            }
+        } catch {
+            window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
+            setCanOpenOfflineApp(false);
+        }
+    }, [user]);
 
     const handleCheckout = () => {
         if (!user) {
@@ -224,7 +222,7 @@ function AuthContent() {
         );
     }
 
-    if (user && (shouldBlockOnSubscriptionLoad || isRedirectingToDashboard)) {
+    if (user && shouldBlockOnSubscriptionLoad) {
         return (
             <div style={{
                 minHeight: '100vh',
@@ -233,21 +231,46 @@ function AuthContent() {
                 justifyContent: 'center',
                 background: 'var(--background)'
             }}>
-                <Spinner text={shouldBlockOnSubscriptionLoad ? 'Checking subscription...' : 'Redirecting to dashboard...'} />
+                <Spinner text="Checking subscription..." />
             </div>
         );
     }
 
-    if (user && !isOnline) {
+    if (!isOnline) {
         return (
             <div style={{
                 minHeight: '100vh',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'var(--background)'
+                background: 'var(--background)',
+                textAlign: 'center',
+                padding: '2rem',
             }}>
-                <Spinner text="Opening offline mode..." />
+                <div>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                        You are offline
+                    </h2>
+                    <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>
+                        Sign-in and checkout are unavailable offline.
+                    </p>
+                    {canOpenOfflineApp ? (
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => {
+                                window.localStorage.setItem(FORCE_OFFLINE_OPEN_KEY, Date.now().toString());
+                                window.location.assign('/offline-app');
+                            }}
+                        >
+                            Open app offline
+                        </button>
+                    ) : (
+                        <p style={{ color: 'var(--foreground-secondary)' }}>
+                            Connect once to sign in, then offline mode will be available.
+                        </p>
+                    )}
+                </div>
             </div>
         );
     }

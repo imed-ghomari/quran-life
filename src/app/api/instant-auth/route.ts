@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { clientEnv } from '@/lib/env/client';
+import { db as instantAdmin } from '@/lib/instant-admin';
 
 type InstantUserCookie = {
   id: string;
@@ -57,7 +58,30 @@ export async function POST(request: Request) {
     return response;
   }
 
-  response.cookies.set(cookieName(), encodeURIComponent(JSON.stringify(body.user)), {
+  let verifiedUser: { id: string; email?: string | null } | null = null;
+  try {
+    verifiedUser = await instantAdmin.auth.getUser({ refresh_token: body.user.refresh_token });
+  } catch {
+    response.cookies.set(cookieName(), '', {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure,
+      path: '/',
+      maxAge: 0,
+    });
+    return NextResponse.json({ ok: false, error: 'Invalid refresh token' }, { status: 401 });
+  }
+
+  const trustedCookieUser: InstantUserCookie = {
+    id: verifiedUser.id,
+    refresh_token: body.user.refresh_token,
+    email: verifiedUser.email ?? null,
+    imageURL: body.user.imageURL ?? null,
+    type: body.user.type,
+    isGuest: body.user.isGuest,
+  };
+
+  response.cookies.set(cookieName(), encodeURIComponent(JSON.stringify(trustedCookieUser)), {
     httpOnly: true,
     sameSite: 'strict',
     secure,

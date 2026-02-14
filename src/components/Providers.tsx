@@ -28,7 +28,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v4";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-12-v5";
 const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
   "workbox",
@@ -75,7 +75,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     hasPremiumAccess: false,
     isEditor: false,
   });
-  const [isAccessLoading, setIsAccessLoading] = useState(false);
+  const [isAccessLoading, setIsAccessLoading] = useState(true);
+  const [hasLoadedAccessState, setHasLoadedAccessState] = useState(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -95,6 +96,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     const syncAndRefreshAccessState = async () => {
       try {
+        setIsAccessLoading(true);
+
         await fetch("/api/instant-auth", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -109,7 +112,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         if (!navigator.onLine) return;
         if (isCancelled) return;
 
-        setIsAccessLoading(true);
         const response = await fetch("/api/access-state", {
           method: "GET",
           credentials: "include",
@@ -130,6 +132,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // Non-blocking: auth and local UI can still function if this check fails.
       } finally {
         if (!isCancelled) {
+          setHasLoadedAccessState(true);
           setIsAccessLoading(false);
         }
       }
@@ -198,7 +201,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AccessStateContext.Provider
         value={{
           ...accessState,
-          isSubscriptionLoading: isAccessLoading || isAuthLoading,
+          isSubscriptionLoading: isAuthLoading || (isOnline && (!hasLoadedAccessState || isAccessLoading)),
         }}
       >
         <SyncProvider>
