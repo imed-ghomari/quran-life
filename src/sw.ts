@@ -8,7 +8,7 @@ const injectedManifest = self.__SW_MANIFEST as
   | Array<string | { url: string; revision?: string | null }>
   | undefined;
 
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 const PRECACHE_NAME = `precache-${CACHE_VERSION}`;
 const PAGES_CACHE = `pages-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
@@ -38,6 +38,10 @@ const OLD_CACHE_PREFIXES = [
   "static-v6",
   "data-v6",
   "offline-content-v6",
+  "pages-v7",
+  "static-v7",
+  "data-v7",
+  "offline-content-v7",
 ];
 
 const toManifestUrl = (entry: string | { url: string }) =>

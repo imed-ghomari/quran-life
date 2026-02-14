@@ -59,7 +59,6 @@ function AuthContent() {
     const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-    const [subscriptionCheckTimedOut, setSubscriptionCheckTimedOut] = useState(false);
     const [canOpenOfflineApp, setCanOpenOfflineApp] = useState(false);
 
     // Environment variables for Google OAuth configuration
@@ -74,27 +73,20 @@ function AuthContent() {
     }, [planFromQuery]);
 
     useEffect(() => {
-        if (!user || !isSubscriptionLoading) {
-            setSubscriptionCheckTimedOut(false);
-            return;
-        }
-
-        const timeoutId = window.setTimeout(() => {
-            setSubscriptionCheckTimedOut(true);
-        }, 4000);
-
-        return () => window.clearTimeout(timeoutId);
-    }, [user, isSubscriptionLoading]);
-
-    useEffect(() => {
         if (!forceCheckoutBlur) return;
         if (!user?.email) return;
         setForceCheckoutBlur(false);
     }, [forceCheckoutBlur, user?.email]);
 
-    const shouldBlockOnSubscriptionLoad =
-        isOnline && isSubscriptionLoading && !subscriptionCheckTimedOut;
-    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
+    const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
+    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription || isPaymentBypass;
+
+    useEffect(() => {
+        if (!user) return;
+        if (isSubscriptionLoading) return;
+        if (!hasActiveSubscription && !isPaymentBypass) return;
+        window.location.replace('/dashboard');
+    }, [user, isSubscriptionLoading, hasActiveSubscription, isPaymentBypass]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -232,6 +224,20 @@ function AuthContent() {
                 background: 'var(--background)'
             }}>
                 <Spinner text="Checking subscription..." />
+            </div>
+        );
+    }
+
+    if (user && (hasActiveSubscription || isPaymentBypass)) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--background)'
+            }}>
+                <Spinner text="Redirecting to dashboard..." />
             </div>
         );
     }

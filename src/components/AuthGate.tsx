@@ -130,7 +130,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (isSubscriptionLoading) return;
 
     if (!hasAccess && !isCheckoutRoute) {
-      router.replace('/checkout');
+      router.replace('/auth');
       return;
     }
 
