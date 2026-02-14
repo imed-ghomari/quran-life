@@ -28,7 +28,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v8-next-pwa";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-14-v9-next-pwa-rsc";
 const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
   "workbox",

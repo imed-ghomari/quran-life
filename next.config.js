@@ -17,6 +17,14 @@ const withPWA = require('@ducanh2912/next-pwa').default({
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        additionalManifestEntries: [
+            { url: '/dashboard', revision: null },
+            { url: '/todo', revision: null },
+            { url: '/statistics', revision: null },
+            { url: '/settings', revision: null },
+            { url: '/docs', revision: null },
+            { url: '/offline-app', revision: null },
+        ],
         runtimeCaching: [
             {
                 urlPattern: ({ request, url }) =>
@@ -42,6 +50,30 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                     },
                     expiration: {
                         maxEntries: 64,
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    },
+                },
+            },
+            {
+                urlPattern: ({ url }) =>
+                    url.searchParams.has('_rsc')
+                    && (
+                        url.pathname === '/dashboard'
+                        || url.pathname === '/todo'
+                        || url.pathname === '/statistics'
+                        || url.pathname === '/settings'
+                        || url.pathname === '/docs'
+                        || url.pathname.startsWith('/docs/')
+                    ),
+                handler: 'NetworkFirst',
+                options: {
+                    cacheName: 'rsc-v10',
+                    networkTimeoutSeconds: 4,
+                    cacheableResponse: {
+                        statuses: [200],
+                    },
+                    expiration: {
+                        maxEntries: 128,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
                     },
                 },

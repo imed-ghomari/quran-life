@@ -148,7 +148,7 @@ function stateToCard(fsrsState: FSRSState): Card {
  */
 function cardToState(card: Card): FSRSState {
     return {
-        due: card.due.toISOString().split('T')[0],
+        due: card.due.toISOString(),
         stability: card.stability,
         difficulty: card.difficulty,
         elapsed_days: card.elapsed_days,
@@ -156,7 +156,7 @@ function cardToState(card: Card): FSRSState {
         reps: card.reps,
         lapses: card.lapses,
         state: stateToString(card.state),
-        last_review: card.last_review ? card.last_review.toISOString().split('T')[0] : '',
+        last_review: card.last_review ? card.last_review.toISOString() : '',
     };
 }
 
@@ -267,7 +267,7 @@ export function createPresetState(preset: MaturityPreset): FSRSState {
             const dueDate = new Date(now);
             dueDate.setDate(dueDate.getDate() + stability);
             return {
-                due: dueDate.toISOString().split('T')[0],
+                due: dueDate.toISOString(),
                 stability,
                 difficulty: defaultDifficulty,
                 elapsed_days: 0,
@@ -275,7 +275,7 @@ export function createPresetState(preset: MaturityPreset): FSRSState {
                 reps: 1,
                 lapses: 0,
                 state: 'Review',
-                last_review: now.toISOString().split('T')[0],
+                last_review: now.toISOString(),
             };
         }
 
@@ -284,7 +284,7 @@ export function createPresetState(preset: MaturityPreset): FSRSState {
             const dueDate = new Date(now);
             dueDate.setDate(dueDate.getDate() + stability);
             return {
-                due: dueDate.toISOString().split('T')[0],
+                due: dueDate.toISOString(),
                 stability,
                 difficulty: defaultDifficulty,
                 elapsed_days: 0,
@@ -292,7 +292,7 @@ export function createPresetState(preset: MaturityPreset): FSRSState {
                 reps: 3,
                 lapses: 0,
                 state: 'Review',
-                last_review: now.toISOString().split('T')[0],
+                last_review: now.toISOString(),
             };
         }
 
@@ -301,7 +301,7 @@ export function createPresetState(preset: MaturityPreset): FSRSState {
             const dueDate = new Date(now);
             dueDate.setDate(dueDate.getDate() + stability);
             return {
-                due: dueDate.toISOString().split('T')[0],
+                due: dueDate.toISOString(),
                 stability,
                 difficulty: defaultDifficulty,
                 elapsed_days: 0,
@@ -309,7 +309,7 @@ export function createPresetState(preset: MaturityPreset): FSRSState {
                 reps: 5,
                 lapses: 0,
                 state: 'Review',
-                last_review: now.toISOString().split('T')[0],
+                last_review: now.toISOString(),
             };
         }
 
@@ -331,7 +331,7 @@ export function buryCard(state: FSRSState): FSRSState {
 
     return {
         ...state,
-        due: tomorrow.toISOString().split('T')[0],
+        due: tomorrow.toISOString(),
         // DO NOT modify stability, difficulty, or any other FSRS parameters
     };
 }
@@ -345,7 +345,7 @@ export function buryCard(state: FSRSState): FSRSState {
  * This continues the FSRS cycle naturally
  */
 export function unsuspendCard(state: FSRSState): FSRSState {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString();
 
     return {
         ...state,
