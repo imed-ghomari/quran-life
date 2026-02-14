@@ -6,8 +6,8 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     // This can make client transitions behave like fresh page loads.
     cacheOnFrontEndNav: false,
     reloadOnOnline: false,
-    dynamicStartUrl: true,
-    dynamicStartUrlRedirect: '/auth',
+    // Keep start URL deterministic to avoid caching auth redirects as app navigations.
+    dynamicStartUrl: false,
     publicExcludes: [
         '!recitations/**/*',
         '!qpc-hafs-word-by-word.json',
@@ -48,7 +48,8 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                     cacheName: 'pages-v10',
                     networkTimeoutSeconds: 8,
                     cacheableResponse: {
-                        statuses: [200, 302, 307, 308],
+                        // Never cache redirects for app navigations.
+                        statuses: [200],
                     },
                     expiration: {
                         maxEntries: 64,
