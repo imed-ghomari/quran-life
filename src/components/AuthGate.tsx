@@ -41,6 +41,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isOnline = useContext(OnlineStatusContext);
   const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
@@ -50,6 +51,10 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
   const hasAccess = hasActiveSubscription || isPaymentBypass || hasRecentCheckout;
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
