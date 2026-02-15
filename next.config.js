@@ -8,6 +8,10 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     reloadOnOnline: false,
     // Keep start URL deterministic to avoid caching auth redirects as app navigations.
     dynamicStartUrl: false,
+    // Use the app's offline handoff route when a document request happens offline.
+    fallbacks: {
+        document: '/offline-app',
+    },
     publicExcludes: [
         '!recitations/**/*',
         '!qpc-hafs-word-by-word.json',
@@ -19,6 +23,9 @@ const withPWA = require('@ducanh2912/next-pwa').default({
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        additionalManifestEntries: [
+            { url: '/offline-app', revision: null },
+        ],
         runtimeCaching: [
             {
                 urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
