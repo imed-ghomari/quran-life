@@ -28,6 +28,17 @@ const withPWA = require('@ducanh2912/next-pwa').default({
         ],
         runtimeCaching: [
             {
+                urlPattern: ({ request, url }) =>
+                    request.mode === 'navigate'
+                    && !url.pathname.startsWith('/api/'),
+                handler: 'NetworkOnly',
+                options: {
+                    precacheFallback: {
+                        fallbackURL: '/offline-app',
+                    },
+                },
+            },
+            {
                 urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
                 handler: 'CacheFirst',
                 options: {
@@ -59,7 +70,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/_next\/static\/.*/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'static-assets-v11',
+                    cacheName: 'static-assets-v12',
                     expiration: {
                         maxEntries: 256,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -73,7 +84,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg|ico)$/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'image-assets-v11',
+                    cacheName: 'image-assets-v12',
                     expiration: {
                         maxEntries: 200,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -87,7 +98,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/(search-index\.json|qpc-hafs-word-by-word\.json|assets\/premade-mindmaps\/.*)/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'offline-content-v11',
+                    cacheName: 'offline-content-v12',
                     expiration: {
                         maxEntries: 128,
                         maxAgeSeconds: 30 * 24 * 60 * 60,
