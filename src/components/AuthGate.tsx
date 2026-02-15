@@ -16,6 +16,8 @@ const SIGNING_OUT_KEY = 'auth:signingOut';
 const POST_SIGN_OUT_UNTIL_KEY = 'auth:postSignOutUntil';
 const AUTH_RESOLVED_ONCE_KEY = 'auth:resolvedOnce';
 
+let hasClientHydratedOnce = false;
+
 function hasValidOfflineAccessMarker() {
   if (typeof window === 'undefined') return false;
   const raw = window.localStorage.getItem(OFFLINE_ACCESS_KEY);
@@ -41,6 +43,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isOnline = useContext(OnlineStatusContext);
   const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
+  const [isHydrated, setIsHydrated] = useState(() => hasClientHydratedOnce);
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
   const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
   const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
@@ -50,6 +53,11 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
   const hasAccess = hasActiveSubscription || isPaymentBypass || hasRecentCheckout;
+
+  useEffect(() => {
+    setIsHydrated(true);
+    hasClientHydratedOnce = true;
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
