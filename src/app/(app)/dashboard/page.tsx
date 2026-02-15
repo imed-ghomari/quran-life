@@ -52,6 +52,7 @@ const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr:
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
+const ACTIVE_REVIEW_NODE_STORAGE_KEY = 'dashboard_active_review_node_id_v1';
 
 const toPositiveInt = (value: unknown): number | null => {
     const parsed = Number(value);
@@ -155,6 +156,7 @@ export default function TodayPage() {
     const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
     const lastPortionKeyRef = useRef<string>('');
     const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
+    const didRestoreActiveNodeRef = useRef(false);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -443,6 +445,34 @@ export default function TodayPage() {
     }, [orderedDueNodes.length, currentReviewIndex]);
 
     const activeReviewNodeId = orderedDueNodes[currentReviewIndex]?.id;
+
+    useEffect(() => {
+        if (didRestoreActiveNodeRef.current) return;
+        if (typeof window === 'undefined') return;
+
+        const storedNodeId = window.sessionStorage.getItem(ACTIVE_REVIEW_NODE_STORAGE_KEY);
+        if (!storedNodeId || orderedDueNodes.length === 0) {
+            didRestoreActiveNodeRef.current = true;
+            return;
+        }
+
+        const restoredIndex = orderedDueNodes.findIndex(node => node.id === storedNodeId);
+        if (restoredIndex >= 0 && restoredIndex !== currentReviewIndex) {
+            setCurrentReviewIndex(restoredIndex);
+        }
+        didRestoreActiveNodeRef.current = true;
+    }, [orderedDueNodes, currentReviewIndex]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!didRestoreActiveNodeRef.current) return;
+        if (activeReviewNodeId) {
+            window.sessionStorage.setItem(ACTIVE_REVIEW_NODE_STORAGE_KEY, activeReviewNodeId);
+        } else {
+            window.sessionStorage.removeItem(ACTIVE_REVIEW_NODE_STORAGE_KEY);
+        }
+    }, [activeReviewNodeId]);
+
     useEffect(() => {
         activeNodeBeforeSortChangeRef.current = activeReviewNodeId ?? null;
     }, [activeReviewNodeId]);
