@@ -693,11 +693,6 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
         clip: `reviews-chart-clip-${gradientSeed}`,
     };
 
-    if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
-    if (nonZeroData.length === 0) {
-        return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
-    }
-
     useEffect(() => {
         if (!containerRef.current) return;
         const el = containerRef.current;
@@ -707,6 +702,11 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
         ro.observe(el);
         return () => ro.disconnect();
     }, []);
+
+    if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+    if (nonZeroData.length === 0) {
+        return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+    }
 
     return (
         <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
