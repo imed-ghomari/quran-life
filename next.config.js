@@ -1,4 +1,10 @@
-const PWA_CACHE_VERSION = (process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || 'local').slice(0, 12);
+const PWA_CACHE_VERSION = (
+    process.env.VERCEL_GIT_COMMIT_SHA
+    || process.env.VERCEL_DEPLOYMENT_ID
+    || process.env.COMMIT_REF
+    || process.env.GITHUB_SHA
+    || `${Date.now()}`
+).slice(0, 12);
 
 const withPWA = require('@ducanh2912/next-pwa').default({
     dest: 'public',
@@ -95,7 +101,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/_next\/static\/.*/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'static-assets-v13',
+                    cacheName: `static-assets-v13-${PWA_CACHE_VERSION}`,
                     expiration: {
                         maxEntries: 256,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -109,7 +115,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg|ico)$/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'image-assets-v13',
+                    cacheName: `image-assets-v13-${PWA_CACHE_VERSION}`,
                     expiration: {
                         maxEntries: 200,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -123,7 +129,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/(search-index\.json|qpc-hafs-word-by-word\.json|assets\/premade-mindmaps\/.*)/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'offline-content-v13',
+                    cacheName: `offline-content-v13-${PWA_CACHE_VERSION}`,
                     expiration: {
                         maxEntries: 128,
                         maxAgeSeconds: 30 * 24 * 60 * 60,

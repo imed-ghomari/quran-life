@@ -144,8 +144,10 @@ export function parseQuranJson(data: Record<string, any>): Verse[] {
     
     for (const key of keys) {
         const item = data[key];
-        const surahId = item.surah;
-        const ayahId = item.ayah;
+        if (!item || typeof item !== 'object') continue;
+        const surahId = Number(item.surah);
+        const ayahId = Number(item.ayah);
+        if (!Number.isFinite(surahId) || !Number.isFinite(ayahId)) continue;
         const verseKey = `${surahId}:${ayahId}`;
 
         let verseWords = versesMap.get(verseKey);
@@ -155,10 +157,10 @@ export function parseQuranJson(data: Record<string, any>): Verse[] {
             verseKeysOrder.push(verseKey);
         }
 
-        const text = item.text;
+        const text = typeof item.text === 'string' ? item.text : '';
         // Check if the word is a verse marker (Arabic digits)
         const isMarker = text.length <= 3 && /^[\u0660-\u0669]+$/.test(text);
-        if (!isMarker) {
+        if (!isMarker && text.length > 0) {
             verseWords.push(text);
         }
     }

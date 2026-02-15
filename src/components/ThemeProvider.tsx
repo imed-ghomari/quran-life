@@ -13,14 +13,19 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>('system');
+    const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const stored = localStorage.getItem('theme') as Theme | null;
-        if (stored && ['light', 'dark', 'system'].includes(stored) && stored !== theme) {
+        if (stored && ['light', 'dark', 'system'].includes(stored)) {
             setThemeState(stored);
-            return;
         }
+        setHydrated(true);
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !hydrated) return;
         const root = window.document.documentElement;
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -36,7 +41,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         };
         mq.addEventListener('change', handleChange);
         return () => mq.removeEventListener('change', handleChange);
-    }, [theme]);
+    }, [theme, hydrated]);
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme: setThemeState }}>

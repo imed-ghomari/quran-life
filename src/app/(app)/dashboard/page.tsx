@@ -52,15 +52,59 @@ const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr:
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 
+const toPositiveInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
-function splitIntoChunks(text: string, wordsPerChunk: number = 3): string[] {
-    const words = text.split(/\s+/);
-    if (words.length <= wordsPerChunk + 2) return [text];
+const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
+    const direct = toPositiveInt((node as any).surahId);
+    if (direct) return direct;
+    const target = String((node as any).targetId || '');
+    const anchorMatch = target.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (anchorMatch) return toPositiveInt(anchorMatch[1]);
+    const mindmapMatch = target.match(/^mindmap-(\d+)$/);
+    if (mindmapMatch) return toPositiveInt(mindmapMatch[1]);
+    return null;
+};
+
+const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
+    const direct = toPositiveInt((node as any).partId);
+    if (direct) return direct;
+    const target = String((node as any).targetId || '');
+    const partMatch = target.match(/^part-mindmap-(\d+)$/);
+    if (!partMatch) return null;
+    return toPositiveInt(partMatch[1]);
+};
+
+
+function splitIntoChunks(text: string | undefined | null, wordsPerChunk: number = 3): string[] {
+    const normalized = typeof text === 'string' ? text : '';
+    const words = normalized.split(/\s+/).filter(Boolean);
+    if (words.length <= wordsPerChunk + 2) return [normalized];
     const chunks: string[] = [];
     for (let i = 0; i < words.length; i += wordsPerChunk) {
         chunks.push(words.slice(i, i + wordsPerChunk).join(' '));
     }
     return chunks;
+}
+
+function sanitizeVerses(input: unknown): Verse[] {
+    if (!Array.isArray(input)) return [];
+    const out: Verse[] = [];
+    for (const raw of input) {
+        if (!raw || typeof raw !== 'object') continue;
+        const v = raw as Partial<Verse>;
+        const surahId = Number(v.surahId);
+        const ayahId = Number(v.ayahId);
+        if (!Number.isFinite(surahId) || !Number.isFinite(ayahId)) continue;
+        out.push({
+            surahId,
+            ayahId,
+            text: typeof v.text === 'string' ? v.text : '',
+        });
+    }
+    return out;
 }
 
 function getLocalDayKeyNow() {
@@ -109,12 +153,13 @@ export default function TodayPage() {
     const [isMobile, setIsMobile] = useState(false);
     const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
     const lastPortionKeyRef = useRef<string>('');
+    const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
-        const mindmap = mindmaps.find(m => m.surahId === surahId);
+        const mindmap = mindmaps.find(m => Number(m.surahId) === surahId);
         if (!mindmap || !mindmap.anchors) return undefined;
-        return (mindmap.anchors as any[]).find(a => a.startVerse === start && a.endVerse === end);
+        return (mindmap.anchors as any[]).find(a => Number(a.startVerse) === start && Number(a.endVerse) === end);
     }, [mindmaps]);
 
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
@@ -123,6 +168,8 @@ export default function TodayPage() {
 
         const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
+        const completeExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
+        const skippedSurahIds = new Set<number>((settings?.skippedSurahs || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
         const typeRank: Record<string, number> = {
             part_mindmap: 0,
             mindmap: 1,
@@ -137,8 +184,8 @@ export default function TodayPage() {
             const bPart = b.partId ?? 0;
             if (aPart !== bPart) return aPart - bPart;
 
-            const aSurah = a.surahId ?? 0;
-            const bSurah = b.surahId ?? 0;
+            const aSurah = resolveNodeSurahId(a) ?? 0;
+            const bSurah = resolveNodeSurahId(b) ?? 0;
             if (aSurah !== bSurah) return aSurah - bSurah;
 
             const aStart = a.startVerse ?? 0;
@@ -158,26 +205,39 @@ export default function TodayPage() {
 
         const filteredDueNodes = hasKanbanState
             ? dueNodes.filter(node => {
+                const surahId = resolveNodeSurahId(node);
+                if (surahId && skippedSurahIds.has(surahId)) return false;
+
                 if (node.type === 'mindmap') {
-                    return completeIds.has(`surah-${node.surahId}`);
+                    return surahId ? completeIds.has(`surah-${surahId}`) : true;
                 }
                 if (node.type === 'part_mindmap') {
-                    return completeIds.has(`part-${node.partId}`);
+                    const partId = resolveNodePartId(node);
+                    return partId ? completeIds.has(`part-${partId}`) : true;
                 }
-                if (node.type === 'verse_segment' && node.surahId) {
-                    const mm = mindmaps.find(m => m.surahId === node.surahId);
+                if (node.type === 'verse_segment') {
+                    const surahId = resolveNodeSurahId(node);
+                    if (!surahId) return true;
+                    if (completeExitBehavior === 'mindmap_and_verses' && !completeIds.has(`surah-${surahId}`)) {
+                        return false;
+                    }
+                    const mm = mindmaps.find(m => Number(m.surahId) === surahId);
                     const anchors = mm?.anchors || [];
                     if (anchors.length === 0) return false;
-                    return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+                    return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
                 }
                 return true;
             })
             : dueNodes.filter(node => {
-                if (node.type === 'verse_segment' && node.surahId) {
-                    const mm = mindmaps.find(m => m.surahId === node.surahId);
+                const surahId = resolveNodeSurahId(node);
+                if (surahId && skippedSurahIds.has(surahId)) return false;
+
+                if (node.type === 'verse_segment') {
+                    if (!surahId) return true;
+                    const mm = mindmaps.find(m => Number(m.surahId) === surahId);
                     const anchors = mm?.anchors || [];
                     if (anchors.length === 0) return false;
-                    return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+                    return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
                 }
                 return true;
             });
@@ -207,18 +267,21 @@ export default function TodayPage() {
         const otherNodes: MemoryNode[] = [];
 
         const isFullSurah = (node: MemoryNode) => {
-            if (node.type !== 'verse_segment' || !node.surahId) return false;
-            const surah = getSurah(node.surahId);
+            if (node.type !== 'verse_segment') return false;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return false;
+            const surah = getSurah(surahId);
             if (!surah) return false;
             return node.startVerse === 1 && node.endVerse === surah.verseCount;
         };
 
         filteredDueNodes.forEach(node => {
-            if (node.surahId) {
-                if (!surahGroups.has(node.surahId)) {
-                    surahGroups.set(node.surahId, { others: [] });
+            const surahId = resolveNodeSurahId(node);
+            if (surahId) {
+                if (!surahGroups.has(surahId)) {
+                    surahGroups.set(surahId, { others: [] });
                 }
-                const group = surahGroups.get(node.surahId)!;
+                const group = surahGroups.get(surahId)!;
                 if (node.type === 'mindmap') {
                     group.mindmap = node;
                 } else if (isFullSurah(node)) {
@@ -249,7 +312,7 @@ export default function TodayPage() {
         }
 
         return ordered;
-    }, [dueNodes, settings?.kanbanColumns, mindmaps, settings?.reviewSortOrder]);
+    }, [dueNodes, settings?.kanbanColumns, settings?.skippedSurahs, settings?.completeExitBehavior, mindmaps, settings?.reviewSortOrder]);
 
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {
@@ -278,9 +341,9 @@ export default function TodayPage() {
                 anchors.forEach(anchor => {
                     const anchorNodeExists = nodes.some(n =>
                         n.type === 'verse_segment' &&
-                        n.surahId === surahId &&
-                        n.startVerse === anchor.startVerse &&
-                        n.endVerse === anchor.endVerse
+                        resolveNodeSurahId(n) === surahId &&
+                        Number(n.startVerse) === Number(anchor.startVerse) &&
+                        Number(n.endVerse) === Number(anchor.endVerse)
                     );
                     if (!anchorNodeExists) {
                         const targetId = anchor.id || `anchor-${surahId}-${anchor.startVerse}-${anchor.endVerse}`;
@@ -302,7 +365,7 @@ export default function TodayPage() {
             const mindmap = mindmaps.find(m => Number(m.surahId) === surahId);
             const mindmapNodeExists = nodes.some(n =>
                 n.targetId === mindmapTargetId ||
-                (n.type === 'mindmap' && n.surahId === surahId)
+                (n.type === 'mindmap' && resolveNodeSurahId(n) === surahId)
             );
             if (mindmap && !mindmapNodeExists) {
                 nodesToCreate.push({
@@ -321,7 +384,7 @@ export default function TodayPage() {
             const partMindmap = partMindMaps.find(pm => Number(pm.partId) === partId);
             const partMindmapNodeExists = nodes.some(n =>
                 n.targetId === partTargetId ||
-                (n.type === 'part_mindmap' && n.partId === partId)
+                (n.type === 'part_mindmap' && resolveNodePartId(n) === partId)
             );
             if (partMindmap && !partMindmapNodeExists) {
                 nodesToCreate.push({
@@ -419,6 +482,28 @@ export default function TodayPage() {
             setShowGrading(false);
         }
     }, [orderedDueNodes.length, currentReviewIndex]);
+
+    const activeReviewNodeId = orderedDueNodes[currentReviewIndex]?.id;
+    useEffect(() => {
+        activeNodeBeforeSortChangeRef.current = activeReviewNodeId ?? null;
+    }, [activeReviewNodeId]);
+
+    useEffect(() => {
+        if (!orderedDueNodes.length) return;
+        const prevActiveNodeId = activeNodeBeforeSortChangeRef.current;
+        if (!prevActiveNodeId) return;
+        const preservedIndex = orderedDueNodes.findIndex(node => node.id === prevActiveNodeId);
+        if (preservedIndex >= 0 && preservedIndex !== currentReviewIndex) {
+            setCurrentReviewIndex(preservedIndex);
+        }
+    }, [settings?.reviewSortOrder, orderedDueNodes, currentReviewIndex]);
+
+    useEffect(() => {
+        if (!activeReviewNodeId) return;
+        setRevealedChunks(0);
+        setCurrentVerseInReview(0);
+        setShowGrading(false);
+    }, [activeReviewNodeId]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -697,22 +782,37 @@ export default function TodayPage() {
 
                 try {
                     // Map logs to match ReviewLogInput interface
-                    const formattedLogs = reviewLogs.map(log => ({
-                        nodeId: log.nodeId,
-                        rating: (log.rating === 'Good' || log.rating === 3) ? 3 : 1, // Map string/number rating to FSRS number
-                        elapsed_days: log.elapsed_days,
-                        review: log.timestamp || new Date().toISOString() // Use timestamp as review date
-                    }));
+                    const formattedLogs = reviewLogs
+                        .map(log => {
+                            const nodeId = String(log?.nodeId || '').trim();
+                            if (!nodeId) return null;
+                            const review = String(log?.review_time || '').trim();
+                            const reviewDate = review ? new Date(review) : null;
+                            const elapsedDays = Number.isFinite(Number(log?.elapsed_days)) ? Number(log.elapsed_days) : 0;
+                            return {
+                                nodeId,
+                                rating: (log.rating === 'Good' || log.rating === 3) ? 3 : 1, // Map string/number rating to FSRS number
+                                elapsed_days: Math.max(0, Math.floor(elapsedDays)),
+                                review: reviewDate && !Number.isNaN(reviewDate.getTime())
+                                    ? reviewDate.toISOString()
+                                    : new Date().toISOString()
+                            };
+                        })
+                        .filter((log): log is { nodeId: string; rating: number; elapsed_days: number; review: string } => !!log);
+
+                    if (formattedLogs.length === 0) return;
 
                     const result = await optimizeWeights(formattedLogs);
 
                     if (result.success && result.weights) {
-                        saveCustomWeights(result.weights);
-                        saveOptimizationMeta({
+                        await Promise.all([
+                            saveCustomWeights(result.weights),
+                            saveOptimizationMeta({
                             ...optimizationMeta,
                             logCountAtLastOptimization: count,
                             lastOptimizedAt: new Date().toISOString()
-                        });
+                            })
+                        ]);
                         addToast('success', 'Optimization Complete', 'FSRS parameters updated based on your performance.');
                     } else {
                         console.error('Optimization failed:', result.error);
@@ -737,15 +837,19 @@ export default function TodayPage() {
             // Check session storage first
             const cached = sessionStorage.getItem('quran_verses_cache_v2');
             if (cached) {
-                setAllVerses(JSON.parse(cached));
-                setIsVersesLoaded(true);
-                return;
+                try {
+                    setAllVerses(sanitizeVerses(JSON.parse(cached)));
+                    setIsVersesLoaded(true);
+                    return;
+                } catch {
+                    sessionStorage.removeItem('quran_verses_cache_v2');
+                }
             }
 
             try {
                 const response = await fetch('/qpc-hafs-word-by-word.json');
                 const data = await response.json() as Record<string, any>;
-                const verses = parseQuranJson(data);
+                const verses = sanitizeVerses(parseQuranJson(data));
                 setAllVerses(verses);
                 setIsVersesLoaded(true);
 
@@ -760,7 +864,7 @@ export default function TodayPage() {
                         const cachedRes = await caches.match('/qpc-hafs-word-by-word.json');
                         if (cachedRes) {
                             const data = await cachedRes.json() as Record<string, any>;
-                            const verses = parseQuranJson(data);
+                            const verses = sanitizeVerses(parseQuranJson(data));
                             setAllVerses(verses);
                             setIsVersesLoaded(true);
                             return;
@@ -814,14 +918,14 @@ export default function TodayPage() {
                 let remainingLength = 0;
                 while (i < totalVerses && allVersesInPart[i].surahId === lastVerseInProposed.surahId) {
                     remainingCount++;
-                    remainingLength += allVersesInPart[i].text.length;
+                    remainingLength += (allVersesInPart[i]?.text || '').length;
                     i++;
                 }
                 // If <= 5 verses or total text is short (< 400 chars)
                 if (remainingCount <= 5 || remainingLength < 400) {
                     // Ignore surahs with very long verses (e.g. Baqarah 282)
                     const surahVerses = allVersesInPart.filter(v => v.surahId === lastVerseInProposed.surahId);
-                    const hasVeryLongVerses = surahVerses.some(v => v.text.length > 600);
+                    const hasVeryLongVerses = surahVerses.some(v => (v?.text || '').length > 600);
 
                     if (!hasVeryLongVerses) {
                         endIdx = i;
@@ -883,12 +987,13 @@ export default function TodayPage() {
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
         setIsPersistingReviewAction(true);
+        const resolvedSurahId = resolveNodeSurahId(node);
 
         const errorId = !remembered ? id() : undefined;
         let errorPayload: any | undefined;
         const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
-            node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
-                `${getSurah(node.surahId!)?.arabicName} (${node.startVerse}-${node.endVerse})`;
+            node.type === 'mindmap' ? getSurah(resolvedSurahId || 0)?.arabicName :
+                `${getSurah(resolvedSurahId || 0)?.arabicName} (${node.startVerse}-${node.endVerse})`;
 
         const toastType = remembered ? 'success' : 'error';
         const toastMessage = remembered ? 'Remembered' : 'Forgot';
@@ -936,19 +1041,19 @@ export default function TodayPage() {
             };
 
             // Add optional fields only if they exist
-            if (node.surahId !== undefined) errorToSave.surahId = node.surahId;
+            if (resolvedSurahId !== null) errorToSave.surahId = resolvedSurahId;
             if (node.partId !== undefined) errorToSave.partId = node.partId;
             if (node.startVerse !== undefined) errorToSave.startVerse = node.startVerse;
             if (node.endVerse !== undefined) errorToSave.endVerse = node.endVerse;
 
             const anchor = (node.startVerse !== undefined && node.endVerse !== undefined)
-                ? findAnchorForRange(node.surahId!, node.startVerse, node.endVerse)
+                ? findAnchorForRange(resolvedSurahId || 0, node.startVerse, node.endVerse)
                 : undefined;
 
             if (anchor?.label) errorToSave.anchorLabel = anchor.label;
             if (anchor?.id) errorToSave.anchorId = anchor.id;
 
-            const abs = failedAyahId && node.surahId ? surahAyahToAbsolute(node.surahId, failedAyahId) : undefined;
+            const abs = failedAyahId && resolvedSurahId ? surahAyahToAbsolute(resolvedSurahId, failedAyahId) : undefined;
             if (abs !== undefined) errorToSave.absoluteAyah = abs;
 
             errorPayload = errorToSave;
@@ -1016,10 +1121,11 @@ export default function TodayPage() {
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
         setIsPersistingReviewAction(true);
+        const resolvedSurahId = resolveNodeSurahId(node);
 
         const info = node.type === 'part_mindmap' ? `Part ${node.partId}` :
-            node.type === 'mindmap' ? getSurah(node.surahId!)?.arabicName :
-                `${getSurah(node.surahId!)?.arabicName} (${node.startVerse}-${node.endVerse})`;
+            node.type === 'mindmap' ? getSurah(resolvedSurahId || 0)?.arabicName :
+                `${getSurah(resolvedSurahId || 0)?.arabicName} (${node.startVerse}-${node.endVerse})`;
 
         // Postpone by 1 day
         const scheduler = node.scheduler as any;
@@ -1294,11 +1400,15 @@ export default function TodayPage() {
         const node = orderedDueNodes[currentReviewIndex];
 
         if (node.type === 'part_mindmap') {
-            const pm = partMindMaps.find(m => m.partId === node.partId);
-            return { type: 'part_mindmap', partId: node.partId, mindmap: pm };
+            const partId = resolveNodePartId(node);
+            if (!partId) return null;
+            const pm = partMindMaps.find(m => Number(m.partId) === partId);
+            return { type: 'part_mindmap', partId, mindmap: pm };
         } else if (node.type === 'mindmap') {
-            const s = getSurah(node.surahId!);
-            const m = mindmaps.find(mm => mm.surahId === node.surahId);
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return null;
+            const s = getSurah(surahId);
+            const m = mindmaps.find(mm => Number(mm.surahId) === surahId);
 
             // For mindmap reviews, include verses from anchors for gradual revelation
             const verses: Verse[] = [];
@@ -1314,15 +1424,17 @@ export default function TodayPage() {
 
             return { type: 'mindmap', surah: s, mindmap: m, verses };
         } else {
-            const s = getSurah(node.surahId!);
-            const vs = allVerses.filter(v => v.surahId === node.surahId && v.ayahId >= (node.startVerse || 1) && v.ayahId <= (node.endVerse || 999));
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return null;
+            const s = getSurah(surahId);
+            const vs = allVerses.filter(v => v.surahId === surahId && v.ayahId >= (node.startVerse || 1) && v.ayahId <= (node.endVerse || 999));
 
             // Context with mutashabihat-aware expansion
             const contextVerses: Verse[] = [];
             const start = node.startVerse || 1;
             let lookback = 1;
-            while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(node.surahId!, start - lookback + 1)))) {
-                const candidate = allVerses.find(v => v.surahId === node.surahId && v.ayahId === start - lookback);
+            while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, start - lookback + 1)))) {
+                const candidate = allVerses.find(v => v.surahId === surahId && v.ayahId === start - lookback);
                 if (!candidate) break;
                 contextVerses.unshift(candidate);
                 const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
@@ -1336,18 +1448,25 @@ export default function TodayPage() {
 
     const reviewContent = getCurrentReviewContent();
     const activeContent = reviewContent;
+    const normalizedActiveVerses = useMemo(() => {
+        const raw = activeContent?.verses;
+        if (!raw || !Array.isArray(raw)) return [];
+        return raw.filter((v): v is Verse => !!v && typeof v.text === 'string');
+    }, [activeContent?.verses]);
     // Reveal Logic
     const getCurrentVerseChunks = () => {
-        if (!activeContent || !activeContent.verses || !activeContent.verses.length) return [];
-        const v = activeContent.verses[currentVerseInReview];
+        if (normalizedActiveVerses.length === 0) return [];
+        const safeVerseIndex = Math.max(0, Math.min(currentVerseInReview, normalizedActiveVerses.length - 1));
+        const v = normalizedActiveVerses[safeVerseIndex];
+        if (!v?.text) return [];
         return splitIntoChunks(v.text);
     };
 
     const verseChunks = getCurrentVerseChunks();
     const totalChunks = verseChunks.length;
-    const totalVerses = activeContent?.verses?.length || 0;
+    const totalVerses = normalizedActiveVerses.length;
 
-    const verseChunkMap = activeContent?.verses?.map(v => splitIntoChunks(v.text)) || [];
+    const verseChunkMap = normalizedActiveVerses.map(v => splitIntoChunks(v?.text ?? ''));
     const hasCurrentVerseNextChunk = revealedChunks < totalChunks;
     const nextRevealVerseIndex =
         totalVerses > 0
@@ -1757,11 +1876,11 @@ export default function TodayPage() {
                                                             <span key={`context-${v.ayahId}`} className="grouped-verse-block">
                                                                 <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px', opacity: 0.8 }}>{v.ayahId}</span>
                                                                 <span className="grouped-verse-text arabic-text" style={{ opacity: 0.65 }}>
-                                                                    {v.text}
+                                                                    {v?.text || ''}
                                                                 </span>
                                                             </span>
                                                         ))}
-                                                        {activeContent.verses?.map((v, idx) => {
+                                                        {normalizedActiveVerses.map((v, idx) => {
                                                             const chunks = verseChunkMap[idx] || [];
                                                             const isPast = idx < currentVerseInReview;
                                                             const isCurrent = idx === currentVerseInReview;
@@ -1778,7 +1897,7 @@ export default function TodayPage() {
                                                                 ? ''
                                                                 : (isNextRevealVerse
                                                                     ? chunks.slice(nextRevealChunkIndex + 1).join(' ')
-                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : v.text));
+                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : (v?.text || '')));
 
                                                             return (
                                                                 <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
@@ -2009,7 +2128,7 @@ export default function TodayPage() {
                                                     <AudioPlayer
                                                         verses={todaysPortion}
                                                         currentVerseIndex={currentVerseIndex}
-                                                        currentVerseWordCount={todaysPortion[currentVerseIndex]?.text.split(' ').length || 0}
+                                                        currentVerseWordCount={todaysPortion[currentVerseIndex]?.text?.split(' ').length || 0}
                                                         onVerseChange={setCurrentVerseIndex}
                                                         onWordIndexChange={setHighlightedWordIndex}
                                                     />
@@ -2081,7 +2200,7 @@ export default function TodayPage() {
                                                             )}
                                                             <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
                                                                 <span className="verse-ref" style={{ float: 'left', fontSize: '0.7rem' }}>{v.ayahId}</span>
-                                                                <span className="arabic-text" style={{ fontSize: '1.2rem' }}>{v.text}</span>
+                                                                <span className="arabic-text" style={{ fontSize: '1.2rem' }}>{v?.text || ''}</span>
                                                             </div>
                                                         </div>
                                                     );

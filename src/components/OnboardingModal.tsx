@@ -28,6 +28,16 @@ interface OnboardingModalProps {
 
 const ONBOARDING_TX_BATCH_SIZE = 100;
 
+const resolveNodeSurahId = (node: { surahId?: unknown; targetId?: unknown }): number | null => {
+    const direct = Number(node.surahId);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const target = String(node.targetId || '');
+    const match = target.match(/^anchor-(\d+)-\d+-\d+$/) || target.match(/^verse-(\d+)-\d+-\d+$/);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
 export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const [step, setStep] = useState(0);
     const { settings, user } = useInstantSettings();
@@ -77,9 +87,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                     n.targetId === targetId ||
                     (
                         n.type === 'verse_segment' &&
-                        n.surahId === surahId &&
-                        n.startVerse === i &&
-                        n.endVerse === i
+                        resolveNodeSurahId(n as any) === surahId &&
+                        Number(n.startVerse) === i &&
+                        Number(n.endVerse) === i
                     )
                 );
                 if (!alreadyExists) {
