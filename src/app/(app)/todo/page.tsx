@@ -139,6 +139,87 @@ export default function TodoPage() {
         return nodes.some(n => n.type === 'verse_segment' && getVerseSegmentSurahId(n) === surahId && hasNodeBeenReviewed(n.scheduler));
     }, [nodes]);
 
+    // Keep scheduler nodes aligned when split anchors change in Todo.
+    // Without this, Today counters can lag until the Dashboard mount sync runs.
+    useEffect(() => {
+        const completedIds = settings?.kanbanColumns?.complete || [];
+        if (completedIds.length === 0) return;
+
+        const completedSurahIds = completedIds
+            .filter(itemId => itemId.startsWith('surah-'))
+            .map(itemId => Number.parseInt(itemId.replace('surah-', ''), 10))
+            .filter(id => Number.isFinite(id));
+
+        const completedPartIds = completedIds
+            .filter(itemId => itemId.startsWith('part-'))
+            .map(itemId => Number.parseInt(itemId.replace('part-', ''), 10))
+            .filter(id => Number.isFinite(id)) as QuranPart[];
+
+        const nodesToCreate: MemoryNode[] = [];
+
+        completedSurahIds.forEach(surahId => {
+            const surah = getSurah(surahId);
+            if (!surah) return;
+
+            const mm = mindmaps[surahId];
+            const anchors = mm?.anchors || [];
+            anchors.forEach(anchor => {
+                const startVerse = Number(anchor.startVerse);
+                const endVerse = Number(anchor.endVerse);
+                const exists = nodes.some(n =>
+                    n.type === 'verse_segment' &&
+                    getVerseSegmentSurahId(n) === surahId &&
+                    Number(n.startVerse) === startVerse &&
+                    Number(n.endVerse) === endVerse
+                );
+                if (!exists) {
+                    nodesToCreate.push({
+                        id: stableNodeId('memory_node', 'verse_segment', surahId, startVerse, endVerse),
+                        type: 'verse_segment',
+                        surahId,
+                        startVerse,
+                        endVerse,
+                        targetId: anchor.id || `anchor-${surahId}-${startVerse}-${endVerse}`,
+                        scheduler: createNewFSRSState(),
+                        createdAt: new Date().toISOString(),
+                    });
+                }
+            });
+
+            const mindmapExists = nodes.some(n => n.type === 'mindmap' && getMindmapSurahId(n) === surahId);
+            if (mm && !mindmapExists) {
+                nodesToCreate.push({
+                    id: stableNodeId('memory_node', 'mindmap', surahId),
+                    type: 'mindmap',
+                    surahId,
+                    targetId: `mindmap-${surahId}`,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString(),
+                });
+            }
+        });
+
+        completedPartIds.forEach(partId => {
+            const partMap = partMindmapsMap[partId];
+            const exists = nodes.some(n => n.type === 'part_mindmap' && getPartMindmapPartId(n) === partId);
+            if (partMap && !exists) {
+                nodesToCreate.push({
+                    id: stableNodeId('memory_node', 'part_mindmap', partId),
+                    type: 'part_mindmap',
+                    partId,
+                    targetId: `part-mindmap-${partId}`,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString(),
+                });
+            }
+        });
+
+        if (nodesToCreate.length === 0) return;
+        Promise.all(nodesToCreate.map(node => saveNode(node))).catch((err) => {
+            console.error('Failed syncing Todo split changes to FSRS nodes', err);
+        });
+    }, [settings?.kanbanColumns, nodes, mindmaps, partMindmapsMap, saveNode]);
+
     // Theme detection
     const { theme } = useTheme();
     const [systemIsDark, setSystemIsDark] = useState(false);
@@ -400,6 +481,9 @@ export default function TodoPage() {
         });
 
         const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
+        const previousAnchorRanges = new Set(
+            (existing.anchors || []).map((a: any) => `${Number(a.startVerse)}-${Number(a.endVerse)}`)
+        );
         const newAnchors = anchors.map(a => ({
             id: `anchor-${surahId}-${a.start}-${a.end}`,
             surahId,
@@ -419,6 +503,11 @@ export default function TodoPage() {
         const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
         const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
         const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
+        const nextRangeKeys = Array.from(nextRanges).sort();
+        const prevRangeKeys = Array.from(previousAnchorRanges).sort();
+        const splitsChanged =
+            nextRangeKeys.length !== prevRangeKeys.length ||
+            nextRangeKeys.some((key, idx) => key !== prevRangeKeys[idx]);
 
         const staleNodes = existingVerseNodes.filter(n => !nextRanges.has(rangeKey(Number(n.startVerse), Number(n.endVerse))));
         if (staleNodes.length > 0) {
@@ -426,10 +515,31 @@ export default function TodoPage() {
         }
 
         if (shouldCreateMissingRanges) {
-            const existingRanges = new Set(existingVerseNodes.map(n => rangeKey(Number(n.startVerse), Number(n.endVerse))));
-            const missingAnchors = newAnchors.filter(a => !existingRanges.has(rangeKey(Number(a.startVerse), Number(a.endVerse))));
-            if (missingAnchors.length > 0) {
-                await Promise.all(missingAnchors.map(anchor => saveNode({
+            const existingByRange = new Map<string, MemoryNode>(
+                existingVerseNodes.map(n => [rangeKey(Number(n.startVerse), Number(n.endVerse)), n] as const)
+            );
+            const shouldResetAllForComplete = isInCompleteColumn && splitsChanged;
+            const nowIso = new Date().toISOString();
+
+            const upserts = newAnchors.map(anchor => {
+                const key = rangeKey(Number(anchor.startVerse), Number(anchor.endVerse));
+                const existingNode = existingByRange.get(key);
+
+                if (existingNode) {
+                    return saveNode({
+                        ...existingNode,
+                        id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
+                        type: 'verse_segment',
+                        surahId,
+                        startVerse: anchor.startVerse,
+                        endVerse: anchor.endVerse,
+                        targetId: anchor.id,
+                        scheduler: shouldResetAllForComplete ? createNewFSRSState() : existingNode.scheduler,
+                        createdAt: shouldResetAllForComplete ? nowIso : existingNode.createdAt,
+                    } as MemoryNode);
+                }
+
+                return saveNode({
                     id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
                     type: 'verse_segment',
                     surahId,
@@ -437,8 +547,12 @@ export default function TodoPage() {
                     endVerse: anchor.endVerse,
                     targetId: anchor.id,
                     scheduler: createNewFSRSState(),
-                    createdAt: new Date().toISOString()
-                } as MemoryNode)));
+                    createdAt: nowIso
+                } as MemoryNode);
+            });
+
+            if (upserts.length > 0) {
+                await Promise.all(upserts);
             }
         }
     };

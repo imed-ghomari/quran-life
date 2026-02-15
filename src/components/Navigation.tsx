@@ -16,29 +16,7 @@ import {
 } from '@/hooks/useInstantData';
 import { getMutashabihatForAbsolute, surahAyahToAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
-
-const toPositiveInt = (value: unknown): number | null => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-};
-
-const resolveNodeSurahId = (node: { surahId?: unknown; targetId?: unknown }): number | null => {
-    const direct = toPositiveInt(node.surahId);
-    if (direct) return direct;
-    const target = String(node.targetId || '');
-    const anchorMatch = target.match(/^anchor-(\d+)-\d+-\d+$/);
-    if (!anchorMatch) return null;
-    return toPositiveInt(anchorMatch[1]);
-};
-
-const resolveNodePartId = (node: { partId?: unknown; targetId?: unknown }): number | null => {
-    const direct = toPositiveInt(node.partId);
-    if (direct) return direct;
-    const target = String(node.targetId || '');
-    const partMatch = target.match(/^part-mindmap-(\d+)$/);
-    if (!partMatch) return null;
-    return toPositiveInt(partMatch[1]);
-};
+import { filterReviewQueueNodes } from '@/lib/reviewQueue';
 
 function NavigationContent() {
     const pathname = usePathname();
@@ -159,46 +137,7 @@ function NavigationContent() {
         setIsDailyPortionComplete(dailyComplete);
 
         // Match Today badge count with the exact queue filter used by the review section.
-        const hasKanbanState = !!settings.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
-        const completeIds = new Set<string>(hasKanbanState ? (settings.kanbanColumns?.complete || []) : []);
-        const completeExitBehavior = settings.completeExitBehavior ?? 'mindmap_only';
-        const skippedSurahIds = new Set<number>((settings.skippedSurahs || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
-
-        const hasAnchorForNode = (node: (typeof dueNodes)[number]) => {
-            if (node.type !== 'verse_segment') return true;
-            const surahId = resolveNodeSurahId(node as any);
-            if (!surahId) return true;
-            const mm = mindmaps.find(m => Number(m.surahId) === surahId);
-            const anchors = mm?.anchors || [];
-            if (anchors.length === 0) return false;
-            return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
-        };
-
-        const todayCount = dueNodes
-            .filter(node => {
-                const surahId = resolveNodeSurahId(node as any);
-                return !surahId || !skippedSurahIds.has(surahId);
-            })
-            .filter(node => {
-                if (!hasKanbanState) return true;
-                if (node.type === 'mindmap') {
-                    const surahId = resolveNodeSurahId(node as any);
-                    return surahId ? completeIds.has(`surah-${surahId}`) : true;
-                }
-                if (node.type === 'part_mindmap') {
-                    const partId = resolveNodePartId(node as any);
-                    return partId ? completeIds.has(`part-${partId}`) : true;
-                }
-                if (node.type === 'verse_segment') {
-                    if (completeExitBehavior !== 'mindmap_and_verses') return true;
-                    const surahId = resolveNodeSurahId(node as any);
-                    if (!surahId) return true;
-                    return completeIds.has(`surah-${surahId}`);
-                }
-                return true;
-            })
-            .filter(hasAnchorForNode)
-            .length;
+        const todayCount = filterReviewQueueNodes(dueNodes, settings, mindmaps).length;
 
         setTodayTasks(todayCount);
 

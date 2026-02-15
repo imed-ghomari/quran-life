@@ -45,6 +45,7 @@ import { optimizeWeights } from '../../actions';
 import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
+import { filterReviewQueueNodes } from '@/lib/reviewQueue';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -165,11 +166,6 @@ export default function TodayPage() {
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
     const orderedDueNodes = useMemo(() => {
         if (!dueNodes.length) return [];
-
-        const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
-        const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
-        const completeExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
-        const skippedSurahIds = new Set<number>((settings?.skippedSurahs || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
         const typeRank: Record<string, number> = {
             part_mindmap: 0,
             mindmap: 1,
@@ -203,44 +199,7 @@ export default function TodayPage() {
             return a.id.localeCompare(b.id);
         };
 
-        const filteredDueNodes = hasKanbanState
-            ? dueNodes.filter(node => {
-                const surahId = resolveNodeSurahId(node);
-                if (surahId && skippedSurahIds.has(surahId)) return false;
-
-                if (node.type === 'mindmap') {
-                    return surahId ? completeIds.has(`surah-${surahId}`) : true;
-                }
-                if (node.type === 'part_mindmap') {
-                    const partId = resolveNodePartId(node);
-                    return partId ? completeIds.has(`part-${partId}`) : true;
-                }
-                if (node.type === 'verse_segment') {
-                    const surahId = resolveNodeSurahId(node);
-                    if (!surahId) return true;
-                    if (completeExitBehavior === 'mindmap_and_verses' && !completeIds.has(`surah-${surahId}`)) {
-                        return false;
-                    }
-                    const mm = mindmaps.find(m => Number(m.surahId) === surahId);
-                    const anchors = mm?.anchors || [];
-                    if (anchors.length === 0) return false;
-                    return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
-                }
-                return true;
-            })
-            : dueNodes.filter(node => {
-                const surahId = resolveNodeSurahId(node);
-                if (surahId && skippedSurahIds.has(surahId)) return false;
-
-                if (node.type === 'verse_segment') {
-                    if (!surahId) return true;
-                    const mm = mindmaps.find(m => Number(m.surahId) === surahId);
-                    const anchors = mm?.anchors || [];
-                    if (anchors.length === 0) return false;
-                    return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
-                }
-                return true;
-            });
+        const filteredDueNodes = filterReviewQueueNodes(dueNodes, settings, mindmaps);
 
         if (!filteredDueNodes.length) return [];
 
@@ -312,7 +271,7 @@ export default function TodayPage() {
         }
 
         return ordered;
-    }, [dueNodes, settings?.kanbanColumns, settings?.skippedSurahs, settings?.completeExitBehavior, mindmaps, settings?.reviewSortOrder]);
+    }, [dueNodes, settings, mindmaps, settings?.reviewSortOrder]);
 
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {
@@ -1683,7 +1642,7 @@ export default function TodayPage() {
         });
         if (!ok) return;
 
-        const mm = mindmaps.find(m => m.surahId === surahId);
+        const mm = mindmaps.find(m => Number((m as any).surahId) === Number(surahId));
         if (mm) {
             const updated = { ...mm, isComplete: false };
             try {
@@ -1704,7 +1663,7 @@ export default function TodayPage() {
         });
         if (!ok) return;
 
-        const mm = partMindMaps.find(m => m.partId === partId);
+        const mm = partMindMaps.find(m => Number((m as any).partId) === Number(partId));
         if (mm) {
             const updated = { ...mm, isComplete: false };
             try {

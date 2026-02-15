@@ -46,6 +46,13 @@ interface MutashabihatDecision {
     notes?: string;
 }
 
+interface SettingsToastItem {
+    id: string;
+    type: 'success' | 'error';
+    message: string;
+    info?: string;
+}
+
 function AppearanceCard({ onSelectTheme }: { onSelectTheme: (nextTheme: Theme) => void }) {
     const { theme } = useTheme();
 
@@ -219,7 +226,7 @@ export default function SettingsPage() {
         { id: 'type_grouped', label: 'By Type (Part → Surah → Verse)' }
     ] as const;
     const completeExitOptions = [
-        { id: 'mindmap_only', label: 'Suspend Mindmap Only (Recommended)' },
+        { id: 'mindmap_only', label: 'Suspend Mindmap Only' },
         { id: 'mindmap_and_verses', label: 'Suspend Mindmap + Verses' }
     ] as const;
     const kanbanSortOptions = [
@@ -279,6 +286,8 @@ export default function SettingsPage() {
     } | null>(null);
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
+    const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
+    const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
     const mobileHistoryKey = 'mobileSettingsPage';
 
@@ -1664,6 +1673,20 @@ export default function SettingsPage() {
         });
     };
 
+    const addToast = (type: 'success' | 'error', message: string, info?: string) => {
+        const key = `${type}|${message}|${info || ''}`;
+        const now = Date.now();
+        if (lastToastRef.current && lastToastRef.current.key === key && now - lastToastRef.current.at < 500) {
+            return;
+        }
+        lastToastRef.current = { key, at: now };
+        const toastId = crypto.randomUUID();
+        setToasts((prev) => [...prev, { id: toastId, type, message, info }]);
+        window.setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== toastId));
+        }, 6000);
+    };
+
     const handleCompleteExitBehaviorChange = async (nextBehavior: 'mindmap_only' | 'mindmap_and_verses') => {
         const prevBehavior = completeExitBehavior ?? 'mindmap_only';
         if (nextBehavior === prevBehavior) return;
@@ -1690,8 +1713,8 @@ export default function SettingsPage() {
         if (nextBehavior === 'mindmap_only') {
             const apply = await confirm({
                 title: 'Optional: Apply To Existing Cards',
-                message: `This setting now controls future drag-and-drop behavior.\n\nOptional: also show verse reviews now for ${targets.length} surah card(s) already outside Complete?`,
-                confirmLabel: 'Show Verses',
+                message: `This setting now controls future drag-and-drop behavior.\n\nOptional: also show verse groups now for ${targets.length} surah card(s) already outside Complete?`,
+                confirmLabel: 'Show Verse Groups',
                 cancelLabel: 'Keep As-Is',
             });
             if (!apply) return;
@@ -1724,12 +1747,13 @@ export default function SettingsPage() {
                         created += 1;
                     }
                 }
-                await alert({
-                    title: 'Applied',
-                    message: created > 0
-                        ? `Added ${created} verse review card(s) for existing out-of-complete mindmaps.`
-                        : 'No verse review cards needed to be added.',
-                });
+                addToast(
+                    'success',
+                    'Applied',
+                    created > 0
+                        ? `Added ${created} verse group card(s) for existing out-of-complete mindmaps.`
+                        : 'No verse group cards needed to be added.'
+                );
             } catch (error) {
                 console.error('Failed applying complete-exit behavior retroactively (show verses)', error);
                 await alert({
@@ -1742,8 +1766,8 @@ export default function SettingsPage() {
 
         const apply = await confirm({
             title: 'Optional: Apply To Existing Cards',
-            message: `This setting now controls future drag-and-drop behavior.\n\nOptional: also suspend verse reviews now for ${targets.length} surah card(s) already outside Complete?`,
-            confirmLabel: 'Suspend Verses',
+            message: `This setting now controls future drag-and-drop behavior.\n\nOptional: also suspend verse groups now for ${targets.length} surah card(s) already outside Complete?`,
+            confirmLabel: 'Suspend Verse Groups',
             cancelLabel: 'Keep As-Is',
             isDestructive: true,
         });
@@ -1755,12 +1779,13 @@ export default function SettingsPage() {
                 targets.some((t) => resolveNodeSurahId(node) === t.surahId)
             );
             await Promise.all(nodesToDelete.map((node) => deleteInstantNode(node.id)));
-            await alert({
-                title: 'Applied',
-                message: nodesToDelete.length > 0
-                    ? `Suspended ${nodesToDelete.length} verse review card(s) for existing out-of-complete mindmaps.`
-                    : 'No verse review cards were active for those cards.',
-            });
+            addToast(
+                'success',
+                'Applied',
+                nodesToDelete.length > 0
+                    ? `Suspended ${nodesToDelete.length} verse group card(s) for existing out-of-complete mindmaps.`
+                    : 'No verse group cards were active for those cards.'
+            );
         } catch (error) {
             console.error('Failed applying complete-exit behavior retroactively (suspend verses)', error);
             await alert({
@@ -4331,6 +4356,78 @@ export default function SettingsPage() {
                     </div>
                 </div>
             )}
+
+            <div
+                className="toast-container"
+                style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '20px',
+                    zIndex: 1000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    pointerEvents: 'none',
+                    maxWidth: 'calc(100vw - 40px)',
+                }}
+            >
+                {toasts.map((t) => (
+                    <div
+                        key={t.id}
+                        className={`review-toast ${t.type}`}
+                        style={{
+                            padding: '0.65rem 1rem',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 4,
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                            animation: 'slideInRight 0.3s ease-out',
+                            background: t.type === 'success'
+                                ? 'color-mix(in srgb, var(--success) 18%, var(--background-secondary))'
+                                : 'color-mix(in srgb, var(--danger) 16%, var(--background-secondary))',
+                            border: '1px solid var(--border)',
+                            color: 'var(--foreground)',
+                            minWidth: '180px',
+                            fontSize: '0.85rem',
+                            pointerEvents: 'auto',
+                            backdropFilter: 'blur(12px)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {t.type === 'success' ? <Check size={18} /> : <X size={18} />}
+                            <span style={{ fontWeight: 600 }}>{t.message}</span>
+                            <button
+                                onClick={() => setToasts((prev) => prev.filter((toast) => toast.id !== t.id))}
+                                style={{
+                                    background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                    border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                    color: 'inherit',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    marginLeft: 'auto',
+                                }}
+                            >
+                                Close
+                            </button>
+                        </div>
+                        {t.info && (
+                            <div
+                                style={{
+                                    fontSize: '0.8rem',
+                                    opacity: 0.9,
+                                    paddingLeft: '28px',
+                                    whiteSpace: 'pre-line',
+                                }}
+                            >
+                                {t.info}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
         </>
     );
 }
