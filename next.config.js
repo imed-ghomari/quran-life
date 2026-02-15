@@ -70,6 +70,33 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 },
             },
             {
+                urlPattern: ({ url }) =>
+                    url.searchParams.has('_rsc')
+                    && (
+                        url.pathname === '/dashboard'
+                        || url.pathname === '/todo'
+                        || url.pathname === '/statistics'
+                        || url.pathname === '/settings'
+                        || url.pathname === '/docs'
+                        || url.pathname.startsWith('/docs/')
+                    ),
+                handler: 'NetworkFirst',
+                options: {
+                    cacheName: `rsc-v13-${PWA_CACHE_VERSION}`,
+                    networkTimeoutSeconds: 3,
+                    matchOptions: {
+                        ignoreSearch: true,
+                    },
+                    cacheableResponse: {
+                        statuses: [200],
+                    },
+                    expiration: {
+                        maxEntries: 128,
+                        maxAgeSeconds: 24 * 60 * 60,
+                    },
+                },
+            },
+            {
                 urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
                 handler: 'CacheFirst',
                 options: {
