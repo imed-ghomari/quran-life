@@ -2046,7 +2046,7 @@ export default function TodayPage() {
                                                                 )
                                                             )}
                                                             <div className="arabic-text">
-                                                                {todaysPortion[currentVerseIndex].text.split(' ').map((word, i) => (
+                                                                {(todaysPortion[currentVerseIndex]?.text ?? '').split(' ').filter(Boolean).map((word, i) => (
                                                                     <span
                                                                         key={i}
                                                                         id={`word-${i}`}
