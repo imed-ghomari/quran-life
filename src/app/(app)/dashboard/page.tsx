@@ -420,6 +420,14 @@ export default function TodayPage() {
         }
     }, [orderedDueNodes.length, currentReviewIndex]);
 
+    const activeReviewNodeId = orderedDueNodes[currentReviewIndex]?.id;
+    useEffect(() => {
+        if (!activeReviewNodeId) return;
+        setRevealedChunks(0);
+        setCurrentVerseInReview(0);
+        setShowGrading(false);
+    }, [activeReviewNodeId]);
+
     useEffect(() => {
         if (theme === 'dark') {
             setIsDark(true);
@@ -1339,7 +1347,9 @@ export default function TodayPage() {
     // Reveal Logic
     const getCurrentVerseChunks = () => {
         if (!activeContent || !activeContent.verses || !activeContent.verses.length) return [];
-        const v = activeContent.verses[currentVerseInReview];
+        const safeVerseIndex = Math.max(0, Math.min(currentVerseInReview, activeContent.verses.length - 1));
+        const v = activeContent.verses[safeVerseIndex];
+        if (!v?.text) return [];
         return splitIntoChunks(v.text);
     };
 
@@ -1347,7 +1357,7 @@ export default function TodayPage() {
     const totalChunks = verseChunks.length;
     const totalVerses = activeContent?.verses?.length || 0;
 
-    const verseChunkMap = activeContent?.verses?.map(v => splitIntoChunks(v.text)) || [];
+    const verseChunkMap = activeContent?.verses?.map(v => splitIntoChunks(v?.text ?? '')) || [];
     const hasCurrentVerseNextChunk = revealedChunks < totalChunks;
     const nextRevealVerseIndex =
         totalVerses > 0
@@ -1778,7 +1788,7 @@ export default function TodayPage() {
                                                                 ? ''
                                                                 : (isNextRevealVerse
                                                                     ? chunks.slice(nextRevealChunkIndex + 1).join(' ')
-                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : v.text));
+                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : (v.text || '')));
 
                                                             return (
                                                                 <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
