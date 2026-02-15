@@ -1,3 +1,5 @@
+const PWA_CACHE_VERSION = (process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || 'local').slice(0, 12);
+
 const withPWA = require('@ducanh2912/next-pwa').default({
     dest: 'public',
     register: true,
@@ -8,6 +10,10 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     reloadOnOnline: false,
     // Keep start URL deterministic to avoid caching auth redirects as app navigations.
     dynamicStartUrl: false,
+    // Use the app's offline handoff route when a document request happens offline.
+    fallbacks: {
+        document: '/offline-app',
+    },
     publicExcludes: [
         '!recitations/**/*',
         '!qpc-hafs-word-by-word.json',
@@ -20,12 +26,12 @@ const withPWA = require('@ducanh2912/next-pwa').default({
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
         additionalManifestEntries: [
-            { url: '/dashboard', revision: null },
-            { url: '/todo', revision: null },
-            { url: '/statistics', revision: null },
-            { url: '/settings', revision: null },
-            { url: '/docs', revision: null },
-            { url: '/offline-app', revision: null },
+            { url: '/dashboard', revision: PWA_CACHE_VERSION },
+            { url: '/todo', revision: PWA_CACHE_VERSION },
+            { url: '/statistics', revision: PWA_CACHE_VERSION },
+            { url: '/settings', revision: PWA_CACHE_VERSION },
+            { url: '/docs', revision: PWA_CACHE_VERSION },
+            { url: '/offline-app', revision: PWA_CACHE_VERSION },
         ],
         runtimeCaching: [
             {
@@ -40,44 +46,20 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                         || url.pathname.startsWith('/docs/')
                         || url.pathname === '/offline-app'
                     )
-                    && !url.pathname.startsWith('/auth')
-                    && !url.pathname.startsWith('/checkout')
                     && !url.pathname.startsWith('/api/'),
                 handler: 'NetworkFirst',
                 options: {
-                    cacheName: 'pages-v10',
-                    networkTimeoutSeconds: 8,
+                    cacheName: `pages-v13-${PWA_CACHE_VERSION}`,
+                    networkTimeoutSeconds: 6,
                     cacheableResponse: {
-                        // Never cache redirects for app navigations.
                         statuses: [200],
                     },
                     expiration: {
                         maxEntries: 64,
-                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                        maxAgeSeconds: 24 * 60 * 60,
                     },
-                },
-            },
-            {
-                urlPattern: ({ url }) =>
-                    url.searchParams.has('_rsc')
-                    && (
-                        url.pathname === '/dashboard'
-                        || url.pathname === '/todo'
-                        || url.pathname === '/statistics'
-                        || url.pathname === '/settings'
-                        || url.pathname === '/docs'
-                        || url.pathname.startsWith('/docs/')
-                    ),
-                handler: 'NetworkFirst',
-                options: {
-                    cacheName: 'rsc-v10',
-                    networkTimeoutSeconds: 4,
-                    cacheableResponse: {
-                        statuses: [200],
-                    },
-                    expiration: {
-                        maxEntries: 128,
-                        maxAgeSeconds: 7 * 24 * 60 * 60,
+                    precacheFallback: {
+                        fallbackURL: '/offline-app',
                     },
                 },
             },
@@ -113,7 +95,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/_next\/static\/.*/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'static-assets-v10',
+                    cacheName: 'static-assets-v13',
                     expiration: {
                         maxEntries: 256,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -127,7 +109,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg|ico)$/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'image-assets-v10',
+                    cacheName: 'image-assets-v13',
                     expiration: {
                         maxEntries: 200,
                         maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -141,7 +123,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/(search-index\.json|qpc-hafs-word-by-word\.json|assets\/premade-mindmaps\/.*)/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: 'offline-content-v10',
+                    cacheName: 'offline-content-v13',
                     expiration: {
                         maxEntries: 128,
                         maxAgeSeconds: 30 * 24 * 60 * 60,
