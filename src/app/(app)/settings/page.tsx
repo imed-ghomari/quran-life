@@ -7,7 +7,8 @@ import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import { AppSettings, QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
 import { db } from '@/lib/instant';
-import { useInstantSettings, useInstantNodes, useInstantMutashabihat, useInstantListeningProgress } from '@/hooks/useInstantData';
+import { useInstantSettings, useInstantNodes, useInstantMutashabihat, useInstantListeningProgress, useInstantMindMaps } from '@/hooks/useInstantData';
+import { createNewFSRSState } from '@/lib/fsrs';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
     Upload,
@@ -132,6 +133,34 @@ const formatKnowledgeTrackingDueDate = (due: string | null): string => {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
+const toPositiveInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
+    const direct = toPositiveInt((node as any).surahId);
+    if (direct) return direct;
+    const target = String((node as any).targetId || '');
+    const anchorMatch = target.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (anchorMatch) return toPositiveInt(anchorMatch[1]);
+    const mindmapMatch = target.match(/^mindmap-(\d+)$/);
+    if (mindmapMatch) return toPositiveInt(mindmapMatch[1]);
+    return null;
+};
+
+const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
+    const direct = toPositiveInt((node as any).partId);
+    if (direct) return direct;
+    const target = String((node as any).targetId || '');
+    const partMatch = target.match(/^part-mindmap-(\d+)$/);
+    if (!partMatch) return null;
+    return toPositiveInt(partMatch[1]);
+};
+
+const stableNodeId = (...parts: Array<string | number>) =>
+    parts.map((part) => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
+
 /**
  * Renders Arabic text with highlighted word ranges
  */
@@ -172,7 +201,8 @@ export default function SettingsPage() {
     });
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
     const { settings, saveSettings } = useInstantSettings();
-    const { nodes: instantNodes } = useInstantNodes();
+    const { nodes: instantNodes, saveNode: saveInstantNode, deleteNode: deleteInstantNode } = useInstantNodes();
+    const { mindmaps: instantMindmaps } = useInstantMindMaps();
     const { progress: listeningProgress } = useInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme } = useTheme();
@@ -256,8 +286,8 @@ export default function SettingsPage() {
         const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
         const latestMap: { [key: number]: MemoryNode } = {};
         partMindmapNodes.forEach(node => {
-            const part = node.partId;
-            if (part === undefined) return;
+            const part = resolveNodePartId(node);
+            if (!part) return;
             if (node.createdAt) {
                 const existingNode = latestMap[part];
                 if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
@@ -272,7 +302,8 @@ export default function SettingsPage() {
         const surahMindmapNodes = memoryNodes.filter(n => (n as any).type === 'mindmap');
         const latestMap: { [key: number]: MemoryNode } = {};
         surahMindmapNodes.forEach(node => {
-            const surahId = (node as any).surahId;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return;
             if (node.createdAt) {
                 const existingNode = latestMap[surahId];
                 if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
@@ -287,7 +318,9 @@ export default function SettingsPage() {
         const verseNodes = memoryNodes.filter(n => n.type === 'verse_segment');
         const latestMap: Record<string, MemoryNode> = {};
         verseNodes.forEach(node => {
-            const key = `${node.surahId}-${node.startVerse}-${node.endVerse}`;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return;
+            const key = `${surahId}-${node.startVerse}-${node.endVerse}`;
             const existing = latestMap[key];
             if (!existing) {
                 latestMap[key] = node;
@@ -327,7 +360,7 @@ export default function SettingsPage() {
 
     const getFilteredNodesForSlideOver = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number) => {
         if (type === 'verse_segment' && surahId) {
-            return filteredVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+            return filteredVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId);
         }
         if (type === 'mindmap') return filteredSurahMindmaps;
         if (type === 'part_mindmap') return filteredPartMindmaps;
@@ -1045,7 +1078,7 @@ export default function SettingsPage() {
 
                                             const visibleSurahs = knowledgeFilter === 'all'
                                                 ? eligibleSurahs
-                                                : eligibleSurahs.filter(surah => filteredVerseSegments.some(n => n.type === 'verse_segment' && n.surahId === surah.id));
+                                                : eligibleSurahs.filter(surah => filteredVerseSegments.some(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surah.id));
 
                                             if (visibleSurahs.length === 0) {
                                                 return (
@@ -1056,8 +1089,8 @@ export default function SettingsPage() {
                                             return visibleSurahs.map(surah => {
                                                 const surahId = surah.id;
                                                 const surahNodes = knowledgeFilter === 'all'
-                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId)
-                                                    : filteredVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                                    ? latestVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
+                                                    : filteredVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId);
 
                                                 // Always show the surah group when showing all items, even if no nodes exist yet (0 items)
                                                 // This allows users to set maturity for the whole group before starting reviews
@@ -1351,8 +1384,7 @@ export default function SettingsPage() {
                                                     key={option.id}
                                                     type="button"
                                                     onClick={() => {
-                                                        setCompleteExitBehavior(option.id);
-                                                        persistSettingsUpdate({ completeExitBehavior: option.id }, 'complete-exit behavior');
+                                                        void handleCompleteExitBehaviorChange(option.id);
                                                     }}
                                                     className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                 >
@@ -1540,9 +1572,10 @@ export default function SettingsPage() {
 
         const newState = getMaturityState(level);
         try {
-            await db.transact(db.tx.memoryNodes[nodeId].update({
-                scheduler: { ...node.scheduler, ...newState }
-            }));
+            await saveInstantNode({
+                ...node,
+                scheduler: { ...(node.scheduler as any), ...newState } as any
+            });
         } catch (error) {
             console.error('Failed to save node maturity', error);
             await alert({
@@ -1573,7 +1606,7 @@ export default function SettingsPage() {
 
         const nodesToUpdate = instantNodes.filter(node => {
             if (node.type !== targetType) return false;
-            if (surahId && node.surahId !== surahId) return false;
+            if (surahId && resolveNodeSurahId(node) !== surahId) return false;
             return true;
         });
 
@@ -1585,14 +1618,13 @@ export default function SettingsPage() {
             return;
         }
 
-        const transactions = nodesToUpdate.map(node =>
-            db.tx.memoryNodes[node.id].update({
-                scheduler: { ...node.scheduler, ...newState }
-            })
-        );
-
         try {
-            await db.transact(transactions);
+            await Promise.all(nodesToUpdate.map(node =>
+                saveInstantNode({
+                    ...node,
+                    scheduler: { ...(node.scheduler as any), ...newState } as any
+                })
+            ));
         } catch (error) {
             console.error('Failed to save group maturity', error);
             await alert({
@@ -1630,6 +1662,112 @@ export default function SettingsPage() {
         void saveSettings(update).catch((error) => {
             console.error(`Failed to save ${context}`, error);
         });
+    };
+
+    const handleCompleteExitBehaviorChange = async (nextBehavior: 'mindmap_only' | 'mindmap_and_verses') => {
+        const prevBehavior = completeExitBehavior ?? 'mindmap_only';
+        if (nextBehavior === prevBehavior) return;
+
+        setCompleteExitBehavior(nextBehavior);
+        persistSettingsUpdate({ completeExitBehavior: nextBehavior }, 'complete-exit behavior');
+
+        const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
+        const targets = instantMindmaps
+            .map((mm: any) => {
+                const surahId = Number(mm?.surahId);
+                const anchors = Array.isArray(mm?.anchors) ? mm.anchors : [];
+                return { surahId, anchors };
+            })
+            .filter(({ surahId, anchors }) =>
+                Number.isFinite(surahId) &&
+                surahId > 0 &&
+                anchors.length > 0 &&
+                !completeIds.has(`surah-${surahId}`)
+            );
+
+        if (targets.length === 0) return;
+
+        if (nextBehavior === 'mindmap_only') {
+            const apply = await confirm({
+                title: 'Optional: Apply To Existing Cards',
+                message: `This setting now controls future drag-and-drop behavior.\n\nOptional: also show verse reviews now for ${targets.length} surah card(s) already outside Complete?`,
+                confirmLabel: 'Show Verses',
+                cancelLabel: 'Keep As-Is',
+            });
+            if (!apply) return;
+
+            try {
+                let created = 0;
+                for (const target of targets) {
+                    for (const anchor of target.anchors) {
+                        const startVerse = Number(anchor?.startVerse);
+                        const endVerse = Number(anchor?.endVerse);
+                        if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) continue;
+                        const exists = instantNodes.some((node) =>
+                            node.type === 'verse_segment' &&
+                            resolveNodeSurahId(node) === target.surahId &&
+                            Number(node.startVerse) === startVerse &&
+                            Number(node.endVerse) === endVerse
+                        );
+                        if (exists) continue;
+                        const targetId = anchor?.id || `anchor-${target.surahId}-${startVerse}-${endVerse}`;
+                        await saveInstantNode({
+                            id: stableNodeId('memory_node', 'verse_segment', target.surahId, startVerse, endVerse),
+                            type: 'verse_segment',
+                            surahId: target.surahId,
+                            startVerse,
+                            endVerse,
+                            targetId,
+                            scheduler: createNewFSRSState(),
+                            createdAt: new Date().toISOString(),
+                        } as MemoryNode);
+                        created += 1;
+                    }
+                }
+                await alert({
+                    title: 'Applied',
+                    message: created > 0
+                        ? `Added ${created} verse review card(s) for existing out-of-complete mindmaps.`
+                        : 'No verse review cards needed to be added.',
+                });
+            } catch (error) {
+                console.error('Failed applying complete-exit behavior retroactively (show verses)', error);
+                await alert({
+                    title: 'Apply Failed',
+                    message: 'Could not apply this change to existing cards. Please try again.',
+                });
+            }
+            return;
+        }
+
+        const apply = await confirm({
+            title: 'Optional: Apply To Existing Cards',
+            message: `This setting now controls future drag-and-drop behavior.\n\nOptional: also suspend verse reviews now for ${targets.length} surah card(s) already outside Complete?`,
+            confirmLabel: 'Suspend Verses',
+            cancelLabel: 'Keep As-Is',
+            isDestructive: true,
+        });
+        if (!apply) return;
+
+        try {
+            const nodesToDelete = instantNodes.filter((node) =>
+                node.type === 'verse_segment' &&
+                targets.some((t) => resolveNodeSurahId(node) === t.surahId)
+            );
+            await Promise.all(nodesToDelete.map((node) => deleteInstantNode(node.id)));
+            await alert({
+                title: 'Applied',
+                message: nodesToDelete.length > 0
+                    ? `Suspended ${nodesToDelete.length} verse review card(s) for existing out-of-complete mindmaps.`
+                    : 'No verse review cards were active for those cards.',
+            });
+        } catch (error) {
+            console.error('Failed applying complete-exit behavior retroactively (suspend verses)', error);
+            await alert({
+                title: 'Apply Failed',
+                message: 'Could not apply this change to existing cards. Please try again.',
+            });
+        }
     };
 
     const handleResetDailyPortion = async () => {
@@ -2430,7 +2568,7 @@ export default function SettingsPage() {
                                                                 const visibleSurahs = knowledgeFilter === 'all'
                                                                     ? filteredSurahs
                                                                     : filteredSurahs.filter(surahId =>
-                                                                        filteredVerseSegments.some(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                        filteredVerseSegments.some(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
                                                                     );
 
                                                                 if (visibleSurahs.length === 0) {
@@ -2442,8 +2580,8 @@ export default function SettingsPage() {
                                                                 return visibleSurahs.map(surahId => {
                                                                     const surah = getSurah(surahId!);
                                                                     const surahNodes = knowledgeFilter === 'all'
-                                                                        ? latestVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId)
-                                                                        : filteredVerseSegments.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                                                                        ? latestVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
+                                                                        : filteredVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId);
                                                                     return (
                                                                         <div key={surahId} className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
                                                                             id: `verse-surah-${surahId}`,
@@ -2540,13 +2678,14 @@ export default function SettingsPage() {
                                                                 {expandedGroups['mindmaps-part'] && (
                                                                     filteredPartMindmaps.length > 0 ? (
                                                                         filteredPartMindmaps
-                                                                            .sort((a, b) => (a.partId || 0) - (b.partId || 0))
+                                                                            .sort((a, b) => (resolveNodePartId(a) || 0) - (resolveNodePartId(b) || 0))
                                                                             .map(node => {
                                                                                 const due = getNodeDueDate(node);
                                                                                 const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
+                                                                                const partId = resolveNodePartId(node);
                                                                                 return (
                                                                                 <tr key={node.id} className="node-row">
-                                                                                    <td>Part {node.partId}</td>
+                                                                                    <td>Part {partId ?? '-'}</td>
                                                                                     <td>
                                                                                         <select
                                                                                             value=""
@@ -2606,13 +2745,14 @@ export default function SettingsPage() {
                                                                 {expandedGroups['mindmaps-surah'] && (
                                                                     filteredSurahMindmaps.length > 0 ? (
                                                                         filteredSurahMindmaps
-                                                                            .sort((a, b) => (a.surahId || 0) - (b.surahId || 0))
+                                                                            .sort((a, b) => (resolveNodeSurahId(a) || 0) - (resolveNodeSurahId(b) || 0))
                                                                             .map(node => {
                                                                                 const due = getNodeDueDate(node);
                                                                                 const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
+                                                                                const surahId = resolveNodeSurahId(node);
                                                                                 return (
                                                                                 <tr key={node.id} className="node-row">
-                                                                                    <td>{node.surahId}. {getSurah(node.surahId!)?.name}</td>
+                                                                                    <td>{surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-'}</td>
                                                                                     <td>
                                                                                         <select
                                                                                             value=""
@@ -2698,7 +2838,7 @@ export default function SettingsPage() {
                                                                     const visibleSurahs = knowledgeFilter === 'all'
                                                                         ? filteredSurahs
                                                                         : filteredSurahs.filter(surahId =>
-                                                                            filteredVerseSegments.some(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                            filteredVerseSegments.some(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
                                                                         );
 
                                                                     if (visibleSurahs.length === 0) {
@@ -2711,7 +2851,7 @@ export default function SettingsPage() {
                                                                         const surah = getSurah(surahId!);
                                                                         const surahKey = `verse-surah-${surahId}`;
                                                                         const surahNodes = (knowledgeFilter === 'all' ? latestVerseSegments : filteredVerseSegments)
-                                                                            .filter(n => n.type === 'verse_segment' && n.surahId === surahId)
+                                                                            .filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
                                                                             .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
 
                                                                         return (
@@ -3394,8 +3534,7 @@ export default function SettingsPage() {
                                                                 key={option.id}
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setCompleteExitBehavior(option.id);
-                                                                    persistSettingsUpdate({ completeExitBehavior: option.id }, 'complete-exit behavior');
+                                                                    void handleCompleteExitBehaviorChange(option.id);
                                                                 }}
                                                                 className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                             >
@@ -4120,16 +4259,23 @@ export default function SettingsPage() {
                                     activeSlideOverGroup.nodes
                                         .sort((a, b) => {
                                             if (activeSlideOverGroup.type === 'verse_segment') return (a.startVerse || 0) - (b.startVerse || 0);
-                                            if (activeSlideOverGroup.type === 'mindmap') return (a.surahId || 0) - (b.surahId || 0);
-                                            return (a.partId || 0) - (b.partId || 0);
+                                            if (activeSlideOverGroup.type === 'mindmap') return (resolveNodeSurahId(a) || 0) - (resolveNodeSurahId(b) || 0);
+                                            return (resolveNodePartId(a) || 0) - (resolveNodePartId(b) || 0);
                                         })
                                         .map(node => (
                                             <div key={node.id} className="mobile-node-card">
                                                 <div className="node-card-main">
                                                     <div className="node-target">
                                                         {activeSlideOverGroup.type === 'verse_segment' ? `Ayat ${node.startVerse}-${node.endVerse}` :
-                                                            activeSlideOverGroup.type === 'mindmap' ? `${node.surahId}. ${getSurah(node.surahId!)?.name}` :
-                                                                `Part ${node.partId}`}
+                                                            activeSlideOverGroup.type === 'mindmap'
+                                                                ? (() => {
+                                                                    const surahId = resolveNodeSurahId(node);
+                                                                    return surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-';
+                                                                })()
+                                                                : (() => {
+                                                                    const partId = resolveNodePartId(node);
+                                                                    return partId ? `Part ${partId}` : '-';
+                                                                })()}
                                                     </div>
                                                     <select
                                                         value=""

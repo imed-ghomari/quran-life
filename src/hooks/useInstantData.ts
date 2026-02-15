@@ -202,8 +202,12 @@ export function useInstantNodes() {
 
     const nodes = useMemo(() => {
         const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
-        return raw.filter(node => (node as any).type !== 'transition');
-    }, [data?.memoryNodes]);
+        return raw.filter(node => {
+            if ((node as any).type === 'transition') return false;
+            if (!user?.id) return false;
+            return String((node as any).userId || '') === user.id;
+        });
+    }, [data?.memoryNodes, user?.id]);
 
     const canonicalNodes = useMemo(() => {
         const byKey = new Map<string, MemoryNode>();
@@ -299,17 +303,31 @@ export function useInstantNodes() {
 
     const saveNode = (node: MemoryNode) => {
         if (!user) return Promise.resolve();
-        const nodeId = resolveEntityId(node.id, memoryNodeLogicalKey(node));
+        const canReuseCandidateId =
+            isUuid(node.id) &&
+            canonicalNodes.some(existingNode => existingNode.id === node.id);
+        const nodeId = canReuseCandidateId
+            ? (node.id as string)
+            : resolveEntityId(undefined, 'memory_node', user.id, memoryNodeLogicalKey(node));
         return db.transact(db.tx.memoryNodes[nodeId].update({
             ...node,
             userId: user.id
         }));
     };
 
-    const deleteNode = (nodeId: string) => {
+    const deleteNode = async (nodeId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(nodeId)) return Promise.resolve();
-        return db.transact(db.tx.memoryNodes[nodeId].delete());
+        try {
+            return await db.transact(db.tx.memoryNodes[nodeId].delete());
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error || '');
+            if (message.includes('not perms-pass')) {
+                console.warn('Skipping memory node delete due to permission mismatch', { nodeId, userId: user.id });
+                return;
+            }
+            throw error;
+        }
     };
 
     return useMemo(() => ({

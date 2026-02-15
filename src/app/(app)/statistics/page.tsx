@@ -32,6 +32,31 @@ interface StatSegment {
     description: string;
 }
 
+const toPositiveInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
+    const direct = toPositiveInt((node as any).surahId);
+    if (direct) return direct;
+    const target = String((node as any).targetId || '');
+    const anchorMatch = target.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (anchorMatch) return toPositiveInt(anchorMatch[1]);
+    const mindmapMatch = target.match(/^mindmap-(\d+)$/);
+    if (mindmapMatch) return toPositiveInt(mindmapMatch[1]);
+    return null;
+};
+
+const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
+    const direct = toPositiveInt((node as any).partId);
+    if (direct) return direct;
+    const target = String((node as any).targetId || '');
+    const partMatch = target.match(/^part-mindmap-(\d+)$/);
+    if (!partMatch) return null;
+    return toPositiveInt(partMatch[1]);
+};
+
 export default function StatisticsPage() {
     const { settings, isLoading: settingsLoading } = useInstantSettings();
     const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
@@ -57,10 +82,10 @@ export default function StatisticsPage() {
         let learnedMastered = 0;
 
         [1, 2, 3, 4].forEach(p => {
-            const pmm = partMindMaps.find(m => m.partId === p);
+            const pmm = partMindMaps.find(m => Number((m as any).partId) === p);
             if (pmm) {
                 if (pmm.isComplete) {
-                    const node = memoryNodes.find(n => n.id === `part-mindmap-${p}`);
+                    const node = memoryNodes.find(n => n.type === 'part_mindmap' && resolveNodePartId(n) === p);
                     const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                     if (maturity === 'mastered') learnedMastered++;
                     else if (maturity === 'strong') learnedStrong++;
@@ -104,10 +129,10 @@ export default function StatisticsPage() {
             if (skippedSurahs.has(s.id)) {
                 skipped++;
             } else {
-                const mm = mindmaps.find(m => m.surahId === s.id);
+                const mm = mindmaps.find(m => Number((m as any).surahId) === s.id);
                 if (mm) {
                     if (mm.isComplete) {
-                        const node = memoryNodes.find(n => n.id === `mindmap-${s.id}`);
+                        const node = memoryNodes.find(n => n.type === 'mindmap' && resolveNodeSurahId(n) === s.id);
                         const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                         if (maturity === 'mastered') learnedMastered++;
                         else if (maturity === 'strong') learnedStrong++;
@@ -159,7 +184,7 @@ export default function StatisticsPage() {
                         notLearned++;
                     } else {
                         // If it has any learned verses, we look at the maturity of its nodes
-                        const nodes = memoryNodes.filter(n => n.type === 'verse_segment' && n.surahId === s.id);
+                        const nodes = memoryNodes.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === s.id);
                         if (nodes.length === 0) {
                             learnedNew++; // Learned but nodes not synced yet
                         } else {
@@ -201,7 +226,7 @@ export default function StatisticsPage() {
                                 // Get maturity for this segment
                                 const nodes = memoryNodes.filter(n =>
                                     n.type === 'verse_segment' &&
-                                    n.surahId === s.id &&
+                                    resolveNodeSurahId(n) === s.id &&
                                     (n.startVerse ?? 0) >= segmentStart &&
                                     (n.endVerse ?? 0) <= segmentEnd
                                 );
@@ -260,7 +285,7 @@ export default function StatisticsPage() {
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
-        const partProgress = listeningProgress.find(p => p.partId === activePart);
+        const partProgress = listeningProgress.find(p => Number((p as any).partId) === Number(activePart));
         const progress = partProgress?.lastVerseIndex || 0;
         const cycles = partProgress?.cycles || 0;
 
@@ -346,33 +371,42 @@ export default function StatisticsPage() {
         const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
         const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
+        const completeExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
 
         const hasAnchorForNode = (node: MemoryNode) => {
-            if (node.type !== 'verse_segment' || !node.surahId) return true;
-            const mm = mindmaps.find(m => m.surahId === node.surahId);
+            if (node.type !== 'verse_segment') return true;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return true;
+            const mm = mindmaps.find(m => Number(m.surahId) === surahId);
             const anchors = mm?.anchors || [];
             if (anchors.length === 0) return false;
-            return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+            return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
         };
 
         const nodes = memoryNodes.filter(node => {
             if (node.type !== 'verse_segment' && node.type !== 'mindmap' && node.type !== 'part_mindmap') return false;
 
             if (node.type === 'part_mindmap') {
-                if (activePart !== 5 && node.partId !== activePart) return false;
-                if (hasKanbanState && node.partId && !completeIds.has(`part-${node.partId}`)) return false;
+                const partId = resolveNodePartId(node);
+                if (!partId) return false;
+                if (activePart !== 5 && partId !== activePart) return false;
+                if (hasKanbanState && !completeIds.has(`part-${partId}`)) return false;
                 return true;
             }
 
-            if (!node.surahId) return false;
-            if (!targetSurahs.has(node.surahId)) return false;
-            if (skippedSurahs.has(node.surahId)) return false;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return false;
+            if (!targetSurahs.has(surahId)) return false;
+            if (skippedSurahs.has(surahId)) return false;
 
             if (node.type === 'mindmap') {
-                if (hasKanbanState && !completeIds.has(`surah-${node.surahId}`)) return false;
+                if (hasKanbanState && !completeIds.has(`surah-${surahId}`)) return false;
                 return true;
             }
 
+            if (hasKanbanState && completeExitBehavior === 'mindmap_and_verses' && !completeIds.has(`surah-${surahId}`)) {
+                return false;
+            }
             return hasAnchorForNode(node);
         });
 
@@ -443,8 +477,9 @@ export default function StatisticsPage() {
             if (activePart === 5) return true;
             const node = nodeById.get(log.nodeId);
             if (!node) return false;
-            if (!node.surahId) return true;
-            return targetSurahs.has(node.surahId);
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return true;
+            return targetSurahs.has(surahId);
         };
 
         const validLogs = reviewLogs.filter(filterLogByActivePart).filter(log => {
@@ -488,8 +523,9 @@ export default function StatisticsPage() {
             if (activePart === 5) return true;
             const node = nodeById.get(log.nodeId);
             if (!node) return false;
-            if (!node.surahId) return true;
-            return targetSurahs.has(node.surahId);
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return true;
+            return targetSurahs.has(surahId);
         }).length;
 
         return {
@@ -503,7 +539,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, showBacklog, skippedSurahs, timeRange]);
+    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, showBacklog, skippedSurahs, timeRange]);
 
     const hasRenderableData =
         Boolean(settings) ||

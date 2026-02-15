@@ -27,6 +27,48 @@ import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 
+const getVerseSegmentSurahId = (node: MemoryNode): number | null => {
+    if (node.type !== 'verse_segment') return null;
+
+    const direct = Number((node as any).surahId);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+
+    const target = String((node as any).targetId || '');
+    const fromAnchor = target.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (fromAnchor) {
+        const parsed = Number(fromAnchor[1]);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+
+    return null;
+};
+
+const getMindmapSurahId = (node: MemoryNode): number | null => {
+    if (node.type !== 'mindmap') return null;
+    const direct = Number((node as any).surahId);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const target = String((node as any).targetId || '');
+    const match = target.match(/^mindmap-(\d+)$/);
+    if (match) {
+        const parsed = Number(match[1]);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+    return null;
+};
+
+const getPartMindmapPartId = (node: MemoryNode): number | null => {
+    if (node.type !== 'part_mindmap') return null;
+    const direct = Number((node as any).partId);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const target = String((node as any).targetId || '');
+    const match = target.match(/^part-mindmap-(\d+)$/);
+    if (match) {
+        const parsed = Number(match[1]);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+    return null;
+};
+
 
 /**
  * TodoPage Component
@@ -94,7 +136,7 @@ export default function TodoPage() {
 
     // Check if the user has already reviewed chunks for this Surah (used to lock anchor editing)
     const hasReviewedChunks = useCallback((surahId: number) => {
-        return nodes.some(n => n.type === 'verse_segment' && n.surahId === surahId && hasNodeBeenReviewed(n.scheduler));
+        return nodes.some(n => n.type === 'verse_segment' && getVerseSegmentSurahId(n) === surahId && hasNodeBeenReviewed(n.scheduler));
     }, [nodes]);
 
     // Theme detection
@@ -230,6 +272,11 @@ export default function TodoPage() {
     }, [reviewLogs]);
 
     const suspendedAnchors = useMemo(() => {
+        const toSurahId = (value: unknown): number | null => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        };
+
         const byKey = new Map<string, any>();
         const legacyFailureCounts = new Map<string, number>();
 
@@ -237,49 +284,54 @@ export default function TodoPage() {
         errors
             .filter(e => e.nodeType === 'verse_segment' && e.surahId && !e.nodeId)
             .forEach(error => {
+                const errorSurahId = toSurahId(error.surahId);
+                if (!errorSurahId) return;
                 const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
                 const focusAyah =
-                    absoluteRef && absoluteRef.surahId === error.surahId
+                    absoluteRef && absoluteRef.surahId === errorSurahId
                         ? absoluteRef.ayahId
                         : (error.startVerse ?? 1);
                 const startVerse = error.startVerse ?? focusAyah;
                 const endVerse = error.endVerse ?? startVerse;
                 const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
                 const anchorId = error.anchorId || fallbackAnchorId;
-                const key = `${error.surahId}-${anchorId}`;
+                const key = `${errorSurahId}-${anchorId}`;
                 legacyFailureCounts.set(key, (legacyFailureCounts.get(key) || 0) + 1);
             });
 
         errors
             .filter(e => {
-                if (!(e.nodeType === 'verse_segment' && e.surahId)) return false;
+                const errorSurahId = toSurahId(e.surahId);
+                if (!(e.nodeType === 'verse_segment' && errorSurahId)) return false;
                 if (e.nodeId) {
                     return suspendedNodeIds.has(e.nodeId);
                 }
 
                 const absoluteRef = e.absoluteAyah ? absoluteToSurahAyah(e.absoluteAyah) : null;
                 const focusAyah =
-                    absoluteRef && absoluteRef.surahId === e.surahId
+                    absoluteRef && absoluteRef.surahId === errorSurahId
                         ? absoluteRef.ayahId
                         : (e.startVerse ?? 1);
                 const startVerse = e.startVerse ?? focusAyah;
                 const endVerse = e.endVerse ?? startVerse;
                 const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
                 const anchorId = e.anchorId || fallbackAnchorId;
-                const key = `${e.surahId}-${anchorId}`;
+                const key = `${errorSurahId}-${anchorId}`;
                 return (legacyFailureCounts.get(key) || 0) >= 3;
             })
             .forEach(error => {
+                const errorSurahId = toSurahId(error.surahId);
+                if (!errorSurahId) return;
                 const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
                 const focusAyah =
-                    absoluteRef && absoluteRef.surahId === error.surahId
+                    absoluteRef && absoluteRef.surahId === errorSurahId
                         ? absoluteRef.ayahId
                         : (error.startVerse ?? 1);
                 const startVerse = error.startVerse ?? focusAyah;
                 const endVerse = error.endVerse ?? startVerse;
                 const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
                 const anchorId = error.anchorId || fallbackAnchorId;
-                const key = `${error.surahId}-${anchorId}`;
+                const key = `${errorSurahId}-${anchorId}`;
                 const timestamp = error.timestamp ? new Date(error.timestamp).getTime() : 0;
 
                 const existing = byKey.get(key);
@@ -287,7 +339,7 @@ export default function TodoPage() {
 
                 if (!existing || timestamp >= existingTimestamp) {
                     byKey.set(key, {
-                        surahId: error.surahId,
+                        surahId: errorSurahId,
                         anchorId,
                         label: error.anchorLabel || `Verses ${startVerse}-${endVerse}`,
                         startVerse,
@@ -356,6 +408,39 @@ export default function TodoPage() {
             label: a.label,
         }));
         await saveMindMap(surahId, { ...existing, anchors: newAnchors });
+
+        // Keep existing verse-segment nodes in sync with updated splits.
+        // We create new range nodes only when this surah currently participates in verse review
+        // (either still in Complete or already has verse-segment nodes).
+        const rangeKey = (start: number, end: number) => `${start}-${end}`;
+        const nextRanges = new Set(newAnchors.map(a => rangeKey(Number(a.startVerse), Number(a.endVerse))));
+        const existingVerseNodes = nodes.filter(n => n.type === 'verse_segment' && getVerseSegmentSurahId(n) === surahId);
+
+        const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
+        const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
+        const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
+
+        const staleNodes = existingVerseNodes.filter(n => !nextRanges.has(rangeKey(Number(n.startVerse), Number(n.endVerse))));
+        if (staleNodes.length > 0) {
+            await Promise.all(staleNodes.map(n => deleteNode(n.id)));
+        }
+
+        if (shouldCreateMissingRanges) {
+            const existingRanges = new Set(existingVerseNodes.map(n => rangeKey(Number(n.startVerse), Number(n.endVerse))));
+            const missingAnchors = newAnchors.filter(a => !existingRanges.has(rangeKey(Number(a.startVerse), Number(a.endVerse))));
+            if (missingAnchors.length > 0) {
+                await Promise.all(missingAnchors.map(anchor => saveNode({
+                    id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
+                    type: 'verse_segment',
+                    surahId,
+                    startVerse: anchor.startVerse,
+                    endVerse: anchor.endVerse,
+                    targetId: anchor.id,
+                    scheduler: createNewFSRSState(),
+                    createdAt: new Date().toISOString()
+                } as MemoryNode)));
+            }
+        }
     };
 
     // Marks a Mindmap (Surah level) as complete/incomplete
@@ -380,7 +465,7 @@ export default function TodoPage() {
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
             console.log('Checking for existing mindmap MemoryNode for surah:', surahId);
-            const existingNode = nodes.find(n => n.type === 'mindmap' && n.surahId === surahId);
+            const existingNode = nodes.find(n => n.type === 'mindmap' && getMindmapSurahId(n) === surahId);
             console.log('Existing node found:', existingNode);
             if (!existingNode) {
                 const newNode: MemoryNode = {
@@ -401,9 +486,17 @@ export default function TodoPage() {
         } else {
             const behavior = settings.completeExitBehavior ?? 'mindmap_only';
             if (behavior === 'mindmap_and_verses') {
-                const verseNodes = nodes.filter(n => n.type === 'verse_segment' && n.surahId === surahId);
+                const verseNodes = nodes.filter(n => getVerseSegmentSurahId(n) === surahId);
                 if (verseNodes.length > 0) {
-                    await Promise.all(verseNodes.map(n => deleteNode(n.id)));
+                    const results = await Promise.allSettled(verseNodes.map(n => deleteNode(n.id)));
+                    const failed = results.filter((r) => r.status === 'rejected');
+                    if (failed.length > 0) {
+                        console.warn('Some verse nodes could not be suspended on move-out', {
+                            surahId,
+                            failed: failed.length,
+                            total: verseNodes.length,
+                        });
+                    }
                     appLogger.addLog(`Suspended verse reviews for Surah ${surahId}`, 'info');
                 }
             }
@@ -570,8 +663,8 @@ export default function TodoPage() {
 
     const resetMindmapNodes = useCallback(async (type: 'surah' | 'part', id: number) => {
         const matching = nodes.filter(node => {
-            if (type === 'surah') return node.type === 'mindmap' && node.surahId === id;
-            return node.type === 'part_mindmap' && node.partId === id;
+            if (type === 'surah') return node.type === 'mindmap' && getMindmapSurahId(node) === id;
+            return node.type === 'part_mindmap' && getPartMindmapPartId(node) === id;
         });
         if (matching.length === 0) return;
 
@@ -661,7 +754,7 @@ export default function TodoPage() {
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
-            const existingNode = nodes.find(n => n.type === 'part_mindmap' && n.partId === part);
+            const existingNode = nodes.find(n => n.type === 'part_mindmap' && getPartMindmapPartId(n) === part);
             if (!existingNode) {
                 const newNode: MemoryNode = {
                     id: stableNodeId('memory_node', 'part_mindmap', part),

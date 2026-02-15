@@ -17,6 +17,29 @@ import {
 import { getMutashabihatForAbsolute, surahAyahToAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 
+const toPositiveInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const resolveNodeSurahId = (node: { surahId?: unknown; targetId?: unknown }): number | null => {
+    const direct = toPositiveInt(node.surahId);
+    if (direct) return direct;
+    const target = String(node.targetId || '');
+    const anchorMatch = target.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (!anchorMatch) return null;
+    return toPositiveInt(anchorMatch[1]);
+};
+
+const resolveNodePartId = (node: { partId?: unknown; targetId?: unknown }): number | null => {
+    const direct = toPositiveInt(node.partId);
+    if (direct) return direct;
+    const target = String(node.targetId || '');
+    const partMatch = target.match(/^part-mindmap-(\d+)$/);
+    if (!partMatch) return null;
+    return toPositiveInt(partMatch[1]);
+};
+
 function NavigationContent() {
     const pathname = usePathname();
     const { settings } = useInstantSettings();
@@ -45,7 +68,7 @@ function NavigationContent() {
         // 1. Surah Items
         const surahItems = surahsInPart.map(s => {
             const id = `surah-${s.id}`;
-            const mm = (mindmaps as any[]).find(m => m.surahId === s.id);
+            const mm = (mindmaps as any[]).find(m => Number(m.surahId) === s.id);
             const isComplete = mm?.isComplete && (!!mm?.imageUrl || !!mm?.tldrawSnapshot || !!mm?.imageUrlDark);
 
             let column = isComplete ? 'complete' : 'backlog';
@@ -62,7 +85,7 @@ function NavigationContent() {
         const partsToConsider = activePart === 5 ? [1, 2, 3, 4] : [activePart as number];
         const partItems = partsToConsider.map(p => {
             const id = `part-${p}`;
-            const pmm = (partMindMaps as any[]).find(m => m.partId === p);
+            const pmm = (partMindMaps as any[]).find(m => Number(m.partId) === p);
             const isComplete = pmm?.isComplete && (!!pmm?.imageUrl || !!pmm?.tldrawSnapshot || !!pmm?.imageUrlDark);
 
             let column = isComplete ? 'complete' : 'backlog';
@@ -138,20 +161,40 @@ function NavigationContent() {
         // Match Today badge count with the exact queue filter used by the review section.
         const hasKanbanState = !!settings.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings.kanbanColumns?.complete || []) : []);
+        const completeExitBehavior = settings.completeExitBehavior ?? 'mindmap_only';
+        const skippedSurahIds = new Set<number>((settings.skippedSurahs || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
 
         const hasAnchorForNode = (node: (typeof dueNodes)[number]) => {
-            if (node.type !== 'verse_segment' || !node.surahId) return true;
-            const mm = mindmaps.find(m => m.surahId === node.surahId);
+            if (node.type !== 'verse_segment') return true;
+            const surahId = resolveNodeSurahId(node as any);
+            if (!surahId) return true;
+            const mm = mindmaps.find(m => Number(m.surahId) === surahId);
             const anchors = mm?.anchors || [];
             if (anchors.length === 0) return false;
-            return anchors.some(a => a.startVerse === node.startVerse && a.endVerse === node.endVerse);
+            return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
         };
 
         const todayCount = dueNodes
             .filter(node => {
+                const surahId = resolveNodeSurahId(node as any);
+                return !surahId || !skippedSurahIds.has(surahId);
+            })
+            .filter(node => {
                 if (!hasKanbanState) return true;
-                if (node.type === 'mindmap') return completeIds.has(`surah-${node.surahId}`);
-                if (node.type === 'part_mindmap') return completeIds.has(`part-${node.partId}`);
+                if (node.type === 'mindmap') {
+                    const surahId = resolveNodeSurahId(node as any);
+                    return surahId ? completeIds.has(`surah-${surahId}`) : true;
+                }
+                if (node.type === 'part_mindmap') {
+                    const partId = resolveNodePartId(node as any);
+                    return partId ? completeIds.has(`part-${partId}`) : true;
+                }
+                if (node.type === 'verse_segment') {
+                    if (completeExitBehavior !== 'mindmap_and_verses') return true;
+                    const surahId = resolveNodeSurahId(node as any);
+                    if (!surahId) return true;
+                    return completeIds.has(`surah-${surahId}`);
+                }
                 return true;
             })
             .filter(hasAnchorForNode)

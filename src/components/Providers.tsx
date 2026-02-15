@@ -29,7 +29,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-02-15-v15-offline-networkfirst-app-routes";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-15-v17-build-cache-bust";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
 const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -301,6 +301,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
             );
           }
           await Promise.all(cacheKeysToDelete.map((key) => caches.delete(key)));
+        }
+
+        try {
+          window.sessionStorage.removeItem("quran_verses_cache_v2");
+        } catch {
+          // Non-fatal; migration still succeeds.
         }
 
         window.localStorage.setItem(SW_MIGRATION_KEY, "done");
