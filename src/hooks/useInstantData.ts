@@ -19,10 +19,37 @@ const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     kanbanColumns: {},
 };
 
-const stableEntityId = (...parts: Array<string | number>) =>
-    parts
-        .map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_'))
-        .join('__');
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string | undefined | null): value is string =>
+    !!value && UUID_RE.test(value);
+
+const hash32 = (value: string, seed: number) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < value.length; i += 1) {
+        h ^= value.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+};
+
+const stableEntityId = (...parts: Array<string | number>) => {
+    const input = parts.map(part => String(part).trim()).join('|');
+    const hex =
+        hash32(input, 0x811c9dc5).toString(16).padStart(8, '0') +
+        hash32(input, 0x12345678).toString(16).padStart(8, '0') +
+        hash32(input, 0x9abcdef0).toString(16).padStart(8, '0') +
+        hash32(input, 0x0fedcba9).toString(16).padStart(8, '0');
+    const chars = hex.slice(0, 32).split('');
+    chars[12] = '4';
+    chars[16] = ((Number.parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+    return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
+};
+
+const resolveEntityId = (candidateId: string | undefined, ...fallbackParts: Array<string | number>) => {
+    if (isUuid(candidateId)) return candidateId;
+    return stableEntityId(...fallbackParts);
+};
 
 const parseMindmapSurahFromTarget = (targetId?: string) => {
     if (!targetId) return undefined;
@@ -131,7 +158,8 @@ export function useInstantSettings() {
 
         const syncedAt = new Date().toISOString();
         if (settingsEntry) {
-            await db.transact(db.tx.settings[settingsEntry.id].update({
+            const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
+            await db.transact(db.tx.settings[settingsId].update({
                 ...newSettings,
                 lastSyncedAt: syncedAt
             }));
@@ -207,7 +235,10 @@ export function useInstantNodes() {
 
     useEffect(() => {
         if (!user || transitionIds.length === 0) return;
-        const tx = transitionIds.map(id => db.tx.memoryNodes[id].delete());
+        const tx = transitionIds
+            .filter(nodeId => isUuid(nodeId))
+            .map(nodeId => db.tx.memoryNodes[nodeId].delete());
+        if (tx.length === 0) return;
         void db.transact(tx);
     }, [user, transitionIds]);
 
@@ -268,15 +299,17 @@ export function useInstantNodes() {
 
     const saveNode = (node: MemoryNode) => {
         if (!user) return Promise.resolve();
-        return db.transact(db.tx.memoryNodes[node.id].update({
+        const nodeId = resolveEntityId(node.id, memoryNodeLogicalKey(node));
+        return db.transact(db.tx.memoryNodes[nodeId].update({
             ...node,
             userId: user.id
         }));
     };
 
-    const deleteNode = (id: string) => {
+    const deleteNode = (nodeId: string) => {
         if (!user) return Promise.resolve();
-        return db.transact(db.tx.memoryNodes[id].delete());
+        if (!isUuid(nodeId)) return Promise.resolve();
+        return db.transact(db.tx.memoryNodes[nodeId].delete());
     };
 
     return useMemo(() => ({
@@ -313,7 +346,7 @@ export function useInstantMindMaps() {
     const saveMindMap = (surahId: number, mapData: Partial<MindMap>) => {
         if (!user) return Promise.resolve();
         const existing = mindmaps.find(m => Number((m as any).surahId) === surahId);
-        const mapId = existing ? (existing as any).id : stableEntityId('mindmap', user.id, surahId);
+        const mapId = resolveEntityId((existing as any)?.id, 'mindmap', user.id, surahId);
 
         // Merge existing data with new data to preserve fields like anchors
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
@@ -337,7 +370,7 @@ export function useInstantMindMaps() {
     const savePartMindMap = (partId: number, mapData: any) => {
         if (!user) return Promise.resolve();
         const existing = partMindMaps.find(m => Number((m as any).partId) === partId);
-        const mapId = existing ? existing.id : stableEntityId('part_mindmap', user.id, partId);
+        const mapId = resolveEntityId(existing?.id, 'part_mindmap', user.id, partId);
 
         // Merge existing data with new data to preserve all fields
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
@@ -355,14 +388,16 @@ export function useInstantMindMaps() {
         }));
     };
 
-    const deleteMindMap = (id: string) => {
+    const deleteMindMap = (mindMapId: string) => {
         if (!user) return Promise.resolve();
-        return db.transact(db.tx.mindMaps[id].delete());
+        if (!isUuid(mindMapId)) return Promise.resolve();
+        return db.transact(db.tx.mindMaps[mindMapId].delete());
     };
 
-    const deletePartMindMap = (id: string) => {
+    const deletePartMindMap = (partMindMapId: string) => {
         if (!user) return Promise.resolve();
-        return db.transact(db.tx.partMindMaps[id].delete());
+        if (!isUuid(partMindMapId)) return Promise.resolve();
+        return db.transact(db.tx.partMindMaps[partMindMapId].delete());
     };
 
     return useMemo(() => ({
@@ -393,7 +428,7 @@ export function useInstantListeningStats() {
     const saveStats = (surahId: number, newStats: any) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
-        const statsId = existing ? existing.id : stableEntityId('listening_stats', user.id, surahId);
+        const statsId = resolveEntityId(existing?.id, 'listening_stats', user.id, surahId);
 
         return db.transact(db.tx.listeningStats[statsId].update({
             ...newStats,
@@ -405,7 +440,7 @@ export function useInstantListeningStats() {
     const deleteStats = (surahId: number) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
-        if (!existing?.id) return Promise.resolve();
+        if (!isUuid(existing?.id)) return Promise.resolve();
         return db.transact(db.tx.listeningStats[existing.id].delete());
     };
 
@@ -428,7 +463,7 @@ export function useInstantListeningProgress() {
     const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
-        const progressId = existing ? existing.id : stableEntityId('listening_progress', user.id, partId);
+        const progressId = resolveEntityId(existing?.id, 'listening_progress', user.id, partId);
 
         return db.transact(db.tx.listeningProgress[progressId].update({
             partId,
@@ -442,7 +477,7 @@ export function useInstantListeningProgress() {
     const deleteProgress = (partId: number) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
-        if (!existing?.id) return Promise.resolve();
+        if (!isUuid(existing?.id)) return Promise.resolve();
         return db.transact(db.tx.listeningProgress[existing.id].delete());
     };
 
@@ -465,7 +500,7 @@ export function useInstantMutashabihat() {
     const saveDecision = (phraseId: string, update: any) => {
         if (!user) return Promise.resolve();
         const existing = decisions.find(d => d.phraseId === phraseId);
-        const decisionId = existing ? existing.id : stableEntityId('mut_decision', user.id, phraseId);
+        const decisionId = resolveEntityId(existing?.id, 'mut_decision', user.id, phraseId);
 
         return db.transact(db.tx.mutashabihatDecisions[decisionId].update({
             ...update,
@@ -477,16 +512,17 @@ export function useInstantMutashabihat() {
 
     const saveCustom = (item: any) => {
         if (!user) return Promise.resolve();
-        const customId = item.id || id();
+        const customId = isUuid(item.id) ? item.id : id();
         return db.transact(db.tx.customMutashabihat[customId].update({
             ...item,
             userId: user.id
         }));
     };
 
-    const deleteCustom = (id: string) => {
+    const deleteCustom = (customId: string) => {
         if (!user) return Promise.resolve();
-        return db.transact(db.tx.customMutashabihat[id].delete());
+        if (!isUuid(customId)) return Promise.resolve();
+        return db.transact(db.tx.customMutashabihat[customId].delete());
     };
 
     return useMemo(() => ({
@@ -536,16 +572,17 @@ export function useInstantReviewErrors() {
 
     const saveError = (errorItem: any) => {
         if (!user) return Promise.resolve();
-        const errorId = errorItem.id || id();
+        const errorId = isUuid(errorItem.id) ? errorItem.id : id();
         return db.transact(db.tx.reviewErrors[errorId].update({
             ...errorItem,
             userId: user.id
         }));
     };
 
-    const deleteError = (id: string) => {
+    const deleteError = (errorId: string) => {
         if (!user) return Promise.resolve();
-        return db.transact(db.tx.reviewErrors[id].delete());
+        if (!isUuid(errorId)) return Promise.resolve();
+        return db.transact(db.tx.reviewErrors[errorId].delete());
     };
 
     return useMemo(() => ({ errors, saveError, deleteError, isLoading, error }), [errors, isLoading, error]);
@@ -570,7 +607,7 @@ export function useInstantOptimization() {
 
     const saveMeta = (newMeta: any) => {
         if (!user) return Promise.resolve();
-        const metaId = data?.optimizationMeta?.[0]?.id || id();
+        const metaId = isUuid(data?.optimizationMeta?.[0]?.id) ? data?.optimizationMeta?.[0]?.id : id();
         return db.transact(db.tx.optimizationMeta[metaId].update({
             ...newMeta,
             userId: user.id
@@ -579,7 +616,7 @@ export function useInstantOptimization() {
 
     const saveWeights = (newWeights: any[]) => {
         if (!user) return Promise.resolve();
-        const weightsId = data?.customWeights?.[0]?.id || id();
+        const weightsId = isUuid(data?.customWeights?.[0]?.id) ? data?.customWeights?.[0]?.id : id();
         return db.transact(db.tx.customWeights[weightsId].update({
             weights: newWeights,
             userId: user.id
