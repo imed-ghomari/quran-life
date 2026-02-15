@@ -6,7 +6,7 @@ const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
 const OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY = 'offline:autoRedirectAttemptAt';
-const OFFLINE_AUTO_REDIRECT_COOLDOWN_MS = 10 * 1000;
+const OFFLINE_AUTO_REDIRECT_COOLDOWN_MS = 45 * 1000;
 
 function hasValidOfflineAccessMarker() {
   if (typeof window === 'undefined') return false;
@@ -26,7 +26,7 @@ function hasValidOfflineAccessMarker() {
 
 function hadRecentAutoRedirectAttempt() {
   if (typeof window === 'undefined') return false;
-  const raw = window.sessionStorage.getItem(OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY);
+  const raw = window.localStorage.getItem(OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY);
   const timestamp = Number(raw ?? 0);
   return Number.isFinite(timestamp) && Date.now() - timestamp < OFFLINE_AUTO_REDIRECT_COOLDOWN_MS;
 }
@@ -39,7 +39,7 @@ export default function OfflineAppPage() {
   useEffect(() => {
     if (!canOpenOffline) return;
     if (navigator.onLine) {
-      window.sessionStorage.removeItem(OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY);
+      window.localStorage.removeItem(OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY);
       setHasRecentAutoAttempt(false);
       return;
     }
@@ -48,7 +48,7 @@ export default function OfflineAppPage() {
 
     setIsRedirecting(true);
     window.localStorage.setItem(FORCE_OFFLINE_OPEN_KEY, Date.now().toString());
-    window.sessionStorage.setItem(OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY, Date.now().toString());
+    window.localStorage.setItem(OFFLINE_AUTO_REDIRECT_ATTEMPT_KEY, Date.now().toString());
     window.location.replace('/dashboard');
   }, [canOpenOffline, hasRecentAutoAttempt]);
 
@@ -79,7 +79,7 @@ export default function OfflineAppPage() {
             {isRedirecting
               ? 'Redirecting to your dashboard...'
               : hasRecentAutoAttempt
-                ? 'Automatic redirect was paused to prevent a loop. Tap below to open your dashboard again.'
+                ? 'Automatic redirect is paused briefly to prevent a loop. Tap below to retry opening your dashboard.'
                 : 'Preparing offline access...'}
           </p>
           {hasRecentAutoAttempt && !isRedirecting && (
