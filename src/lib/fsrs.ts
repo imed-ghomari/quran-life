@@ -50,7 +50,7 @@ export interface ReviewLogEntry {
 export interface OptimizationMeta {
     lastOptimizedAt: string | null;
     logCountAtLastOptimization: number;
-    customWeights: number[] | null;  // 19 FSRS v6 weights
+    customWeights: number[] | null;  // FSRS weights array (ts-fsrs currently uses 21 values)
 }
 
 // ========================================

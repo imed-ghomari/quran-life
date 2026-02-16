@@ -59,14 +59,30 @@ export default function AudioPlayer({
     const prevIsPlayingRef = useRef(false);
     const hasHydratedPlaybackStateRef = useRef(false);
     const pendingResumeRef = useRef<{ reciterId?: string; surahId: number; ayahId: number; timestamp: number } | null>(null);
+    const autoAdvanceStateRef = useRef<{ key: string; at: number; attempts: number }>({ key: '', at: 0, attempts: 0 });
+    const stallCheckRef = useRef<{ t: number; wall: number }>({ t: 0, wall: 0 });
 
     const currentVerse = verses[currentVerseIndex];
     const totalVerses = verses.length;
     const verseProgress = ((currentVerseIndex + 1) / totalVerses) * 100;
+    const currentRecitationData = useMemo(() => {
+        if (!selectedReciter || !currentVerse) return null;
+        if (selectedReciter.type === 'surah-based') {
+            const fromMap = recitationDataMap[currentVerse.surahId];
+            if (fromMap) return fromMap;
+            if (recitationData?.surahId === currentVerse.surahId) return recitationData;
+            return null;
+        }
+        return recitationData;
+    }, [selectedReciter, currentVerse, recitationDataMap, recitationData]);
 
     useEffect(() => {
         isPlayingRef.current = isPlaying;
     }, [isPlaying]);
+
+    useEffect(() => {
+        autoAdvanceStateRef.current = { key: '', at: 0, attempts: 0 };
+    }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex]);
 
     const persistPlaybackState = useCallback((opts?: {
         timestamp?: number;
@@ -183,13 +199,15 @@ export default function AudioPlayer({
 
         let isActive = true;
         const reciterId = selectedReciter.id;
+        const requestedSurahId = currentVerse.surahId;
 
         const load = async () => {
             setIsLoadingReciter(true);
-            const data = await loadRecitationData(selectedReciter, currentVerse.surahId);
+            const data = await loadRecitationData(selectedReciter, requestedSurahId);
             if (!isActive) return;
             // Guard against stale resolves when reciter changes mid-load
             if (selectedReciter.id !== reciterId) return;
+            if (selectedReciter.type === 'surah-based' && data?.surahId !== requestedSurahId) return;
             setRecitationData(data);
             setIsLoadingReciter(false);
         };
@@ -250,9 +268,9 @@ export default function AudioPlayer({
     // Main Audio Loading Logic
     useEffect(() => {
         if (!currentVerse || !selectedReciter) return;
-        if (isLoadingReciter && !recitationData) return;
+        if (isLoadingReciter && !currentRecitationData) return;
 
-        const info = getAudioInfoForVerse(selectedReciter, recitationData, currentVerse.surahId, currentVerse.ayahId);
+        const info = getAudioInfoForVerse(selectedReciter, currentRecitationData, currentVerse.surahId, currentVerse.ayahId);
 
         if (!info) {
             if (audioRef.current) {
@@ -307,9 +325,13 @@ export default function AudioPlayer({
                     audioRef.current.load();
                 } else {
                     // Same src (Surah mode), just seek
-                    // Only seek if significantly different (to avoid jitter)
-                    if (Math.abs(audioRef.current.currentTime - (pendingSeekTimeRef.current ?? desiredStartTime)) > 0.15) {
-                        audioRef.current.currentTime = pendingSeekTimeRef.current ?? desiredStartTime;
+                    const targetTime = pendingSeekTimeRef.current ?? desiredStartTime;
+                    if (Math.abs(audioRef.current.currentTime - targetTime) > 0.08) {
+                        audioRef.current.currentTime = targetTime;
+                    }
+                    // If browser deferred the seek, force-apply once.
+                    if (Math.abs(audioRef.current.currentTime - targetTime) > 0.15) {
+                        audioRef.current.currentTime = targetTime;
                     }
                     pendingSeekTimeRef.current = null;
                 }
@@ -342,7 +364,7 @@ export default function AudioPlayer({
                 lastWordIndexRef.current = initialIndex;
             }
         }
-    }, [currentVerse, selectedReciter, recitationData, speed, isLoadingReciter, currentVerseWordCount, safePlay, onWordIndexChange]); 
+    }, [currentVerse, selectedReciter, currentRecitationData, speed, isLoadingReciter, currentVerseWordCount, safePlay, onWordIndexChange]); 
 
     // Handle Play/Pause effect
     useEffect(() => {
@@ -368,6 +390,39 @@ export default function AudioPlayer({
     }, [isPlaying, onPlayStateChange, selectedReciter, currentVerse, speed, safePlay, persistPlaybackState]);
 
     useEffect(() => {
+        if (!isPlaying) return;
+
+        const id = window.setInterval(() => {
+            const audio = audioRef.current;
+            if (!audio) return;
+            if (audio.paused || audio.ended) return;
+
+            const now = Date.now();
+            const current = audio.currentTime;
+            const prev = stallCheckRef.current;
+
+            if (Math.abs(current - prev.t) > 0.02) {
+                stallCheckRef.current = { t: current, wall: now };
+                return;
+            }
+
+            if (prev.wall === 0) {
+                stallCheckRef.current = { t: current, wall: now };
+                return;
+            }
+
+            if (now - prev.wall >= 1500) {
+                const nudged = current + 0.02;
+                audio.currentTime = nudged;
+                safePlay();
+                stallCheckRef.current = { t: nudged, wall: now };
+            }
+        }, 500);
+
+        return () => window.clearInterval(id);
+    }, [isPlaying, safePlay]);
+
+    useEffect(() => {
         const persistOnHide = () => {
             persistPlaybackState();
         };
@@ -388,9 +443,20 @@ export default function AudioPlayer({
     const handleTimeUpdate = useCallback(() => {
         if (audioRef.current) {
             const current = audioRef.current.currentTime;
+            const verseKey = `${currentVerse?.surahId ?? 0}:${currentVerse?.ayahId ?? 0}:${currentVerseIndex}`;
             
             // Check for verse end in Surah mode
             if (verseEndTime !== null && current >= verseEndTime) {
+                const now = Date.now();
+                const state = autoAdvanceStateRef.current;
+                if (state.key === verseKey && now - state.at < 700) {
+                    return;
+                }
+                autoAdvanceStateRef.current = {
+                    key: verseKey,
+                    at: now,
+                    attempts: state.key === verseKey ? state.attempts + 1 : 1
+                };
                 // Determine what to do
                 if (currentVerseIndex < totalVerses - 1) {
                     onVerseChange(currentVerseIndex + 1);
@@ -471,7 +537,7 @@ export default function AudioPlayer({
                 onWordIndexChange?.(nextIndex);
             }
         }
-    }, [verseEndTime, verseStartTime, currentVerseIndex, totalVerses, onVerseChange, activeSegments, onWordIndexChange, currentVerseWordCount]);
+    }, [verseEndTime, verseStartTime, currentVerseIndex, totalVerses, onVerseChange, activeSegments, onWordIndexChange, currentVerseWordCount, currentVerse?.surahId, currentVerse?.ayahId]);
 
     const handleEnded = useCallback(() => {
         // This triggers for Ayah-mode files (end of file)
@@ -503,6 +569,13 @@ export default function AudioPlayer({
         onWordIndexChange?.(-1);
         lastWordIndexRef.current = -1;
     }, [onWordIndexChange]);
+
+    const handleWaitingOrStalled = useCallback(() => {
+        if (!isPlayingRef.current || !audioRef.current) return;
+        const audio = audioRef.current;
+        audio.currentTime = audio.currentTime + 0.02;
+        safePlay();
+    }, [safePlay]);
 
     const handleReciterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const id = e.target.value;
@@ -558,7 +631,10 @@ export default function AudioPlayer({
         setIsCompleted(false);
 
         const firstVerse = verses[0];
-        const info = getAudioInfoForVerse(selectedReciter, recitationData, firstVerse.surahId, firstVerse.ayahId);
+        const firstVerseData = selectedReciter.type === 'surah-based'
+            ? (recitationDataMap[firstVerse.surahId] ?? (recitationData?.surahId === firstVerse.surahId ? recitationData : null))
+            : recitationData;
+        const info = getAudioInfoForVerse(selectedReciter, firstVerseData, firstVerse.surahId, firstVerse.ayahId);
         const desiredStartTime = info?.startTime || 0;
 
         onVerseChange(0);
@@ -659,6 +735,8 @@ export default function AudioPlayer({
                 onEnded={handleEnded}
                 onTimeUpdate={handleTimeUpdate}
                 onError={handleError}
+                onWaiting={handleWaitingOrStalled}
+                onStalled={handleWaitingOrStalled}
                 onLoadedMetadata={handleLoadedMetadata}
                 preload="auto"
             />
