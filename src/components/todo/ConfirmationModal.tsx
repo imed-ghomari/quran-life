@@ -32,10 +32,8 @@ export default function ConfirmationModal({
             isOpen={isOpen}
             onClose={onCancel}
             closeOnBackdropClick={!isProcessing}
-            maxWidthClassName="max-w-[980px]"
-            headerClassName="px-8 py-6 sm:px-10 sm:py-7"
-            bodyClassName="px-8 py-7 sm:px-10 sm:py-8"
-            footerClassName="gap-4 px-8 py-5 sm:px-10 sm:py-6"
+            maxWidthClassName="max-w-[500px]"
+            footerClassName="gap-4"
             header={
                 <div className="flex items-start gap-5 sm:gap-6">
                     <div className={`shrink-0 flex h-16 w-16 items-center justify-center rounded-3xl ${isDestructive ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-[var(--accent)]/10 text-[var(--accent)]'}`}>
