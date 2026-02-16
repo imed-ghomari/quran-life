@@ -15,10 +15,35 @@ import {
   Monitor,
   Headphones,
   Smartphone,
-  Anchor
+  Anchor,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
+
+const FaqItem = ({ question, answer }: { question: string; answer: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className={`faq-item ${isOpen ? 'open' : ''}`}>
+      <button
+        className="faq-question"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+      >
+        <span>{question}</span>
+        {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+      </button>
+      <div
+        className="faq-answer"
+        style={{ maxHeight: isOpen ? '500px' : '0' }}
+      >
+        <p>{answer}</p>
+      </div>
+    </div>
+  );
+};
 
 interface LandingPageProps {
   /** * Callback function triggered when the user clicks the 
@@ -39,7 +64,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
   const getThemeIcon = () => {
     // Larger size for mobile visibility
-    const size = 22; 
+    const size = 22;
     switch (theme) {
       case 'light': return <Sun size={size} />;
       case 'dark': return <Moon size={size} />;
@@ -67,8 +92,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <a href="#roadmap" className="nav-link">
               Roadmap
             </a>
-            <button 
-              className="btn btn-secondary nav-theme-btn" 
+            <button
+              className="btn btn-secondary nav-theme-btn"
               onClick={cycleTheme}
               aria-label="Toggle Theme"
             >
@@ -96,16 +121,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             </div>
 
             <div className="hero-media delay-200 animate-entry">
-                <img
-                  src="/landing/hero-light.png"
-                  alt="Quran Life visual mindmap preview"
-                  className="hero-image hero-image-light"
-                  loading="eager"
-                  decoding="async"
-                  fetchPriority="high"
-                  width={1200}
-                  height={900}
-                />
+              <img
+                src="/landing/hero-light.png"
+                alt="Quran Life visual mindmap preview"
+                className="hero-image hero-image-light"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                width={1200}
+                height={900}
+              />
               <img
                 src="/landing/hero-dark.png"
                 alt="Quran Life visual mindmap preview"
@@ -291,17 +316,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               <p>
                 One plan. Everything you need to master the Quran.
               </p>
-              
+
               {/* Billing Toggle */}
               <div className="billing-toggle-container">
                 <div className="billing-toggle">
-                  <button 
+                  <button
                     className={`toggle-option ${billingCycle === 'monthly' ? 'active' : ''}`}
                     onClick={() => setBillingCycle('monthly')}
                   >
                     Monthly
                   </button>
-                  <button 
+                  <button
                     className={`toggle-option ${billingCycle === 'yearly' ? 'active' : ''}`}
                     onClick={() => setBillingCycle('yearly')}
                   >
@@ -316,13 +341,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               {/* Premium Tier */}
               <div className="price-card premium">
                 <div className="badge">Complete Access</div>
-                
+
                 {billingCycle === 'monthly' ? (
                   <div className="price">$10<span>/mo</span></div>
                 ) : (
                   <div className="price">$96<span>/yr</span></div>
                 )}
-                
+
                 <p>
                   Unlock the full power of visual learning.
                 </p>
@@ -346,6 +371,45 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 </button>
                 <p className="guarantee">1 week trial</p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* --- FAQ Section --- */}
+        <section id="faq" className="faq-section">
+          <div className="container">
+            <div className="section-header">
+              <h2 className="section-title">Frequently Asked Questions</h2>
+              <p>
+                Everything you need to know about Quran Life.
+              </p>
+            </div>
+
+            <div className="faq-grid">
+              {[
+                {
+                  question: "How does the 'Visual Mindmap' technique actually help with Hifdh?",
+                  answer: "Scientific research shows that the brain retains information better when it's structured visually. Instead of memorizing linear text, our Anchoring System allows you to break Surahs down into logical blocks (mindmaps). This creates 'mental hooks' that make recall faster and more reliable, especially for longer Surahs."
+                },
+                {
+                  question: "My Hifdh is weak. Will this app help me fix old mistakes?",
+                  answer: "Yes. The hardest part of fixing weak Hifdh is identifying exactly where the mistakes are. Our Mutashabihat Engine proactively flags similar verses that often cause confusion. Additionally, the Spaced Repetition algorithm adapts to your performance—if you struggle with a specific passage, it will schedule reviews more frequently until it sticks."
+                },
+                {
+                  question: "I see 'Offline Mode' mentioned. Does that mean my data is stored locally?",
+                  answer: "It's a hybrid system. Quran Life focuses on being 'Local First' for speeed and offline accessibility. Your mindmaps and progress are stored on your device instantly, so you never see a loading spinner. When you connect to the internet, we silently sync your encrypted data to the cloud so you can switch between your phone and laptop seamlessly."
+                },
+                {
+                  question: "What happens if I miss a few days of review?",
+                  answer: "Unlike rigid schedules that pile up endlessly, our intelligent scheduler adjusts. If you miss a few days, it won't overwhelm you with impossible backlogs. It prioritizes the verses most at risk of being forgotten, allowing you to catch up at a sustainable pace without losing motivation."
+                },
+                {
+                  question: "Why isn't this available on the App Store or Play Store?",
+                  answer: "We chose to build Quran Life as a Progressive Web App (PWA) to give us complete control over updates and features without waiting for store approvals. This ensures you always have the latest version instantly. You can still 'install' it on your home screen just like a native app, and it works exactly the same—full screen, offline, and fast."
+                }
+              ].map((faq, index) => (
+                <FaqItem key={index} question={faq.question} answer={faq.answer} />
+              ))}
             </div>
           </div>
         </section>

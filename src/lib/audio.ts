@@ -180,8 +180,8 @@ export async function getReciters(): Promise<Reciter[]> {
 
 export async function loadRecitationData(reciter: Reciter, surahId: number) {
     const cacheKey = reciter.type === 'surah-based'
-        ? reciter.id
-        : `${reciter.id}-${surahId}`;
+        ? `${reciter.id}-${surahId}`
+        : reciter.id;
     if (recitationCache[cacheKey]) return recitationCache[cacheKey];
 
     let data: any = {};
@@ -200,6 +200,8 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
 
             // Normalize
             data = {
+                surahId,
+                surahNumber: surahData[surahId]?.surah_number,
                 audioUrl: surahData[surahId]?.audio_url,
                 timings: segmentsData // Keyed by "Surah:Ayah"
             };
@@ -211,11 +213,6 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
             // Wait, "ayah-recitation-....json" - does it contain 6236 keys?
             // I should check the size of one of these files.
             
-            // If it's already loaded for another surah, good.
-            if (recitationCache[reciter.id]) {
-                return recitationCache[reciter.id];
-            }
-
             const res = await fetch(reciter.relativePath);
             const json = await res.json();
             
@@ -223,10 +220,6 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
             data = {
                 verses: json
             };
-            
-            // Cache at reciter level since it's one file for whole Quran
-            recitationCache[reciter.id] = data;
-            return data;
         }
 
         recitationCache[cacheKey] = data;
@@ -253,6 +246,14 @@ export function getAudioInfoForVerse(
     } else {
         // Surah based
         if (!data.audioUrl) return null;
+        if (
+            typeof data.surahNumber === 'number' &&
+            Number.isFinite(data.surahNumber) &&
+            data.surahNumber !== surahId
+        ) {
+            console.error(`Recitation data mismatch for ${reciter.id}: requested surah ${surahId}, loaded ${data.surahNumber}`);
+            return null;
+        }
         
         const key = `${surahId}:${ayahId}`;
         const timing = data.timings?.[key];
@@ -262,10 +263,88 @@ export function getAudioInfoForVerse(
             return null;
         }
 
+        const toFiniteNumber = (value: unknown): number | null => {
+            if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+            return value;
+        };
+
+        const getSegmentBounds = (segments: unknown): { start: number; end: number } | null => {
+            if (!Array.isArray(segments) || segments.length === 0) return null;
+
+            let minStart = Number.POSITIVE_INFINITY;
+            let maxEnd = Number.NEGATIVE_INFINITY;
+
+            for (const segment of segments) {
+                if (!Array.isArray(segment)) continue;
+                const start = toFiniteNumber(segment[1]);
+                const end = toFiniteNumber(segment[2]);
+                if (start === null || end === null) continue;
+                if (end <= start) continue;
+                if (start < minStart) minStart = start;
+                if (end > maxEnd) maxEnd = end;
+            }
+
+            if (!Number.isFinite(minStart) || !Number.isFinite(maxEnd) || maxEnd <= minStart) return null;
+            return { start: minStart, end: maxEnd };
+        };
+
+        const getTimingStart = (candidate: any): number | null => {
+            const timestampFrom = toFiniteNumber(candidate?.timestamp_from);
+            if (timestampFrom !== null) return timestampFrom;
+            const segmentBounds = getSegmentBounds(candidate?.segments);
+            return segmentBounds?.start ?? null;
+        };
+
+        const getTimingEnd = (candidate: any): number | null => {
+            const timestampTo = toFiniteNumber(candidate?.timestamp_to);
+            if (timestampTo !== null) return timestampTo;
+            const segmentBounds = getSegmentBounds(candidate?.segments);
+            return segmentBounds?.end ?? null;
+        };
+
+        let startMs = getTimingStart(timing);
+        let endMs = getTimingEnd(timing);
+
+        // Some imported segment files have null/invalid first-ayah bounds.
+        // Recover from nearby ayah timings so auto-advance and preview stay in sync.
+        if (startMs === null || endMs === null || endMs <= startMs) {
+            let previousEnd: number | null = null;
+            let nextStart: number | null = null;
+
+            for (let prevAyah = ayahId - 1; prevAyah >= 1; prevAyah--) {
+                const prevTiming = data.timings?.[`${surahId}:${prevAyah}`];
+                if (!prevTiming) continue;
+                const candidateEnd = getTimingEnd(prevTiming);
+                if (candidateEnd !== null) {
+                    previousEnd = candidateEnd;
+                    break;
+                }
+            }
+
+            for (let nextAyah = ayahId + 1; nextAyah <= 286; nextAyah++) {
+                const nextTiming = data.timings?.[`${surahId}:${nextAyah}`];
+                if (!nextTiming) continue;
+                const candidateStart = getTimingStart(nextTiming);
+                if (candidateStart !== null) {
+                    nextStart = candidateStart;
+                    break;
+                }
+            }
+
+            if (startMs === null) startMs = previousEnd ?? 0;
+            if (endMs === null || endMs <= startMs) {
+                if (nextStart !== null && nextStart > startMs) {
+                    endMs = nextStart - 1;
+                } else {
+                    endMs = startMs + 2000;
+                }
+            }
+        }
+
         return {
             url: data.audioUrl,
-            startTime: timing.timestamp_from / 1000,
-            endTime: timing.timestamp_to / 1000,
+            startTime: startMs / 1000,
+            endTime: endMs / 1000,
             segments: timing.segments
         };
     }

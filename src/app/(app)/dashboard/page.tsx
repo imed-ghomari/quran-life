@@ -46,6 +46,7 @@ import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabiha
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
+import { clientEnv } from '@/lib/env/client';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -53,6 +54,8 @@ const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr:
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 const ACTIVE_REVIEW_NODE_STORAGE_KEY = 'dashboard_active_review_node_id_v1';
+const FSRS_OPTIMIZATION_LOG_DELTA = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA);
+const FSRS_OPTIMIZATION_DELAY_MS = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS);
 
 const toPositiveInt = (value: unknown): number | null => {
     const parsed = Number(value);
@@ -764,9 +767,8 @@ export default function TodayPage() {
         const checkOptimization = async () => {
             const count = reviewLogs.length;
 
-            // Optimization triggers when over 400 new review logs (since last optimization)
-            // Minimum 400 logs total required for first optimization
-            if (count >= (optimizationMeta.logCountAtLastOptimization || 0) + 400) {
+            // Optimization triggers when enough new logs are accumulated.
+            if (count >= (optimizationMeta.logCountAtLastOptimization || 0) + FSRS_OPTIMIZATION_LOG_DELTA) {
                 addToast('success', 'Optimizing FSRS...', 'Analyzing your review history...');
 
                 try {
@@ -812,7 +814,7 @@ export default function TodayPage() {
             }
         };
 
-        const timer = setTimeout(checkOptimization, 5000); // 5s delay to not block initial render/data load
+        const timer = setTimeout(checkOptimization, FSRS_OPTIMIZATION_DELAY_MS);
         return () => clearTimeout(timer);
     }, [addToast, reviewLogs, optimizationMeta, saveCustomWeights, saveOptimizationMeta]);
 

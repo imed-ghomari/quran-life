@@ -1,6 +1,5 @@
-import React from 'react';
-import { AlertTriangle } from 'lucide-react';
-import ModalWindow from '@/components/ui/ModalWindow';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
@@ -27,42 +26,94 @@ export default function ConfirmationModal({
     onConfirm,
     onCancel
 }: ConfirmationModalProps) {
+    const [isVisible, setIsVisible] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setIsVisible(true);
+            // Prevent body scroll
+            document.body.style.overflow = 'hidden';
+        } else {
+            const timer = setTimeout(() => setIsVisible(false), 300);
+            document.body.style.overflow = '';
+            return () => clearTimeout(timer);
+        }
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
+
+    if (!isVisible && !isOpen) return null;
+
+    const showcontent = isOpen;
+
     return (
-        <ModalWindow
-            isOpen={isOpen}
-            onClose={onCancel}
-            closeOnBackdropClick={!isProcessing}
-            maxWidthClassName="max-w-[980px]"
-            headerClassName="px-8 py-6 sm:px-10 sm:py-7"
-            bodyClassName="px-8 py-7 sm:px-10 sm:py-8"
-            footerClassName="gap-4 px-8 py-5 sm:px-10 sm:py-6"
-            header={
-                <div className="flex items-start gap-5 sm:gap-6">
-                    <div className={`shrink-0 flex h-16 w-16 items-center justify-center rounded-3xl ${isDestructive ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-[var(--accent)]/10 text-[var(--accent)]'}`}>
+        <div
+            className={`fixed inset-0 z-[1000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
+            role="dialog"
+            aria-modal="true"
+        >
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300"
+                onClick={!isProcessing ? onCancel : undefined}
+            />
+
+            {/* Modal Content */}
+            <div
+                className={`
+                    relative w-full max-w-[500px] 
+                    bg-[var(--background)] 
+                    border border-[var(--border)] 
+                    rounded-2xl shadow-2xl 
+                    overflow-hidden 
+                    flex flex-col
+                    transform transition-all duration-300 
+                    ${showcontent ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}
+                `}
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+                    <h3 className="text-lg font-bold text-[var(--foreground)]">
+                        {title}
+                    </h3>
+                    {!isProcessing && (
+                        <button
+                            onClick={onCancel}
+                            className="text-[var(--foreground-secondary)] hover:text-[var(--foreground)] transition-colors p-1 rounded-full hover:bg-[var(--bg-secondary)]"
+                        >
+                            <X size={20} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Body */}
+                <div className="flex p-6 gap-4">
+                    <div
+                        className={`
+                            shrink-0 w-12 h-12 rounded-full flex items-center justify-center 
+                            ${isDestructive
+                                ? 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
+                                : 'bg-[var(--accent)]/10 text-[var(--accent)]'}
+                        `}
+                    >
                         {isProcessing ? (
-                            <div className="h-6 w-6 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         ) : (
-                            <AlertTriangle size={28} />
+                            <AlertTriangle size={24} strokeWidth={2} />
                         )}
                     </div>
-                    <h3 className="mt-2 text-xl font-bold text-[var(--foreground)]">{title}</h3>
-                </div>
-            }
-            body={
-                <div className="min-h-[7.5rem] sm:min-h-[8.5rem]">
-                    <p className="whitespace-pre-line text-base leading-8 text-[var(--foreground-secondary)]">
+                    <p className="text-[var(--foreground-secondary)] text-base leading-relaxed pt-1">
                         {message}
                     </p>
                 </div>
-            }
-            footer={
-                <>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end px-6 py-4 gap-3 bg-[var(--background-secondary)] border-t border-[var(--border)]">
                     {showCancel && (
                         <button
                             onClick={onCancel}
                             disabled={isProcessing}
                             className="btn std-normal-btn"
-                            style={{ padding: '0.55rem 1.15rem', fontSize: '0.85rem', minWidth: '8.5rem' }}
                         >
                             {cancelLabel}
                         </button>
@@ -70,14 +121,15 @@ export default function ConfirmationModal({
                     <button
                         onClick={onConfirm}
                         disabled={isProcessing}
-                        className={`btn std-normal-btn ${isDestructive ? 'std-normal-danger' : ''}`}
-                        style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', minWidth: '8.5rem' }}
+                        className={`
+                            btn std-normal-btn
+                            ${isDestructive ? 'std-normal-danger' : 'btn-primary'}
+                        `}
                     >
-                        {isProcessing && <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />}
                         {isProcessing ? 'Processing...' : confirmLabel}
                     </button>
-                </>
-            }
-        />
+                </div>
+            </div>
+        </div>
     );
 }

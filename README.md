@@ -76,4 +76,22 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - Endpoint: `GET /api/e2e/session`
   - Hard guards: disabled unless `E2E_MODE=true`, requires secret, blocked in `NODE_ENV=production`.
   - Cookie TTL: 1 hour, `HttpOnly`, `SameSite=Strict`.
+
+## FSRS Optimization Testing (No E2E)
+- Run local optimizer test: `npm run test:fsrs:optimization`
+- This uses synthetic review logs and verifies optimizer output shape (finite FSRS weights array; currently `21` values).
+
+### FSRS Optimization Mode Switch
+- Add these to `.env.local` and restart `npm run dev`.
+- Normal mode (default behavior):
+  - `NEXT_PUBLIC_FSRS_OPTIMIZATION_MODE=normal`
+  - Uses `400` new logs threshold and `5000ms` startup delay.
+- Test mode (fast trigger for manual testing):
+  - `NEXT_PUBLIC_FSRS_OPTIMIZATION_MODE=test`
+  - Uses `5` new logs threshold and `0ms` delay.
+
+### Optional Overrides
+- You can override either mode with:
+  - `NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA=<number>`
+  - `NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS=<number>`
 # quran-life

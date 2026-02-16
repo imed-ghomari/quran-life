@@ -10,8 +10,9 @@ interface ReviewLogInput {
 }
 
 export async function optimizeWeights(logs: ReviewLogInput[]) {
-    // 1. Transform logs to FSRSBinding items
-    // Group by nodeId
+    // 1. Transform logs to FSRSBinding items.
+    // For FSRS optimizer, each item should represent one review event with its prior history.
+    // So a card with N reviews contributes N-1 training items (prefixes of length 2..N).
     const groups: Record<string, ReviewLogInput[]> = {};
     for (const log of logs) {
         if (!groups[log.nodeId]) groups[log.nodeId] = [];
@@ -29,13 +30,15 @@ export async function optimizeWeights(logs: ReviewLogInput[]) {
             return new FSRSBindingReview(log.rating, deltaT);
         });
 
-        trainSet.push(new FSRSBindingItem(reviews));
+        for (let i = 1; i < reviews.length; i++) {
+            trainSet.push(new FSRSBindingItem(reviews.slice(0, i + 1)));
+        }
     }
 
     // 2. Compute Parameters
     try {
         // Run optimization
-        const parameters = await computeParameters(trainSet, { enableShortTerm: true });
+        const parameters = await computeParameters(trainSet, { enableShortTerm: false });
         
         // Return weights to client, client will handle saving to InstantDB
         return { success: true, weights: parameters };
