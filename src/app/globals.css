@@ -3018,6 +3018,69 @@ input:focus {
   padding: 0.5rem !important;
 }
 
+/* Confirmation dialog spacing guardrails */
+.confirm-dialog {
+  max-width: 560px !important;
+}
+
+.confirm-dialog-header {
+  padding: 0.75rem 1rem !important;
+}
+
+.confirm-dialog-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.confirm-dialog-body {
+  padding: 1rem 1.1rem 1.05rem !important;
+}
+
+.confirm-dialog-icon {
+  width: 42px !important;
+  height: 42px !important;
+}
+
+.confirm-dialog-message {
+  padding-top: 0.15rem;
+  line-height: 1.45;
+}
+
+.confirm-dialog-footer {
+  gap: 0.85rem !important;
+  padding: 0.75rem 1rem 0.75rem !important;
+}
+
+.confirm-dialog-footer .btn {
+  border-radius: 18px;
+  min-height: 50px;
+  padding: 0.5rem 1rem;
+}
+
+@media (max-width: 767px) {
+  .confirm-dialog-header {
+    padding: 0.85rem 0.95rem !important;
+  }
+
+  .confirm-dialog-title-wrap {
+    gap: 0.55rem;
+  }
+
+  .confirm-dialog-body {
+    padding: 0.85rem 0.95rem 1rem !important;
+  }
+
+  .confirm-dialog-icon {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .confirm-dialog-footer {
+    padding: 0.85rem 0.95rem 0.95rem !important;
+  }
+}
+
 .mut-actions-v2 select {
   flex: 1;
   padding: 0.6rem;
