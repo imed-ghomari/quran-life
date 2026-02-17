@@ -1844,7 +1844,7 @@ export default function TodayPage() {
                                         <p>No reviews due!</p>
                                     </div>
                                 ) : activeContent && (
-                                    <div style={{ paddingTop: '0.5rem' }}>
+                                  <div style={{ paddingTop: '0.5rem' }}>
                                         {/* Header */}
                                         <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
                                             {`${currentReviewIndex + 1}`} • {
@@ -1908,7 +1908,7 @@ export default function TodayPage() {
 
                                         {/* Mindmap type content */}
                                         {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
-                                            <div>
+                                            <div>  
                                                 {!showGrading ? (
                                                     <div className="verse-hidden" onClick={() => setShowGrading(true)}>
                                                         <EyeOff size={24} style={{ marginBottom: 8 }} />

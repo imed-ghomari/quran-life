@@ -60,7 +60,7 @@ export default function ConfirmationModal({
             {/* Modal Content */}
             <div
                 className={`
-                    relative w-full max-w-[500px] 
+                    confirm-dialog relative w-full max-w-[560px]
                     bg-[var(--background)] 
                     border border-[var(--border)] 
                     rounded-2xl shadow-2xl 
@@ -72,14 +72,30 @@ export default function ConfirmationModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-                    <h3 className="text-lg font-bold text-[var(--foreground)]">
-                        {title}
-                    </h3>
+                <div className="confirm-dialog-header flex items-center justify-between px-7 py-5 sm:px-8 sm:py-6 border-b border-[var(--border)]">
+                    <div className="confirm-dialog-title-wrap flex items-center">
+                        <div
+                            className={`
+                                confirm-dialog-icon shrink-0 rounded-full flex items-center justify-center
+                                ${isDestructive
+                                    ? 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
+                                    : 'bg-[var(--accent)]/10 text-[var(--accent)]'}
+                            `}
+                        >
+                            {isProcessing ? (
+                                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <AlertTriangle size={22} strokeWidth={2} />
+                            )}
+                        </div>
+                        <h3 className="text-lg font-bold text-[var(--foreground)]">
+                            {title}
+                        </h3>
+                    </div>
                     {!isProcessing && (
                         <button
                             onClick={onCancel}
-                            className="text-[var(--foreground-secondary)] hover:text-[var(--foreground)] transition-colors p-1 rounded-full hover:bg-[var(--bg-secondary)]"
+                            className="text-[var(--foreground-secondary)] hover:text-[var(--foreground)] transition-colors p-1 rounded-full hover:bg-[var(--bg-secondary)] cursor-pointer"
                         >
                             <X size={20} />
                         </button>
@@ -87,28 +103,14 @@ export default function ConfirmationModal({
                 </div>
 
                 {/* Body */}
-                <div className="flex p-6 gap-4">
-                    <div
-                        className={`
-                            shrink-0 w-12 h-12 rounded-full flex items-center justify-center 
-                            ${isDestructive
-                                ? 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
-                                : 'bg-[var(--accent)]/10 text-[var(--accent)]'}
-                        `}
-                    >
-                        {isProcessing ? (
-                            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                            <AlertTriangle size={24} strokeWidth={2} />
-                        )}
-                    </div>
-                    <p className="text-[var(--foreground-secondary)] text-base leading-relaxed pt-1">
+                <div className="confirm-dialog-body px-7 py-7 sm:px-8 sm:py-8">
+                    <p className="confirm-dialog-message text-[var(--foreground-secondary)] text-base sm:text-[1.02rem] leading-relaxed pt-1 pr-1">
                         {message}
                     </p>
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end px-6 py-4 gap-3 bg-[var(--background-secondary)] border-t border-[var(--border)]">
+                <div className="confirm-dialog-footer flex items-center justify-end px-7 py-5 sm:px-8 sm:py-6 gap-3 sm:gap-4 bg-[var(--background-secondary)] border-t border-[var(--border)]">
                     {showCancel && (
                         <button
                             onClick={onCancel}
