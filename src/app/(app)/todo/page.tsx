@@ -7,8 +7,7 @@ import {
     useInstantNodes,
     useInstantMindMaps,
     useInstantMutashabihat,
-    useInstantReviewErrors,
-    useInstantReviewLogs
+    useInstantReviewErrors
 } from '@/hooks/useInstantData';
 import { MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
@@ -102,7 +101,6 @@ export default function TodoPage() {
     }, [mindmapsList]);
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
-    const { logs: reviewLogs } = useInstantReviewLogs();
 
     const { isEditor } = useContext(AccessStateContext);
     const appMode = isEditor ? 'owner' : 'user';
@@ -270,7 +268,8 @@ export default function TodoPage() {
     const decisionsMap = useMemo(() => {
         const acc: Record<string, any> = {};
         decisions.forEach(d => {
-            acc[d.id] = d;
+            if (d?.phraseId) acc[d.phraseId] = d;
+            if (d?.id && !acc[d.id]) acc[d.id] = d;
         });
         return acc;
     }, [decisions]);
@@ -298,6 +297,23 @@ export default function TodoPage() {
 
     // Gather Similarity Errors (Mutashabihat) that need resolution
     const similarityItems = useMemo(() => {
+        const isPhraseResolved = (absolute: number, entry: any) => {
+            const exact = decisionsMap[`${absolute}-${entry.phraseId}`];
+            if (exact?.status === 'ignored' || !!exact?.confirmedAt) return true;
+
+            const currentRef = absoluteToSurahAyah(absolute);
+            const candidateAbs = Array.from(new Set<number>([
+                absolute,
+                ...(entry.sources || []),
+                ...(entry.matches || []),
+            ])).filter((absRef) => absoluteToSurahAyah(absRef).surahId === currentRef.surahId);
+
+            return candidateAbs.some((absRef) => {
+                const phraseDecision = decisionsMap[`${absRef}-${entry.phraseId}`];
+                return phraseDecision?.status === 'ignored' || !!phraseDecision?.confirmedAt;
+            });
+        };
+
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .map(err => {
@@ -309,13 +325,8 @@ export default function TodoPage() {
                 const absolute = entry.err.absoluteAyah!;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
-
-                const anyPhraseConfirmed = entry.muts.some((m: any) => {
-                    const phraseDecision = decisionsMap[`${absolute}-${m.phraseId}`];
-                    return !!phraseDecision?.confirmedAt;
-                });
-
-                return !anyPhraseConfirmed;
+                const unresolvedPhrases = entry.muts.filter((m: any) => !isPhraseResolved(absolute, m));
+                return unresolvedPhrases.length > 0;
             });
     }, [errors, decisionsMap, customMutashabihat]);
 
@@ -336,58 +347,16 @@ export default function TodoPage() {
 
     const SUSPEND_ERROR_THRESHOLD = 3;
 
-    const suspendedNodeIds = useMemo(() => {
-        const logsByNode = new Map<string, any[]>();
-
-        reviewLogs.forEach(log => {
-            if (!log?.nodeId) return;
-            const existing = logsByNode.get(log.nodeId) || [];
-            existing.push(log);
-            logsByNode.set(log.nodeId, existing);
-        });
-
-        const suspended = new Set<string>();
-
-        logsByNode.forEach((nodeLogs, nodeId) => {
-            const sorted = [...nodeLogs].sort((a, b) => {
-                const aTime = a.review_time ? new Date(a.review_time).getTime() : 0;
-                const bTime = b.review_time ? new Date(b.review_time).getTime() : 0;
-                return aTime - bTime;
-            });
-
-            let trailingFailures = 0;
-            for (let i = sorted.length - 1; i >= 0; i -= 1) {
-                const raw = sorted[i]?.rating;
-                const rating = typeof raw === 'string'
-                    ? (raw.toLowerCase() === 'good' ? 3 : 1)
-                    : Number(raw);
-                if (rating === 1) {
-                    trailingFailures += 1;
-                } else {
-                    break;
-                }
-            }
-
-            if (trailingFailures >= SUSPEND_ERROR_THRESHOLD) {
-                suspended.add(nodeId);
-            }
-        });
-
-        return suspended;
-    }, [reviewLogs, SUSPEND_ERROR_THRESHOLD]);
-
     const suspendedAnchors = useMemo(() => {
         const toSurahId = (value: unknown): number | null => {
             const parsed = Number(value);
             return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
         };
 
-        const byKey = new Map<string, any>();
-        const legacyFailureCounts = new Map<string, number>();
+        const byGroup = new Map<string, any[]>();
 
-        // Legacy fallback: old rows can miss nodeId. Use the same threshold for anchor grouping.
         errors
-            .filter(e => e.nodeType === 'verse_segment' && e.surahId && !e.nodeId)
+            .filter(e => e.nodeType === 'verse_segment' && e.surahId)
             .forEach(error => {
                 const errorSurahId = toSurahId(error.surahId);
                 if (!errorSurahId) return;
@@ -400,67 +369,75 @@ export default function TodoPage() {
                 const endVerse = error.endVerse ?? startVerse;
                 const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
                 const anchorId = error.anchorId || fallbackAnchorId;
-                const key = `${errorSurahId}-${anchorId}`;
-                legacyFailureCounts.set(key, (legacyFailureCounts.get(key) || 0) + 1);
+                const groupKey = `${errorSurahId}-${anchorId}`;
+                const timestamp = error.timestamp || '';
+                const ts = Date.parse(timestamp);
+
+                const current = byGroup.get(groupKey) || [];
+                current.push({
+                    surahId: errorSurahId,
+                    anchorId,
+                    groupKey,
+                    label: error.anchorLabel || `Verses ${startVerse}-${endVerse}`,
+                    startVerse,
+                    endVerse,
+                    focusAyah,
+                    timestamp,
+                    timestampMs: Number.isFinite(ts) ? ts : 0
+                });
+                byGroup.set(groupKey, current);
             });
 
-        errors
-            .filter(e => {
-                const errorSurahId = toSurahId(e.surahId);
-                if (!(e.nodeType === 'verse_segment' && errorSurahId)) return false;
-                if (e.nodeId) {
-                    return suspendedNodeIds.has(e.nodeId);
-                }
+        const suspended: any[] = [];
 
-                const absoluteRef = e.absoluteAyah ? absoluteToSurahAyah(e.absoluteAyah) : null;
-                const focusAyah =
-                    absoluteRef && absoluteRef.surahId === errorSurahId
-                        ? absoluteRef.ayahId
-                        : (e.startVerse ?? 1);
-                const startVerse = e.startVerse ?? focusAyah;
-                const endVerse = e.endVerse ?? startVerse;
-                const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
-                const anchorId = e.anchorId || fallbackAnchorId;
-                const key = `${errorSurahId}-${anchorId}`;
-                return (legacyFailureCounts.get(key) || 0) >= SUSPEND_ERROR_THRESHOLD;
-            })
-            .forEach(error => {
-                const errorSurahId = toSurahId(error.surahId);
-                if (!errorSurahId) return;
-                const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
-                const focusAyah =
-                    absoluteRef && absoluteRef.surahId === errorSurahId
-                        ? absoluteRef.ayahId
-                        : (error.startVerse ?? 1);
-                const startVerse = error.startVerse ?? focusAyah;
-                const endVerse = error.endVerse ?? startVerse;
-                const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
-                const anchorId = error.anchorId || fallbackAnchorId;
-                const key = `${errorSurahId}-${anchorId}`;
-                const timestamp = error.timestamp ? new Date(error.timestamp).getTime() : 0;
+        byGroup.forEach((groupErrors, groupKey) => {
+            const sorted = [...groupErrors].sort((a, b) => b.timestampMs - a.timestampMs);
+            if (sorted.length < SUSPEND_ERROR_THRESHOLD) return;
 
-                const existing = byKey.get(key);
-                const existingTimestamp = existing?.timestamp ? new Date(existing.timestamp).getTime() : -1;
+            const latest = sorted[0];
+            const recentThree = sorted.slice(0, SUSPEND_ERROR_THRESHOLD);
+            const countsByAyah = new Map<number, { ayahId: number; count: number; latestTimestampMs: number }>();
 
-                if (!existing || timestamp >= existingTimestamp) {
-                    byKey.set(key, {
-                        surahId: errorSurahId,
-                        anchorId,
-                        label: error.anchorLabel || `Verses ${startVerse}-${endVerse}`,
-                        startVerse,
-                        endVerse,
-                        focusAyah,
-                        timestamp: error.timestamp
+            recentThree.forEach(entry => {
+                const ayahId = Number(entry.focusAyah) || Number(entry.startVerse) || 1;
+                const existing = countsByAyah.get(ayahId);
+                if (existing) {
+                    existing.count += 1;
+                    if (entry.timestampMs > existing.latestTimestampMs) {
+                        existing.latestTimestampMs = entry.timestampMs;
+                    }
+                } else {
+                    countsByAyah.set(ayahId, {
+                        ayahId,
+                        count: 1,
+                        latestTimestampMs: entry.timestampMs
                     });
                 }
             });
 
-        return Array.from(byKey.values()).sort((a, b) => {
+            const recentVerseWindow = Array.from(countsByAyah.values())
+                .sort((a, b) => b.latestTimestampMs - a.latestTimestampMs);
+
+            suspended.push({
+                surahId: latest.surahId,
+                anchorId: latest.anchorId,
+                groupKey,
+                label: latest.label,
+                startVerse: latest.startVerse,
+                endVerse: latest.endVerse,
+                focusAyah: latest.focusAyah,
+                timestamp: latest.timestamp,
+                mistakeCount: sorted.length,
+                recentVerseWindow
+            });
+        });
+
+        return suspended.sort((a, b) => {
             if (a.surahId !== b.surahId) return a.surahId - b.surahId;
             if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
             return a.endVerse - b.endVerse;
         });
-    }, [errors, suspendedNodeIds, SUSPEND_ERROR_THRESHOLD]);
+    }, [errors, SUSPEND_ERROR_THRESHOLD]);
 
 
 

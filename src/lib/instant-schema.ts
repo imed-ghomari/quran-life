@@ -108,6 +108,7 @@ export const schema = i.schema({
     }),
     // Mistakes recorded during review sessions.
     reviewErrors: i.entity({
+      type: i.string().optional(),
       timestamp: i.string().optional(),
       nodeId: i.string().optional(),
       nodeType: i.string().optional(),

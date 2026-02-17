@@ -80,6 +80,23 @@ function NavigationContent() {
         const decisionsMap = new Map();
         decisions.forEach(d => decisionsMap.set(d.phraseId || d.id, d));
 
+        const isPhraseResolved = (absolute: number, entry: any) => {
+            const exact = decisionsMap.get(`${absolute}-${entry.phraseId}`);
+            if (exact?.status === 'ignored' || !!exact?.confirmedAt) return true;
+
+            const currentRef = absoluteToSurahAyah(absolute);
+            const candidateAbs = Array.from(new Set<number>([
+                absolute,
+                ...(entry.sources || []),
+                ...(entry.matches || []),
+            ])).filter((absRef) => absoluteToSurahAyah(absRef).surahId === currentRef.surahId);
+
+            return candidateAbs.some((absRef) => {
+                const phraseDecision = decisionsMap.get(`${absRef}-${entry.phraseId}`);
+                return phraseDecision?.status === 'ignored' || !!phraseDecision?.confirmedAt;
+            });
+        };
+
         const similarityItems = errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .filter(err => {
@@ -88,12 +105,8 @@ function NavigationContent() {
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
 
                 const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
-                const anyPhraseConfirmed = muts.some((m: any) => {
-                    const phraseDecision = decisionsMap.get(`${absolute}-${m.phraseId}`);
-                    return !!phraseDecision?.confirmedAt;
-                });
-
-                return !anyPhraseConfirmed;
+                const unresolvedPhrases = muts.filter((m: any) => !isPhraseResolved(absolute, m));
+                return unresolvedPhrases.length > 0;
             });
 
         const similaritySurahIds = new Set<number>();
