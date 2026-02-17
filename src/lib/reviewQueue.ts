@@ -35,11 +35,43 @@ const hasAnchorForNode = (node: MemoryNode, mindmaps: MindMap[]) => {
     return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
 };
 
+const getMindmapFreshnessScore = (mindmap: MindMap) => {
+    const updatedAt = Date.parse(String((mindmap as any)?.updatedAt || ''));
+    if (Number.isFinite(updatedAt)) return updatedAt;
+    const createdAt = Date.parse(String((mindmap as any)?.createdAt || ''));
+    if (Number.isFinite(createdAt)) return createdAt;
+    return 0;
+};
+
+const canonicalizeMindmaps = (mindmaps: MindMap[]) => {
+    const bySurah = new Map<number, MindMap>();
+    for (const mm of mindmaps) {
+        const surahId = Number((mm as any)?.surahId);
+        if (!Number.isFinite(surahId) || surahId <= 0) continue;
+        const existing = bySurah.get(surahId);
+        if (!existing) {
+            bySurah.set(surahId, mm);
+            continue;
+        }
+        const nextScore = getMindmapFreshnessScore(mm);
+        const existingScore = getMindmapFreshnessScore(existing);
+        if (nextScore > existingScore) {
+            bySurah.set(surahId, mm);
+            continue;
+        }
+        if (nextScore === existingScore && String((mm as any)?.id || '') > String((existing as any)?.id || '')) {
+            bySurah.set(surahId, mm);
+        }
+    }
+    return Array.from(bySurah.values());
+};
+
 export const filterReviewQueueNodes = (
     nodes: MemoryNode[],
     settings: Partial<AppSettings> | undefined,
     mindmaps: MindMap[]
 ) => {
+    const canonicalMindmaps = canonicalizeMindmaps(mindmaps);
     const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
     const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
     const skippedSurahIds = new Set<number>((settings?.skippedSurahs || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
@@ -64,7 +96,7 @@ export const filterReviewQueueNodes = (
             if (hasKanbanState && completeExitBehavior === 'mindmap_and_verses' && surahId && !completeIds.has(`surah-${surahId}`)) {
                 return false;
             }
-            return hasAnchorForNode(node, mindmaps);
+            return hasAnchorForNode(node, canonicalMindmaps);
         }
 
         return true;

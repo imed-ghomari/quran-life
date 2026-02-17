@@ -309,6 +309,12 @@ export function useInstantNodes() {
         };
     }, [nodes, dueNowMs]);
 
+    // Force an immediate due-clock refresh when node snapshots change.
+    // Without this, newly created "due now" cards can wait for the adaptive timer tick.
+    useEffect(() => {
+        setDueNowMs(Date.now());
+    }, [canonicalNodes]);
+
     const dueNodes = useMemo(() => canonicalNodes.filter(node => {
         if (!node.scheduler) return false;
         const dueString = (node.scheduler as any).due || (node.scheduler as any).dueDate;
@@ -336,7 +342,9 @@ export function useInstantNodes() {
         return transactWithRetry(db.tx.memoryNodes[nodeId].update({
             ...node,
             userId: user.id
-        }));
+        })).finally(() => {
+            setDueNowMs(Date.now());
+        });
     };
 
     const deleteNode = async (nodeId: string) => {
@@ -351,6 +359,8 @@ export function useInstantNodes() {
                 return;
             }
             throw error;
+        } finally {
+            setDueNowMs(Date.now());
         }
     };
 

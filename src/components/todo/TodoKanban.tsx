@@ -242,38 +242,20 @@ export default function TodoKanban({
 
     const getMindmapRemovalInfo = useCallback((item: KanbanItem): string => {
         if (item.type === 'part') {
-            return [
-                'Part mindmap removed from review.',
-                'Advanced "moving out" option does not affect part cards.',
-                'Move back to Complete to restore part mindmap review.'
-            ].join('\n');
+            return 'Part mindmap removed from review; move back to Complete to restore it.';
         }
         const mindmap = item.data.mindmap;
         const hasSplits = !!(mindmap?.anchors && mindmap.anchors.length > 0);
         if (!hasSplits) {
             if (completeExitBehavior === 'mindmap_and_verses') {
-                return [
-                    'Surah mindmap removed from review.',
-                    'No verse splits exist, so there were no verse reviews to suspend.'
-                ].join('\n');
+                return 'Surah mindmap removed from review; no verse splits exist, so no verse reviews were suspended.';
             }
-            return [
-                'Surah mindmap removed from review.',
-                'No verse splits exist, so no verse reviews were affected.'
-            ].join('\n');
+            return 'Surah mindmap removed from review; no verse splits exist, so verse reviews were unchanged.';
         }
         if (completeExitBehavior === 'mindmap_and_verses') {
-            return [
-                'Surah mindmap removed from review.',
-                'Verse reviews were suspended (Advanced option: Suspend Mindmap + Verses).',
-                'Move back to Complete to restore mindmap and verse review entries.'
-            ].join('\n');
+            return 'Surah mindmap removed and verse reviews suspended; move back to Complete to restore both.';
         }
-        return [
-            'Surah mindmap removed from review.',
-            'Verse reviews remain active (Advanced option: Suspend Mindmap Only).',
-            'Move back to Complete to restore mindmap review.'
-        ].join('\n');
+        return 'Surah mindmap removed while verse reviews stay active; move back to Complete to restore the mindmap.';
     }, [completeExitBehavior]);
 
     const hasMindmapForItem = useCallback((item: KanbanItem): boolean => {

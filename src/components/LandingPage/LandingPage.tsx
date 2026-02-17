@@ -226,6 +226,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <a href="#pricing" className="nav-link">
               Pricing
             </a>
+            <a href="#faq" className="nav-link">
+              FAQ
+            </a>
             <a href="#roadmap" className="nav-link">
               Roadmap
             </a>
@@ -394,8 +397,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   answer: "Scientific research shows that the brain retains information better when it's structured visually. Instead of memorizing linear text, our Anchoring System allows you to break Surahs down into logical blocks (mindmaps). This creates 'mental hooks' that make recall faster and more reliable, especially for longer Surahs."
                 },
                 {
-                  question: "I already memorized some Surahs. Is this app only for new students?",
-                  answer: "It is not only for new students. You can set your Active Part (Juz) to focus on your current target, and you can skip Surahs you already know well so your Todo and Daily Portion stay focused. If needed, you can unskip them later and bring them back into your workflow."
+                  question: "I already memorized some Surahs. Is this app only for new learners?",
+                  answer: "It is not only for new learners. You can set your Active Part (Juz) to focus on your current target, and you can skip Surahs you already know well so your Todo and Daily Portion stay focused. If needed, you can unskip them later and bring them back into your workflow."
                 },
                 {
                   question: "I already finished the Quran. Can Quran Life still make my Hifdh stronger?",
