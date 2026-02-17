@@ -151,7 +151,6 @@ export default function TodayPage() {
     const [isVersesLoaded, setIsVersesLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
-    const [deferMindmapPreview, setDeferMindmapPreview] = useState(false);
     const [isPersistingReviewAction, setIsPersistingReviewAction] = useState(false);
     const [isPersistingDailyComplete, setIsPersistingDailyComplete] = useState(false);
     const [isApplyingHistoryAction, setIsApplyingHistoryAction] = useState(false);
@@ -1461,29 +1460,6 @@ export default function TodayPage() {
     const reviewContent = getCurrentReviewContent();
     const activeContent = reviewContent;
 
-    useEffect(() => {
-        const isMindmapReview = activeContent?.type === 'mindmap' || activeContent?.type === 'part_mindmap';
-        if (!showGrading || !isMindmapReview) {
-            setDeferMindmapPreview(false);
-            return;
-        }
-
-        // Let grading controls paint first, then mount heavy mindmap preview.
-        setDeferMindmapPreview(true);
-        let raf1 = 0;
-        let raf2 = 0;
-        raf1 = window.requestAnimationFrame(() => {
-            raf2 = window.requestAnimationFrame(() => {
-                setDeferMindmapPreview(false);
-            });
-        });
-
-        return () => {
-            if (raf1) window.cancelAnimationFrame(raf1);
-            if (raf2) window.cancelAnimationFrame(raf2);
-        };
-    }, [showGrading, activeContent?.type, activeContent?.mindmap?.id]);
-
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;
         if (!raw || !Array.isArray(raw)) return [];
@@ -1962,14 +1938,7 @@ export default function TodayPage() {
                                                     </div>
                                                 ) : (
                                                     <div>
-                                                        {deferMindmapPreview ? (
-                                                            <div className="verse-hidden" style={{ cursor: 'default' }}>
-                                                                <Brain size={24} style={{ marginBottom: 8, opacity: 0.75 }} />
-                                                                <p>Preparing mindmap preview...</p>
-                                                                <p style={{ fontSize: '0.8rem', marginTop: 8, opacity: 0.8 }}>You can already grade below.</p>
-                                                            </div>
-                                                        ) : (
-                                                        (() => {
+                                                        {(() => {
                                                             const hasContent = !!activeContent.mindmap?.imageUrl || !!activeContent.mindmap?.imageUrlDark || !!activeContent.mindmap?.tldrawSnapshot;
 
                                                             if (!hasContent) {
@@ -2001,12 +1970,11 @@ export default function TodayPage() {
                                                                         imageUrlDark={activeContent.mindmap?.imageUrlDark}
                                                                         isDark={isDark}
                                                                         title={activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` : `Part ${activeContent.partId} Mindmap`}
-                                                                        height={320}
+                                                                        height={isMobile ? 'min(34vh, 280px)' : 'min(42vh, 320px)'}
                                                                     />
                                                                 </div>
                                                             );
-                                                        })()
-                                                        )}
+                                                        })()}
 
                                                     </div>
                                                 )}
