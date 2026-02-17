@@ -18,6 +18,32 @@ const AUTH_RESOLVED_ONCE_KEY = 'auth:resolvedOnce';
 
 let hasClientHydratedOnce = false;
 
+function readAuthResolvedOnceMarker() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.sessionStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === '1'
+      || window.localStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function writeAuthResolvedOnceMarker() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(AUTH_RESOLVED_ONCE_KEY, '1');
+  } catch {
+    // Best-effort cache write.
+  }
+  try {
+    window.localStorage.setItem(AUTH_RESOLVED_ONCE_KEY, '1');
+  } catch {
+    // Best-effort cache write.
+  }
+}
+
 function hasValidOfflineAccessMarker() {
   if (typeof window === 'undefined') return false;
   const raw = window.localStorage.getItem(OFFLINE_ACCESS_KEY);
@@ -61,7 +87,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    setHasResolvedAuthOnce(window.sessionStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === '1');
+    setHasResolvedAuthOnce(readAuthResolvedOnceMarker());
     setHasOfflineAccess(hasValidOfflineAccessMarker());
   }, []);
 
@@ -129,9 +155,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (!isAuthLoading) {
       setHasResolvedAuthOnce(true);
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(AUTH_RESOLVED_ONCE_KEY, '1');
-      }
+      writeAuthResolvedOnceMarker();
     }
   }, [isAuthLoading]);
 

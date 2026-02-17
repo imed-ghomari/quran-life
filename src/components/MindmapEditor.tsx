@@ -7,6 +7,11 @@ import Spinner from '@/components/ui/Spinner';
 import { appLogger } from '@/lib/logger';
 import { useTheme } from '@/components/ThemeProvider';
 import {
+    clipboardHasBlockedMedia,
+    dataTransferHasBlockedMedia,
+    sanitizeMindmapSnapshot,
+} from '@/lib/mindmapSnapshot';
+import {
     Tldraw,
     DefaultDashStyle,
     DefaultSizeStyle,
@@ -218,12 +223,13 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
         if (initialSnapshot) {
             try {
+                const sanitizedInitialSnapshot = sanitizeMindmapSnapshot(initialSnapshot) || initialSnapshot;
                 // Determine if we're loading a v4 snapshot or v3
                 // Standard Tldraw (v2+) uses getSnapshot/loadSnapshot
                 if (typeof editorInstance.loadSnapshot === 'function') {
-                    editorInstance.loadSnapshot(initialSnapshot);
+                    editorInstance.loadSnapshot(sanitizedInitialSnapshot);
                 } else {
-                    editorInstance.store.loadSnapshot(initialSnapshot);
+                    editorInstance.store.loadSnapshot(sanitizedInitialSnapshot);
                 }
 
                 // Set initial tool if desired
@@ -283,6 +289,12 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         if (!editor) return;
 
         const handlePaste = (e: ClipboardEvent) => {
+            if (clipboardHasBlockedMedia(e)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
             const tldrawContent = e.clipboardData?.getData('application/tldraw');
             if (tldrawContent) {
                 try {
@@ -293,7 +305,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         e.preventDefault();
                         e.stopPropagation();
 
-                        const sanitizedData = { ...parsed.data };
+                        const sanitizedData = sanitizeMindmapSnapshot({
+                            ...parsed.data,
+                            schema: undefined,
+                        }) || { ...parsed.data };
                         delete sanitizedData.schema;
 
                         editor.putExternalContent({
@@ -308,7 +323,31 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             }
         };
 
+        const handleDragOver = (e: DragEvent) => {
+            const container = containerRef.current;
+            if (!container) return;
+            const target = e.target;
+            const targetNode = target instanceof Node ? target : null;
+            if (!targetNode || !container.contains(targetNode)) return;
+            if (!dataTransferHasBlockedMedia(e.dataTransfer)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
+        const handleDrop = (e: DragEvent) => {
+            const container = containerRef.current;
+            if (!container) return;
+            const target = e.target;
+            const targetNode = target instanceof Node ? target : null;
+            if (!targetNode || !container.contains(targetNode)) return;
+            if (!dataTransferHasBlockedMedia(e.dataTransfer)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
         window.addEventListener('paste', handlePaste, true);
+        window.addEventListener('dragover', handleDragOver, true);
+        window.addEventListener('drop', handleDrop, true);
 
         // --- Change Listener for Sync Timestamps ---
         // We listen to all changes. If a shape is updated/added by 'user',
@@ -367,6 +406,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         return () => {
             cleanupListener();
             window.removeEventListener('paste', handlePaste, true);
+            window.removeEventListener('dragover', handleDragOver, true);
+            window.removeEventListener('drop', handleDrop, true);
         };
     }, [editor]);
 
@@ -439,25 +480,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     }
                 }
 
-                // Sanitize snapshot: remove non-document records to save space
-                // (camera, pointer, transient state etc)
-                // Optimized for performance: avoid Object.entries and filtering if possible
-                const sanitizedSnapshot = { ...snapshot };
-                if (sanitizedSnapshot.store) {
-                    const sanitizedStore: any = {};
-                    // Direct iteration is faster than Object.entries().filter()
-                    for (const key in sanitizedSnapshot.store) {
-                         if (
-                            key.startsWith('shape:') || 
-                            // key.startsWith('asset:') || // Disable assets
-                            key.startsWith('binding:') || 
-                            key.startsWith('page:')
-                        ) {
-                            sanitizedStore[key] = sanitizedSnapshot.store[key];
-                        }
-                    }
-                    sanitizedSnapshot.store = sanitizedStore;
-                }
+                // Keep the persisted snapshot text-only and strip any media/file-backed records.
+                const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
 
                 await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined, withImages);
                 isDirty.current = false;
@@ -598,6 +622,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         DebugMenu: null,
         DebugPanel: null,
         SharePanel: null,
+        MainMenu: null,
     }), []);
 
     return (

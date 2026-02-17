@@ -67,22 +67,69 @@ type AccessStateCache = {
   state: Omit<AccessState, "isSubscriptionLoading">;
 };
 
+function readAuthResolvedOnce() {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      window.sessionStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === "1"
+      || window.localStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function writeAuthResolvedOnce() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(AUTH_RESOLVED_ONCE_KEY, "1");
+  } catch {
+    // Best-effort cache write.
+  }
+  try {
+    window.localStorage.setItem(AUTH_RESOLVED_ONCE_KEY, "1");
+  } catch {
+    // Best-effort cache write.
+  }
+}
+
 function readAccessStateCache(): AccessStateCache | null {
   if (typeof window === "undefined") return null;
+  const rawValues: string[] = [];
   try {
-    const raw = window.sessionStorage.getItem(ACCESS_STATE_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AccessStateCache;
-    if (!parsed || typeof parsed !== "object") return null;
-    const cachedAt = Number(parsed.cachedAt ?? 0);
-    if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > ACCESS_STATE_CACHE_TTL_MS) {
-      window.sessionStorage.removeItem(ACCESS_STATE_CACHE_KEY);
-      return null;
-    }
-    return parsed;
+    const sessionValue = window.sessionStorage.getItem(ACCESS_STATE_CACHE_KEY);
+    if (sessionValue) rawValues.push(sessionValue);
   } catch {
-    return null;
+    // Ignore storage read failure.
   }
+  try {
+    const localValue = window.localStorage.getItem(ACCESS_STATE_CACHE_KEY);
+    if (localValue && !rawValues.includes(localValue)) rawValues.push(localValue);
+  } catch {
+    // Ignore storage read failure.
+  }
+
+  for (const raw of rawValues) {
+    try {
+      const parsed = JSON.parse(raw) as AccessStateCache;
+      if (!parsed || typeof parsed !== "object") continue;
+      const cachedAt = Number(parsed.cachedAt ?? 0);
+      if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > ACCESS_STATE_CACHE_TTL_MS) {
+        window.sessionStorage.removeItem(ACCESS_STATE_CACHE_KEY);
+        window.localStorage.removeItem(ACCESS_STATE_CACHE_KEY);
+        continue;
+      }
+      try {
+        window.sessionStorage.setItem(ACCESS_STATE_CACHE_KEY, raw);
+      } catch {
+        // Best-effort tab cache hydration.
+      }
+      return parsed;
+    } catch {
+      // Try next candidate.
+    }
+  }
+  return null;
 }
 
 function OnboardingWrapper() {
@@ -116,8 +163,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem(AUTH_RESOLVED_ONCE_KEY) === "1";
+    return readAuthResolvedOnce();
   });
   const [cachedAccessState] = useState<AccessStateCache | null>(() => readAccessStateCache());
   const [accessState, setAccessState] = useState<Omit<AccessState, "isSubscriptionLoading">>(() => (
@@ -172,9 +218,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       lastResolvedIdentityRef.current = authIdentityKey;
       return;
     }
+    if (isAuthLoading && authIdentityKey === "anon") {
+      setAccessState(cachedAccessState.state);
+      setHasLoadedAccessState(true);
+      setIsAccessLoading(false);
+      return;
+    }
     setHasLoadedAccessState(false);
     setIsAccessLoading(true);
-  }, [authIdentityKey, cachedAccessState]);
+  }, [authIdentityKey, cachedAccessState, isAuthLoading]);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -240,20 +292,27 @@ export function Providers({ children }: { children: React.ReactNode }) {
           isEditor: Boolean(data?.isEditor),
         });
         if (typeof window !== "undefined") {
-          window.sessionStorage.setItem(
-            ACCESS_STATE_CACHE_KEY,
-            JSON.stringify({
-              identityKey: authIdentityKey,
-              cachedAt: Date.now(),
-              state: {
-                isAuthenticated: Boolean(data?.isAuthenticated),
-                hasActiveSubscription: Boolean(data?.hasActiveSubscription),
-                isPaymentBypass: Boolean(data?.isPaymentBypass),
-                hasPremiumAccess: Boolean(data?.hasPremiumAccess),
-                isEditor: Boolean(data?.isEditor),
-              },
-            } satisfies AccessStateCache)
-          );
+          const serializedState = JSON.stringify({
+            identityKey: authIdentityKey,
+            cachedAt: Date.now(),
+            state: {
+              isAuthenticated: Boolean(data?.isAuthenticated),
+              hasActiveSubscription: Boolean(data?.hasActiveSubscription),
+              isPaymentBypass: Boolean(data?.isPaymentBypass),
+              hasPremiumAccess: Boolean(data?.hasPremiumAccess),
+              isEditor: Boolean(data?.isEditor),
+            },
+          } satisfies AccessStateCache);
+          try {
+            window.sessionStorage.setItem(ACCESS_STATE_CACHE_KEY, serializedState);
+          } catch {
+            // Best-effort cache write.
+          }
+          try {
+            window.localStorage.setItem(ACCESS_STATE_CACHE_KEY, serializedState);
+          } catch {
+            // Best-effort cache write.
+          }
         }
         lastResolvedIdentityRef.current = authIdentityKey;
       } catch {
@@ -272,9 +331,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthLoading) {
       setHasResolvedAuthOnce(true);
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(AUTH_RESOLVED_ONCE_KEY, "1");
-      }
+      writeAuthResolvedOnce();
     }
   }, [isAuthLoading]);
 

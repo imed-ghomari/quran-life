@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
+import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 
 // Static defaults to ensure reference stability
 const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
@@ -404,11 +405,10 @@ export function useInstantMindMaps() {
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
         
         const sanitizedData: any = { ...mergedData };
-        if (sanitizedData.imageUrl === null) delete sanitizedData.imageUrl;
-        if (sanitizedData.imageUrlDark === null) delete sanitizedData.imageUrlDark;
+        delete sanitizedData.imageUrl;
+        delete sanitizedData.imageUrlDark;
         if (sanitizedData.tldrawSnapshot) {
-            delete sanitizedData.imageUrl;
-            delete sanitizedData.imageUrlDark;
+            sanitizedData.tldrawSnapshot = sanitizeMindmapSnapshot(sanitizedData.tldrawSnapshot);
         }
 
         return db.transact(db.tx.mindMaps[mapId].update({
@@ -427,9 +427,10 @@ export function useInstantMindMaps() {
         // Merge existing data with new data to preserve all fields
         const mergedData = existing ? { ...existing, ...mapData } : mapData;
         const sanitizedData: any = { ...mergedData };
+        delete sanitizedData.imageUrl;
+        delete sanitizedData.imageUrlDark;
         if (sanitizedData.tldrawSnapshot) {
-            delete sanitizedData.imageUrl;
-            delete sanitizedData.imageUrlDark;
+            sanitizedData.tldrawSnapshot = sanitizeMindmapSnapshot(sanitizedData.tldrawSnapshot);
         }
 
         return db.transact(db.tx.partMindMaps[mapId].update({
