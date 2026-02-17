@@ -46,7 +46,7 @@ import { optimizeWeights } from '../../actions';
 import { surahAyahToAbsolute, hasMutashabihForAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
-import { filterReviewQueueNodes } from '@/lib/reviewQueue';
+import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { clientEnv } from '@/lib/env/client';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
@@ -125,7 +125,7 @@ export default function TodayPage() {
     const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
-    const { saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
+    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
     const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
     const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
@@ -198,6 +198,10 @@ export default function TodayPage() {
         });
     }, [mutashabihatDecisionsMap, customMutashabihat]);
 
+    const suspendedVerseGroupKeys = useMemo(() => {
+        return deriveSuspendedVerseGroupKeys(reviewErrors, 3, settings?.suspendedVerseGroupsAcknowledged);
+    }, [reviewErrors, settings?.suspendedVerseGroupsAcknowledged]);
+
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
     const orderedDueNodes = useMemo(() => {
         if (!dueNodes.length) return [];
@@ -234,7 +238,7 @@ export default function TodayPage() {
             return a.id.localeCompare(b.id);
         };
 
-        const filteredDueNodes = filterReviewQueueNodes(dueNodes, settings, mindmaps);
+        const filteredDueNodes = filterReviewQueueNodes(dueNodes, settings, mindmaps, suspendedVerseGroupKeys);
 
         if (!filteredDueNodes.length) return [];
 
@@ -306,7 +310,7 @@ export default function TodayPage() {
         }
 
         return ordered;
-    }, [dueNodes, settings, mindmaps, settings?.reviewSortOrder]);
+    }, [dueNodes, settings, mindmaps, suspendedVerseGroupKeys, settings?.reviewSortOrder]);
 
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {

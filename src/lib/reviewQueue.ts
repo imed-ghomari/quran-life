@@ -66,10 +66,78 @@ const canonicalizeMindmaps = (mindmaps: MindMap[]) => {
     return Array.from(bySurah.values());
 };
 
+const toPositiveIntLoose = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const toOptionalString = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+};
+
+const getFallbackAnchorId = (startVerse: unknown, endVerse: unknown): string => {
+    const start = toPositiveIntLoose(startVerse) ?? 1;
+    const end = toPositiveIntLoose(endVerse) ?? start;
+    return `range-${start}-${end}`;
+};
+
+export const getVerseGroupKey = (input: {
+    surahId: unknown;
+    anchorId?: unknown;
+    startVerse?: unknown;
+    endVerse?: unknown;
+}) => {
+    const surahId = toPositiveIntLoose(input.surahId);
+    if (!surahId) return null;
+    const anchorId = toOptionalString(input.anchorId) || getFallbackAnchorId(input.startVerse, input.endVerse);
+    return `${surahId}-${anchorId}`;
+};
+
+export const deriveSuspendedVerseGroupKeys = (
+    errors: Array<any>,
+    threshold: number = 3,
+    acknowledgedAtByGroup?: Record<string, string>
+) => {
+    const counts = new Map<string, number>();
+    const latestErrorTimestampMs = new Map<string, number>();
+
+    errors.forEach((error) => {
+        if (String(error?.nodeType || '') !== 'verse_segment') return;
+        const key = getVerseGroupKey({
+            surahId: error?.surahId,
+            anchorId: error?.anchorId,
+            startVerse: error?.startVerse,
+            endVerse: error?.endVerse
+        });
+        if (!key) return;
+        counts.set(key, (counts.get(key) || 0) + 1);
+        const ts = Date.parse(String(error?.timestamp || ''));
+        const ms = Number.isFinite(ts) ? ts : 0;
+        const existing = latestErrorTimestampMs.get(key) ?? 0;
+        if (ms >= existing) {
+            latestErrorTimestampMs.set(key, ms);
+        }
+    });
+
+    const suspended = new Set<string>();
+    counts.forEach((count, key) => {
+        if (count < threshold) return;
+        const latestErrorMs = latestErrorTimestampMs.get(key) ?? 0;
+        const ackIso = acknowledgedAtByGroup?.[key];
+        const ackMs = ackIso ? Date.parse(ackIso) : Number.NaN;
+        if (Number.isFinite(ackMs) && ackMs >= latestErrorMs) return;
+        suspended.add(key);
+    });
+    return suspended;
+};
+
 export const filterReviewQueueNodes = (
     nodes: MemoryNode[],
     settings: Partial<AppSettings> | undefined,
-    mindmaps: MindMap[]
+    mindmaps: MindMap[],
+    suspendedVerseGroupKeys?: Set<string>
 ) => {
     const canonicalMindmaps = canonicalizeMindmaps(mindmaps);
     const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
@@ -94,6 +162,15 @@ export const filterReviewQueueNodes = (
 
         if (node.type === 'verse_segment') {
             if (hasKanbanState && completeExitBehavior === 'mindmap_and_verses' && surahId && !completeIds.has(`surah-${surahId}`)) {
+                return false;
+            }
+            const verseGroupKey = getVerseGroupKey({
+                surahId,
+                anchorId: (node as any)?.targetId,
+                startVerse: (node as any)?.startVerse,
+                endVerse: (node as any)?.endVerse
+            });
+            if (verseGroupKey && suspendedVerseGroupKeys?.has(verseGroupKey)) {
                 return false;
             }
             return hasAnchorForNode(node, canonicalMindmaps);
