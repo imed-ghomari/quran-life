@@ -39,10 +39,11 @@ import {
     useInstantOptimization,
     useInstantListeningStats,
     useInstantListeningProgress,
+    useInstantMutashabihat,
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
-import { surahAyahToAbsolute, hasMutashabihForAbsolute } from '@/lib/mutashabihat';
+import { surahAyahToAbsolute, hasMutashabihForAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
@@ -126,6 +127,7 @@ export default function TodayPage() {
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
     const { saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
     const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
+    const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
     const isOnline = useContext(OnlineStatusContext);
@@ -171,6 +173,30 @@ export default function TodayPage() {
         if (!mindmap || !mindmap.anchors) return undefined;
         return (mindmap.anchors as any[]).find(a => Number(a.startVerse) === start && Number(a.endVerse) === end);
     }, [mindmaps]);
+
+    const mutashabihatDecisionsMap = useMemo(() => {
+        const map = new Map<string, any>();
+        mutashabihatDecisions.forEach((decision: any) => {
+            map.set(decision.phraseId || decision.id, decision);
+        });
+        return map;
+    }, [mutashabihatDecisions]);
+
+    const isUnresolvedMutashabihatFailure = useCallback((absoluteAyah: number) => {
+        const verseDecision = mutashabihatDecisionsMap.get(absoluteAyah.toString());
+        if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
+
+        const entries = getMutashabihatForAbsolute(absoluteAyah, customMutashabihat);
+        if (entries.length === 0) return false;
+
+        return entries.some((entry: any) => {
+            const decisionKey = `${absoluteAyah}-${entry.phraseId}`;
+            const phraseDecision = mutashabihatDecisionsMap.get(decisionKey);
+            if (!phraseDecision) return true;
+            if (phraseDecision.status === 'ignored') return false;
+            return !phraseDecision.confirmedAt;
+        });
+    }, [mutashabihatDecisionsMap, customMutashabihat]);
 
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
     const orderedDueNodes = useMemo(() => {
@@ -1054,7 +1080,12 @@ export default function TodayPage() {
             if (anchor?.id) errorToSave.anchorId = anchor.id;
 
             const abs = failedAyahId && resolvedSurahId ? surahAyahToAbsolute(resolvedSurahId, failedAyahId) : undefined;
-            if (abs !== undefined) errorToSave.absoluteAyah = abs;
+            if (abs !== undefined) {
+                errorToSave.absoluteAyah = abs;
+                if (isUnresolvedMutashabihatFailure(abs)) {
+                    errorToSave.type = 'similarity';
+                }
+            }
 
             errorPayload = errorToSave;
             try {
@@ -1116,7 +1147,7 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, isPersistingReviewAction, isApplyingHistoryAction]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure]);
 
     const handlePostpone = useCallback(async () => {
         if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;

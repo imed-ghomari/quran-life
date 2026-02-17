@@ -411,7 +411,8 @@ export default function TodoKanban({
         const itemMap = new Map<string, KanbanItem>();
 
         suspendedAnchors.forEach(item => {
-            const id = `suspended-${item.surahId}-${item.anchorId}`;
+            const groupIdentity = item.groupKey || `${item.surahId}-${item.anchorId}`;
+            const id = `suspended-${groupIdentity}`;
             if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
         });
@@ -1237,39 +1238,102 @@ export default function TodoKanban({
                 const surah = getSurah(surahId);
                 const surahMeta = SURAHS.find(s => s.id === surahId);
                 const total = surahMeta?.verseCount || 1;
-                const targetAyah = issue.focusAyah || issue.startVerse || 1;
-                const target = Math.min(Math.max(1, targetAyah), total);
-                const prev = target > 1 ? target - 1 : null;
-                const next = target < total ? target + 1 : null;
+                const mistakeEntries = (Array.isArray(issue.recentVerseWindow) ? issue.recentVerseWindow : [])
+                    .map((entry: any) => {
+                        const ayahId = Math.min(Math.max(1, Number(entry?.ayahId) || 1), total);
+                        const count = Math.max(1, Number(entry?.count) || 1);
+                        return { ayahId, count };
+                    })
+                    .slice(0, 3);
+                const mistakeAyahIds = new Set<number>(mistakeEntries.map((entry: any) => entry.ayahId));
+                const mistakeCountByAyah = new Map<number, number>(mistakeEntries.map((entry: any) => [entry.ayahId, entry.count]));
                 const getVerseText = (ayahId: number) => verses.find((v: any) => v.surahId === surahId && v.ayahId === ayahId)?.text || '';
-                const renderVerse = (ayahId: number, highlight: boolean) => (
-                    <div key={ayahId} className="verse-context-verse bg-[var(--background-secondary)] p-6 rounded-lg">
-                        <div className="verse-context-label text-xs text-[var(--foreground-secondary)] mb-2">
-                            {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
-                        </div>
-                        <p
-                            className="verse-context-ayah text-right font-arabic text-xl leading-loose"
-                            style={highlight ? { background: 'rgba(255, 99, 99, 0.18)' } : undefined}
-                        >
-                            {getVerseText(ayahId)}
-                        </p>
-                    </div>
-                );
+                const mergedContextRanges = (() => {
+                    const rawRanges = mistakeEntries
+                        .map((entry: any) => ({
+                            start: Math.max(1, entry.ayahId - 1),
+                            end: Math.min(total, entry.ayahId + 1),
+                        }))
+                        .sort((a: any, b: any) => a.start - b.start);
 
-                const content = (
-                    <div className="verse-context-stack">
-                        {prev && renderVerse(prev, false)}
-                        {renderVerse(target, true)}
-                        {next && renderVerse(next, false)}
+                    const merged: Array<{ start: number; end: number }> = [];
+                    rawRanges.forEach((range: any) => {
+                        const last = merged[merged.length - 1];
+                        if (!last || range.start > last.end) {
+                            merged.push({ ...range });
+                            return;
+                        }
+                        last.end = Math.max(last.end, range.end);
+                    });
+                    return merged;
+                })();
+
+                const renderVerse = (ayahId: number) => {
+                    const highlight = mistakeAyahIds.has(ayahId);
+                    const count = mistakeCountByAyah.get(ayahId) || 1;
+                    return (
+                        <div key={`${ayahId}-${count}`} className="verse-context-verse bg-[var(--background-secondary)] p-5 rounded-lg">
+                            <div className="verse-context-label text-xs text-[var(--foreground-secondary)] mb-2">
+                                {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
+                            </div>
+                            <p
+                                className="verse-context-ayah text-right font-arabic text-xl leading-loose"
+                                style={highlight ? { background: 'rgba(255, 99, 99, 0.18)' } : undefined}
+                            >
+                                {getVerseText(ayahId)}
+                            </p>
+                            {highlight && count > 1 && (
+                                <div className="mt-3 inline-flex items-center rounded-full border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-1 text-xs font-semibold text-[var(--danger)]">
+                                    {count} errors on this verse
+                                </div>
+                            )}
+                        </div>
+                    );
+                };
+
+                const content = mistakeEntries.length > 0 ? (
+                    <div className="verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4">
+                        {mergedContextRanges.map((range: any, rangeIdx: number) => {
+                            const versesInRange = Array.from(
+                                { length: Math.max(0, range.end - range.start + 1) },
+                                (_, idx) => range.start + idx
+                            );
+                            return (
+                                <div key={`${range.start}-${range.end}`} className="space-y-4">
+                                    {rangeIdx > 0 && (
+                                        <div className="my-2 flex items-center gap-3">
+                                            <div className="h-px flex-1 bg-[var(--border)]" />
+                                            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                                                Other mistake context
+                                            </span>
+                                            <div className="h-px flex-1 bg-[var(--border)]" />
+                                        </div>
+                                    )}
+                                    {versesInRange.map((ayahId) => renderVerse(ayahId))}
+                                </div>
+                            );
+                        })}
                     </div>
-                );
+                ) : (() => {
+                    const targetAyah = issue.focusAyah || issue.startVerse || 1;
+                    const target = Math.min(Math.max(1, targetAyah), total);
+                    const prev = target > 1 ? target - 1 : null;
+                    const next = target < total ? target + 1 : null;
+                    return (
+                        <div className="verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4">
+                            {prev && renderVerse(prev)}
+                            {renderVerse(target)}
+                            {next && renderVerse(next)}
+                        </div>
+                    );
+                })();
 
                 if (isMobile || isTablet) {
                     return (
                         <div className="slide-over-overlay" onClick={() => setVerseContextItem(null)}>
                             <div className="slide-over-content verse-context-modal" onClick={e => e.stopPropagation()}>
                                 <div className="slide-over-header verse-context-header">
-                                    <h3 className="verse-context-title" style={{ margin: 0, fontSize: '1rem' }}>Verse Context</h3>
+                                    <h3 className="verse-context-title" style={{ margin: 0, fontSize: '1rem' }}>Suspension Context (Last 3 Errors)</h3>
                                     <button className="close-btn verse-context-close" onClick={() => setVerseContextItem(null)}>
                                         <X size={20} />
                                     </button>
@@ -1287,7 +1351,7 @@ export default function TodoKanban({
                         <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setVerseContextItem(null)} />
                         <div className="relative w-full max-w-2xl max-h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
                             <div className="verse-context-header flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-                                <h3 className="verse-context-title text-lg font-bold">Verse Context</h3>
+                                <h3 className="verse-context-title text-lg font-bold">Suspension Context (Last 3 Errors)</h3>
                                 <button
                                     onClick={() => setVerseContextItem(null)}
                                     className="verse-context-close p-2 rounded-full hover:bg-[var(--background-secondary)] transition-colors"
@@ -1296,6 +1360,9 @@ export default function TodoKanban({
                                 </button>
                             </div>
                             <div className="verse-context-content px-8 py-7 space-y-5 overflow-y-auto max-h-[calc(85vh-70px)]">
+                                <div className="rounded-xl border border-[var(--border)] bg-[var(--background-secondary)]/60 px-4 py-3 text-sm text-[var(--foreground-secondary)]">
+                                    {issue.label || 'Verse group'} • {Math.max(0, Number(issue.mistakeCount) || 0)} total errors in this group
+                                </div>
                                 {content}
                             </div>
                         </div>
