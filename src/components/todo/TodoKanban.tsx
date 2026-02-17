@@ -694,7 +694,7 @@ export default function TodoKanban({
                         });
                         addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                     }
-                } else if (source.droppableId !== 'complete') {
+                } else if (source.droppableId !== 'complete' && movedItem.type === 'similarity') {
                     void handleCompletionTrigger(movedItem).catch((err) => {
                         console.error('Failed to persist completion trigger', err);
                         addToast(movedItem.type === 'similarity' ? 'similarity' : 'suspended', 'Failed to save completion', 'Please try again.');
@@ -747,7 +747,18 @@ export default function TodoKanban({
                     });
                 }
 
-                const removalTimer = setTimeout(() => {
+                const removalTimer = setTimeout(async () => {
+                    if (movedItem.type === 'suspended') {
+                        try {
+                            await handleCompletionTrigger(movedItem);
+                        } catch (err) {
+                            console.error('Failed to persist suspension completion trigger', err);
+                            clearPendingRemoval(movedItem.id);
+                            restoreItemToColumn(movedItem, source.droppableId, source.index);
+                            addToast('suspended', 'Failed to unsuspend verse group', 'Please try again.');
+                            return;
+                        }
+                    }
                     finalizeRemoval(movedItem);
                     removalTimersRef.current.delete(movedItem.id);
                     pendingToastIdsRef.current.delete(movedItem.id);

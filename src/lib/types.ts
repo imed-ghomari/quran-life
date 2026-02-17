@@ -101,6 +101,7 @@ export interface AppSettings {
     updatedAt?: string;
     isOnboardingComplete?: boolean;
     kanbanColumns?: Record<string, string[]>;
+    suspendedVerseGroupsAcknowledged?: Record<string, string>;
     audioSettings?: AudioSettings;
     userId?: string;
     lastSyncedAt?: string;

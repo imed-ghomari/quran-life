@@ -389,12 +389,18 @@ export default function TodoPage() {
             });
 
         const suspended: any[] = [];
+        const acknowledgedAtByGroup = settings?.suspendedVerseGroupsAcknowledged || {};
 
         byGroup.forEach((groupErrors, groupKey) => {
             const sorted = [...groupErrors].sort((a, b) => b.timestampMs - a.timestampMs);
             if (sorted.length < SUSPEND_ERROR_THRESHOLD) return;
 
             const latest = sorted[0];
+            const ackIso = acknowledgedAtByGroup[groupKey];
+            const ackMs = ackIso ? Date.parse(ackIso) : Number.NaN;
+            if (Number.isFinite(ackMs) && ackMs >= (latest.timestampMs || 0)) {
+                return;
+            }
             const recentThree = sorted.slice(0, SUSPEND_ERROR_THRESHOLD);
             const countsByAyah = new Map<number, { ayahId: number; count: number; latestTimestampMs: number }>();
 
@@ -437,7 +443,7 @@ export default function TodoPage() {
             if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
             return a.endVerse - b.endVerse;
         });
-    }, [errors, SUSPEND_ERROR_THRESHOLD]);
+    }, [errors, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD]);
 
 
 
@@ -888,8 +894,15 @@ export default function TodoPage() {
         }
     };
 
-    const handleFixConfirm = (_surahId: number, _anchorId: string) => {
-        // No-op for now as clearAnchorIssues was a no-op
+    const handleFixConfirm = async (surahId: number, anchorId: string) => {
+        const key = `${surahId}-${anchorId}`;
+        const current = settings.suspendedVerseGroupsAcknowledged || {};
+        await saveSettings({
+            suspendedVerseGroupsAcknowledged: {
+                ...current,
+                [key]: new Date().toISOString()
+            }
+        });
     };
 
     const handleSimilarityDecision = async (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm: boolean = true) => {
