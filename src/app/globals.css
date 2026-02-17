@@ -3068,7 +3068,7 @@ input:focus {
 }
 
 .confirm-dialog-footer .btn {
-  border-radius: 18px;
+  border-radius: 12px;
   min-height: 50px;
   padding: 0.5rem 1rem;
 }
