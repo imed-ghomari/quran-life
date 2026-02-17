@@ -1126,13 +1126,16 @@ h3 {
 
 /* Reviews: keep only the inner target box scroll */
 .review-section-content .today-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow: visible;
   padding-bottom: 1rem;
 }
 
 .review-section-content .today-card-content--mindmap-grading {
-  /* Reserve enough room for the sticky grading row so quick actions stay fully visible */
-  padding-bottom: 9.5rem;
+  padding-bottom: 1rem;
 }
 
 .review-section-content .today-card-content--mindmap-grading .mindmap-quick-actions {
@@ -1163,8 +1166,12 @@ h3 {
 }
 
 .review-section-content .today-card-footer {
+  position: static;
+  bottom: auto;
+  z-index: auto;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
+  margin-top: 0;
 }
 
 .today-card-footer {

@@ -44,8 +44,6 @@ export default function MindmapViewer({
     const [fetchedSnapshot, setFetchedSnapshot] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [editor, setEditor] = useState<any>(null);
-    const [inlineEditor, setInlineEditor] = useState<any>(null);
-    const [showInlineBackToContent, setShowInlineBackToContent] = useState(false);
     const activeSnapshot = fetchedSnapshot || snapshot;
     const displayUrl = isDark ? (imageUrlDark || imageUrl) : imageUrl;
     const hasImage = !!displayUrl && !activeSnapshot;
@@ -127,68 +125,6 @@ export default function MindmapViewer({
         window.addEventListener('wheel', handleWheel, { capture: true, passive: false });
         return () => window.removeEventListener('wheel', handleWheel, { capture: true });
     }, []);
-
-    useEffect(() => {
-        if (!inlineEditor || !activeSnapshot) {
-            setShowInlineBackToContent(false);
-            return;
-        }
-
-        const intersects = (a: any, b: any) => {
-            const aRight = a.x + a.w;
-            const aBottom = a.y + a.h;
-            const bRight = b.x + b.w;
-            const bBottom = b.y + b.h;
-            return a.x < bRight && aRight > b.x && a.y < bBottom && aBottom > b.y;
-        };
-
-        const computeContentBounds = () => {
-            const shapes = inlineEditor.getCurrentPageShapes?.() ?? [];
-            if (!shapes.length) return null;
-
-            let minX = Infinity;
-            let minY = Infinity;
-            let maxX = -Infinity;
-            let maxY = -Infinity;
-            let hasBounds = false;
-
-            for (const shape of shapes) {
-                const shapeBounds = inlineEditor.getShapePageBounds?.(shape.id);
-                if (!shapeBounds) continue;
-                hasBounds = true;
-                minX = Math.min(minX, shapeBounds.x);
-                minY = Math.min(minY, shapeBounds.y);
-                maxX = Math.max(maxX, shapeBounds.x + shapeBounds.w);
-                maxY = Math.max(maxY, shapeBounds.y + shapeBounds.h);
-            }
-
-            if (!hasBounds) return null;
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-        };
-
-        const updateVisibility = () => {
-            try {
-                const viewportBounds = inlineEditor.getViewportPageBounds?.();
-                const contentBounds = computeContentBounds();
-                if (!viewportBounds || !contentBounds) {
-                    setShowInlineBackToContent(false);
-                    return;
-                }
-                setShowInlineBackToContent(!intersects(viewportBounds, contentBounds));
-            } catch {
-                setShowInlineBackToContent(false);
-            }
-        };
-
-        updateVisibility();
-        const intervalId = window.setInterval(updateVisibility, 250);
-        window.addEventListener('resize', updateVisibility);
-
-        return () => {
-            window.clearInterval(intervalId);
-            window.removeEventListener('resize', updateVisibility);
-        };
-    }, [inlineEditor, activeSnapshot]);
 
     const inlineComponents = useMemo(() => ({
         Toolbar: null,
@@ -290,7 +226,6 @@ export default function MindmapViewer({
             // but for inline view, we just want it to be reliable.
             // Using a separate handleMount for inline to ensure zoom happens correctly there too.
             const handleInlineMount = (editor: any) => {
-                setInlineEditor(editor);
                 setEditor(editor);
                 editor.updateInstanceState({ isReadonly: true });
                 editor.setCurrentTool('hand');
@@ -324,15 +259,6 @@ export default function MindmapViewer({
                     style={{ height: height, minHeight: height, ...style }}
                 >
                     <div className="absolute top-3 right-3 z-10">
-                        {showInlineBackToContent && (
-                            <button
-                                onClick={() => inlineEditor?.zoomToFit({ duration: 200 })}
-                                className="btn btn-secondary std-normal-btn mr-4"
-                                title="Back to content"
-                            >
-                                Back to content
-                            </button>
-                        )}
                          <button 
                             onClick={() => setIsFullScreen(true)}
                             className="p-2 bg-[var(--background)] hover:bg-[var(--background-secondary)] border border-[var(--border)] rounded-lg shadow-sm transition-colors"
@@ -364,13 +290,15 @@ export default function MindmapViewer({
             {isFullScreen && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
                     <div
-                        className="mindmap-editor-header flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
+                        className="mindmap-viewer-header flex items-center border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
                         style={{ height: '50px', padding: '0 1rem' }}
                     >
-                        <h3 className="font-bold text-lg text-[var(--foreground)]">{title || "Mindmap Viewer"}</h3>
+                        <h3 className="min-w-0 flex-1 truncate font-bold text-base sm:text-lg text-[var(--foreground)]">
+                            {title || "Mindmap Viewer"}
+                        </h3>
                         <button 
                             onClick={() => setIsFullScreen(false)}
-                            className="p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
+                            className="ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
                         >
                             <X size={24} className="text-[var(--foreground)]" />
                         </button>

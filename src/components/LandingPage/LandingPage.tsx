@@ -1,15 +1,10 @@
 import React, { useState } from 'react';
 import { useTheme } from '../ThemeProvider';
 import {
-  Brain,
   Repeat,
-  Copy, // For Similar Verses
+  Copy,
   Check,
-  ArrowRight,
-  Zap,
-  Layers,
-  BookOpen,
-  Sparkles,
+  AlertTriangle,
   Sun,
   Moon,
   Monitor,
@@ -21,6 +16,148 @@ import {
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
+
+type ShowcaseItem = {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ size?: string | number }>;
+  lightSrc: string;
+  darkSrc: string;
+  alt: string;
+};
+
+const methodItems: ShowcaseItem[] = [
+  {
+    title: '1. Passive Exposure',
+    description:
+      'Start by listening. Your "Daily Portion" builds a natural familiarity with the verses\' sound and flow before you even try to memorize.',
+    icon: Headphones,
+    lightSrc: '/landing/Passive_Exposure_Light.webp',
+    darkSrc: '/landing/Passive_Exposure_Dark.webp',
+    alt: 'Passive Exposure screen preview',
+  },
+  {
+    title: '2. Visual Mapping',
+    description:
+      "Don't just repeat. Use the Splits setup modal to chunk verses and place them on a visual map, creating powerful mental hooks.",
+    icon: Anchor,
+    lightSrc: '/landing/visual-mapping-light.webp',
+    darkSrc: '/landing/visual-mapping-dark.webp',
+    alt: 'Visual Mapping screen preview',
+  },
+  {
+    title: '3. Smart Review',
+    description:
+      'Lock it in. Our algorithm tracks every verse and notifies you to review exactly when your memory is about to fade.',
+    icon: Repeat,
+    lightSrc: '/landing/smart-review-card-light.webp',
+    darkSrc: '/landing/smart-review-card-dark.webp',
+    alt: 'Smart Review screen preview',
+  },
+];
+
+const featureItems: ShowcaseItem[] = [
+  {
+    title: 'Error Detection',
+    description:
+      'Logs the exact verse where you made a mistake so you can detect weak spots early and fix them before they become repeated mistakes.',
+    icon: AlertTriangle,
+    lightSrc: '/landing/error-card-light.webp',
+    darkSrc: '/landing/error-card-dark.webp',
+    alt: 'Error Detection feature preview',
+  },
+  {
+    title: 'Mutashabihat Engine',
+    description:
+      'Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.',
+    icon: Copy,
+    lightSrc: '/landing/mutashabihat-card-light.webp',
+    darkSrc: '/landing/mutashabihat-card-dark.webp',
+    alt: 'Mutashabihat Engine screen preview',
+  },
+  {
+    title: 'Offline & Mobile',
+    description:
+      'Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.',
+    icon: Smartphone,
+    lightSrc: '/landing/mobile-card-light.webp',
+    darkSrc: '/landing/mobile-card-dark.webp',
+    alt: 'Offline and Mobile screen preview',
+  },
+];
+
+const FeatureShowcase = ({
+  items,
+  idPrefix,
+  inverted = false,
+}: {
+  items: ShowcaseItem[];
+  idPrefix: string;
+  inverted?: boolean;
+}) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeItem = items[activeIndex];
+  const panelId = `${idPrefix}-panel`;
+
+  return (
+    <div className={`feature-showcase${inverted ? ' feature-showcase-inverted' : ''}`}>
+      <div className="feature-showcase-list" role="tablist" aria-orientation="vertical">
+        {items.map((item, index) => {
+          const Icon = item.icon;
+          const isActive = index === activeIndex;
+          const tabId = `${idPrefix}-tab-${index}`;
+
+          return (
+            <button
+              key={item.title}
+              id={tabId}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={panelId}
+              className={`feature-showcase-card ${isActive ? 'active' : ''}`}
+              onClick={() => setActiveIndex(index)}
+            >
+              <span className="feature-showcase-card-icon" aria-hidden="true">
+                <Icon size={22} />
+              </span>
+              <span className="feature-showcase-card-content">
+                <span className="feature-showcase-card-title">{item.title}</span>
+                <span className="feature-showcase-card-description">{item.description}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={`${idPrefix}-tab-${activeIndex}`}
+        className="feature-showcase-preview"
+      >
+        <img
+          src={activeItem.lightSrc}
+          alt={activeItem.alt}
+          className="feature-showcase-image card-preview-image-light"
+          loading="lazy"
+          decoding="async"
+          width={1400}
+          height={1000}
+        />
+        <img
+          src={activeItem.darkSrc}
+          alt={activeItem.alt}
+          className="feature-showcase-image card-preview-image-dark"
+          loading="lazy"
+          decoding="async"
+          width={1400}
+          height={1000}
+        />
+      </div>
+    </div>
+  );
+};
 
 const FaqItem = ({ question, answer }: { question: string; answer: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -122,7 +259,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
             <div className="hero-media delay-200 animate-entry">
               <img
-                src="/landing/hero-light.png"
+                src="/landing/hero-tilted-light.webp"
                 alt="Quran Life visual mindmap preview"
                 className="hero-image hero-image-light"
                 loading="eager"
@@ -132,7 +269,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 height={900}
               />
               <img
-                src="/landing/hero-dark.png"
+                src="/landing/hero-tilted-dark.webp"
                 alt="Quran Life visual mindmap preview"
                 className="hero-image hero-image-dark"
                 loading="eager"
@@ -155,89 +292,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </p>
             </div>
 
-            <div className="grid">
-              {/* Phase 1 */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Headphones size={28} />
-                </div>
-                <h3>1. Passive Exposure</h3>
-                <p>
-                  Start by listening. Your "Daily Portion" builds a natural familiarity with the verses' sound and flow before you even try to memorize.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-audio" aria-hidden="true">
-                  <div className="audio-wave">
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                  <div className="audio-track-meta">
-                    <div className="meta-pill" />
-                    <div className="meta-pill short" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Phase 2 */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Anchor size={28} />
-                </div>
-                <h3>2. Visual Mapping</h3>
-                <p>
-                  Don't just repeat. Use the <strong>AnchorBuilder</strong> to chunk verses and place them on a visual map, creating powerful mental hooks.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-map" aria-hidden="true">
-                  <div className="map-node node-main" />
-                  <div className="map-node node-a" />
-                  <div className="map-node node-b" />
-                  <div className="map-node node-c" />
-                  <div className="map-node node-d" />
-                  <div className="map-link link-1" />
-                  <div className="map-link link-2" />
-                  <div className="map-link link-3" />
-                  <div className="map-link link-4" />
-                </div>
-              </div>
-
-              {/* Phase 3 */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Repeat size={28} />
-                </div>
-                <h3>3. Smart Review</h3>
-                <p>
-                  Lock it in. Our algorithm tracks every verse and notifies you to review exactly when your memory is about to fade.
-                </p>
-                <div className="card-preview card-preview-smart-review">
-                  <img
-                    src="/landing/smart-review-light.png"
-                    alt="Smart Review screen preview in light mode"
-                    className="card-preview-image card-preview-image-light"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                  <img
-                    src="/landing/smart-review-dark.png"
-                    alt="Smart Review screen preview in dark mode"
-                    className="card-preview-image card-preview-image-dark"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                </div>
-              </div>
-            </div>
+            <FeatureShowcase items={methodItems} idPrefix="method-showcase" />
           </div>
         </section>
 
@@ -251,60 +306,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </p>
             </div>
 
-            <div className="grid">
-              {/* Feature 1: Mindmapping */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Layers size={28} />
-                </div>
-                <h3>Infinite Canvas</h3>
-                <p>
-                  A distraction-free space to build your maps. Import templates or draw your own connections to visualize the Surah's structure.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-canvas" aria-hidden="true">
-                  <div className="canvas-grid" />
-                  <div className="canvas-sticky sticky-a" />
-                  <div className="canvas-sticky sticky-b" />
-                  <div className="canvas-sticky sticky-c" />
-                </div>
-              </div>
-
-              {/* Feature 2: Similar Verses */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Copy size={28} />
-                </div>
-                <h3>Mutashabihat Engine</h3>
-                <p>
-                  Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-compare" aria-hidden="true">
-                  <div className="compare-chip chip-a" />
-                  <div className="compare-chip chip-b" />
-                  <div className="compare-chip chip-c" />
-                  <div className="compare-chip chip-d" />
-                </div>
-              </div>
-
-              {/* Feature 3: Offline */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Smartphone size={28} />
-                </div>
-                <h3>Offline & Mobile</h3>
-                <p>
-                  Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-mobile" aria-hidden="true">
-                  <div className="phone-frame">
-                    <div className="phone-notch" />
-                    <div className="phone-lines" />
-                    <div className="phone-lines short" />
-                    <div className="phone-lines" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <FeatureShowcase items={featureItems} idPrefix="feature-showcase" inverted />
           </div>
         </section>
 
@@ -392,20 +394,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   answer: "Scientific research shows that the brain retains information better when it's structured visually. Instead of memorizing linear text, our Anchoring System allows you to break Surahs down into logical blocks (mindmaps). This creates 'mental hooks' that make recall faster and more reliable, especially for longer Surahs."
                 },
                 {
-                  question: "My Hifdh is weak. Will this app help me fix old mistakes?",
-                  answer: "Yes. The hardest part of fixing weak Hifdh is identifying exactly where the mistakes are. Our Mutashabihat Engine proactively flags similar verses that often cause confusion. Additionally, the Spaced Repetition algorithm adapts to your performance—if you struggle with a specific passage, it will schedule reviews more frequently until it sticks."
+                  question: "I already memorized some Surahs. Is this app only for new students?",
+                  answer: "It is not only for new students. You can set your Active Part (Juz) to focus on your current target, and you can skip Surahs you already know well so your Todo and Daily Portion stay focused. If needed, you can unskip them later and bring them back into your workflow."
                 },
                 {
-                  question: "I see 'Offline Mode' mentioned. Does that mean my data is stored locally?",
-                  answer: "It's a hybrid system. Quran Life focuses on being 'Local First' for speeed and offline accessibility. Your mindmaps and progress are stored on your device instantly, so you never see a loading spinner. When you connect to the internet, we silently sync your encrypted data to the cloud so you can switch between your phone and laptop seamlessly."
+                  question: "I already finished the Quran. Can Quran Life still make my Hifdh stronger?",
+                  answer: "Yes. Quran Life can be used as a long-term maintenance system. Smart Review (FSRS) schedules your reviews over time, and the Mutashabihat tools help you handle similar verses that commonly cause slips. This is useful even if you are not learning from zero."
                 },
                 {
-                  question: "What happens if I miss a few days of review?",
-                  answer: "Unlike rigid schedules that pile up endlessly, our intelligent scheduler adjusts. If you miss a few days, it won't overwhelm you with impossible backlogs. It prioritizes the verses most at risk of being forgotten, allowing you to catch up at a sustainable pace without losing motivation."
+                  question: "Do I need to build a mindmap before reviews, or can I just start reviewing?",
+                  answer: "For this method, the mindmap is core. The app is designed around visual anchors, and review works best after your map and verse splits are set. You can import a pre-made map or create/edit your own, then start Smart Review."
                 },
                 {
-                  question: "Why isn't this available on the App Store or Play Store?",
-                  answer: "We chose to build Quran Life as a Progressive Web App (PWA) to give us complete control over updates and features without waiting for store approvals. This ensures you always have the latest version instantly. You can still 'install' it on your home screen just like a native app, and it works exactly the same—full screen, offline, and fast."
+                  question: "Do I have to start from Surah Al-Baqarah, or can I focus only on the Juz I am working on?",
+                  answer: "You can focus only on your current Juz. Quran Life lets you set an Active Part (Juz), and your Daily Portion and Todo are filtered to that focus so you can study in a structured way without restarting everything."
                 }
               ].map((faq, index) => (
                 <FaqItem key={index} question={faq.question} answer={faq.answer} />

@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     completeExitBehavior: 'mindmap_only',
     kanbanSortOrder: 'type_then_number',
     dailyPortionMode: 'audio',
+    todayDefaultMode: 'daily',
     theme: 'system',
     isOnboardingComplete: false,
     kanbanColumns: {},
@@ -84,6 +85,29 @@ const getLocalDayKeyFromMs = (ms: number) => {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+};
+
+const waitMs = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isInstantTransactionTimeoutError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return message.toLowerCase().includes('transaction timed out');
+};
+
+const transactWithRetry = async (tx: any, maxAttempts: number = 3) => {
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+        try {
+            return await db.transact(tx);
+        } catch (error) {
+            attempt += 1;
+            if (!isInstantTransactionTimeoutError(error) || attempt >= maxAttempts) {
+                throw error;
+            }
+            await waitMs(100 * attempt);
+        }
+    }
+    throw new Error('Instant transact retry exhausted');
 };
 
 const memoryNodeLogicalKey = (node: MemoryNode) => {
@@ -309,7 +333,7 @@ export function useInstantNodes() {
         const nodeId = canReuseCandidateId
             ? (node.id as string)
             : resolveEntityId(undefined, 'memory_node', user.id, memoryNodeLogicalKey(node));
-        return db.transact(db.tx.memoryNodes[nodeId].update({
+        return transactWithRetry(db.tx.memoryNodes[nodeId].update({
             ...node,
             userId: user.id
         }));
@@ -568,7 +592,7 @@ export function useInstantReviewLogs() {
     const saveLog = (log: any) => {
         if (!user) return Promise.resolve();
         const logId = id();
-        return db.transact(db.tx.fsrsReviewLogs[logId].update({
+        return transactWithRetry(db.tx.fsrsReviewLogs[logId].update({
             ...log,
             userId: user.id
         }));
@@ -591,7 +615,7 @@ export function useInstantReviewErrors() {
     const saveError = (errorItem: any) => {
         if (!user) return Promise.resolve();
         const errorId = isUuid(errorItem.id) ? errorItem.id : id();
-        return db.transact(db.tx.reviewErrors[errorId].update({
+        return transactWithRetry(db.tx.reviewErrors[errorId].update({
             ...errorItem,
             userId: user.id
         }));
@@ -600,7 +624,7 @@ export function useInstantReviewErrors() {
     const deleteError = (errorId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(errorId)) return Promise.resolve();
-        return db.transact(db.tx.reviewErrors[errorId].delete());
+        return transactWithRetry(db.tx.reviewErrors[errorId].delete());
     };
 
     return useMemo(() => ({ errors, saveError, deleteError, isLoading, error }), [errors, isLoading, error]);

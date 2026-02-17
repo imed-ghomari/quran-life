@@ -24,6 +24,8 @@ import {
     SelectToolbarItem,
     HandToolbarItem,
     DrawToolbarItem,
+    ArrowToolbarItem,
+    TextToolbarItem,
     HighlightToolbarItem,
     EraserToolbarItem,
     useTools,
@@ -578,6 +580,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         <SelectToolbarItem />
                         <HandToolbarItem />
                         <DrawToolbarItem />
+                        <ArrowToolbarItem />
+                        <TextToolbarItem />
                         <HighlightToolbarItem />
                         <EraserToolbarItem />
                     </TldrawUiMenuGroup>
