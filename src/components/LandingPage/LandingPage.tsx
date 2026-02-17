@@ -4,7 +4,7 @@ import {
   Repeat,
   Copy,
   Check,
-  Layers,
+  AlertTriangle,
   Sun,
   Moon,
   Monitor,
@@ -32,8 +32,8 @@ const methodItems: ShowcaseItem[] = [
     description:
       'Start by listening. Your "Daily Portion" builds a natural familiarity with the verses\' sound and flow before you even try to memorize.',
     icon: Headphones,
-    lightSrc: '/landing/Passive_Exposure_Light.png',
-    darkSrc: '/landing/Passive_Exposure_Dark.png',
+    lightSrc: '/landing/Passive_Exposure_Light.webp',
+    darkSrc: '/landing/Passive_Exposure_Dark.webp',
     alt: 'Passive Exposure screen preview',
   },
   {
@@ -41,8 +41,8 @@ const methodItems: ShowcaseItem[] = [
     description:
       "Don't just repeat. Use the Splits setup modal to chunk verses and place them on a visual map, creating powerful mental hooks.",
     icon: Anchor,
-    lightSrc: '/landing/hero-light.png',
-    darkSrc: '/landing/hero-dark.png',
+    lightSrc: '/landing/visual-mapping-light.webp',
+    darkSrc: '/landing/visual-mapping-dark.webp',
     alt: 'Visual Mapping screen preview',
   },
   {
@@ -50,29 +50,29 @@ const methodItems: ShowcaseItem[] = [
     description:
       'Lock it in. Our algorithm tracks every verse and notifies you to review exactly when your memory is about to fade.',
     icon: Repeat,
-    lightSrc: '/landing/smart-review-light.png',
-    darkSrc: '/landing/smart-review-dark.png',
+    lightSrc: '/landing/smart-review-card-light.webp',
+    darkSrc: '/landing/smart-review-card-dark.webp',
     alt: 'Smart Review screen preview',
   },
 ];
 
 const featureItems: ShowcaseItem[] = [
   {
-    title: 'Infinite Canvas',
+    title: 'Error Detection',
     description:
-      "A distraction-free space to build your maps. Import templates or draw your own connections to visualize the Surah's structure.",
-    icon: Layers,
-    lightSrc: '/landing/InfiniteCanva.jpeg',
-    darkSrc: '/landing/InfiniteCanva.jpeg',
-    alt: 'Infinite Canvas screen preview',
+      'Logs the exact verse where you made a mistake so you can detect weak spots early and fix them before they become repeated mistakes.',
+    icon: AlertTriangle,
+    lightSrc: '/landing/error-card-light.webp',
+    darkSrc: '/landing/error-card-dark.webp',
+    alt: 'Error Detection feature preview',
   },
   {
     title: 'Mutashabihat Engine',
     description:
       'Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.',
     icon: Copy,
-    lightSrc: '/landing/Mutashabihat_light.png',
-    darkSrc: '/landing/Mutashabihat_dark.png',
+    lightSrc: '/landing/mutashabihat-card-light.webp',
+    darkSrc: '/landing/mutashabihat-card-dark.webp',
     alt: 'Mutashabihat Engine screen preview',
   },
   {
@@ -80,8 +80,8 @@ const featureItems: ShowcaseItem[] = [
     description:
       'Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.',
     icon: Smartphone,
-    lightSrc: '/landing/Mobile.png',
-    darkSrc: '/landing/Mobile.png',
+    lightSrc: '/landing/mobile-card-light.webp',
+    darkSrc: '/landing/mobile-card-dark.webp',
     alt: 'Offline and Mobile screen preview',
   },
 ];
@@ -259,7 +259,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
             <div className="hero-media delay-200 animate-entry">
               <img
-                src="/landing/hero-tilted-light.png"
+                src="/landing/hero-tilted-light.webp"
                 alt="Quran Life visual mindmap preview"
                 className="hero-image hero-image-light"
                 loading="eager"
@@ -269,7 +269,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 height={900}
               />
               <img
-                src="/landing/hero-tilted-dark.png"
+                src="/landing/hero-tilted-dark.webp"
                 alt="Quran Life visual mindmap preview"
                 className="hero-image hero-image-dark"
                 loading="eager"

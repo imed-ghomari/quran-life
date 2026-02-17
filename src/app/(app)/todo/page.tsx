@@ -312,6 +312,8 @@ export default function TodoPage() {
         })).filter(g => g.surah);
     }, [similarityItems]);
 
+    const SUSPEND_ERROR_THRESHOLD = 3;
+
     const suspendedNodeIds = useMemo(() => {
         const logsByNode = new Map<string, any[]>();
 
@@ -344,13 +346,13 @@ export default function TodoPage() {
                 }
             }
 
-            if (trailingFailures >= 3) {
+            if (trailingFailures >= SUSPEND_ERROR_THRESHOLD) {
                 suspended.add(nodeId);
             }
         });
 
         return suspended;
-    }, [reviewLogs]);
+    }, [reviewLogs, SUSPEND_ERROR_THRESHOLD]);
 
     const suspendedAnchors = useMemo(() => {
         const toSurahId = (value: unknown): number | null => {
@@ -361,7 +363,7 @@ export default function TodoPage() {
         const byKey = new Map<string, any>();
         const legacyFailureCounts = new Map<string, number>();
 
-        // Legacy fallback: old rows can miss nodeId. Require at least 3 failures for that anchor key.
+        // Legacy fallback: old rows can miss nodeId. Use the same threshold for anchor grouping.
         errors
             .filter(e => e.nodeType === 'verse_segment' && e.surahId && !e.nodeId)
             .forEach(error => {
@@ -398,7 +400,7 @@ export default function TodoPage() {
                 const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
                 const anchorId = e.anchorId || fallbackAnchorId;
                 const key = `${errorSurahId}-${anchorId}`;
-                return (legacyFailureCounts.get(key) || 0) >= 3;
+                return (legacyFailureCounts.get(key) || 0) >= SUSPEND_ERROR_THRESHOLD;
             })
             .forEach(error => {
                 const errorSurahId = toSurahId(error.surahId);
@@ -436,7 +438,7 @@ export default function TodoPage() {
             if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
             return a.endVerse - b.endVerse;
         });
-    }, [errors, suspendedNodeIds]);
+    }, [errors, suspendedNodeIds, SUSPEND_ERROR_THRESHOLD]);
 
 
 

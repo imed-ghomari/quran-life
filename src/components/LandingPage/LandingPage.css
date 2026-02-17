@@ -1157,6 +1157,20 @@
     /* Increased top padding to clear fixed navbar */
   }
 
+  .hero .container {
+    width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    box-sizing: border-box;
+  }
+
+  .hero-copy {
+    width: 100%;
+    text-align: center;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
   .hero-title {
     font-size: 2.35rem;
     line-height: 1.2;
@@ -1169,13 +1183,16 @@
     -webkit-background-clip: border-box;
     background-clip: border-box;
     -webkit-text-fill-color: currentColor;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
   }
 
   .hero-subtitle {
     font-size: 1.1rem;
     margin-bottom: 2rem;
-    padding: 0 1rem;
-    max-width: 600px;
+    padding: 0;
+    max-width: 31ch;
     margin-left: auto;
     margin-right: auto;
     text-align: center;
