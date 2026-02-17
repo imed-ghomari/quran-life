@@ -1098,6 +1098,11 @@ h3 {
   min-height: 0;
 }
 
+.review-section-content {
+  position: relative;
+  isolation: isolate;
+}
+
 .review-queue-progress-track {
   height: 4px;
   margin-bottom: 0.35rem;
@@ -1132,6 +1137,8 @@ h3 {
   min-height: 0;
   overflow: visible;
   padding-bottom: 1rem;
+  position: relative;
+  z-index: 0;
 }
 
 .review-section-content .today-card-content--mindmap-grading {
@@ -1166,9 +1173,10 @@ h3 {
 }
 
 .review-section-content .today-card-footer {
-  position: static;
+  position: relative;
   bottom: auto;
-  z-index: auto;
+  z-index: 4;
+  isolation: isolate;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
   margin-top: 0;

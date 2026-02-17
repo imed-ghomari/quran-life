@@ -69,6 +69,14 @@ const getPartMindmapPartId = (node: MemoryNode): number | null => {
     return null;
 };
 
+const getMindmapFreshnessScore = (mindmap: any): number => {
+    const updatedAt = Date.parse(String(mindmap?.updatedAt || ''));
+    if (Number.isFinite(updatedAt)) return updatedAt;
+    const createdAt = Date.parse(String(mindmap?.createdAt || ''));
+    if (Number.isFinite(createdAt)) return createdAt;
+    return 0;
+};
+
 
 /**
  * TodoPage Component
@@ -108,10 +116,17 @@ export default function TodoPage() {
     // we only take the FIRST one. This prevents "ghost" items from overwriting valid data.
     const mindmaps = useMemo(() => {
         const acc: Record<number, MindMap> = {};
-        mindmapsList.forEach(mm => {
+        mindmapsList.forEach((mm: any) => {
             const sId = Number(mm.surahId);
-            if (!acc[sId]) {
-                // First-Wins strategy: Only assign if key doesn't exist yet.
+            if (!Number.isFinite(sId) || sId <= 0) return;
+            const existing = acc[sId] as any;
+            if (!existing) {
+                acc[sId] = mm as unknown as MindMap;
+                return;
+            }
+            const nextScore = getMindmapFreshnessScore(mm);
+            const existingScore = getMindmapFreshnessScore(existing);
+            if (nextScore > existingScore || (nextScore === existingScore && String(mm?.id || '') > String(existing?.id || ''))) {
                 acc[sId] = mm as unknown as MindMap;
             }
         });
@@ -120,10 +135,17 @@ export default function TodoPage() {
 
     const partMindmapsMap = useMemo(() => {
         const acc: Record<number, PartMindMap> = {};
-        partMindmapsList.forEach(pmm => {
+        partMindmapsList.forEach((pmm: any) => {
             const pId = Number(pmm.partId);
-            if (!acc[pId]) {
-                // First-Wins strategy for Parts as well
+            if (!Number.isFinite(pId) || pId <= 0) return;
+            const existing = acc[pId] as any;
+            if (!existing) {
+                acc[pId] = pmm as unknown as PartMindMap;
+                return;
+            }
+            const nextScore = getMindmapFreshnessScore(pmm);
+            const existingScore = getMindmapFreshnessScore(existing);
+            if (nextScore > existingScore || (nextScore === existingScore && String(pmm?.id || '') > String(existing?.id || ''))) {
                 acc[pId] = pmm as unknown as PartMindMap;
             }
         });
@@ -562,8 +584,11 @@ export default function TodoPage() {
     // Marks a Mindmap (Surah level) as complete/incomplete
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
         console.log('handleMarkComplete called:', { surahId, forceState, currentMindmap });
-        const existing = currentMindmap || mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const tldrawSnapshot = currentMindmap?.tldrawSnapshot || existing.tldrawSnapshot;
+        // Always prefer the latest persisted mindmap to avoid overwriting fresh splits
+        // with stale card payloads during drag/drop completion transitions.
+        const persisted = mindmaps[surahId];
+        const existing = persisted || currentMindmap || { surahId, anchors: [], imageUrl: null, isComplete: false };
+        const tldrawSnapshot = existing.tldrawSnapshot || currentMindmap?.tldrawSnapshot;
 
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
         console.log('isNowComplete:', isNowComplete);
