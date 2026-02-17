@@ -1,15 +1,10 @@
 import React, { useState } from 'react';
 import { useTheme } from '../ThemeProvider';
 import {
-  Brain,
   Repeat,
-  Copy, // For Similar Verses
+  Copy,
   Check,
-  ArrowRight,
-  Zap,
   Layers,
-  BookOpen,
-  Sparkles,
   Sun,
   Moon,
   Monitor,
@@ -21,6 +16,148 @@ import {
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
+
+type ShowcaseItem = {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ size?: string | number }>;
+  lightSrc: string;
+  darkSrc: string;
+  alt: string;
+};
+
+const methodItems: ShowcaseItem[] = [
+  {
+    title: '1. Passive Exposure',
+    description:
+      'Start by listening. Your "Daily Portion" builds a natural familiarity with the verses\' sound and flow before you even try to memorize.',
+    icon: Headphones,
+    lightSrc: '/landing/Passive_Exposure_Light.png',
+    darkSrc: '/landing/Passive_Exposure_Dark.png',
+    alt: 'Passive Exposure screen preview',
+  },
+  {
+    title: '2. Visual Mapping',
+    description:
+      "Don't just repeat. Use the Splits setup modal to chunk verses and place them on a visual map, creating powerful mental hooks.",
+    icon: Anchor,
+    lightSrc: '/landing/hero-light.png',
+    darkSrc: '/landing/hero-dark.png',
+    alt: 'Visual Mapping screen preview',
+  },
+  {
+    title: '3. Smart Review',
+    description:
+      'Lock it in. Our algorithm tracks every verse and notifies you to review exactly when your memory is about to fade.',
+    icon: Repeat,
+    lightSrc: '/landing/smart-review-light.png',
+    darkSrc: '/landing/smart-review-dark.png',
+    alt: 'Smart Review screen preview',
+  },
+];
+
+const featureItems: ShowcaseItem[] = [
+  {
+    title: 'Infinite Canvas',
+    description:
+      "A distraction-free space to build your maps. Import templates or draw your own connections to visualize the Surah's structure.",
+    icon: Layers,
+    lightSrc: '/landing/InfiniteCanva.jpeg',
+    darkSrc: '/landing/InfiniteCanva.jpeg',
+    alt: 'Infinite Canvas screen preview',
+  },
+  {
+    title: 'Mutashabihat Engine',
+    description:
+      'Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.',
+    icon: Copy,
+    lightSrc: '/landing/Mutashabihat_light.png',
+    darkSrc: '/landing/Mutashabihat_dark.png',
+    alt: 'Mutashabihat Engine screen preview',
+  },
+  {
+    title: 'Offline & Mobile',
+    description:
+      'Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.',
+    icon: Smartphone,
+    lightSrc: '/landing/Mobile.png',
+    darkSrc: '/landing/Mobile.png',
+    alt: 'Offline and Mobile screen preview',
+  },
+];
+
+const FeatureShowcase = ({
+  items,
+  idPrefix,
+  inverted = false,
+}: {
+  items: ShowcaseItem[];
+  idPrefix: string;
+  inverted?: boolean;
+}) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeItem = items[activeIndex];
+  const panelId = `${idPrefix}-panel`;
+
+  return (
+    <div className={`feature-showcase${inverted ? ' feature-showcase-inverted' : ''}`}>
+      <div className="feature-showcase-list" role="tablist" aria-orientation="vertical">
+        {items.map((item, index) => {
+          const Icon = item.icon;
+          const isActive = index === activeIndex;
+          const tabId = `${idPrefix}-tab-${index}`;
+
+          return (
+            <button
+              key={item.title}
+              id={tabId}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={panelId}
+              className={`feature-showcase-card ${isActive ? 'active' : ''}`}
+              onClick={() => setActiveIndex(index)}
+            >
+              <span className="feature-showcase-card-icon" aria-hidden="true">
+                <Icon size={22} />
+              </span>
+              <span className="feature-showcase-card-content">
+                <span className="feature-showcase-card-title">{item.title}</span>
+                <span className="feature-showcase-card-description">{item.description}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={`${idPrefix}-tab-${activeIndex}`}
+        className="feature-showcase-preview"
+      >
+        <img
+          src={activeItem.lightSrc}
+          alt={activeItem.alt}
+          className="feature-showcase-image card-preview-image-light"
+          loading="lazy"
+          decoding="async"
+          width={1400}
+          height={1000}
+        />
+        <img
+          src={activeItem.darkSrc}
+          alt={activeItem.alt}
+          className="feature-showcase-image card-preview-image-dark"
+          loading="lazy"
+          decoding="async"
+          width={1400}
+          height={1000}
+        />
+      </div>
+    </div>
+  );
+};
 
 const FaqItem = ({ question, answer }: { question: string; answer: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -122,7 +259,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
             <div className="hero-media delay-200 animate-entry">
               <img
-                src="/landing/hero-light.png"
+                src="/landing/hero-tilted-light.png"
                 alt="Quran Life visual mindmap preview"
                 className="hero-image hero-image-light"
                 loading="eager"
@@ -132,7 +269,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 height={900}
               />
               <img
-                src="/landing/hero-dark.png"
+                src="/landing/hero-tilted-dark.png"
                 alt="Quran Life visual mindmap preview"
                 className="hero-image hero-image-dark"
                 loading="eager"
@@ -155,91 +292,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </p>
             </div>
 
-            <div className="grid">
-              {/* Phase 1 */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Headphones size={28} />
-                </div>
-                <h3>1. Passive Exposure</h3>
-                <p>
-                  Start by listening. Your "Daily Portion" builds a natural familiarity with the verses' sound and flow before you even try to memorize.
-                </p>
-                <div className="card-preview">
-                  <img
-                    src="/landing/Passive_Exposure_Light.png"
-                    alt="Passive Exposure screen preview in light mode"
-                    className="card-preview-image card-preview-image-light"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                  <img
-                    src="/landing/Passive_Exposure_Dark.png"
-                    alt="Passive Exposure screen preview in dark mode"
-                    className="card-preview-image card-preview-image-dark"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                </div>
-              </div>
-
-              {/* Phase 2 */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Anchor size={28} />
-                </div>
-                <h3>2. Visual Mapping</h3>
-                <p>
-                  Don't just repeat. Use the <strong>Splits setup modal</strong> to chunk verses and place them on a visual map, creating powerful mental hooks.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-map" aria-hidden="true">
-                  <div className="map-node node-main" />
-                  <div className="map-node node-a" />
-                  <div className="map-node node-b" />
-                  <div className="map-node node-c" />
-                  <div className="map-node node-d" />
-                  <div className="map-link link-1" />
-                  <div className="map-link link-2" />
-                  <div className="map-link link-3" />
-                  <div className="map-link link-4" />
-                </div>
-              </div>
-
-              {/* Phase 3 */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Repeat size={28} />
-                </div>
-                <h3>3. Smart Review</h3>
-                <p>
-                  Lock it in. Our algorithm tracks every verse and notifies you to review exactly when your memory is about to fade.
-                </p>
-                <div className="card-preview card-preview-smart-review">
-                  <img
-                    src="/landing/smart-review-light.png"
-                    alt="Smart Review screen preview in light mode"
-                    className="card-preview-image card-preview-image-light"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                  <img
-                    src="/landing/smart-review-dark.png"
-                    alt="Smart Review screen preview in dark mode"
-                    className="card-preview-image card-preview-image-dark"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                </div>
-              </div>
-            </div>
+            <FeatureShowcase items={methodItems} idPrefix="method-showcase" />
           </div>
         </section>
 
@@ -253,82 +306,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </p>
             </div>
 
-            <div className="grid">
-              {/* Feature 1: Mindmapping */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Layers size={28} />
-                </div>
-                <h3>Infinite Canvas</h3>
-                <p>
-                  A distraction-free space to build your maps. Import templates or draw your own connections to visualize the Surah's structure.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-canvas" >
-                 <img
-                    src="/landing/InfiniteCanva.jpeg"
-                    alt="Mutashabihat Engine preview in light mode"
-                    className="card-preview-image card-preview-image-light"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                </div>
-              </div>
-
-              {/* Feature 2: Similar Verses */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Copy size={28} />
-                </div>
-                <h3>Mutashabihat Engine</h3>
-                <p>
-                  Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.
-                </p>
-                <div className="card-preview card-preview-mutashabihat">
-                  <img
-                    src="/landing/Mutashabihat_light.png"
-                    alt="Mutashabihat Engine preview in light mode"
-                    className="card-preview-image card-preview-image-light"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                  <img
-                    src="/landing/Mutashabihat_dark.png"
-                    alt="Mutashabihat Engine preview in dark mode"
-                    className="card-preview-image card-preview-image-dark"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                </div>
-              </div>
-
-              {/* Feature 3: Offline */}
-              <div className="card">
-                <div className="icon-wrapper">
-                  <Smartphone size={28} />
-                </div>
-                <h3>Offline & Mobile</h3>
-                <p>
-                  Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.
-                </p>
-                <div className="card-preview card-preview-placeholder card-preview-mobile" aria-hidden="true">
-                 <img
-                    src="/landing/Mobile.png"
-                    alt="Mutashabihat Engine preview in dark mode"
-                    className="card-preview-image card-preview-image-dark"
-                    loading="lazy"
-                    decoding="async"
-                    width={726}
-                    height={772}
-                  />
-                </div>
-              </div>
-            </div>
+            <FeatureShowcase items={featureItems} idPrefix="feature-showcase" inverted />
           </div>
         </section>
 

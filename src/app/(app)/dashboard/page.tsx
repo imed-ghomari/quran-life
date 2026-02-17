@@ -151,6 +151,7 @@ export default function TodayPage() {
     const [isVersesLoaded, setIsVersesLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
     const [readOnlyMode, setReadOnlyMode] = useState(true);
+    const [deferMindmapPreview, setDeferMindmapPreview] = useState(false);
     const [isPersistingReviewAction, setIsPersistingReviewAction] = useState(false);
     const [isPersistingDailyComplete, setIsPersistingDailyComplete] = useState(false);
     const [isApplyingHistoryAction, setIsApplyingHistoryAction] = useState(false);
@@ -162,6 +163,8 @@ export default function TodayPage() {
     const lastPortionKeyRef = useRef<string>('');
     const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
     const didRestoreActiveNodeRef = useRef(false);
+    const reviewActionLockRef = useRef(false);
+    const historyActionLockRef = useRef(false);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -980,9 +983,10 @@ export default function TodayPage() {
 
     // Grade review
     const handleGrade = useCallback(async (remembered: boolean) => {
-        if (isPersistingReviewAction || isApplyingHistoryAction) return;
+        if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
+        reviewActionLockRef.current = true;
         setIsPersistingReviewAction(true);
         const resolvedSurahId = resolveNodeSurahId(node);
 
@@ -1065,6 +1069,7 @@ export default function TodayPage() {
                 addToast('error', 'Failed to save grade', 'Please try again.');
                 return;
             } finally {
+                reviewActionLockRef.current = false;
                 setIsPersistingReviewAction(false);
             }
         } else {
@@ -1078,6 +1083,7 @@ export default function TodayPage() {
                 addToast('error', 'Failed to save grade', 'Please try again.');
                 return;
             } finally {
+                reviewActionLockRef.current = false;
                 setIsPersistingReviewAction(false);
             }
         }
@@ -1114,9 +1120,10 @@ export default function TodayPage() {
     }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, isPersistingReviewAction, isApplyingHistoryAction]);
 
     const handlePostpone = useCallback(async () => {
-        if (isPersistingReviewAction || isApplyingHistoryAction) return;
+        if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
         const node = orderedDueNodes[currentReviewIndex];
         if (!node || !node.scheduler) return;
+        reviewActionLockRef.current = true;
         setIsPersistingReviewAction(true);
         const resolvedSurahId = resolveNodeSurahId(node);
 
@@ -1142,6 +1149,7 @@ export default function TodayPage() {
         } catch (err) {
             console.error('Failed to persist postpone action', err);
             addToast('error', 'Failed to save postpone', 'Please try again.');
+            reviewActionLockRef.current = false;
             setIsPersistingReviewAction(false);
             return;
         }
@@ -1171,17 +1179,19 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
+        reviewActionLockRef.current = false;
         setIsPersistingReviewAction(false);
     }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction]);
 
     const handleUndo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
-        if (isApplyingHistoryAction) return;
+        if (historyActionLockRef.current || reviewActionLockRef.current || isApplyingHistoryAction) return;
         const stack = undoStackRef.current;
         if (!stack.length) return;
         const last = stack[stack.length - 1];
         const nextStack = stack.slice(0, -1);
         const nextRedo = [...redoStackRef.current, last].slice(-UNDO_STACK_LIMIT);
 
+        historyActionLockRef.current = true;
         setIsApplyingHistoryAction(true);
         try {
             if (last.kind === 'review') {
@@ -1215,6 +1225,7 @@ export default function TodayPage() {
         } catch (err) {
             console.error('Failed to persist undo action', err);
             addToast('error', 'Undo failed', 'Please try again.');
+            historyActionLockRef.current = false;
             setIsApplyingHistoryAction(false);
             return;
         }
@@ -1225,17 +1236,19 @@ export default function TodayPage() {
             setToasts(prev => prev.filter(t => t.id !== toastId));
         }
         addToast(last.toastType, `Undid ${last.toastMessage}`, last.toastInfo);
+        historyActionLockRef.current = false;
         setIsApplyingHistoryAction(false);
     }, [persistUndoStack, persistRedoStack, updateInstantNode, removeInstantReviewError, addToast, saveListeningProgress, deleteListeningProgress, saveListeningStats, deleteListeningStats, isApplyingHistoryAction]);
 
     const handleRedo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
-        if (isApplyingHistoryAction) return;
+        if (historyActionLockRef.current || reviewActionLockRef.current || isApplyingHistoryAction) return;
         const stack = redoStackRef.current;
         if (!stack.length) return;
         const last = stack[stack.length - 1];
         const nextStack = stack.slice(0, -1);
         const nextUndo = [...undoStackRef.current, last].slice(-UNDO_STACK_LIMIT);
 
+        historyActionLockRef.current = true;
         setIsApplyingHistoryAction(true);
         try {
             if (last.kind === 'review') {
@@ -1262,6 +1275,7 @@ export default function TodayPage() {
         } catch (err) {
             console.error('Failed to persist redo action', err);
             addToast('error', 'Redo failed', 'Please try again.');
+            historyActionLockRef.current = false;
             setIsApplyingHistoryAction(false);
             return;
         }
@@ -1272,6 +1286,7 @@ export default function TodayPage() {
             setToasts(prev => prev.filter(t => t.id !== toastId));
         }
         addToast(last.toastType, `Redid ${last.toastMessage}`, last.toastInfo);
+        historyActionLockRef.current = false;
         setIsApplyingHistoryAction(false);
     }, [persistRedoStack, persistUndoStack, updateInstantNode, saveInstantReviewError, addToast, saveListeningProgress, saveListeningStats, isApplyingHistoryAction]);
 
@@ -1445,6 +1460,30 @@ export default function TodayPage() {
 
     const reviewContent = getCurrentReviewContent();
     const activeContent = reviewContent;
+
+    useEffect(() => {
+        const isMindmapReview = activeContent?.type === 'mindmap' || activeContent?.type === 'part_mindmap';
+        if (!showGrading || !isMindmapReview) {
+            setDeferMindmapPreview(false);
+            return;
+        }
+
+        // Let grading controls paint first, then mount heavy mindmap preview.
+        setDeferMindmapPreview(true);
+        let raf1 = 0;
+        let raf2 = 0;
+        raf1 = window.requestAnimationFrame(() => {
+            raf2 = window.requestAnimationFrame(() => {
+                setDeferMindmapPreview(false);
+            });
+        });
+
+        return () => {
+            if (raf1) window.cancelAnimationFrame(raf1);
+            if (raf2) window.cancelAnimationFrame(raf2);
+        };
+    }, [showGrading, activeContent?.type, activeContent?.mindmap?.id]);
+
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;
         if (!raw || !Array.isArray(raw)) return [];
@@ -1492,7 +1531,7 @@ export default function TodayPage() {
             // Check if we have any items to review
             const hasItems = orderedDueNodes.length > 0;
             if (!hasItems) return;
-            if (isPersistingReviewAction || isApplyingHistoryAction) return;
+            if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
 
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -1923,7 +1962,14 @@ export default function TodayPage() {
                                                     </div>
                                                 ) : (
                                                     <div>
-                                                        {(() => {
+                                                        {deferMindmapPreview ? (
+                                                            <div className="verse-hidden" style={{ cursor: 'default' }}>
+                                                                <Brain size={24} style={{ marginBottom: 8, opacity: 0.75 }} />
+                                                                <p>Preparing mindmap preview...</p>
+                                                                <p style={{ fontSize: '0.8rem', marginTop: 8, opacity: 0.8 }}>You can already grade below.</p>
+                                                            </div>
+                                                        ) : (
+                                                        (() => {
                                                             const hasContent = !!activeContent.mindmap?.imageUrl || !!activeContent.mindmap?.imageUrlDark || !!activeContent.mindmap?.tldrawSnapshot;
 
                                                             if (!hasContent) {
@@ -1959,7 +2005,8 @@ export default function TodayPage() {
                                                                     />
                                                                 </div>
                                                             );
-                                                        })()}
+                                                        })()
+                                                        )}
 
                                                     </div>
                                                 )}
