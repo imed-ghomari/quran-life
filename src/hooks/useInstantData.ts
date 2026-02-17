@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     completeExitBehavior: 'mindmap_only',
     kanbanSortOrder: 'type_then_number',
     dailyPortionMode: 'audio',
+    todayDefaultMode: 'daily',
     theme: 'system',
     isOnboardingComplete: false,
     kanbanColumns: {},

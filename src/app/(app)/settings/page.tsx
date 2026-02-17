@@ -53,6 +53,22 @@ interface SettingsToastItem {
     info?: string;
 }
 
+const isMobileViewport = () =>
+    typeof window !== 'undefined' && window.innerWidth < 768;
+
+const getInitialSectionExpansion = () => {
+    const expanded = !isMobileViewport();
+    return {
+        cloudSync: expanded,
+        backupRestore: expanded,
+        schedule: expanded,
+        activePart: expanded,
+        surahStatus: expanded,
+        mutashabihat: expanded,
+        advancedOptions: expanded,
+    };
+};
+
 function AppearanceCard({ onSelectTheme }: { onSelectTheme: (nextTheme: Theme) => void }) {
     const { theme } = useTheme();
 
@@ -238,6 +254,10 @@ export default function SettingsPage() {
         { id: 'audio', label: 'Listening' },
         { id: 'reading', label: 'Reading' }
     ] as const;
+    const todayDefaultModeOptions = [
+        { id: 'daily', label: 'Daily Portion' },
+        { id: 'review', label: 'Reviews' }
+    ] as const;
 
     const [decisions, setDecisions] = useState<Record<string, MutashabihatDecision>>({});
     const [expandedSurahs, setExpandedSurahs] = useState<Record<number, boolean>>({});
@@ -252,10 +272,10 @@ export default function SettingsPage() {
         initialNote: string;
     } | null>(null);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
-    const [showDebugNodes, setShowDebugNodes] = useState(true);
+    const [showDebugNodes, setShowDebugNodes] = useState(() => !isMobileViewport());
     const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-    const [isMobile, setIsMobile] = useState(false);
+    const [isMobile, setIsMobile] = useState(isMobileViewport);
     const [knowledgeFilter, setKnowledgeFilter] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'not_due'>('all');
     const [activeSlideOverGroup, setActiveSlideOverGroup] = useState<{
         id: string;
@@ -269,6 +289,7 @@ export default function SettingsPage() {
     const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
     const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
+    const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
 
     const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
         id: string;
@@ -366,6 +387,19 @@ export default function SettingsPage() {
     const filteredPartMindmaps = latestPartMindmaps.filter(matchesKnowledgeFilter);
     const filteredSurahMindmaps = latestSurahMindmaps.filter(matchesKnowledgeFilter);
     const filteredVerseSegments = latestVerseSegments.filter(matchesKnowledgeFilter);
+    const hasExpandedKnowledgeItems = Object.values(expandedGroups).some(Boolean);
+    const hasExpandedSimilarVerseItems = Object.values(expandedSurahs).some(Boolean) || Object.values(expandedMutItems).some(Boolean);
+
+    const foldKnowledgeTrackingItems = () => {
+        setExpandedGroups({});
+        setActiveSlideOverGroup(null);
+    };
+
+    const foldSimilarVerseItems = () => {
+        setExpandedSurahs({});
+        setExpandedMutItems({});
+        setActiveMutSlideOver(null);
+    };
 
     const getFilteredNodesForSlideOver = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number) => {
         if (type === 'verse_segment' && surahId) {
@@ -392,7 +426,7 @@ export default function SettingsPage() {
     }, [instantNodes]);
 
     useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        const checkMobile = () => setIsMobile(isMobileViewport());
         checkMobile();
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
@@ -434,15 +468,7 @@ export default function SettingsPage() {
         }
     }, [activeMobilePage, isMobile, mobileHistoryKey]);
 
-    const [sectionsExpanded, setSectionsExpanded] = useState({
-        cloudSync: true,
-        backupRestore: true,
-        schedule: true,
-        activePart: true,
-        surahStatus: true,
-        mutashabihat: true,
-        advancedOptions: true,
-    });
+    const [sectionsExpanded, setSectionsExpanded] = useState(getInitialSectionExpansion);
 
     const toggleSection = (key: keyof typeof sectionsExpanded) => {
         // Disable folding on desktop
@@ -555,6 +581,10 @@ export default function SettingsPage() {
         }
         setDailyPortionMode(settings.dailyPortionMode ?? 'audio');
     }, [isOnline, settings.dailyPortionMode]);
+
+    useEffect(() => {
+        setTodayDefaultMode(settings.todayDefaultMode ?? 'daily');
+    }, [settings.todayDefaultMode]);
 
     const latestSubscription = useMemo(() => {
         if (!subscriptions.length) return null;
@@ -985,40 +1015,53 @@ export default function SettingsPage() {
                             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
                                 <Activity size={18} /> Knowledge Tracking
                             </h2>
-                            {isMobile ? (
-                                <select
-                                    className="maturity-select"
-                                    value={knowledgeFilter}
-                                    onChange={(e) => setKnowledgeFilter(e.target.value as any)}
-                                    style={{ fontSize: '0.75rem', padding: '6px 10px' }}
-                                >
-                                    <option value="all">All</option>
-                                    <option value="overdue">Overdue</option>
-                                    <option value="today">Due Today</option>
-                                    <option value="upcoming">Upcoming</option>
-                                    <option value="not_due">Not Due</option>
-                                </select>
-                            ) : (
-                                <div className="segmented-compact segmented-compact--small">
-                                    {[
-                                        { id: 'all', label: 'ALL' },
-                                        { id: 'overdue', label: 'OVERDUE' },
-                                        { id: 'today', label: 'DUE TODAY' },
-                                        { id: 'upcoming', label: 'UPCOMING' },
-                                        { id: 'not_due', label: 'NOT DUE' }
-                                    ].map((f) => (
-                                        <button
-                                            key={f.id}
-                                            suppressHydrationWarning={true}
-                                            onClick={() => setKnowledgeFilter(f.id as any)}
-                                            className={`adv-seg-btn ${knowledgeFilter === f.id ? 'adv-seg-active' : ''}`}
-                                            style={{ flex: 1 }}
-                                        >
-                                            {f.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                {isMobile ? (
+                                    <select
+                                        className="maturity-select"
+                                        value={knowledgeFilter}
+                                        onChange={(e) => setKnowledgeFilter(e.target.value as any)}
+                                        style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                    >
+                                        <option value="all">All</option>
+                                        <option value="overdue">Overdue</option>
+                                        <option value="today">Due Today</option>
+                                        <option value="upcoming">Upcoming</option>
+                                        <option value="not_due">Not Due</option>
+                                    </select>
+                                ) : (
+                                    <div className="segmented-compact segmented-compact--small">
+                                        {[
+                                            { id: 'all', label: 'ALL' },
+                                            { id: 'overdue', label: 'OVERDUE' },
+                                            { id: 'today', label: 'DUE TODAY' },
+                                            { id: 'upcoming', label: 'UPCOMING' },
+                                            { id: 'not_due', label: 'NOT DUE' }
+                                        ].map((f) => (
+                                            <button
+                                                key={f.id}
+                                                suppressHydrationWarning={true}
+                                                onClick={() => setKnowledgeFilter(f.id as any)}
+                                                className={`adv-seg-btn ${knowledgeFilter === f.id ? 'adv-seg-active' : ''}`}
+                                                style={{ flex: 1 }}
+                                            >
+                                                {f.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {hasExpandedKnowledgeItems && (
+                                    <button
+                                        className="bulk-btn reset-mut"
+                                        onClick={foldKnowledgeTrackingItems}
+                                        title="Collapse open Knowledge Tracking groups"
+                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                    >
+                                        <ChevronDown size={14} style={{ transform: 'rotate(180deg)' }} />
+                                        <span>Fold All</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="knowledge-groups-mobile">
                             {/* MINDMAPS MOBILE GROUP */}
@@ -1149,6 +1192,17 @@ export default function SettingsPage() {
                             >
                                 <RotateCcw size={14} /> <span>Reset Decisions</span>
                             </button>
+                            {hasExpandedSimilarVerseItems && (
+                                <button
+                                    className="bulk-btn reset-mut"
+                                    onClick={foldSimilarVerseItems}
+                                    title="Collapse open Similar Verse groups"
+                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                >
+                                    <ChevronDown size={14} style={{ transform: 'rotate(180deg)' }} />
+                                    <span>Fold All</span>
+                                </button>
+                            )}
                         </div>
                         <div className="knowledge-groups-mobile">
                             {mutashabihatSurahs.map(({ surah, count }) => {
@@ -1426,6 +1480,29 @@ export default function SettingsPage() {
                                                     className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                     style={disableListeningOption ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
                                                     title={disableListeningOption ? 'Listening mode is unavailable offline' : undefined}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Today Page Default Section</div>
+                                    <div className="adv-segmented">
+                                        {todayDefaultModeOptions.map((option) => {
+                                            const isActive = (todayDefaultMode ?? 'daily') === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setTodayDefaultMode(option.id);
+                                                        persistSettingsUpdate({ todayDefaultMode: option.id }, 'today default mode');
+                                                    }}
+                                                    className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                 >
                                                     {isActive && <Check size={14} className="adv-check" />}
                                                     <span>{option.label}</span>
@@ -2506,6 +2583,21 @@ export default function SettingsPage() {
                                                 </div>
                                             )
                                         )}
+                                        {showDebugNodes && hasExpandedKnowledgeItems && (
+                                            <button
+                                                className="bulk-btn reset-mut"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    foldKnowledgeTrackingItems();
+                                                }}
+                                                title="Collapse open Knowledge Tracking groups"
+                                                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}
+                                            >
+                                                <ChevronDown size={14} style={{ transform: 'rotate(180deg)' }} />
+                                                <span className="hide-mobile">Fold All</span>
+                                                <span className="show-mobile">Fold</span>
+                                            </button>
+                                        )}
                                         <ChevronDown className="md:hidden" size={20} style={{ transform: showDebugNodes ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                     </div>
                                 </div>
@@ -3009,6 +3101,20 @@ export default function SettingsPage() {
                                                 >
                                                     <RotateCcw size={14} /> <span className="hide-mobile">Reset Decisions</span><span className="show-mobile">Reset</span>
                                                 </button>
+                                                {hasExpandedSimilarVerseItems && (
+                                                    <button
+                                                        className="bulk-btn reset-mut"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            foldSimilarVerseItems();
+                                                        }}
+                                                        title="Collapse open Similar Verse groups"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                                                    >
+                                                        <ChevronDown size={14} style={{ transform: 'rotate(180deg)' }} />
+                                                        <span className="hide-mobile">Fold All</span><span className="show-mobile">Fold</span>
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                         <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.mutashabihat ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
@@ -3592,6 +3698,29 @@ export default function SettingsPage() {
                                                                 className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                                 style={disableListeningOption ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
                                                                 title={disableListeningOption ? 'Listening mode is unavailable offline' : undefined}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="adv-group">
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Today Page Default Section</h4>
+                                                <div className="adv-segmented">
+                                                    {todayDefaultModeOptions.map((option) => {
+                                                        const isActive = (todayDefaultMode ?? 'daily') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setTodayDefaultMode(option.id);
+                                                                    persistSettingsUpdate({ todayDefaultMode: option.id }, 'today default mode');
+                                                                }}
+                                                                className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
                                                             >
                                                                 {isActive && <Check size={14} className="adv-check" />}
                                                                 <span>{option.label}</span>

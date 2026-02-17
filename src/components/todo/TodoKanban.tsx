@@ -82,6 +82,17 @@ interface TodoKanbanProps {
     kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
 }
 
+const getViewportFlags = () => {
+    if (typeof window === 'undefined') {
+        return { isMobile: false, isTablet: false };
+    }
+    const width = window.innerWidth;
+    return {
+        isMobile: width < 768,
+        isTablet: width >= 768 && width < 1100,
+    };
+};
+
 export default function TodoKanban({
     suspendedAnchors,
     similarityGroups,
@@ -121,8 +132,8 @@ export default function TodoKanban({
     });
 
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
-    const [isMobile, setIsMobile] = useState(false);
-    const [isTablet, setIsTablet] = useState(false);
+    const [isMobile, setIsMobile] = useState(() => getViewportFlags().isMobile);
+    const [isTablet, setIsTablet] = useState(() => getViewportFlags().isTablet);
     // const [isDragging, setIsDragging] = useState(false); // Removed to avoid re-renders
     const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>(defaultFilter ?? 'all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -132,8 +143,8 @@ export default function TodoKanban({
     }, [defaultFilter]);
 
     // Refs for stable access in callbacks
-    const isMobileRef = useRef(false);
-    const isTabletRef = useRef(false);
+    const isMobileRef = useRef(isMobile);
+    const isTabletRef = useRef(isTablet);
 
     // Splits Modal State
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
@@ -374,9 +385,7 @@ export default function TodoKanban({
 
     useEffect(() => {
         const checkResponsive = () => {
-            const width = window.innerWidth;
-            const mobile = width < 768;
-            const tablet = width >= 768 && width < 1100;
+            const { isMobile: mobile, isTablet: tablet } = getViewportFlags();
             setIsMobile(mobile);
             setIsTablet(tablet);
             isMobileRef.current = mobile;

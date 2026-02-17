@@ -125,6 +125,22 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 },
             },
             {
+                // tldraw UI assets (icons, fonts, translations, watermark) come from their CDN.
+                // Cache them explicitly so the editor UI remains fully usable offline.
+                urlPattern: /^https:\/\/cdn\.tldraw\.com\/.*/i,
+                handler: 'CacheFirst',
+                options: {
+                    cacheName: `tldraw-cdn-v1-${PWA_CACHE_VERSION}`,
+                    expiration: {
+                        maxEntries: 256,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                    },
+                    cacheableResponse: {
+                        statuses: [0, 200],
+                    },
+                },
+            },
+            {
                 urlPattern: /\/_next\/static\/.*/i,
                 handler: 'StaleWhileRevalidate',
                 options: {

@@ -165,23 +165,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Start by listening. Your "Daily Portion" builds a natural familiarity with the verses' sound and flow before you even try to memorize.
                 </p>
-                <div className="card-preview card-preview-placeholder card-preview-audio" aria-hidden="true">
-                  <div className="audio-wave">
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                  <div className="audio-track-meta">
-                    <div className="meta-pill" />
-                    <div className="meta-pill short" />
-                  </div>
+                <div className="card-preview">
+                  <img
+                    src="/landing/Passive_Exposure_Light.png"
+                    alt="Passive Exposure screen preview in light mode"
+                    className="card-preview-image card-preview-image-light"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
+                  <img
+                    src="/landing/Passive_Exposure_Dark.png"
+                    alt="Passive Exposure screen preview in dark mode"
+                    className="card-preview-image card-preview-image-dark"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
                 </div>
               </div>
 
@@ -192,7 +194,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 </div>
                 <h3>2. Visual Mapping</h3>
                 <p>
-                  Don't just repeat. Use the <strong>AnchorBuilder</strong> to chunk verses and place them on a visual map, creating powerful mental hooks.
+                  Don't just repeat. Use the <strong>Splits setup modal</strong> to chunk verses and place them on a visual map, creating powerful mental hooks.
                 </p>
                 <div className="card-preview card-preview-placeholder card-preview-map" aria-hidden="true">
                   <div className="map-node node-main" />
@@ -261,11 +263,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   A distraction-free space to build your maps. Import templates or draw your own connections to visualize the Surah's structure.
                 </p>
-                <div className="card-preview card-preview-placeholder card-preview-canvas" aria-hidden="true">
-                  <div className="canvas-grid" />
-                  <div className="canvas-sticky sticky-a" />
-                  <div className="canvas-sticky sticky-b" />
-                  <div className="canvas-sticky sticky-c" />
+                <div className="card-preview card-preview-placeholder card-preview-canvas" >
+                 <img
+                    src="/landing/InfiniteCanva.jpeg"
+                    alt="Mutashabihat Engine preview in light mode"
+                    className="card-preview-image card-preview-image-light"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
                 </div>
               </div>
 
@@ -278,11 +285,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <p>
                   Automatically detects similar verses. Flags them during reviews so you can differentiate them with logic, not just guessing.
                 </p>
-                <div className="card-preview card-preview-placeholder card-preview-compare" aria-hidden="true">
-                  <div className="compare-chip chip-a" />
-                  <div className="compare-chip chip-b" />
-                  <div className="compare-chip chip-c" />
-                  <div className="compare-chip chip-d" />
+                <div className="card-preview card-preview-mutashabihat">
+                  <img
+                    src="/landing/Mutashabihat_light.png"
+                    alt="Mutashabihat Engine preview in light mode"
+                    className="card-preview-image card-preview-image-light"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
+                  <img
+                    src="/landing/Mutashabihat_dark.png"
+                    alt="Mutashabihat Engine preview in dark mode"
+                    className="card-preview-image card-preview-image-dark"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
                 </div>
               </div>
 
@@ -296,12 +317,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   Install as an App (PWA). Your progress syncs to the cloud, but you can review your maps anywhere, anytime, without internet.
                 </p>
                 <div className="card-preview card-preview-placeholder card-preview-mobile" aria-hidden="true">
-                  <div className="phone-frame">
-                    <div className="phone-notch" />
-                    <div className="phone-lines" />
-                    <div className="phone-lines short" />
-                    <div className="phone-lines" />
-                  </div>
+                 <img
+                    src="/landing/Mobile.png"
+                    alt="Mutashabihat Engine preview in dark mode"
+                    className="card-preview-image card-preview-image-dark"
+                    loading="lazy"
+                    decoding="async"
+                    width={726}
+                    height={772}
+                  />
                 </div>
               </div>
             </div>
@@ -392,20 +416,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   answer: "Scientific research shows that the brain retains information better when it's structured visually. Instead of memorizing linear text, our Anchoring System allows you to break Surahs down into logical blocks (mindmaps). This creates 'mental hooks' that make recall faster and more reliable, especially for longer Surahs."
                 },
                 {
-                  question: "My Hifdh is weak. Will this app help me fix old mistakes?",
-                  answer: "Yes. The hardest part of fixing weak Hifdh is identifying exactly where the mistakes are. Our Mutashabihat Engine proactively flags similar verses that often cause confusion. Additionally, the Spaced Repetition algorithm adapts to your performance—if you struggle with a specific passage, it will schedule reviews more frequently until it sticks."
+                  question: "I already memorized some Surahs. Is this app only for new students?",
+                  answer: "It is not only for new students. You can set your Active Part (Juz) to focus on your current target, and you can skip Surahs you already know well so your Todo and Daily Portion stay focused. If needed, you can unskip them later and bring them back into your workflow."
                 },
                 {
-                  question: "I see 'Offline Mode' mentioned. Does that mean my data is stored locally?",
-                  answer: "It's a hybrid system. Quran Life focuses on being 'Local First' for speeed and offline accessibility. Your mindmaps and progress are stored on your device instantly, so you never see a loading spinner. When you connect to the internet, we silently sync your encrypted data to the cloud so you can switch between your phone and laptop seamlessly."
+                  question: "I already finished the Quran. Can Quran Life still make my Hifdh stronger?",
+                  answer: "Yes. Quran Life can be used as a long-term maintenance system. Smart Review (FSRS) schedules your reviews over time, and the Mutashabihat tools help you handle similar verses that commonly cause slips. This is useful even if you are not learning from zero."
                 },
                 {
-                  question: "What happens if I miss a few days of review?",
-                  answer: "Unlike rigid schedules that pile up endlessly, our intelligent scheduler adjusts. If you miss a few days, it won't overwhelm you with impossible backlogs. It prioritizes the verses most at risk of being forgotten, allowing you to catch up at a sustainable pace without losing motivation."
+                  question: "Do I need to build a mindmap before reviews, or can I just start reviewing?",
+                  answer: "For this method, the mindmap is core. The app is designed around visual anchors, and review works best after your map and verse splits are set. You can import a pre-made map or create/edit your own, then start Smart Review."
                 },
                 {
-                  question: "Why isn't this available on the App Store or Play Store?",
-                  answer: "We chose to build Quran Life as a Progressive Web App (PWA) to give us complete control over updates and features without waiting for store approvals. This ensures you always have the latest version instantly. You can still 'install' it on your home screen just like a native app, and it works exactly the same—full screen, offline, and fast."
+                  question: "Do I have to start from Surah Al-Baqarah, or can I focus only on the Juz I am working on?",
+                  answer: "You can focus only on your current Juz. Quran Life lets you set an Active Part (Juz), and your Daily Portion and Todo are filtered to that focus so you can study in a structured way without restarting everything."
                 }
               ].map((faq, index) => (
                 <FaqItem key={index} question={faq.question} answer={faq.answer} />

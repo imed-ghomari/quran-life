@@ -156,7 +156,9 @@ export default function TodayPage() {
     const [isApplyingHistoryAction, setIsApplyingHistoryAction] = useState(false);
     const [viewState, setViewState] = useState({ reviewExpanded: true, dailyExpanded: true });
     const [isMobile, setIsMobile] = useState(false);
-    const [mobileSection, setMobileSection] = useState<'review' | 'daily'>('daily');
+    const [mobileSection, setMobileSection] = useState<'review' | 'daily'>(
+        settings?.todayDefaultMode === 'review' ? 'review' : 'daily'
+    );
     const lastPortionKeyRef = useRef<string>('');
     const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
     const didRestoreActiveNodeRef = useRef(false);
@@ -429,6 +431,10 @@ export default function TodayPage() {
         }
         setReadOnlyMode(defaultMode === 'reading');
     }, [settings?.dailyPortionMode, isOnline]);
+
+    useEffect(() => {
+        setMobileSection(settings?.todayDefaultMode === 'review' ? 'review' : 'daily');
+    }, [settings?.todayDefaultMode]);
 
     // Keep review index in sync with changing due queue to avoid blanks
     useEffect(() => {

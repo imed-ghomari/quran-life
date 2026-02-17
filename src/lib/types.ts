@@ -96,6 +96,7 @@ export interface AppSettings {
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
     kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
     dailyPortionMode?: 'audio' | 'reading';
+    todayDefaultMode?: 'daily' | 'review';
     theme?: 'light' | 'dark' | 'system';
     updatedAt?: string;
     isOnboardingComplete?: boolean;

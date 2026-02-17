@@ -439,6 +439,15 @@
   background: linear-gradient(180deg, rgba(127, 127, 127, 0.08), transparent 18%), var(--landing-bg-secondary);
 }
 
+.card-preview-mutashabihat {
+  background: linear-gradient(180deg, rgba(127, 127, 127, 0.08), transparent 18%), var(--landing-bg-secondary);
+}
+
+.card-preview-mutashabihat .card-preview-image {
+  object-fit: contain;
+  object-position: center;
+}
+
 .card-preview-image {
   width: 100%;
   height: 100%;
