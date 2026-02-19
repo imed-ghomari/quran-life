@@ -9,11 +9,12 @@ import {
     useInstantListeningProgress,
     useInstantMutashabihat,
     useInstantReviewLogs,
+    useInstantReviewErrors,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { getNodeStability, getNodeDueDate, MemoryNode } from '@/lib/types';
 
-import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy } from 'lucide-react';
+import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays } from 'lucide-react';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
@@ -30,6 +31,19 @@ interface StatSegment {
     color: string;
     opacity?: number;
     description: string;
+}
+
+type SurahRiskRange = '7d' | '30d' | '90d' | 'all';
+type TrendDirection = 'up' | 'down' | 'flat';
+
+interface SurahRiskRow {
+    surahId: number;
+    surahName: string;
+    mistakes: number;
+    attempts: number;
+    errorRate: number;
+    maturity: MaturityBucket;
+    trend: TrendDirection;
 }
 
 const toPositiveInt = (value: unknown): number | null => {
@@ -57,6 +71,23 @@ const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
     return toPositiveInt(partMatch[1]);
 };
 
+const resolveSurahIdFromErrorNodeRef = (nodeRef: unknown): number | null => {
+    const value = String(nodeRef || '').trim();
+    if (!value) return null;
+
+    const anchorMatch = value.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (anchorMatch) return toPositiveInt(anchorMatch[1]);
+
+    const mindmapMatch = value.match(/^mindmap-(\d+)$/);
+    if (mindmapMatch) return toPositiveInt(mindmapMatch[1]);
+
+    // Legacy/local ids can look like: memory_node__mindmap__3
+    const legacyMindmapMatch = value.match(/(?:^|__)mindmap__(\d+)$/);
+    if (legacyMindmapMatch) return toPositiveInt(legacyMindmapMatch[1]);
+
+    return null;
+};
+
 export default function StatisticsPage() {
     const { settings, isLoading: settingsLoading } = useInstantSettings();
     const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
@@ -64,10 +95,12 @@ export default function StatisticsPage() {
     const { progress: listeningProgress, isLoading: progressLoading } = useInstantListeningProgress();
     const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useInstantMutashabihat();
     const { logs: reviewLogs, isLoading: reviewLogsLoading } = useInstantReviewLogs();
+    const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
 
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
+    const [surahRiskRange, setSurahRiskRange] = useState<SurahRiskRange>('30d');
 
-    const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading || reviewLogsLoading;
+    const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading || reviewLogsLoading || reviewErrorsLoading;
 
     const activePart = settings?.activePart || 1;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
@@ -541,6 +574,255 @@ export default function StatisticsPage() {
         };
     }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, showBacklog, skippedSurahs, timeRange]);
 
+    const surahRiskStats = useMemo(() => {
+        const nowMs = Date.now();
+        const dayMs = 1000 * 60 * 60 * 24;
+        const rangeDays = surahRiskRange === '7d' ? 7 : surahRiskRange === '30d' ? 30 : surahRiskRange === '90d' ? 90 : null;
+        const rangeStartMs = rangeDays ? nowMs - rangeDays * dayMs : Number.NEGATIVE_INFINITY;
+        const trendWindowDays = rangeDays ?? 30;
+        const currentWindowStartMs = nowMs - trendWindowDays * dayMs;
+        const previousWindowStartMs = currentWindowStartMs - trendWindowDays * dayMs;
+
+        const targetSurahs = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !skippedSurahs.has(s.id));
+        const targetSurahIds = new Set(targetSurahs.map(s => s.id));
+        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
+
+        const toMs = (value: unknown): number | null => {
+            const parsed = Date.parse(String(value || ''));
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        const resolveErrorSurahId = (error: any): number | null => {
+            const direct = toPositiveInt(error?.surahId);
+            if (direct) return direct;
+
+            const fromErrorRef = resolveSurahIdFromErrorNodeRef(error?.targetId) || resolveSurahIdFromErrorNodeRef(error?.nodeId);
+            if (fromErrorRef) return fromErrorRef;
+
+            const nodeId = String(error?.nodeId || '');
+            const node = nodeId ? nodeById.get(nodeId) : undefined;
+            if (node) {
+                const fromNode = resolveNodeSurahId(node);
+                if (fromNode) return fromNode;
+            }
+            const absolute = toPositiveInt(error?.absoluteAyah);
+            if (absolute) {
+                const ref = absoluteToSurahAyah(absolute);
+                return toPositiveInt(ref?.surahId);
+            }
+            return null;
+        };
+
+        const resolveLogSurahId = (log: any): number | null => {
+            const nodeId = String(log?.nodeId || '');
+            const node = nodeId ? nodeById.get(nodeId) : undefined;
+            if (node) {
+                const fromNode = resolveNodeSurahId(node);
+                if (fromNode) return fromNode;
+            }
+            return toPositiveInt(log?.surahId);
+        };
+
+        const inWindow = (ms: number, startMs: number, endMs: number) => ms >= startMs && ms < endMs;
+        const makeCounter = () => new Map<number, number>();
+        const inc = (map: Map<number, number>, surahId: number, amount = 1) => {
+            map.set(surahId, (map.get(surahId) || 0) + amount);
+        };
+
+        const mistakesInRange = makeCounter();
+        const attemptsInRange = makeCounter();
+        const mistakesCurrent = makeCounter();
+        const attemptsCurrent = makeCounter();
+        const mistakesPrevious = makeCounter();
+        const attemptsPrevious = makeCounter();
+
+        reviewErrors.forEach(error => {
+            const timestampMs = toMs(error?.timestamp);
+            if (timestampMs === null) return;
+            const surahId = resolveErrorSurahId(error);
+            if (!surahId || !targetSurahIds.has(surahId)) return;
+
+            if (timestampMs >= rangeStartMs && timestampMs <= nowMs) {
+                inc(mistakesInRange, surahId);
+            }
+
+            if (inWindow(timestampMs, currentWindowStartMs, nowMs + 1)) {
+                inc(mistakesCurrent, surahId);
+            } else if (inWindow(timestampMs, previousWindowStartMs, currentWindowStartMs)) {
+                inc(mistakesPrevious, surahId);
+            }
+        });
+
+        reviewLogs.forEach(log => {
+            const reviewMs = toMs(log?.review_time);
+            if (reviewMs === null) return;
+            const surahId = resolveLogSurahId(log);
+            if (!surahId || !targetSurahIds.has(surahId)) return;
+
+            if (reviewMs >= rangeStartMs && reviewMs <= nowMs) {
+                inc(attemptsInRange, surahId);
+            }
+
+            if (inWindow(reviewMs, currentWindowStartMs, nowMs + 1)) {
+                inc(attemptsCurrent, surahId);
+            } else if (inWindow(reviewMs, previousWindowStartMs, currentWindowStartMs)) {
+                inc(attemptsPrevious, surahId);
+            }
+        });
+
+        const surahMaturity = new Map<number, MaturityBucket>();
+        targetSurahs.forEach(surah => {
+            const relatedNodes = memoryNodes.filter(n => {
+                if (n.type !== 'verse_segment' && n.type !== 'mindmap') return false;
+                return resolveNodeSurahId(n) === surah.id;
+            });
+
+            if (relatedNodes.length === 0) {
+                surahMaturity.set(surah.id, 'new');
+                return;
+            }
+
+            const stabilities = relatedNodes
+                .map(node => getNodeStability(node))
+                .filter(value => Number.isFinite(value) && value >= 0);
+
+            if (stabilities.length === 0) {
+                surahMaturity.set(surah.id, 'new');
+                return;
+            }
+
+            const averageStability = stabilities.reduce((sum, value) => sum + value, 0) / stabilities.length;
+            surahMaturity.set(surah.id, getMaturity(averageStability));
+        });
+
+        const rows: SurahRiskRow[] = targetSurahs
+            .map(surah => {
+                const mistakes = mistakesInRange.get(surah.id) || 0;
+                const attempts = attemptsInRange.get(surah.id) || 0;
+                const maturity = surahMaturity.get(surah.id) || 'new';
+
+                const errorRateRaw = mistakes / Math.max(1, attempts);
+
+                const currentMistakes = mistakesCurrent.get(surah.id) || 0;
+                const currentAttempts = attemptsCurrent.get(surah.id) || 0;
+                const previousMistakes = mistakesPrevious.get(surah.id) || 0;
+                const previousAttempts = attemptsPrevious.get(surah.id) || 0;
+
+                const currentRate = currentMistakes / Math.max(1, currentAttempts);
+                const previousRate = previousMistakes / Math.max(1, previousAttempts);
+                const trendDelta = currentRate - previousRate;
+
+                let trend: TrendDirection = 'flat';
+                if (trendDelta > 0.05) trend = 'up';
+                else if (trendDelta < -0.05) trend = 'down';
+
+                return {
+                    surahId: surah.id,
+                    surahName: surah.name,
+                    mistakes,
+                    attempts,
+                    errorRate: errorRateRaw,
+                    maturity,
+                    trend,
+                };
+            })
+            .filter(row => row.mistakes > 0 || row.attempts > 0)
+            .sort((a, b) => {
+                if (b.mistakes !== a.mistakes) return b.mistakes - a.mistakes;
+                if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate;
+                return b.attempts - a.attempts;
+            })
+            .slice(0, 5);
+
+        const totalAttempts = Array.from(attemptsInRange.values()).reduce((sum, value) => sum + value, 0);
+        const totalMistakes = Array.from(mistakesInRange.values()).reduce((sum, value) => sum + value, 0);
+        return {
+            rows,
+            hasData: totalAttempts > 0 || totalMistakes > 0,
+        };
+    }, [activePart, memoryNodes, reviewErrors, reviewLogs, skippedSurahs, surahRiskRange]);
+
+    const reviewHeatmapStats = useMemo(() => {
+        const rangeDays = 180;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const start = new Date(today);
+        start.setDate(start.getDate() - (rangeDays - 1));
+
+        const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
+        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
+
+        const toDayKey = (date: Date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+        const formatDate = (date: Date) =>
+            date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+        const dayCounts = new Map<string, number>();
+        const isLogInScope = (log: any) => {
+            const reviewDate = new Date(log?.review_time || '');
+            if (Number.isNaN(reviewDate.getTime())) return false;
+            reviewDate.setHours(0, 0, 0, 0);
+            if (reviewDate < start || reviewDate > today) return false;
+            if (activePart === 5) return true;
+            const node = nodeById.get(String(log?.nodeId || ''));
+            if (!node) return false;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return false;
+            if (!targetSurahs.has(surahId)) return false;
+            if (skippedSurahs.has(surahId)) return false;
+            return true;
+        };
+
+        for (const log of reviewLogs) {
+            if (!isLogInScope(log)) continue;
+            const d = new Date(log.review_time);
+            d.setHours(0, 0, 0, 0);
+            const key = toDayKey(d);
+            dayCounts.set(key, (dayCounts.get(key) || 0) + 1);
+        }
+
+        const startGrid = new Date(start);
+        startGrid.setDate(startGrid.getDate() - startGrid.getDay());
+        const endGrid = new Date(today);
+        endGrid.setDate(endGrid.getDate() + (6 - endGrid.getDay()));
+
+        const days: Array<{ key: string; dateLabel: string; count: number; inRange: boolean; dow: number; isToday: boolean }> = [];
+        const cursor = new Date(startGrid);
+        const todayKey = toDayKey(today);
+        while (cursor <= endGrid) {
+            const key = toDayKey(cursor);
+            const inRange = cursor >= start && cursor <= today;
+            days.push({
+                key,
+                dateLabel: formatDate(cursor),
+                count: inRange ? (dayCounts.get(key) || 0) : 0,
+                inRange,
+                dow: cursor.getDay(),
+                isToday: key === todayKey,
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        const weeks: typeof days[] = [];
+        for (let i = 0; i < days.length; i += 7) {
+            weeks.push(days.slice(i, i + 7));
+        }
+
+        const maxCount = Math.max(0, ...days.map(day => day.count));
+        const totalReviews = days.reduce((sum, day) => sum + day.count, 0);
+        const averagePerDay = totalReviews / rangeDays;
+
+        return {
+            weeks,
+            maxCount,
+            averagePerDay: averagePerDay.toFixed(1),
+        };
+    }, [activePart, memoryNodes, reviewLogs, skippedSurahs]);
+
     const hasRenderableData =
         Boolean(settings) ||
         mindmaps.length > 0 ||
@@ -548,7 +830,8 @@ export default function StatisticsPage() {
         memoryNodes.length > 0 ||
         listeningProgress.length > 0 ||
         mutashabihatDecisions.length > 0 ||
-        reviewLogs.length > 0;
+        reviewLogs.length > 0 ||
+        reviewErrors.length > 0;
 
     if (isLoading && !hasRenderableData) {
         return (
@@ -570,69 +853,323 @@ export default function StatisticsPage() {
                     </div>
                 </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 items-start">
-                    <ProgressBarSection
-                        title="Part Mindmaps"
-                        icon={<MapIcon size={20} />}
-                        stats={partMindmapStats}
-                    />
+           <div className="stats-masonry">
+                    <div className="stats-masonry-item">
+                        <ProgressBarSection
+                            title="Part Mindmaps"
+                            icon={<MapIcon size={20} />}
+                            stats={partMindmapStats}
+                        />
+                    </div>
 
-                    <ProgressBarSection
-                        title="Surah Mindmaps"
-                        icon={<MapPinned size={20} />}
-                        stats={surahMindmapStats}
-                    />
+                    <div className="stats-masonry-item">
+                        <ProgressBarSection
+                            title="Surah Mindmaps"
+                            icon={<MapPinned size={20} />}
+                            stats={surahMindmapStats}
+                        />
+                    </div>
 
-                    <ProgressBarSection
-                        title="Verse Progress"
-                        icon={<RotateCcw size={20} />}
-                        stats={verseChunkStats}
-                        headerSuffix={
-                            <div className="segmented-compact">
-                                <button
-                                    onClick={() => setVerseChunkMode('chunks')}
-                                    className={`adv-seg-btn ${verseChunkMode === 'chunks' ? 'adv-seg-active' : ''}`}
-                                >
-                                    CHUNKS
-                                </button>
-                                <button
-                                    onClick={() => setVerseChunkMode('surahs')}
-                                    className={`adv-seg-btn ${verseChunkMode === 'surahs' ? 'adv-seg-active' : ''}`}
-                                >
-                                    SURAHS
-                                </button>
-                            </div>
-                        }
-                    />
+                    <div className="stats-masonry-item">
+                        <ProgressBarSection
+                            title="Verse Progress"
+                            icon={<RotateCcw size={20} />}
+                            stats={verseChunkStats}
+                            headerSuffix={
+                                <div className="segmented-compact">
+                                    <button
+                                        onClick={() => setVerseChunkMode('chunks')}
+                                        className={`adv-seg-btn ${verseChunkMode === 'chunks' ? 'adv-seg-active' : ''}`}
+                                    >
+                                        CHUNKS
+                                    </button>
+                                    <button
+                                        onClick={() => setVerseChunkMode('surahs')}
+                                        className={`adv-seg-btn ${verseChunkMode === 'surahs' ? 'adv-seg-active' : ''}`}
+                                    >
+                                        SURAHS
+                                    </button>
+                                </div>
+                            }
+                        />
+                    </div>
 
-                    <ProgressBarSection
-                        title="Similar Verses Coverage"
-                        icon={<BookCopy size={20} />}
-                        stats={mutashabihatStats}
-                    />
+                    <div className="stats-masonry-item">
+                        <ProgressBarSection
+                            title="Similar Verses Coverage"
+                            icon={<BookCopy size={20} />}
+                            stats={mutashabihatStats}
+                        />
+                    </div>
 
-                    <ProgressBarSection
-                        title="Daily Portion"
-                        icon={<Repeat size={20} />}
-                        stats={dailyPortionStats}
-                        headerSuffix={
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
-                                <Repeat size={14} />
-                                <span>{dailyPortionStats.completions} cycles</span>
-                            </div>
-                        }
-                    />
+                    <div className="stats-masonry-item">
+                        <ProgressBarSection
+                            title="Daily Portion"
+                            icon={<Repeat size={20} />}
+                            stats={dailyPortionStats}
+                            headerSuffix={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                    <Repeat size={14} />
+                                    <span>{dailyPortionStats.completions} cycles</span>
+                                </div>
+                            }
+                        />
+                    </div>
 
-                    <FutureDueSection
-                        stats={futureDueStats}
-                        showBacklog={showBacklog}
-                        setShowBacklog={setShowBacklog}
-                        timeRange={timeRange}
-                        setTimeRange={setTimeRange}
-                    />
+                    <div className="stats-masonry-item">
+                        <ReviewsHeatmapSection
+                            weeks={reviewHeatmapStats.weeks}
+                            maxCount={reviewHeatmapStats.maxCount}
+                            averagePerDay={reviewHeatmapStats.averagePerDay}
+                        />
+                    </div>
+
+                    <div className="stats-masonry-item">
+                        <SurahRiskMaturitySection
+                            rows={surahRiskStats.rows}
+                            hasData={surahRiskStats.hasData}
+                            range={surahRiskRange}
+                            onRangeChange={setSurahRiskRange}
+                        />
+                    </div>
+
+                    <div className="stats-masonry-item">
+                        <FutureDueSection
+                            stats={futureDueStats}
+                            showBacklog={showBacklog}
+                            setShowBacklog={setShowBacklog}
+                            timeRange={timeRange}
+                            setTimeRange={setTimeRange}
+                        />
+                    </div>
                 </div>
             </div>
 
+        </div>
+    );
+}
+
+function ReviewsHeatmapSection({
+    weeks,
+    maxCount,
+    averagePerDay,
+}: {
+    weeks: Array<Array<{ key: string; dateLabel: string; count: number; inRange: boolean; dow: number; isToday: boolean }>>;
+    maxCount: number;
+    averagePerDay: string;
+}) {
+    const getCellColor = (count: number, inRange: boolean, isToday: boolean) => {
+        if (isToday) {
+            return count > 0
+                ? 'color-mix(in srgb, var(--accent) 95%, transparent)'
+                : 'color-mix(in srgb, var(--accent) 45%, transparent)';
+        }
+        if (!inRange) return 'transparent';
+        if (count <= 0) return 'color-mix(in srgb, var(--border) 50%, transparent)';
+        const intensity = maxCount <= 0 ? 0 : count / maxCount;
+        if (intensity < 0.25) return 'color-mix(in srgb, var(--chart-medium) 25%, transparent)';
+        if (intensity < 0.5) return 'color-mix(in srgb, var(--chart-medium) 45%, transparent)';
+        if (intensity < 0.75) return 'color-mix(in srgb, var(--chart-medium) 65%, transparent)';
+        return 'color-mix(in srgb, var(--accent) 85%, transparent)';
+    };
+
+    return (
+        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                        <CalendarDays size={20} />
+                    </div>
+                    <div>
+                        <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Daily Reviews</h2>
+                    </div>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--foreground-secondary)', fontWeight: 700 }}>
+                    Avg/Day <span style={{ color: 'var(--foreground)', fontSize: '0.86rem' }}>{averagePerDay}</span>
+                </div>
+            </div>
+
+            <div style={{ borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--reviews-chart-panel)', padding: '0.7rem', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                    {weeks.map((week, weekIndex) => (
+                        <div key={`week-${weekIndex}`} style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', marginLeft: weekIndex === 0 ? 0 : '4px' }}>
+                            {week.map(day => (
+                                <div
+                                    key={day.key}
+                                    data-tooltip={`${day.dateLabel}: ${day.count} review${day.count === 1 ? '' : 's'}${day.isToday ? ' (today)' : ''}`}
+                                    data-tooltip-trigger="tap"
+                                    style={{
+                                        width: '12px',
+                                        height: '12px',
+                                        borderRadius: '3px',
+                                        background: getCellColor(day.count, day.inRange, day.isToday),
+                                        border: `1px solid ${day.isToday ? 'var(--accent)' : day.inRange ? 'color-mix(in srgb, var(--border) 60%, transparent)' : 'transparent'}`,
+                                        boxShadow: day.isToday ? '0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent)' : 'none',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SurahRiskMaturitySection({
+    rows,
+    hasData,
+    range,
+    onRangeChange,
+}: {
+    rows: SurahRiskRow[];
+    hasData: boolean;
+    range: SurahRiskRange;
+    onRangeChange: (value: SurahRiskRange) => void;
+}) {
+    const rangeLabel = range === '7d' ? '7 days' : range === '30d' ? '30 days' : range === '90d' ? '90 days' : 'all time';
+
+    return (
+        <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                        <AlertTriangle size={20} />
+                    </div>
+                    <div>
+                        <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Weak Surahs</h2>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div className="segmented-compact">
+                        <button type="button" onClick={() => onRangeChange('7d')} className={`adv-seg-btn ${range === '7d' ? 'adv-seg-active' : ''}`}>7d</button>
+                        <button type="button" onClick={() => onRangeChange('30d')} className={`adv-seg-btn ${range === '30d' ? 'adv-seg-active' : ''}`}>30d</button>
+                        <button type="button" onClick={() => onRangeChange('90d')} className={`adv-seg-btn ${range === '90d' ? 'adv-seg-active' : ''}`}>90d</button>
+                        <button type="button" onClick={() => onRangeChange('all')} className={`adv-seg-btn ${range === 'all' ? 'adv-seg-active' : ''}`}>all</button>
+                    </div>
+                </div>
+            </div>
+
+            {!hasData ? (
+                <div style={{ height: '200px', borderRadius: '16px', background: 'var(--reviews-chart-panel)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
+                    No review data available
+                </div>
+            ) : (
+                <SurahRiskBarsChart rows={rows} rangeLabel={rangeLabel} />
+            )}
+        </div>
+    );
+}
+
+function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeLabel: string }) {
+    const MAX_Y_AXIS_LEGENDS = 6;
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [chartWidth, setChartWidth] = useState(0);
+    const gradientSeed = useId();
+    const chartHeight = 210;
+    const padding = { top: 20, right: 34, bottom: 42, left: 34 };
+    const maxMistakes = Math.max(1, ...rows.map(row => row.mistakes));
+    const ids = {
+        clip: `risk-chart-clip-${gradientSeed}`,
+    };
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const el = containerRef.current;
+        const update = () => setChartWidth(Math.max(0, Math.floor(el.clientWidth)));
+        update();
+        const ro = new ResizeObserver(() => update());
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    if (rows.length === 0) {
+        return null;
+    }
+
+    const shortSurahLabel = (name: string) => (name.length > 10 ? `${name.slice(0, 10)}…` : name);
+
+    return (
+        <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
+            {chartWidth > 0 && (
+                <svg
+                    width={chartWidth}
+                    height={chartHeight}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{ overflow: 'visible', display: 'block', width: '100%', height: chartHeight }}
+                >
+                    <defs>
+                        <clipPath id={ids.clip}>
+                            <rect x={padding.left} y={padding.top} width={chartWidth - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
+                        </clipPath>
+                    </defs>
+                    {(() => {
+                        const plotWidth = chartWidth - padding.left - padding.right;
+                        const plotHeight = chartHeight - padding.top - padding.bottom;
+                        const span = Math.max(1, rows.length);
+                        const groupWidth = plotWidth * 0.76;
+                        const groupStart = padding.left + (plotWidth - groupWidth) / 2;
+                        const step = groupWidth / span;
+                        const getX = (index: number) => groupStart + (index + 0.5) * step;
+                        const tickCount = maxMistakes <= 8 ? Math.max(2, maxMistakes) : 4;
+                        const tickStep = maxMistakes <= 8 ? 1 : Math.max(2, Math.ceil(maxMistakes / tickCount / 2) * 2);
+                        const maxNice = Math.max(1, tickCount * tickStep);
+                        const allTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
+                        const yLegendStep = Math.max(1, Math.ceil((allTicks.length - 1) / Math.max(1, MAX_Y_AXIS_LEGENDS - 1)));
+                        const ticks = allTicks.filter((_, i) => i % yLegendStep === 0 || i === allTicks.length - 1);
+                        const getYBars = (value: number) => chartHeight - padding.bottom - (value / maxNice) * plotHeight;
+                        return (
+                            <>
+                                <rect x={padding.left} y={padding.top} width={plotWidth} height={plotHeight} rx={16} ry={16} fill="var(--reviews-chart-panel)" stroke="none" />
+                                <g clipPath={`url(#${ids.clip})`}>
+                                    {rows.map((row, i) => {
+                                        const value = Math.max(0, row.mistakes);
+                                        const barWidth = Math.max(16, Math.min(34, step * 0.62));
+                                        const x = getX(i) - barWidth / 2;
+                                        const y = getYBars(value);
+                                        const h = Math.max(0, chartHeight - padding.bottom - y);
+                                        const tooltip = `${row.mistakes} mistakes`;
+                                        return (
+                                            <g key={row.surahId}>
+                                                <rect x={x} y={padding.top + 6} width={barWidth} height={plotHeight - 6} rx={8} fill="var(--border)" opacity="0.2" />
+                                                <rect
+                                                    x={x}
+                                                    y={y}
+                                                    width={barWidth}
+                                                    height={h}
+                                                    rx={8}
+                                                    fill={i === 0 ? 'var(--accent)' : 'var(--chart-medium)'}
+                                                    opacity={i === 0 ? 0.95 : 0.7}
+                                                    data-tooltip={tooltip}
+                                                    data-tooltip-trigger="tap"
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                            </g>
+                                        );
+                                    })}
+                                </g>
+
+                                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={chartWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.5" />
+                                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.35" />
+
+                                {ticks.map(tick => (
+                                    <text key={tick} x={padding.left - 7} y={getYBars(tick) + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">
+                                        {tick}
+                                    </text>
+                                ))}
+
+                                {rows.map((row, i) => (
+                                    <text key={`x-${row.surahId}`} x={getX(i)} y={chartHeight - padding.bottom + 18} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">
+                                        {shortSurahLabel(row.surahName)}
+                                    </text>
+                                ))}
+                            </>
+                        );
+                    })()}
+                </svg>
+            )}
         </div>
     );
 }
@@ -653,9 +1190,9 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                     <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                         <CalendarClock size={20} />
                     </div>
-                    <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Reviews</h2>
+                    <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Review Plan</h2>
                 </div>
-                <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <button
                         type="button"
                         className="future-due-toggle std-normal-btn"
@@ -689,24 +1226,13 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} />
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Average / Day</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.average}</div>
-                    </div>
-                    <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'var(--background)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', marginBottom: '0.25rem' }}>Daily Load</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--foreground)' }}>{stats.dailyLoad}</div>
-                    </div>
-                </div>
+                <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
             </div>
         </div>
     );
 }
 
-function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number; maxDay: number }) {
+function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minDay: number; maxDay: number; dailyLoad: string }) {
     const MAX_X_AXIS_LEGENDS = 6;
     const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -770,6 +1296,8 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
                         const labelStep = Math.max(1, Math.ceil(nonZeroData.length / MAX_X_AXIS_LEGENDS));
+                        const dailyLoadValue = Number(dailyLoad);
+                        const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
                         const formatDayLabel = (day: number) => {
                             if (day === 0) return 'Today';
                             if (day === 1) return '1d';
@@ -809,6 +1337,20 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                                 />
 
                                 <g clipPath={`url(#${ids.clip})`}>
+                                    {showDailyLoadLine && (
+                                        <>
+                                            <line
+                                                x1={padding.left}
+                                                y1={getYCount(dailyLoadValue)}
+                                                x2={vWidth - padding.right}
+                                                y2={getYCount(dailyLoadValue)}
+                                                stroke="var(--accent)"
+                                                strokeWidth="1.2"
+                                                strokeDasharray="4 3"
+                                                opacity="0.9"
+                                            />
+                                        </>
+                                    )}
                                     {/* Bars */}
                                     {nonZeroData.map((d, i) => {
                                         const barWidth = Math.max(14, Math.min(40, step * 0.96));

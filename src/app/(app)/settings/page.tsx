@@ -2720,8 +2720,8 @@ export default function SettingsPage() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                                <table className="debug-table" style={{ minWidth: '700px', width: '100%', tableLayout:'fixed'}}>
+                                            <div className="settings-sticky-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                                <table className="debug-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%', tableLayout:'fixed'}}>
                                                     <thead>
                                                         <tr>
                                                             <th>Target / Range</th>
@@ -3225,8 +3225,8 @@ export default function SettingsPage() {
                                             })}
                                         </div>
                                     ) : (
-                                        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-                                            <table className="debug-table mutashabihat-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
+                                        <div className="settings-sticky-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                            <table className="debug-table mutashabihat-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
                                                 <thead>
                                                     <tr>
                                                         <th style={{ width: '50px' }}></th>
@@ -3953,6 +3953,20 @@ export default function SettingsPage() {
                 @media (min-width: 768px) {
                     .show-mobile {
                         display: none !important;
+                    }
+                }
+
+                @media (min-width: 768px) {
+                    :global(.settings-sticky-table-wrap) {
+                        overflow: visible !important;
+                    }
+
+                    :global(.settings-sticky-header-table thead th) {
+                        position: sticky;
+                        top: 0;
+                        z-index: 6;
+                        background: var(--background);
+                        box-shadow: inset 0 -1px 0 var(--border);
                     }
                 }
 

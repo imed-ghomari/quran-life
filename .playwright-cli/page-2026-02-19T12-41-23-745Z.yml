@@ -1,0 +1,25 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - link "Today" [ref=e4] [cursor=pointer]:
+      - /url: /dashboard
+      - img [ref=e6]
+      - text: Today
+    - link "Todo" [ref=e8] [cursor=pointer]:
+      - /url: /todo
+      - img [ref=e10]
+      - text: Todo
+    - link "Statistics" [ref=e13] [cursor=pointer]:
+      - /url: /statistics
+      - img [ref=e15]
+      - text: Statistics
+    - link "Docs" [ref=e17] [cursor=pointer]:
+      - /url: /docs
+      - img [ref=e19]
+      - text: Docs
+    - link "Settings" [ref=e22] [cursor=pointer]:
+      - /url: /settings
+      - img [ref=e24]
+      - text: Settings
+  - generic [ref=e29]:
+    - img [ref=e30]
+    - text: Verifying access...
