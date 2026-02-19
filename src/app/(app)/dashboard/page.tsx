@@ -1811,6 +1811,21 @@ export default function TodayPage() {
         }
     }, [activePartEditor, partMindMaps, savePartMindMap]);
 
+    const getHistoryTooltip = (entry: UndoEntry | undefined, action: 'undo' | 'redo') => {
+        if (!entry) {
+            return action === 'undo' ? 'Nothing to undo' : 'Nothing to redo';
+        }
+
+        const actionLabel = action === 'undo' ? 'Undo' : 'Redo';
+        const summary = entry.toastMessage?.trim() || (entry.kind === 'daily_complete' ? 'Completed daily portion' : 'Review change');
+        const context = entry.toastInfo?.trim();
+
+        return context ? `${actionLabel}: ${summary} - ${context}` : `${actionLabel}: ${summary}`;
+    };
+
+    const undoTooltip = getHistoryTooltip(undoStack[undoStack.length - 1], 'undo');
+    const redoTooltip = getHistoryTooltip(redoStack[redoStack.length - 1], 'redo');
+
     if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
 
     return (
@@ -1838,7 +1853,8 @@ export default function TodayPage() {
                         className="today-header-btn"
                         onClick={() => handleUndo('keyboard')}
                         disabled={undoStack.length === 0 || isApplyingHistoryAction}
-                        title="Undo (⌘/Ctrl+Z)"
+                        data-tooltip={undoTooltip}
+                        data-tooltip-trigger="long-press"
                         aria-label="Undo"
                     >
                         <Undo2 size={16} />
@@ -1869,7 +1885,8 @@ export default function TodayPage() {
                         className="today-header-btn"
                         onClick={() => handleRedo('keyboard')}
                         disabled={redoStack.length === 0 || isApplyingHistoryAction}
-                        title="Redo (⌘/Ctrl+Shift+Z)"
+                        data-tooltip={redoTooltip}
+                        data-tooltip-trigger="long-press"
                         aria-label="Redo"
                     >
                         <Redo2 size={16} />

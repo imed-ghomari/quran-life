@@ -3566,3 +3566,26 @@ input:focus {
     text-align: center;
   }
 }
+
+.custom-hover-tooltip {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 0.45rem 0.62rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background-secondary) 94%, black 6%);
+  color: var(--foreground);
+  font-size: 0.76rem;
+  line-height: 1.2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 90ms ease, visibility 90ms ease;
+}
+
+.custom-hover-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+}

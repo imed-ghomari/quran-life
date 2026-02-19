@@ -828,9 +828,10 @@ function FutureDueChart({ data, minDay, maxDay }: { data: any[]; minDay: number;
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
                                                     fill={isPeak ? 'var(--accent)' : 'var(--chart-medium)'}
                                                     opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
+                                                    data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'} (${formatDayLabel(d.day)})`}
+                                                    data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
                                                 />
-                                                <title>{`${d.count} review${d.count === 1 ? '' : 's'} (${formatDayLabel(d.day)})`}</title>
                                             </g>
                                         );
                                     })}
