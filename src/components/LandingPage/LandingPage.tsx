@@ -12,7 +12,8 @@ import {
   Smartphone,
   Anchor,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowUpRight
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
@@ -421,6 +422,28 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
         {/* --- Roadmap Section --- */}
         <RoadmapSection />
+
+        {/* --- Cross-Project Shout-out --- */}
+        <section className="partner-shoutout" aria-labelledby="partner-shoutout-title">
+          <div className="container">
+            <div className="partner-shoutout-card">
+              <span className="partner-shoutout-badge">Free resource</span>
+              <h2 id="partner-shoutout-title" className="partner-shoutout-title">
+                Roadmap to Janna
+              </h2>
+              <p className="partner-shoutout-copy">If you are systematizing Quran memorization, you will likely want to systematize the other parts of your Muslim life too.</p>
+              <a
+                className="partner-shoutout-link"
+                href="https://imed-ghomari.github.io/roadmap-to-janna/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Visit the free roadmap
+                <ArrowUpRight size={18} />
+              </a>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* --- Footer --- */}

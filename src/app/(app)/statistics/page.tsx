@@ -726,7 +726,7 @@ export default function StatisticsPage() {
                     trend,
                 };
             })
-            .filter(row => row.mistakes > 0 || row.attempts > 0)
+            .filter(row => row.mistakes > 0)
             .sort((a, b) => {
                 if (b.mistakes !== a.mistakes) return b.mistakes - a.mistakes;
                 if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate;
@@ -958,6 +958,25 @@ function ReviewsHeatmapSection({
     maxCount: number;
     averagePerDay: string;
 }) {
+    const panelRef = useRef<HTMLDivElement | null>(null);
+    const [panelWidth, setPanelWidth] = useState(0);
+
+    useEffect(() => {
+        if (!panelRef.current) return;
+        const el = panelRef.current;
+        const update = () => setPanelWidth(Math.max(0, Math.floor(el.clientWidth)));
+        update();
+        const ro = new ResizeObserver(() => update());
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const cellSize = 12;
+    const cellGap = 4;
+    const totalWeeks = weeks.length;
+    const gridWidth = totalWeeks > 0 ? totalWeeks * cellSize + (totalWeeks - 1) * cellGap : 0;
+    const alignToEnd = panelWidth > 0 && gridWidth > panelWidth;
+
     const getCellColor = (count: number, inRange: boolean, isToday: boolean) => {
         if (isToday) {
             return count > 0
@@ -989,18 +1008,18 @@ function ReviewsHeatmapSection({
                 </div>
             </div>
 
-            <div style={{ borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--reviews-chart-panel)', padding: '0.7rem', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+            <div ref={panelRef} style={{ borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--reviews-chart-panel)', padding: '0.7rem', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: alignToEnd ? 'flex-end' : 'flex-start', width: '100%' }}>
                     {weeks.map((week, weekIndex) => (
-                        <div key={`week-${weekIndex}`} style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', marginLeft: weekIndex === 0 ? 0 : '4px' }}>
+                        <div key={`week-${weekIndex}`} style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: `${cellGap}px`, marginLeft: weekIndex === 0 ? 0 : `${cellGap}px` }}>
                             {week.map(day => (
                                 <div
                                     key={day.key}
                                     data-tooltip={`${day.dateLabel}: ${day.count} review${day.count === 1 ? '' : 's'}${day.isToday ? ' (today)' : ''}`}
                                     data-tooltip-trigger="tap"
                                     style={{
-                                        width: '12px',
-                                        height: '12px',
+                                        width: `${cellSize}px`,
+                                        height: `${cellSize}px`,
                                         borderRadius: '3px',
                                         background: getCellColor(day.count, day.inRange, day.isToday),
                                         border: `1px solid ${day.isToday ? 'var(--accent)' : day.inRange ? 'color-mix(in srgb, var(--border) 60%, transparent)' : 'transparent'}`,
@@ -1067,8 +1086,8 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
     const gradientSeed = useId();
-    const chartHeight = 210;
-    const padding = { top: 20, right: 34, bottom: 42, left: 34 };
+    const chartHeight = 220;
+    const padding = { top: 20, right: 34, bottom: 58, left: 34 };
     const maxMistakes = Math.max(1, ...rows.map(row => row.mistakes));
     const ids = {
         clip: `risk-chart-clip-${gradientSeed}`,
@@ -1088,7 +1107,7 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
         return null;
     }
 
-    const shortSurahLabel = (name: string) => (name.length > 10 ? `${name.slice(0, 10)}…` : name);
+    const shortSurahLabel = (name: string, maxChars: number) => (name.length > maxChars ? `${name.slice(0, maxChars)}…` : name);
 
     return (
         <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
@@ -1113,6 +1132,8 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                         const groupStart = padding.left + (plotWidth - groupWidth) / 2;
                         const step = groupWidth / span;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
+                        const rotateLabels = step < 95;
+                        const labelMaxChars = step < 70 ? 5 : step < 90 ? 7 : 10;
                         const tickCount = maxMistakes <= 8 ? Math.max(2, maxMistakes) : 4;
                         const tickStep = maxMistakes <= 8 ? 1 : Math.max(2, Math.ceil(maxMistakes / tickCount / 2) * 2);
                         const maxNice = Math.max(1, tickCount * tickStep);
@@ -1160,11 +1181,31 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                     </text>
                                 ))}
 
-                                {rows.map((row, i) => (
-                                    <text key={`x-${row.surahId}`} x={getX(i)} y={chartHeight - padding.bottom + 18} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">
-                                        {shortSurahLabel(row.surahName)}
-                                    </text>
-                                ))}
+                                {rows.map((row, i) => {
+                                    const x = getX(i);
+                                    const y = chartHeight - padding.bottom + 18;
+                                    const label = shortSurahLabel(row.surahName, labelMaxChars);
+                                    if (rotateLabels) {
+                                        return (
+                                            <text
+                                                key={`x-${row.surahId}`}
+                                                x={x}
+                                                y={y}
+                                                textAnchor="end"
+                                                fontSize="9"
+                                                fill="var(--foreground-secondary)"
+                                                transform={`rotate(-24 ${x} ${y})`}
+                                            >
+                                                {label}
+                                            </text>
+                                        );
+                                    }
+                                    return (
+                                        <text key={`x-${row.surahId}`} x={x} y={y} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">
+                                            {label}
+                                        </text>
+                                    );
+                                })}
                             </>
                         );
                     })()}

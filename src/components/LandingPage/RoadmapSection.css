@@ -14,10 +14,13 @@
 }
 
 .roadmap-column {
-  background: var(--landing-bg-secondary);
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 56%),
+    var(--landing-surface-bg);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   border: 1px solid var(--border);
+  box-shadow: var(--landing-glow-shadow-soft);
 }
 
 .column-header {
@@ -42,11 +45,13 @@
 }
 
 .roadmap-card {
-  background: var(--background);
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 58%),
+    color-mix(in srgb, var(--landing-surface-bg) 88%, var(--background));
   padding: 1.25rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  box-shadow: var(--landing-glow-shadow-soft);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -58,7 +63,7 @@
 
 .roadmap-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: var(--landing-glow-shadow-strong);
 }
 
 .roadmap-card h4 {
