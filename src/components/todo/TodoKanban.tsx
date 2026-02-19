@@ -1302,8 +1302,12 @@ export default function TodoKanban({
                     );
                 };
 
+                const contextStackClassName = (isMobile || isTablet)
+                    ? 'verse-context-stack pr-1 space-y-4'
+                    : 'verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4';
+
                 const content = mistakeEntries.length > 0 ? (
-                    <div className="verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4">
+                    <div className={contextStackClassName}>
                         {mergedContextRanges.map((range: any, rangeIdx: number) => {
                             const versesInRange = Array.from(
                                 { length: Math.max(0, range.end - range.start + 1) },
@@ -1331,7 +1335,7 @@ export default function TodoKanban({
                     const prev = target > 1 ? target - 1 : null;
                     const next = target < total ? target + 1 : null;
                     return (
-                        <div className="verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4">
+                        <div className={contextStackClassName}>
                             {prev && renderVerse(prev)}
                             {renderVerse(target)}
                             {next && renderVerse(next)}

@@ -3,6 +3,7 @@
 import React from 'react';
 import Navigation from './Navigation';
 import { usePathname } from 'next/navigation';
+import GlobalTooltip from './ui/GlobalTooltip';
 
 interface AppShellProps {
     children: React.ReactNode;
@@ -34,6 +35,7 @@ export default function AppShell({ children }: AppShellProps) {
             <div className={`page-container ${isFixedLayout ? 'fixed-layout' : ''}`}>
                 {children}
             </div>
+            <GlobalTooltip />
         </div>
     );
 }

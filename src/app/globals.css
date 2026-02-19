@@ -935,6 +935,34 @@ h3 {
   box-shadow: var(--card-shadow);
 }
 
+/* Statistics: mobile single column, tablet/desktop masonry with symmetric spacing */
+.stats-masonry {
+  width: 100%;
+  column-count: 1;
+  column-gap: 0;
+}
+
+.stats-masonry-item {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  margin-bottom: 0.85rem;
+}
+
+.stats-masonry-item .card {
+  margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .stats-masonry {
+    column-count: 2;
+    column-gap: 1rem;
+  }
+
+  .stats-masonry-item {
+    margin-bottom: 1rem;
+  }
+}
+
 .adv-section-title {
   font-weight: 800;
   font-size: clamp(1.05rem, 3.6vw, 1.2rem);
@@ -3565,4 +3593,27 @@ input:focus {
   .checkout-plan-label {
     text-align: center;
   }
+}
+
+.custom-hover-tooltip {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 0.45rem 0.62rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background-secondary) 94%, black 6%);
+  color: var(--foreground);
+  font-size: 0.76rem;
+  line-height: 1.2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 90ms ease, visibility 90ms ease;
+}
+
+.custom-hover-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
 }
