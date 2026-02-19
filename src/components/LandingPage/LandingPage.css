@@ -20,7 +20,11 @@
   --landing-accent-light: rgba(91, 143, 185, 0.1);
 
   /* Secondary Background for Landing Page */
-  --landing-bg-secondary: var(--background-secondary);
+  --landing-bg-secondary: #e9eef5;
+  --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 86%, var(--background));
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 20%, transparent);
+  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 14%, transparent);
+  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 18%, transparent);
 
   /* Hero & Nav Colors */
   --nav-bg: rgba(240, 240, 240, 0.9);
@@ -35,6 +39,11 @@
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     --landing-accent-light: rgba(108, 165, 212, 0.15);
+    --landing-bg-secondary: var(--background-secondary);
+    --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 78%, var(--background));
+    --landing-glow-radial: color-mix(in srgb, var(--accent) 12%, transparent);
+    --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent);
+    --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
 
     --nav-bg: rgba(20, 20, 20, 0.7);
     --hero-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -48,6 +57,11 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   --landing-accent-light: rgba(108, 165, 212, 0.15);
+  --landing-bg-secondary: var(--background-secondary);
+  --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 78%, var(--background));
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 12%, transparent);
+  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent);
+  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
 
   --nav-bg: rgba(20, 20, 20, 0.7);
   --hero-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -59,7 +73,11 @@
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
   --landing-accent-light: rgba(91, 143, 185, 0.1);
-  --landing-bg-secondary: #f4f6f8;
+  --landing-bg-secondary: #e9eef5;
+  --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 86%, var(--background));
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 20%, transparent);
+  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 14%, transparent);
+  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 18%, transparent);
 
   --nav-bg: var(--glass-bg);
   --hero-overlay-bg: rgba(255, 255, 255, 0.7);
@@ -442,7 +460,9 @@
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: var(--background);
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 55%),
+    var(--landing-surface-bg);
   color: inherit;
   text-align: left;
   padding: 1rem;
@@ -450,18 +470,22 @@
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.9rem;
+  box-shadow: var(--landing-glow-shadow-soft);
   transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .feature-showcase-card:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: var(--landing-glow-shadow-strong);
 }
 
 .feature-showcase-card.active {
   border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
-  background: color-mix(in srgb, var(--landing-accent-light) 55%, var(--background));
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--accent) 12%, transparent);
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 52%),
+    color-mix(in srgb, var(--landing-accent-light) 58%, var(--landing-surface-bg));
+  box-shadow: var(--landing-glow-shadow-strong);
 }
 
 .feature-showcase-card:focus-visible {
@@ -508,6 +532,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  box-shadow: var(--landing-glow-shadow-soft);
 }
 
 .feature-showcase-image {
@@ -932,7 +957,9 @@
 
 /* Styling for the Single Pricing Card */
 .price-card {
-  background: var(--glass-bg);
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 56%),
+    var(--glass-bg);
   backdrop-filter: var(--blur);
   padding: 2.5rem 2.25rem;
   border-radius: var(--radius-lg);
@@ -951,7 +978,7 @@
 
 .price-card.premium {
   border: 2px solid var(--accent);
-  box-shadow: 0 0 0 4px var(--landing-accent-light), var(--glass-shadow);
+  box-shadow: 0 0 0 4px var(--landing-accent-light), var(--glass-shadow), 0 14px 30px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .badge {
@@ -1023,6 +1050,73 @@
   text-align: center;
   color: var(--foreground-secondary);
   font-size: 0.9rem;
+}
+
+/* Cross-project shout-out */
+.partner-shoutout {
+  padding: 0 0 3.4rem;
+  background: var(--background);
+}
+
+.partner-shoutout-card {
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 52%),
+    var(--landing-surface-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.2rem, 2.4vw, 1.7rem);
+  box-shadow: var(--landing-glow-shadow-soft);
+}
+
+.partner-shoutout-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+}
+
+.partner-shoutout-title {
+  margin: 0.72rem 0 0.5rem;
+  font-size: clamp(1.2rem, 2.1vw, 1.5rem);
+  line-height: 1.3;
+}
+
+.partner-shoutout-copy {
+  margin: 0;
+  max-width: 100%;
+  color: var(--foreground-secondary);
+  line-height: 1.55;
+  font-size: 0.98rem;
+}
+
+.partner-shoutout-link {
+  margin-top: 1rem;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 999px;
+  padding: 0.42rem 0.78rem;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.partner-shoutout-link:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  transform: translateY(-1px);
 }
 
 .footer-logo {
@@ -1320,6 +1414,18 @@
     font-size: 1rem;
     padding: 0.875rem 1.5rem;
   }
+
+  .partner-shoutout {
+    padding-bottom: 2.7rem;
+  }
+
+  .partner-shoutout-card {
+    padding: 1.1rem;
+  }
+
+  .partner-shoutout-link {
+    width: auto;
+  }
 }
 
 /* Billing Toggle */
@@ -1399,20 +1505,24 @@
 }
 
 .faq-item {
-  background: var(--landing-bg-secondary);
+  background:
+    radial-gradient(circle at top right, var(--landing-glow-radial), transparent 58%),
+    var(--landing-surface-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--landing-glow-shadow-soft);
   transition: all 0.2s ease;
 }
 
 .faq-item:hover {
   border-color: var(--accent);
+  box-shadow: var(--landing-glow-shadow-strong);
 }
 
 .faq-item.open {
   border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(91, 143, 185, 0.15);
+  box-shadow: var(--landing-glow-shadow-strong);
 }
 
 .faq-question {
