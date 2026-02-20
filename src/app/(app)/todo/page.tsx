@@ -619,19 +619,9 @@ export default function TodoPage() {
         } else {
             const behavior = settings.completeExitBehavior ?? 'mindmap_only';
             if (behavior === 'mindmap_and_verses') {
-                const verseNodes = nodes.filter(n => getVerseSegmentSurahId(n) === surahId);
-                if (verseNodes.length > 0) {
-                    const results = await Promise.allSettled(verseNodes.map(n => deleteNode(n.id)));
-                    const failed = results.filter((r) => r.status === 'rejected');
-                    if (failed.length > 0) {
-                        console.warn('Some verse nodes could not be suspended on move-out', {
-                            surahId,
-                            failed: failed.length,
-                            total: verseNodes.length,
-                        });
-                    }
-                    appLogger.addLog(`Suspended verse reviews for Surah ${surahId}`, 'info');
-                }
+                // Suspension is visibility-only: verse nodes remain stored and are
+                // filtered out from the review queue while the surah is outside Complete.
+                appLogger.addLog(`Suspended verse reviews for Surah ${surahId} (non-destructive)`, 'info');
             }
         }
     };

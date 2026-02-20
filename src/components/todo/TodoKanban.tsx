@@ -286,10 +286,16 @@ export default function TodoKanban({
         representativeAbs: number;
         group: {
             phraseId: string;
+            phraseIds: string[];
             absRefs: number[];
-            entry: any;
+            entries: any[];
             ayahIds: number[];
             surahId: number;
+            resolutionTargets: Array<{
+                phraseId: string;
+                decisionKey: string;
+                representativeAbs: number;
+            }>;
         };
         surah: { id: number; name: string; arabicName?: string };
     } | null>(null);
@@ -713,47 +719,90 @@ export default function TodoKanban({
         if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
 
         const group = item.data;
-        const phraseMap: Record<string, { phraseId: string; absRefs: number[]; entry: any; ayahIds: number[] }> = {};
+        const sourceMap: Record<string, {
+            phraseId: string;
+            phraseIds: string[];
+            absRefs: number[];
+            entries: any[];
+            ayahIds: number[];
+            phraseAbsRefs: Record<string, number[]>;
+        }> = {};
 
         group.items.forEach((gItem: any) => {
             const abs = gItem.err.absoluteAyah!;
             gItem.muts.forEach((entry: any) => {
-                if (!phraseMap[entry.phraseId]) {
-                    phraseMap[entry.phraseId] = {
+                const sourceAbs = Number(entry?.meta?.sourceAbs);
+                const sourceRef = Number.isFinite(sourceAbs) ? absoluteToSurahAyah(sourceAbs) : null;
+                const sourceGroupKey = sourceRef && sourceRef.surahId === group.surah.id
+                    ? `source-${sourceAbs}`
+                    : `phrase-${entry.phraseId}`;
+
+                if (!sourceMap[sourceGroupKey]) {
+                    sourceMap[sourceGroupKey] = {
                         phraseId: entry.phraseId,
+                        phraseIds: [],
                         absRefs: [],
-                        entry,
-                        ayahIds: []
+                        entries: [],
+                        ayahIds: [],
+                        phraseAbsRefs: {}
                     };
                 }
-                if (!phraseMap[entry.phraseId].absRefs.includes(abs)) {
-                    phraseMap[entry.phraseId].absRefs.push(abs);
+                const current = sourceMap[sourceGroupKey];
+                if (!current.phraseIds.includes(entry.phraseId)) {
+                    current.phraseIds.push(entry.phraseId);
+                }
+                if (!current.entries.some((existingEntry: any) => existingEntry.phraseId === entry.phraseId)) {
+                    current.entries.push(entry);
+                }
+                if (!current.phraseAbsRefs[entry.phraseId]) {
+                    current.phraseAbsRefs[entry.phraseId] = [];
+                }
+                if (!current.phraseAbsRefs[entry.phraseId].includes(abs)) {
+                    current.phraseAbsRefs[entry.phraseId].push(abs);
+                }
+
+                if (!current.absRefs.includes(abs)) {
+                    current.absRefs.push(abs);
                     const ref = absoluteToSurahAyah(abs);
-                    phraseMap[entry.phraseId].ayahIds.push(ref.ayahId);
+                    current.ayahIds.push(ref.ayahId);
                 }
             });
         });
 
-        const groups = Object.values(phraseMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+        const groups = Object.values(sourceMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
         if (groups.length === 0) return;
 
         const selected = groups[0];
-        const representativeAbs = selected.absRefs.find(abs => {
-            const key = `${abs}-${selected.phraseId}`;
-            const existing = mutashabihatDecisions.find(d => d.phraseId === key);
-            return existing && existing.status !== 'pending';
-        }) || selected.absRefs[0];
-        const decisionKey = `${representativeAbs}-${selected.phraseId}`;
+        const resolutionTargets = selected.phraseIds.map((phraseId) => {
+            const phraseAbsRefs = selected.phraseAbsRefs[phraseId] || selected.absRefs;
+            const targetAbs = phraseAbsRefs.find((abs) => {
+                const key = `${abs}-${phraseId}`;
+                const existing = mutashabihatDecisions.find(d => d.phraseId === key);
+                return existing && existing.status !== 'pending';
+            }) || phraseAbsRefs[0];
+            return {
+                phraseId,
+                representativeAbs: targetAbs,
+                decisionKey: `${targetAbs}-${phraseId}`,
+            };
+        });
+
+        const firstResolvedTarget = resolutionTargets.find(target =>
+            (mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.status || 'pending') !== 'pending'
+        );
+        const primaryTarget = firstResolvedTarget || resolutionTargets[0];
 
         setActiveSimilarityContext({
-            decisionKey,
-            representativeAbs,
+            decisionKey: primaryTarget.decisionKey,
+            representativeAbs: primaryTarget.representativeAbs,
             group: {
                 phraseId: selected.phraseId,
+                phraseIds: selected.phraseIds,
                 absRefs: selected.absRefs,
-                entry: selected.entry,
+                entries: selected.entries,
                 ayahIds: selected.ayahIds,
-                surahId: group.surah.id
+                surahId: group.surah.id,
+                resolutionTargets,
             },
             surah: group.surah
         });
@@ -1252,19 +1301,48 @@ export default function TodoKanban({
 
             {/* Similarity Context Modal */}
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
-                const { decisionKey, representativeAbs, group, surah } = activeSimilarityContext;
+                const { decisionKey, group, surah } = activeSimilarityContext;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
                 const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
-                const isConfirmed = !!existing.confirmedAt;
-                const entry = group.entry;
+                const isConfirmed = group.resolutionTargets.some(target => !!mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.confirmedAt);
+                const sortedAbsRefs = [...group.absRefs].sort((a, b) => a - b);
+                const sourceEntries = sortedAbsRefs.map(absRef => {
+                    const ref = absoluteToSurahAyah(absRef);
+                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                    const mutEntry = group.entries.find((entry: any) =>
+                        entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)
+                    );
+                    return { absRef, ref, baseVerse, mutEntry };
+                }).filter(item => !!item.baseVerse && !!item.mutEntry);
 
-                const matches = entry.matches.filter((matchAbs: number) => {
-                    const matchRef = absoluteToSurahAyah(matchAbs);
-                    return matchRef.surahId !== group.surahId;
+                const matchRangeByAbs = new Map<number, [number, number]>();
+                group.entries.forEach((entry: any) => {
+                    (entry?.meta?.matches || []).forEach((m: any) => {
+                        if (!matchRangeByAbs.has(m.absolute)) {
+                            matchRangeByAbs.set(m.absolute, m.wordRange);
+                        }
+                    });
                 });
+
+                const matches = Array.from(new Set(group.entries.flatMap((entry: any) => entry?.matches || [])))
+                    .filter((matchAbs: number) => {
+                        if (group.absRefs.includes(matchAbs)) return false;
+                        const matchRef = absoluteToSurahAyah(matchAbs);
+                        return matchRef.surahId !== group.surahId;
+                    });
                 const isExpanded = expandedSimilarityMatches[`${decisionKey}-full`] || false;
                 const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
                 const hasMore = matches.length > 4;
+                const phraseLabel = group.phraseIds.length === 1
+                    ? (group.phraseIds[0].startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseIds[0]}`)
+                    : `Phrases ${group.phraseIds.map(phraseId => phraseId.startsWith('custom-') ? 'Custom' : `#${phraseId}`).join(', ')}`;
+
+                const applyDecisionToGroup = (updater: (targetExisting: any) => any) => {
+                    group.resolutionTargets.forEach((target) => {
+                        const targetExisting = mutashabihatDecisions.find(d => d.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
+                        onMutashabihatDecisionUpdate(target.representativeAbs, updater(targetExisting), target.decisionKey);
+                    });
+                };
 
                 const similarityContent = (
                     <>
@@ -1273,7 +1351,7 @@ export default function TodoKanban({
                                 <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
                                 <select
                                     value={existing.status}
-                                    onChange={e => onMutashabihatDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
+                                    onChange={e => applyDecisionToGroup(targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
                                     className="maturity-select"
                                     style={{ width: '100%', padding: '8px' }}
                                 >
@@ -1287,7 +1365,7 @@ export default function TodoKanban({
                             <textarea
                                 placeholder="Add your distinction notes here..."
                                 value={existingNotes}
-                                onChange={e => onMutashabihatDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
+                                onChange={e => applyDecisionToGroup(targetExisting => ({ ...targetExisting, notes: e.target.value }))}
                                 style={{
                                     width: '100%',
                                     minHeight: '80px',
@@ -1306,19 +1384,17 @@ export default function TodoKanban({
                                 Similarity Context
                             </div>
                             <div style={{ padding: '0.5rem' }}>
-                                {group.absRefs.map(absRef => {
-                                    const ref = absoluteToSurahAyah(absRef);
-                                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
-                                    const matchRange = entry.meta?.matches?.find((m: any) => m.absolute === absRef)?.wordRange;
-                                    const isSource = entry.meta?.sourceAbs === absRef;
-                                    const sourceRange = entry.meta?.sourceRange;
-
-                                    if (!baseVerse) return null;
+                                {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
+                                    const sourceRange = mutEntry?.meta?.sourceRange;
+                                    const isSource = mutEntry?.meta?.sourceAbs === absRef;
+                                    const matchRange = isSource
+                                        ? sourceRange
+                                        : matchRangeByAbs.get(absRef);
 
                                     return (
                                         <div key={absRef} className="mut-text" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
                                             <div className="mut-text-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
-                                                {getSurah(ref.surahId)?.name} - {ref.ayahId} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
+                                                {getSurah(ref.surahId)?.name} - {ref.ayahId} ({phraseLabel})
                                             </div>
                                             <div className="mut-context">
                                                 <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', textAlign: 'right', direction: 'rtl', lineHeight: '2.2', marginBottom: '1.5rem' }}>
@@ -1333,7 +1409,7 @@ export default function TodoKanban({
                                                     const mref = absoluteToSurahAyah(matchAbs);
                                                     const msurah = getSurah(mref.surahId);
                                                     const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
-                                                    const matchRange = entry.meta?.matches?.find((m: any) => m.absolute === matchAbs)?.wordRange;
+                                                    const matchRange = matchRangeByAbs.get(matchAbs);
 
                                                     return (
                                                         <div key={idx} className="mut-match-item" style={{

@@ -144,6 +144,25 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
 ];
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 
+type SimilarityResolutionTarget = {
+    phraseId: string;
+    decisionKey: string;
+    representativeAbs: number;
+};
+
+type SimilaritySurahGroup = {
+    phraseId: string;
+    phraseIds: string[];
+    ayahIds: number[];
+    absRefs: number[];
+    entries: any[];
+    customIds: string[];
+    matchCount: number;
+    decisionKey: string;
+    representativeAbs: number;
+    resolutionTargets: SimilarityResolutionTarget[];
+};
+
 const formatKnowledgeTrackingDueDate = (due: string | null): string => {
     if (!due) return '-';
     const parsed = new Date(due);
@@ -224,7 +243,7 @@ export default function SettingsPage() {
     });
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
     const { settings, saveSettings } = useInstantSettings();
-    const { nodes: instantNodes, saveNode: saveInstantNode, deleteNode: deleteInstantNode } = useInstantNodes();
+    const { nodes: instantNodes, saveNode: saveInstantNode } = useInstantNodes();
     const { mindmaps: instantMindmaps } = useInstantMindMaps();
     const { progress: listeningProgress } = useInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
@@ -268,6 +287,7 @@ export default function SettingsPage() {
     const [noteModal, setNoteModal] = useState<{
         decisionKey: string;
         representativeAbs: number;
+        resolutionTargets?: SimilarityResolutionTarget[];
         title: string;
         initialNote: string;
     } | null>(null);
@@ -296,13 +316,7 @@ export default function SettingsPage() {
         title: string;
         surahId: number;
         phraseId: string;
-        group: {
-            phraseId: string;
-            ayahIds: number[];
-            entry: any;
-            absRefs: number[];
-            customId?: string;
-        };
+        group: SimilaritySurahGroup;
         representativeAbs: number;
     } | null>(null);
 
@@ -1208,59 +1222,7 @@ export default function SettingsPage() {
                             {mutashabihatSurahs.map(({ surah, count }) => {
                                 const isOpen = expandedSurahs[surah.id] ?? false;
 
-                                // Calculate surah group data
-                                const surahMutsMap: Record<string, {
-                                    phraseId: string,
-                                    ayahIds: number[],
-                                    entry: any,
-                                    absRefs: number[]
-                                }> = {};
-
-                                getAllMutashabihatRefs().filter(abs => {
-                                    const ref = absoluteToSurahAyah(abs);
-                                    return ref.surahId === surah.id;
-                                }).forEach(abs => {
-                                    const muts = getMutashabihatForAbsolute(abs);
-                                    const ref = absoluteToSurahAyah(abs);
-                                    muts.forEach(m => {
-                                        if (!surahMutsMap[m.phraseId]) {
-                                            surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [] };
-                                        }
-                                        if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
-                                            surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
-                                            surahMutsMap[m.phraseId].absRefs.push(abs);
-                                        }
-                                    });
-                                });
-
-                                // Add custom mutashabihat
-                                instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
-                                    const phraseId = `custom-${c.id}`;
-                                    const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
-                                    const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
-
-                                    if (!surahMutsMap[phraseId]) {
-                                        surahMutsMap[phraseId] = {
-                                            phraseId,
-                                            ayahIds: [c.ayahId],
-                                            absRefs: [abs],
-                                            entry: {
-                                                phraseId,
-                                                matches: [abs, targetAbs],
-                                                meta: {
-                                                    sourceAbs: abs,
-                                                    sourceRange: [0, 0],
-                                                    matches: [
-                                                        { absolute: abs, wordRange: [0, 0] },
-                                                        { absolute: targetAbs, wordRange: [0, 0] }
-                                                    ]
-                                                }
-                                            }
-                                        };
-                                    }
-                                });
-
-                                const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+                                const groups = buildSurahMutGroups(surah.id);
 
                                 return (
                                     <div key={surah.id} className="mobile-group-item">
@@ -1282,10 +1244,10 @@ export default function SettingsPage() {
                                         {isOpen && (
                                             <div className="mobile-subgroup-list">
                                                 {groups.map(group => {
-                                                    const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
-                                                    const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                    const representativeAbs = group.representativeAbs;
+                                                    const decisionKey = group.decisionKey;
                                                     const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                                                    const isConfirmed = !!existing.confirmedAt;
+                                                    const isConfirmed = group.resolutionTargets.some(target => !!decisions[target.decisionKey]?.confirmedAt);
 
                                                     return (
                                                         <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
@@ -1301,7 +1263,7 @@ export default function SettingsPage() {
                                                                     {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
                                                                 </span>
                                                                 <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                                                                    {group.entry.matches.length - 1} matches
+                                                                    {group.matchCount} matches
                                                                 </span>
                                                             </div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1862,21 +1824,19 @@ export default function SettingsPage() {
             message: `${currentSettingDescription}\n\nOptional:\n${optionalQuestion}`,
             confirmLabel: targets.length > 0 ? 'Suspend Verse Groups' : 'Keep Setting',
             cancelLabel: 'Keep As-Is',
-            isDestructive: true,
         });
         if (!apply) return;
 
         try {
-            const nodesToDelete = instantNodes.filter((node) =>
+            const affectedVerseNodes = instantNodes.filter((node) =>
                 node.type === 'verse_segment' &&
                 targets.some((t) => resolveNodeSurahId(node) === t.surahId)
             );
-            await Promise.all(nodesToDelete.map((node) => deleteInstantNode(node.id)));
             addToast(
                 'success',
                 'Applied',
-                nodesToDelete.length > 0
-                    ? `Suspended ${nodesToDelete.length} verse group card(s) for existing out-of-complete mindmaps.`
+                affectedVerseNodes.length > 0
+                    ? `Suspended ${affectedVerseNodes.length} verse group card(s) for existing out-of-complete mindmaps (no data deleted).`
                     : 'No verse group cards were active for those cards.'
             );
         } catch (error) {
@@ -1958,7 +1918,7 @@ export default function SettingsPage() {
         persistSettingsUpdate({ skippedSurahs: currentSkipped.filter(s => s !== id) }, 'skipped surah list');
     };
 
-  const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
+const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
     const { id: _ignored, ...updateWithoutId } = update;
     const previousDecision = decisions[phraseId];
 
@@ -1997,6 +1957,13 @@ export default function SettingsPage() {
         });
     }
 };
+
+    const applyDecisionToTargets = (targets: SimilarityResolutionTarget[], updater: (existing: MutashabihatDecision) => MutashabihatDecision) => {
+        targets.forEach(target => {
+            const existing = decisions[target.decisionKey] || { id: target.decisionKey, phraseId: target.decisionKey, status: 'pending' };
+            void handleDecisionUpdate(target.representativeAbs, updater(existing), target.decisionKey);
+        });
+    };
 
     const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
@@ -2037,7 +2004,16 @@ export default function SettingsPage() {
         });
         if (!ok) return;
 
-        const relatedDecisions = instantDecisions.filter(d => d.phraseId?.includes(`custom-${customId}`));
+        const isDecisionLinkedToCustom = (phraseId?: string) => {
+            if (!phraseId) return false;
+            return (
+                phraseId === `custom-${customId}` ||
+                phraseId.startsWith(`custom-${customId}-`) ||
+                phraseId.endsWith(`-custom-${customId}`) ||
+                phraseId.includes(`-custom-${customId}-`)
+            );
+        };
+        const relatedDecisions = instantDecisions.filter(d => isDecisionLinkedToCustom(d.phraseId));
         const deletes = [
             db.tx.customMutashabihat[customId].delete(),
             ...relatedDecisions.map(d => db.tx.mutashabihatDecisions[d.id].delete())
@@ -2134,6 +2110,95 @@ export default function SettingsPage() {
             setSelectedMutSurah(mutashabihatSurahs[0]?.surah.id ?? null);
         }
     }, [mutashabihatSurahs, selectedMutSurah]);
+
+    const buildSurahMutGroups = (surahId: number): SimilaritySurahGroup[] => {
+        const sourceMap: Record<string, {
+            phraseId: string;
+            phraseIds: string[];
+            ayahIds: number[];
+            absRefs: number[];
+            entries: any[];
+            phraseAbsRefs: Record<string, number[]>;
+            customIds: Set<string>;
+        }> = {};
+
+        getAllMutashabihatRefs(instantCustomMutashabihat)
+            .filter(abs => absoluteToSurahAyah(abs).surahId === surahId)
+            .forEach(abs => {
+                const ref = absoluteToSurahAyah(abs);
+                const muts = getMutashabihatForAbsolute(abs, instantCustomMutashabihat);
+                muts.forEach(entry => {
+                    const sourceAbs = Number((entry as any)?.meta?.sourceAbs);
+                    const sourceRef = Number.isFinite(sourceAbs) ? absoluteToSurahAyah(sourceAbs) : null;
+                    const sourceGroupKey = sourceRef && sourceRef.surahId === surahId
+                        ? `source-${sourceAbs}`
+                        : `phrase-${entry.phraseId}`;
+
+                    if (!sourceMap[sourceGroupKey]) {
+                        sourceMap[sourceGroupKey] = {
+                            phraseId: entry.phraseId,
+                            phraseIds: [],
+                            ayahIds: [],
+                            absRefs: [],
+                            entries: [],
+                            phraseAbsRefs: {},
+                            customIds: new Set<string>(),
+                        };
+                    }
+
+                    const current = sourceMap[sourceGroupKey];
+                    if (!current.phraseIds.includes(entry.phraseId)) {
+                        current.phraseIds.push(entry.phraseId);
+                    }
+                    if (!current.entries.some(existingEntry => existingEntry?.phraseId === entry.phraseId)) {
+                        current.entries.push(entry);
+                    }
+                    if (!current.phraseAbsRefs[entry.phraseId]) {
+                        current.phraseAbsRefs[entry.phraseId] = [];
+                    }
+                    if (!current.phraseAbsRefs[entry.phraseId].includes(abs)) {
+                        current.phraseAbsRefs[entry.phraseId].push(abs);
+                    }
+                    if (!current.absRefs.includes(abs)) {
+                        current.absRefs.push(abs);
+                        current.ayahIds.push(ref.ayahId);
+                    }
+
+                    const customId = String((entry as any)?.meta?.customId || '');
+                    if (customId) current.customIds.add(customId);
+                });
+            });
+
+        return Object.values(sourceMap)
+            .map((group): SimilaritySurahGroup => {
+                const resolutionTargets: SimilarityResolutionTarget[] = group.phraseIds.map((phraseId) => {
+                    const phraseAbsRefs = group.phraseAbsRefs[phraseId] || group.absRefs;
+                    const representativeAbs = phraseAbsRefs.find(a => decisions[`${a}-${phraseId}`]?.status !== 'pending') || phraseAbsRefs[0];
+                    return {
+                        phraseId,
+                        representativeAbs,
+                        decisionKey: `${representativeAbs}-${phraseId}`,
+                    };
+                });
+                const primary = resolutionTargets.find(target => decisions[target.decisionKey]?.status !== 'pending') || resolutionTargets[0];
+                const mergedMatches = Array.from(new Set(group.entries.flatMap((entry: any) => entry?.matches || [])))
+                    .filter((matchAbs: number) => !group.absRefs.includes(matchAbs));
+
+                return {
+                    phraseId: primary?.phraseId || group.phraseId,
+                    phraseIds: group.phraseIds,
+                    ayahIds: group.ayahIds,
+                    absRefs: group.absRefs,
+                    entries: group.entries,
+                    customIds: Array.from(group.customIds),
+                    matchCount: mergedMatches.length,
+                    decisionKey: primary?.decisionKey || `${group.absRefs[0]}-${group.phraseId}`,
+                    representativeAbs: primary?.representativeAbs || group.absRefs[0],
+                    resolutionTargets,
+                };
+            })
+            .sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+    };
 
     return (
         <>
@@ -3147,63 +3212,7 @@ export default function SettingsPage() {
                                             {mutashabihatSurahs.map(({ surah, count }) => {
                                                 const isOpen = expandedSurahs[surah.id] ?? false;
 
-                                                // Calculate surah group data
-                                                const surahMutsMap: Record<string, {
-                                                    phraseId: string,
-                                                    ayahIds: number[],
-                                                    entry: any,
-                                                    absRefs: number[],
-                                                    customId?: string
-                                                }> = {};
-
-                                                getAllMutashabihatRefs().filter(abs => {
-                                                    const ref = absoluteToSurahAyah(abs);
-                                                    return ref.surahId === surah.id;
-                                                }).forEach(abs => {
-                                                    const muts = getMutashabihatForAbsolute(abs);
-                                                    const ref = absoluteToSurahAyah(abs);
-                                                    muts.forEach(m => {
-                                                        if (!surahMutsMap[m.phraseId]) {
-                                                            surahMutsMap[m.phraseId] = { phraseId: m.phraseId, ayahIds: [], entry: m, absRefs: [], customId: (m as any)?.meta?.customId };
-                                                        }
-                                                        if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
-                                                            surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
-                                                            surahMutsMap[m.phraseId].absRefs.push(abs);
-                                                        }
-                                                    });
-                                                });
-
-                                                // Add custom mutashabihat
-                                                instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
-                                                    const phraseId = `custom-${c.id}`;
-                                                    const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
-                                                    const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
-
-                                                    if (!surahMutsMap[phraseId]) {
-                                                        surahMutsMap[phraseId] = {
-                                                            phraseId,
-                                                            ayahIds: [c.ayahId],
-                                                            absRefs: [abs],
-                                                            customId: c.id,
-                                                            entry: {
-                                                                phraseId,
-                                                                matches: [abs, targetAbs],
-                                                                meta: {
-                                                                    sourceAbs: abs,
-                                                                    sourceRange: [0, 0],
-                                                                    matches: [
-                                                                        { absolute: abs, wordRange: [0, 0] },
-                                                                        { absolute: targetAbs, wordRange: [0, 0] }
-                                                                    ],
-                                                                    isCustom: true,
-                                                                    customId: c.id
-                                                                }
-                                                            }
-                                                        };
-                                                    }
-                                                });
-
-                                                const groups = Object.values(surahMutsMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+                                                const groups = buildSurahMutGroups(surah.id);
 
                                                 return (
                                                     <div key={surah.id} className="mobile-group-item">
@@ -3225,11 +3234,11 @@ export default function SettingsPage() {
                                                         {isOpen && (
                                                             <div className="mobile-subgroup-list">
                                                                 {groups.map(group => {
-                                                                    const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
-                                                                    const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                                    const representativeAbs = group.representativeAbs;
+                                                                    const decisionKey = group.decisionKey;
                                                                     const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                                                                    const isConfirmed = !!existing.confirmedAt;
-                                                                    const isCustom = group.phraseId.startsWith('custom-');
+                                                                    const isConfirmed = group.resolutionTargets.some(target => !!decisions[target.decisionKey]?.confirmedAt);
+                                                                    const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
 
                                                                     return (
                                                                         <div key={decisionKey} className="mobile-subgroup-item" onClick={() => setActiveMutSlideOver({
@@ -3245,7 +3254,7 @@ export default function SettingsPage() {
                                                                                     {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
                                                                                 </span>
                                                                                 <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                                                                                    {group.entry.matches.length - 1} matches
+                                                                                    {group.matchCount} matches
                                                                                 </span>
                                                                             </div>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3299,82 +3308,18 @@ export default function SettingsPage() {
                                                                     </td>
                                                                 </tr>
                                                                 {isOpen && (() => {
-                                                                    const surahMutsMap: Record<string, {
-                                                                        phraseId: string,
-                                                                        ayahIds: number[],
-                                                                        entry: any,
-                                                                        absRefs: number[],
-                                                                        customId?: string
-                                                                    }> = {};
-
-                                                                    getAllMutashabihatRefs().filter(abs => {
-                                                                        const ref = absoluteToSurahAyah(abs);
-                                                                        return ref.surahId === surah.id;
-                                                                    }).forEach(abs => {
-                                                                        const muts = getMutashabihatForAbsolute(abs);
-                                                                        const ref = absoluteToSurahAyah(abs);
-                                                                        muts.forEach(m => {
-                                                                            if (!surahMutsMap[m.phraseId]) {
-                                                                                surahMutsMap[m.phraseId] = {
-                                                                                    phraseId: m.phraseId,
-                                                                                    ayahIds: [],
-                                                                                    entry: m,
-                                                                                    absRefs: []
-                                                                                };
-                                                                            }
-                                                                            if (!surahMutsMap[m.phraseId].ayahIds.includes(ref.ayahId)) {
-                                                                                surahMutsMap[m.phraseId].ayahIds.push(ref.ayahId);
-                                                                                surahMutsMap[m.phraseId].absRefs.push(abs);
-                                                                            }
-                                                                        });
-                                                                    });
-
-                                                                    // Add custom mutashabihat
-                                                                    instantCustomMutashabihat.filter(c => c.surahId === surah.id).forEach(c => {
-                                                                        const phraseId = `custom-${c.id}`;
-                                                                        const abs = surahAyahToAbsolute(c.surahId, c.ayahId);
-                                                                        const targetAbs = surahAyahToAbsolute(c.targetSurahId, c.targetAyahId);
-
-                                                                        if (!surahMutsMap[phraseId]) {
-                                                                            surahMutsMap[phraseId] = {
-                                                                                phraseId,
-                                                                                ayahIds: [c.ayahId],
-                                                                                absRefs: [abs],
-                                                                                customId: c.id,
-                                                                                entry: {
-                                                                                    phraseId,
-                                                                                    matches: [abs, targetAbs],
-                                                                                    meta: {
-                                                                                        sourceAbs: abs,
-                                                                                        sourceRange: [0, 0],
-                                                                                        matches: [
-                                                                                            { absolute: abs, wordRange: [0, 0] },
-                                                                                            { absolute: targetAbs, wordRange: [0, 0] }
-                                                                                        ],
-                                                                                        isCustom: true,
-                                                                                        customId: c.id
-                                                                                    }
-                                                                                }
-                                                                            };
-                                                                        }
-                                                                    });
-
-                                                                    return Object.values(surahMutsMap)
-                                                                        .sort((a, b) => {
-                                                                            const aMin = Math.min(...a.ayahIds);
-                                                                            const bMin = Math.min(...b.ayahIds);
-                                                                            return aMin - bMin;
-                                                                        })
-                                                                        .map(group => {
-                                                                            const entry = group.entry;
-                                                                            // Use the first abs that has a decision, or the first one in the list
-                                                                            const representativeAbs = group.absRefs.find(a => decisions[`${a}-${group.phraseId}`]?.status !== 'pending') || group.absRefs[0];
-                                                                            const decisionKey = `${representativeAbs}-${group.phraseId}`;
+                                                                    const groups = buildSurahMutGroups(surah.id);
+                                                                    return groups.map(group => {
+                                                                            const representativeAbs = group.representativeAbs;
+                                                                            const decisionKey = group.decisionKey;
                                                                             const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                                                                            const isConfirmed = !!existing.confirmedAt;
+                                                                            const isConfirmed = group.resolutionTargets.some(target => !!decisions[target.decisionKey]?.confirmedAt);
                                                                             const isDetailExpanded = expandedMutItems[decisionKey] || false;
-                                                                            const isCustom = group.phraseId.startsWith('custom-');
-                                                                            const customId = (group as any).customId || (entry?.meta as any)?.customId;
+                                                                            const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
+                                                                            const customId = isCustom ? group.customIds[0] : undefined;
+                                                                            const phraseLabel = group.phraseIds.length === 1
+                                                                                ? (group.phraseIds[0].startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseIds[0]}`)
+                                                                                : `Phrases ${group.phraseIds.map(phraseId => phraseId.startsWith('custom-') ? 'Custom' : `#${phraseId}`).join(', ')}`;
 
                                                                             const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
 
@@ -3409,15 +3354,15 @@ export default function SettingsPage() {
                                                                                                 {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
                                                                                             </div>
                                                                                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                                                                                {group.phraseId.startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseId}`}
+                                                                                                {phraseLabel}
                                                                                             </div>
                                                                                         </td>
-                                                                                        <td>{entry.matches.length - 1} matches</td>
+                                                                                        <td>{group.matchCount} matches</td>
                                                                                         <td>
                                                                                             <select
                                                                                                 value={existing.status}
                                                                                                 onClick={(e) => e.stopPropagation()}
-                                                                                                onChange={e => handleDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
+                                                                                                onChange={e => applyDecisionToTargets(group.resolutionTargets, targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
                                                                                                 className="maturity-select"
                                                                                                 style={{
                                                                                                     borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
@@ -3433,10 +3378,10 @@ export default function SettingsPage() {
     data-tooltip-disabled="true"
     onClick={(e) => {
         e.stopPropagation();
-        const update = isConfirmed 
-            ? { ...existing, confirmedAt: undefined, status: 'pending' as const }
-            : { ...existing, confirmedAt: new Date().toISOString() };
-        handleDecisionUpdate(representativeAbs, update, decisionKey);
+        applyDecisionToTargets(group.resolutionTargets, targetExisting => {
+            if (isConfirmed) return { ...targetExisting, confirmedAt: undefined, status: 'pending' as const };
+            return { ...targetExisting, confirmedAt: new Date().toISOString() };
+        });
     }}
     style={{ minWidth: '100px' }}
 >
@@ -3471,6 +3416,7 @@ export default function SettingsPage() {
                                                                                                         setNoteModal({
                                                                                                             decisionKey,
                                                                                                             representativeAbs,
+                                                                                                            resolutionTargets: group.resolutionTargets,
                                                                                                             title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
                                                                                                             initialNote: existing.notes || ''
                                                                                                         });
@@ -3488,13 +3434,13 @@ export default function SettingsPage() {
                                                                                                 <div className={`mut-context-block mut-detail-panel ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
                                                                                                     <div className="mut-text mut-detail-source">
                                                                                                         <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem' }}>
-                                                                                                            Surah {surah.name} - {group.ayahIds.join(', ')} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
+                                                                                                            Surah {surah.name} - {group.ayahIds.join(', ')} ({phraseLabel})
                                                                                                         </div>
                                                                                                         <div className="mut-context mut-verse-stack">
                                                                                                             {group.absRefs.map(absRef => {
                                                                                                                 const ref = absoluteToSurahAyah(absRef);
                                                                                                                 const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
-                                                                                                                const mutEntry = getMutashabihatForAbsolute(absRef).find(m => m.phraseId === group.phraseId);
+                                                                                                                const mutEntry = group.entries.find(m => (m?.meta?.sourceAbs === absRef) || (m?.matches || []).includes(absRef));
                                                                                                                 if (!mutEntry || !baseVerse) return null;
 
                                                                                                                 return (
@@ -3516,7 +3462,16 @@ export default function SettingsPage() {
 
                                                                                                     <div className="mut-matches mut-compare-list" style={{ marginTop: '1.25rem' }}>
                                                                                                         {(() => {
-                                                                                                            const matches = entry.matches.filter((matchAbs: number) => {
+                                                                                                            const matchRangeByAbs = new Map<number, [number, number]>();
+                                                                                                            group.entries.forEach((mutEntry: any) => {
+                                                                                                                (mutEntry?.meta?.matches || []).forEach((m: any) => {
+                                                                                                                    if (!matchRangeByAbs.has(m.absolute)) {
+                                                                                                                        matchRangeByAbs.set(m.absolute, m.wordRange);
+                                                                                                                    }
+                                                                                                                });
+                                                                                                            });
+                                                                                                            const matches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || []))).filter((matchAbs: number) => {
+                                                                                                                if (group.absRefs.includes(matchAbs)) return false;
                                                                                                                 const matchRef = absoluteToSurahAyah(matchAbs);
                                                                                                                 return matchRef.surahId !== surah.id;
                                                                                                             });
@@ -3530,7 +3485,7 @@ export default function SettingsPage() {
                                                                                                                         const mref = absoluteToSurahAyah(matchAbs);
                                                                                                                         const msurah = getSurah(mref.surahId);
                                                                                                                         const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
-                                                                                                                        const matchRange = entry.meta.matches.find((m: any) => m.absolute === matchAbs)?.wordRange;
+                                                                                                                        const matchRange = matchRangeByAbs.get(matchAbs);
 
                                                                                                                         return (
                                                                                                                             <div key={`${decisionKey}-match-${idx}`} className="mut-text mut-compare-card">
@@ -3788,10 +3743,13 @@ export default function SettingsPage() {
             {activeMutSlideOver && (() => {
                 const decisionKey = activeMutSlideOver.id;
                 const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                const isConfirmed = !!existing.confirmedAt;
+                const isConfirmed = activeMutSlideOver.group.resolutionTargets.some(target => !!decisions[target.decisionKey]?.confirmedAt);
                 const group = activeMutSlideOver.group;
-                const isCustom = activeMutSlideOver.phraseId.startsWith('custom-');
-                const customId = (group as any)?.customId || ((group as any)?.entry?.meta as any)?.customId;
+                const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
+                const customId = isCustom ? group.customIds[0] : undefined;
+                const phraseLabel = group.phraseIds.length === 1
+                    ? (group.phraseIds[0].startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseIds[0]}`)
+                    : `Phrases ${group.phraseIds.map(phraseId => phraseId.startsWith('custom-') ? 'Custom' : `#${phraseId}`).join(', ')}`;
 
                 return (
                     <div className="slide-over-overlay" onClick={() => setActiveMutSlideOver(null)}>
@@ -3814,7 +3772,7 @@ export default function SettingsPage() {
                                         <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
                                         <select
                                             value={existing.status}
-                                            onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, status: e.target.value as any }, activeMutSlideOver.id)}
+                                            onChange={e => applyDecisionToTargets(group.resolutionTargets, targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
                                             className="maturity-select"
                                             style={{ width: '100%', padding: '8px' }}
                                         >
@@ -3825,10 +3783,10 @@ export default function SettingsPage() {
                                         <button
                                         className={`bulk-btn std-normal-btn ${isConfirmed ? 'learned' : ''}`}
                                         onClick={() => {
-                                            const update = isConfirmed 
-                                                ? { ...existing, confirmedAt: undefined, status: 'pending' as const }
-                                                : { ...existing, confirmedAt: new Date().toISOString() };
-                                            handleDecisionUpdate(activeMutSlideOver.representativeAbs, update, activeMutSlideOver.id);
+                                            applyDecisionToTargets(group.resolutionTargets, targetExisting => {
+                                                if (isConfirmed) return { ...targetExisting, confirmedAt: undefined, status: 'pending' as const };
+                                                return { ...targetExisting, confirmedAt: new Date().toISOString() };
+                                            });
                                         }}
                                         style={{ height: '38px', minWidth: '100px' }}
                                     >
@@ -3842,7 +3800,7 @@ export default function SettingsPage() {
                                     <textarea
                                         placeholder="Add your distinction notes here..."
                                         value={existing.notes || ''}
-                                        onChange={e => handleDecisionUpdate(activeMutSlideOver.representativeAbs, { ...existing, notes: e.target.value }, activeMutSlideOver.id)}
+                                        onChange={e => applyDecisionToTargets(group.resolutionTargets, targetExisting => ({ ...targetExisting, notes: e.target.value }))}
                                         style={{
                                             width: '100%',
                                             minHeight: '80px',
@@ -3878,7 +3836,6 @@ export default function SettingsPage() {
                                     </div>
                                     <div style={{ padding: '0.5rem' }}>
                                         {(() => {
-                                            const phraseId = group.phraseId;
                                             const sortedAbsRefs = [...group.absRefs].sort((a, b) => a - b);
                                             const firstRef = absoluteToSurahAyah(sortedAbsRefs[0]);
                                             const sourceEntries = sortedAbsRefs.map(absRef => ({
@@ -3888,7 +3845,7 @@ export default function SettingsPage() {
                                                     const r = absoluteToSurahAyah(absRef);
                                                     return v.surahId === r.surahId && v.ayahId === r.ayahId;
                                                 }),
-                                                mutEntry: getMutashabihatForAbsolute(absRef).find(m => m.phraseId === phraseId),
+                                                mutEntry: group.entries.find((entry: any) => entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)),
                                             })).filter(item => !!item.baseVerse && !!item.mutEntry) as Array<{
                                                 absRef: number;
                                                 ref: { surahId: number; ayahId: number };
@@ -3899,15 +3856,15 @@ export default function SettingsPage() {
                                             if (sourceEntries.length === 0) return null;
 
                                             const matchRangeByAbs = new Map<number, [number, number]>();
-                                            sourceEntries.forEach(({ mutEntry }) => {
-                                                (mutEntry.meta?.matches || []).forEach((m: any) => {
+                                            group.entries.forEach((mutEntry: any) => {
+                                                (mutEntry?.meta?.matches || []).forEach((m: any) => {
                                                     if (!matchRangeByAbs.has(m.absolute)) {
                                                         matchRangeByAbs.set(m.absolute, m.wordRange);
                                                     }
                                                 });
                                             });
 
-                                            const mergedMatches = Array.from(new Set(sourceEntries.flatMap(({ mutEntry }) => mutEntry.matches || [])))
+                                            const mergedMatches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || [])))
                                                 .filter((matchAbs: number) => {
                                                     if (sortedAbsRefs.includes(matchAbs)) return false;
                                                     const matchRef = absoluteToSurahAyah(matchAbs);
@@ -3921,7 +3878,7 @@ export default function SettingsPage() {
                                             return (
                                                 <div className="mut-text mut-detail-source" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
                                                     <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
-                                                        {getSurah(firstRef.surahId)?.name} - {sourceEntries.map(s => s.ref.ayahId).join(', ')} {phraseId.startsWith('custom-') ? '' : `(Phrase #${phraseId})`}
+                                                        {getSurah(firstRef.surahId)?.name} - {sourceEntries.map(s => s.ref.ayahId).join(', ')} ({phraseLabel})
                                                     </div>
                                                     <div className="mut-context mut-verse-stack">
                                                         {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => (
@@ -4527,9 +4484,13 @@ export default function SettingsPage() {
                 onClose={() => setNoteModal(null)}
                 onSave={(note) => {
                     if (!noteModal) return;
-                    const { representativeAbs, decisionKey } = noteModal;
-                    const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                    handleDecisionUpdate(representativeAbs, { ...existing, notes: note }, decisionKey);
+                    const { representativeAbs, decisionKey, resolutionTargets } = noteModal;
+                    if (resolutionTargets && resolutionTargets.length > 0) {
+                        applyDecisionToTargets(resolutionTargets, existing => ({ ...existing, notes: note }));
+                    } else {
+                        const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
+                        void handleDecisionUpdate(representativeAbs, { ...existing, notes: note }, decisionKey);
+                    }
                     setNoteModal(null);
                 }}
             />
