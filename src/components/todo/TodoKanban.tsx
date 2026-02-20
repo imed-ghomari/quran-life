@@ -53,7 +53,7 @@ interface TodoKanbanProps {
     isDark: boolean;
 
     // Callbacks
-    onFixConfirm: (surahId: number, anchorId: string) => Promise<void> | void;
+    onFixConfirm: (surahId: number, anchorId: string, confirm?: boolean) => Promise<void> | void;
     onSimilarityDecision: (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm?: boolean) => Promise<void> | void;
     onPartComplete: (part: QuranPart, forceState?: boolean) => Promise<void> | void;
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => Promise<void> | void;
@@ -149,7 +149,7 @@ export default function TodoKanban({
     // Splits Modal State
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
 
-    // Toast + Undo (for removing suspended/similarity after completion)
+    // Toast state
     type TodoToastType = 'surah' | 'part' | 'suspended' | 'similarity';
 
     interface TodoToastItem {
@@ -162,9 +162,6 @@ export default function TodoKanban({
     }
     const [toasts, setToasts] = useState<TodoToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
-    const removalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-    const pendingToastIdsRef = useRef<Map<string, string>>(new Map());
-    const [hiddenItemIds, setHiddenItemIds] = useState<Set<string>>(new Set());
     const persistMoveSeqRef = useRef(0);
 
     const addToast = useCallback((type: TodoToastType, message: string, info?: string, onUndo?: () => void, onExpire?: () => void) => {
@@ -258,6 +255,17 @@ export default function TodoKanban({
         return 'Surah mindmap removed while verse reviews stay active; move back to Complete to restore the mindmap.';
     }, [completeExitBehavior]);
 
+    const getMaintenanceCardReviewInfo = useCallback((item: KanbanItem, enteringComplete: boolean): string => {
+        if (item.type === 'suspended') {
+            return enteringComplete
+                ? `Suspended verse group is now unsuspended and shown in the review queue.`
+                : `Suspended verse group is now suspended and removed from the review queue.`;
+        }
+        return enteringComplete
+            ? `Similarity item is now marked resolved.`
+            : `Similarity item is now marked unresolved.`;
+    }, []);
+
     const hasMindmapForItem = useCallback((item: KanbanItem): boolean => {
         if (item.type === 'part') {
             return !!(item.data.mindmap?.tldrawSnapshot || item.data.mindmap?.imageUrl || item.data.mindmap?.imageUrlDark);
@@ -286,80 +294,6 @@ export default function TodoKanban({
         surah: { id: number; name: string; arabicName?: string };
     } | null>(null);
     const [expandedSimilarityMatches, setExpandedSimilarityMatches] = useState<Record<string, boolean>>({});
-    const lastRemovalRef = useRef<{ itemId: string; at: number } | null>(null);
-
-    const restoreItemToColumn = useCallback((item: KanbanItem, colId: string, index: number) => {
-        const persistSeq = ++persistMoveSeqRef.current;
-        let nextStateToPersist: Record<string, string[]> | null = null;
-        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
-
-        setColumns(prev => {
-            const next: Record<string, KanbanColumnData> = { ...prev };
-            Object.values(next).forEach(col => {
-                col.items = col.items.filter(i => i.id !== item.id);
-            });
-            const target = next[colId] || next['backlog'];
-            const insertAt = Math.min(Math.max(index, 0), target.items.length);
-            target.items.splice(insertAt, 0, { ...item, status: target.id as any });
-
-            if (onKanbanStateChange) {
-                const state: Record<string, string[]> = {};
-                Object.values(next).forEach(col => {
-                    state[col.id] = col.items.map(i => i.id);
-                });
-                nextStateToPersist = state;
-                rollbackColumns = prev;
-            }
-
-            return { ...next };
-        });
-        if (nextStateToPersist) {
-            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
-        }
-    }, [onKanbanStateChange, persistKanbanState]);
-
-    const clearPendingRemoval = useCallback((itemId: string) => {
-        const timer = removalTimersRef.current.get(itemId);
-        if (timer) {
-            clearTimeout(timer);
-            removalTimersRef.current.delete(itemId);
-        }
-        const toastId = pendingToastIdsRef.current.get(itemId);
-        if (toastId) {
-            setToasts(prev => prev.filter(t => t.id !== toastId));
-            pendingToastIdsRef.current.delete(itemId);
-        }
-    }, []);
-
-    const finalizeRemoval = useCallback((item: KanbanItem) => {
-        setHiddenItemIds(prev => {
-            const next = new Set(prev);
-            next.add(item.id);
-            return next;
-        });
-        const persistSeq = ++persistMoveSeqRef.current;
-        let nextStateToPersist: Record<string, string[]> | null = null;
-        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
-
-        setColumns(prev => {
-            const next: Record<string, KanbanColumnData> = { ...prev };
-            Object.values(next).forEach(col => {
-                col.items = col.items.filter(i => i.id !== item.id);
-            });
-            if (onKanbanStateChange) {
-                const state: Record<string, string[]> = {};
-                Object.values(next).forEach(col => {
-                    state[col.id] = col.items.map(i => i.id);
-                });
-                nextStateToPersist = state;
-                rollbackColumns = prev;
-            }
-            return { ...next };
-        });
-        if (nextStateToPersist) {
-            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
-        }
-    }, [onKanbanStateChange, persistKanbanState]);
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -413,27 +347,23 @@ export default function TodoKanban({
         suspendedAnchors.forEach(item => {
             const groupIdentity = item.groupKey || `${item.surahId}-${item.anchorId}`;
             const id = `suspended-${groupIdentity}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
         });
 
         similarityGroups.forEach(group => {
             const id = `similarity-${group.surah.id}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
         partTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `part-${item.part}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'part', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
         surahTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `surah-${item.surah.id}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
@@ -441,57 +371,53 @@ export default function TodoKanban({
 
         if (showReviewDummies && suspendedAnchors.length === 0) {
             const dummyId = 'suspended-dummy-1';
-            if (!hiddenItemIds.has(dummyId)) {
-                itemMap.set(dummyId, {
-                    id: dummyId,
-                    type: 'suspended',
-                    status: 'backlog',
-                    data: {
-                        surahId: 1,
-                        anchorId: 'dummy-review-fix',
-                        label: 'Dummy review fix (dev)',
-                        startVerse: 1,
-                        endVerse: 7,
-                        isDummy: true
-                    }
-                });
-            }
+            itemMap.set(dummyId, {
+                id: dummyId,
+                type: 'suspended',
+                status: 'backlog',
+                data: {
+                    surahId: 1,
+                    anchorId: 'dummy-review-fix',
+                    label: 'Dummy review fix (dev)',
+                    startVerse: 1,
+                    endVerse: 7,
+                    isDummy: true
+                }
+            });
         }
 
         if (showReviewDummies && similarityGroups.length === 0) {
             const dummyId = 'similarity-dummy-1';
-            if (!hiddenItemIds.has(dummyId)) {
-                const dummySurah = getSurah(1);
-                itemMap.set(dummyId, {
-                    id: dummyId,
-                    type: 'similarity',
-                    status: 'backlog',
-                    data: {
-                        surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
-                        count: 1,
-                        isDummy: true,
-                        items: [
-                            {
-                                err: { absoluteAyah: 1 },
-                                muts: [
-                                    {
-                                        phraseId: 'dummy-phrase-1',
-                                        meta: {
-                                            sourceAbs: 1,
-                                            sourceRange: [1, 3],
-                                            matches: [
-                                                { absolute: 1, wordRange: [1, 3] },
-                                                { absolute: 2, wordRange: [1, 2] }
-                                            ]
-                                        },
-                                        matches: [1, 2]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                });
-            }
+            const dummySurah = getSurah(1);
+            itemMap.set(dummyId, {
+                id: dummyId,
+                type: 'similarity',
+                status: 'backlog',
+                data: {
+                    surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
+                    count: 1,
+                    isDummy: true,
+                    items: [
+                        {
+                            err: { absoluteAyah: 1 },
+                            muts: [
+                                {
+                                    phraseId: 'dummy-phrase-1',
+                                    meta: {
+                                        sourceAbs: 1,
+                                        sourceRange: [1, 3],
+                                        matches: [
+                                            { absolute: 1, wordRange: [1, 3] },
+                                            { absolute: 2, wordRange: [1, 2] }
+                                        ]
+                                    },
+                                    matches: [1, 2]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            });
         }
 
         const newCols: Record<string, KanbanItem[]> = {
@@ -560,18 +486,25 @@ export default function TodoKanban({
             'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, hiddenItemIds, kanbanSortOrder]);
+    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, kanbanSortOrder]);
 
     const handleCompletionTrigger = useCallback(async (item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
             if (item.data?.isDummy) return;
-            await onFixConfirm(item.data.surahId, item.data.anchorId);
+            const shouldUnsuspend = forceState !== false;
+            await onFixConfirm(item.data.surahId, item.data.anchorId, shouldUnsuspend);
         } else if (item.type === 'similarity') {
             if (item.data?.isDummy) return;
+            const shouldResolve = forceState !== false;
             const group = item.data;
             group.items.forEach((simItem: any) => {
                 simItem.muts.forEach((entry: any) => {
-                    onSimilarityDecision(simItem.err.absoluteAyah, 'solved_note', entry.phraseId, true);
+                    onSimilarityDecision(
+                        simItem.err.absoluteAyah,
+                        shouldResolve ? 'solved_note' : 'pending',
+                        entry.phraseId,
+                        shouldResolve
+                    );
                 });
             });
         } else if (item.type === 'part') {
@@ -672,10 +605,6 @@ export default function TodoKanban({
                 [destination.droppableId]: { ...destCol, items: destItems }
             };
 
-            const shouldRemoveAfterComplete = destination.droppableId === 'complete'
-                && source.droppableId !== 'complete'
-                && (movedItem.type === 'suspended' || movedItem.type === 'similarity');
-
             if (onKanbanStateChange) {
                 const state: Record<string, string[]> = {};
                 Object.values(newColsMap).forEach(col => {
@@ -694,11 +623,12 @@ export default function TodoKanban({
                         });
                         addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                     }
-                } else if (source.droppableId !== 'complete' && movedItem.type === 'similarity') {
-                    void handleCompletionTrigger(movedItem).catch((err) => {
+                } else if (source.droppableId !== 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
+                    void handleCompletionTrigger(movedItem, true).catch((err) => {
                         console.error('Failed to persist completion trigger', err);
-                        addToast(movedItem.type === 'similarity' ? 'similarity' : 'suspended', 'Failed to save completion', 'Please try again.');
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
                     });
+                    addToast(movedItem.type, 'Marked complete', getMaintenanceCardReviewInfo(movedItem, true));
                 }
             } else if (source.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
@@ -709,78 +639,13 @@ export default function TodoKanban({
                     if (hasMindmapForItem(movedItem)) {
                         addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
                     }
-                }
-            }
-
-            if (source.droppableId === 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
-                clearPendingRemoval(movedItem.id);
-            }
-
-            if (shouldRemoveAfterComplete) {
-                const now = Date.now();
-                if (lastRemovalRef.current?.itemId === movedItem.id && now - lastRemovalRef.current.at < 500) {
-                    return newColsMap;
-                }
-                lastRemovalRef.current = { itemId: movedItem.id, at: now };
-
-                const info = movedItem.type === 'suspended'
-                    ? `Suspended • Surah ${movedItem.data.surahId}`
-                    : `Similarity • ${movedItem.data?.surah?.name || 'Surah'}`;
-
-                const similarityUndoSnapshot: Array<{ decisionKey: string; update: any; representativeAbs: number }> = [];
-
-                if (movedItem.type === 'similarity' && mutashabihatDecisions && onMutashabihatDecisionUpdate) {
-                    movedItem.data.items.forEach((simItem: any) => {
-                        simItem.muts.forEach((entry: any) => {
-                            const decisionKey = `${simItem.err.absoluteAyah}-${entry.phraseId}`;
-                            const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
-                            similarityUndoSnapshot.push({
-                                decisionKey,
-                                update: {
-                                    status: existing.status ?? 'pending',
-                                    notes: existing.notes ?? existing.note ?? '',
-                                    confirmedAt: existing.confirmedAt
-                                },
-                                representativeAbs: simItem.err.absoluteAyah
-                            });
-                        });
+                } else if (movedItem.type === 'suspended' || movedItem.type === 'similarity') {
+                    void handleCompletionTrigger(movedItem, false).catch((err) => {
+                        console.error('Failed to persist completion trigger', err);
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
                     });
+                    addToast(movedItem.type, 'Moved out of Complete', getMaintenanceCardReviewInfo(movedItem, false));
                 }
-
-                const removalTimer = setTimeout(async () => {
-                    if (movedItem.type === 'suspended') {
-                        try {
-                            await handleCompletionTrigger(movedItem);
-                        } catch (err) {
-                            console.error('Failed to persist suspension completion trigger', err);
-                            clearPendingRemoval(movedItem.id);
-                            restoreItemToColumn(movedItem, source.droppableId, source.index);
-                            addToast('suspended', 'Failed to unsuspend verse group', 'Please try again.');
-                            return;
-                        }
-                    }
-                    finalizeRemoval(movedItem);
-                    removalTimersRef.current.delete(movedItem.id);
-                    pendingToastIdsRef.current.delete(movedItem.id);
-                }, 6000);
-                removalTimersRef.current.set(movedItem.id, removalTimer);
-
-                const toastType: TodoToastType = movedItem.type === 'similarity' ? 'similarity' : 'suspended';
-                const toastId = addToast(
-                    toastType,
-                    'Marked complete',
-                    `${info}\nWill disappear when this popup closes`,
-                    () => {
-                        clearPendingRemoval(movedItem.id);
-                        restoreItemToColumn(movedItem, source.droppableId, source.index);
-                        if (movedItem.type === 'similarity' && onMutashabihatDecisionUpdate) {
-                            similarityUndoSnapshot.forEach(s => {
-                                onMutashabihatDecisionUpdate(s.representativeAbs, { ...s.update }, s.decisionKey);
-                            });
-                        }
-                    }
-                );
-                pendingToastIdsRef.current.set(movedItem.id, toastId);
             }
 
             return newColsMap;
@@ -789,7 +654,7 @@ export default function TodoKanban({
         if (nextStateToPersist) {
             persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
         }
-    }, [handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, hasMindmapForItem, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval, filteredItem, persistKanbanState]);
+    }, [handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, getMaintenanceCardReviewInfo, hasMindmapForItem, filteredItem, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {

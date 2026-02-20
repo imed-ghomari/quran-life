@@ -45,6 +45,19 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - Run `npm run build` to verify production readiness.
 - Static assets served from `/public`.
 
+## Mindmap Source Verification (Maintainer)
+- Scope: `content/mindmaps/part-*.mdx` and `content/mindmaps/surah-*.mdx`.
+- Each file has a `## Source Verification` section with 5 source pills and page placeholders (`p.___`).
+- Set the 5 shared source URLs in bulk:
+  - `scripts/set-mindmap-source-links.sh "<source1_url>" "<source2_url>" "<source3_url>" "<source4_url>" "<source5_url>"`
+- Current URL placeholders:
+  - `https://SOURCE_FILE_1_URL`
+  - `https://SOURCE_FILE_2_URL`
+  - `https://SOURCE_FILE_3_URL`
+  - `https://SOURCE_FILE_4_URL`
+  - `https://SOURCE_FILE_5_URL`
+- After links are set, fill page placeholders per Surah/Part by replacing `p.___` in each file.
+
 ## Access Configuration (Canonical)
 - Role and checkout bypass are server-authoritative.
 - Canonical vars:

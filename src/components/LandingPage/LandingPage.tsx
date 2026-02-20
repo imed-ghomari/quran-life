@@ -301,7 +301,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
         </section>
 
         {/* --- Features Grid --- */}
-        <section id="features" className="features">
+        <section id="features" className="features features-soft-band">
           <div className="container">
             <div className="section-header">
               <h2 className="section-title">Built for Hifdh</h2>

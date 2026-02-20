@@ -3429,6 +3429,14 @@ input:focus {
   background-color: var(--background-secondary) !important;
 }
 
+:root[data-theme="dark"] .todo-page .roadmap-card,
+:root[data-theme="dark"] .todo-page .kanban-card,
+:root[data-theme="dark"] .todo-page .todo-kanban-card {
+  background-color: var(--background) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
 :root[data-theme="dark"] .review-section-content .today-card-footer {
   background-color: var(--background-secondary) !important;
 }
@@ -3497,6 +3505,14 @@ input:focus {
   :root:not([data-theme="light"]) .kanban-column,
   :root:not([data-theme="light"]) .roadmap-column {
     background-color: var(--background-secondary) !important;
+  }
+
+  :root:not([data-theme="light"]) .todo-page .roadmap-card,
+  :root:not([data-theme="light"]) .todo-page .kanban-card,
+  :root:not([data-theme="light"]) .todo-page .todo-kanban-card {
+    background-color: var(--background) !important;
+    background-image: none !important;
+    box-shadow: none !important;
   }
 
   :root:not([data-theme="light"]) .docs-search-trigger.todo-search-bar {
@@ -3600,6 +3616,9 @@ input:focus {
   z-index: 2000;
   pointer-events: none;
   max-width: min(320px, calc(100vw - 24px));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0.45rem 0.62rem;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);

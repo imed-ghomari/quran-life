@@ -9,7 +9,7 @@ import {
     useInstantMutashabihat,
     useInstantReviewErrors
 } from '@/hooks/useInstantData';
-import { MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
+import { AppSettings, MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { X } from 'lucide-react';
@@ -91,6 +91,12 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
     const { settings, saveSettings } = useInstantSettings();
+    const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const queueSettingsUpdate = useCallback((update: Partial<AppSettings>) => {
+        const queued = settingsWriteQueueRef.current.then(() => saveSettings(update));
+        settingsWriteQueueRef.current = queued.catch(() => { });
+        return queued;
+    }, [saveSettings]);
     const { nodes, saveNode, deleteNode } = useInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
     const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
@@ -317,16 +323,17 @@ export default function TodoPage() {
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .map(err => {
+                const absolute = err.absoluteAyah!;
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
-                return { err, muts };
+                const unresolvedCount = muts.filter((m: any) => !isPhraseResolved(absolute, m)).length;
+                return { err, muts, unresolvedCount };
             })
             // Filter out items that are already resolved/ignored
             .filter(entry => {
                 const absolute = entry.err.absoluteAyah!;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
-                const unresolvedPhrases = entry.muts.filter((m: any) => !isPhraseResolved(absolute, m));
-                return unresolvedPhrases.length > 0;
+                return entry.unresolvedCount > 0;
             });
     }, [errors, decisionsMap, customMutashabihat]);
 
@@ -338,11 +345,13 @@ export default function TodoPage() {
             if (!groups[ref.surahId]) groups[ref.surahId] = [];
             groups[ref.surahId].push(item);
         });
-        return Object.entries(groups).map(([surahId, items]) => ({
-            surah: getSurah(parseInt(surahId)),
-            items,
-            count: items.length
-        })).filter(g => g.surah);
+        return Object.entries(groups)
+            .map(([surahId, items]) => ({
+                surah: getSurah(parseInt(surahId)),
+                items,
+                count: items.reduce((sum, item) => sum + (item.unresolvedCount || 0), 0)
+            }))
+            .filter(g => g.surah);
     }, [similarityItems]);
 
     const SUSPEND_ERROR_THRESHOLD = 3;
@@ -894,10 +903,17 @@ export default function TodoPage() {
         }
     };
 
-    const handleFixConfirm = async (surahId: number, anchorId: string) => {
+    const handleFixConfirm = async (surahId: number, anchorId: string, confirm: boolean = true) => {
         const key = `${surahId}-${anchorId}`;
         const current = settings.suspendedVerseGroupsAcknowledged || {};
-        await saveSettings({
+        if (!confirm) {
+            const { [key]: _removed, ...rest } = current;
+            await queueSettingsUpdate({
+                suspendedVerseGroupsAcknowledged: rest
+            });
+            return;
+        }
+        await queueSettingsUpdate({
             suspendedVerseGroupsAcknowledged: {
                 ...current,
                 [key]: new Date().toISOString()
@@ -919,7 +935,7 @@ export default function TodoPage() {
         await saveDecision(key, {
             ...existing,
             status,
-            confirmedAt: confirm ? new Date().toISOString() : existing.confirmedAt
+            confirmedAt: confirm ? new Date().toISOString() : undefined
         });
     };
 
@@ -1054,7 +1070,7 @@ export default function TodoPage() {
                     completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
                     kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
                     onKanbanStateChange={async (cols) => {
-                        await saveSettings({
+                        await queueSettingsUpdate({
                             kanbanColumns: cols
                         });
                     }}
