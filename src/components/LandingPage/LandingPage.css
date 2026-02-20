@@ -22,9 +22,9 @@
   /* Secondary Background for Landing Page */
   --landing-bg-secondary: #e9eef5;
   --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 86%, var(--background));
-  --landing-glow-radial: color-mix(in srgb, var(--accent) 20%, transparent);
-  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 14%, transparent);
-  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 18%, transparent);
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 16%, transparent);
+  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 11%, transparent);
+  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
 
   /* Hero & Nav Colors */
   --nav-bg: rgba(240, 240, 240, 0.9);
@@ -41,9 +41,9 @@
     --landing-accent-light: rgba(108, 165, 212, 0.15);
     --landing-bg-secondary: var(--background-secondary);
     --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 78%, var(--background));
-    --landing-glow-radial: color-mix(in srgb, var(--accent) 12%, transparent);
-    --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent);
-    --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
+    --landing-glow-radial: color-mix(in srgb, var(--accent) 9%, transparent);
+    --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 8%, transparent);
+    --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 11%, transparent);
 
     --nav-bg: rgba(20, 20, 20, 0.7);
     --hero-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -59,9 +59,9 @@
   --landing-accent-light: rgba(108, 165, 212, 0.15);
   --landing-bg-secondary: var(--background-secondary);
   --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 78%, var(--background));
-  --landing-glow-radial: color-mix(in srgb, var(--accent) 12%, transparent);
-  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent);
-  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 9%, transparent);
+  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 8%, transparent);
+  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 11%, transparent);
 
   --nav-bg: rgba(20, 20, 20, 0.7);
   --hero-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -75,9 +75,9 @@
   --landing-accent-light: rgba(91, 143, 185, 0.1);
   --landing-bg-secondary: #e9eef5;
   --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 86%, var(--background));
-  --landing-glow-radial: color-mix(in srgb, var(--accent) 20%, transparent);
-  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 14%, transparent);
-  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 18%, transparent);
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 16%, transparent);
+  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 11%, transparent);
+  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
 
   --nav-bg: var(--glass-bg);
   --hero-overlay-bg: rgba(255, 255, 255, 0.7);
@@ -409,7 +409,27 @@
 /* Features Grid */
 .features {
   padding: 6rem 0;
-  background-color: var(--landing-bg-secondary);
+  background-color: var(--background);
+}
+
+.features-soft-band {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 24%),
+    color-mix(in srgb, var(--background) 96%, var(--accent) 4%);
+}
+
+[data-theme="dark"] .features-soft-band {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 2%, transparent), transparent 24%),
+    color-mix(in srgb, var(--background) 98%, var(--accent) 2%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .features-soft-band {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--accent) 2%, transparent), transparent 24%),
+      color-mix(in srgb, var(--background) 98%, var(--accent) 2%);
+  }
 }
 
 .section-header {

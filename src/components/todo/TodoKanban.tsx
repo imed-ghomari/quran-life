@@ -53,7 +53,7 @@ interface TodoKanbanProps {
     isDark: boolean;
 
     // Callbacks
-    onFixConfirm: (surahId: number, anchorId: string) => Promise<void> | void;
+    onFixConfirm: (surahId: number, anchorId: string, confirm?: boolean) => Promise<void> | void;
     onSimilarityDecision: (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm?: boolean) => Promise<void> | void;
     onPartComplete: (part: QuranPart, forceState?: boolean) => Promise<void> | void;
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => Promise<void> | void;
@@ -149,7 +149,7 @@ export default function TodoKanban({
     // Splits Modal State
     const [splitsModalItem, setSplitsModalItem] = useState<KanbanItem | null>(null);
 
-    // Toast + Undo (for removing suspended/similarity after completion)
+    // Toast state
     type TodoToastType = 'surah' | 'part' | 'suspended' | 'similarity';
 
     interface TodoToastItem {
@@ -162,9 +162,6 @@ export default function TodoKanban({
     }
     const [toasts, setToasts] = useState<TodoToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
-    const removalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-    const pendingToastIdsRef = useRef<Map<string, string>>(new Map());
-    const [hiddenItemIds, setHiddenItemIds] = useState<Set<string>>(new Set());
     const persistMoveSeqRef = useRef(0);
 
     const addToast = useCallback((type: TodoToastType, message: string, info?: string, onUndo?: () => void, onExpire?: () => void) => {
@@ -258,6 +255,17 @@ export default function TodoKanban({
         return 'Surah mindmap removed while verse reviews stay active; move back to Complete to restore the mindmap.';
     }, [completeExitBehavior]);
 
+    const getMaintenanceCardReviewInfo = useCallback((item: KanbanItem, enteringComplete: boolean): string => {
+        if (item.type === 'suspended') {
+            return enteringComplete
+                ? `Suspended verse group is now unsuspended and shown in the review queue.`
+                : `Suspended verse group is now suspended and removed from the review queue.`;
+        }
+        return enteringComplete
+            ? `Similarity item is now marked resolved.`
+            : `Similarity item is now marked unresolved.`;
+    }, []);
+
     const hasMindmapForItem = useCallback((item: KanbanItem): boolean => {
         if (item.type === 'part') {
             return !!(item.data.mindmap?.tldrawSnapshot || item.data.mindmap?.imageUrl || item.data.mindmap?.imageUrlDark);
@@ -278,88 +286,20 @@ export default function TodoKanban({
         representativeAbs: number;
         group: {
             phraseId: string;
+            phraseIds: string[];
             absRefs: number[];
-            entry: any;
+            entries: any[];
             ayahIds: number[];
             surahId: number;
+            resolutionTargets: Array<{
+                phraseId: string;
+                decisionKey: string;
+                representativeAbs: number;
+            }>;
         };
         surah: { id: number; name: string; arabicName?: string };
     } | null>(null);
     const [expandedSimilarityMatches, setExpandedSimilarityMatches] = useState<Record<string, boolean>>({});
-    const lastRemovalRef = useRef<{ itemId: string; at: number } | null>(null);
-
-    const restoreItemToColumn = useCallback((item: KanbanItem, colId: string, index: number) => {
-        const persistSeq = ++persistMoveSeqRef.current;
-        let nextStateToPersist: Record<string, string[]> | null = null;
-        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
-
-        setColumns(prev => {
-            const next: Record<string, KanbanColumnData> = { ...prev };
-            Object.values(next).forEach(col => {
-                col.items = col.items.filter(i => i.id !== item.id);
-            });
-            const target = next[colId] || next['backlog'];
-            const insertAt = Math.min(Math.max(index, 0), target.items.length);
-            target.items.splice(insertAt, 0, { ...item, status: target.id as any });
-
-            if (onKanbanStateChange) {
-                const state: Record<string, string[]> = {};
-                Object.values(next).forEach(col => {
-                    state[col.id] = col.items.map(i => i.id);
-                });
-                nextStateToPersist = state;
-                rollbackColumns = prev;
-            }
-
-            return { ...next };
-        });
-        if (nextStateToPersist) {
-            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
-        }
-    }, [onKanbanStateChange, persistKanbanState]);
-
-    const clearPendingRemoval = useCallback((itemId: string) => {
-        const timer = removalTimersRef.current.get(itemId);
-        if (timer) {
-            clearTimeout(timer);
-            removalTimersRef.current.delete(itemId);
-        }
-        const toastId = pendingToastIdsRef.current.get(itemId);
-        if (toastId) {
-            setToasts(prev => prev.filter(t => t.id !== toastId));
-            pendingToastIdsRef.current.delete(itemId);
-        }
-    }, []);
-
-    const finalizeRemoval = useCallback((item: KanbanItem) => {
-        setHiddenItemIds(prev => {
-            const next = new Set(prev);
-            next.add(item.id);
-            return next;
-        });
-        const persistSeq = ++persistMoveSeqRef.current;
-        let nextStateToPersist: Record<string, string[]> | null = null;
-        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
-
-        setColumns(prev => {
-            const next: Record<string, KanbanColumnData> = { ...prev };
-            Object.values(next).forEach(col => {
-                col.items = col.items.filter(i => i.id !== item.id);
-            });
-            if (onKanbanStateChange) {
-                const state: Record<string, string[]> = {};
-                Object.values(next).forEach(col => {
-                    state[col.id] = col.items.map(i => i.id);
-                });
-                nextStateToPersist = state;
-                rollbackColumns = prev;
-            }
-            return { ...next };
-        });
-        if (nextStateToPersist) {
-            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
-        }
-    }, [onKanbanStateChange, persistKanbanState]);
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -413,27 +353,23 @@ export default function TodoKanban({
         suspendedAnchors.forEach(item => {
             const groupIdentity = item.groupKey || `${item.surahId}-${item.anchorId}`;
             const id = `suspended-${groupIdentity}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
         });
 
         similarityGroups.forEach(group => {
             const id = `similarity-${group.surah.id}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
         partTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `part-${item.part}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'part', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
         surahTasks.forEach(item => {
             const isComplete = item.mindmap?.isComplete && (!!item.mindmap?.imageUrl || !!item.mindmap?.tldrawSnapshot);
             const id = `surah-${item.surah.id}`;
-            if (hiddenItemIds.has(id)) return;
             itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
 
@@ -441,57 +377,53 @@ export default function TodoKanban({
 
         if (showReviewDummies && suspendedAnchors.length === 0) {
             const dummyId = 'suspended-dummy-1';
-            if (!hiddenItemIds.has(dummyId)) {
-                itemMap.set(dummyId, {
-                    id: dummyId,
-                    type: 'suspended',
-                    status: 'backlog',
-                    data: {
-                        surahId: 1,
-                        anchorId: 'dummy-review-fix',
-                        label: 'Dummy review fix (dev)',
-                        startVerse: 1,
-                        endVerse: 7,
-                        isDummy: true
-                    }
-                });
-            }
+            itemMap.set(dummyId, {
+                id: dummyId,
+                type: 'suspended',
+                status: 'backlog',
+                data: {
+                    surahId: 1,
+                    anchorId: 'dummy-review-fix',
+                    label: 'Dummy review fix (dev)',
+                    startVerse: 1,
+                    endVerse: 7,
+                    isDummy: true
+                }
+            });
         }
 
         if (showReviewDummies && similarityGroups.length === 0) {
             const dummyId = 'similarity-dummy-1';
-            if (!hiddenItemIds.has(dummyId)) {
-                const dummySurah = getSurah(1);
-                itemMap.set(dummyId, {
-                    id: dummyId,
-                    type: 'similarity',
-                    status: 'backlog',
-                    data: {
-                        surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
-                        count: 1,
-                        isDummy: true,
-                        items: [
-                            {
-                                err: { absoluteAyah: 1 },
-                                muts: [
-                                    {
-                                        phraseId: 'dummy-phrase-1',
-                                        meta: {
-                                            sourceAbs: 1,
-                                            sourceRange: [1, 3],
-                                            matches: [
-                                                { absolute: 1, wordRange: [1, 3] },
-                                                { absolute: 2, wordRange: [1, 2] }
-                                            ]
-                                        },
-                                        matches: [1, 2]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                });
-            }
+            const dummySurah = getSurah(1);
+            itemMap.set(dummyId, {
+                id: dummyId,
+                type: 'similarity',
+                status: 'backlog',
+                data: {
+                    surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
+                    count: 1,
+                    isDummy: true,
+                    items: [
+                        {
+                            err: { absoluteAyah: 1 },
+                            muts: [
+                                {
+                                    phraseId: 'dummy-phrase-1',
+                                    meta: {
+                                        sourceAbs: 1,
+                                        sourceRange: [1, 3],
+                                        matches: [
+                                            { absolute: 1, wordRange: [1, 3] },
+                                            { absolute: 2, wordRange: [1, 2] }
+                                        ]
+                                    },
+                                    matches: [1, 2]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            });
         }
 
         const newCols: Record<string, KanbanItem[]> = {
@@ -560,18 +492,25 @@ export default function TodoKanban({
             'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, hiddenItemIds, kanbanSortOrder]);
+    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, kanbanSortOrder]);
 
     const handleCompletionTrigger = useCallback(async (item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
             if (item.data?.isDummy) return;
-            await onFixConfirm(item.data.surahId, item.data.anchorId);
+            const shouldUnsuspend = forceState !== false;
+            await onFixConfirm(item.data.surahId, item.data.anchorId, shouldUnsuspend);
         } else if (item.type === 'similarity') {
             if (item.data?.isDummy) return;
+            const shouldResolve = forceState !== false;
             const group = item.data;
             group.items.forEach((simItem: any) => {
                 simItem.muts.forEach((entry: any) => {
-                    onSimilarityDecision(simItem.err.absoluteAyah, 'solved_note', entry.phraseId, true);
+                    onSimilarityDecision(
+                        simItem.err.absoluteAyah,
+                        shouldResolve ? 'solved_note' : 'pending',
+                        entry.phraseId,
+                        shouldResolve
+                    );
                 });
             });
         } else if (item.type === 'part') {
@@ -672,10 +611,6 @@ export default function TodoKanban({
                 [destination.droppableId]: { ...destCol, items: destItems }
             };
 
-            const shouldRemoveAfterComplete = destination.droppableId === 'complete'
-                && source.droppableId !== 'complete'
-                && (movedItem.type === 'suspended' || movedItem.type === 'similarity');
-
             if (onKanbanStateChange) {
                 const state: Record<string, string[]> = {};
                 Object.values(newColsMap).forEach(col => {
@@ -694,11 +629,12 @@ export default function TodoKanban({
                         });
                         addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                     }
-                } else if (source.droppableId !== 'complete' && movedItem.type === 'similarity') {
-                    void handleCompletionTrigger(movedItem).catch((err) => {
+                } else if (source.droppableId !== 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
+                    void handleCompletionTrigger(movedItem, true).catch((err) => {
                         console.error('Failed to persist completion trigger', err);
-                        addToast(movedItem.type === 'similarity' ? 'similarity' : 'suspended', 'Failed to save completion', 'Please try again.');
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
                     });
+                    addToast(movedItem.type, 'Marked complete', getMaintenanceCardReviewInfo(movedItem, true));
                 }
             } else if (source.droppableId === 'complete') {
                 if (movedItem.type === 'surah' || movedItem.type === 'part') {
@@ -709,78 +645,13 @@ export default function TodoKanban({
                     if (hasMindmapForItem(movedItem)) {
                         addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
                     }
-                }
-            }
-
-            if (source.droppableId === 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
-                clearPendingRemoval(movedItem.id);
-            }
-
-            if (shouldRemoveAfterComplete) {
-                const now = Date.now();
-                if (lastRemovalRef.current?.itemId === movedItem.id && now - lastRemovalRef.current.at < 500) {
-                    return newColsMap;
-                }
-                lastRemovalRef.current = { itemId: movedItem.id, at: now };
-
-                const info = movedItem.type === 'suspended'
-                    ? `Suspended • Surah ${movedItem.data.surahId}`
-                    : `Similarity • ${movedItem.data?.surah?.name || 'Surah'}`;
-
-                const similarityUndoSnapshot: Array<{ decisionKey: string; update: any; representativeAbs: number }> = [];
-
-                if (movedItem.type === 'similarity' && mutashabihatDecisions && onMutashabihatDecisionUpdate) {
-                    movedItem.data.items.forEach((simItem: any) => {
-                        simItem.muts.forEach((entry: any) => {
-                            const decisionKey = `${simItem.err.absoluteAyah}-${entry.phraseId}`;
-                            const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
-                            similarityUndoSnapshot.push({
-                                decisionKey,
-                                update: {
-                                    status: existing.status ?? 'pending',
-                                    notes: existing.notes ?? existing.note ?? '',
-                                    confirmedAt: existing.confirmedAt
-                                },
-                                representativeAbs: simItem.err.absoluteAyah
-                            });
-                        });
+                } else if (movedItem.type === 'suspended' || movedItem.type === 'similarity') {
+                    void handleCompletionTrigger(movedItem, false).catch((err) => {
+                        console.error('Failed to persist completion trigger', err);
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
                     });
+                    addToast(movedItem.type, 'Moved out of Complete', getMaintenanceCardReviewInfo(movedItem, false));
                 }
-
-                const removalTimer = setTimeout(async () => {
-                    if (movedItem.type === 'suspended') {
-                        try {
-                            await handleCompletionTrigger(movedItem);
-                        } catch (err) {
-                            console.error('Failed to persist suspension completion trigger', err);
-                            clearPendingRemoval(movedItem.id);
-                            restoreItemToColumn(movedItem, source.droppableId, source.index);
-                            addToast('suspended', 'Failed to unsuspend verse group', 'Please try again.');
-                            return;
-                        }
-                    }
-                    finalizeRemoval(movedItem);
-                    removalTimersRef.current.delete(movedItem.id);
-                    pendingToastIdsRef.current.delete(movedItem.id);
-                }, 6000);
-                removalTimersRef.current.set(movedItem.id, removalTimer);
-
-                const toastType: TodoToastType = movedItem.type === 'similarity' ? 'similarity' : 'suspended';
-                const toastId = addToast(
-                    toastType,
-                    'Marked complete',
-                    `${info}\nWill disappear when this popup closes`,
-                    () => {
-                        clearPendingRemoval(movedItem.id);
-                        restoreItemToColumn(movedItem, source.droppableId, source.index);
-                        if (movedItem.type === 'similarity' && onMutashabihatDecisionUpdate) {
-                            similarityUndoSnapshot.forEach(s => {
-                                onMutashabihatDecisionUpdate(s.representativeAbs, { ...s.update }, s.decisionKey);
-                            });
-                        }
-                    }
-                );
-                pendingToastIdsRef.current.set(movedItem.id, toastId);
             }
 
             return newColsMap;
@@ -789,7 +660,7 @@ export default function TodoKanban({
         if (nextStateToPersist) {
             persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
         }
-    }, [handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, hasMindmapForItem, mutashabihatDecisions, onMutashabihatDecisionUpdate, restoreItemToColumn, clearPendingRemoval, finalizeRemoval, filteredItem, persistKanbanState]);
+    }, [handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, getMaintenanceCardReviewInfo, hasMindmapForItem, filteredItem, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
@@ -848,47 +719,90 @@ export default function TodoKanban({
         if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
 
         const group = item.data;
-        const phraseMap: Record<string, { phraseId: string; absRefs: number[]; entry: any; ayahIds: number[] }> = {};
+        const sourceMap: Record<string, {
+            phraseId: string;
+            phraseIds: string[];
+            absRefs: number[];
+            entries: any[];
+            ayahIds: number[];
+            phraseAbsRefs: Record<string, number[]>;
+        }> = {};
 
         group.items.forEach((gItem: any) => {
             const abs = gItem.err.absoluteAyah!;
             gItem.muts.forEach((entry: any) => {
-                if (!phraseMap[entry.phraseId]) {
-                    phraseMap[entry.phraseId] = {
+                const sourceAbs = Number(entry?.meta?.sourceAbs);
+                const sourceRef = Number.isFinite(sourceAbs) ? absoluteToSurahAyah(sourceAbs) : null;
+                const sourceGroupKey = sourceRef && sourceRef.surahId === group.surah.id
+                    ? `source-${sourceAbs}`
+                    : `phrase-${entry.phraseId}`;
+
+                if (!sourceMap[sourceGroupKey]) {
+                    sourceMap[sourceGroupKey] = {
                         phraseId: entry.phraseId,
+                        phraseIds: [],
                         absRefs: [],
-                        entry,
-                        ayahIds: []
+                        entries: [],
+                        ayahIds: [],
+                        phraseAbsRefs: {}
                     };
                 }
-                if (!phraseMap[entry.phraseId].absRefs.includes(abs)) {
-                    phraseMap[entry.phraseId].absRefs.push(abs);
+                const current = sourceMap[sourceGroupKey];
+                if (!current.phraseIds.includes(entry.phraseId)) {
+                    current.phraseIds.push(entry.phraseId);
+                }
+                if (!current.entries.some((existingEntry: any) => existingEntry.phraseId === entry.phraseId)) {
+                    current.entries.push(entry);
+                }
+                if (!current.phraseAbsRefs[entry.phraseId]) {
+                    current.phraseAbsRefs[entry.phraseId] = [];
+                }
+                if (!current.phraseAbsRefs[entry.phraseId].includes(abs)) {
+                    current.phraseAbsRefs[entry.phraseId].push(abs);
+                }
+
+                if (!current.absRefs.includes(abs)) {
+                    current.absRefs.push(abs);
                     const ref = absoluteToSurahAyah(abs);
-                    phraseMap[entry.phraseId].ayahIds.push(ref.ayahId);
+                    current.ayahIds.push(ref.ayahId);
                 }
             });
         });
 
-        const groups = Object.values(phraseMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+        const groups = Object.values(sourceMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
         if (groups.length === 0) return;
 
         const selected = groups[0];
-        const representativeAbs = selected.absRefs.find(abs => {
-            const key = `${abs}-${selected.phraseId}`;
-            const existing = mutashabihatDecisions.find(d => d.phraseId === key);
-            return existing && existing.status !== 'pending';
-        }) || selected.absRefs[0];
-        const decisionKey = `${representativeAbs}-${selected.phraseId}`;
+        const resolutionTargets = selected.phraseIds.map((phraseId) => {
+            const phraseAbsRefs = selected.phraseAbsRefs[phraseId] || selected.absRefs;
+            const targetAbs = phraseAbsRefs.find((abs) => {
+                const key = `${abs}-${phraseId}`;
+                const existing = mutashabihatDecisions.find(d => d.phraseId === key);
+                return existing && existing.status !== 'pending';
+            }) || phraseAbsRefs[0];
+            return {
+                phraseId,
+                representativeAbs: targetAbs,
+                decisionKey: `${targetAbs}-${phraseId}`,
+            };
+        });
+
+        const firstResolvedTarget = resolutionTargets.find(target =>
+            (mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.status || 'pending') !== 'pending'
+        );
+        const primaryTarget = firstResolvedTarget || resolutionTargets[0];
 
         setActiveSimilarityContext({
-            decisionKey,
-            representativeAbs,
+            decisionKey: primaryTarget.decisionKey,
+            representativeAbs: primaryTarget.representativeAbs,
             group: {
                 phraseId: selected.phraseId,
+                phraseIds: selected.phraseIds,
                 absRefs: selected.absRefs,
-                entry: selected.entry,
+                entries: selected.entries,
                 ayahIds: selected.ayahIds,
-                surahId: group.surah.id
+                surahId: group.surah.id,
+                resolutionTargets,
             },
             surah: group.surah
         });
@@ -1387,19 +1301,48 @@ export default function TodoKanban({
 
             {/* Similarity Context Modal */}
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
-                const { decisionKey, representativeAbs, group, surah } = activeSimilarityContext;
+                const { decisionKey, group, surah } = activeSimilarityContext;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
                 const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
-                const isConfirmed = !!existing.confirmedAt;
-                const entry = group.entry;
+                const isConfirmed = group.resolutionTargets.some(target => !!mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.confirmedAt);
+                const sortedAbsRefs = [...group.absRefs].sort((a, b) => a - b);
+                const sourceEntries = sortedAbsRefs.map(absRef => {
+                    const ref = absoluteToSurahAyah(absRef);
+                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                    const mutEntry = group.entries.find((entry: any) =>
+                        entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)
+                    );
+                    return { absRef, ref, baseVerse, mutEntry };
+                }).filter(item => !!item.baseVerse && !!item.mutEntry);
 
-                const matches = entry.matches.filter((matchAbs: number) => {
-                    const matchRef = absoluteToSurahAyah(matchAbs);
-                    return matchRef.surahId !== group.surahId;
+                const matchRangeByAbs = new Map<number, [number, number]>();
+                group.entries.forEach((entry: any) => {
+                    (entry?.meta?.matches || []).forEach((m: any) => {
+                        if (!matchRangeByAbs.has(m.absolute)) {
+                            matchRangeByAbs.set(m.absolute, m.wordRange);
+                        }
+                    });
                 });
+
+                const matches = Array.from(new Set(group.entries.flatMap((entry: any) => entry?.matches || [])))
+                    .filter((matchAbs: number) => {
+                        if (group.absRefs.includes(matchAbs)) return false;
+                        const matchRef = absoluteToSurahAyah(matchAbs);
+                        return matchRef.surahId !== group.surahId;
+                    });
                 const isExpanded = expandedSimilarityMatches[`${decisionKey}-full`] || false;
                 const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
                 const hasMore = matches.length > 4;
+                const phraseLabel = group.phraseIds.length === 1
+                    ? (group.phraseIds[0].startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseIds[0]}`)
+                    : `Phrases ${group.phraseIds.map(phraseId => phraseId.startsWith('custom-') ? 'Custom' : `#${phraseId}`).join(', ')}`;
+
+                const applyDecisionToGroup = (updater: (targetExisting: any) => any) => {
+                    group.resolutionTargets.forEach((target) => {
+                        const targetExisting = mutashabihatDecisions.find(d => d.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
+                        onMutashabihatDecisionUpdate(target.representativeAbs, updater(targetExisting), target.decisionKey);
+                    });
+                };
 
                 const similarityContent = (
                     <>
@@ -1408,7 +1351,7 @@ export default function TodoKanban({
                                 <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
                                 <select
                                     value={existing.status}
-                                    onChange={e => onMutashabihatDecisionUpdate(representativeAbs, { ...existing, status: e.target.value as any }, decisionKey)}
+                                    onChange={e => applyDecisionToGroup(targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
                                     className="maturity-select"
                                     style={{ width: '100%', padding: '8px' }}
                                 >
@@ -1422,7 +1365,7 @@ export default function TodoKanban({
                             <textarea
                                 placeholder="Add your distinction notes here..."
                                 value={existingNotes}
-                                onChange={e => onMutashabihatDecisionUpdate(representativeAbs, { ...existing, notes: e.target.value }, decisionKey)}
+                                onChange={e => applyDecisionToGroup(targetExisting => ({ ...targetExisting, notes: e.target.value }))}
                                 style={{
                                     width: '100%',
                                     minHeight: '80px',
@@ -1441,19 +1384,17 @@ export default function TodoKanban({
                                 Similarity Context
                             </div>
                             <div style={{ padding: '0.5rem' }}>
-                                {group.absRefs.map(absRef => {
-                                    const ref = absoluteToSurahAyah(absRef);
-                                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
-                                    const matchRange = entry.meta?.matches?.find((m: any) => m.absolute === absRef)?.wordRange;
-                                    const isSource = entry.meta?.sourceAbs === absRef;
-                                    const sourceRange = entry.meta?.sourceRange;
-
-                                    if (!baseVerse) return null;
+                                {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
+                                    const sourceRange = mutEntry?.meta?.sourceRange;
+                                    const isSource = mutEntry?.meta?.sourceAbs === absRef;
+                                    const matchRange = isSource
+                                        ? sourceRange
+                                        : matchRangeByAbs.get(absRef);
 
                                     return (
                                         <div key={absRef} className="mut-text" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
                                             <div className="mut-text-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
-                                                {getSurah(ref.surahId)?.name} - {ref.ayahId} {group.phraseId.startsWith('custom-') ? '' : `(Phrase #${group.phraseId})`}
+                                                {getSurah(ref.surahId)?.name} - {ref.ayahId} ({phraseLabel})
                                             </div>
                                             <div className="mut-context">
                                                 <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', textAlign: 'right', direction: 'rtl', lineHeight: '2.2', marginBottom: '1.5rem' }}>
@@ -1468,7 +1409,7 @@ export default function TodoKanban({
                                                     const mref = absoluteToSurahAyah(matchAbs);
                                                     const msurah = getSurah(mref.surahId);
                                                     const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
-                                                    const matchRange = entry.meta?.matches?.find((m: any) => m.absolute === matchAbs)?.wordRange;
+                                                    const matchRange = matchRangeByAbs.get(matchAbs);
 
                                                     return (
                                                         <div key={idx} className="mut-match-item" style={{

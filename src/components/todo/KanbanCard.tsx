@@ -126,7 +126,7 @@ const KanbanCard = ({
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         className={`
-                            roadmap-card group relative cursor-pointer !rounded-[14px]
+                            roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
                             ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
                             ${item.status === 'complete' ? 'opacity-80' : ''}
                             ${isMobile ? 'min-w-[42vw] snap-center' : ''}

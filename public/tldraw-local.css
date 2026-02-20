@@ -3162,6 +3162,9 @@ tldraw? probably.
 	color: var(--tl-color-text-shadow);
 	max-width: 400px;
 	width: fit-content;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	text-align: center;
 	will-change: transform, opacity;
 	z-index: 2;
@@ -3945,4 +3948,3 @@ tldraw? probably.
 		transform: translateX(calc(100% + var(--tl-space-3)));
 	}
 }
-

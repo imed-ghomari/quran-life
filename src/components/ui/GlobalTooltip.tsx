@@ -135,6 +135,10 @@ export default function GlobalTooltip() {
             return null;
         }
 
+        if (target.closest('[data-tooltip-disabled="true"]')) {
+            return null;
+        }
+
         const el = target.closest('[data-custom-tooltip-title],[data-tooltip]');
         if (!el || !getTooltipText(el)) {
             return null;

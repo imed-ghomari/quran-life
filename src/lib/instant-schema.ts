@@ -18,6 +18,7 @@ export const schema = i.schema({
       theme: i.string().optional(),
       isOnboardingComplete: i.boolean().optional(),
       kanbanColumns: i.json().optional(),
+      suspendedVerseGroupsAcknowledged: i.json().optional(),
       audioSettings: i.json().optional(),
       lastSyncedAt: i.string().optional(),
       userId: i.string().indexed(),

@@ -61,14 +61,19 @@ function toMillis(row) {
   return 0;
 }
 
+function hasValidTimestamp(row) {
+  return Number.isFinite(toMillis(row)) && toMillis(row) > 0;
+}
+
 function makeKey(parts) {
   return parts.map((v) => String(v ?? '').trim()).join('::');
 }
 
 function dedupeRows(rows, keyFn) {
-  const keepByKey = new Map();
+  const groupsByKey = new Map();
   const deleteIds = [];
   const skipped = [];
+  const ambiguousKeys = [];
 
   for (const row of rows || []) {
     const key = keyFn(row);
@@ -76,29 +81,47 @@ function dedupeRows(rows, keyFn) {
       skipped.push(row?.id);
       continue;
     }
+    if (!groupsByKey.has(key)) groupsByKey.set(key, []);
+    groupsByKey.get(key).push(row);
+  }
 
-    const existing = keepByKey.get(key);
-    if (!existing) {
-      keepByKey.set(key, row);
+  let kept = 0;
+  for (const [key, group] of groupsByKey.entries()) {
+    if (group.length <= 1) {
+      kept += group.length;
       continue;
     }
 
-    const rowTs = toMillis(row);
-    const existingTs = toMillis(existing);
+    // Safety-first: only delete duplicates when all rows in the group have valid timestamps.
+    const allHaveValidTimestamps = group.every(hasValidTimestamp);
+    if (!allHaveValidTimestamps) {
+      kept += group.length;
+      ambiguousKeys.push(key);
+      continue;
+    }
 
-    if (rowTs > existingTs) {
-      if (existing?.id) deleteIds.push(existing.id);
-      keepByKey.set(key, row);
-    } else {
-      if (row?.id) deleteIds.push(row.id);
+    const sorted = [...group].sort((a, b) => {
+      const diff = toMillis(b) - toMillis(a);
+      if (diff !== 0) return diff;
+      return String(a?.id || '').localeCompare(String(b?.id || ''));
+    });
+
+    const winner = sorted[0];
+    kept += 1;
+    for (let i = 1; i < sorted.length; i += 1) {
+      const candidate = sorted[i];
+      if (candidate?.id && candidate.id !== winner?.id) {
+        deleteIds.push(candidate.id);
+      }
     }
   }
 
   return {
-    kept: keepByKey.size,
+    kept,
     duplicates: deleteIds.length,
     deleteIds,
     skipped,
+    ambiguousKeys,
   };
 }
 
@@ -163,7 +186,7 @@ async function main() {
   for (const plan of plans) {
     totalDuplicates += plan.result.duplicates;
     console.log(
-      `[${plan.name}] rows=${(data[plan.entity] || []).length} keep=${plan.result.kept} duplicates=${plan.result.duplicates} skipped=${plan.result.skipped.length}`,
+      `[${plan.name}] rows=${(data[plan.entity] || []).length} keep=${plan.result.kept} duplicates=${plan.result.duplicates} skipped=${plan.result.skipped.length} ambiguous=${plan.result.ambiguousKeys.length}`,
     );
   }
 
@@ -174,6 +197,7 @@ async function main() {
 
   if (!apply) {
     console.log(`Dry run: ${totalDuplicates} duplicate rows would be deleted.`);
+    console.log('Note: Ambiguous duplicate groups (missing timestamps) are skipped for safety.');
     console.log('Re-run with --apply to execute cleanup.');
     return;
   }
