@@ -86,7 +86,7 @@ export default function SplitsModal({
     // Mobile: SlideOver Presentation (match settings mobile slideover)
     if (isMobile || useSlideOver) {
         return (
-            <div className="slide-over-overlay" onClick={onClose}>
+            <div className="slide-over-overlay" onClick={onClose} style={{ zIndex: 12000 }}>
                 <div className="slide-over-content" onClick={e => e.stopPropagation()}>
                     <div className="slide-over-header">
                         <h3 style={{ margin: 0, fontSize: '1rem' }}>Splits Configuration</h3>
@@ -117,7 +117,7 @@ export default function SplitsModal({
         );
     }
 return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div className="fixed inset-0 z-[12000] flex items-center justify-center">
         {/* Backdrop */}
         <div
             className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'

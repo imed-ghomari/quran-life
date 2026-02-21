@@ -203,19 +203,7 @@ export default function CardActionMenu({
         // 3. Similarity Actions
         if (cardType === 'similarity') {
             items.push({
-                label: 'Edit Mindmap',
-                icon: <PenTool size={20} />,
-                onClick: onEditMindmap,
-                disabled: isProcessing
-            });
-            items.push({
-                label: 'Edit Splits',
-                icon: <SplitSquareHorizontal size={20} />,
-                onClick: onChangeSplits,
-                disabled: isProcessing
-            });
-            items.push({
-                label: 'View Similarity Conflict',
+                label: 'Open Similarity Context',
                 icon: <Search size={20} />,
                 onClick: onViewSimilarityContext,
                 disabled: isProcessing

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import KanbanColumn from './KanbanColumn';
 import SlideOver from '../SlideOver';
 import '../LandingPage/RoadmapSection.css'; // Import shared styles
@@ -10,9 +11,9 @@ import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
 import SplitsModal from './SplitsModal';
-import { PenTool, Download, Search, X, Brain, Check } from 'lucide-react';
+import { PenTool, Download, Search, X, Brain, Check, SplitSquareHorizontal, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
-import { absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { absoluteToSurahAyah, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { QuranPart, MutashabihatDecision } from '@/lib/types';
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
@@ -125,6 +126,9 @@ export default function TodoKanban({
     completeExitBehavior,
     kanbanSortOrder
 }: TodoKanbanProps) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [columns, setColumns] = useState<Record<string, KanbanColumnData>>({
         'backlog': { id: 'backlog', title: 'Backlog', items: [] },
         'in-progress': { id: 'in-progress', title: 'In Progress', items: [] },
@@ -300,6 +304,8 @@ export default function TodoKanban({
         surah: { id: number; name: string; arabicName?: string };
     } | null>(null);
     const [expandedSimilarityMatches, setExpandedSimilarityMatches] = useState<Record<string, boolean>>({});
+    const [contextVerseCursor, setContextVerseCursor] = useState<Record<number, number>>({});
+    const lastToolRequestKeyRef = useRef<string>('');
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -486,10 +492,26 @@ export default function TodoKanban({
             });
         };
 
-        setColumns({
-            'backlog': { id: 'backlog', title: 'Backlog', items: sortItems(newCols['backlog']) },
-            'in-progress': { id: 'in-progress', title: 'In Progress', items: sortItems(newCols['in-progress']) },
-            'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
+        setColumns((prev) => {
+            // Keep suspended cards visible in Complete even after they leave suspendedAnchors.
+            // This prevents completed maintenance cards from disappearing after the completion side effect runs.
+            const retainedCompletedSuspended = prev.complete.items.filter((item) => (
+                item.type === 'suspended'
+                && !itemMap.has(item.id)
+                && (kanbanState?.complete?.includes(item.id) ?? true)
+            ));
+
+            retainedCompletedSuspended.forEach((item) => {
+                if (!newCols.complete.some((existing) => existing.id === item.id)) {
+                    newCols.complete.push({ ...item, status: 'complete' });
+                }
+            });
+
+            return {
+                'backlog': { id: 'backlog', title: 'Backlog', items: sortItems(newCols['backlog']) },
+                'in-progress': { id: 'in-progress', title: 'In Progress', items: sortItems(newCols['in-progress']) },
+                'complete': { id: 'complete', title: 'Complete', items: sortItems(newCols['complete']) },
+            };
         });
 
     }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, kanbanSortOrder]);
@@ -769,7 +791,136 @@ export default function TodoKanban({
             });
         });
 
-        const groups = Object.values(sourceMap).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
+        const rawGroups = Object.values(sourceMap).map((group) => ({
+            phraseId: group.phraseId,
+            phraseIds: [...group.phraseIds],
+            absRefs: [...group.absRefs],
+            entries: [...group.entries],
+            ayahIds: [...group.ayahIds],
+            phraseAbsRefs: Object.fromEntries(
+                Object.entries(group.phraseAbsRefs).map(([phraseId, refs]) => [phraseId, [...refs]])
+            ) as Record<string, number[]>
+        }));
+
+        const getEntryRangesForAbs = (entry: any, absRef: number): Set<string> => {
+            const ranges = new Set<string>();
+            const meta: any = entry?.meta;
+            if (!meta) return ranges;
+
+            if (Number(meta.sourceAbs) === absRef && Array.isArray(meta.sourceRange) && meta.sourceRange.length === 2) {
+                ranges.add(`${meta.sourceRange[0]}-${meta.sourceRange[1]}`);
+            }
+
+            const matches = Array.isArray(meta.matches) ? meta.matches : [];
+            matches.forEach((match: any) => {
+                if (Number(match?.absolute) !== absRef) return;
+                if (!Array.isArray(match?.wordRange) || match.wordRange.length !== 2) return;
+                ranges.add(`${match.wordRange[0]}-${match.wordRange[1]}`);
+            });
+
+            return ranges;
+        };
+
+        const getGroupRangesForAbs = (group: typeof rawGroups[number], absRef: number): Set<string> => {
+            const ranges = new Set<string>();
+            group.entries.forEach((entry: any) => {
+                getEntryRangesForAbs(entry, absRef).forEach((range) => ranges.add(range));
+            });
+            return ranges;
+        };
+
+        const getGroupExternalMatches = (group: typeof rawGroups[number]): Set<number> => {
+            const matches = new Set<number>();
+            const localAbs = new Set(group.absRefs);
+            group.entries.forEach((entry: any) => {
+                const entryMatches = Array.isArray(entry?.matches) ? entry.matches : [];
+                entryMatches.forEach((matchAbs: number) => {
+                    if (!localAbs.has(matchAbs)) matches.add(matchAbs);
+                });
+            });
+            return matches;
+        };
+
+        const rangesOverlap = (leftRange: string, rightRange: string): boolean => {
+            const [lStartStr, lEndStr] = leftRange.split('-');
+            const [rStartStr, rEndStr] = rightRange.split('-');
+            const lStart = Number(lStartStr);
+            const lEnd = Number(lEndStr);
+            const rStart = Number(rStartStr);
+            const rEnd = Number(rEndStr);
+            if (![lStart, lEnd, rStart, rEnd].every(Number.isFinite)) return false;
+            return Math.max(lStart, rStart) <= Math.min(lEnd, rEnd);
+        };
+
+        const sameMatchSet = (leftMatches: Set<number>, rightMatches: Set<number>): boolean => {
+            if (leftMatches.size === 0 || rightMatches.size === 0) return false;
+            if (leftMatches.size !== rightMatches.size) return false;
+            return Array.from(leftMatches).every((value) => rightMatches.has(value));
+        };
+
+        const groupsShouldMerge = (left: typeof rawGroups[number], right: typeof rawGroups[number]) => {
+            const sharedAbsRefs = left.absRefs.filter((absRef) => right.absRefs.includes(absRef));
+            if (sharedAbsRefs.length === 0) return false;
+
+            const leftExternalMatches = getGroupExternalMatches(left);
+            const rightExternalMatches = getGroupExternalMatches(right);
+
+            return sharedAbsRefs.some((absRef) => {
+                const leftRanges = getGroupRangesForAbs(left, absRef);
+                const rightRanges = getGroupRangesForAbs(right, absRef);
+                if (leftRanges.size === 0 || rightRanges.size === 0) return false;
+
+                const hasExactRangeMatch = Array.from(leftRanges).some((range) => rightRanges.has(range));
+                if (hasExactRangeMatch) return true;
+
+                const hasOverlappingRange = Array.from(leftRanges).some((leftRange) =>
+                    Array.from(rightRanges).some((rightRange) => rangesOverlap(leftRange, rightRange))
+                );
+                if (!hasOverlappingRange) return false;
+
+                return sameMatchSet(leftExternalMatches, rightExternalMatches);
+            });
+        };
+
+        const mergeGroupData = (left: typeof rawGroups[number], right: typeof rawGroups[number]) => {
+            const mergedPhraseAbsRefs: Record<string, number[]> = { ...left.phraseAbsRefs };
+            Object.entries(right.phraseAbsRefs).forEach(([phraseId, refs]) => {
+                mergedPhraseAbsRefs[phraseId] = Array.from(new Set([...(mergedPhraseAbsRefs[phraseId] || []), ...refs]));
+            });
+
+            const entriesByKey = new Map<string, any>();
+            [...left.entries, ...right.entries].forEach((entry: any) => {
+                const key = `${entry?.phraseId || ''}-${Number(entry?.meta?.sourceAbs) || 0}`;
+                if (!entriesByKey.has(key)) entriesByKey.set(key, entry);
+            });
+
+            return {
+                phraseId: left.phraseId,
+                phraseIds: Array.from(new Set([...left.phraseIds, ...right.phraseIds])),
+                absRefs: Array.from(new Set([...left.absRefs, ...right.absRefs])),
+                entries: Array.from(entriesByKey.values()),
+                ayahIds: Array.from(new Set([...left.ayahIds, ...right.ayahIds])),
+                phraseAbsRefs: mergedPhraseAbsRefs
+            };
+        };
+
+        const groups = rawGroups.reduce<typeof rawGroups>((acc, group) => {
+            let candidate = group;
+            let didMerge = true;
+            while (didMerge) {
+                didMerge = false;
+                for (let i = 0; i < acc.length; i += 1) {
+                    if (groupsShouldMerge(acc[i], candidate)) {
+                        candidate = mergeGroupData(acc[i], candidate);
+                        acc.splice(i, 1);
+                        didMerge = true;
+                        break;
+                    }
+                }
+            }
+            acc.push(candidate);
+            return acc;
+        }, []).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
         if (groups.length === 0) return;
 
         const selected = groups[0];
@@ -807,6 +958,66 @@ export default function TodoKanban({
             surah: group.surah
         });
     }, [mutashabihatDecisions, onMutashabihatDecisionUpdate]);
+
+    const openMindmapForSurah = useCallback(async (surahId: number) => {
+        await onEditMindmap(surahId, mindmaps[surahId]?.tldrawSnapshot, false);
+    }, [onEditMindmap, mindmaps]);
+
+    const openSplitsForSurah = useCallback((surahId: number) => {
+        const surah = getSurah(surahId);
+        if (!surah) return;
+        setSplitsModalItem({
+            id: `similarity-surah-${surahId}`,
+            type: 'similarity',
+            status: 'in-progress',
+            data: { surah, items: [], count: 0 }
+        } as any);
+    }, []);
+
+    useEffect(() => {
+        const tool = (searchParams.get('tool') || '').toLowerCase();
+        const surahId = Number(searchParams.get('surah'));
+        if (!Number.isFinite(surahId) || surahId <= 0) return;
+        if (tool !== 'mindmap' && tool !== 'splits') return;
+
+        const requestKey = `${tool}:${surahId}`;
+        if (lastToolRequestKeyRef.current === requestKey) return;
+        lastToolRequestKeyRef.current = requestKey;
+
+        if (tool === 'mindmap') {
+            void openMindmapForSurah(surahId);
+        } else {
+            openSplitsForSurah(surahId);
+        }
+
+        const next = new URLSearchParams(searchParams.toString());
+        next.delete('tool');
+        next.delete('surah');
+        const nextQuery = next.toString();
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    }, [searchParams, pathname, router, openMindmapForSurah, openSplitsForSurah]);
+
+    const shiftContextVerse = useCallback((baseAbsRef: number, direction: 'before' | 'after') => {
+        setContextVerseCursor((prev) => {
+            const currentAbs = prev[baseAbsRef] ?? baseAbsRef;
+            const currentRef = absoluteToSurahAyah(currentAbs);
+            const surahMeta = getSurah(currentRef.surahId);
+            if (!surahMeta) return prev;
+            const nextAyah = direction === 'before' ? currentRef.ayahId - 1 : currentRef.ayahId + 1;
+            if (nextAyah < 1 || nextAyah > surahMeta.verseCount) return prev;
+            return {
+                ...prev,
+                [baseAbsRef]: surahAyahToAbsolute(currentRef.surahId, nextAyah)
+            };
+        });
+    }, []);
+
+    const resetContextVerse = useCallback((baseAbsRef: number) => {
+        setContextVerseCursor((prev) => ({
+            ...prev,
+            [baseAbsRef]: baseAbsRef
+        }));
+    }, []);
 
     const getHasMindmap = useCallback((item: KanbanItem): boolean => {
         if (item.type === 'surah' || item.type === 'part') {
@@ -1333,10 +1544,6 @@ export default function TodoKanban({
                 const isExpanded = expandedSimilarityMatches[`${decisionKey}-full`] || false;
                 const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
                 const hasMore = matches.length > 4;
-                const phraseLabel = group.phraseIds.length === 1
-                    ? (group.phraseIds[0].startsWith('custom-') ? 'Custom' : `Phrase #${group.phraseIds[0]}`)
-                    : `Phrases ${group.phraseIds.map(phraseId => phraseId.startsWith('custom-') ? 'Custom' : `#${phraseId}`).join(', ')}`;
-
                 const applyDecisionToGroup = (updater: (targetExisting: any) => any) => {
                     group.resolutionTargets.forEach((target) => {
                         const targetExisting = mutashabihatDecisions.find(d => d.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
@@ -1379,80 +1586,197 @@ export default function TodoKanban({
                             />
                         </div>
 
-                        <div className={`mut-context-block ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: '1px solid var(--border)', background: 'transparent' }}>
+                        <div className={`mut-context-block mut-detail-panel ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: '1px solid var(--border)', background: 'transparent' }}>
                             <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--background-secondary)', fontWeight: 600 }}>
                                 Similarity Context
                             </div>
                             <div style={{ padding: '0.5rem' }}>
                                 {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
+                                    const displayedAbs = contextVerseCursor[absRef] ?? absRef;
+                                    const displayedRef = absoluteToSurahAyah(displayedAbs);
+                                    const displayedVerse = verses.find(v => v.surahId === displayedRef.surahId && v.ayahId === displayedRef.ayahId);
                                     const sourceRange = mutEntry?.meta?.sourceRange;
-                                    const isSource = mutEntry?.meta?.sourceAbs === absRef;
+                                    const isSource = mutEntry?.meta?.sourceAbs === displayedAbs;
                                     const matchRange = isSource
                                         ? sourceRange
-                                        : matchRangeByAbs.get(absRef);
+                                        : matchRangeByAbs.get(displayedAbs);
 
                                     return (
-                                        <div key={absRef} className="mut-text" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
-                                            <div className="mut-text-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
-                                                {getSurah(ref.surahId)?.name} - {ref.ayahId} ({phraseLabel})
+                                        <div key={absRef} className="mut-text mut-detail-source" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
+                                            <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
+                                                {getSurah(displayedRef.surahId)?.name} - {displayedRef.ayahId}
                                             </div>
-                                            <div className="mut-context">
-                                                <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', textAlign: 'right', direction: 'rtl', lineHeight: '2.2', marginBottom: '1.5rem' }}>
-                                                    <span className="mut-ayah-tag">{ref.ayahId}</span>
-                                                    <HighlightedVerse
-                                                        text={baseVerse.text}
-                                                        range={isSource ? sourceRange : matchRange}
-                                                    />
-                                                </p>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                                                <button
+                                                    className="bulk-btn std-normal-btn"
+                                                    onClick={() => openMindmapForSurah(displayedRef.surahId)}
+                                                    data-tooltip="Mindmap Editor"
+                                                    data-tooltip-trigger="hover"
+                                                    title="Mindmap Editor"
+                                                    aria-label="Mindmap Editor"
+                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    <PenTool size={14} />
+                                                </button>
+                                                <button
+                                                    className="bulk-btn std-normal-btn"
+                                                    onClick={() => openSplitsForSurah(displayedRef.surahId)}
+                                                    data-tooltip="Splits Configuration"
+                                                    data-tooltip-trigger="hover"
+                                                    title="Splits Configuration"
+                                                    aria-label="Splits Configuration"
+                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    <SplitSquareHorizontal size={14} />
+                                                </button>
+                                                <button
+                                                    className="bulk-btn std-normal-btn"
+                                                    onClick={() => shiftContextVerse(absRef, 'after')}
+                                                    data-tooltip="Next Verse"
+                                                    data-tooltip-trigger="hover"
+                                                    title="Next Verse"
+                                                    aria-label="Next Verse"
+                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    <ChevronLeft size={14} />
+                                                </button>
+                                                <button
+                                                    className="bulk-btn std-normal-btn"
+                                                    onClick={() => shiftContextVerse(absRef, 'before')}
+                                                    data-tooltip="Previous Verse"
+                                                    data-tooltip-trigger="hover"
+                                                    title="Previous Verse"
+                                                    aria-label="Previous Verse"
+                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    <ChevronRight size={14} />
+                                                </button>
+                                                <button
+                                                    className="bulk-btn std-normal-btn"
+                                                    onClick={() => resetContextVerse(absRef)}
+                                                    data-tooltip="Reset To Origin Verse"
+                                                    data-tooltip-trigger="hover"
+                                                    title="Reset To Origin Verse"
+                                                    aria-label="Reset To Origin Verse"
+                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    <RotateCcw size={14} />
+                                                </button>
+                                            </div>
+                                            <div className="mut-context mut-verse-stack">
+                                                <div className="mut-verse-card" style={{ marginBottom: '1rem' }}>
+                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', marginBottom: '0.6rem' }}>
+                                                        {sourceEntries.length > 1 && (
+                                                            <span className="verse-badge mut-detail-ayah-badge">{displayedRef.ayahId}</span>
+                                                        )}
+                                                        <HighlightedVerse
+                                                            text={displayedVerse?.text || baseVerse.text}
+                                                            range={isSource ? sourceRange : matchRange}
+                                                        />
+                                                    </p>
+                                                </div>
 
-                                                {displayedMatches.map((matchAbs: number, idx: number) => {
-                                                    const mref = absoluteToSurahAyah(matchAbs);
-                                                    const msurah = getSurah(mref.surahId);
-                                                    const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
-                                                    const matchRange = matchRangeByAbs.get(matchAbs);
+                                                <div className="mut-matches mut-compare-list" style={{ marginTop: '1.25rem' }}>
+                                                    {displayedMatches.map((matchAbs: number, idx: number) => {
+                                                        const displayedMatchAbs = contextVerseCursor[matchAbs] ?? matchAbs;
+                                                        const mref = absoluteToSurahAyah(displayedMatchAbs);
+                                                        const msurah = getSurah(mref.surahId);
+                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                        const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
-                                                    return (
-                                                        <div key={idx} className="mut-match-item" style={{
-                                                            marginBottom: '1rem',
-                                                            padding: '0.75rem',
-                                                            borderRadius: '8px',
-                                                            background: 'var(--background)',
-                                                            border: '1px solid var(--border)'
-                                                        }}>
-                                                            <div className="mut-match-label" style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                                                                Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                        return (
+                                                            <div key={idx} className="mut-match-item mut-compare-card" style={{ marginBottom: '0.85rem' }}>
+                                                                <div className="mut-match-label mut-compare-label">
+                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                                                                    <button
+                                                                        className="bulk-btn std-normal-btn"
+                                                                        onClick={() => openMindmapForSurah(mref.surahId)}
+                                                                        data-tooltip="Mindmap Editor"
+                                                                        data-tooltip-trigger="hover"
+                                                                        title="Mindmap Editor"
+                                                                        aria-label="Mindmap Editor"
+                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <PenTool size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        className="bulk-btn std-normal-btn"
+                                                                        onClick={() => openSplitsForSurah(mref.surahId)}
+                                                                        data-tooltip="Splits Configuration"
+                                                                        data-tooltip-trigger="hover"
+                                                                        title="Splits Configuration"
+                                                                        aria-label="Splits Configuration"
+                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <SplitSquareHorizontal size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        className="bulk-btn std-normal-btn"
+                                                                        onClick={() => shiftContextVerse(matchAbs, 'after')}
+                                                                        data-tooltip="Next Verse"
+                                                                        data-tooltip-trigger="hover"
+                                                                        title="Next Verse"
+                                                                        aria-label="Next Verse"
+                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <ChevronLeft size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        className="bulk-btn std-normal-btn"
+                                                                        onClick={() => shiftContextVerse(matchAbs, 'before')}
+                                                                        data-tooltip="Previous Verse"
+                                                                        data-tooltip-trigger="hover"
+                                                                        title="Previous Verse"
+                                                                        aria-label="Previous Verse"
+                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <ChevronRight size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        className="bulk-btn std-normal-btn"
+                                                                        onClick={() => resetContextVerse(matchAbs)}
+                                                                        data-tooltip="Reset To Comparator Verse"
+                                                                        data-tooltip-trigger="hover"
+                                                                        title="Reset To Comparator Verse"
+                                                                        aria-label="Reset To Comparator Verse"
+                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <RotateCcw size={14} />
+                                                                    </button>
+                                                                </div>
+                                                                <div className="mut-context mut-verse-card">
+                                                                    {mVerse && (
+                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', margin: 0 }}>
+                                                                            <HighlightedVerse text={mVerse.text} range={matchRange} />
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <div className="mut-context">
-                                                                {mVerse && (
-                                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', textAlign: 'right', direction: 'rtl', lineHeight: '2' }}>
-                                                                        <span className="mut-ayah-tag">{mref.ayahId}</span>
-                                                                        <HighlightedVerse text={mVerse.text} range={matchRange} />
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
 
-                                                {hasMore && (
-                                                    <button
-                                                        className="btn-show-more"
-                                                        onClick={() => setExpandedSimilarityMatches(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
-                                                        style={{
-                                                            width: '100%',
-                                                            padding: '8px',
-                                                            marginTop: '8px',
-                                                            fontSize: '0.8rem',
-                                                            color: 'var(--accent)',
-                                                            background: 'none',
-                                                            border: '1px dashed var(--accent)',
-                                                            borderRadius: '8px',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
-                                                        {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
-                                                    </button>
-                                                )}
+                                                    {hasMore && (
+                                                        <button
+                                                            className="btn-show-more"
+                                                            onClick={() => setExpandedSimilarityMatches(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '8px',
+                                                                marginTop: '8px',
+                                                                fontSize: '0.8rem',
+                                                                color: 'var(--accent)',
+                                                                background: 'none',
+                                                                border: '1px dashed var(--accent)',
+                                                                borderRadius: '8px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     );
