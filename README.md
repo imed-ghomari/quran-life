@@ -20,7 +20,7 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - **Sequential Daily Portion**: Portions follow natural Quranic order (surah-by-surah) with Bismillah transitions.
 - **Statistics**: Progress focus — learned counts, active part progress, maturity buckets, mindmap completion, skipped count, due reviews.
 - **Todo**: Work queue:
-  - Surah mindmaps (incomplete first), add anchors, upload image, mark complete.
+  - Surah mindmaps (incomplete first), add anchors, mark complete (no uploads in the mindmap editor).
   - Part mindmaps (incomplete first).
   - **Fix mindmaps**: Anchors suspended after 3 failed recalls. **Re-learning phase** (Day 1 -> Day 3) triggers after fix confirmation to ensure mental re-encoding.
   - **Similarity checks**: Warnings for verse chunks with any failures involving mutashabihat. Not necessarily suspended; used for proactive checking.
@@ -37,6 +37,46 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - Mindmap reviews appear when a mindmap is marked complete.
 - Mutashabihat-aware context expands preview until a non-similar verse is reached.
 - Desktop nav docks right; mobile keeps bottom bar.
+
+## Mutashabihat Logic (Maintainer, Simple Terms)
+- Think of each mutashabihat item as a "similarity case" around one ayah, with other ayat that look similar.
+- The app now groups repeated cases so the user sees cleaner, non-duplicate items.
+
+- Grouping rules:
+  - If cases belong to the same surah and point to the same verse area, they are merged.
+  - If two cases in the same verse overlap strongly and point to the same outside comparator set, they are merged.
+  - A verse can still appear in more than one case when it truly has different similarity patterns (we do not force unrelated cases into one).
+
+- Important counting behavior:
+  - In **Settings > Similar Verse Coverage**, the counter uses grouped verse-cases (not raw backend rows), so the count matches what users actually see.
+
+- Display behavior:
+  - Internal `phrase#number` labels are hidden from users.
+  - Context buttons exist per origin/comparator row:
+    - Mindmap editor
+    - Splits configuration
+    - Previous verse
+    - Next verse
+    - Reset back to original verse
+  - Previous/next changes the shown verse in-place (minimal view), not by adding extra lines.
+
+- Where buttons open:
+  - From **Todo similarity context**: open editor/splits in Todo.
+  - From **Settings similarity coverage/context**: open editor/splits in Settings.
+  - New windows open in front of the current context view.
+
+- Tooltip behavior:
+  - Button hover tooltips are expected in both mutashabihat windows.
+
+- Todo card appearance rule (important):
+  - A **Similarity** card is shown only when:
+    - it has unresolved similarity work, and
+    - at least one comparator verse has already been reviewed at least once.
+  - If none of the comparator verses have been reviewed yet, that similarity card stays hidden for now.
+
+- Why this design:
+  - Users first build basic review familiarity, then similarity warnings appear when they are actionable.
+  - This reduces early noise and keeps mutashabihat work focused.
 
 ## Styling
 - Reusable `.anchor-input` for anchor/mindmap inputs to align UI.

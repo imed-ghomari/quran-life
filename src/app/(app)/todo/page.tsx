@@ -320,22 +320,40 @@ export default function TodoPage() {
             });
         };
 
+        const hasComparatorBeenReviewed = (absoluteComparator: number) => {
+            const comparatorRef = absoluteToSurahAyah(absoluteComparator);
+            return nodes.some((node) => {
+                if (node.type !== 'verse_segment') return false;
+                if (getVerseSegmentSurahId(node) !== comparatorRef.surahId) return false;
+                const start = Number(node.startVerse || 0);
+                const end = Number(node.endVerse || 0);
+                if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+                if (comparatorRef.ayahId < start || comparatorRef.ayahId > end) return false;
+                return hasNodeBeenReviewed(node.scheduler);
+            });
+        };
+
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .map(err => {
                 const absolute = err.absoluteAyah!;
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
                 const unresolvedCount = muts.filter((m: any) => !isPhraseResolved(absolute, m)).length;
-                return { err, muts, unresolvedCount };
+                const comparators = Array.from(new Set(
+                    muts.flatMap((m: any) => (Array.isArray(m?.matches) ? m.matches : []))
+                )).filter((absRef: number) => absRef !== absolute);
+                const hasReviewedComparator = comparators.some(hasComparatorBeenReviewed);
+                return { err, muts, unresolvedCount, hasReviewedComparator };
             })
             // Filter out items that are already resolved/ignored
             .filter(entry => {
                 const absolute = entry.err.absoluteAyah!;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
-                return entry.unresolvedCount > 0;
+                if (entry.unresolvedCount <= 0) return false;
+                return entry.hasReviewedComparator;
             });
-    }, [errors, decisionsMap, customMutashabihat]);
+    }, [errors, decisionsMap, customMutashabihat, nodes]);
 
     // Group similarity items by Surah for cleaner display in Kanban
     const groupedSimilarity = useMemo(() => {

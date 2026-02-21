@@ -629,7 +629,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         <div
             ref={containerRef}
             data-mindmap-swipe-guard="true"
-            style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}
         >
             <div
                 className="mindmap-editor-header"
@@ -698,7 +698,7 @@ function MindmapEditorInner(props: MindmapEditorProps) {
 export default dynamic(() => Promise.resolve(MindmapEditorInner), {
     ssr: false,
     loading: () => (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Spinner size={32} text="Loading Editor..." />
         </div>
     )

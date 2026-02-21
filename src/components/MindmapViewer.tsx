@@ -294,7 +294,6 @@ export default function MindmapViewer({
                             <button
                                 onClick={() => inlineEditor?.zoomToFit({ duration: 200 })}
                                 className="btn btn-secondary std-normal-btn"
-                                title="Back to content"
                             >
                                 Back to content
                             </button>

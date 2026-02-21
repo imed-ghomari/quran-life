@@ -1276,6 +1276,11 @@ h3 {
   border-color: var(--border);
 }
 
+.daily-verse-preview .arabic-text {
+  font-size: 1.2rem;
+  line-height: 2.05;
+}
+
 @media (max-width: 768px) {
   .card {
     margin-bottom: 1rem;
@@ -3061,6 +3066,97 @@ input:focus {
   padding: 0.5rem !important;
 }
 
+/* Similarity Context mutashabihat styling parity with Settings reference */
+.similarity-context-modal .mut-context-block {
+  gap: 0.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.similarity-context-modal .mut-context-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.similarity-context-modal .mut-detail-panel {
+  border-radius: 10px;
+}
+
+.similarity-context-modal .mut-detail-source {
+  padding: 0;
+}
+
+.similarity-context-modal .mut-detail-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.similarity-context-modal .mut-verse-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.similarity-context-modal .mut-verse-card {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.similarity-context-modal .mut-compare-list {
+  border-top: 1px solid var(--border);
+  padding-top: 0.9rem;
+}
+
+.similarity-context-modal .mut-compare-card {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 0.95rem;
+}
+
+.similarity-context-modal .mut-compare-label {
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--foreground-secondary);
+}
+
+.similarity-context-modal .mut-detail-panel .mut-core {
+  background: transparent;
+  border-right: none;
+  padding: 0;
+  font-weight: 500;
+  color: var(--foreground);
+  line-height: 1.95;
+  letter-spacing: 0;
+}
+
+.similarity-context-modal .mut-detail-ayah-badge {
+  background: var(--accent);
+  color: white;
+  border-radius: 999px;
+  padding: 0.04rem 0.38rem;
+  margin-right: 0;
+  margin-inline: 0.2rem 0.32rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  border: none;
+  vertical-align: middle;
+}
+
+.similarity-context-modal .mut-detail-panel .mut-context {
+  direction: rtl;
+  text-align: right;
+}
+
+.similarity-context-modal .mut-detail-panel .mut-compare-card .mut-verse-card {
+  background: transparent;
+}
+
 /* Confirmation dialog spacing guardrails */
 .confirm-dialog {
   max-width: 560px !important;
@@ -3613,7 +3709,7 @@ input:focus {
 
 .custom-hover-tooltip {
   position: fixed;
-  z-index: 2000;
+  z-index: 13000;
   pointer-events: none;
   max-width: min(320px, calc(100vw - 24px));
   white-space: nowrap;
