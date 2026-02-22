@@ -11,19 +11,20 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 3) Build: `npm run build` (uses Next 13.5)
 
 ## Data
-- Quran text: `public/qpc-hafs-word-by-word.json` (Word-by-word dataset)
+- Quran text and word data: `public/qpc-hafs-word-by-word.json`
 - Audio: `public/audio/<surah><ayah>.mp3` (e.g., 001001.mp3)
 - Mutashabihat data: `Quran_Mutashabihat_Data-master/mutashabiha_data.json`
 
 ## Tabs
-- **Today**: Reviews (SM-2) + Daily Portion (audio/read). Speed control, chunked reveal, mutashabihat-aware context, read-only toggle.
+- **Today**: Reviews (SM-2) + Daily Portion (audio/read). Speed control, chunked reveal, mutashabihat-aware context, read-only toggle, and undo/redo for review actions.
   - **Sequential Daily Portion**: Portions follow natural Quranic order (surah-by-surah) with Bismillah transitions.
 - **Statistics**: Progress focus — learned counts, active part progress, maturity buckets, mindmap completion, skipped count, due reviews.
 - **Todo**: Work queue:
-  - Surah mindmaps (incomplete first), add anchors, mark complete (no uploads in the mindmap editor).
+  - Surah mindmaps (incomplete first), configure verse splits, mark complete (no uploads in the mindmap editor).
   - Part mindmaps (incomplete first).
-  - **Fix mindmaps**: Anchors suspended after 3 failed recalls. **Re-learning phase** (Day 1 -> Day 3) triggers after fix confirmation to ensure mental re-encoding.
+  - **Fix mindmaps**: Verse groups are suspended after 3 failed recalls. **Re-learning phase** (Day 1 -> Day 3) triggers after fix confirmation.
   - **Similarity checks**: Warnings for verse chunks with any failures involving mutashabihat. Not necessarily suspended; used for proactive checking.
+  - **Active Part scope rule**: Changing **Settings > Active Part** filters only Surah/Part construction cards. Maintenance cards (**Similarity** and **Suspended**) are generated from review errors and remain visible across parts until resolved/acknowledged.
   - Empty sections auto-collapse.
 - **Settings**: Completion schedule, active part, learned/skipped surahs, surah maturity adjustment, mutashabihat decisions registry (editable notes).
   - **Cloud Sync**: InstantDB integration with real-time graph-based synchronization and automatic conflict resolution.
@@ -35,6 +36,8 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - **Sequential Transitions**: Automatic Bismillah display/audio when transitioning between surahs in the Daily Portion.
 - Skipped surahs are removed from Today (audio/read) and due reviews; mindmap artifacts pruned.
 - Mindmap reviews appear when a mindmap is marked complete.
+- Verse-group review creation uses splits (anchors). If a Surah has no saved splits, verse groups are not created, except for short Surahs with `<= 10` verses where a single implicit group (`1..N`) is used automatically.
+- Manual splits always override the short-Surah implicit group as soon as the user saves splits.
 - Mutashabihat-aware context expands preview until a non-similar verse is reached.
 - Desktop nav docks right; mobile keeps bottom bar.
 
@@ -79,7 +82,7 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - This reduces early noise and keeps mutashabihat work focused.
 
 ## Styling
-- Reusable `.anchor-input` for anchor/mindmap inputs to align UI.
+- Reusable shared input styles for split and mindmap forms.
 
 ## Build & deploy
 - Run `npm run build` to verify production readiness.

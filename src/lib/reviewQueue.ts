@@ -1,8 +1,14 @@
 import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
+import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 
 const toPositiveInt = (value: unknown): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const toNonNegativeInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 };
 
 export const resolveReviewNodeSurahId = (node: Partial<MemoryNode>): number | null => {
@@ -17,12 +23,12 @@ export const resolveReviewNodeSurahId = (node: Partial<MemoryNode>): number | nu
 };
 
 export const resolveReviewNodePartId = (node: Partial<MemoryNode>): number | null => {
-    const direct = toPositiveInt((node as any).partId);
-    if (direct) return direct;
+    const direct = toNonNegativeInt((node as any).partId);
+    if (direct !== null) return direct;
     const target = String((node as any).targetId || '');
     const partMatch = target.match(/^part-mindmap-(\d+)$/);
     if (!partMatch) return null;
-    return toPositiveInt(partMatch[1]);
+    return toNonNegativeInt(partMatch[1]);
 };
 
 const hasAnchorForNode = (node: MemoryNode, mindmaps: MindMap[]) => {
@@ -30,7 +36,7 @@ const hasAnchorForNode = (node: MemoryNode, mindmaps: MindMap[]) => {
     const surahId = resolveReviewNodeSurahId(node);
     if (!surahId) return true;
     const mm = mindmaps.find(m => Number((m as any).surahId) === surahId);
-    const anchors = mm?.anchors || [];
+    const anchors = getEffectiveSurahAnchors(surahId, mm);
     if (anchors.length === 0) return false;
     return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
 };
@@ -157,7 +163,7 @@ export const filterReviewQueueNodes = (
         if (node.type === 'part_mindmap') {
             if (!hasKanbanState) return true;
             const partId = resolveReviewNodePartId(node);
-            return partId ? completeIds.has(`part-${partId}`) : true;
+            return partId !== null ? completeIds.has(`part-${partId}`) : true;
         }
 
         if (node.type === 'verse_segment') {

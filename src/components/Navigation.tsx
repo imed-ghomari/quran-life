@@ -17,6 +17,7 @@ import {
 import { getMutashabihatForAbsolute, surahAyahToAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
+import { ALL_QURAN_PART, CORE_QURAN_PARTS, LEGACY_ALL_QURAN_PART } from '@/lib/types';
 
 function NavigationContent() {
     const pathname = usePathname();
@@ -38,7 +39,7 @@ function NavigationContent() {
         const activePart = settings.activePart;
         const skippedSurahs = new Set(settings.skippedSurahs || []);
         const activePartSize = activePart as number;
-        const surahsInPart = SURAHS.filter(s => (activePartSize === 5 || s.part === activePartSize) && !skippedSurahs.has(s.id));
+        const surahsInPart = SURAHS.filter(s => (activePartSize === ALL_QURAN_PART || s.part === activePartSize) && !skippedSurahs.has(s.id));
 
         // --- KANBAN BASED LOGIC ---
         const kanbanState = settings.kanbanColumns || {};
@@ -60,7 +61,7 @@ function NavigationContent() {
         });
 
         // 2. Part Items
-        const partsToConsider = activePart === 5 ? [1, 2, 3, 4] : [activePart as number];
+        const partsToConsider = activePart === ALL_QURAN_PART ? Array.from(CORE_QURAN_PARTS) : [activePart as number];
         const partItems = partsToConsider.map(p => {
             const id = `part-${p}`;
             const pmm = (partMindMaps as any[]).find(m => Number(m.partId) === p);
@@ -143,7 +144,10 @@ function NavigationContent() {
         setIsPortionComplete(portionComplete);
 
         // Daily portion completion (listening progress updated today)
-        const activeProgress = listeningProgress.find(p => p.partId === settings.activePart);
+        const activeProgress = listeningProgress.find(p => p.partId === settings.activePart)
+            ?? (settings.activePart === ALL_QURAN_PART && (settings.partSystemVersion ?? 1) < 2
+                ? listeningProgress.find(p => p.partId === LEGACY_ALL_QURAN_PART)
+                : undefined);
         const lastUpdate = activeProgress?.updatedAt ? new Date(activeProgress.updatedAt) : null;
         const todayDate = new Date();
         const dailyComplete = !!lastUpdate && lastUpdate.toDateString() === todayDate.toDateString();

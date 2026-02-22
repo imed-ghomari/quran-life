@@ -12,7 +12,14 @@ import {
     useInstantReviewErrors,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { getNodeStability, getNodeDueDate, MemoryNode } from '@/lib/types';
+import {
+    ALL_QURAN_PART,
+    CORE_QURAN_PARTS,
+    LEGACY_ALL_QURAN_PART,
+    getNodeStability,
+    getNodeDueDate,
+    MemoryNode
+} from '@/lib/types';
 
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays } from 'lucide-react';
 
@@ -51,6 +58,11 @@ const toPositiveInt = (value: unknown): number | null => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const toNonNegativeInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
     const direct = toPositiveInt((node as any).surahId);
     if (direct) return direct;
@@ -63,12 +75,12 @@ const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
 };
 
 const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
-    const direct = toPositiveInt((node as any).partId);
-    if (direct) return direct;
+    const direct = toNonNegativeInt((node as any).partId);
+    if (direct !== null) return direct;
     const target = String((node as any).targetId || '');
     const partMatch = target.match(/^part-mindmap-(\d+)$/);
     if (!partMatch) return null;
-    return toPositiveInt(partMatch[1]);
+    return toNonNegativeInt(partMatch[1]);
 };
 
 const resolveSurahIdFromErrorNodeRef = (nodeRef: unknown): number | null => {
@@ -102,7 +114,7 @@ export default function StatisticsPage() {
 
     const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading || reviewLogsLoading || reviewErrorsLoading;
 
-    const activePart = settings?.activePart || 1;
+    const activePart = settings?.activePart || ALL_QURAN_PART;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
 
     // 1. Part Mindmaps Data (Always Global)
@@ -114,7 +126,7 @@ export default function StatisticsPage() {
         let learnedStrong = 0;
         let learnedMastered = 0;
 
-        [1, 2, 3, 4].forEach(p => {
+        CORE_QURAN_PARTS.forEach(p => {
             const pmm = partMindMaps.find(m => Number((m as any).partId) === p);
             if (pmm) {
                 if (pmm.isComplete) {
@@ -133,7 +145,7 @@ export default function StatisticsPage() {
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
         return {
-            total: 4,
+            total: CORE_QURAN_PARTS.length,
             segments: [
                 { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Part mindmap not yet created' },
                 { label: 'Not Learned', count: notLearned, color: 'var(--chart-not-learned)', description: 'Part mindmap not yet complete' },
@@ -147,7 +159,7 @@ export default function StatisticsPage() {
 
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
-        const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
+        const targetSurahs = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart);
         const learnedVerses = settings?.learnedVerses || {};
         let skipped = 0;
         let notCreated = 0;
@@ -198,7 +210,7 @@ export default function StatisticsPage() {
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
-        const targetSurahs = SURAHS.filter(s => activePart === 5 || s.part === activePart);
+        const targetSurahs = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart);
         let skipped = 0;
         let notLearned = 0;
         let learnedNew = 0;
@@ -318,11 +330,14 @@ export default function StatisticsPage() {
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
-        const partProgress = listeningProgress.find(p => Number((p as any).partId) === Number(activePart));
+        const partProgress = listeningProgress.find(p => Number((p as any).partId) === Number(activePart))
+            ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
+                ? listeningProgress.find(p => Number((p as any).partId) === LEGACY_ALL_QURAN_PART)
+                : undefined);
         const progress = partProgress?.lastVerseIndex || 0;
         const cycles = partProgress?.cycles || 0;
 
-        const surahsInPart = SURAHS.filter(s => activePart === 5 || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
+        const surahsInPart = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
 
         const learnedVerseCount = progress;
 
@@ -353,7 +368,7 @@ export default function StatisticsPage() {
         const targetRefs = allRefs.filter(abs => {
             const { surahId } = absoluteToSurahAyah(abs);
             const surah = SURAHS.find(s => s.id === surahId);
-            return activePart === 5 || surah?.part === activePart;
+            return activePart === ALL_QURAN_PART || surah?.part === activePart;
         });
 
         const total = targetRefs.length;
@@ -401,7 +416,7 @@ export default function StatisticsPage() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
+        const targetSurahs = new Set(SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).map(s => s.id));
         const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
         const completeExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
@@ -422,7 +437,7 @@ export default function StatisticsPage() {
             if (node.type === 'part_mindmap') {
                 const partId = resolveNodePartId(node);
                 if (!partId) return false;
-                if (activePart !== 5 && partId !== activePart) return false;
+                if (activePart !== ALL_QURAN_PART && partId !== activePart) return false;
                 if (hasKanbanState && !completeIds.has(`part-${partId}`)) return false;
                 return true;
             }
@@ -507,7 +522,7 @@ export default function StatisticsPage() {
 
         const filterLogByActivePart = (log: any) => {
             if (!log.review_time) return false;
-            if (activePart === 5) return true;
+            if (activePart === ALL_QURAN_PART) return true;
             const node = nodeById.get(log.nodeId);
             if (!node) return false;
             const surahId = resolveNodeSurahId(node);
@@ -553,7 +568,7 @@ export default function StatisticsPage() {
             if (isNaN(reviewDate.getTime())) return false;
             reviewDate.setHours(0, 0, 0, 0);
             if (reviewDate.getTime() !== today.getTime()) return false;
-            if (activePart === 5) return true;
+            if (activePart === ALL_QURAN_PART) return true;
             const node = nodeById.get(log.nodeId);
             if (!node) return false;
             const surahId = resolveNodeSurahId(node);
@@ -583,7 +598,7 @@ export default function StatisticsPage() {
         const currentWindowStartMs = nowMs - trendWindowDays * dayMs;
         const previousWindowStartMs = currentWindowStartMs - trendWindowDays * dayMs;
 
-        const targetSurahs = SURAHS.filter(s => (activePart === 5 || s.part === activePart) && !skippedSurahs.has(s.id));
+        const targetSurahs = SURAHS.filter(s => (activePart === ALL_QURAN_PART || s.part === activePart) && !skippedSurahs.has(s.id));
         const targetSurahIds = new Set(targetSurahs.map(s => s.id));
         const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
 
@@ -749,7 +764,7 @@ export default function StatisticsPage() {
         const start = new Date(today);
         start.setDate(start.getDate() - (rangeDays - 1));
 
-        const targetSurahs = new Set(SURAHS.filter(s => activePart === 5 || s.part === activePart).map(s => s.id));
+        const targetSurahs = new Set(SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).map(s => s.id));
         const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
 
         const toDayKey = (date: Date) => {
@@ -767,7 +782,7 @@ export default function StatisticsPage() {
             if (Number.isNaN(reviewDate.getTime())) return false;
             reviewDate.setHours(0, 0, 0, 0);
             if (reviewDate < start || reviewDate > today) return false;
-            if (activePart === 5) return true;
+            if (activePart === ALL_QURAN_PART) return true;
             const node = nodeById.get(String(log?.nodeId || ''));
             if (!node) return false;
             const surahId = resolveNodeSurahId(node);
@@ -1185,6 +1200,7 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                     const x = getX(i);
                                     const y = chartHeight - padding.bottom + 18;
                                     const label = shortSurahLabel(row.surahName, labelMaxChars);
+                                    const isTruncated = label !== row.surahName;
                                     if (rotateLabels) {
                                         return (
                                             <text
@@ -1195,13 +1211,28 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                                 fontSize="9"
                                                 fill="var(--foreground-secondary)"
                                                 transform={`rotate(-24 ${x} ${y})`}
+                                                data-tooltip={isTruncated ? row.surahName : undefined}
+                                                data-tooltip-trigger={isTruncated ? 'tap' : undefined}
+                                                style={isTruncated ? { cursor: 'help' } : undefined}
                                             >
+                                                {isTruncated ? <title>{row.surahName}</title> : null}
                                                 {label}
                                             </text>
                                         );
                                     }
                                     return (
-                                        <text key={`x-${row.surahId}`} x={x} y={y} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">
+                                        <text
+                                            key={`x-${row.surahId}`}
+                                            x={x}
+                                            y={y}
+                                            textAnchor="middle"
+                                            fontSize="10"
+                                            fill="var(--foreground-secondary)"
+                                            data-tooltip={isTruncated ? row.surahName : undefined}
+                                            data-tooltip-trigger={isTruncated ? 'tap' : undefined}
+                                            style={isTruncated ? { cursor: 'help' } : undefined}
+                                        >
+                                            {isTruncated ? <title>{row.surahName}</title> : null}
                                             {label}
                                         </text>
                                     );
@@ -1411,7 +1442,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
                                                     fill={isPeak ? 'var(--accent)' : 'var(--chart-medium)'}
                                                     opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
-                                                    data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'} (${formatDayLabel(d.day)})`}
+                                                    data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'}`}
                                                     data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
                                                 />

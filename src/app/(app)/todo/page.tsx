@@ -9,9 +9,21 @@ import {
     useInstantMutashabihat,
     useInstantReviewErrors
 } from '@/hooks/useInstantData';
-import { AppSettings, MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
+import {
+    ALL_QURAN_PART,
+    AppSettings,
+    CORE_QURAN_PARTS,
+    MindMap,
+    PartMindMap,
+    PartMindMapId,
+    MutashabihatDecision,
+    hasNodeBeenReviewed,
+    QuranPart,
+    MemoryNode
+} from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { X } from 'lucide-react';
 import MindmapEditor from '@/components/MindmapEditor';
 import MindmapViewer from '@/components/MindmapViewer';
@@ -55,15 +67,19 @@ const getMindmapSurahId = (node: MemoryNode): number | null => {
     return null;
 };
 
-const getPartMindmapPartId = (node: MemoryNode): number | null => {
+const getPartMindmapPartId = (node: MemoryNode): PartMindMapId | null => {
     if (node.type !== 'part_mindmap') return null;
     const direct = Number((node as any).partId);
-    if (Number.isFinite(direct) && direct > 0) return direct;
+    if (Number.isFinite(direct) && direct >= 0 && direct <= ALL_QURAN_PART) {
+        return direct as PartMindMapId;
+    }
     const target = String((node as any).targetId || '');
     const match = target.match(/^part-mindmap-(\d+)$/);
     if (match) {
         const parsed = Number(match[1]);
-        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+        if (Number.isFinite(parsed) && parsed >= 0 && parsed <= ALL_QURAN_PART) {
+            return parsed as PartMindMapId;
+        }
     }
     return null;
 };
@@ -75,7 +91,6 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
     if (Number.isFinite(createdAt)) return createdAt;
     return 0;
 };
-
 
 /**
  * TodoPage Component
@@ -141,7 +156,7 @@ export default function TodoPage() {
         const acc: Record<number, PartMindMap> = {};
         partMindmapsList.forEach((pmm: any) => {
             const pId = Number(pmm.partId);
-            if (!Number.isFinite(pId) || pId <= 0) return;
+            if (!Number.isFinite(pId) || pId < 0) return;
             const existing = acc[pId] as any;
             if (!existing) {
                 acc[pId] = pmm as unknown as PartMindMap;
@@ -179,7 +194,7 @@ export default function TodoPage() {
         const completedPartIds = completedIds
             .filter(itemId => itemId.startsWith('part-'))
             .map(itemId => Number.parseInt(itemId.replace('part-', ''), 10))
-            .filter(id => Number.isFinite(id)) as QuranPart[];
+            .filter(id => Number.isFinite(id) && id >= 0) as PartMindMapId[];
 
         const nodesToCreate: MemoryNode[] = [];
 
@@ -188,7 +203,7 @@ export default function TodoPage() {
             if (!surah) return;
 
             const mm = mindmaps[surahId];
-            const anchors = mm?.anchors || [];
+            const anchors = getEffectiveSurahAnchors(surahId, mm);
             anchors.forEach(anchor => {
                 const startVerse = Number(anchor.startVerse);
                 const endVerse = Number(anchor.endVerse);
@@ -262,7 +277,7 @@ export default function TodoPage() {
 
     // Mindmap Editor State
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
-    const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
+    const [activePartEditor, setActivePartEditor] = useState<{ partId: PartMindMapId; snapshot?: any } | null>(null);
     const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
 
     useEffect(() => {
@@ -286,7 +301,7 @@ export default function TodoPage() {
     // Filter Surahs based on the user's active part setting
     const surahTasks = useMemo(() => {
         const eligible = SURAHS.filter(s =>
-            (activePart === 5 || s.part === activePart) &&
+            (activePart === ALL_QURAN_PART || s.part === activePart) &&
             !settings.skippedSurahs?.includes(s.id)
         );
         return eligible
@@ -295,10 +310,12 @@ export default function TodoPage() {
     }, [mindmaps, activePart, settings.skippedSurahs]);
 
     const partTasks = useMemo(() => {
-        const parts: QuranPart[] = [1, 2, 3, 4];
-        return parts
-            .filter(p => activePart === 5 || p === activePart)
+        const metaPartTask = { part: 0, mindmap: partMindmapsMap[0] };
+        const parts: QuranPart[] = Array.from(CORE_QURAN_PARTS);
+        const regularPartTasks = parts
+            .filter(p => activePart === ALL_QURAN_PART || p === activePart)
             .map(p => ({ part: p, mindmap: partMindmapsMap[p] }));
+        return [metaPartTask, ...regularPartTasks];
     }, [partMindmapsMap, activePart]);
 
     // Gather Similarity Errors (Mutashabihat) that need resolution
@@ -887,7 +904,7 @@ export default function TodoPage() {
         return type === 'surah' ? premadeIndex.surah.includes(id) : premadeIndex.part.includes(id);
     }, [premadeIndex]);
 
-    const handlePartComplete = async (part: QuranPart, forceState?: boolean) => {
+    const handlePartComplete = async (part: PartMindMapId, forceState?: boolean) => {
         const existing = partMindmapsMap[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
         const updated = { ...existing, isComplete: isNowComplete };

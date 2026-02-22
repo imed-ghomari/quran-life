@@ -1,15 +1,18 @@
 // ========================================
-// Qur'an Data with Traditional Part Classifications
+// Qur'an data with app-specific active-part ranges
 // ========================================
 
-import { Surah, Verse, QuranPart } from './types';
+import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
 
 // Helper to determine part based on surah ID
-function getPart(surahId: number): QuranPart {
-    if (surahId >= 1 && surahId <= 9) return 1;   // As-Sab'ut-Tiwal
-    if (surahId >= 10 && surahId <= 32) return 2;  // Al-Mi'un
-    if (surahId >= 33 && surahId <= 49) return 3;  // Al-Mathani
-    return 4; // Al-Mufassal (50-114)
+function getPart(surahId: number): CoreQuranPart {
+    if (surahId >= 1 && surahId <= 5) return 1;
+    if (surahId >= 6 && surahId <= 9) return 2;
+    if (surahId >= 10 && surahId <= 24) return 3;
+    if (surahId >= 25 && surahId <= 33) return 4;
+    if (surahId >= 34 && surahId <= 49) return 5;
+    if (surahId >= 50 && surahId <= 66) return 6;
+    return 7; // 67-114
 }
 
 // Complete Surah metadata (114 surahs)
@@ -252,7 +255,7 @@ export async function getQuranVerses(): Promise<Verse[]> {
  * Get surahs by part
  */
 export function getSurahsByPart(part: QuranPart): Surah[] {
-    if (part === 5) return SURAHS;
+    if (part === ALL_QURAN_PART) return SURAHS;
     return SURAHS.filter(s => s.part === part);
 }
 

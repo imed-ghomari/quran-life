@@ -4,15 +4,34 @@
 
 import { FSRSState } from './fsrs';
 
-// Traditional Qur'anic Part Classifications
-export type QuranPart = 1 | 2 | 3 | 4 | 5; // 5 = All Quran
+// Qur'anic part classifications used by the app
+export type QuranPart = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; // 8 = All Quran
+export type PartMindMapId = 0 | QuranPart; // 0 = Meta map, 1..7 = parts, 8 = all Quran
+export const LEGACY_ALL_QURAN_PART = 5 as const; // pre-v2 "All Quran" id
+export const ALL_QURAN_PART = 8 as const;
+export const CORE_QURAN_PARTS = [1, 2, 3, 4, 5, 6, 7] as const;
+export type CoreQuranPart = (typeof CORE_QURAN_PARTS)[number];
+
+export const ACTIVE_PART_OPTIONS: ReadonlyArray<{ id: QuranPart; name: string }> = [
+    { id: 1, name: 'Surah 1-5' },
+    { id: 2, name: 'Surah 6-9' },
+    { id: 3, name: 'Surah 10-24' },
+    { id: 4, name: 'Surah 25-33' },
+    { id: 5, name: 'Surah 34-49' },
+    { id: 6, name: 'Surah 50-66' },
+    { id: 7, name: 'Surah 67-114' },
+    { id: ALL_QURAN_PART, name: 'All Quran' },
+];
 
 export const PART_NAMES: Record<QuranPart, { arabic: string; english: string; surahs: [number, number] }> = {
-    1: { arabic: "السبع الطوال", english: "As-Sab'ut-Tiwal (The Seven Long Ones)", surahs: [1, 9] },
-    2: { arabic: "المئون", english: "Al-Mi'un (The Hundreds)", surahs: [10, 32] },
-    3: { arabic: "المثاني", english: "Al-Mathani (The Oft-Repeated)", surahs: [33, 49] },
-    4: { arabic: "المفصل", english: "Al-Mufassal (The Clearly Divided)", surahs: [50, 114] },
-    5: { arabic: "القرآن الكريم", english: "All Quran", surahs: [1, 114] },
+    1: { arabic: "السور 1-5", english: "Surah 1-5", surahs: [1, 5] },
+    2: { arabic: "السور 6-9", english: "Surah 6-9", surahs: [6, 9] },
+    3: { arabic: "السور 10-24", english: "Surah 10-24", surahs: [10, 24] },
+    4: { arabic: "السور 25-33", english: "Surah 25-33", surahs: [25, 33] },
+    5: { arabic: "السور 34-49", english: "Surah 34-49", surahs: [34, 49] },
+    6: { arabic: "السور 50-66", english: "Surah 50-66", surahs: [50, 66] },
+    7: { arabic: "السور 67-114", english: "Surah 67-114", surahs: [67, 114] },
+    8: { arabic: "القرآن الكريم", english: "All Quran", surahs: [1, 114] },
 };
 
 // Surah metadata
@@ -21,7 +40,7 @@ export interface Surah {
     name: string;        // English transliteration
     arabicName: string;  // Arabic
     verseCount: number;
-    part: QuranPart;
+    part: CoreQuranPart;
 }
 
 // Verse (reference data, never scheduled)
@@ -65,7 +84,7 @@ export interface MemoryNode {
     id: string;
     type: MemoryNodeType;
     surahId?: number; // Optional context
-    partId?: QuranPart; // Optional context
+    partId?: PartMindMapId; // Optional context
     startVerse?: number; // Optional context
     endVerse?: number; // Optional context
     targetId?: string;      // Legacy: VerseSegment.id
@@ -89,6 +108,7 @@ export interface AppSettings {
     id?: string;
     completionDays: number;
     activePart: QuranPart;
+    partSystemVersion?: number;
     learnedVerses: { [surahId: string]: number[] };
     skippedSurahs?: number[];
     todoDefaultFilter?: 'all' | 'maintenance' | 'construction';
@@ -135,7 +155,7 @@ export interface MindMap {
 }
 
 export interface PartMindMap {
-    partId: QuranPart; // 1 | 2 | 3 | 4
+    partId: PartMindMapId; // 0 = meta map, 1..7 are parts, 8 is all Quran
     imageUrl: string | null;
     imageUrlDark?: string | null;
     description: string;

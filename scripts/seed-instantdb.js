@@ -42,6 +42,7 @@ async function main() {
     db.tx.settings[settingsEntityId].update({
       completionDays: 7,
       activePart: 1,
+      partSystemVersion: 2,
       learnedVerses: [],
       skippedSurahs: [],
       theme: 'light',
