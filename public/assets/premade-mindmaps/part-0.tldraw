@@ -1,0 +1,11 @@
+{
+  "store": {
+    "page:page": {
+      "id": "page:page",
+      "meta": {},
+      "name": "Page 1",
+      "index": "a1",
+      "typeName": "page"
+    }
+  }
+}

@@ -35,6 +35,8 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - **Sequential Transitions**: Automatic Bismillah display/audio when transitioning between surahs in the Daily Portion.
 - Skipped surahs are removed from Today (audio/read) and due reviews; mindmap artifacts pruned.
 - Mindmap reviews appear when a mindmap is marked complete.
+- Verse-group review creation uses splits (anchors). If a Surah has no saved splits, verse groups are not created, except for short Surahs with `<= 10` verses where a single implicit group (`1..N`) is used automatically.
+- Manual splits always override the short-Surah implicit group as soon as the user saves splits.
 - Mutashabihat-aware context expands preview until a non-similar verse is reached.
 - Desktop nav docks right; mobile keeps bottom bar.
 

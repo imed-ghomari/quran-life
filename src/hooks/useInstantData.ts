@@ -83,7 +83,7 @@ const parsePartFromTarget = (targetId?: string) => {
     const m = targetId.match(/^part-mindmap-(\d+)$/);
     if (!m) return undefined;
     const parsed = Number.parseInt(m[1], 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 };
 
 const parseAnchorRangeFromTarget = (targetId?: string) => {
@@ -115,6 +115,16 @@ const waitMs = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const isInstantTransactionTimeoutError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error || '');
     return message.toLowerCase().includes('transaction timed out');
+};
+
+const isInstantMissingEntityUpdateError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return message.includes("Updating entities that don't exist");
+};
+
+const isInstantAlreadyExistingCreateError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return message.includes('Creating entities that already exist');
 };
 
 const transactWithRetry = async (tx: any, maxAttempts: number = 3) => {
@@ -416,18 +426,36 @@ export function useInstantNodes() {
 
     const saveNode = (node: MemoryNode) => {
         if (!user) return Promise.resolve();
-        const canReuseCandidateId =
-            isUuid(node.id) &&
-            canonicalNodes.some(existingNode => existingNode.id === node.id);
+        const canReuseCandidateId = isUuid(node.id) && canonicalNodes.some(existingNode => existingNode.id === node.id);
         const nodeId = canReuseCandidateId
             ? (node.id as string)
             : resolveEntityId(undefined, 'memory_node', user.id, memoryNodeLogicalKey(node));
-        return transactWithRetry(db.tx.memoryNodes[nodeId].update({
+        const payload = {
             ...node,
             userId: user.id
-        })).finally(() => {
-            setDueNowMs(Date.now());
-        });
+        };
+
+        const updateTx = db.tx.memoryNodes[nodeId].update(payload);
+        const createTx = db.tx.memoryNodes[nodeId].create(payload);
+
+        return transactWithRetry(updateTx)
+            .catch(async (updateError) => {
+                if (!isInstantMissingEntityUpdateError(updateError)) {
+                    throw updateError;
+                }
+                try {
+                    return await transactWithRetry(createTx);
+                } catch (createError) {
+                    if (!isInstantAlreadyExistingCreateError(createError)) {
+                        throw createError;
+                    }
+                    // Another client created it between update/create attempts.
+                    return transactWithRetry(updateTx);
+                }
+            })
+            .finally(() => {
+                setDueNowMs(Date.now());
+            });
     };
 
     const deleteNode = async (nodeId: string) => {

@@ -223,6 +223,11 @@ const toPositiveInt = (value: unknown): number | null => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const toNonNegativeInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
     const direct = toPositiveInt((node as any).surahId);
     if (direct) return direct;
@@ -235,12 +240,12 @@ const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
 };
 
 const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
-    const direct = toPositiveInt((node as any).partId);
-    if (direct) return direct;
+    const direct = toNonNegativeInt((node as any).partId);
+    if (direct !== null) return direct;
     const target = String((node as any).targetId || '');
     const partMatch = target.match(/^part-mindmap-(\d+)$/);
     if (!partMatch) return null;
-    return toPositiveInt(partMatch[1]);
+    return toNonNegativeInt(partMatch[1]);
 };
 
 const stableNodeId = (...parts: Array<string | number>) =>
@@ -874,9 +879,12 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Palette size={18} /> Theme Mode
                         </h2>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            Choose how Quran Life looks for you.
+                        </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {[
                                 { id: 'light', label: 'Light Mode', icon: Sun },
@@ -941,6 +949,9 @@ export default function SettingsPage() {
                                 <RotateCcw size={14} /> Reset
                             </button>
                         </div>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            Set how many days you want to complete one full cycle of your active part.
+                        </p>
                         <DailyCompletionSlider
                             days={settings.completionDays || 30}
                             onChange={handleCompletionDays}
@@ -952,6 +963,9 @@ export default function SettingsPage() {
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <PauseCircle size={18} /> Active Part
                         </h2>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            Choose the part you are focusing on for your daily portion and todo flow.
+                        </p>
                         <div className="part-selector" style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
@@ -1093,7 +1107,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
                                 <Activity size={18} /> Knowledge Tracking
                             </h2>
@@ -1145,6 +1159,9 @@ export default function SettingsPage() {
                                 )}
                             </div>
                         </div>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            This section shows your review schedules.
+                        </p>
                         <div className="knowledge-groups-mobile">
                             {/* MINDMAPS MOBILE GROUP */}
                             <div className="mobile-group-item">
@@ -1251,9 +1268,12 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="card modern-card" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Brain size={18} /> Similar Verse Coverage
                         </h2>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            Surahs with similar verses in this part. Tap to expand and annotate similar ayat.
+                        </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
                             <button
                                 className="bulk-btn learned"
@@ -2747,6 +2767,9 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                 </div>
                                 {sectionsExpanded.schedule && (
                                     <>
+                                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                            Set how many days you want to complete one full cycle of your active part.
+                                        </p>
                                         <DailyCompletionSlider
                                             days={settings.completionDays || 30}
                                             onChange={handleCompletionDays}
@@ -2783,35 +2806,40 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     <ChevronDown className="md:hidden" size={20} style={{ transform: sectionsExpanded.activePart ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                 </div>
                                 {sectionsExpanded.activePart && (
-                                    <div className="part-selector" style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-                                        gap: '0.75rem'
-                                    }}>
-                                        {ACTIVE_PART_OPTIONS.map(p => (
-                                            <button
-                                                key={p.id}
-                                                className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
-                                                onClick={() => handleActivePart(p.id as QuranPart)}
-                                                style={{
-                                                    padding: '1.25rem 0.75rem',
-                                                    borderRadius: '16px',
-                                                    transition: 'all 0.2s',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    textAlign: 'center',
-                                                    gap: '0.25rem',
-                                                }}
-                                            >
-                                                <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>
-                                                    {p.id === ALL_QURAN_PART ? '∞' : p.id}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
-                                                <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <>
+                                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                            Choose the part you are focusing on for your daily portion and todo flow.
+                                        </p>
+                                        <div className="part-selector" style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                                            gap: '0.75rem'
+                                        }}>
+                                            {ACTIVE_PART_OPTIONS.map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
+                                                    onClick={() => handleActivePart(p.id as QuranPart)}
+                                                    style={{
+                                                        padding: '1.25rem 0.75rem',
+                                                        borderRadius: '16px',
+                                                        transition: 'all 0.2s',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        textAlign: 'center',
+                                                        gap: '0.25rem',
+                                                    }}
+                                                >
+                                                    <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>
+                                                        {p.id === ALL_QURAN_PART ? '∞' : p.id}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
+                                                    <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </>
                                 )}
                             </div>
 
@@ -4015,7 +4043,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
                                     <div className="adv-grid">
                                         <div className="adv-card">
-                                            <div className="adv-card-title">Sorting & Filters</div>
+                                            <div className="adv-card-title">
+                                                <span className="adv-card-title-icon" aria-hidden="true">
+                                                    <Sliders size={16} />
+                                                </span>
+                                                <span>Sorting & Filters</span>
+                                            </div>
 
                                             <div className="adv-group">
                                                 <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Default Todo Filter</h4>
@@ -4088,7 +4121,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         </div>
 
                                         <div className="adv-card">
-                                            <div className="adv-card-title">Workflow Behaviors</div>
+                                            <div className="adv-card-title">
+                                                <span className="adv-card-title-icon" aria-hidden="true">
+                                                    <Activity size={16} />
+                                                </span>
+                                                <span>Workflow Behaviors</span>
+                                            </div>
 
                                             <div className="adv-group">
                                                 <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>When Moving Out of Complete</h4>
@@ -4899,9 +4937,20 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 }
 
                 .adv-card-title {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.45rem;
                     font-weight: 700;
                     font-size: 0.95rem;
                     color: var(--foreground);
+                }
+
+                .adv-card-title-icon,
+                .adv-section-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: var(--foreground-secondary);
                 }
 
                 .adv-group {

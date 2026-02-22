@@ -7,13 +7,21 @@ const RoadmapSection: React.FC = () => {
     planned: [
       { id: 1, title: 'Validation of Mindmaps & Methodology', tag: 'Planned' },
       { id: 2, title: 'Localization & Translation', tag: 'Planned' },
-      { id: 12, title: 'Completing Mindmaps (Part 1, 2, 3)', tag: 'Planned' },
+      {
+        id: 12,
+        title: 'Completing Mindmaps (Surah 1-5 / Surah 6-9 / Surah 10-24 / Surah 25-33)',
+        tag: 'Planned'
+      },
       { id: 13, title: 'Better Design for Mindmaps', tag: 'Planned' },
     
       
     ],
     inProgress: [
-      { id: 7, title: 'Part 4 Mindmaps Integration', tag: 'In Progress' },
+      {
+        id: 7,
+        title: 'Mindmaps Integration (Surah 34-49 / Surah 50-66 / Surah 67-114)',
+        tag: 'In Progress'
+      },
         { id: 14, title: 'Community Platform (Discord)', tag: 'In Progress' },
  
     ],

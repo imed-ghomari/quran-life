@@ -14,7 +14,8 @@ import SplitsModal from './SplitsModal';
 import { PenTool, Download, Search, X, Brain, Check, SplitSquareHorizontal, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah, surahAyahToAbsolute } from '@/lib/mutashabihat';
-import { QuranPart, MutashabihatDecision } from '@/lib/types';
+import { PartMindMapId, MutashabihatDecision } from '@/lib/types';
+import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'pending', label: 'Pending Review' },
@@ -56,7 +57,7 @@ interface TodoKanbanProps {
     // Callbacks
     onFixConfirm: (surahId: number, anchorId: string, confirm?: boolean) => Promise<void> | void;
     onSimilarityDecision: (absoluteAyah: number, status: MutashabihatDecision['status'], phraseId?: string, confirm?: boolean) => Promise<void> | void;
-    onPartComplete: (part: QuranPart, forceState?: boolean) => Promise<void> | void;
+    onPartComplete: (part: PartMindMapId, forceState?: boolean) => Promise<void> | void;
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => Promise<void> | void;
     onImportPremade: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     onExportPremade?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
@@ -215,7 +216,8 @@ export default function TodoKanban({
 
         const mindmap = item.data.mindmap;
         const hasMap = !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl || mindmap?.imageUrlDark);
-        const hasSplits = !!(mindmap?.anchors && mindmap.anchors.length > 0);
+        const effectiveAnchors = getEffectiveSurahAnchors(item.data.surah.id, mindmap);
+        const hasSplits = effectiveAnchors.length > 0;
 
         if (hasMap && hasSplits) {
             const hasReviewed = hasReviewedChunks(item.data.surah.id);
@@ -246,7 +248,7 @@ export default function TodoKanban({
             return 'Part mindmap removed from review; move back to Complete to restore it.';
         }
         const mindmap = item.data.mindmap;
-        const hasSplits = !!(mindmap?.anchors && mindmap.anchors.length > 0);
+        const hasSplits = getEffectiveSurahAnchors(item.data.surah.id, mindmap).length > 0;
         if (!hasSplits) {
             if (completeExitBehavior === 'mindmap_and_verses') {
                 return 'Surah mindmap removed from review; no verse splits exist, so no verse reviews were suspended.';
@@ -326,7 +328,10 @@ export default function TodoKanban({
 
     const getItemSearchText = (item: KanbanItem) => {
         if (item.type === 'surah') return `${item.data.surah.id} ${item.data.surah.name} ${item.data.surah.arabicName || ''}`;
-        if (item.type === 'part') return `Part ${item.data.part} الجزء ${item.data.part}`;
+        if (item.type === 'part') {
+            if (Number(item.data.part) === 0) return 'Part 0 Meta Mindmap relationships all parts';
+            return `Part ${item.data.part} الجزء ${item.data.part}`;
+        }
         if (item.type === 'suspended') {
             const surah = getSurah(item.data.surahId);
             return `${surah?.name || ''} ${surah?.arabicName || ''} ${item.data.label}`;
@@ -1030,7 +1035,7 @@ export default function TodoKanban({
     const getHasSplits = useCallback((item: KanbanItem): boolean => {
         if (item.type === 'surah') {
             const mindmap = item.data.mindmap;
-            return !!(mindmap?.anchors && mindmap.anchors.length > 0);
+            return getEffectiveSurahAnchors(item.data.surah.id, mindmap).length > 0;
         }
         return false;
     }, []);
@@ -1039,6 +1044,7 @@ export default function TodoKanban({
         if (item.type === 'surah') {
             return `/docs/mindmaps/surah-${item.data.surah.id}`;
         } else if (item.type === 'part') {
+            if (Number(item.data.part) === 0) return undefined;
             return `/docs/mindmaps/part-${item.data.part}`;
         }
         return undefined;
@@ -1125,25 +1131,28 @@ export default function TodoKanban({
         if (type === 'part' || type === 'surah') {
             const isSurah = type === 'surah';
             const id = isSurah ? data.surah.id : data.part;
+            const isMetaPart = !isSurah && Number(id) === 0;
             const mindmap = data.mindmap;
             const hasContent = !!mindmap?.imageUrl || !!mindmap?.tldrawSnapshot;
 
             return (
                 <div className="flex flex-col gap-6">
                     <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-lg">{isSurah ? `Surah ${data.surah.id}. ${data.surah.name}` : `Part ${id}`}</h3>
+                        <h3 className="font-bold text-lg">{isSurah ? `Surah ${data.surah.id}. ${data.surah.name}` : isMetaPart ? 'Part 0 Meta Mindmap' : `Part ${id}`}</h3>
                         <span className={`status-badge ${mindmap?.isComplete ? 'learned' : 'partial'}`}>
                             {mindmap?.isComplete ? 'Complete' : 'Incomplete'}
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={`grid gap-2 ${isMetaPart ? 'grid-cols-1' : 'grid-cols-2'}`}>
                         <button className="btn btn-secondary text-xs" onClick={() => onEditMindmap(id, mindmap?.tldrawSnapshot, !isSurah)}>
                             <PenTool size={14} className="mr-1" /> {mindmap?.tldrawSnapshot ? 'Edit Map' : 'Start Map'}
                         </button>
-                        <button className="btn btn-secondary text-xs" onClick={() => onImportPremade(type, id)}>
-                            <Download size={14} className="mr-1" /> Import Premade
-                        </button>
+                        {!isMetaPart && (
+                            <button className="btn btn-secondary text-xs" onClick={() => onImportPremade(type, id)}>
+                                <Download size={14} className="mr-1" /> Import Premade
+                            </button>
+                        )}
                     </div>
 
                     {hasContent && (
@@ -1342,7 +1351,7 @@ export default function TodoKanban({
             <SlideOver
                 isOpen={!!activeItem}
                 onClose={() => setActiveItem(null)}
-                title={activeItem ? (activeItem.type === 'surah' ? activeItem.data.surah.name : activeItem.type === 'part' ? `Part ${activeItem.data.part}` : 'Detail') : ''}
+                title={activeItem ? (activeItem.type === 'surah' ? activeItem.data.surah.name : activeItem.type === 'part' ? (Number(activeItem.data.part) === 0 ? 'Part 0 Meta Mindmap' : `Part ${activeItem.data.part}`) : 'Detail') : ''}
             >
                 {renderSlideOverContent()}
             </SlideOver>

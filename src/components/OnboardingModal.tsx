@@ -329,9 +329,6 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
                                 You can skip Surahs you already know well. Skipping them means they won&apos;t appear in your daily review queue, allowing you to focus on what you&apos;re currently memorizing.
                             </p>
-                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', fontSize: '0.82rem' }}>
-                                Al-Fatiha is always skipped by default.
-                            </p>
                             <div style={{
                                 flex: 1,
                                 overflowY: 'auto',

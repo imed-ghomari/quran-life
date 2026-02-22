@@ -251,11 +251,20 @@ function renderCardZones({
         case 'part': {
             const partTask = item.data;
             zone1 = { label: "PART MAP", color: "var(--todo-part-purple)" };
-            zone2 = {
-                english: `Part ${partTask.part}`,
-                arabic: `الجزء ${partTask.part}`
-            };
-            zone4Meta = "Full Part Map";
+            if (Number(partTask.part) === 0) {
+                zone2 = {
+                    english: 'Part 0 Meta Mindmap',
+                    arabic: 'الخريطة الشاملة'
+                };
+                zone3 = 'Global relationship map across Parts 1-7.';
+                zone4Meta = "Always visible";
+            } else {
+                zone2 = {
+                    english: `Part ${partTask.part}`,
+                    arabic: `الجزء ${partTask.part}`
+                };
+                zone4Meta = "Full Part Map";
+            }
             break;
         }
         case 'surah': {

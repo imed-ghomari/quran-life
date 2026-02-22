@@ -58,6 +58,11 @@ const toPositiveInt = (value: unknown): number | null => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const toNonNegativeInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
     const direct = toPositiveInt((node as any).surahId);
     if (direct) return direct;
@@ -70,12 +75,12 @@ const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
 };
 
 const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
-    const direct = toPositiveInt((node as any).partId);
-    if (direct) return direct;
+    const direct = toNonNegativeInt((node as any).partId);
+    if (direct !== null) return direct;
     const target = String((node as any).targetId || '');
     const partMatch = target.match(/^part-mindmap-(\d+)$/);
     if (!partMatch) return null;
-    return toPositiveInt(partMatch[1]);
+    return toNonNegativeInt(partMatch[1]);
 };
 
 const resolveSurahIdFromErrorNodeRef = (nodeRef: unknown): number | null => {
@@ -1195,6 +1200,7 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                     const x = getX(i);
                                     const y = chartHeight - padding.bottom + 18;
                                     const label = shortSurahLabel(row.surahName, labelMaxChars);
+                                    const isTruncated = label !== row.surahName;
                                     if (rotateLabels) {
                                         return (
                                             <text
@@ -1205,13 +1211,28 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                                 fontSize="9"
                                                 fill="var(--foreground-secondary)"
                                                 transform={`rotate(-24 ${x} ${y})`}
+                                                data-tooltip={isTruncated ? row.surahName : undefined}
+                                                data-tooltip-trigger={isTruncated ? 'tap' : undefined}
+                                                style={isTruncated ? { cursor: 'help' } : undefined}
                                             >
+                                                {isTruncated ? <title>{row.surahName}</title> : null}
                                                 {label}
                                             </text>
                                         );
                                     }
                                     return (
-                                        <text key={`x-${row.surahId}`} x={x} y={y} textAnchor="middle" fontSize="10" fill="var(--foreground-secondary)">
+                                        <text
+                                            key={`x-${row.surahId}`}
+                                            x={x}
+                                            y={y}
+                                            textAnchor="middle"
+                                            fontSize="10"
+                                            fill="var(--foreground-secondary)"
+                                            data-tooltip={isTruncated ? row.surahName : undefined}
+                                            data-tooltip-trigger={isTruncated ? 'tap' : undefined}
+                                            style={isTruncated ? { cursor: 'help' } : undefined}
+                                        >
+                                            {isTruncated ? <title>{row.surahName}</title> : null}
                                             {label}
                                         </text>
                                     );

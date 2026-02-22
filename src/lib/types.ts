@@ -6,6 +6,7 @@ import { FSRSState } from './fsrs';
 
 // Qur'anic part classifications used by the app
 export type QuranPart = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; // 8 = All Quran
+export type PartMindMapId = 0 | QuranPart; // 0 = Meta map, 1..7 = parts, 8 = all Quran
 export const LEGACY_ALL_QURAN_PART = 5 as const; // pre-v2 "All Quran" id
 export const ALL_QURAN_PART = 8 as const;
 export const CORE_QURAN_PARTS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -83,7 +84,7 @@ export interface MemoryNode {
     id: string;
     type: MemoryNodeType;
     surahId?: number; // Optional context
-    partId?: QuranPart; // Optional context
+    partId?: PartMindMapId; // Optional context
     startVerse?: number; // Optional context
     endVerse?: number; // Optional context
     targetId?: string;      // Legacy: VerseSegment.id
@@ -154,7 +155,7 @@ export interface MindMap {
 }
 
 export interface PartMindMap {
-    partId: QuranPart; // 1..7 are parts, 8 is all Quran
+    partId: PartMindMapId; // 0 = meta map, 1..7 are parts, 8 is all Quran
     imageUrl: string | null;
     imageUrlDark?: string | null;
     description: string;

@@ -982,11 +982,16 @@ h3 {
   height: 20px;
   border-radius: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--foreground-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.adv-section-icon svg {
+  color: inherit;
+  stroke: currentColor;
 }
 
 .adv-options {

@@ -56,6 +56,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { clientEnv } from '@/lib/env/client';
+import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -71,6 +72,11 @@ const toPositiveInt = (value: unknown): number | null => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const toNonNegativeInt = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
     const direct = toPositiveInt((node as any).surahId);
     if (direct) return direct;
@@ -83,12 +89,12 @@ const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
 };
 
 const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
-    const direct = toPositiveInt((node as any).partId);
-    if (direct) return direct;
+    const direct = toNonNegativeInt((node as any).partId);
+    if (direct !== null) return direct;
     const target = String((node as any).targetId || '');
     const partMatch = target.match(/^part-mindmap-(\d+)$/);
     if (!partMatch) return null;
-    return toPositiveInt(partMatch[1]);
+    return toNonNegativeInt(partMatch[1]);
 };
 
 
@@ -178,8 +184,8 @@ export default function TodayPage() {
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
         const mindmap = mindmaps.find(m => Number(m.surahId) === surahId);
-        if (!mindmap || !mindmap.anchors) return undefined;
-        return (mindmap.anchors as any[]).find(a => Number(a.startVerse) === start && Number(a.endVerse) === end);
+        const anchors = getEffectiveSurahAnchors(surahId, mindmap);
+        return anchors.find(a => Number(a.startVerse) === start && Number(a.endVerse) === end);
     }, [mindmaps]);
 
     const mutashabihatDecisionsMap = useMemo(() => {
@@ -342,7 +348,7 @@ export default function TodayPage() {
             if (!surah) return;
 
             const mindmapForAnchors = mindmaps.find(m => Number(m.surahId) === surahId);
-            const anchors = mindmapForAnchors?.anchors || [];
+            const anchors = getEffectiveSurahAnchors(surahId, mindmapForAnchors);
             if (anchors.length > 0) {
                 anchors.forEach(anchor => {
                     const anchorNodeExists = nodes.some(n =>

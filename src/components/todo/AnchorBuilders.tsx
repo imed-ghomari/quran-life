@@ -533,7 +533,14 @@ export function DesktopAnchorBuilder({
     const [isEditing, setIsEditing] = useState(false);
     const [hoverVal, setHoverVal] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [hoveredCompactSegment, setHoveredCompactSegment] = useState<{
+        start: number;
+        end: number;
+        centerPercent: number;
+    } | null>(null);
+    const [trackViewportWidth, setTrackViewportWidth] = useState(0);
     const barRef = useRef<HTMLDivElement>(null);
+    const trackViewportRef = useRef<HTMLDivElement>(null);
     const { confirm } = useConfirmDialog();
 
     const breaks = Array.from(new Set([...builderState.breaks]))
@@ -541,6 +548,48 @@ export function DesktopAnchorBuilder({
         .filter(b => b > 0 && b < verseCount);
 
     const boundaries = Array.from(new Set([1, ...breaks.map(b => b + 1), verseCount + 1])).sort((a, b) => a - b);
+    const MIN_SPLIT_GAP_PX = 56;
+
+    useEffect(() => {
+        const el = trackViewportRef.current;
+        if (!el) return;
+
+        const updateWidth = () => setTrackViewportWidth(el.clientWidth);
+        updateWidth();
+
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateWidth);
+            return () => window.removeEventListener('resize', updateWidth);
+        }
+
+        const observer = new ResizeObserver(updateWidth);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    let minBreakGapPx = Number.POSITIVE_INFINITY;
+    if (breaks.length > 1 && trackViewportWidth > 0) {
+        for (let i = 1; i < breaks.length; i += 1) {
+            const gapVerses = breaks[i] - breaks[i - 1];
+            const gapPx = (gapVerses / verseCount) * trackViewportWidth;
+            if (gapPx < minBreakGapPx) {
+                minBreakGapPx = gapPx;
+            }
+        }
+    }
+
+    const shouldEnableHorizontalScroll =
+        isEditing &&
+        Number.isFinite(minBreakGapPx) &&
+        minBreakGapPx < MIN_SPLIT_GAP_PX;
+
+    const widthExpansionFactor = shouldEnableHorizontalScroll
+        ? Math.min(4, Math.max(1.15, MIN_SPLIT_GAP_PX / Math.max(minBreakGapPx, 1)))
+        : 1;
+
+    const trackWidthStyle = shouldEnableHorizontalScroll && trackViewportWidth > 0
+        ? `${Math.round(trackViewportWidth * widthExpansionFactor)}px`
+        : '100%';
 
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!isEditing || !barRef.current) return;
@@ -617,26 +666,60 @@ export function DesktopAnchorBuilder({
             </div>
 
             <div
-                className="anchor-bar-track"
-                ref={barRef}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-                onClick={handleClick}
+                ref={trackViewportRef}
                 style={{
-                    position: 'relative',
-                    height: '40px',
-                    background: isEditing ? 'rgba(0,0,0,0.1)' : 'var(--background)',
-                    borderRadius: '8px',
-                    cursor: isEditing ? 'pointer' : 'default',
+                    overflowX: shouldEnableHorizontalScroll ? 'auto' : 'hidden',
+                    overflowY: shouldEnableHorizontalScroll ? 'hidden' : 'visible',
                     marginTop: '1rem',
                     marginBottom: '1rem',
-                    border: '1px solid var(--border)'
+                    // Reserve space for floating split/hover labels so they remain visible
+                    // when horizontal scrolling is enabled.
+                    paddingTop: isEditing ? '34px' : 0,
+                    paddingBottom: isEditing ? '28px' : 0,
                 }}
             >
+                <div
+                    className="anchor-bar-track"
+                    ref={barRef}
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={handleClick}
+                    style={{
+                        position: 'relative',
+                        height: '40px',
+                        width: trackWidthStyle,
+                        background: isEditing ? 'rgba(0,0,0,0.1)' : 'var(--background)',
+                        borderRadius: '8px',
+                        cursor: isEditing ? 'pointer' : 'default',
+                        border: '1px solid var(--border)'
+                    }}
+                >
                 {boundaries.slice(0, -1).map((start, idx) => {
                     const end = boundaries[idx + 1] - 1;
                     const widthPercent = ((end - start + 1) / verseCount) * 100;
                     const leftPercent = ((start - 1) / verseCount) * 100;
+                    const centerPercent = leftPercent + widthPercent / 2;
+                    const segmentPixelWidth = trackViewportWidth > 0
+                        ? (trackViewportWidth * (end - start + 1)) / verseCount
+                        : Number.POSITIVE_INFINITY;
+                    const labelFontSize = segmentPixelWidth < 56
+                        ? '0.62rem'
+                        : segmentPixelWidth < 90
+                            ? '0.68rem'
+                            : '0.75rem';
+                    const labelFontPx = parseFloat(labelFontSize) * 16;
+                    const fullRangeText = `${start}-${end}`;
+                    const estimatedCharWidth = labelFontPx * 0.56;
+                    const labelPadding = segmentPixelWidth < 56 ? '1px 4px' : '2px 6px';
+                    const paddingX = segmentPixelWidth < 56 ? 4 : 6;
+                    const labelText = segmentPixelWidth < 36 ? `${start}` : `${start}-${end}`;
+                    const shouldRenderLabel = segmentPixelWidth >= 24;
+                    const isUltraCompact = segmentPixelWidth < 24;
+                    const estimatedFullLabelWidth =
+                        fullRangeText.length * estimatedCharWidth + (paddingX * 2) + 4;
+                    const isFullLabelVisible =
+                        segmentPixelWidth >= 36 && segmentPixelWidth >= estimatedFullLabelWidth;
+                    const shouldUseHoverWindow = !isEditing && !isFullLabelVisible;
 
                     return (
                         <div key={`seg-${start}`} style={{
@@ -647,17 +730,118 @@ export function DesktopAnchorBuilder({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            pointerEvents: 'none',
+                            pointerEvents: isEditing ? 'none' : 'auto',
                             borderRight: idx < boundaries.length - 2 ? '1px solid var(--border)' : 'none'
-                        }}>
-                            {!isEditing && (
-                                <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', background: 'var(--background-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
-                                    {start}-{end}
+                        }}
+                            onMouseEnter={() => {
+                                if (shouldUseHoverWindow) {
+                                    setHoveredCompactSegment({ start, end, centerPercent });
+                                }
+                            }}
+                            onMouseLeave={() => {
+                                setHoveredCompactSegment(prev => (
+                                    prev?.start === start && prev?.end === end ? null : prev
+                                ));
+                            }}
+                            onFocus={() => {
+                                if (shouldUseHoverWindow) {
+                                    setHoveredCompactSegment({ start, end, centerPercent });
+                                }
+                            }}
+                            onBlur={() => {
+                                setHoveredCompactSegment(prev => (
+                                    prev?.start === start && prev?.end === end ? null : prev
+                                ));
+                            }}
+                            tabIndex={!isEditing ? 0 : -1}
+                            aria-label={`Verses ${start} to ${end}`}
+                        >
+                            {!isEditing && shouldRenderLabel && (
+                                <span
+                                    title={shouldUseHoverWindow ? `${start}-${end}` : undefined}
+                                    style={{
+                                        fontSize: labelFontSize,
+                                        color: 'var(--foreground-secondary)',
+                                        background: 'var(--background-secondary)',
+                                        padding: labelPadding,
+                                        borderRadius: '4px',
+                                        maxWidth: 'calc(100% - 4px)',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        display: 'inline-block'
+                                    }}
+                                >
+                                    {labelText}
                                 </span>
+                            )}
+                            {!isEditing && isUltraCompact && (
+                                <button
+                                    type="button"
+                                    onMouseEnter={() => setHoveredCompactSegment({ start, end, centerPercent })}
+                                    onMouseLeave={() => {
+                                        setHoveredCompactSegment(prev => (
+                                            prev?.start === start && prev?.end === end ? null : prev
+                                        ));
+                                    }}
+                                    onFocus={() => setHoveredCompactSegment({ start, end, centerPercent })}
+                                    onBlur={() => {
+                                        setHoveredCompactSegment(prev => (
+                                            prev?.start === start && prev?.end === end ? null : prev
+                                        ));
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        left: '50%',
+                                        top: '50%',
+                                        transform: 'translate(-50%, -50%)',
+                                        width: '18px',
+                                        height: '18px',
+                                        borderRadius: '999px',
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--background-secondary)',
+                                        color: 'var(--foreground-secondary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.7rem',
+                                        lineHeight: 1,
+                                        padding: 0,
+                                        cursor: 'help',
+                                        zIndex: 2
+                                    }}
+                                    aria-label={`Show full split ${start}-${end}`}
+                                    title={`${start}-${end}`}
+                                >
+                                    •
+                                </button>
                             )}
                         </div>
                     );
                 })}
+
+                {!isEditing && hoveredCompactSegment && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: `${hoveredCompactSegment.centerPercent}%`,
+                            top: '-34px',
+                            transform: 'translateX(-50%)',
+                            background: '#333',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            zIndex: 30,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                            pointerEvents: 'none'
+                        }}
+                    >
+                        {hoveredCompactSegment.start}-{hoveredCompactSegment.end}
+                    </div>
+                )}
 
                 {breaks.map(b => (
                     <React.Fragment key={b}>
@@ -755,6 +939,7 @@ export function DesktopAnchorBuilder({
                         </div>
                     </div>
                 )}
+                </div>
             </div>
         </div>
     );
