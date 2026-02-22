@@ -5,7 +5,18 @@ import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
-import { AppSettings, QuranPart, MemoryNode, getNodeStability, getNodeDifficulty, getNodeReps, getNodeDueDate } from '@/lib/types';
+import {
+    ACTIVE_PART_OPTIONS,
+    ALL_QURAN_PART,
+    AppSettings,
+    LEGACY_ALL_QURAN_PART,
+    QuranPart,
+    MemoryNode,
+    getNodeStability,
+    getNodeDifficulty,
+    getNodeReps,
+    getNodeDueDate
+} from '@/lib/types';
 import { db } from '@/lib/instant';
 import { useInstantSettings, useInstantNodes, useInstantMutashabihat, useInstantListeningProgress, useInstantMindMaps } from '@/hooks/useInstantData';
 import { createNewFSRSState } from '@/lib/fsrs';
@@ -148,6 +159,7 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_note', label: 'Solved by Note' },
 ];
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
+const LOCKED_SKIPPED_SURAH_ID = 1;
 
 type SimilarityResolutionTarget = {
     phraseId: string;
@@ -178,6 +190,32 @@ const formatKnowledgeTrackingDueDate = (due: string | null): string => {
     const hours = parsed.getHours().toString().padStart(2, '0');
     const minutes = parsed.getMinutes().toString().padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+const formatKnowledgeTrackingInterval = (stabilityDays: number): string => {
+    if (!Number.isFinite(stabilityDays) || stabilityDays <= 0) return '-';
+
+    const round1 = (value: number) => Math.round(value * 10) / 10;
+    const formatValue = (value: number) => {
+        const rounded = round1(value);
+        return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+    };
+
+    if (stabilityDays >= 365) return `${formatValue(stabilityDays / 365)}y`;
+    if (stabilityDays >= 30) return `${formatValue(stabilityDays / 30)}mo`;
+    if (stabilityDays >= 7) return `${formatValue(stabilityDays / 7)}w`;
+    if (stabilityDays >= 1) return `${formatValue(stabilityDays)}d`;
+    return `${Math.max(1, Math.round(stabilityDays * 24))}h`;
+};
+
+const formatKnowledgeTrackingDifficulty = (difficulty: number): string => {
+    if (!Number.isFinite(difficulty) || difficulty <= 0) return '-';
+
+    // Display-only major scale (1-5) while keeping internal FSRS 1-10 unchanged.
+    const clampedFsrs = Math.min(10, Math.max(1, difficulty));
+    const majorDifficulty = 1 + ((clampedFsrs - 1) / 9) * 4;
+    const rounded = Math.round(majorDifficulty * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded}/5` : `${rounded.toFixed(1)}/5`;
 };
 
 const toPositiveInt = (value: unknown): number | null => {
@@ -315,6 +353,7 @@ export default function SettingsPage() {
     const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
+    const activePartLabel = settings.activePart === ALL_QURAN_PART ? 'All Quran' : `Part ${settings.activePart}`;
 
     const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
         id: string;
@@ -918,13 +957,7 @@ export default function SettingsPage() {
                             gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
                             gap: '0.75rem'
                         }}>
-                            {[
-                                { id: 1, name: "Sab'ut-Tiwal" },
-                                { id: 2, name: "Al-Mi'un" },
-                                { id: 3, name: "Al-Mathani" },
-                                { id: 4, name: "Al-Mufassal" },
-                                { id: 5, name: "All Quran" }
-                            ].map(p => (
+                            {ACTIVE_PART_OPTIONS.map(p => (
                                 <button
                                     suppressHydrationWarning={true}
                                     key={p.id}
@@ -942,7 +975,7 @@ export default function SettingsPage() {
                                     }}
                                 >
                                     <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>
-                                        {p.id === 5 ? '∞' : p.id}
+                                        {p.id === ALL_QURAN_PART ? '∞' : p.id}
                                     </div>
                                     <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
                                     <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
@@ -974,6 +1007,9 @@ export default function SettingsPage() {
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                             Search and add Surahs you want to skip (e.g., ones you know perfectly).
                         </p>
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                            Al-Fatiha is always skipped and cannot be removed.
+                        </p>
 
                         <div className="add-skipped-container" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                             <select
@@ -990,7 +1026,7 @@ export default function SettingsPage() {
                                 }}
                             >
                                 <option value="">Select Surah to Skip...</option>
-                                {SURAHS.map(s => (
+                                {SURAHS.filter(s => s.id !== LOCKED_SKIPPED_SURAH_ID).map(s => (
                                     <option key={s.id} value={s.id} disabled={settings.skippedSurahs?.includes(s.id)}>
                                         {s.id}. {s.name} ({s.arabicName})
                                     </option>
@@ -1031,21 +1067,25 @@ export default function SettingsPage() {
                                         fontSize: '0.9rem'
                                     }}>
                                         <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{s.name}</span>
-                                        <button
-                                            onClick={() => handleRemoveSkippedSurah(id)}
-                                            style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                color: 'var(--foreground-secondary)',
-                                                cursor: 'pointer',
-                                                padding: '2px',
-                                                display: 'flex',
-                                                alignItems: 'center'
-                                            }}
-                                            title="Unskip (Add back to cycle)"
-                                        >
-                                            <X size={14} />
-                                        </button>
+                                        {id === LOCKED_SKIPPED_SURAH_ID ? (
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--foreground-secondary)' }}>Always skipped</span>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleRemoveSkippedSurah(id)}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: 'var(--foreground-secondary)',
+                                                    cursor: 'pointer',
+                                                    padding: '2px',
+                                                    display: 'flex',
+                                                    alignItems: 'center'
+                                                }}
+                                                title="Unskip (Add back to cycle)"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -1160,13 +1200,13 @@ export default function SettingsPage() {
                                         {(() => {
                                             // Get all eligible surahs for the current active part
                                             const eligibleSurahs = SURAHS.filter(s =>
-                                                (settings.activePart === 5 || s.part === settings.activePart) &&
+                                                (settings.activePart === ALL_QURAN_PART || s.part === settings.activePart) &&
                                                 !settings.skippedSurahs?.includes(s.id)
                                             ).sort((a, b) => a.id - b.id);
 
                                             if (eligibleSurahs.length === 0) {
                                                 return (
-                                                    <div className="empty-state" style={{ padding: '1rem' }}>No surahs in Part {settings.activePart}</div>
+                                                    <div className="empty-state" style={{ padding: '1rem' }}>No surahs in {activePartLabel}</div>
                                                 );
                                             }
 
@@ -1878,7 +1918,7 @@ export default function SettingsPage() {
 
     const handleResetDailyPortion = async () => {
         if (!settings) return;
-        const partName = settings.activePart === 5 ? 'the whole Quran' : `Part ${settings.activePart}`;
+        const partName = settings.activePart === ALL_QURAN_PART ? 'the whole Quran' : `Part ${settings.activePart}`;
         const message = `Reset daily portion progress for ${partName}? This will restart the daily portion from the beginning and mark today as incomplete.`;
         const ok = await confirm({
             title: 'Reset Daily Portion',
@@ -1888,14 +1928,17 @@ export default function SettingsPage() {
         });
         if (!ok) return;
 
-        const entry = listeningProgress.find(p => p.partId === settings.activePart);
+        const entry = listeningProgress.find(p => p.partId === settings.activePart)
+            ?? (settings.activePart === ALL_QURAN_PART && (settings.partSystemVersion ?? 1) < 2
+                ? listeningProgress.find(p => p.partId === LEGACY_ALL_QURAN_PART)
+                : undefined);
         if (entry?.id) {
             await db.transact(db.tx.listeningProgress[entry.id].delete());
         }
     };
 
     const handleResetMutashabihat = async () => {
-        const partName = settings?.activePart === 5 ? 'the whole Quran' : `Part ${settings?.activePart}`;
+        const partName = settings?.activePart === ALL_QURAN_PART ? 'the whole Quran' : `Part ${settings?.activePart}`;
         const msg = `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`;
         const ok = await confirm({
             title: 'Reset Mutashabihat',
@@ -1908,7 +1951,7 @@ export default function SettingsPage() {
         const absoluteAyat = getAllMutashabihatRefs(instantCustomMutashabihat).filter(abs => {
             const ref = absoluteToSurahAyah(abs);
             const surah = getSurah(ref.surahId);
-            return surah && (settings?.activePart === 5 || surah.part === settings?.activePart);
+            return surah && (settings?.activePart === ALL_QURAN_PART || surah.part === settings?.activePart);
         });
 
         const ayahSet = new Set(absoluteAyat.map(String));
@@ -1934,14 +1977,20 @@ export default function SettingsPage() {
 
     const handleAddSkippedSurah = () => {
         if (!surahToSkipId) return;
+        const nextSurahId = Number(surahToSkipId);
+        if (nextSurahId === LOCKED_SKIPPED_SURAH_ID) {
+            setSurahToSkipId('');
+            return;
+        }
         const currentSkipped = settings?.skippedSurahs || [];
-        if (!currentSkipped.includes(Number(surahToSkipId))) {
-            persistSettingsUpdate({ skippedSurahs: [...currentSkipped, Number(surahToSkipId)] }, 'skipped surah list');
+        if (!currentSkipped.includes(nextSurahId)) {
+            persistSettingsUpdate({ skippedSurahs: [...currentSkipped, nextSurahId] }, 'skipped surah list');
         }
         setSurahToSkipId('');
     };
 
     const handleRemoveSkippedSurah = (id: number) => {
+        if (id === LOCKED_SKIPPED_SURAH_ID) return;
         const currentSkipped = settings?.skippedSurahs || [];
         persistSettingsUpdate({ skippedSurahs: currentSkipped.filter(s => s !== id) }, 'skipped surah list');
     };
@@ -2739,16 +2788,10 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
                                         gap: '0.75rem'
                                     }}>
-                                        {[
-                                            { id: 1, name: "Sab'ut-Tiwal" },
-                                            { id: 2, name: "Al-Mi'un" },
-                                            { id: 3, name: "Al-Mathani" },
-                                            { id: 4, name: "Al-Mufassal" },
-                                            { id: 5, name: "All Quran" }
-                                        ].map(p => (
+                                        {ACTIVE_PART_OPTIONS.map(p => (
                                             <button
                                                 key={p.id}
-                                                className={`part-option ${settings.activePart === p.id ? 'active' : ''} ${p.id === 5 ? 'all-quran-option' : ''}`}
+                                                className={`part-option ${settings.activePart === p.id ? 'active' : ''}`}
                                                 onClick={() => handleActivePart(p.id as QuranPart)}
                                                 style={{
                                                     padding: '1.25rem 0.75rem',
@@ -2762,7 +2805,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                 }}
                                             >
                                                 <div className="part-number" style={{ fontSize: '1.4rem', fontWeight: 800, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>
-                                                    {p.id === 5 ? '∞' : p.id}
+                                                    {p.id === ALL_QURAN_PART ? '∞' : p.id}
                                                 </div>
                                                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: settings.activePart === p.id ? 'var(--accent)' : 'var(--foreground-secondary)' }}>{p.name}</div>
                                                 <div style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', opacity: 0.8 }}>{getSurahsByPart(p.id as QuranPart).length} surahs</div>
@@ -2807,6 +2850,9 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                                             Manage surahs you want to skip from the daily review queue.
                                         </p>
+                                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                                            Al-Fatiha is always skipped and cannot be removed.
+                                        </p>
 
                                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                                             <select
@@ -2824,7 +2870,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                 }}
                                             >
                                                 <option value="">Select a surah to skip...</option>
-                                                {SURAHS.map(s => (
+                                                {SURAHS.filter(s => s.id !== LOCKED_SKIPPED_SURAH_ID).map(s => (
                                                     <option key={s.id} value={s.id} disabled={settings.skippedSurahs?.includes(s.id)}>
                                                         {s.id}. {s.name} ({s.arabicName})
                                                     </option>
@@ -2865,20 +2911,24 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         fontSize: '0.85rem'
                                                     }}>
                                                         <span>{s.id}. {s.name}</span>
-                                                        <button
-                                                            onClick={() => handleRemoveSkippedSurah(id)}
-                                                            style={{
-                                                                background: 'none',
-                                                                border: 'none',
-                                                                padding: 0,
-                                                                color: 'var(--foreground-secondary)',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center'
-                                                            }}
-                                                        >
-                                                            <X size={14} />
-                                                        </button>
+                                                        {id === LOCKED_SKIPPED_SURAH_ID ? (
+                                                            <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)' }}>Always skipped</span>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleRemoveSkippedSurah(id)}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    padding: 0,
+                                                                    color: 'var(--foreground-secondary)',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center'
+                                                                }}
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -3035,8 +3085,8 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                 const learnedSurahs = settings.learnedVerses || {};
                                                                 const filteredSurahs = SURAHS
                                                                     .filter(surah => {
-                                                                        // Filter by active part (show all if part 5)
-                                                                        if (settings.activePart !== 5 && surah.part !== settings.activePart) return false;
+                                                                        // Filter by active part (show all when "All Quran" is selected)
+                                                                        if (settings.activePart !== ALL_QURAN_PART && surah.part !== settings.activePart) return false;
                                                                         // Only show learned surahs (have entries in learnedVerses)
                                                                       
                                                                         // Only show non-skipped surahs
@@ -3048,7 +3098,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
                                                                 if (filteredSurahs.length === 0) {
                                                                     return (
-                                                                        <div className="empty-state" style={{ padding: '1rem' }}>No learned surahs in Part {settings.activePart}</div>
+                                                                        <div className="empty-state" style={{ padding: '1rem' }}>No learned surahs in {activePartLabel}</div>
                                                                     );
                                                                 }
 
@@ -3189,8 +3239,8 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                             <option value="mastered">Mastered</option>
                                                                                         </select>
                                                                                     </td>
-                                                                                    <td>{getNodeStability(node)}d</td>
-                                                                                    <td>{getNodeDifficulty(node)}</td>
+                                                                                    <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
+                                                                                    <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
                                                                                     <td>{getNodeReps(node)}</td>
                                                                                     <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
                                                                                 </tr>
@@ -3256,8 +3306,8 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                             <option value="mastered">Mastered</option>
                                                                                         </select>
                                                                                     </td>
-                                                                                    <td>{getNodeStability(node)}d</td>
-                                                                                    <td>{getNodeDifficulty(node)}</td>
+                                                                                    <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
+                                                                                    <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
                                                                                     <td>{getNodeReps(node)}</td>
                                                                                     <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
                                                                                 </tr>
@@ -3305,8 +3355,8 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                     const learnedSurahs = settings.learnedVerses || {};
                                                                     const filteredSurahs = SURAHS
                                                                         .filter(surah => {
-                                                                            // Filter by active part (show all if part 5)
-                                                                            if (settings.activePart !== 5 && surah.part !== settings.activePart) return false;
+                                                                            // Filter by active part (show all when "All Quran" is selected)
+                                                                            if (settings.activePart !== ALL_QURAN_PART && surah.part !== settings.activePart) return false;
                                                                             // Only show learned surahs (have entries in learnedVerses)
                                                                            
                                                                             // Only show non-skipped surahs
@@ -3318,7 +3368,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
                                                                     if (filteredSurahs.length === 0) {
                                                                         return (
-                                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No learned surahs in Part {settings.activePart}</td></tr>
+                                                                            <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5, paddingLeft: '2rem' }}>No learned surahs in {activePartLabel}</td></tr>
                                                                         );
                                                                     }
 
@@ -3393,8 +3443,8 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                 <option value="mastered">Mastered</option>
                                                                                             </select>
                                                                                         </td>
-                                                                                        <td>{getNodeStability(node)}d</td>
-                                                                                        <td>{getNodeDifficulty(node)}</td>
+                                                                                        <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
+                                                                                        <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
                                                                                         <td>{getNodeReps(node)}</td>
                                                                                         <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
                                                                                     </tr>
@@ -4483,10 +4533,6 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 }
 
                 @media (min-width: 768px) and (max-width: 1024px) {
-                    .part-selector .all-quran-option {
-                        grid-column: auto !important;
-                    }
-
                     .mutashabihat-table {
                         min-width: 760px !important;
                     }
@@ -4577,11 +4623,6 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     }
                 }
 
-                @media (min-width: 1025px) {
-                    .part-selector .all-quran-option {
-                        grid-column: 1 / -1;
-                    }
-                }
                 .mut-fold-header .mut-chevron {
                         margin-left: 0;
                     }
@@ -5077,11 +5118,11 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                 <div className="node-card-details">
                                                     <div className="stat-item">
                                                         <span className="stat-label">Interval</span>
-                                                        <span className="stat-value">{getNodeStability(node)}d</span>
+                                                        <span className="stat-value">{formatKnowledgeTrackingInterval(getNodeStability(node))}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Difficulty</span>
-                                                        <span className="stat-value">{getNodeDifficulty(node)}</span>
+                                                        <span className="stat-value">{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Reps</span>

@@ -7,6 +7,7 @@ export const schema = i.schema({
     settings: i.entity({
       completionDays: i.number(),
       activePart: i.number(),
+      partSystemVersion: i.number().optional(),
       learnedVerses: i.json().optional(),
       skippedSurahs: i.json().optional(),
       todoDefaultFilter: i.string().optional(),

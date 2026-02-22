@@ -8,7 +8,15 @@ import { id } from '@instantdb/react';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
 import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
-import { Verse, QuranPart, MemoryNode, AppSettings, getNodeDueDate } from '@/lib/types';
+import {
+    ALL_QURAN_PART,
+    LEGACY_ALL_QURAN_PART,
+    Verse,
+    QuranPart,
+    MemoryNode,
+    AppSettings,
+    getNodeDueDate
+} from '@/lib/types';
 import {
     CheckCircle,
     BookOpen,
@@ -860,6 +868,16 @@ export default function TodayPage() {
     const [reviewLayoutVersion, setReviewLayoutVersion] = useState(0);
     const lastRevealPositionRef = useRef<{ verse: number; chunks: number; scrollTop: number } | null>(null);
 
+    const resolveActivePartProgress = useCallback(() => {
+        if (!settings) return undefined;
+        const exact = listeningProgress.find(p => p.partId === settings.activePart);
+        if (exact) return exact;
+        if (settings.activePart === ALL_QURAN_PART && (settings.partSystemVersion ?? 1) < 2) {
+            return listeningProgress.find(p => p.partId === LEGACY_ALL_QURAN_PART);
+        }
+        return undefined;
+    }, [listeningProgress, settings]);
+
     // Load data
     useEffect(() => {
         async function load() {
@@ -932,7 +950,7 @@ export default function TodayPage() {
         const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
 
         // Use InstantDB listening progress
-        const partProgress = listeningProgress.find(p => p.partId === settings.activePart);
+        const partProgress = resolveActivePartProgress();
         const startIdx = partProgress?.lastVerseIndex || 0;
         let endIdx = startIdx + versesPerDay;
 
@@ -978,7 +996,7 @@ export default function TodayPage() {
             totalVerses,
             lastUpdateAt: partProgress?.updatedAt
         };
-    }, [allVerses, settings, listeningProgress]);
+    }, [allVerses, settings, resolveActivePartProgress]);
 
     useEffect(() => {
         if (!portionData.lastUpdateAt) return;
@@ -1331,7 +1349,7 @@ export default function TodayPage() {
         if (isApplyingHistoryAction) return;
 
         // Use InstantDB listening progress
-        const partProgress = listeningProgress.find(p => p.partId === settings.activePart);
+        const partProgress = resolveActivePartProgress();
         const current = partProgress?.lastVerseIndex || 0;
         const totalInPart = portionData.totalVerses;
         if (totalInPart <= 0) return;
@@ -1917,7 +1935,9 @@ export default function TodayPage() {
                                         <p>No reviews due!</p>
                                     </div>
                                 ) : activeContent && (
-                                  <div style={{ paddingTop: '0.5rem' }}>
+                                  <div
+                                        className={`review-active-content ${activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap' ? 'review-active-content--mindmap' : ''}`}
+                                  >
                                         {/* Header */}
                                         <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
                                             {`${currentReviewIndex + 1}`} • {
@@ -1981,12 +2001,11 @@ export default function TodayPage() {
 
                                         {/* Mindmap type content */}
                                         {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
-                                            <div>  
+                                            <div className="review-mindmap-content">  
                                                 {!showGrading ? (
-                                                    <div className="verse-hidden" onClick={() => setShowGrading(true)}>
-                                                        <EyeOff size={24} style={{ marginBottom: 8 }} />
-                                                        <p>Visualize mindmap structure...</p>
-                                                        <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Tap to Check</p>
+                                                    <div className="verse-hidden verse-hidden--static-icon review-mindmap-placeholder">
+                                                        <EyeOff size={24} />
+                                                        <p>Mindmap hidden</p>
                                                     </div>
                                                 ) : (
                                                     <div>

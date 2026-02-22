@@ -17,14 +17,14 @@
   --max-width: 1200px;
 
   /* Specific accent variants for Landing Page */
-  --landing-accent-light: rgba(91, 143, 185, 0.1);
+  --landing-accent-light: rgba(91, 143, 185, 0.06);
 
   /* Secondary Background for Landing Page */
   --landing-bg-secondary: #e9eef5;
   --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 86%, var(--background));
-  --landing-glow-radial: color-mix(in srgb, var(--accent) 16%, transparent);
-  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 11%, transparent);
-  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 8%, transparent);
+  --landing-glow-shadow-soft: 0 6px 16px color-mix(in srgb, var(--accent) 5%, transparent);
+  --landing-glow-shadow-strong: 0 8px 18px color-mix(in srgb, var(--accent) 7%, transparent);
 
   /* Hero & Nav Colors */
   --nav-bg: rgba(240, 240, 240, 0.9);
@@ -38,12 +38,12 @@
     --glass-bg: rgba(28, 28, 28, 0.65);
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-    --landing-accent-light: rgba(108, 165, 212, 0.15);
+    --landing-accent-light: rgba(108, 165, 212, 0.1);
     --landing-bg-secondary: var(--background-secondary);
     --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 78%, var(--background));
-    --landing-glow-radial: color-mix(in srgb, var(--accent) 9%, transparent);
-    --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 8%, transparent);
-    --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 11%, transparent);
+    --landing-glow-radial: color-mix(in srgb, var(--accent) 5%, transparent);
+    --landing-glow-shadow-soft: 0 6px 16px color-mix(in srgb, var(--accent) 4%, transparent);
+    --landing-glow-shadow-strong: 0 8px 18px color-mix(in srgb, var(--accent) 6%, transparent);
 
     --nav-bg: rgba(20, 20, 20, 0.7);
     --hero-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -56,12 +56,12 @@
   --glass-bg: rgba(28, 28, 28, 0.65);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-  --landing-accent-light: rgba(108, 165, 212, 0.15);
+  --landing-accent-light: rgba(108, 165, 212, 0.1);
   --landing-bg-secondary: var(--background-secondary);
   --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 78%, var(--background));
-  --landing-glow-radial: color-mix(in srgb, var(--accent) 9%, transparent);
-  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 8%, transparent);
-  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 11%, transparent);
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 5%, transparent);
+  --landing-glow-shadow-soft: 0 6px 16px color-mix(in srgb, var(--accent) 4%, transparent);
+  --landing-glow-shadow-strong: 0 8px 18px color-mix(in srgb, var(--accent) 6%, transparent);
 
   --nav-bg: rgba(20, 20, 20, 0.7);
   --hero-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -72,12 +72,12 @@
   --glass-bg: rgba(253, 253, 253, 0.75);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-  --landing-accent-light: rgba(91, 143, 185, 0.1);
+  --landing-accent-light: rgba(91, 143, 185, 0.06);
   --landing-bg-secondary: #e9eef5;
   --landing-surface-bg: color-mix(in srgb, var(--landing-bg-secondary) 86%, var(--background));
-  --landing-glow-radial: color-mix(in srgb, var(--accent) 16%, transparent);
-  --landing-glow-shadow-soft: 0 8px 22px color-mix(in srgb, var(--accent) 11%, transparent);
-  --landing-glow-shadow-strong: 0 12px 28px color-mix(in srgb, var(--accent) 14%, transparent);
+  --landing-glow-radial: color-mix(in srgb, var(--accent) 8%, transparent);
+  --landing-glow-shadow-soft: 0 6px 16px color-mix(in srgb, var(--accent) 5%, transparent);
+  --landing-glow-shadow-strong: 0 8px 18px color-mix(in srgb, var(--accent) 7%, transparent);
 
   --nav-bg: var(--glass-bg);
   --hero-overlay-bg: rgba(255, 255, 255, 0.7);
@@ -207,12 +207,12 @@
   border-radius: 12px;
   font-size: 0.95rem;
   letter-spacing: 0.2px;
-  box-shadow: 0 8px 24px rgba(91, 143, 185, 0.25);
+  box-shadow: 0 6px 14px rgba(91, 143, 185, 0.16);
 }
 
 .nav .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px rgba(91, 143, 185, 0.35);
+  box-shadow: 0 8px 18px rgba(91, 143, 185, 0.2);
 }
 
 .logo {
@@ -382,7 +382,7 @@
 .btn-primary {
   background-color: var(--accent);
   color: white;
-  box-shadow: 0 4px 14px rgba(91, 143, 185, 0.4);
+  box-shadow: 0 3px 10px rgba(91, 143, 185, 0.24);
 }
 
 .btn-primary:hover {
@@ -504,7 +504,7 @@
   border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
   background:
     radial-gradient(circle at top right, var(--landing-glow-radial), transparent 52%),
-    color-mix(in srgb, var(--landing-accent-light) 58%, var(--landing-surface-bg));
+    color-mix(in srgb, var(--landing-accent-light) 34%, var(--landing-surface-bg));
   box-shadow: var(--landing-glow-shadow-strong);
 }
 
@@ -998,7 +998,7 @@
 
 .price-card.premium {
   border: 2px solid var(--accent);
-  box-shadow: 0 0 0 4px var(--landing-accent-light), var(--glass-shadow), 0 14px 30px color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 0 0 2px var(--landing-accent-light), var(--glass-shadow), 0 10px 18px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .badge {
@@ -1127,7 +1127,7 @@
   font-weight: 600;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-radius: 999px;
+  border-radius: 12px;
   padding: 0.42rem 0.78rem;
   transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
@@ -1166,7 +1166,7 @@
   text-decoration: none;
   font-weight: 500;
   padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+  border-radius: 12px;
   border: 1px solid transparent;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }

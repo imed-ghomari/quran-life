@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
-import { AppSettings, MemoryNode, MindMap } from '@/lib/types';
+import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart } from '@/lib/types';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
+
+const LOCKED_SKIPPED_SURAH_ID = 1;
+
+const normalizeSkippedSurahs = (value: unknown): number[] => {
+    const normalized = new Set<number>([LOCKED_SKIPPED_SURAH_ID]);
+    if (Array.isArray(value)) {
+        value.forEach((surahId) => {
+            const parsed = Number(surahId);
+            if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 114) {
+                normalized.add(parsed);
+            }
+        });
+    }
+    return Array.from(normalized).sort((a, b) => a - b);
+};
 
 // Static defaults to ensure reference stability
 const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     completionDays: 30,
-    activePart: 5,
+    activePart: ALL_QURAN_PART,
+    partSystemVersion: 2,
     learnedVerses: {},
-    skippedSurahs: [],
+    skippedSurahs: normalizeSkippedSurahs([]),
     todoDefaultFilter: 'all',
     reviewSortOrder: 'surah_grouped',
     completeExitBehavior: 'mindmap_only',
@@ -79,6 +95,11 @@ const parseAnchorRangeFromTarget = (targetId?: string) => {
     const endVerse = Number.parseInt(m[3], 10);
     if (!Number.isFinite(surahId) || !Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return undefined;
     return { surahId, startVerse, endVerse };
+};
+
+const isValidQuranPart = (value: unknown): value is QuranPart => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= ALL_QURAN_PART;
 };
 
 const getLocalDayKeyFromMs = (ms: number) => {
@@ -176,24 +197,84 @@ export function useInstantSettings() {
             lastSyncedAt: new Date().toISOString(),
         };
         if (!settingsEntry) return base;
-        return { ...base, ...settingsEntry } as AppSettings;
+        const merged = { ...base, ...settingsEntry } as AppSettings;
+        const rawVersion = Number((settingsEntry as any).partSystemVersion ?? 1);
+        const normalizedActivePart = isValidQuranPart(merged.activePart) ? merged.activePart : ALL_QURAN_PART;
+        return {
+            ...merged,
+            partSystemVersion: rawVersion,
+            activePart: rawVersion < 2 && normalizedActivePart === LEGACY_ALL_QURAN_PART
+                ? ALL_QURAN_PART
+                : normalizedActivePart,
+            skippedSurahs: normalizeSkippedSurahs((merged as any).skippedSurahs),
+        };
     }, [settingsEntry, user?.id]);
+
+    useEffect(() => {
+        if (!user || !settingsEntry) return;
+
+        const rawVersion = Number((settingsEntry as any).partSystemVersion ?? 1);
+        if (rawVersion >= 2) return;
+
+        const rawActivePart = Number((settingsEntry as any).activePart);
+        const migratedActivePart: QuranPart =
+            rawActivePart === LEGACY_ALL_QURAN_PART
+                ? ALL_QURAN_PART
+                : (isValidQuranPart(rawActivePart) ? rawActivePart : ALL_QURAN_PART);
+
+        const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
+        void db.transact(db.tx.settings[settingsId].update({
+            activePart: migratedActivePart,
+            partSystemVersion: 2,
+            lastSyncedAt: new Date().toISOString(),
+        }));
+    }, [settingsEntry, user]);
+
+    useEffect(() => {
+        if (!user || !settingsEntry) return;
+
+        const normalizedSkippedSurahs = normalizeSkippedSurahs((settingsEntry as any).skippedSurahs);
+        const rawSkippedSurahs = Array.isArray((settingsEntry as any).skippedSurahs)
+            ? (settingsEntry as any).skippedSurahs
+                .map((surahId: unknown) => Number(surahId))
+                .filter((surahId: number) => Number.isInteger(surahId) && surahId >= 1 && surahId <= 114)
+                .sort((a: number, b: number) => a - b)
+            : [];
+
+        const hasDiff =
+            normalizedSkippedSurahs.length !== rawSkippedSurahs.length ||
+            normalizedSkippedSurahs.some((surahId, index) => rawSkippedSurahs[index] !== surahId);
+
+        if (!hasDiff) return;
+
+        const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
+        void db.transact(db.tx.settings[settingsId].update({
+            skippedSurahs: normalizedSkippedSurahs,
+            lastSyncedAt: new Date().toISOString(),
+        }));
+    }, [settingsEntry, user]);
 
     const saveSettings = async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
+
+        const normalizedSettings: Partial<AppSettings> = { ...newSettings };
+        if (Object.prototype.hasOwnProperty.call(newSettings, 'skippedSurahs')) {
+            normalizedSettings.skippedSurahs = normalizeSkippedSurahs(newSettings.skippedSurahs);
+        }
 
         const syncedAt = new Date().toISOString();
         if (settingsEntry) {
             const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
             await db.transact(db.tx.settings[settingsId].update({
-                ...newSettings,
+                ...normalizedSettings,
+                partSystemVersion: 2,
                 lastSyncedAt: syncedAt
             }));
         } else {
             const settingsId = stableEntityId('settings', user.id);
             await db.transact(db.tx.settings[settingsId].update({
                 ...DEFAULT_SETTINGS_BASE,
-                ...newSettings,
+                ...normalizedSettings,
                 userId: user.id,
                 lastSyncedAt: syncedAt,
             }));

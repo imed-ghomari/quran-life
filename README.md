@@ -11,18 +11,18 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 3) Build: `npm run build` (uses Next 13.5)
 
 ## Data
-- Quran text: `public/qpc-hafs-word-by-word.json` (Word-by-word dataset)
+- Quran text and word data: `public/qpc-hafs-word-by-word.json`
 - Audio: `public/audio/<surah><ayah>.mp3` (e.g., 001001.mp3)
 - Mutashabihat data: `Quran_Mutashabihat_Data-master/mutashabiha_data.json`
 
 ## Tabs
-- **Today**: Reviews (SM-2) + Daily Portion (audio/read). Speed control, chunked reveal, mutashabihat-aware context, read-only toggle.
+- **Today**: Reviews (SM-2) + Daily Portion (audio/read). Speed control, chunked reveal, mutashabihat-aware context, read-only toggle, and undo/redo for review actions.
   - **Sequential Daily Portion**: Portions follow natural Quranic order (surah-by-surah) with Bismillah transitions.
 - **Statistics**: Progress focus — learned counts, active part progress, maturity buckets, mindmap completion, skipped count, due reviews.
 - **Todo**: Work queue:
-  - Surah mindmaps (incomplete first), add anchors, mark complete (no uploads in the mindmap editor).
+  - Surah mindmaps (incomplete first), configure verse splits, mark complete (no uploads in the mindmap editor).
   - Part mindmaps (incomplete first).
-  - **Fix mindmaps**: Anchors suspended after 3 failed recalls. **Re-learning phase** (Day 1 -> Day 3) triggers after fix confirmation to ensure mental re-encoding.
+  - **Fix mindmaps**: Verse groups are suspended after 3 failed recalls. **Re-learning phase** (Day 1 -> Day 3) triggers after fix confirmation.
   - **Similarity checks**: Warnings for verse chunks with any failures involving mutashabihat. Not necessarily suspended; used for proactive checking.
   - Empty sections auto-collapse.
 - **Settings**: Completion schedule, active part, learned/skipped surahs, surah maturity adjustment, mutashabihat decisions registry (editable notes).
@@ -79,7 +79,7 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - This reduces early noise and keeps mutashabihat work focused.
 
 ## Styling
-- Reusable `.anchor-input` for anchor/mindmap inputs to align UI.
+- Reusable shared input styles for split and mindmap forms.
 
 ## Build & deploy
 - Run `npm run build` to verify production readiness.

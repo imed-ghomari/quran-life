@@ -9,7 +9,17 @@ import {
     useInstantMutashabihat,
     useInstantReviewErrors
 } from '@/hooks/useInstantData';
-import { AppSettings, MindMap, PartMindMap, MutashabihatDecision, hasNodeBeenReviewed, QuranPart, MemoryNode } from '@/lib/types';
+import {
+    ALL_QURAN_PART,
+    AppSettings,
+    CORE_QURAN_PARTS,
+    MindMap,
+    PartMindMap,
+    MutashabihatDecision,
+    hasNodeBeenReviewed,
+    QuranPart,
+    MemoryNode
+} from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { X } from 'lucide-react';
@@ -286,7 +296,7 @@ export default function TodoPage() {
     // Filter Surahs based on the user's active part setting
     const surahTasks = useMemo(() => {
         const eligible = SURAHS.filter(s =>
-            (activePart === 5 || s.part === activePart) &&
+            (activePart === ALL_QURAN_PART || s.part === activePart) &&
             !settings.skippedSurahs?.includes(s.id)
         );
         return eligible
@@ -295,9 +305,9 @@ export default function TodoPage() {
     }, [mindmaps, activePart, settings.skippedSurahs]);
 
     const partTasks = useMemo(() => {
-        const parts: QuranPart[] = [1, 2, 3, 4];
+        const parts: QuranPart[] = Array.from(CORE_QURAN_PARTS);
         return parts
-            .filter(p => activePart === 5 || p === activePart)
+            .filter(p => activePart === ALL_QURAN_PART || p === activePart)
             .map(p => ({ part: p, mindmap: partMindmapsMap[p] }));
     }, [partMindmapsMap, activePart]);
 

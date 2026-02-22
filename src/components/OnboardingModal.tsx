@@ -19,7 +19,7 @@ import { useInstantSettings, useInstantNodes } from '@/hooks/useInstantData';
 import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { SURAHS } from '@/lib/quranData';
-import { PART_NAMES, QuranPart, getMaturityState } from '@/lib/types';
+import { ALL_QURAN_PART, PART_NAMES, QuranPart, getMaturityState } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 
 interface OnboardingModalProps {
@@ -27,6 +27,20 @@ interface OnboardingModalProps {
 }
 
 const ONBOARDING_TX_BATCH_SIZE = 100;
+const LOCKED_SKIPPED_SURAH_ID = 1;
+
+const normalizeSkippedSurahs = (value: unknown): number[] => {
+    const normalized = new Set<number>([LOCKED_SKIPPED_SURAH_ID]);
+    if (Array.isArray(value)) {
+        value.forEach((surahId) => {
+            const parsed = Number(surahId);
+            if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 114) {
+                normalized.add(parsed);
+            }
+        });
+    }
+    return Array.from(normalized).sort((a, b) => a - b);
+};
 
 const resolveNodeSurahId = (node: { surahId?: unknown; targetId?: unknown }): number | null => {
     const direct = Number(node.surahId);
@@ -42,9 +56,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const [step, setStep] = useState(0);
     const { settings, user } = useInstantSettings();
     const { nodes } = useInstantNodes();
-    const [selectedPart, setSelectedPart] = useState<QuranPart>(4);
+    const [selectedPart, setSelectedPart] = useState<QuranPart>(ALL_QURAN_PART);
     const [days, setDays] = useState(30);
-    const [localSkipped, setLocalSkipped] = useState<number[]>([]);
+    const [localSkipped, setLocalSkipped] = useState<number[]>(() => normalizeSkippedSurahs([]));
     const [dailyPortionModeChoice, setDailyPortionModeChoice] = useState<'audio' | 'reading'>('audio');
     const initializationKey = useRef<string | null>(null);
 
@@ -52,9 +66,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (!settings || !user) return;
         const key = `${user.id}-${settings.id ?? 'new'}`;
         if (initializationKey.current === key) return;
-        setSelectedPart(settings.activePart || 4);
+        setSelectedPart(settings.activePart || ALL_QURAN_PART);
         setDays(settings.completionDays || 30);
-        setLocalSkipped(settings.skippedSurahs || []);
+        setLocalSkipped(normalizeSkippedSurahs(settings.skippedSurahs || []));
         setDailyPortionModeChoice(settings.dailyPortionMode ?? 'audio');
         initializationKey.current = key;
     }, [settings, user]);
@@ -64,20 +78,21 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const completeOnboarding = async () => {
         // Save final settings
         const settingsId = settings.id || id();
+        const normalizedSkippedSurahs = normalizeSkippedSurahs(localSkipped);
         
         const transactions = [
             db.tx.settings[settingsId].update({
                 activePart: selectedPart,
                 completionDays: days,
                 isOnboardingComplete: true,
-                skippedSurahs: localSkipped,
+                skippedSurahs: normalizedSkippedSurahs,
                 dailyPortionMode: dailyPortionModeChoice,
                 userId: user.id
             }) as any
         ];
 
         // Sync memory nodes for skipped surahs
-        for (const surahId of localSkipped) {
+        for (const surahId of normalizedSkippedSurahs) {
             const surah = SURAHS.find(s => s.id === surahId);
             if (!surah) continue;
 
@@ -135,18 +150,19 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     };
 
     const toggleSkippedSurah = (surahId: number) => {
+        if (surahId === LOCKED_SKIPPED_SURAH_ID) return;
         setLocalSkipped(prev => {
-            const current = new Set(prev);
+            const current = new Set(normalizeSkippedSurahs(prev));
             if (current.has(surahId)) {
                 current.delete(surahId);
             } else {
                 current.add(surahId);
             }
-            return Array.from(current).sort((a, b) => a - b);
+            return normalizeSkippedSurahs(Array.from(current));
         });
     };
 
-    const filteredSurahs = SURAHS.filter(s => selectedPart === 5 || s.part === selectedPart);
+    const filteredSurahs = SURAHS.filter(s => selectedPart === ALL_QURAN_PART || s.part === selectedPart);
 
     return (
         <div className="onboarding-overlay" style={{
@@ -313,6 +329,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
                                 You can skip Surahs you already know well. Skipping them means they won&apos;t appear in your daily review queue, allowing you to focus on what you&apos;re currently memorizing.
                             </p>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1.5rem', fontSize: '0.82rem' }}>
+                                Al-Fatiha is always skipped by default.
+                            </p>
                             <div style={{
                                 flex: 1,
                                 overflowY: 'auto',
@@ -325,11 +344,13 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                     const surah = SURAHS.find(s => s.id === id);
                                     if (!surah) return null;
                                     const isSkipped = localSkipped.includes(id);
+                                    const isLocked = id === LOCKED_SKIPPED_SURAH_ID;
                                     
                                     return (
                                         <button
                                             key={id}
                                             onClick={() => toggleSkippedSurah(id)}
+                                            disabled={isLocked}
                                             style={{
                                                 padding: '1rem',
                                                 borderRadius: '16px',
@@ -339,9 +360,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                                 flexDirection: 'column',
                                                 alignItems: 'center',
                                                 gap: '0.5rem',
-                                                cursor: 'pointer',
+                                                cursor: isLocked ? 'not-allowed' : 'pointer',
                                                 transition: 'all 0.2s ease',
-                                                opacity: isSkipped ? 0.7 : 1,
+                                                opacity: isLocked ? 0.85 : (isSkipped ? 0.7 : 1),
                                             }}
                                         >
                                             <div style={{ 
@@ -359,6 +380,9 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                             </div>
                                             <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{surah.name}</span>
                                             <span style={{ fontFamily: 'Amiri, serif', color: 'var(--foreground-secondary)' }}>{surah.arabicName}</span>
+                                            {isLocked && (
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)' }}>Always skipped</span>
+                                            )}
                                         </button>
                                     );
                                 })}
