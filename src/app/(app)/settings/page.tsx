@@ -1021,10 +1021,6 @@ export default function SettingsPage() {
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                             Search and add Surahs you want to skip (e.g., ones you know perfectly).
                         </p>
-                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.82rem' }}>
-                            Al-Fatiha is always skipped and cannot be removed.
-                        </p>
-
                         <div className="add-skipped-container" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                             <select
                                 value={surahToSkipId}
@@ -2878,10 +2874,6 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                                             Manage surahs you want to skip from the daily review queue.
                                         </p>
-                                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.82rem' }}>
-                                            Al-Fatiha is always skipped and cannot be removed.
-                                        </p>
-
                                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                                             <select
                                                 value={surahToSkipId}
@@ -3859,7 +3851,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                                                 <RotateCcw size={14} />
                                                                                                                             </button>
                                                                                                                         </div>
-                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.25rem', margin: 0 }}>
+                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.1rem', margin: 0 }}>
                                                                                                                             {group.absRefs.length > 1 && (
                                                                                                                                 <span className="verse-badge mut-detail-ayah-badge">{ref.ayahId}</span>
                                                                                                                             )}
@@ -3956,7 +3948,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                                                 </div>
                                                                                                                                 <div className="mut-context mut-verse-card">
                                                                                                                                     {mVerse && (
-                                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', margin: 0 }}>
+                                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.05rem', margin: 0 }}>
                                                                             <HighlightedVerse text={mVerse.text} range={matchRange} />
                                                                                                                                         </p>
                                                                                                                                     )}
@@ -4405,7 +4397,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                         <RotateCcw size={14} />
                                                                     </button>
                                                                 </div>
-                                                                <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', marginBottom: '0.6rem' }}>
+                                                                <p className="arabic-text mut-core" style={{ fontSize: '1.15rem', marginBottom: '0.6rem' }}>
                                                                     {sourceEntries.length > 1 && (
                                                                         <span className="verse-badge mut-detail-ayah-badge">{displayedRef.ayahId}</span>
                                                                     )}
@@ -4479,7 +4471,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                     </div>
                                                                     <div className="mut-context mut-verse-card">
                                                                         {mVerse && (
-                                                                            <p className="arabic-text mut-core" style={{ fontSize: '1.2rem' }}>
+                                                                            <p className="arabic-text mut-core" style={{ fontSize: '1.05rem' }}>
                                                                                 <HighlightedVerse text={mVerse.text} range={matchRange} />
                                                                             </p>
                                                                         )}

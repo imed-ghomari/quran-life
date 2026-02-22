@@ -1674,7 +1674,7 @@ export default function TodoKanban({
                                             </div>
                                             <div className="mut-context mut-verse-stack">
                                                 <div className="mut-verse-card" style={{ marginBottom: '1rem' }}>
-                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.3rem', marginBottom: '0.6rem' }}>
+                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.15rem', marginBottom: '0.6rem' }}>
                                                         {sourceEntries.length > 1 && (
                                                             <span className="verse-badge mut-detail-ayah-badge">{displayedRef.ayahId}</span>
                                                         )}
@@ -1757,7 +1757,7 @@ export default function TodoKanban({
                                                                 </div>
                                                                 <div className="mut-context mut-verse-card">
                                                                     {mVerse && (
-                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.2rem', margin: 0 }}>
+                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.05rem', margin: 0 }}>
                                                                             <HighlightedVerse text={mVerse.text} range={matchRange} />
                                                                         </p>
                                                                     )}

@@ -664,7 +664,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         </a>
                     )}
                 </div>
-                <span className="mindmap-editor-status" style={{ fontSize: '0.8rem', color: '#666' }}>Auto-saves on close</span>
             </div>
 
             <div className="tldraw-container" style={{ 
