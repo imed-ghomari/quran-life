@@ -118,6 +118,7 @@ export interface AppSettings {
     dailyPortionMode?: 'audio' | 'reading';
     todayDefaultMode?: 'daily' | 'review';
     theme?: 'light' | 'dark' | 'system';
+    accentTheme?: 'default' | 'dracula' | 'nord' | 'catppuccin' | 'solarized' | 'tokyo-night';
     updatedAt?: string;
     isOnboardingComplete?: boolean;
     kanbanColumns?: Record<string, string[]>;

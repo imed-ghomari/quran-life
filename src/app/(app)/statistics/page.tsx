@@ -1011,7 +1011,7 @@ function ReviewsHeatmapSection({
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                    <div className="header-icon-badge">
                         <CalendarDays size={20} />
                     </div>
                     <div>
@@ -1067,7 +1067,7 @@ function SurahRiskMaturitySection({
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                    <div className="header-icon-badge">
                         <AlertTriangle size={20} />
                     </div>
                     <div>
@@ -1176,7 +1176,7 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                                     width={barWidth}
                                                     height={h}
                                                     rx={8}
-                                                    fill={i === 0 ? 'var(--accent)' : 'var(--chart-medium)'}
+                                                    fill={i === 0 ? 'var(--chart-strong)' : 'var(--chart-medium)'}
                                                     opacity={i === 0 ? 0.95 : 0.7}
                                                     data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
@@ -1259,7 +1259,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div className="future-due-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                    <div className="header-icon-badge">
                         <CalendarClock size={20} />
                     </div>
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Review Plan</h2>
@@ -1416,7 +1416,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                 y1={getYCount(dailyLoadValue)}
                                                 x2={vWidth - padding.right}
                                                 y2={getYCount(dailyLoadValue)}
-                                                stroke="var(--accent)"
+                                                stroke="var(--chart-strong)"
                                                 strokeWidth="1.2"
                                                 strokeDasharray="4 3"
                                                 opacity="0.9"
@@ -1440,7 +1440,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                 />
                                                 <path
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
-                                                    fill={isPeak ? 'var(--accent)' : 'var(--chart-medium)'}
+                                                    fill={isPeak ? 'var(--chart-strong)' : 'var(--chart-medium)'}
                                                     opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
                                                     data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'}`}
                                                     data-tooltip-trigger="tap"
@@ -1582,7 +1582,7 @@ function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, class
         <div className={`card modern-card${className ? ` ${className}` : ''}`} style={{ width: '100%', background: 'var(--background-secondary)', minHeight }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ color: 'var(--accent)', background: 'var(--verse-bg)', padding: '6px', borderRadius: '8px', display: 'flex' }}>{icon}</div>
+                    <div className="header-icon-badge">{icon}</div>
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>{title}</h2>
                 </div>
                 {headerSuffix}

@@ -10,6 +10,7 @@
     "e2e:auth:url": "node scripts/e2e-auth-url.js",
     "instant:cleanup:duplicates": "node scripts/cleanup-instant-duplicates.js",
     "instant:cleanup:duplicates:apply": "node scripts/cleanup-instant-duplicates.js --apply",
+    "verify:quran": "node scripts/verify-quran-integrity.js",
     "mcp:paddle:read-only": "sh -c 'ENV=${PADDLE_ENV:-sandbox}; if [ \"$ENV\" = \"production\" ]; then KEY=${PADDLE_SECRET_KEY_PRODUCTION:-$PADDLE_SECRET_KEY}; else KEY=${PADDLE_SECRET_KEY_SANDBOX:-$PADDLE_SECRET_KEY}; fi; npx @paddle/paddle-mcp --api-key=\"$KEY\" --environment=\"$ENV\" --tools=read-only'",
     "verify:paddle:instant": "node scripts/verify-paddle-instant.js",
     "test:fsrs:optimization": "node scripts/test-fsrs-optimization.js"

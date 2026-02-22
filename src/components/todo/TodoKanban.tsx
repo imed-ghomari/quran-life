@@ -218,13 +218,19 @@ export default function TodoKanban({
         const hasMap = !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl || mindmap?.imageUrlDark);
         const effectiveAnchors = getEffectiveSurahAnchors(item.data.surah.id, mindmap);
         const hasSplits = effectiveAnchors.length > 0;
+        const explicitAnchorsCount = Array.isArray(mindmap?.anchors) ? mindmap.anchors.length : 0;
+        const usesAutoShortSurahGroup = hasSplits && explicitAnchorsCount === 0;
 
         if (hasMap && hasSplits) {
             const hasReviewed = hasReviewedChunks(item.data.surah.id);
             return [
                 hasReviewed
-                    ? 'Mindmap back in review, verses not touched.'
-                    : 'Surah Mindmap and verses added to review.',
+                    ? (usesAutoShortSurahGroup
+                        ? 'Mindmap back in review. Auto short-surah verse group unchanged.'
+                        : 'Mindmap back in review, verses not touched.')
+                    : (usesAutoShortSurahGroup
+                        ? 'Surah mindmap and auto short-surah verse group added to review.'
+                        : 'Surah Mindmap and verses added to review.'),
             ].join('\n');
         }
         if (hasMap && !hasSplits) {
@@ -248,12 +254,21 @@ export default function TodoKanban({
             return 'Part mindmap removed from review; move back to Complete to restore it.';
         }
         const mindmap = item.data.mindmap;
-        const hasSplits = getEffectiveSurahAnchors(item.data.surah.id, mindmap).length > 0;
+        const effectiveAnchors = getEffectiveSurahAnchors(item.data.surah.id, mindmap);
+        const hasSplits = effectiveAnchors.length > 0;
+        const explicitAnchorsCount = Array.isArray(mindmap?.anchors) ? mindmap.anchors.length : 0;
+        const usesAutoShortSurahGroup = hasSplits && explicitAnchorsCount === 0;
         if (!hasSplits) {
             if (completeExitBehavior === 'mindmap_and_verses') {
                 return 'Surah mindmap removed from review; no verse splits exist, so no verse reviews were suspended.';
             }
             return 'Surah mindmap removed from review; no verse splits exist, so verse reviews were unchanged.';
+        }
+        if (usesAutoShortSurahGroup) {
+            if (completeExitBehavior === 'mindmap_and_verses') {
+                return 'Surah mindmap removed and auto short-surah verse group suspended; move back to Complete to restore both.';
+            }
+            return 'Surah mindmap removed while auto short-surah verse group stays active; move back to Complete to restore the mindmap.';
         }
         if (completeExitBehavior === 'mindmap_and_verses') {
             return 'Surah mindmap removed and verse reviews suspended; move back to Complete to restore both.';
