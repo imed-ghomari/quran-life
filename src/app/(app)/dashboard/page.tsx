@@ -34,6 +34,7 @@ import {
     Undo2,
     Redo2
 } from 'lucide-react';
+
 import dynamic from 'next/dynamic';
 import MindmapViewer from '@/components/MindmapViewer';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -1924,7 +1925,10 @@ export default function TodayPage() {
                 <div className="card today-card today-card--review">
                     {!isMobile && (
                         <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><CheckCircle size={20} /><span>Reviews</span></div>
+                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground">
+                                <span className="header-icon-badge"><CheckCircle size={20} /></span>
+                                <span>Reviews</span>
+                            </div>
                             <div className="flex items-center gap-2">
                                 <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                             </div>
@@ -2197,7 +2201,10 @@ export default function TodayPage() {
                 <div className="card today-card today-card--daily">
                     {!isMobile && (
                         <div className="collapsible-header" onClick={() => toggleSection('daily')}>
-                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground"><BookOpen size={20} /><span>Daily Portion</span></div>
+                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground">
+                                <span className="header-icon-badge"><BookOpen size={20} /></span>
+                                <span>Daily Portion</span>
+                            </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <span className={`collapse-icon ${viewState.dailyExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                             </div>

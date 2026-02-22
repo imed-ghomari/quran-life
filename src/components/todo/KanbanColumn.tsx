@@ -84,12 +84,7 @@ const KanbanColumn = ({
                     // but the class usually handles it.
                 } : undefined}
             >
-                {/* Icon with subtle styling matching roadmap theme */}
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                    id === 'complete' ? 'text-[var(--success)] bg-[var(--success)]/10' : 
-                    id === 'in-progress' ? 'text-amber-500 bg-amber-500/10' : 
-                    'text-[var(--foreground-secondary)] bg-[var(--foreground)]/5'
-                }`}>
+                <div className="header-icon-badge">
                     {getColumnIcon(id)}
                 </div>
                 <h3>{title}</h3>

@@ -21,66 +21,39 @@ export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNav
     const normalize = (p: string) => p.replace(/\/$/, '') || '/';
     const activePath = normalize(pathname || '');
 
-    // Track which items are expanded
-    const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
+    const [expandedPath, setExpandedPath] = useState<string | null>(null);
 
-    // Track which items were manually toggled by the user
-    const [manuallyToggled, setManuallyToggled] = useState<Record<string, boolean>>({});
-
-    // Auto-expand the active path's ancestors ONLY on mount or when navigation occurs
-    useEffect(() => {
-        const newExpanded: Record<string, boolean> = { ...expandedPaths };
-        let changed = false;
-
-        const checkExpand = (items: SidebarItem[]) => {
-            for (const item of items) {
-                if (item.children) {
-                    // If any child is active, expand this parent
-                    const isChildActive = item.children.some(child =>
-                        normalize(child.href) === activePath ||
-                        (child.children && child.children.some(c => normalize(c.href) === activePath))
-                    );
-
-                    // Only auto-expand if the user hasn't manually toggled this path yet
-                    if (isChildActive && !expandedPaths[item.href] && !manuallyToggled[item.href]) {
-                        newExpanded[item.href] = true;
-                        changed = true;
-                    }
-                    checkExpand(item.children);
-                }
-            }
-        };
-
-        checkExpand(items);
-        if (changed) {
-            setExpandedPaths(newExpanded);
+    const subtreeHasActivePath = (item: SidebarItem): boolean => {
+        const itemPath = normalize(item.href);
+        if (itemPath === activePath) {
+            return true;
         }
-    }, [activePath, items, expandedPaths, manuallyToggled]);
+        if (!item.children || item.children.length === 0) {
+            return false;
+        }
+        return item.children.some((child) => subtreeHasActivePath(child));
+    };
+
+    // Keep the folder containing the active route open at this level.
+    useEffect(() => {
+        const activeContainer = items.find(
+            (item) => item.children && item.children.length > 0 && subtreeHasActivePath(item),
+        );
+        if (activeContainer) {
+            setExpandedPath(activeContainer.href);
+        }
+    }, [activePath, items]);
 
     const toggleExpand = (e: React.MouseEvent, href: string) => {
         e.preventDefault();
         e.stopPropagation();
-
-        // Mark as manually toggled so auto-expand doesn't override this decision
-        setManuallyToggled(prev => ({ ...prev, [href]: true }));
-
-        setExpandedPaths(prev => {
-            const isExpanding = !prev[href];
-            
-            // Accordion effect: if we're expanding, collapse all other items at this level
-            if (isExpanding) {
-                return { [href]: true };
-            } else {
-                // If we're collapsing, just collapse this one
-                return { ...prev, [href]: false };
-            }
-        });
+        setExpandedPath((prev) => (prev === href ? null : href));
     };
 
     return (
         <ul className={`sidebar-nav-list ${level > 0 ? 'nested' : ''}`}>
             {items.map((item) => {
-                const isExpanded = expandedPaths[item.href];
+                const isExpanded = expandedPath === item.href;
                 const hasChildren = item.children && item.children.length > 0;
 
                 return (

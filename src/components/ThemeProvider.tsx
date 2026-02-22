@@ -3,16 +3,20 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
+export type AccentTheme = 'default' | 'dracula' | 'nord' | 'catppuccin' | 'solarized' | 'tokyo-night';
 
 interface ThemeContextType {
     theme: Theme;
     setTheme: (theme: Theme) => void;
+    accentTheme: AccentTheme;
+    setAccentTheme: (accentTheme: AccentTheme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>('system');
+    const [accentTheme, setAccentThemeState] = useState<AccentTheme>('default');
     const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => {
@@ -20,6 +24,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const stored = localStorage.getItem('theme') as Theme | null;
         if (stored && ['light', 'dark', 'system'].includes(stored)) {
             setThemeState(stored);
+        }
+        const storedAccentTheme = localStorage.getItem('accent-theme') as AccentTheme | null;
+        if (storedAccentTheme && ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'].includes(storedAccentTheme)) {
+            setAccentThemeState(storedAccentTheme);
         }
         setHydrated(true);
     }, []);
@@ -43,8 +51,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         return () => mq.removeEventListener('change', handleChange);
     }, [theme, hydrated]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined' || !hydrated) return;
+        const root = window.document.documentElement;
+        root.setAttribute('data-accent-theme', accentTheme);
+        localStorage.setItem('accent-theme', accentTheme);
+    }, [accentTheme, hydrated]);
+
     return (
-        <ThemeContext.Provider value={{ theme, setTheme: setThemeState }}>
+        <ThemeContext.Provider value={{ theme, setTheme: setThemeState, accentTheme, setAccentTheme: setAccentThemeState }}>
             {children}
         </ThemeContext.Provider>
     );

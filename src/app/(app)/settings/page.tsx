@@ -43,7 +43,7 @@ import {
     Palette,
     Sliders
 } from 'lucide-react';
-import { Theme, useTheme } from '@/components/ThemeProvider';
+import { AccentTheme, Theme, useTheme } from '@/components/ThemeProvider';
 import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
 import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
@@ -54,6 +54,7 @@ import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
+import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 
 interface MutashabihatDecision {
     id: string; // absoluteAyah or absoluteAyah-phraseId
@@ -85,8 +86,29 @@ const getInitialSectionExpansion = () => {
     };
 };
 
-function AppearanceCard({ onSelectTheme }: { onSelectTheme: (nextTheme: Theme) => void }) {
-    const { theme } = useTheme();
+const THEME_MODE_OPTIONS: Array<{ id: Theme; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+    { id: 'light', label: 'Light', icon: Sun },
+    { id: 'dark', label: 'Dark', icon: Moon },
+    { id: 'system', label: 'System', icon: Monitor },
+];
+
+const ACCENT_THEME_OPTIONS: Array<{ id: AccentTheme; label: string; accent: string }> = [
+    { id: 'default', label: 'Default', accent: '#5b8fb9' },
+    { id: 'dracula', label: 'Dracula', accent: '#bd93f9' },
+    { id: 'nord', label: 'Nord', accent: '#88c0d0' },
+    { id: 'catppuccin', label: 'Catppuccin', accent: '#d6a8ca' },
+    { id: 'solarized', label: 'Solarized', accent: '#2aa198' },
+    { id: 'tokyo-night', label: 'Tokyo Night', accent: '#7aa2f7' },
+];
+
+function AppearanceCard({
+    onSelectTheme,
+    onSelectAccentTheme,
+}: {
+    onSelectTheme: (nextTheme: Theme) => void;
+    onSelectAccentTheme: (nextTheme: AccentTheme) => void;
+}) {
+    const { theme, accentTheme } = useTheme();
 
     return (
         <div className="card modern-card" style={{
@@ -117,15 +139,11 @@ function AppearanceCard({ onSelectTheme }: { onSelectTheme: (nextTheme: Theme) =
                     Choose how Quran Life looks for you.
                 </p>
                 <div style={{ display: 'flex', gap: '0.65rem' }}>
-                    {[
-                        { id: 'light', label: 'Light', icon: Sun },
-                        { id: 'dark', label: 'Dark', icon: Moon },
-                        { id: 'system', label: 'System', icon: Monitor }
-                    ].map((mode) => (
+                    {THEME_MODE_OPTIONS.map((mode) => (
                         <button
                             key={mode.id}
                             className="appearance-choice-btn"
-                            onClick={() => onSelectTheme(mode.id as Theme)}
+                            onClick={() => onSelectTheme(mode.id)}
                             style={{
                                 flex: 1,
                                 display: 'flex',
@@ -146,6 +164,57 @@ function AppearanceCard({ onSelectTheme }: { onSelectTheme: (nextTheme: Theme) =
                             <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{mode.label}</span>
                         </button>
                     ))}
+                </div>
+                <div style={{ marginTop: '0.65rem' }}>
+                    <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+                        Accent theme
+                    </p>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                            gap: '0.5rem',
+                        }}
+                    >
+                        {ACCENT_THEME_OPTIONS.map((option) => {
+                            const isActive = accentTheme === option.id;
+                            return (
+                                <button
+                                    key={option.id}
+                                    className="appearance-choice-btn"
+                                    onClick={() => onSelectAccentTheme(option.id)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '0.55rem 0.65rem',
+                                        borderRadius: '10px',
+                                        border: isActive ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                        background: isActive ? 'var(--verse-bg)' : 'var(--background)',
+                                        color: isActive ? 'var(--accent)' : 'var(--foreground-secondary)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        fontSize: '0.76rem',
+                                        fontWeight: isActive ? 600 : 500,
+                                        minHeight: '40px',
+                                    }}
+                                >
+                                    <span
+                                        aria-hidden
+                                        style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            borderRadius: '999px',
+                                            background: option.accent,
+                                            border: '1px solid color-mix(in srgb, var(--foreground) 16%, transparent)',
+                                            flexShrink: 0,
+                                        }}
+                                    />
+                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         </div>
@@ -295,7 +364,7 @@ export default function SettingsPage() {
     const { mindmaps: instantMindmaps, saveMindMap } = useInstantMindMaps();
     const { progress: listeningProgress } = useInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
-    const { theme, setTheme } = useTheme();
+    const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
     const { confirm, alert } = useConfirmDialog();
 
     const todoFilterOptions = [
@@ -885,37 +954,77 @@ export default function SettingsPage() {
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                             Choose how Quran Life looks for you.
                         </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {[
-                                { id: 'light', label: 'Light Mode', icon: Sun },
-                                { id: 'dark', label: 'Dark Mode', icon: Moon },
-                                { id: 'system', label: 'System Default', icon: Monitor }
-                            ].map((mode) => (
+                        <div style={{ display: 'flex', gap: '0.65rem' }}>
+                            {THEME_MODE_OPTIONS.map((mode) => (
                                 <button
                                     key={mode.id}
                                     className="appearance-choice-btn"
-                                    onClick={() => handleThemeSelect(mode.id as Theme)}
+                                    onClick={() => handleThemeSelect(mode.id)}
                                     style={{
+                                        flex: 1,
                                         display: 'flex',
+                                        flexDirection: 'column',
                                         alignItems: 'center',
-                                        gap: '1rem',
-                                        padding: '1rem',
+                                        gap: '0.5rem',
+                                        padding: '0.75rem 0.5rem',
                                         borderRadius: '12px',
                                         border: theme === mode.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                                         background: theme === mode.id ? 'var(--verse-bg)' : 'var(--background)',
                                         color: theme === mode.id ? 'var(--accent)' : 'var(--foreground-secondary)',
                                         cursor: 'pointer',
-                                        width: '100%',
                                         transition: 'all 0.2s ease',
-                                        fontWeight: theme === mode.id ? 600 : 400,
                                         boxShadow: theme === mode.id ? '0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent)' : 'none',
                                     }}
                                 >
                                     <mode.icon size={20} />
-                                    <span>{mode.label}</span>
-                                    {theme === mode.id && <Check size={18} style={{ marginLeft: 'auto' }} />}
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{mode.label}</span>
                                 </button>
                             ))}
+                        </div>
+                        <div style={{ marginTop: '1rem' }}>
+                            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+                                Accent theme
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.6rem' }}>
+                                {ACCENT_THEME_OPTIONS.map((option) => {
+                                    const isActive = accentTheme === option.id;
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            className="appearance-choice-btn"
+                                            onClick={() => handleAccentThemeSelect(option.id)}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                padding: '0.75rem 0.7rem',
+                                                borderRadius: '10px',
+                                                border: isActive ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                                background: isActive ? 'var(--verse-bg)' : 'var(--background)',
+                                                color: isActive ? 'var(--accent)' : 'var(--foreground-secondary)',
+                                                cursor: 'pointer',
+                                                fontSize: '0.78rem',
+                                                fontWeight: isActive ? 600 : 500,
+                                            }}
+                                        >
+                                            <span
+                                                aria-hidden
+                                                style={{
+                                                    width: '12px',
+                                                    height: '12px',
+                                                    borderRadius: '999px',
+                                                    background: option.accent,
+                                                    border: '1px solid color-mix(in srgb, var(--foreground) 16%, transparent)',
+                                                    flexShrink: 0,
+                                                }}
+                                            />
+                                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {option.label}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1790,6 +1899,13 @@ export default function SettingsPage() {
         });
     };
 
+    const handleAccentThemeSelect = (nextAccentTheme: AccentTheme) => {
+        setAccentTheme(nextAccentTheme);
+        void saveSettings({ accentTheme: nextAccentTheme }).catch((error) => {
+            console.error('Failed to save accent theme', error);
+        });
+    };
+
     const persistSettingsUpdate = (update: Partial<AppSettings>, context: string) => {
         void saveSettings(update).catch((error) => {
             console.error(`Failed to save ${context}`, error);
@@ -1821,8 +1937,12 @@ export default function SettingsPage() {
         const targets = instantMindmaps
             .map((mm: any) => {
                 const surahId = Number(mm?.surahId);
-                const anchors = Array.isArray(mm?.anchors) ? mm.anchors : [];
-                return { surahId, anchors };
+                const anchors = Number.isFinite(surahId) && surahId > 0
+                    ? getEffectiveSurahAnchors(surahId, mm)
+                    : [];
+                const explicitAnchorCount = Array.isArray(mm?.anchors) ? mm.anchors.length : 0;
+                const usesAutoShortSurahGroup = anchors.length > 0 && explicitAnchorCount === 0;
+                return { surahId, anchors, usesAutoShortSurahGroup };
             })
             .filter(({ surahId, anchors }) =>
                 Number.isFinite(surahId) &&
@@ -1830,21 +1950,25 @@ export default function SettingsPage() {
                 anchors.length > 0 &&
                 !completeIds.has(`surah-${surahId}`)
             );
+        const autoShortTargets = targets.filter((target) => target.usesAutoShortSurahGroup).length;
+        const targetScopeText = targets.length > 0
+            ? `${targets.length} surah card(s) already outside Complete${autoShortTargets > 0 ? ` (${autoShortTargets} using automatic short-surah verse groups)` : ''}`
+            : '';
 
         const currentSettingDescription = nextBehavior === 'mindmap_only'
-            ? 'Current setting: Suspend One (mindmap only). When a surah leaves Complete, only the mindmap card is suspended.'
-            : 'Current setting: Suspend Two (mindmap + verses). When a surah leaves Complete, both the mindmap and verse groups are suspended.';
+            ? 'Current setting: Suspend Mindmap Only. When a surah leaves Complete, only the mindmap is suspended. Verse groups include manual splits and auto short-surah groups.'
+            : 'Current setting: Suspend Mindmap + Verses. When a surah leaves Complete, both mindmap and verse groups are suspended. Verse groups include manual splits and auto short-surah groups.';
 
         const optionalQuestion = nextBehavior === 'mindmap_only'
             ? (
                 targets.length > 0
-                    ? `also show verse groups now for ${targets.length} surah card(s) already outside Complete?`
-                    : 'no surah cards outside Complete need verse-group updates right now.\nKeep this setting for future moves only?'
+                    ? `Also show verse groups now for ${targetScopeText}?`
+                    : 'No surah cards outside Complete need verse-group updates now.\nKeep this setting for future moves only?'
             )
             : (
                 targets.length > 0
-                    ? `also suspend verse groups now for ${targets.length} surah card(s) already outside Complete?`
-                    : 'no surah cards outside Complete need verse-group suspension right now.\nKeep this setting for future moves only?'
+                    ? `Also suspend verse groups now for ${targetScopeText}?`
+                    : 'No surah cards outside Complete need verse-group suspension now.\nKeep this setting for future moves only?'
             );
 
         if (targets.length === 0) return;
@@ -2722,7 +2846,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     </>
                                 )}
                             </div>
-                            <AppearanceCard onSelectTheme={handleThemeSelect} />
+                            <AppearanceCard onSelectTheme={handleThemeSelect} onSelectAccentTheme={handleAccentThemeSelect} />
                             <div className="card modern-card" style={{
                                 background: 'var(--background-secondary)',
                                 border: '1px solid var(--border)',

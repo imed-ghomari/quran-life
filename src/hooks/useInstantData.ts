@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     dailyPortionMode: 'audio',
     todayDefaultMode: 'daily',
     theme: 'system',
+    accentTheme: 'default',
     isOnboardingComplete: false,
     kanbanColumns: {},
     suspendedVerseGroupsAcknowledged: {},

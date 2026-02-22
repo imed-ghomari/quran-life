@@ -215,7 +215,7 @@ function renderCardZones({
     onViewVerseContext,
     onViewSimilarityContext
 }: RenderZoneProps) {
-    let zone1 = { label: "TASK", color: "var(--accent)" };
+    let zone1 = { label: "TASK", color: "var(--todo-pill-task)" };
     let zone2 = { english: "", arabic: "" };
     let zone3 = "";
     let zone4Meta = "";
@@ -228,7 +228,7 @@ function renderCardZones({
             const surah = getSurah(issue.surahId);
             const labelLower = (issue?.label || '').toString().toLowerCase();
             const label = labelLower.includes('error') ? 'REVIEW ERROR' : 'SUSPENDED';
-            zone1 = { label, color: "var(--danger)" };
+            zone1 = { label, color: "var(--todo-pill-suspended)" };
             zone2 = {
                 english: surah ? `${surah.id}. ${surah.name}` : `Surah ${issue.surahId}`,
                 arabic: surah?.arabicName || 'الإصلاح'
@@ -239,7 +239,7 @@ function renderCardZones({
         }
         case 'similarity': {
             const sim = item.data;
-            zone1 = { label: "SIMILARITY", color: "var(--warning)" };
+            zone1 = { label: "SIMILARITY", color: "var(--todo-pill-similarity)" };
             zone2 = {
                 english: sim.surah ? `${sim.surah.id}. ${sim.surah.name}` : "Similarity",
                 arabic: sim.surah?.arabicName || 'التشابه'
@@ -250,7 +250,7 @@ function renderCardZones({
         }
         case 'part': {
             const partTask = item.data;
-            zone1 = { label: "PART MAP", color: "var(--todo-part-purple)" };
+            zone1 = { label: "PART MAP", color: "var(--todo-pill-part)" };
             if (Number(partTask.part) === 0) {
                 zone2 = {
                     english: 'Part 0 Meta Mindmap',
@@ -269,7 +269,7 @@ function renderCardZones({
         }
         case 'surah': {
             const surahTask = item.data;
-            zone1 = { label: "SURAH MAP", color: "#3b82f6" };
+            zone1 = { label: "SURAH MAP", color: "var(--todo-pill-surah)" };
             zone2 = {
                 english: `${surahTask.surah.id}. ${surahTask.surah.name}`,
                 arabic: surahTask.surah.arabicName || 'سورة'
@@ -286,7 +286,7 @@ function renderCardZones({
                 <span
                     className="status-pill"
                     style={{
-                        backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 90%)`,
+                        backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 84%)`,
                         color: zone1.color,
                         fontSize: '0.65rem',
                         padding: '0.2rem 0.6rem'
