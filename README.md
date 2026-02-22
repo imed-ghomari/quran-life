@@ -24,6 +24,7 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - Part mindmaps (incomplete first).
   - **Fix mindmaps**: Verse groups are suspended after 3 failed recalls. **Re-learning phase** (Day 1 -> Day 3) triggers after fix confirmation.
   - **Similarity checks**: Warnings for verse chunks with any failures involving mutashabihat. Not necessarily suspended; used for proactive checking.
+  - **Active Part scope rule**: Changing **Settings > Active Part** filters only Surah/Part construction cards. Maintenance cards (**Similarity** and **Suspended**) are generated from review errors and remain visible across parts until resolved/acknowledged.
   - Empty sections auto-collapse.
 - **Settings**: Completion schedule, active part, learned/skipped surahs, surah maturity adjustment, mutashabihat decisions registry (editable notes).
   - **Cloud Sync**: InstantDB integration with real-time graph-based synchronization and automatic conflict resolution.
