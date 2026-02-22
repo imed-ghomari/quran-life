@@ -1746,11 +1746,10 @@ h3 {
 }
 
 .header-icon-badge {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--accent) 12%, var(--background));
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
   color: color-mix(in srgb, var(--accent-light) 62%, var(--accent) 38%);
   display: inline-flex;
   align-items: center;
@@ -1759,13 +1758,12 @@ h3 {
 }
 
 .header-icon-badge svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 :root:not([data-theme="dark"]) .header-icon-badge {
   background: color-mix(in srgb, var(--accent) 10%, var(--background-secondary));
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
   color: color-mix(in srgb, var(--accent-hover) 72%, var(--accent) 28%);
 }
 
@@ -1981,8 +1979,13 @@ input:focus {
 }
 
 .nav-item.active {
-  color: var(--accent);
-  background: rgba(14, 165, 233, 0.1);
+  color: var(--accent-light);
+  background: color-mix(in srgb, var(--accent) 16%, var(--background-secondary));
+}
+
+:root:not([data-theme="dark"]) .nav-item.active {
+  color: color-mix(in srgb, var(--accent-hover) 70%, var(--accent) 30%);
+  background: color-mix(in srgb, var(--accent) 12%, var(--background-secondary));
 }
 
 .nav-icon {

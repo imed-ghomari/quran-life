@@ -1472,7 +1472,7 @@ export default function TodayPage() {
 
         if (node.type === 'part_mindmap') {
             const partId = resolveNodePartId(node);
-            if (!partId) return null;
+            if (partId === null) return null;
             const pm = partMindMaps.find(m => Number(m.partId) === partId);
             return { type: 'part_mindmap', partId, mindmap: pm };
         } else if (node.type === 'mindmap') {
