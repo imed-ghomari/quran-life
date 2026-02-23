@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import SlideOver from '../SlideOver'; // Using generic SlideOver for behavior consistency? Or replicating styles?
 import MindmapViewer from '../MindmapViewer';
+import { getSurah } from '@/lib/quranData';
 
 interface SplitsModalProps {
     isOpen: boolean;
@@ -39,6 +40,7 @@ export default function SplitsModal({
     onSave,
     hasReviewedHistory
 }: SplitsModalProps) {
+    const surahName = getSurah(surahId)?.name;
     const [visible, setVisible] = useState(isOpen);
     const [useSlideOver, setUseSlideOver] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -172,6 +174,8 @@ return (
                             imageUrlDark={mindmapImageUrlDark}
                             isDark={isDark || false}
                             title="Reference Map"
+                            contextLabel={`Surah ${surahId}${surahName ? `. ${surahName}` : ''}`}
+                            docLink={`/docs/mindmaps/surah-${surahId}`}
                             height="100%"
                         />
                     </div>

@@ -5,6 +5,7 @@ import { useInstantMindMaps } from '@/hooks/useInstantData';
 import MindmapViewer from '@/components/MindmapViewer';
 import { QuranPart } from '@/lib/types';
 import { useTheme } from '@/components/ThemeProvider';
+import { getSurah } from '@/lib/quranData';
 
 interface MindmapDocHeaderProps {
     slug: string;
@@ -71,6 +72,10 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
             imageUrlDark={mindmapData.data?.imageUrlDark}
             isDark={isDark}
             title={mindmapData.type === 'surah' ? `Surah ${mindmapData.id} Mindmap` : `Part ${mindmapData.id} Mindmap`}
+            contextLabel={mindmapData.type === 'surah'
+                ? `Surah ${mindmapData.id}${getSurah(mindmapData.id)?.name ? `. ${getSurah(mindmapData.id)?.name}` : ''}`
+                : `Part ${mindmapData.id}`}
+            showDocLink={false}
             height={400}
             style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}
         />

@@ -428,16 +428,43 @@ article.prose pre {
   border-color: var(--accent);
 }
 
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.custom-scrollbar:hover,
+.custom-scrollbar:focus-within,
+.custom-scrollbar:active,
+.custom-scrollbar.is-scrolling {
+  scrollbar-color: var(--border) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: transparent;
   border-radius: 10px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+.custom-scrollbar:hover::-webkit-scrollbar-thumb,
+.custom-scrollbar:focus-within::-webkit-scrollbar-thumb,
+.custom-scrollbar:active::-webkit-scrollbar-thumb,
+.custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar:focus-within::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar:active::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb:hover {
   background: var(--foreground-secondary);
 }
 
@@ -1017,6 +1044,49 @@ article.prose pre {
   --todo-pill-suspended: #c36f89;
 }
 
+/* Global chart vibrancy tuning (applies across all accent themes) */
+:root {
+  --chart-skipped: color-mix(in srgb, var(--foreground-secondary) 18%, var(--background) 82%);
+  --chart-not-created: color-mix(in srgb, var(--foreground-secondary) 68%, var(--accent) 32%);
+  --chart-not-learned: color-mix(in srgb, var(--danger) 80%, var(--accent) 20%);
+  --chart-new: color-mix(in srgb, var(--accent) 66%, #6366f1 34%);
+  --chart-medium: color-mix(in srgb, var(--accent) 72%, #3b82f6 28%);
+  --chart-strong: color-mix(in srgb, var(--accent-secondary) 74%, var(--accent) 26%);
+  --chart-mastered: color-mix(in srgb, var(--success) 80%, var(--accent-secondary) 20%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --chart-skipped: color-mix(in srgb, var(--foreground-secondary) 24%, var(--background) 76%);
+    --chart-not-created: color-mix(in srgb, var(--foreground-secondary) 62%, var(--accent) 38%);
+    --chart-not-learned: color-mix(in srgb, var(--danger) 84%, var(--accent) 16%);
+    --chart-new: color-mix(in srgb, var(--accent-light) 68%, #a855f7 32%);
+    --chart-medium: color-mix(in srgb, var(--accent-light) 72%, #38bdf8 28%);
+    --chart-strong: color-mix(in srgb, var(--accent-secondary) 76%, var(--accent) 24%);
+    --chart-mastered: color-mix(in srgb, var(--success) 82%, var(--accent-secondary) 18%);
+  }
+}
+
+:root[data-theme="light"] {
+  --chart-skipped: color-mix(in srgb, var(--foreground-secondary) 18%, var(--background) 82%);
+  --chart-not-created: color-mix(in srgb, var(--foreground-secondary) 68%, var(--accent) 32%);
+  --chart-not-learned: color-mix(in srgb, var(--danger) 80%, var(--accent) 20%);
+  --chart-new: color-mix(in srgb, var(--accent) 66%, #6366f1 34%);
+  --chart-medium: color-mix(in srgb, var(--accent) 72%, #3b82f6 28%);
+  --chart-strong: color-mix(in srgb, var(--accent-secondary) 74%, var(--accent) 26%);
+  --chart-mastered: color-mix(in srgb, var(--success) 80%, var(--accent-secondary) 20%);
+}
+
+:root[data-theme="dark"] {
+  --chart-skipped: color-mix(in srgb, var(--foreground-secondary) 24%, var(--background) 76%);
+  --chart-not-created: color-mix(in srgb, var(--foreground-secondary) 62%, var(--accent) 38%);
+  --chart-not-learned: color-mix(in srgb, var(--danger) 84%, var(--accent) 16%);
+  --chart-new: color-mix(in srgb, var(--accent-light) 68%, #a855f7 32%);
+  --chart-medium: color-mix(in srgb, var(--accent-light) 72%, #38bdf8 28%);
+  --chart-strong: color-mix(in srgb, var(--accent-secondary) 76%, var(--accent) 24%);
+  --chart-mastered: color-mix(in srgb, var(--success) 82%, var(--accent-secondary) 18%);
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -1276,6 +1346,12 @@ h3 {
     justify-self: center;
   }
 
+  .today-segmented .adv-seg-btn[role="radio"][aria-checked="true"] {
+    border-color: var(--accent-secondary);
+    color: var(--accent-secondary);
+    background: color-mix(in srgb, var(--accent-secondary) 14%, var(--background));
+  }
+
   .today-grid {
     display: block;
   }
@@ -1470,6 +1546,12 @@ h3 {
 }
 
 .today-segmented .adv-seg-active {
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+  background: color-mix(in srgb, var(--accent-secondary) 14%, var(--background));
+}
+
+.todo-filter-segmented .adv-seg-active {
   border-color: var(--accent-secondary);
   color: var(--accent-secondary);
   background: color-mix(in srgb, var(--accent-secondary) 14%, var(--background));

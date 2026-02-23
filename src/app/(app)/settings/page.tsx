@@ -453,7 +453,7 @@ export default function SettingsPage() {
         const latestMap: { [key: number]: MemoryNode } = {};
         partMindmapNodes.forEach(node => {
             const part = resolveNodePartId(node);
-            if (!part) return;
+            if (part === null) return;
             if (node.createdAt) {
                 const existingNode = latestMap[part];
                 if (!existingNode || !existingNode.createdAt || new Date(node.createdAt) > new Date(existingNode.createdAt)) {
@@ -5253,7 +5253,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                 })()
                                                                 : (() => {
                                                                     const partId = resolveNodePartId(node);
-                                                                    return partId ? `Part ${partId}` : '-';
+                                                                    return partId !== null ? `Part ${partId}` : '-';
                                                                 })()}
                                                     </div>
                                                     <select

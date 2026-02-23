@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
 import { appLogger } from '@/lib/logger';
 import { useTheme } from '@/components/ThemeProvider';
+import { getSurah } from '@/lib/quranData';
 import {
     clipboardHasBlockedMedia,
     dataTransferHasBlockedMedia,
@@ -184,13 +185,50 @@ interface MindmapEditorProps {
     onClose: () => void;
     title?: string;
     docLink?: string | null;
+    contextLabel?: string;
 }
 
-function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink }: MindmapEditorProps) {
+const extractContextFromTitle = (value?: string | null): string | null => {
+    if (!value) return null;
+    const partMatch = value.match(/\bpart\s+(\d+)\b/i);
+    if (partMatch) return `Part ${partMatch[1]}`;
+
+    const surahNameMatch = value.match(/(?:edit\s+)?(.+?)\s+mindmap(?:\s+editor)?$/i);
+    if (!surahNameMatch) return null;
+    const candidate = surahNameMatch[1]?.trim();
+    if (!candidate) return null;
+    const blocked = ['mindmap', 'preview', 'reference map', 'viewer'];
+    if (blocked.some((token) => candidate.toLowerCase() === token)) return null;
+    return candidate;
+};
+
+const extractContextFromDocLink = (value?: string | null): string | null => {
+    if (!value) return null;
+    const surahMatch = value.match(/surah-(\d+)/i);
+    if (surahMatch) {
+        const surahId = Number(surahMatch[1]);
+        const surah = Number.isFinite(surahId) ? getSurah(surahId) : null;
+        return surah ? `Surah ${surah.id}. ${surah.name}` : `Surah ${surahId}`;
+    }
+    const partMatch = value.match(/part-(\d+)/i);
+    if (partMatch) return `Part ${partMatch[1]}`;
+    return null;
+};
+
+function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink, contextLabel }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
     const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const { theme } = useTheme();
+    const currentContextLabel = useMemo(
+        () => contextLabel || extractContextFromDocLink(docLink) || extractContextFromTitle(title),
+        [contextLabel, docLink, title]
+    );
+    const shouldShowContextLabel = useMemo(() => {
+        if (!currentContextLabel) return false;
+        if (!title) return true;
+        return !title.toLowerCase().includes(currentContextLabel.toLowerCase());
+    }, [currentContextLabel, title]);
 
     useEffect(() => {
         try {
@@ -635,7 +673,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 className="mindmap-editor-header"
                 style={{
                 height: '50px',
-                borderBottom: '1px solid #e5e5e5',
+                borderBottom: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -646,6 +684,23 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         <X size={24} />
                     </button>
                     <span className="mindmap-editor-title" style={{ fontWeight: 600 }}>{title || 'Mindmap Editor'}</span>
+                    {shouldShowContextLabel && (
+                        <span
+                            className="mindmap-editor-context"
+                            style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                color: 'var(--foreground-secondary)',
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '999px',
+                                padding: '3px 10px',
+                                lineHeight: 1.2
+                            }}
+                        >
+                            {currentContextLabel}
+                        </span>
+                    )}
                     {docLink && (
                         <a
                             className="mindmap-editor-doclink"

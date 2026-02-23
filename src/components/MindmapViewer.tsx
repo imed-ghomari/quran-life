@@ -6,6 +6,7 @@ import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
+import { getSurah } from '@/lib/quranData';
 import 'tldraw/tldraw.css';
 
 // Only load tldraw on the client
@@ -24,10 +25,58 @@ interface MindmapViewerProps {
     imageUrlDark?: string | null;
     isDark: boolean;
     title?: string;
+    contextLabel?: string;
+    docLink?: string | null;
+    showDocLink?: boolean;
     height?: string | number;
     className?: string;
     style?: React.CSSProperties;
 }
+
+const extractContextFromTitle = (value?: string | null): string | null => {
+    if (!value) return null;
+    const partMatch = value.match(/\bpart\s+(\d+)\b/i);
+    if (partMatch) return `Part ${partMatch[1]}`;
+
+    const surahNumberMatch = value.match(/\bsurah\s+(\d+)\b/i);
+    if (surahNumberMatch) {
+        const surahId = Number(surahNumberMatch[1]);
+        const surah = Number.isFinite(surahId) ? getSurah(surahId) : null;
+        return surah ? `Surah ${surah.id}. ${surah.name}` : `Surah ${surahId}`;
+    }
+
+    const surahNameMatch = value.match(/(.+?)\s+mindmap(?:\s+viewer)?$/i);
+    if (!surahNameMatch) return null;
+    const candidate = surahNameMatch[1]?.trim();
+    if (!candidate) return null;
+    const blocked = ['mindmap', 'preview', 'reference map', 'viewer', 'full screen'];
+    if (blocked.some((token) => candidate.toLowerCase() === token)) return null;
+    return candidate;
+};
+
+const extractContextFromTemplateUrl = (value?: string | null): string | null => {
+    if (!value) return null;
+    const surahMatch = value.match(/surah-(\d+)/i);
+    if (surahMatch) {
+        const surahId = Number(surahMatch[1]);
+        const surah = Number.isFinite(surahId) ? getSurah(surahId) : null;
+        return surah ? `Surah ${surah.id}. ${surah.name}` : `Surah ${surahId}`;
+    }
+    const partMatch = value.match(/part-(\d+)/i);
+    if (partMatch) return `Part ${partMatch[1]}`;
+    return null;
+};
+
+const isGenericViewerTitle = (value?: string | null): boolean => {
+    if (!value) return true;
+    const normalized = value.trim().toLowerCase();
+    return (
+        normalized === 'mindmap viewer' ||
+        normalized === 'mindmap preview' ||
+        normalized === 'preview' ||
+        normalized === 'reference map'
+    );
+};
 
 export default function MindmapViewer({
     snapshot,
@@ -36,6 +85,9 @@ export default function MindmapViewer({
     imageUrlDark,
     isDark,
     title,
+    contextLabel,
+    docLink,
+    showDocLink = true,
     height = '400px',
     className,
     style
@@ -49,6 +101,30 @@ export default function MindmapViewer({
     const activeSnapshot = fetchedSnapshot || snapshot;
     const displayUrl = isDark ? (imageUrlDark || imageUrl) : imageUrl;
     const hasImage = !!displayUrl && !activeSnapshot;
+    const currentContextLabel = useMemo(
+        () => contextLabel || extractContextFromTemplateUrl(templateUrl) || extractContextFromTitle(title),
+        [contextLabel, templateUrl, title]
+    );
+    const shouldShowContextLabel = useMemo(() => {
+        if (!currentContextLabel) return false;
+        // Avoid duplicate identity display when title is already specific (e.g. Surah/Part name in title).
+        if (!isGenericViewerTitle(title)) return false;
+        if (!title) return true;
+        return !title.toLowerCase().includes(currentContextLabel.toLowerCase());
+    }, [currentContextLabel, title]);
+    const resolvedDocLink = useMemo(() => {
+        if (!showDocLink) return null;
+        if (docLink) return docLink;
+        if (!templateUrl) return null;
+
+        const surahMatch = templateUrl.match(/surah-(\d+)/i);
+        if (surahMatch) return `/docs/mindmaps/surah-${surahMatch[1]}`;
+
+        const partMatch = templateUrl.match(/part-(\d+)/i);
+        if (partMatch) return `/docs/mindmaps/part-${partMatch[1]}`;
+
+        return null;
+    }, [docLink, showDocLink, templateUrl]);
 
     useEffect(() => {
         if (editor?.user?.updateUserPreferences) {
@@ -329,14 +405,38 @@ export default function MindmapViewer({
             {renderInline()}
 
             {isFullScreen && createPortal(
-                <div className="fixed inset-0 z-[9999] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
+                <div className="fixed inset-0 z-[13000] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
                     <div
                         className="mindmap-viewer-header flex items-center border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
                         style={{ height: '50px', padding: '0 1rem' }}
                     >
-                        <h3 className="min-w-0 flex-1 truncate font-bold text-base sm:text-lg text-[var(--foreground)]">
-                            {title || "Mindmap Viewer"}
-                        </h3>
+                        <div className="min-w-0 flex-1 flex items-center gap-2">
+                            <h3 className="min-w-0 truncate font-bold text-base sm:text-lg text-[var(--foreground)]">
+                                {title || "Mindmap Viewer"}
+                            </h3>
+                            {shouldShowContextLabel && (
+                                <span className="inline-flex max-w-[40vw] shrink-0 truncate rounded-full border border-[var(--border)] bg-[var(--background-secondary)] px-3 py-1 text-xs font-semibold text-[var(--foreground-secondary)]">
+                                    {currentContextLabel}
+                                </span>
+                            )}
+                            {resolvedDocLink && (
+                                <a
+                                    className="mindmap-viewer-doclink"
+                                    href={resolvedDocLink}
+                                    style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--accent)',
+                                        textDecoration: 'none',
+                                        padding: '4px 8px',
+                                        border: '1px solid var(--accent)',
+                                        borderRadius: '4px',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    Back to Documentation
+                                </a>
+                            )}
+                        </div>
                         <button 
                             onClick={() => setIsFullScreen(false)}
                             className="ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"

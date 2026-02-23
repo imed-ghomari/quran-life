@@ -2050,7 +2050,13 @@ export default function TodayPage() {
                                                                         imageUrl={activeContent.mindmap?.imageUrl}
                                                                         imageUrlDark={activeContent.mindmap?.imageUrlDark}
                                                                         isDark={isDark}
-                                                                        title={activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` : `Part ${activeContent.partId} Mindmap`}
+                                                                        title="Mindmap"
+                                                                        contextLabel={activeContent.type === 'mindmap'
+                                                                            ? `Surah ${activeContent.surah?.id}. ${activeContent.surah?.name}`
+                                                                            : `Part ${activeContent.partId}`}
+                                                                        docLink={activeContent.type === 'mindmap'
+                                                                            ? `/docs/mindmaps/surah-${activeContent.surah?.id}`
+                                                                            : `/docs/mindmaps/part-${activeContent.partId}`}
                                                                         height={isMobile ? 'min(34vh, 280px)' : 'min(42vh, 320px)'}
                                                                     />
                                                                 </div>
@@ -2276,7 +2282,7 @@ export default function TodayPage() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="read-view">
+                                            <div className="read-view custom-scrollbar">
                                                 {todaysPortion.map((v, idx) => {
                                                     const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;
                                                     const isNewSurah = !prevVerse || prevVerse.surahId !== v.surahId;
