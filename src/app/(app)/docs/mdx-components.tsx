@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { ReactNode } from 'react';
 import type { MDXComponents } from 'mdx/types';
 
 export const mdxComponents: MDXComponents = {
