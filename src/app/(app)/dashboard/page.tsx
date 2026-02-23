@@ -128,6 +128,24 @@ function sanitizeVerses(input: unknown): Verse[] {
     return out;
 }
 
+type DailyPortionSurahGroup = {
+    surahId: number;
+    verses: Verse[];
+};
+
+function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
+    const groups: DailyPortionSurahGroup[] = [];
+    for (const verse of verses) {
+        const prev = groups[groups.length - 1];
+        if (prev && prev.surahId === verse.surahId) {
+            prev.verses.push(verse);
+        } else {
+            groups.push({ surahId: verse.surahId, verses: [verse] });
+        }
+    }
+    return groups;
+}
+
 function getLocalDayKeyNow() {
     const now = new Date();
     const y = now.getFullYear();
@@ -1850,6 +1868,8 @@ export default function TodayPage() {
 
     const undoTooltip = getHistoryTooltip(undoStack[undoStack.length - 1], 'undo');
     const redoTooltip = getHistoryTooltip(redoStack[redoStack.length - 1], 'redo');
+    const dailyReadingStyle = settings?.dailyReadingStyle ?? 'line_by_line';
+    const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
 
     if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
 
@@ -2283,30 +2303,76 @@ export default function TodayPage() {
                                             </div>
                                         ) : (
                                             <div className="read-view custom-scrollbar">
-                                                {todaysPortion.map((v, idx) => {
-                                                    const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;
-                                                    const isNewSurah = !prevVerse || prevVerse.surahId !== v.surahId;
-                                                    const surah = getSurah(v.surahId);
+                                                {dailyReadingStyle === 'paragraph' ? (
+                                                    dailyPortionSurahGroups.map((group, groupIndex) => {
+                                                        const surah = getSurah(group.surahId);
+                                                        const firstVerse = group.verses[0];
+                                                        if (!firstVerse) return null;
 
-                                                    return (
-                                                        <div key={idx}>
-                                                            {isNewSurah && surah && (
-                                                                <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                                                                    <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
-                                                                    {v.ayahId === 1 ? (
-                                                                        surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
-                                                                    ) : (
-                                                                        <p className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
-                                                                    )}
+                                                        return (
+                                                            <div key={`${group.surahId}-${groupIndex}`}>
+                                                                {surah && (
+                                                                    <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                                                                        <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                        {firstVerse.ayahId === 1 ? (
+                                                                            surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
+                                                                        ) : (
+                                                                            <p className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                <div className="verse-item" style={{ display: 'block', marginBottom: '0.85rem', textAlign: 'right' }}>
+                                                                    <div
+                                                                        className="grouped-verse"
+                                                                        style={{
+                                                                            fontSize: '1.05rem',
+                                                                            lineHeight: 1.95,
+                                                                            textAlign: 'justify',
+                                                                            textAlignLast: 'right',
+                                                                        }}
+                                                                    >
+                                                                        {group.verses.map((verse) => (
+                                                                            <span key={`${verse.surahId}-${verse.ayahId}`} className="grouped-verse-block">
+                                                                                <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{verse.ayahId}</span>
+                                                                                <span
+                                                                                    className="grouped-verse-text arabic-text"
+                                                                                    style={{ fontSize: '1.25rem', lineHeight: 1.9 }}
+                                                                                >
+                                                                                    {verse?.text || ''}
+                                                                                </span>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
-                                                            )}
-                                                            <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
-                                                                <span className="verse-ref" style={{ float: 'left', fontSize: '0.7rem' }}>{v.ayahId}</span>
-                                                                <span className="arabic-text" style={{ fontSize: '1.2rem' }}>{v?.text || ''}</span>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })
+                                                ) : (
+                                                    todaysPortion.map((v, idx) => {
+                                                        const prevVerse = idx > 0 ? todaysPortion[idx - 1] : null;
+                                                        const isNewSurah = !prevVerse || prevVerse.surahId !== v.surahId;
+                                                        const surah = getSurah(v.surahId);
+
+                                                        return (
+                                                            <div key={idx}>
+                                                                {isNewSurah && surah && (
+                                                                    <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                                                                        <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                        {v.ayahId === 1 ? (
+                                                                            surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
+                                                                        ) : (
+                                                                            <p className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
+                                                                    <span className="verse-ref" style={{ float: 'left', fontSize: '0.7rem' }}>{v.ayahId}</span>
+                                                                    <span className="arabic-text" style={{ fontSize: '1.2rem' }}>{v?.text || ''}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
                                             </div>
                                         )}
                                     </div>

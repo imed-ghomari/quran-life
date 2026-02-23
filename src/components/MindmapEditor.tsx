@@ -14,6 +14,7 @@ import {
 } from '@/lib/mindmapSnapshot';
 import {
     Tldraw,
+    Editor,
     DefaultDashStyle,
     DefaultSizeStyle,
     atom,
@@ -215,6 +216,34 @@ const extractContextFromDocLink = (value?: string | null): string | null => {
     return null;
 };
 
+/**
+ * Prevents tldraw from getting stuck in pen mode when using pen/tablet devices.
+ * If a non-pen pointer event arrives while pen mode is active, force pen mode off.
+ */
+function usePenModeUnstick(editor: Editor | null) {
+    useEffect(() => {
+        if (!editor) return;
+
+        editor.updateInstanceState({ isPenMode: false });
+
+        const container = editor.getContainer();
+        if (!container) return;
+
+        const handlePointerDown = (e: PointerEvent) => {
+            const isNonPen = e.pointerType === 'mouse' || e.pointerType === 'touch';
+            if (isNonPen && editor.getInstanceState().isPenMode) {
+                editor.updateInstanceState({ isPenMode: false });
+            }
+        };
+
+        container.addEventListener('pointerdown', handlePointerDown, true);
+
+        return () => {
+            container.removeEventListener('pointerdown', handlePointerDown, true);
+        };
+    }, [editor]);
+}
+
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink, contextLabel }: MindmapEditorProps) {
     const [editor, setEditor] = useState<any>(null);
     const editorRef = useRef<any>(null);
@@ -239,15 +268,20 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         }
     }, []);
 
+    usePenModeUnstick(editor);
+
     const handleMount = useCallback((editorInstance: any) => {
         setEditor(editorInstance);
         editorRef.current = editorInstance;
 
         // --- Obsidian-style switching logic ---
-        const pointingCanvasState = editorInstance.getStateDescendant('select.pointing_canvas');
+        const pointingCanvasState = editorInstance.getStateDescendant('select.pointing_canvas') as {
+            onEnter?: (...args: any[]) => void;
+        } | null;
         if (pointingCanvasState) {
             const originalOnEnter = pointingCanvasState.onEnter;
-            pointingCanvasState.onEnter = function (info: any) {
+            pointingCanvasState.onEnter = function (...args: any[]) {
+                const info = args[0];
                 const selectedShapeIds = editorInstance.getSelectedShapeIds();
                 const selectionBounds = editorInstance.getSelectionPageBounds();
 
@@ -255,7 +289,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     editorInstance.setCurrentTool('lasso-select');
                     return;
                 }
-                originalOnEnter?.call(this, info);
+                originalOnEnter?.apply(this, args);
             };
         }
 

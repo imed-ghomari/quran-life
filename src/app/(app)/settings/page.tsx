@@ -390,6 +390,10 @@ export default function SettingsPage() {
         { id: 'audio', label: 'Listening' },
         { id: 'reading', label: 'Reading' }
     ] as const;
+    const dailyReadingStyleOptions = [
+        { id: 'line_by_line', label: 'Line by Line Quran' },
+        { id: 'paragraph', label: 'Paragraph Style' }
+    ] as const;
     const todayDefaultModeOptions = [
         { id: 'daily', label: 'Daily Portion' },
         { id: 'review', label: 'Reviews' }
@@ -426,6 +430,7 @@ export default function SettingsPage() {
     const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
     const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
+    const [dailyReadingStyle, setDailyReadingStyle] = useState<'line_by_line' | 'paragraph'>(settings.dailyReadingStyle ?? 'line_by_line');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
     const activePartLabel = settings.activePart === ALL_QURAN_PART ? 'All Quran' : `Part ${settings.activePart}`;
 
@@ -736,6 +741,10 @@ export default function SettingsPage() {
         }
         setDailyPortionMode(settings.dailyPortionMode ?? 'audio');
     }, [isOnline, settings.dailyPortionMode]);
+
+    useEffect(() => {
+        setDailyReadingStyle(settings.dailyReadingStyle ?? 'line_by_line');
+    }, [settings.dailyReadingStyle]);
 
     useEffect(() => {
         setTodayDefaultMode(settings.todayDefaultMode ?? 'daily');
@@ -1645,7 +1654,30 @@ export default function SettingsPage() {
                                 </div>
 
                                 <div>
-                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Today Page Default Section</div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Reading Mode Layout</div>
+                                    <div className="adv-segmented">
+                                        {dailyReadingStyleOptions.map((option) => {
+                                            const isActive = (dailyReadingStyle ?? 'line_by_line') === option.id;
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setDailyReadingStyle(option.id);
+                                                        persistSettingsUpdate({ dailyReadingStyle: option.id }, 'daily reading style');
+                                                    }}
+                                                    className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                >
+                                                    {isActive && <Check size={14} className="adv-check" />}
+                                                    <span>{option.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Today Page Default Section in mobile</div>
                                     <div className="adv-segmented">
                                         {todayDefaultModeOptions.map((option) => {
                                             const isActive = (todayDefaultMode ?? 'daily') === option.id;
@@ -4297,7 +4329,30 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             </div>
 
                                             <div className="adv-group">
-                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Today Page Default Section</h4>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Reading Mode Layout</h4>
+                                                <div className="adv-segmented">
+                                                    {dailyReadingStyleOptions.map((option) => {
+                                                        const isActive = (dailyReadingStyle ?? 'line_by_line') === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setDailyReadingStyle(option.id);
+                                                                    persistSettingsUpdate({ dailyReadingStyle: option.id }, 'daily reading style');
+                                                                }}
+                                                                className={`adv-seg-btn ${isActive ? 'adv-seg-active' : ''}`}
+                                                            >
+                                                                {isActive && <Check size={14} className="adv-check" />}
+                                                                <span>{option.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="adv-group">
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Today Page Default Section in mobile</h4>
                                                 <div className="adv-segmented">
                                                     {todayDefaultModeOptions.map((option) => {
                                                         const isActive = (todayDefaultMode ?? 'daily') === option.id;
