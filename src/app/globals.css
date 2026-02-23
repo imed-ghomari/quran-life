@@ -1087,6 +1087,24 @@ article.prose pre {
   --chart-mastered: color-mix(in srgb, var(--success) 82%, var(--accent-secondary) 18%);
 }
 
+/* Experimental: subtle theme-tinted app surfaces */
+:root[data-theme="light"] {
+  --background: color-mix(in srgb, #ffffff 98%, var(--accent) 2%);
+  --background-secondary: color-mix(in srgb, #ffffff 99%, var(--accent-light) 1%);
+}
+
+:root[data-theme="dark"] {
+  --background: color-mix(in srgb, #0f1113 94%, var(--accent) 6%);
+  --background-secondary: color-mix(in srgb, #171a1d 93%, var(--accent) 7%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: color-mix(in srgb, #0f1113 94%, var(--accent) 6%);
+    --background-secondary: color-mix(in srgb, #171a1d 93%, var(--accent) 7%);
+  }
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -2312,12 +2330,20 @@ input:focus {
   flex: 1;
   min-height: 120px;
   margin-bottom: 0;
+  background: color-mix(in srgb, var(--accent) 7%, var(--background-secondary));
+  border: 1px dashed color-mix(in srgb, var(--accent) 22%, var(--border));
+  color: color-mix(in srgb, var(--foreground-secondary) 70%, var(--accent) 30%);
 }
 
 .review-mindmap-placeholder p {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--foreground-secondary);
+  color: inherit;
+}
+
+.review-mindmap-placeholder.verse-hidden--static-icon:hover {
+  background: color-mix(in srgb, var(--accent) 7%, var(--background-secondary));
+  color: color-mix(in srgb, var(--foreground-secondary) 70%, var(--accent) 30%);
 }
 
 .verse-ref {
