@@ -1074,6 +1074,8 @@ export default function TodoPage() {
                             imageUrlDark={activeMindmapPreview.imageUrlDark}
                             isDark={isDark}
                             title="Mindmap Preview"
+                            contextLabel={`Surah ${activeMindmapPreview.surahId}${getSurah(activeMindmapPreview.surahId)?.name ? `. ${getSurah(activeMindmapPreview.surahId)?.name}` : ''}`}
+                            docLink={`/docs/mindmaps/surah-${activeMindmapPreview.surahId}`}
                             height="100%"
                         />
                     </div>

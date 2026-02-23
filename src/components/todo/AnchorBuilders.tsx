@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import MindmapViewer from '../MindmapViewer';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import { getSurah } from '@/lib/quranData';
 
 export type AnchorBuilderState = { breaks: number[]; labels: Record<number, string> };
 
@@ -35,6 +36,7 @@ export function MobileAnchorBuilder({
     onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
 }) {
+    const surahName = getSurah(surahId)?.name;
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [currentSplitPoint, setCurrentSplitPoint] = useState<number>(1);
     const [isEditing, setIsEditing] = useState(false);
@@ -338,6 +340,8 @@ export function MobileAnchorBuilder({
                             imageUrlDark={mindmapImageUrlDark || undefined}
                             isDark={isDark || false}
                             title="Reference Map"
+                            contextLabel={`Surah ${surahId}${surahName ? `. ${surahName}` : ''}`}
+                            docLink={`/docs/mindmaps/surah-${surahId}`}
                             height="100%"
                         />
                     </div>

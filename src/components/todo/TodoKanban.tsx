@@ -1059,7 +1059,6 @@ export default function TodoKanban({
         if (item.type === 'surah') {
             return `/docs/mindmaps/surah-${item.data.surah.id}`;
         } else if (item.type === 'part') {
-            if (Number(item.data.part) === 0) return undefined;
             return `/docs/mindmaps/part-${item.data.part}`;
         }
         return undefined;
@@ -1178,6 +1177,8 @@ export default function TodoKanban({
                                 imageUrlDark={mindmap?.imageUrlDark}
                                 isDark={isDark}
                                 title="Preview"
+                                contextLabel={isSurah ? `Surah ${id}. ${data.surah.name}` : (isMetaPart ? 'Part 0' : `Part ${id}`)}
+                                docLink={isSurah ? `/docs/mindmaps/surah-${id}` : `/docs/mindmaps/part-${id}`}
                                 height="100%"
                             />
                         </div>
@@ -1298,7 +1299,7 @@ export default function TodoKanban({
 
                     {/* Filters - Full width on mobile */}
                     <div
-                        className={`segmented-compact ${isMobile ? 'w-full' : ''}`}
+                        className={`segmented-compact todo-filter-segmented ${isMobile ? 'w-full' : ''}`}
                         style={{ flex: isMobile ? 1 : 'unset' }}
                     >
                         {[

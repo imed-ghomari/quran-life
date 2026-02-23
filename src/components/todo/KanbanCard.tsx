@@ -390,7 +390,7 @@ function renderCardZones({
             </div>
 
             {/* Description */}
-            {zone3 && (
+            {!isMobile && zone3 && (
                 <p className="text-xs text-[var(--foreground-secondary)] line-clamp-2 mb-3 leading-relaxed">
                     {zone3}
                 </p>

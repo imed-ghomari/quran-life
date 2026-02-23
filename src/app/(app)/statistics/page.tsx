@@ -1176,7 +1176,7 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                                     width={barWidth}
                                                     height={h}
                                                     rx={8}
-                                                    fill={i === 0 ? 'var(--chart-strong)' : 'var(--chart-medium)'}
+                                                    fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
                                                     opacity={i === 0 ? 0.95 : 0.7}
                                                     data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
@@ -1440,7 +1440,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                 />
                                                 <path
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
-                                                    fill={isPeak ? 'var(--chart-strong)' : 'var(--chart-medium)'}
+                                                    fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
                                                     opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
                                                     data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'}`}
                                                     data-tooltip-trigger="tap"

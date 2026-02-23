@@ -6,6 +6,7 @@ import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityController';
 import { getSiteUrl } from '@/lib/siteUrl';
 
 const outfit = Outfit({ 
@@ -65,6 +66,7 @@ export default function RootLayout({
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}
                 </Script>
+                <ScrollbarVisibilityController />
                 <Providers>
                     <ErrorBoundary>
                         <AppShell>
