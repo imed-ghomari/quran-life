@@ -64,6 +64,8 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
         return null;
     }
 
+    const surahName = mindmapData.type === 'surah' ? getSurah(mindmapData.id)?.name : undefined;
+
     return (
         <MindmapViewer
             snapshot={mindmapData.data?.tldrawSnapshot}
@@ -71,9 +73,11 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
             imageUrl={mindmapData.data?.imageUrl}
             imageUrlDark={mindmapData.data?.imageUrlDark}
             isDark={isDark}
-            title={mindmapData.type === 'surah' ? `Surah ${mindmapData.id} Mindmap` : `Part ${mindmapData.id} Mindmap`}
+            title={mindmapData.type === 'surah'
+                ? `Surah ${mindmapData.id}${surahName ? `. ${surahName}` : ''} Mindmap`
+                : `Part ${mindmapData.id} Mindmap`}
             contextLabel={mindmapData.type === 'surah'
-                ? `Surah ${mindmapData.id}${getSurah(mindmapData.id)?.name ? `. ${getSurah(mindmapData.id)?.name}` : ''}`
+                ? `Surah ${mindmapData.id}${surahName ? `. ${surahName}` : ''}`
                 : `Part ${mindmapData.id}`}
             showDocLink={false}
             height={400}

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
@@ -26,9 +27,20 @@ export default function SidebarLink({
     const activePath = normalize(pathname || '');
     const targetPath = normalize(href);
     const isActive = activePath === targetPath || (hasChildren && activePath.startsWith(targetPath + '/'));
+    const isCurrent = activePath === targetPath;
+    const linkRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isCurrent) return;
+        linkRef.current?.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+            behavior: 'auto',
+        });
+    }, [isCurrent]);
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div ref={linkRef} style={{ display: 'flex', alignItems: 'center' }}>
             {hasChildren ? (
                 <div
                     onClick={onToggle}
