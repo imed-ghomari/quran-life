@@ -87,6 +87,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                 isOnboardingComplete: true,
                 skippedSurahs: normalizedSkippedSurahs,
                 dailyPortionMode: dailyPortionModeChoice,
+                dailyReadingStyle: settings.dailyReadingStyle ?? 'line_by_line',
                 userId: user.id
             }) as any
         ];

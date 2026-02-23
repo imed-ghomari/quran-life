@@ -116,6 +116,7 @@ export interface AppSettings {
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
     kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
     dailyPortionMode?: 'audio' | 'reading';
+    dailyReadingStyle?: 'line_by_line' | 'paragraph';
     todayDefaultMode?: 'daily' | 'review';
     theme?: 'light' | 'dark' | 'system';
     accentTheme?: 'default' | 'dracula' | 'nord' | 'catppuccin' | 'solarized' | 'tokyo-night';

@@ -15,6 +15,7 @@ export const schema = i.schema({
       completeExitBehavior: i.string().optional(),
       kanbanSortOrder: i.string().optional(),
       dailyPortionMode: i.string().optional(),
+      dailyReadingStyle: i.string().optional(),
       todayDefaultMode: i.string().optional(),
       theme: i.string().optional(),
       accentTheme: i.string().optional(),

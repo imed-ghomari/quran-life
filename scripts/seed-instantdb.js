@@ -45,6 +45,8 @@ async function main() {
       partSystemVersion: 2,
       learnedVerses: [],
       skippedSurahs: [],
+      dailyPortionMode: 'audio',
+      dailyReadingStyle: 'line_by_line',
       theme: 'light',
       isOnboardingComplete: false,
       kanbanColumns: [],
