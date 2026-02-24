@@ -18,7 +18,6 @@ import { filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { ALL_QURAN_PART, CORE_QURAN_PARTS, LEGACY_ALL_QURAN_PART } from '@/lib/types';
 
 const NAV_PREFETCH_ROUTES = ['/dashboard', '/todo', '/statistics', '/docs', '/settings'] as const;
-const NAV_WARMUP_SESSION_KEY = 'nav:warmup:v2';
 
 const getLocalDayKey = (date: Date) => {
     const y = date.getFullYear();
@@ -51,41 +50,6 @@ function NavigationContent() {
         return () => {
             timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
         };
-    }, [router]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined' || !navigator.onLine) return;
-        if (window.sessionStorage.getItem(NAV_WARMUP_SESSION_KEY) === '1') return;
-
-        window.sessionStorage.setItem(NAV_WARMUP_SESSION_KEY, '1');
-
-        const warmRoute = async (route: string) => {
-            try {
-                router.prefetch(route);
-                await fetch(route, {
-                    method: 'GET',
-                    credentials: 'include',
-                    cache: 'force-cache',
-                });
-                await fetch(`${route}?_rsc=navwarm`, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        RSC: '1',
-                        'Next-Router-Prefetch': '1',
-                    },
-                    cache: 'force-cache',
-                }).catch(() => undefined);
-            } catch {
-                // Keep warmup best-effort.
-            }
-        };
-
-        void (async () => {
-            for (let i = 0; i < NAV_PREFETCH_ROUTES.length; i += 1) {
-                await warmRoute(NAV_PREFETCH_ROUTES[i]);
-            }
-        })();
     }, [router]);
 
     const navMetrics = useMemo(() => {
