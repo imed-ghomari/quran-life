@@ -49,13 +49,34 @@ export default function RootLayout({
     const themeBootstrapScript = `
 (() => {
   try {
-    const stored = window.localStorage.getItem('theme');
+    const APP_THEME_KEY = 'theme';
+    const APP_ACCENT_THEME_KEY = 'accent-theme';
+    const PUBLIC_THEME_KEY = 'public-theme';
+    const path = window.location.pathname;
+    const isPostAuthRoute = path.startsWith('/dashboard')
+      || path.startsWith('/todo')
+      || path.startsWith('/settings')
+      || path.startsWith('/statistics')
+      || path.startsWith('/docs');
     const root = window.document.documentElement;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const resolved = stored === 'dark' || stored === 'light'
-      ? stored
-      : (prefersDark ? 'dark' : 'light');
+    if (!isPostAuthRoute) {
+      const storedPublicTheme = window.localStorage.getItem(PUBLIC_THEME_KEY);
+      const resolvedPublicTheme = storedPublicTheme === 'dark' || storedPublicTheme === 'light'
+        ? storedPublicTheme
+        : (prefersDark ? 'dark' : 'light');
+      root.setAttribute('data-theme', resolvedPublicTheme);
+      root.setAttribute('data-accent-theme', 'default');
+      return;
+    }
+
+    const stored = window.localStorage.getItem(APP_THEME_KEY);
+    const resolved = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light');
     root.setAttribute('data-theme', resolved);
+    const storedAccent = window.localStorage.getItem(APP_ACCENT_THEME_KEY);
+    const allowedAccents = ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'];
+    const resolvedAccent = storedAccent && allowedAccents.includes(storedAccent) ? storedAccent : 'default';
+    root.setAttribute('data-accent-theme', resolvedAccent);
   } catch (_) {}
 })();
 `;
