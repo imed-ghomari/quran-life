@@ -53,8 +53,11 @@ export default function CardActionMenu({
     showReset,
 }: CardActionMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
-    const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+    const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
     const [isActionPending, setIsActionPending] = useState(false);
+    const DESKTOP_VIEWPORT_MARGIN = 8;
+    const DESKTOP_MENU_GAP = 12;
+    const DESKTOP_MENU_MIN_WIDTH = 270;
 
     const runMenuAction = async (action?: () => Promise<void> | void) => {
         if (!action || isActionPending) return;
@@ -68,49 +71,6 @@ export default function CardActionMenu({
             setIsActionPending(false);
         }
     };
-
-    // Calculate position for desktop dropdown - useLayoutEffect to prevent flash
-    React.useLayoutEffect(() => {
-        if (isOpen && anchorRef.current && !isMobile) {
-            const rect = anchorRef.current.getBoundingClientRect();
-            const scrollY = window.scrollY;
-            setPosition({
-                top: rect.bottom + scrollY + 12, // More vertical gap
-                left: rect.right - 250 + window.scrollX // Adjusted for wider menu (320px width approx)
-            });
-        }
-    }, [isOpen, anchorRef, isMobile]);
-
-    // Close on outside click (desktop only)
-    useEffect(() => {
-        if (!isOpen || isMobile) return;
-
-        const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-                anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
-                onClose();
-            }
-        };
-        const handleScroll = () => onClose();
-
-        document.addEventListener('mousedown', handleClickOutside);
-        window.addEventListener('scroll', handleScroll, true);
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            window.removeEventListener('scroll', handleScroll, true);
-        };
-    }, [isOpen, isMobile, onClose, anchorRef]);
-
-    // Prevent body scroll on mobile when open
-    useEffect(() => {
-        if (isMobile && isOpen) {
-            document.body.style.overflow = 'hidden';
-            return () => { document.body.style.overflow = 'unset'; };
-        }
-    }, [isMobile, isOpen]);
-
-    if (!isOpen) return null;
 
     // Define Menu Items based on Context
     const getMenuItems = () => {
@@ -215,6 +175,83 @@ export default function CardActionMenu({
 
     const menuItems = getMenuItems();
 
+    const estimateMenuHeight = () => {
+        const actionRows = menuItems.filter((item) => item.type !== 'divider').length;
+        const dividerRows = menuItems.length - actionRows;
+        // p-4 container plus per-row height estimate keeps first render stable.
+        return 32 + actionRows * 50 + dividerRows * 10;
+    };
+
+    // Calculate position for desktop dropdown - useLayoutEffect to prevent flash
+    React.useLayoutEffect(() => {
+        if (!isOpen || !anchorRef.current || isMobile) return;
+
+        const updatePosition = () => {
+            if (!anchorRef.current) return;
+            const rect = anchorRef.current.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const measuredWidth = menuRef.current?.offsetWidth ?? DESKTOP_MENU_MIN_WIDTH;
+            const measuredHeight = menuRef.current?.offsetHeight ?? estimateMenuHeight();
+            const leftBound = DESKTOP_VIEWPORT_MARGIN;
+            const rightBound = viewportWidth - measuredWidth - DESKTOP_VIEWPORT_MARGIN;
+            const belowTop = rect.bottom + DESKTOP_MENU_GAP;
+            const aboveTop = rect.top - measuredHeight - DESKTOP_MENU_GAP;
+            const shouldOpenAbove = belowTop + measuredHeight > viewportHeight - DESKTOP_VIEWPORT_MARGIN
+                && aboveTop >= DESKTOP_VIEWPORT_MARGIN;
+            const unclampedTop = shouldOpenAbove ? aboveTop : belowTop;
+            const maxTop = viewportHeight - DESKTOP_VIEWPORT_MARGIN - measuredHeight;
+            const top = Math.max(DESKTOP_VIEWPORT_MARGIN, Math.min(unclampedTop, Math.max(DESKTOP_VIEWPORT_MARGIN, maxTop)));
+            const left = Math.max(leftBound, Math.min(rect.right - measuredWidth, Math.max(leftBound, rightBound)));
+            const directionalSpace = shouldOpenAbove
+                ? rect.top - DESKTOP_MENU_GAP - DESKTOP_VIEWPORT_MARGIN
+                : viewportHeight - belowTop - DESKTOP_VIEWPORT_MARGIN;
+            const fallbackMaxHeight = viewportHeight - DESKTOP_VIEWPORT_MARGIN * 2;
+            const maxHeight = directionalSpace > 160 ? directionalSpace : fallbackMaxHeight;
+
+            setPosition({ top, left, maxHeight });
+        };
+
+        updatePosition();
+        const rafId = window.requestAnimationFrame(updatePosition);
+        window.addEventListener('resize', updatePosition);
+        return () => {
+            window.cancelAnimationFrame(rafId);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isOpen, anchorRef, isMobile, menuItems.length]);
+
+    // Close on outside click (desktop only)
+    useEffect(() => {
+        if (!isOpen || isMobile) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
+                anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+        const handleScroll = () => onClose();
+
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, [isOpen, isMobile, onClose, anchorRef]);
+
+    // Prevent body scroll on mobile when open
+    useEffect(() => {
+        if (isMobile && isOpen) {
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = 'unset'; };
+        }
+    }, [isMobile, isOpen]);
+
+    if (!isOpen) return null;
+
     // Render Logic
     const renderContent = () => {
         if (!isMobile) {
@@ -223,8 +260,8 @@ export default function CardActionMenu({
             return (
                 <div
                     ref={menuRef}
-                    className="fixed z-[9990] min-w-[270px] bg-[var(--background)] border border-[var(--border)] rounded-[14px] shadow-xl ring-1 ring-black/5 overflow-hidden"
-                    style={{ top: position.top, left: position.left }}
+                    className="fixed z-[9990] min-w-[270px] bg-[var(--background)] border border-[var(--border)] rounded-[14px] shadow-xl ring-1 ring-black/5 overflow-x-hidden overflow-y-auto"
+                    style={{ top: position.top, left: position.left, maxHeight: position.maxHeight }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="p-4 flex flex-col gap-1">

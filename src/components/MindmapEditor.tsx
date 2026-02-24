@@ -253,11 +253,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         () => contextLabel || extractContextFromDocLink(docLink) || extractContextFromTitle(title),
         [contextLabel, docLink, title]
     );
-    const shouldShowContextLabel = useMemo(() => {
-        if (!currentContextLabel) return false;
-        if (!title) return true;
-        return !title.toLowerCase().includes(currentContextLabel.toLowerCase());
-    }, [currentContextLabel, title]);
+    const shouldShowContextLabel = useMemo(() => !!currentContextLabel, [currentContextLabel]);
 
     useEffect(() => {
         try {
@@ -713,46 +709,31 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 justifyContent: 'space-between',
                 padding: '0 1rem'
             }}>
-                <div className="mindmap-editor-header-left" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <button onClick={handleClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', display: 'flex' }}>
-                        <X size={24} />
-                    </button>
-                    <span className="mindmap-editor-title" style={{ fontWeight: 600 }}>{title || 'Mindmap Editor'}</span>
+                <div className="mindmap-editor-header-left mindmap-header-main" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', minWidth: 0 }}>
+                    <span className="mindmap-editor-title" style={{ fontWeight: 600 }}>Mindmap Editor</span>
                     {shouldShowContextLabel && (
                         <span
-                            className="mindmap-editor-context"
-                            style={{
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                color: 'var(--foreground-secondary)',
-                                background: 'var(--background-secondary)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '999px',
-                                padding: '3px 10px',
-                                lineHeight: 1.2
-                            }}
+                            className="mindmap-header-context"
                         >
                             {currentContextLabel}
                         </span>
                     )}
                     {docLink && (
                         <a
-                            className="mindmap-editor-doclink"
+                            className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                             href={docLink}
-                            style={{
-                                fontSize: '0.75rem',
-                                color: 'var(--accent)',
-                                textDecoration: 'none',
-                                padding: '4px 8px',
-                                border: '1px solid var(--accent)',
-                                borderRadius: '4px',
-                                marginLeft: '0.5rem'
-                            }}
                         >
                             Back to Documentation
                         </a>
                     )}
                 </div>
+                <button
+                    onClick={handleClose}
+                    className="mindmap-header-close ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
+                    aria-label="Close editor"
+                >
+                    <X size={24} />
+                </button>
             </div>
 
             <div className="tldraw-container" style={{ 
