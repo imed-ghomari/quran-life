@@ -1666,10 +1666,10 @@ export default function TodayPage() {
             if (activeVerse) {
                 const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
                 const nextChunkEl =
-                    (textEl?.querySelector('.next-blur') as HTMLElement | null) ||
-                    (container.querySelector('.next-blur') as HTMLElement | null);
+                    (textEl?.querySelector('.review-chunk--next') as HTMLElement | null) ||
+                    (container.querySelector('.review-chunk--next') as HTMLElement | null);
                 const visibleChunks = textEl
-                    ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
+                    ? Array.from(textEl.querySelectorAll('.review-chunk--revealed')) as HTMLElement[]
                     : [];
                 const lastRevealed = visibleChunks[visibleChunks.length - 1] as HTMLElement | undefined;
                 const targetEl = lastRevealed || nextChunkEl || activeVerse;
@@ -1944,12 +1944,19 @@ export default function TodayPage() {
                 {(!isMobile || mobileSection === 'review') && (
                 <div className="card today-card today-card--review">
                     {!isMobile && (
-                        <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground">
+                        <div className="collapsible-header today-column-header" onClick={() => toggleSection('review')}>
+                            <div className="today-column-title flex items-center gap-2 text-base font-semibold text-foreground">
                                 <span className="header-icon-badge"><CheckCircle size={20} /></span>
                                 <span>Reviews</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="today-column-meta">
+                                {viewState.reviewExpanded && orderedDueNodes.length > 0 && activeContent && (
+                                    <span className="review-header-context">
+                                        {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
+                                            activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
+                                                `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`}
+                                    </span>
+                                )}
                                 <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                             </div>
                         </div>
@@ -1968,14 +1975,16 @@ export default function TodayPage() {
                                   <div
                                         className={`review-active-content ${activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap' ? 'review-active-content--mindmap' : ''}`}
                                   >
-                                        {/* Header */}
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
-                                            {`${currentReviewIndex + 1}`} • {
-                                                activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
-                                                    activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
-                                                        `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`
-                                            }
-                                        </p>
+                                        {/* Mobile-only context label (desktop lives in column header) */}
+                                        {isMobile && (
+                                            <div className="review-context-meta">
+                                                <span className="review-context-meta__label">
+                                                    {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
+                                                        activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
+                                                            `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`}
+                                                </span>
+                                            </div>
+                                        )}
 
                                         {/* Verse type content */}
                                         {activeContent.type === 'verse' && (
@@ -2001,25 +2010,28 @@ export default function TodayPage() {
                                                             const showAll = showGrading || isPast;
                                                             const safeRevealedChunks = Math.max(0, Math.min(revealedChunks, chunks.length));
                                                             const isNextRevealVerse = !showAll && idx === nextRevealVerseIndex;
-                                                            const nextChunk = isNextRevealVerse ? chunks[nextRevealChunkIndex] : undefined;
-                                                            const visibleChunks = showAll
-                                                                ? chunks
-                                                                : isCurrent
-                                                                    ? chunks.slice(0, safeRevealedChunks)
-                                                                    : [];
-                                                            const remainingHidden = showAll
-                                                                ? ''
-                                                                : (isNextRevealVerse
-                                                                    ? chunks.slice(nextRevealChunkIndex + 1).join(' ')
-                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : (v?.text || '')));
 
                                                             return (
                                                                 <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
                                                                     <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
                                                                     <span className="grouped-verse-text arabic-text">
-                                                                        {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
-                                                                        {nextChunk && <span className="blurred-chunk next-blur">{nextChunk}</span>}
-                                                                        {remainingHidden && <span className="blurred-chunk strong-blur">{remainingHidden}</span>}
+                                                                        {chunks.map((chunk, chunkIdx) => {
+                                                                            const chunkKey = `${v.ayahId}-c-${chunkIdx}`;
+                                                                            const isRevealedChunk = showAll || (isCurrent && chunkIdx < safeRevealedChunks);
+                                                                            const isNextChunk = !isRevealedChunk && isNextRevealVerse && chunkIdx === nextRevealChunkIndex;
+                                                                            const chunkClassName = isRevealedChunk
+                                                                                ? 'review-chunk review-chunk--revealed'
+                                                                                : isNextChunk
+                                                                                    ? 'review-chunk blurred-chunk next-blur review-chunk--next'
+                                                                                    : 'review-chunk blurred-chunk strong-blur review-chunk--hidden';
+
+                                                                            return (
+                                                                                <span key={chunkKey} className={chunkClassName}>
+                                                                                    {chunk}
+                                                                                    {chunkIdx < chunks.length - 1 ? ' ' : ''}
+                                                                                </span>
+                                                                            );
+                                                                        })}
                                                                     </span>
                                                                 </span>
                                                             );
@@ -2226,8 +2238,8 @@ export default function TodayPage() {
                 {(!isMobile || mobileSection === 'daily') && (
                 <div className="card today-card today-card--daily">
                     {!isMobile && (
-                        <div className="collapsible-header" onClick={() => toggleSection('daily')}>
-                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground">
+                        <div className="collapsible-header today-column-header" onClick={() => toggleSection('daily')}>
+                            <div className="today-column-title flex items-center gap-2 text-base font-semibold text-foreground">
                                 <span className="header-icon-badge"><BookOpen size={20} /></span>
                                 <span>Daily Portion</span>
                             </div>

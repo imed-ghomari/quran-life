@@ -437,7 +437,7 @@ article.prose pre {
 .custom-scrollbar:focus-within,
 .custom-scrollbar:active,
 .custom-scrollbar.is-scrolling {
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -458,14 +458,14 @@ article.prose pre {
 .custom-scrollbar:focus-within::-webkit-scrollbar-thumb,
 .custom-scrollbar:active::-webkit-scrollbar-thumb,
 .custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--scrollbar-thumb);
 }
 
 .custom-scrollbar:hover::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar:focus-within::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar:active::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb:hover {
-  background: var(--foreground-secondary);
+  background: var(--scrollbar-thumb-hover);
 }
 
 @keyframes fadeUp {
@@ -554,6 +554,8 @@ article.prose pre {
   --todo-pill-suspended: var(--danger);
 
   --reviews-chart-panel: var(--background);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent) 32%, var(--border));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 52%, var(--foreground-secondary));
 }
 
 @media (max-width: 767px) {
@@ -1597,6 +1599,7 @@ h3 {
 .review-section-content {
   position: relative;
   isolation: isolate;
+  padding-top: 0;
 }
 
 .review-queue-progress-track {
@@ -1646,7 +1649,44 @@ h3 {
 }
 
 .review-active-content {
-  padding-top: 0.5rem;
+  padding-top: 0;
+}
+
+.review-context-meta {
+  display: flex;
+  align-items: center;
+  margin: 0 0 0.45rem;
+  padding-inline: 0.8rem;
+  color: var(--foreground-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.review-context-meta__label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.review-header-context {
+  display: inline-block;
+  margin-right: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--foreground-secondary) 94%, var(--foreground));
+  opacity: 0.92;
+  max-width: min(46%, 280px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 .review-active-content--mindmap {
@@ -2012,7 +2052,9 @@ h3 {
 }
 
 .review-target-box {
+  padding-top: 0.8rem;
   padding-bottom: 5rem;
+  scroll-padding-top: 0.8rem;
   scroll-padding-bottom: 5rem;
 }
 
@@ -2174,11 +2216,28 @@ input:focus {
   line-height: 1.9;
 }
 
+.review-target-box .grouped-verse {
+  text-align: justify;
+  text-align-last: right;
+  padding-inline: 0.8rem;
+}
+
+.review-target-box .review-chunk {
+  display: inline;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0 0.22rem;
+}
+
 .blurred-chunk {
   filter: blur(6px);
   background: rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
-  padding: 0 0.3rem;
+}
+
+.review-target-box .review-chunk--revealed {
+  filter: none;
+  background: transparent;
+  color: inherit;
 }
 
 .strong-blur {
@@ -2190,8 +2249,6 @@ input:focus {
   background: rgba(14, 165, 233, 0.3);
   border: 1px dashed var(--accent);
   color: var(--accent);
-  border-radius: 4px;
-  padding: 0 0.4rem;
 }
 
 /* Progress bar */
@@ -3041,6 +3098,38 @@ input:focus {
 }
 
 @media (min-width: 768px) {
+  .today-grid .today-card {
+    padding: 1rem;
+  }
+
+  .today-grid .today-card .today-column-header {
+    align-items: center;
+    padding: 0 0 0.5rem 0;
+    margin: 0 0 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .today-grid .today-card .today-column-title {
+    margin: 0;
+  }
+
+  .today-grid .today-card .today-column-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .today-grid .today-card--review .today-column-header {
+    margin-bottom: 0.35rem;
+  }
+
+  .today-grid .today-card--review .review-context-meta {
+    display: none;
+  }
+
   .content-wrapper {
     max-width: 100%;
     margin: 0 auto;
@@ -3114,6 +3203,10 @@ input:focus {
     flex: 1;
     overflow: hidden;
     min-height: 0;
+  }
+
+  .review-section-content {
+    padding-top: 0 !important;
   }
 
   .today-card-content {

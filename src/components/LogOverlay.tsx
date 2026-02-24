@@ -57,7 +57,7 @@ export const LogOverlay: React.FC = () => {
           <div className="bg-zinc-900 border-x border-b border-white/10 rounded-b-lg shadow-2xl flex flex-col max-h-[40vh] sm:max-h-[60vh]">
             <div 
               ref={scrollRef}
-              className="overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
+              className="overflow-y-auto p-2 space-y-1 custom-scrollbar"
             >
               {logs.length === 0 ? (
                 <div className="text-zinc-600 py-4 text-center italic">No logs yet...</div>

@@ -3,6 +3,7 @@
 import { useCallback, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
@@ -66,6 +67,8 @@ const extractContextFromTemplateUrl = (value?: string | null): string | null => 
     if (partMatch) return `Part ${partMatch[1]}`;
     return null;
 };
+
+const isInternalPath = (href: string) => href.startsWith('/') && !href.startsWith('//');
 
 export default function MindmapViewer({
     snapshot,
@@ -403,12 +406,21 @@ export default function MindmapViewer({
                                 </span>
                             )}
                             {resolvedDocLink && (
-                                <a
-                                    className="btn btn-secondary std-normal-btn mindmap-header-doclink"
-                                    href={resolvedDocLink}
-                                >
-                                    Back to Documentation
-                                </a>
+                                isInternalPath(resolvedDocLink) ? (
+                                    <Link
+                                        className="btn btn-secondary std-normal-btn mindmap-header-doclink"
+                                        href={resolvedDocLink}
+                                    >
+                                        Back to Documentation
+                                    </Link>
+                                ) : (
+                                    <a
+                                        className="btn btn-secondary std-normal-btn mindmap-header-doclink"
+                                        href={resolvedDocLink}
+                                    >
+                                        Back to Documentation
+                                    </a>
+                                )
                             )}
                         </div>
                         <button 

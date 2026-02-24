@@ -37,20 +37,19 @@ function NavigationContent() {
     const { progress: listeningProgress } = useInstantListeningProgress();
 
     useEffect(() => {
-        const prefetch = () => {
-            NAV_PREFETCH_ROUTES.forEach((route) => router.prefetch(route));
+        if (typeof window === 'undefined' || !navigator.onLine) return;
+
+        const timeoutIds: number[] = [];
+        NAV_PREFETCH_ROUTES.forEach((route, index) => {
+            const timeoutId = window.setTimeout(() => {
+                router.prefetch(route);
+            }, index * 120);
+            timeoutIds.push(timeoutId);
+        });
+
+        return () => {
+            timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
         };
-
-        const requestIdle = window.requestIdleCallback?.bind(window);
-        const cancelIdle = window.cancelIdleCallback?.bind(window);
-
-        if (requestIdle && cancelIdle) {
-            const idleId = requestIdle(prefetch, { timeout: 1200 });
-            return () => cancelIdle(idleId);
-        }
-
-        const timeoutId = window.setTimeout(prefetch, 250);
-        return () => window.clearTimeout(timeoutId);
     }, [router]);
 
     const navMetrics = useMemo(() => {
@@ -182,8 +181,10 @@ function NavigationContent() {
                     <Link
                         key={item.href}
                         href={item.href}
+                        prefetch={true}
                         className={`nav-item ${isActive ? 'active' : ''}`}
                         onMouseEnter={() => router.prefetch(item.href)}
+                        onTouchStart={() => router.prefetch(item.href)}
                         onFocus={() => router.prefetch(item.href)}
                     >
                         <div className="nav-icon">

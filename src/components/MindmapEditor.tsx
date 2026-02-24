@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
@@ -215,6 +216,8 @@ const extractContextFromDocLink = (value?: string | null): string | null => {
     if (partMatch) return `Part ${partMatch[1]}`;
     return null;
 };
+
+const isInternalPath = (href: string) => href.startsWith('/') && !href.startsWith('//');
 
 /**
  * Prevents tldraw from getting stuck in pen mode when using pen/tablet devices.
@@ -719,12 +722,21 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         </span>
                     )}
                     {docLink && (
-                        <a
-                            className="btn btn-secondary std-normal-btn mindmap-header-doclink"
-                            href={docLink}
-                        >
-                            Back to Documentation
-                        </a>
+                        isInternalPath(docLink) ? (
+                            <Link
+                                className="btn btn-secondary std-normal-btn mindmap-header-doclink"
+                                href={docLink}
+                            >
+                                Back to Documentation
+                            </Link>
+                        ) : (
+                            <a
+                                className="btn btn-secondary std-normal-btn mindmap-header-doclink"
+                                href={docLink}
+                            >
+                                Back to Documentation
+                            </a>
+                        )
                     )}
                 </div>
                 <button
