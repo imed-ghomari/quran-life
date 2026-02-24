@@ -67,17 +67,6 @@ const extractContextFromTemplateUrl = (value?: string | null): string | null => 
     return null;
 };
 
-const isGenericViewerTitle = (value?: string | null): boolean => {
-    if (!value) return true;
-    const normalized = value.trim().toLowerCase();
-    return (
-        normalized === 'mindmap viewer' ||
-        normalized === 'mindmap preview' ||
-        normalized === 'preview' ||
-        normalized === 'reference map'
-    );
-};
-
 export default function MindmapViewer({
     snapshot,
     templateUrl,
@@ -105,13 +94,7 @@ export default function MindmapViewer({
         () => contextLabel || extractContextFromTemplateUrl(templateUrl) || extractContextFromTitle(title),
         [contextLabel, templateUrl, title]
     );
-    const shouldShowContextLabel = useMemo(() => {
-        if (!currentContextLabel) return false;
-        // Avoid duplicate identity display when title is already specific (e.g. Surah/Part name in title).
-        if (!isGenericViewerTitle(title)) return false;
-        if (!title) return true;
-        return !title.toLowerCase().includes(currentContextLabel.toLowerCase());
-    }, [currentContextLabel, title]);
+    const shouldShowContextLabel = useMemo(() => !!currentContextLabel, [currentContextLabel]);
     const resolvedDocLink = useMemo(() => {
         if (!showDocLink) return null;
         if (docLink) return docLink;
@@ -410,28 +393,19 @@ export default function MindmapViewer({
                         className="mindmap-viewer-header flex items-center border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
                         style={{ height: '50px', padding: '0 1rem' }}
                     >
-                        <div className="min-w-0 flex-1 flex items-center gap-2">
-                            <h3 className="min-w-0 truncate font-bold text-base sm:text-lg text-[var(--foreground)]">
-                                {title || "Mindmap Viewer"}
+                        <div className="mindmap-header-main min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                            <h3 className="min-w-0 truncate font-semibold text-base sm:text-lg text-[var(--foreground)]">
+                                Mindmap Viewer
                             </h3>
                             {shouldShowContextLabel && (
-                                <span className="inline-flex max-w-[40vw] shrink-0 truncate rounded-full border border-[var(--border)] bg-[var(--background-secondary)] px-3 py-1 text-xs font-semibold text-[var(--foreground-secondary)]">
+                                <span className="mindmap-header-context inline-flex max-w-[45vw] shrink-0 truncate rounded-full border border-[var(--border)] bg-[var(--background-secondary)] px-3 py-1 text-xs font-semibold text-[var(--foreground-secondary)]">
                                     {currentContextLabel}
                                 </span>
                             )}
                             {resolvedDocLink && (
                                 <a
-                                    className="mindmap-viewer-doclink"
+                                    className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                     href={resolvedDocLink}
-                                    style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--accent)',
-                                        textDecoration: 'none',
-                                        padding: '4px 8px',
-                                        border: '1px solid var(--accent)',
-                                        borderRadius: '4px',
-                                        whiteSpace: 'nowrap'
-                                    }}
                                 >
                                     Back to Documentation
                                 </a>
@@ -439,7 +413,7 @@ export default function MindmapViewer({
                         </div>
                         <button 
                             onClick={() => setIsFullScreen(false)}
-                            className="ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
+                            className="mindmap-header-close ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
                         >
                             <X size={24} className="text-[var(--foreground)]" />
                         </button>

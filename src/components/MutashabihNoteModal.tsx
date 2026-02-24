@@ -7,11 +7,12 @@ interface Props {
     isOpen: boolean;
     title: string;
     initialNote: string;
+    maxLength?: number;
     onClose: () => void;
     onSave: (note: string) => void;
 }
 
-export default function MutashabihNoteModal({ isOpen, title, initialNote, onClose, onSave }: Props) {
+export default function MutashabihNoteModal({ isOpen, title, initialNote, maxLength = 300, onClose, onSave }: Props) {
     const [note, setNote] = useState(initialNote);
 
     useEffect(() => {
@@ -38,13 +39,15 @@ export default function MutashabihNoteModal({ isOpen, title, initialNote, onClos
                             onChange={e => setNote(e.target.value)}
                             placeholder="Add your distinction note here..."
                             rows={4}
+                            maxLength={maxLength}
                         />
+                        <div className="char-counter">{note.length}/{maxLength} characters</div>
                     </div>
                 </div>
 
                 <div className="modal-footer">
                     <button className="btn std-normal-btn" onClick={onClose}>Cancel</button>
-                    <button className="btn std-normal-btn" onClick={() => onSave(note)}>Save Note</button>
+                    <button className="btn std-normal-btn" onClick={() => onSave(note.slice(0, maxLength))}>Save Note</button>
                 </div>
             </div>
 
@@ -135,6 +138,11 @@ export default function MutashabihNoteModal({ isOpen, title, initialNote, onClos
                     font-size: 0.95rem;
                     resize: vertical;
                     min-height: 110px;
+                }
+                .char-counter {
+                    font-size: 0.75rem;
+                    color: var(--foreground-secondary);
+                    text-align: right;
                 }
                 .modal-footer {
                     padding: 1rem 1.5rem;

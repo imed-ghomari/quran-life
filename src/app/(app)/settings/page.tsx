@@ -227,6 +227,7 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_mindmap', label: 'Solved by Mindmap' },
     { value: 'solved_note', label: 'Solved by Note' },
 ];
+const MUTASHABIH_NOTE_MAX_LENGTH = 300;
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const LOCKED_SKIPPED_SURAH_ID = 1;
 
@@ -365,6 +366,7 @@ export default function SettingsPage() {
     const { progress: listeningProgress } = useInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
     const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
+    const [systemIsDark, setSystemIsDark] = useState(false);
     const { confirm, alert } = useConfirmDialog();
 
     const todoFilterOptions = [
@@ -432,6 +434,22 @@ export default function SettingsPage() {
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
     const [dailyReadingStyle, setDailyReadingStyle] = useState<'line_by_line' | 'paragraph'>(settings.dailyReadingStyle ?? 'line_by_line');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const sync = (event?: MediaQueryListEvent) => {
+            setSystemIsDark(event ? event.matches : media.matches);
+        };
+        sync();
+        if (media.addEventListener) {
+            media.addEventListener('change', sync);
+            return () => media.removeEventListener('change', sync);
+        }
+        media.addListener(sync);
+        return () => media.removeListener(sync);
+    }, []);
+    const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
     const activePartLabel = settings.activePart === ALL_QURAN_PART ? 'All Quran' : `Part ${settings.activePart}`;
 
     const [activeMutSlideOver, setActiveMutSlideOver] = useState<{
@@ -2705,7 +2723,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                         mindmapImageUrl={mm?.imageUrl || null}
                         mindmapImageUrlDark={mm?.imageUrlDark || null}
                         snapshot={mm?.tldrawSnapshot}
-                        isDark={theme === 'dark'}
+                        isDark={isDark}
                         onAddBreak={(val) => handleSettingsAddBreak(settingsSplitsSurahId, val)}
                         onRemoveBreak={(val) => handleSettingsRemoveBreak(settingsSplitsSurahId, val)}
                         onSave={() => handleSettingsSaveAnchors(settingsSplitsSurahId, surahMeta.verseCount)}
@@ -4439,6 +4457,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     <textarea
                                         placeholder="Add your distinction notes here..."
                                         value={existing.notes || ''}
+                                        maxLength={MUTASHABIH_NOTE_MAX_LENGTH}
                                         onChange={e => applyDecisionToTargets(group.resolutionTargets, targetExisting => ({ ...targetExisting, notes: e.target.value }))}
                                         style={{
                                             width: '100%',
@@ -4451,6 +4470,9 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             resize: 'vertical'
                                         }}
                                     />
+                                    <div style={{ marginTop: '0.35rem', textAlign: 'right', fontSize: '0.72rem', color: 'var(--foreground-secondary)' }}>
+                                        {(existing.notes || '').length}/{MUTASHABIH_NOTE_MAX_LENGTH} characters
+                                    </div>
                                 </div>
 
                                 {isCustom && customId && (
@@ -5225,6 +5247,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 isOpen={!!noteModal}
                 title={noteModal?.title || 'Edit Note'}
                 initialNote={noteModal?.initialNote || ''}
+                maxLength={MUTASHABIH_NOTE_MAX_LENGTH}
                 onClose={() => setNoteModal(null)}
                 onSave={(note) => {
                     if (!noteModal) return;

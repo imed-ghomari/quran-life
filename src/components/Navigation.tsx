@@ -1,11 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useMemo } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
-import SyncStatus from './SyncStatus';
-import ThemeToggle from './ThemeToggle';
 import {
     useInstantSettings,
     useInstantNodes,
@@ -14,13 +12,23 @@ import {
     useInstantReviewErrors,
     useInstantListeningProgress
 } from '@/hooks/useInstantData';
-import { getMutashabihatForAbsolute, surahAyahToAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { ALL_QURAN_PART, CORE_QURAN_PARTS, LEGACY_ALL_QURAN_PART } from '@/lib/types';
 
+const NAV_PREFETCH_ROUTES = ['/dashboard', '/todo', '/statistics', '/docs', '/settings'] as const;
+
+const getLocalDayKey = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 function NavigationContent() {
     const pathname = usePathname();
+    const router = useRouter();
     const { settings } = useInstantSettings();
     const { dueNodes } = useInstantNodes();
     const { mindmaps, partMindMaps } = useInstantMindMaps();
@@ -28,58 +36,78 @@ function NavigationContent() {
     const { errors } = useInstantReviewErrors();
     const { progress: listeningProgress } = useInstantListeningProgress();
 
-    const [pendingCount, setPendingCount] = useState(0);
-    const [todayTasks, setTodayTasks] = useState(0);
-    const [isPortionComplete, setIsPortionComplete] = useState(false);
-    const [isDailyPortionComplete, setIsDailyPortionComplete] = useState(false);
-
     useEffect(() => {
-        if (!settings) return;
+        const prefetch = () => {
+            NAV_PREFETCH_ROUTES.forEach((route) => router.prefetch(route));
+        };
+
+        const requestIdle = window.requestIdleCallback?.bind(window);
+        const cancelIdle = window.cancelIdleCallback?.bind(window);
+
+        if (requestIdle && cancelIdle) {
+            const idleId = requestIdle(prefetch, { timeout: 1200 });
+            return () => cancelIdle(idleId);
+        }
+
+        const timeoutId = window.setTimeout(prefetch, 250);
+        return () => window.clearTimeout(timeoutId);
+    }, [router]);
+
+    const navMetrics = useMemo(() => {
+        if (!settings) {
+            return {
+                pendingCount: 0,
+                todayTasks: 0,
+                isDailyPortionComplete: false,
+            };
+        }
 
         const activePart = settings.activePart;
         const skippedSurahs = new Set(settings.skippedSurahs || []);
         const activePartSize = activePart as number;
         const surahsInPart = SURAHS.filter(s => (activePartSize === ALL_QURAN_PART || s.part === activePartSize) && !skippedSurahs.has(s.id));
-
-        // --- KANBAN BASED LOGIC ---
         const kanbanState = settings.kanbanColumns || {};
 
-        // 1. Surah Items
+        const itemColumn = new Map<string, string>();
+        Object.entries(kanbanState).forEach(([colId, itemIds]) => {
+            (itemIds as string[]).forEach((itemId) => {
+                itemColumn.set(itemId, colId);
+            });
+        });
+
+        const mindmapBySurah = new Map<number, any>();
+        (mindmaps as any[]).forEach((mindmap) => {
+            const surahId = Number(mindmap?.surahId);
+            if (Number.isFinite(surahId) && !mindmapBySurah.has(surahId)) {
+                mindmapBySurah.set(surahId, mindmap);
+            }
+        });
+
+        const partMindmapByPart = new Map<number, any>();
+        (partMindMaps as any[]).forEach((mindmap) => {
+            const partId = Number(mindmap?.partId);
+            if (Number.isFinite(partId) && !partMindmapByPart.has(partId)) {
+                partMindmapByPart.set(partId, mindmap);
+            }
+        });
+
         const surahItems = surahsInPart.map(s => {
             const id = `surah-${s.id}`;
-            const mm = (mindmaps as any[]).find(m => Number(m.surahId) === s.id);
+            const mm = mindmapBySurah.get(s.id);
             const isComplete = mm?.isComplete && (!!mm?.imageUrl || !!mm?.tldrawSnapshot || !!mm?.imageUrlDark);
-
-            let column = isComplete ? 'complete' : 'backlog';
-            for (const [colId, itemIds] of Object.entries(kanbanState)) {
-                if ((itemIds as string[]).includes(id)) {
-                    column = colId;
-                    break;
-                }
-            }
-            return { id, column, isComplete };
+            return { id, column: itemColumn.get(id) ?? (isComplete ? 'complete' : 'backlog'), isComplete };
         });
 
-        // 2. Part Items
         const partsToConsider = activePart === ALL_QURAN_PART ? Array.from(CORE_QURAN_PARTS) : [activePart as number];
-        const partItems = partsToConsider.map(p => {
-            const id = `part-${p}`;
-            const pmm = (partMindMaps as any[]).find(m => Number(m.partId) === p);
-            const isComplete = pmm?.isComplete && (!!pmm?.imageUrl || !!pmm?.tldrawSnapshot || !!pmm?.imageUrlDark);
-
-            let column = isComplete ? 'complete' : 'backlog';
-            for (const [colId, itemIds] of Object.entries(kanbanState)) {
-                if ((itemIds as string[]).includes(id)) {
-                    column = colId;
-                    break;
-                }
-            }
-            return { id, column, isComplete };
+        const partItems = partsToConsider.map((partId) => {
+            const id = `part-${partId}`;
+            const partMindmap = partMindmapByPart.get(partId);
+            const isComplete = partMindmap?.isComplete && (!!partMindmap?.imageUrl || !!partMindmap?.tldrawSnapshot || !!partMindmap?.imageUrlDark);
+            return { id, column: itemColumn.get(id) ?? (isComplete ? 'complete' : 'backlog'), isComplete };
         });
 
-        // 3. Similarity Items
-        const decisionsMap = new Map();
-        decisions.forEach(d => decisionsMap.set(d.phraseId || d.id, d));
+        const decisionsMap = new Map<string, any>();
+        decisions.forEach((decision) => decisionsMap.set(decision.phraseId || decision.id, decision));
 
         const isPhraseResolved = (absolute: number, entry: any) => {
             const exact = decisionsMap.get(`${absolute}-${entry.phraseId}`);
@@ -98,71 +126,47 @@ function NavigationContent() {
             });
         };
 
-        const similarityItems = errors
-            .filter(e => e.type === 'similarity' && e.absoluteAyah)
-            .filter(err => {
-                const absolute = err.absoluteAyah!;
-                const verseDecision = decisionsMap.get(absolute.toString());
-                if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
-
-                const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
-                const unresolvedPhrases = muts.filter((m: any) => !isPhraseResolved(absolute, m));
-                return unresolvedPhrases.length > 0;
-            });
-
         const similaritySurahIds = new Set<number>();
-        similarityItems.forEach(item => {
-            const ref = absoluteToSurahAyah(item.absoluteAyah!);
-            similaritySurahIds.add(ref.surahId);
+        errors.forEach((error) => {
+            if (error.type !== 'similarity' || !error.absoluteAyah) return;
+            const absolute = error.absoluteAyah;
+            const verseDecision = decisionsMap.get(absolute.toString());
+            if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return;
+
+            const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
+            const unresolvedPhrases = muts.filter((entry: any) => !isPhraseResolved(absolute, entry));
+            if (unresolvedPhrases.length === 0) return;
+
+            similaritySurahIds.add(absoluteToSurahAyah(absolute).surahId);
         });
 
-        const similarityItemsFinal = Array.from(similaritySurahIds).map(surahId => {
+        const similarityItems = Array.from(similaritySurahIds).map((surahId) => {
             const id = `similarity-${surahId}`;
-            let column = 'backlog';
-            for (const [colId, itemIds] of Object.entries(kanbanState)) {
-                if ((itemIds as string[]).includes(id)) {
-                    column = colId;
-                    break;
-                }
-            }
-            return { id, column };
+            return { id, column: itemColumn.get(id) ?? 'backlog' };
         });
 
-        const totalPending = [...surahItems, ...partItems, ...similarityItemsFinal]
+        const pendingCount = [...surahItems, ...partItems, ...similarityItems]
             .filter(item => item.column === 'backlog' || item.column === 'in-progress')
             .length;
 
-        setPendingCount(totalPending);
-
-        // Calculate if portion is complete (all surahs and parts are complete)
-        const allSurahsComplete = surahItems.every(item => item.isComplete);
-        const allPartsComplete = partItems.every(item => item.isComplete);
-        const hasWorkItems = surahItems.length > 0 || partItems.length > 0;
-        
-        // Portion is complete when there are items and all are complete, OR no pending items exist
-        const portionComplete = hasWorkItems && allSurahsComplete && allPartsComplete && similarityItemsFinal.length === 0;
-        setIsPortionComplete(portionComplete);
-
-        // Daily portion completion (listening progress updated today)
-        const activeProgress = listeningProgress.find(p => p.partId === settings.activePart)
+        const activeProgress = listeningProgress.find(progress => progress.partId === settings.activePart)
             ?? (settings.activePart === ALL_QURAN_PART && (settings.partSystemVersion ?? 1) < 2
-                ? listeningProgress.find(p => p.partId === LEGACY_ALL_QURAN_PART)
+                ? listeningProgress.find(progress => progress.partId === LEGACY_ALL_QURAN_PART)
                 : undefined);
-        const lastUpdate = activeProgress?.updatedAt ? new Date(activeProgress.updatedAt) : null;
-        const todayDate = new Date();
-        const dailyComplete = !!lastUpdate && lastUpdate.toDateString() === todayDate.toDateString();
-        setIsDailyPortionComplete(dailyComplete);
+        const todayKey = getLocalDayKey(new Date());
+        const progressDayKey = activeProgress?.updatedAt ? getLocalDayKey(new Date(activeProgress.updatedAt)) : null;
+        const isDailyPortionComplete = !!progressDayKey && progressDayKey === todayKey;
 
-        // Match Today badge count with the exact queue filter used by the review section.
-        const todayCount = filterReviewQueueNodes(dueNodes, settings, mindmaps).length;
-
-        setTodayTasks(todayCount);
-
-    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, listeningProgress]);
+        return {
+            pendingCount,
+            todayTasks: filterReviewQueueNodes(dueNodes, settings, mindmaps).length,
+            isDailyPortionComplete,
+        };
+    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: todayTasks, showStatusDot: !isDailyPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', badge: pendingCount, showStatusDot: false },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
+        { href: '/todo', icon: ListTodo, label: 'Todo', badge: navMetrics.pendingCount, showStatusDot: false },
         { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
         { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },
@@ -179,6 +183,8 @@ function NavigationContent() {
                         key={item.href}
                         href={item.href}
                         className={`nav-item ${isActive ? 'active' : ''}`}
+                        onMouseEnter={() => router.prefetch(item.href)}
+                        onFocus={() => router.prefetch(item.href)}
                     >
                         <div className="nav-icon">
                             {item.showStatusDot && (
