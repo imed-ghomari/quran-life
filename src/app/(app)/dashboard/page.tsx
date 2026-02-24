@@ -1666,10 +1666,10 @@ export default function TodayPage() {
             if (activeVerse) {
                 const textEl = activeVerse.querySelector('.grouped-verse-text') as HTMLElement | null;
                 const nextChunkEl =
-                    (textEl?.querySelector('.next-blur') as HTMLElement | null) ||
-                    (container.querySelector('.next-blur') as HTMLElement | null);
+                    (textEl?.querySelector('.review-chunk--next') as HTMLElement | null) ||
+                    (container.querySelector('.review-chunk--next') as HTMLElement | null);
                 const visibleChunks = textEl
-                    ? Array.from(textEl.children).filter(el => !el.classList.contains('blurred-chunk')) as HTMLElement[]
+                    ? Array.from(textEl.querySelectorAll('.review-chunk--revealed')) as HTMLElement[]
                     : [];
                 const lastRevealed = visibleChunks[visibleChunks.length - 1] as HTMLElement | undefined;
                 const targetEl = lastRevealed || nextChunkEl || activeVerse;
@@ -2010,25 +2010,28 @@ export default function TodayPage() {
                                                             const showAll = showGrading || isPast;
                                                             const safeRevealedChunks = Math.max(0, Math.min(revealedChunks, chunks.length));
                                                             const isNextRevealVerse = !showAll && idx === nextRevealVerseIndex;
-                                                            const nextChunk = isNextRevealVerse ? chunks[nextRevealChunkIndex] : undefined;
-                                                            const visibleChunks = showAll
-                                                                ? chunks
-                                                                : isCurrent
-                                                                    ? chunks.slice(0, safeRevealedChunks)
-                                                                    : [];
-                                                            const remainingHidden = showAll
-                                                                ? ''
-                                                                : (isNextRevealVerse
-                                                                    ? chunks.slice(nextRevealChunkIndex + 1).join(' ')
-                                                                    : (isCurrent ? chunks.slice(safeRevealedChunks).join(' ') : (v?.text || '')));
 
                                                             return (
                                                                 <span key={v.ayahId} className={`grouped-verse-block ${isCurrent ? 'active-verse' : ''}`}>
                                                                     <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
                                                                     <span className="grouped-verse-text arabic-text">
-                                                                        {visibleChunks.map((c, i) => <span key={`${v.ayahId}-c-${i}`}>{c} </span>)}
-                                                                        {nextChunk && <span className="blurred-chunk next-blur">{nextChunk}</span>}
-                                                                        {remainingHidden && <span className="blurred-chunk strong-blur">{remainingHidden}</span>}
+                                                                        {chunks.map((chunk, chunkIdx) => {
+                                                                            const chunkKey = `${v.ayahId}-c-${chunkIdx}`;
+                                                                            const isRevealedChunk = showAll || (isCurrent && chunkIdx < safeRevealedChunks);
+                                                                            const isNextChunk = !isRevealedChunk && isNextRevealVerse && chunkIdx === nextRevealChunkIndex;
+                                                                            const chunkClassName = isRevealedChunk
+                                                                                ? 'review-chunk review-chunk--revealed'
+                                                                                : isNextChunk
+                                                                                    ? 'review-chunk blurred-chunk next-blur review-chunk--next'
+                                                                                    : 'review-chunk blurred-chunk strong-blur review-chunk--hidden';
+
+                                                                            return (
+                                                                                <span key={chunkKey} className={chunkClassName}>
+                                                                                    {chunk}
+                                                                                    {chunkIdx < chunks.length - 1 ? ' ' : ''}
+                                                                                </span>
+                                                                            );
+                                                                        })}
                                                                     </span>
                                                                 </span>
                                                             );

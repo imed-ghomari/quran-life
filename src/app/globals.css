@@ -1672,6 +1672,7 @@ h3 {
 
 .review-header-context {
   display: inline-block;
+  margin-right: 0.75rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2221,11 +2222,22 @@ input:focus {
   padding-inline: 0.8rem;
 }
 
+.review-target-box .review-chunk {
+  display: inline;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0 0.22rem;
+}
+
 .blurred-chunk {
   filter: blur(6px);
   background: rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
-  padding: 0 0.3rem;
+}
+
+.review-target-box .review-chunk--revealed {
+  filter: none;
+  background: transparent;
+  color: inherit;
 }
 
 .strong-blur {
@@ -2237,8 +2249,6 @@ input:focus {
   background: rgba(14, 165, 233, 0.3);
   border: 1px dashed var(--accent);
   color: var(--accent);
-  border-radius: 4px;
-  padding: 0 0.4rem;
 }
 
 /* Progress bar */
