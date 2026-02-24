@@ -53,6 +53,28 @@ interface SurahRiskRow {
     trend: TrendDirection;
 }
 
+function ChartEmptyState({ message = 'No data available', height = 200 }: { message?: string; height?: number }) {
+    return (
+        <div
+            style={{
+                height: `${height}px`,
+                borderRadius: '16px',
+                background: 'var(--reviews-chart-panel)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--foreground-secondary)',
+                fontSize: '0.85rem',
+                textAlign: 'center',
+                padding: '0 1rem',
+            }}
+        >
+            {message}
+        </div>
+    );
+}
+
 const toPositiveInt = (value: unknown): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -1086,9 +1108,7 @@ function SurahRiskMaturitySection({
             </div>
 
             {!hasData ? (
-                <div style={{ height: '200px', borderRadius: '16px', background: 'var(--reviews-chart-panel)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)', fontSize: '0.85rem' }}>
-                    No review data available
-                </div>
+                <ChartEmptyState message="No review data available" />
             ) : (
                 <SurahRiskBarsChart rows={rows} rangeLabel={rangeLabel} />
             )}
@@ -1337,9 +1357,9 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
         return () => ro.disconnect();
     }, []);
 
-    if (data.length === 0) return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+    if (data.length === 0) return <ChartEmptyState />;
     if (nonZeroData.length === 0) {
-        return <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-secondary)' }}>No data available</div>;
+        return <ChartEmptyState />;
     }
 
     return (
