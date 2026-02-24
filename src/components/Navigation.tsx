@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import {
@@ -16,8 +16,6 @@ import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabi
 import { SURAHS } from '@/lib/quranData';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { ALL_QURAN_PART, CORE_QURAN_PARTS, LEGACY_ALL_QURAN_PART } from '@/lib/types';
-
-const NAV_PREFETCH_ROUTES = ['/dashboard', '/todo', '/statistics', '/docs', '/settings'] as const;
 
 const getLocalDayKey = (date: Date) => {
     const y = date.getFullYear();
@@ -35,22 +33,6 @@ function NavigationContent() {
     const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
     const { progress: listeningProgress } = useInstantListeningProgress();
-
-    useEffect(() => {
-        if (typeof window === 'undefined' || !navigator.onLine) return;
-
-        const timeoutIds: number[] = [];
-        NAV_PREFETCH_ROUTES.forEach((route, index) => {
-            const timeoutId = window.setTimeout(() => {
-                router.prefetch(route);
-            }, index * 120);
-            timeoutIds.push(timeoutId);
-        });
-
-        return () => {
-            timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
-        };
-    }, [router]);
 
     const navMetrics = useMemo(() => {
         if (!settings) {
@@ -181,11 +163,23 @@ function NavigationContent() {
                     <Link
                         key={item.href}
                         href={item.href}
-                        prefetch={true}
                         className={`nav-item ${isActive ? 'active' : ''}`}
-                        onMouseEnter={() => router.prefetch(item.href)}
-                        onTouchStart={() => router.prefetch(item.href)}
-                        onFocus={() => router.prefetch(item.href)}
+                        onClick={(event) => {
+                            if (
+                                event.defaultPrevented
+                                || event.button !== 0
+                                || event.metaKey
+                                || event.ctrlKey
+                                || event.shiftKey
+                                || event.altKey
+                            ) {
+                                return;
+                            }
+                            event.preventDefault();
+                            if (!isActive) {
+                                router.push(item.href);
+                            }
+                        }}
                     >
                         <div className="nav-icon">
                             {item.showStatusDot && (
