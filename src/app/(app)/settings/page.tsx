@@ -128,7 +128,7 @@ function AppearanceCard({
                     fontSize: 'clamp(1rem, 5vw, 1.1rem)'
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div className="header-icon-badge">
                         <Palette size={18} />
                     </div>
                     <span>Appearance</span>
@@ -1734,8 +1734,8 @@ export default function SettingsPage() {
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Database size={24} />
+                            <div className="header-icon-badge">
+                                <Database size={20} />
                             </div>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Account & Appearance</div>
@@ -1752,8 +1752,8 @@ export default function SettingsPage() {
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Clock size={24} />
+                            <div className="header-icon-badge">
+                                <Clock size={20} />
                             </div>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Memorization Plan</div>
@@ -1770,8 +1770,8 @@ export default function SettingsPage() {
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Activity size={24} />
+                            <div className="header-icon-badge">
+                                <Activity size={20} />
                             </div>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Progress Tracking</div>
@@ -1788,8 +1788,8 @@ export default function SettingsPage() {
                         cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ background: 'var(--accent)', color: 'white', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Sliders size={24} />
+                            <div className="header-icon-badge">
+                                <Sliders size={20} />
                             </div>
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Advanced Options</div>
@@ -2757,7 +2757,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         cursor: 'pointer'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div className="header-icon-badge">
                                             <Database size={18} />
                                         </div>
                                         <div className="flex flex-col">
@@ -2916,7 +2916,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         cursor: 'pointer'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div className="header-icon-badge">
                                             <Clock size={18} />
                                         </div>
                                         <span>Completion Schedule</span>
@@ -2968,7 +2968,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         cursor: 'pointer'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div className="header-icon-badge">
                                             <PauseCircle size={18} />
                                         </div>
                                         <span>Active Part</span>
@@ -3034,7 +3034,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         cursor: 'pointer'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div className="header-icon-badge">
                                             <Check size={18} />
                                         </div>
                                         <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Skipped Surah</span>
@@ -3156,7 +3156,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         fontSize: 'clamp(1rem, 5vw, 1.1rem)'
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div className="header-icon-badge">
                                             <Activity size={18} />
                                         </div>
                                         <span>Knowledge Tracking</span>
@@ -3680,7 +3680,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     gap: '1rem',
                                     cursor: 'pointer'
                                 }}>
-                                <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div className="header-icon-badge">
                                     <Check size={18} />
                                 </div>
                                 <div style={{
@@ -4193,7 +4193,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     cursor: 'pointer'
                                 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                    <div style={{ background: 'var(--accent)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div className="header-icon-badge">
                                         <Sliders size={18} />
                                     </div>
                                     <span>Advanced Options</span>

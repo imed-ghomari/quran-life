@@ -1949,7 +1949,14 @@ export default function TodayPage() {
                                 <span className="header-icon-badge"><CheckCircle size={20} /></span>
                                 <span>Reviews</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="today-column-meta">
+                                {viewState.reviewExpanded && orderedDueNodes.length > 0 && activeContent && (
+                                    <span className="review-header-context">
+                                        {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
+                                            activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
+                                                `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`}
+                                    </span>
+                                )}
                                 <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
                             </div>
                         </div>
@@ -1968,14 +1975,16 @@ export default function TodayPage() {
                                   <div
                                         className={`review-active-content ${activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap' ? 'review-active-content--mindmap' : ''}`}
                                   >
-                                        {/* Header */}
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginBottom: '0.5rem' }}>
-                                            {`${currentReviewIndex + 1}`} • {
-                                                activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
-                                                    activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
-                                                        `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`
-                                            }
-                                        </p>
+                                        {/* Mobile-only context label (desktop lives in column header) */}
+                                        {isMobile && (
+                                            <div className="review-context-meta">
+                                                <span className="review-context-meta__label">
+                                                    {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
+                                                        activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
+                                                            `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`}
+                                                </span>
+                                            </div>
+                                        )}
 
                                         {/* Verse type content */}
                                         {activeContent.type === 'verse' && (
