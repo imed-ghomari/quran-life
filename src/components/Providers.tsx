@@ -29,7 +29,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-02-24-v19-navwarm-cache-reset";
+const SW_MIGRATION_KEY = "sw-migration-2026-02-24-v20-nav-prefetch-reset";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
 const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
