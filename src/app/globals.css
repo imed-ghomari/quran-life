@@ -437,7 +437,7 @@ article.prose pre {
 .custom-scrollbar:focus-within,
 .custom-scrollbar:active,
 .custom-scrollbar.is-scrolling {
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -458,14 +458,14 @@ article.prose pre {
 .custom-scrollbar:focus-within::-webkit-scrollbar-thumb,
 .custom-scrollbar:active::-webkit-scrollbar-thumb,
 .custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--scrollbar-thumb);
 }
 
 .custom-scrollbar:hover::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar:focus-within::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar:active::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb:hover {
-  background: var(--foreground-secondary);
+  background: var(--scrollbar-thumb-hover);
 }
 
 @keyframes fadeUp {
@@ -554,6 +554,8 @@ article.prose pre {
   --todo-pill-suspended: var(--danger);
 
   --reviews-chart-panel: var(--background);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent) 32%, var(--border));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 52%, var(--foreground-secondary));
 }
 
 @media (max-width: 767px) {
@@ -2174,6 +2176,12 @@ input:focus {
   line-height: 1.9;
 }
 
+.review-target-box .grouped-verse {
+  text-align: justify;
+  text-align-last: right;
+  padding-inline: 0.8rem;
+}
+
 .blurred-chunk {
   filter: blur(6px);
   background: rgba(0, 0, 0, 0.12);
@@ -3041,6 +3049,21 @@ input:focus {
 }
 
 @media (min-width: 768px) {
+  .today-grid .today-card {
+    padding: 1rem;
+  }
+
+  .today-grid .today-card .today-column-header {
+    align-items: center;
+    padding: 0 0 0.5rem 0;
+    margin: 0 0 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .today-grid .today-card .today-column-title {
+    margin: 0;
+  }
+
   .content-wrapper {
     max-width: 100%;
     margin: 0 auto;

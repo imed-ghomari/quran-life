@@ -1944,8 +1944,8 @@ export default function TodayPage() {
                 {(!isMobile || mobileSection === 'review') && (
                 <div className="card today-card today-card--review">
                     {!isMobile && (
-                        <div className="collapsible-header" onClick={() => toggleSection('review')}>
-                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground">
+                        <div className="collapsible-header today-column-header" onClick={() => toggleSection('review')}>
+                            <div className="today-column-title flex items-center gap-2 text-base font-semibold text-foreground">
                                 <span className="header-icon-badge"><CheckCircle size={20} /></span>
                                 <span>Reviews</span>
                             </div>
@@ -2226,8 +2226,8 @@ export default function TodayPage() {
                 {(!isMobile || mobileSection === 'daily') && (
                 <div className="card today-card today-card--daily">
                     {!isMobile && (
-                        <div className="collapsible-header" onClick={() => toggleSection('daily')}>
-                            <div className="flex items-center gap-2 text-base font-semibold mb-3 text-foreground">
+                        <div className="collapsible-header today-column-header" onClick={() => toggleSection('daily')}>
+                            <div className="today-column-title flex items-center gap-2 text-base font-semibold text-foreground">
                                 <span className="header-icon-badge"><BookOpen size={20} /></span>
                                 <span>Daily Portion</span>
                             </div>
