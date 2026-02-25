@@ -905,6 +905,22 @@ export default function TodayPage() {
 
     // Load data
     useEffect(() => {
+        const readCachedQuranResponse = async (): Promise<Response | null> => {
+            if (!('caches' in window)) return null;
+            const candidates = [
+                '/qpc-hafs-word-by-word.json',
+                `${window.location.origin}/qpc-hafs-word-by-word.json`,
+            ];
+            for (const candidate of candidates) {
+                const match = await caches.match(candidate, {
+                    ignoreSearch: true,
+                    ignoreVary: true,
+                });
+                if (match) return match;
+            }
+            return null;
+        };
+
         async function load() {
             // Check session storage first
             const cached = sessionStorage.getItem('quran_verses_cache_v2');
@@ -919,7 +935,8 @@ export default function TodayPage() {
             }
 
             try {
-                const response = await fetch('/qpc-hafs-word-by-word.json');
+                const response = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
+                if (!response.ok) throw new Error(`Failed to load quran JSON: ${response.status}`);
                 const data = await response.json() as Record<string, any>;
                 const verses = sanitizeVerses(parseQuranJson(data));
                 setAllVerses(verses);
@@ -932,15 +949,13 @@ export default function TodayPage() {
                 }
             } catch (_e) {
                 try {
-                    if ('caches' in window) {
-                        const cachedRes = await caches.match('/qpc-hafs-word-by-word.json');
-                        if (cachedRes) {
-                            const data = await cachedRes.json() as Record<string, any>;
-                            const verses = sanitizeVerses(parseQuranJson(data));
-                            setAllVerses(verses);
-                            setIsVersesLoaded(true);
-                            return;
-                        }
+                    const cachedRes = await readCachedQuranResponse();
+                    if (cachedRes) {
+                        const data = await cachedRes.json() as Record<string, any>;
+                        const verses = sanitizeVerses(parseQuranJson(data));
+                        setAllVerses(verses);
+                        setIsVersesLoaded(true);
+                        return;
                     }
                 } catch (e) {
                     console.warn('Failed to load verses from cache', e);
@@ -1102,7 +1117,16 @@ export default function TodayPage() {
         if (!remembered) {
             const failedAyahId =
                 node.type === 'verse_segment' && node.startVerse !== undefined
-                    ? Math.min(node.endVerse ?? node.startVerse, node.startVerse + currentVerseInReview)
+                    ? (() => {
+                        const segmentStart = node.startVerse;
+                        const segmentEnd = node.endVerse ?? segmentStart;
+                        const currentAyah = Math.min(segmentEnd, segmentStart + currentVerseInReview);
+                        // If the user is at the start of an unrevealed verse, attribute the error to the previous verse.
+                        if (revealedChunks === 0 && currentVerseInReview > 0) {
+                            return Math.max(segmentStart, currentAyah - 1);
+                        }
+                        return currentAyah;
+                    })()
                     : node.startVerse;
 
             const errorToSave: any = {
@@ -1194,7 +1218,7 @@ export default function TodayPage() {
         } else {
             // All done for now
         }
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure]);
 
     const handlePostpone = useCallback(async () => {
         if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;

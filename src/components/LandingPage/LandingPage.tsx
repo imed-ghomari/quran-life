@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTheme } from '../ThemeProvider';
 import {
   Repeat,
@@ -193,6 +193,23 @@ interface LandingPageProps {
 const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = window.document.documentElement;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const applyTheme = () => {
+      const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
+      root.setAttribute('data-theme', resolved);
+    };
+
+    applyTheme();
+    if (theme === 'system') {
+      media.addEventListener('change', applyTheme);
+      return () => media.removeEventListener('change', applyTheme);
+    }
+  }, [theme]);
 
   const cycleTheme = () => {
     if (theme === 'system') setTheme('light');

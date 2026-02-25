@@ -2338,6 +2338,45 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
     const handleAddCustomMutashabih = async (mut: any) => {
         const [s1, a1] = mut.verseId.split(':').map(Number);
         const [s2, a2] = mut.targetVerseId.split(':').map(Number);
+        const abs1 = surahAyahToAbsolute(s1, a1);
+        const abs2 = surahAyahToAbsolute(s2, a2);
+        const skippedSurahs = new Set<number>(settings?.skippedSurahs || []);
+        skippedSurahs.add(LOCKED_SKIPPED_SURAH_ID);
+        if (skippedSurahs.has(s1) || skippedSurahs.has(s2)) {
+            addToast('error', 'Cannot add custom mutashabih for skipped surahs');
+            return false;
+        }
+
+        const toPairKey = (left: number, right: number) => {
+            const min = Math.min(left, right);
+            const max = Math.max(left, right);
+            return `${min}:${max}`;
+        };
+        const incomingPairKey = toPairKey(abs1, abs2);
+
+        const hasExistingCustomPair = instantCustomMutashabihat.some((existing: any) => {
+            const [existingS1, existingA1] = String(existing?.verseId || '').split(':').map(Number);
+            const [existingS2, existingA2] = String(existing?.targetVerseId || '').split(':').map(Number);
+            if (!Number.isFinite(existingS1) || !Number.isFinite(existingA1) || !Number.isFinite(existingS2) || !Number.isFinite(existingA2)) {
+                return false;
+            }
+            const existingAbs1 = surahAyahToAbsolute(existingS1, existingA1);
+            const existingAbs2 = surahAyahToAbsolute(existingS2, existingA2);
+            return toPairKey(existingAbs1, existingAbs2) === incomingPairKey;
+        });
+
+        const hasExistingOfficialPair = getMutashabihatForAbsolute(abs1)
+            .filter((entry) => !entry.isCustom)
+            .some((entry) => {
+                const linkedRefs = new Set<number>([...entry.sources, ...entry.matches]);
+                linkedRefs.delete(abs1);
+                return linkedRefs.has(abs2);
+            });
+
+        if (hasExistingCustomPair || hasExistingOfficialPair) {
+            addToast('error', 'This mutashabih already exists');
+            return false;
+        }
 
         const customItem = {
             id: mut.id && isUuid(mut.id) ? mut.id : id(),
@@ -2354,12 +2393,15 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
         try {
             await updateInstantCustom(customItem);
+            addToast('success', 'Custom mutashabih added');
+            return true;
         } catch (error) {
             console.error('Failed to save custom mutashabih', error);
             await alert({
                 title: 'Save Failed',
                 message: 'Could not save custom similar verse. Please try again.',
             });
+            return false;
         }
     };
 
@@ -2733,7 +2775,20 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             })()}
             {isMobile ? renderMobileView() : (
                 <div className="content-wrapper tab-content">
-                    <h1 className="hidden md:block text-2xl font-bold mb-6">Settings</h1>
+                    <div className="hidden md:flex items-center justify-between mb-6 settings-topbar-row">
+                        <h1 className="text-2xl font-bold m-0">Settings</h1>
+                        <div className="settings-support-cta">
+                            <span>Need help or more details? Join our Discord server.</span>
+                            <a
+                                className="settings-support-discord-link"
+                                href="https://discord.gg/6wy3YRG2qB"
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                Join Discord
+                            </a>
+                        </div>
+                    </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                         <div className="settings-grid">
@@ -4713,6 +4768,41 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             })()}
 
             <style jsx>{`
+                .settings-support-cta {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.7rem;
+                    font-size: 0.9rem;
+                    color: var(--foreground-secondary);
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                    transform: translateY(-2px);
+                }
+
+                .settings-topbar-row {
+                    flex-wrap: nowrap;
+                }
+
+                .settings-support-discord-link {
+                    color: var(--foreground-secondary);
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    line-height: 1;
+                    padding: 0.42rem 0.72rem;
+                    border-radius: 12px;
+                    border: 1px solid var(--border);
+                    background: var(--background);
+                    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+                }
+
+                .settings-support-discord-link:hover {
+                    color: var(--foreground);
+                    border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+                    background: var(--verse-bg);
+                    transform: translateY(-1px);
+                }
+
                 .add-custom-mut-btn {
                     background: var(--accent);
                     color: white;

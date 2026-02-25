@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (mut: CustomMutashabih) => Promise<void> | void;
+    onSave: (mut: CustomMutashabih) => Promise<boolean | void> | boolean | void;
     initialSurahId?: number;
 }
 
@@ -19,6 +19,7 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_mindmap', label: 'Solved by Mindmap' },
     { value: 'solved_note', label: 'Solved by Note' },
 ];
+const NOTE_MAX_LENGTH = 300;
 
 export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, initialSurahId }: Props) {
     const [surah1, setSurah1] = useState<number>(initialSurahId || 1);
@@ -27,6 +28,7 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
     const [ayah2, setAyah2] = useState<number>(1);
     const [status, setStatus] = useState<MutashabihatDecision['status']>('pending');
     const [note, setNote] = useState('');
+    const [formError, setFormError] = useState('');
 
     useEffect(() => {
         if (initialSurahId) {
@@ -39,8 +41,13 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
 
     const s1Data = SURAHS.find(s => s.id === surah1);
     const s2Data = SURAHS.find(s => s.id === surah2);
+    const isSameVersePair = surah1 === surah2 && ayah1 === ayah2;
 
     const handleSave = async () => {
+        if (isSameVersePair) {
+            setFormError('Verse 1 and Verse 2 must be different.');
+            return;
+        }
         const newMut: CustomMutashabih = {
             id: id(),
             verseId: `${surah1}:${ayah1}`,
@@ -51,11 +58,12 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
             targetAyahId: ayah2,
             phrase: '',
             status,
-            notes: note,
+            notes: note.slice(0, NOTE_MAX_LENGTH),
             createdAt: new Date().toISOString(),
         };
         try {
-            await onSave(newMut);
+            const saveResult = await onSave(newMut);
+            if (saveResult === false) return;
             onClose();
         } catch (error) {
             console.error('Failed to save custom mutashabih', error);
@@ -77,12 +85,16 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                             <select value={surah1} onChange={e => {
                                 setSurah1(Number(e.target.value));
                                 setAyah1(1);
+                                setFormError('');
                             }}>
                                 {SURAHS.map(s => (
                                     <option key={s.id} value={s.id}>{s.id}. {s.name}</option>
                                 ))}
                             </select>
-                            <select value={ayah1} onChange={e => setAyah1(Number(e.target.value))}>
+                            <select value={ayah1} onChange={e => {
+                                setAyah1(Number(e.target.value));
+                                setFormError('');
+                            }}>
                                 {Array.from({ length: s1Data?.verseCount || 0 }, (_, i) => i + 1).map(v => (
                                     <option key={v} value={v}>Ayah {v}</option>
                                 ))}
@@ -96,12 +108,16 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                             <select value={surah2} onChange={e => {
                                 setSurah2(Number(e.target.value));
                                 setAyah2(1);
+                                setFormError('');
                             }}>
                                 {SURAHS.map(s => (
                                     <option key={s.id} value={s.id}>{s.id}. {s.name}</option>
                                 ))}
                             </select>
-                            <select value={ayah2} onChange={e => setAyah2(Number(e.target.value))}>
+                            <select value={ayah2} onChange={e => {
+                                setAyah2(Number(e.target.value));
+                                setFormError('');
+                            }}>
                                 {Array.from({ length: s2Data?.verseCount || 0 }, (_, i) => i + 1).map(v => (
                                     <option key={v} value={v}>Ayah {v}</option>
                                 ))}
@@ -111,7 +127,10 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
 
                     <div className="form-group">
                         <label>Status</label>
-                        <select value={status} onChange={e => setStatus(e.target.value as any)}>
+                        <select value={status} onChange={e => {
+                            setStatus(e.target.value as any);
+                            setFormError('');
+                        }}>
                             {MUT_STATES.map(s => (
                                 <option key={s.value} value={s.value}>{s.label}</option>
                             ))}
@@ -120,18 +139,24 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
 
                     <div className="form-group">
                         <label>Note (Optional)</label>
-                        <textarea 
-                            value={note} 
-                            onChange={e => setNote(e.target.value)}
+                        <textarea
+                            value={note}
+                            onChange={e => {
+                                setNote(e.target.value.slice(0, NOTE_MAX_LENGTH));
+                                setFormError('');
+                            }}
                             placeholder="Add your distinction note here..."
                             rows={3}
+                            maxLength={NOTE_MAX_LENGTH}
                         />
+                        <div className="char-counter">{note.length}/{NOTE_MAX_LENGTH} characters</div>
                     </div>
+                    {formError && <div className="form-error">{formError}</div>}
                 </div>
 
                 <div className="modal-footer">
                     <button className="btn std-normal-btn" onClick={onClose}>Cancel</button>
-                    <button className="btn std-normal-btn" onClick={handleSave}>Save Mutashabih</button>
+                    <button className="btn std-normal-btn" onClick={handleSave} disabled={isSameVersePair}>Save Mutashabih</button>
                 </div>
             </div>
 
@@ -230,6 +255,20 @@ export default function AddCustomMutashabihModal({ isOpen, onClose, onSave, init
                 }
                 textarea {
                     resize: vertical;
+                }
+                .char-counter {
+                    font-size: 0.75rem;
+                    color: var(--foreground-secondary);
+                    text-align: right;
+                }
+                .form-error {
+                    color: var(--danger);
+                    font-size: 0.85rem;
+                    margin-top: -0.35rem;
+                }
+                .btn:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
                 }
                 .modal-footer {
                     padding: 1rem 1.5rem;
