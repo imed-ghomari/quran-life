@@ -318,6 +318,14 @@ export default function TodoPage() {
         return [metaPartTask, ...regularPartTasks];
     }, [partMindmapsMap, activePart]);
 
+    const completedSimilarityCards = useMemo(() => {
+        return new Set(
+            (settings.kanbanColumns?.complete || [])
+                .map((id) => String(id))
+                .filter((id) => id.startsWith('similarity-'))
+        );
+    }, [settings.kanbanColumns?.complete]);
+
     // Gather Similarity Errors (Mutashabihat) that need resolution
     const similarityItems = useMemo(() => {
         const isPhraseResolved = (absolute: number, entry: any) => {
@@ -365,12 +373,15 @@ export default function TodoPage() {
             // Filter out items that are already resolved/ignored
             .filter(entry => {
                 const absolute = entry.err.absoluteAyah!;
+                const { surahId } = absoluteToSurahAyah(absolute);
+                const isPinnedInComplete = completedSimilarityCards.has(`similarity-${surahId}`);
+                if (isPinnedInComplete) return true;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
                 if (entry.unresolvedCount <= 0) return false;
                 return entry.hasReviewedComparator;
             });
-    }, [errors, decisionsMap, customMutashabihat, nodes]);
+    }, [errors, decisionsMap, customMutashabihat, nodes, completedSimilarityCards]);
 
     // Group similarity items by Surah for cleaner display in Kanban
     const groupedSimilarity = useMemo(() => {

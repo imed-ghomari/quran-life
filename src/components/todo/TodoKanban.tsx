@@ -519,7 +519,6 @@ export default function TodoKanban({
             const retainedCompletedMaintenance = prev.complete.items.filter((item) => (
                 (item.type === 'suspended' || item.type === 'similarity')
                 && !itemMap.has(item.id)
-                && (kanbanState?.complete?.includes(item.id) ?? true)
             ));
 
             retainedCompletedMaintenance.forEach((item) => {
