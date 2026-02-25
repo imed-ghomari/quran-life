@@ -8,7 +8,7 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 ## Quick start
 1) Install deps: `npm install`
 2) Dev server: `npm run dev`
-3) Build: `npm run build` (uses Next 13.5)
+3) Build: `npm run build` (uses Next)
 
 ## Data
 - Quran text and word data: `public/qpc-hafs-word-by-word.json`
