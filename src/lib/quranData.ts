@@ -192,6 +192,25 @@ export function getSurah(surahId: number): Surah | undefined {
 let cachedVerses: Verse[] | null = null;
 let versesLoadingPromise: Promise<Verse[]> | null = null;
 
+async function readQuranResponseFromCache(): Promise<Response | null> {
+    if (typeof window === 'undefined' || !('caches' in window)) return null;
+
+    const candidates = [
+        '/qpc-hafs-word-by-word.json',
+        `${window.location.origin}/qpc-hafs-word-by-word.json`,
+    ];
+
+    for (const candidate of candidates) {
+        const match = await caches.match(candidate, {
+            ignoreSearch: true,
+            ignoreVary: true,
+        });
+        if (match) return match;
+    }
+
+    return null;
+}
+
 /**
  * Get all verses, caching the result to avoid repeated parsing
  */
@@ -214,7 +233,8 @@ export async function getQuranVerses(): Promise<Verse[]> {
         }
 
         try {
-            const res = await fetch('/qpc-hafs-word-by-word.json');
+            const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
+            if (!res.ok) throw new Error(`Failed to load quran JSON: ${res.status}`);
             const data = await res.json();
             cachedVerses = parseQuranJson(data as Record<string, any>);
             
@@ -231,18 +251,16 @@ export async function getQuranVerses(): Promise<Verse[]> {
              console.error('Failed to load verses', err);
              
              // Fallback to Cache API (for offline support)
-             if (typeof window !== 'undefined' && 'caches' in window) {
-                 try {
-                     const cachedRes = await caches.match('/qpc-hafs-word-by-word.json');
-                     if (cachedRes) {
-                         const data = await cachedRes.json();
-                         cachedVerses = parseQuranJson(data as Record<string, any>);
-                         return cachedVerses;
-                     }
-                 } catch (e) {
-                     console.warn('Failed to recover from cache', e);
-                 }
-             }
+            try {
+                const cachedRes = await readQuranResponseFromCache();
+                if (cachedRes) {
+                    const data = await cachedRes.json();
+                    cachedVerses = parseQuranJson(data as Record<string, any>);
+                    return cachedVerses;
+                }
+            } catch (e) {
+                console.warn('Failed to recover from cache', e);
+            }
              
              return [];
         }

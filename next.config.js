@@ -38,6 +38,8 @@ const withPWA = require('@ducanh2912/next-pwa').default({
             { url: '/settings', revision: PWA_CACHE_VERSION },
             { url: '/docs', revision: PWA_CACHE_VERSION },
             { url: '/offline-app', revision: PWA_CACHE_VERSION },
+            { url: '/qpc-hafs-word-by-word.json', revision: PWA_CACHE_VERSION },
+            { url: '/search-index.json', revision: PWA_CACHE_VERSION },
         ],
         runtimeCaching: [
             {
