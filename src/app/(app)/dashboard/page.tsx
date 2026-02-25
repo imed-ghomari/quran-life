@@ -1121,9 +1121,12 @@ export default function TodayPage() {
                         const segmentStart = node.startVerse;
                         const segmentEnd = node.endVerse ?? segmentStart;
                         const currentAyah = Math.min(segmentEnd, segmentStart + currentVerseInReview);
-                        // If the user is at the start of an unrevealed verse, attribute the error to the previous verse.
-                        if (revealedChunks === 0 && currentVerseInReview > 0) {
-                            return Math.max(segmentStart, currentAyah - 1);
+                        const isAtBeginningOfUnrevealedVerse = revealedChunks === 0;
+                        const isFirstVerseInCurrentReview = currentAyah === segmentStart;
+
+                        // Only use previous-verse attribution after the first verse in this review range.
+                        if (isAtBeginningOfUnrevealedVerse && !isFirstVerseInCurrentReview) {
+                            return currentAyah - 1;
                         }
                         return currentAyah;
                     })()
