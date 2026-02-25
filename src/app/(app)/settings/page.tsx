@@ -2338,6 +2338,45 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
     const handleAddCustomMutashabih = async (mut: any) => {
         const [s1, a1] = mut.verseId.split(':').map(Number);
         const [s2, a2] = mut.targetVerseId.split(':').map(Number);
+        const abs1 = surahAyahToAbsolute(s1, a1);
+        const abs2 = surahAyahToAbsolute(s2, a2);
+        const skippedSurahs = new Set<number>(settings?.skippedSurahs || []);
+        skippedSurahs.add(LOCKED_SKIPPED_SURAH_ID);
+        if (skippedSurahs.has(s1) || skippedSurahs.has(s2)) {
+            addToast('error', 'Cannot add custom mutashabih for skipped surahs');
+            return false;
+        }
+
+        const toPairKey = (left: number, right: number) => {
+            const min = Math.min(left, right);
+            const max = Math.max(left, right);
+            return `${min}:${max}`;
+        };
+        const incomingPairKey = toPairKey(abs1, abs2);
+
+        const hasExistingCustomPair = instantCustomMutashabihat.some((existing: any) => {
+            const [existingS1, existingA1] = String(existing?.verseId || '').split(':').map(Number);
+            const [existingS2, existingA2] = String(existing?.targetVerseId || '').split(':').map(Number);
+            if (!Number.isFinite(existingS1) || !Number.isFinite(existingA1) || !Number.isFinite(existingS2) || !Number.isFinite(existingA2)) {
+                return false;
+            }
+            const existingAbs1 = surahAyahToAbsolute(existingS1, existingA1);
+            const existingAbs2 = surahAyahToAbsolute(existingS2, existingA2);
+            return toPairKey(existingAbs1, existingAbs2) === incomingPairKey;
+        });
+
+        const hasExistingOfficialPair = getMutashabihatForAbsolute(abs1)
+            .filter((entry) => !entry.isCustom)
+            .some((entry) => {
+                const linkedRefs = new Set<number>([...entry.sources, ...entry.matches]);
+                linkedRefs.delete(abs1);
+                return linkedRefs.has(abs2);
+            });
+
+        if (hasExistingCustomPair || hasExistingOfficialPair) {
+            addToast('error', 'This mutashabih already exists');
+            return false;
+        }
 
         const customItem = {
             id: mut.id && isUuid(mut.id) ? mut.id : id(),
@@ -2354,12 +2393,15 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
         try {
             await updateInstantCustom(customItem);
+            addToast('success', 'Custom mutashabih added');
+            return true;
         } catch (error) {
             console.error('Failed to save custom mutashabih', error);
             await alert({
                 title: 'Save Failed',
                 message: 'Could not save custom similar verse. Please try again.',
             });
+            return false;
         }
     };
 
