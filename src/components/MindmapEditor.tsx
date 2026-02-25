@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
-import { appLogger } from '@/lib/logger';
 import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
 import {
@@ -251,12 +250,36 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
     const [editor, setEditor] = useState<any>(null);
     const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const pendingShapeTimestampUpdatesRef = useRef<Map<string, any>>(new Map());
+    const timestampFlushTimerRef = useRef<NodeJS.Timeout | null>(null);
     const { theme } = useTheme();
     const currentContextLabel = useMemo(
         () => contextLabel || extractContextFromDocLink(docLink) || extractContextFromTitle(title),
         [contextLabel, docLink, title]
     );
     const shouldShowContextLabel = useMemo(() => !!currentContextLabel, [currentContextLabel]);
+
+    const flushPendingShapeTimestampUpdates = useCallback(() => {
+        if (timestampFlushTimerRef.current) {
+            clearTimeout(timestampFlushTimerRef.current);
+            timestampFlushTimerRef.current = null;
+        }
+
+        const editorInst = editorRef.current;
+        if (!editorInst) return;
+
+        const pendingRecords = Array.from(pendingShapeTimestampUpdatesRef.current.values());
+        pendingShapeTimestampUpdatesRef.current.clear();
+        if (pendingRecords.length === 0) return;
+
+        const now = new Date().toISOString();
+        const updates = pendingRecords.map((record) => ({
+            ...record,
+            meta: { ...record.meta, updatedAt: now }
+        }));
+
+        editorInst.store.put(updates);
+    }, []);
 
     useEffect(() => {
         try {
@@ -420,55 +443,46 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         window.addEventListener('dragover', handleDragOver, true);
         window.addEventListener('drop', handleDrop, true);
 
+        const isShapeRecord = (rec: any) => rec?.typeName === 'shape' && typeof rec?.id === 'string';
+
+        const scheduleShapeTimestampFlush = () => {
+            if (timestampFlushTimerRef.current) return;
+            // Batch frequent pointer updates to avoid write amplification while drawing.
+            timestampFlushTimerRef.current = setTimeout(flushPendingShapeTimestampUpdates, 700);
+        };
+
         // --- Change Listener for Sync Timestamps ---
-        // We listen to all changes. If a shape is updated/added by 'user',
-        // we essentially "tag" it with a new updatedAt timestamp in its meta.
-        // This allows our sync engine to perform granular Last-Write-Wins merging on shapes.
+        // Tag shape records with updatedAt, but batch writes to keep drawing responsive.
         const cleanupListener = editor.store.listen(
             (event: any) => {
-                // appLogger.addLog(`[Editor] Store update source: ${event.source}`, 'info');
                 if (event.source !== 'user') return;
 
                 const changes = event.changes;
-                const updates: any[] = [];
-                const now = new Date().toISOString();
-
-                // Helper to check if record is a shape
-                const isShape = (rec: any) => rec.typeName === 'shape';
 
                 // Handle updates
                 Object.values(changes.updated || {}).forEach((update: any) => {
-                    const [from, to] = update;
-                    if (isShape(to)) {
-                        // Avoid infinite loops: only update if updatedAt is NOT what we just set
-                        if (to.meta?.updatedAt !== now) {
-                            updates.push({
-                                ...to, // <--- Vital: Spread the full record (x, y, props, etc)
-                                meta: { ...to.meta, updatedAt: now }
-                            });
-                        }
+                    const [, to] = update;
+                    if (isShapeRecord(to)) {
+                        pendingShapeTimestampUpdatesRef.current.set(to.id, to);
                     }
                 });
-
-                if (Object.keys(changes.added || {}).length > 0) {
-                    // appLogger.addLog(`[Editor] Added ${Object.keys(changes.added).length} items`, 'info');
-                }
 
                 // Handle additions
                 Object.values(changes.added || {}).forEach((record: any) => {
-                    if (isShape(record)) {
-                        updates.push({
-                            ...record, // <--- Vital: Spread the full record
-                            meta: { ...record.meta, updatedAt: now }
-                        });
+                    if (isShapeRecord(record)) {
+                        pendingShapeTimestampUpdatesRef.current.set(record.id, record);
                     }
                 });
 
-                if (updates.length > 0) {
-                    // We use store.put to update directly without creating a new undo/redo entry
-                    // and usually this triggers source: 'code' which avoids loop
-                    appLogger.addLog(`[Editor] Injecting timestamps for ${updates.length} shapes`, 'info');
-                    editor.store.put(updates);
+                // If a shape was removed before batch flush, drop any pending write for it.
+                Object.values(changes.removed || {}).forEach((record: any) => {
+                    if (isShapeRecord(record)) {
+                        pendingShapeTimestampUpdatesRef.current.delete(record.id);
+                    }
+                });
+
+                if (pendingShapeTimestampUpdatesRef.current.size > 0) {
+                    scheduleShapeTimestampFlush();
                 }
             },
             { scope: 'document', source: 'user' } // Only listen to user actions
@@ -476,15 +490,21 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
         return () => {
             cleanupListener();
+            if (timestampFlushTimerRef.current) {
+                clearTimeout(timestampFlushTimerRef.current);
+                timestampFlushTimerRef.current = null;
+            }
+            pendingShapeTimestampUpdatesRef.current.clear();
             window.removeEventListener('paste', handlePaste, true);
             window.removeEventListener('dragover', handleDragOver, true);
             window.removeEventListener('drop', handleDrop, true);
         };
-    }, [editor]);
+    }, [editor, flushPendingShapeTimestampUpdates]);
 
-    // Track last save time to avoid too frequent saves
-    const lastSaveTime = useRef<number>(Date.now());
     const isDirty = useRef<boolean>(false);
+    const isSavingRef = useRef<boolean>(false);
+    const queuedSaveRef = useRef<boolean>(false);
+    const queuedSaveWithImagesRef = useRef<boolean>(false);
     const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
     const maxWaitTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -499,9 +519,20 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             maxWaitTimer.current = null;
         }
 
+        if (isSavingRef.current) {
+            queuedSaveRef.current = true;
+            queuedSaveWithImagesRef.current = queuedSaveWithImagesRef.current || withImages;
+            return;
+        }
+
         const editorInst = editorRef.current;
-        if (editorInst && onSave) {
-            try {
+        if (!editorInst || !onSave) return;
+
+        isSavingRef.current = true;
+        try {
+                // Ensure all pending shape-level updatedAt tags are present before persisting snapshot.
+                flushPendingShapeTimestampUpdates();
+
                 // Force store snapshot to ensure we get schema and full store
                 const snapshot = editorInst.store.getSnapshot();
 
@@ -556,16 +587,23 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
                 await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined, withImages);
                 isDirty.current = false;
-                lastSaveTime.current = Date.now();
                 
                 if (!withImages) {
                     // appLogger.addLog('[Editor] Auto-saved successfully', 'info');
                 }
             } catch (e) {
                 console.error("Save failed", e);
+            } finally {
+                isSavingRef.current = false;
+
+                if (queuedSaveRef.current) {
+                    const nextSaveWithImages = queuedSaveWithImagesRef.current;
+                    queuedSaveRef.current = false;
+                    queuedSaveWithImagesRef.current = false;
+                    void saveContent(nextSaveWithImages);
+                }
             }
-        }
-    }, [onSave]);
+    }, [onSave, flushPendingShapeTimestampUpdates]);
 
     const handleClose = async () => {
         // Clear any pending auto-save
