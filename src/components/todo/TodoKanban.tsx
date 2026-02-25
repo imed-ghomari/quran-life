@@ -513,15 +513,16 @@ export default function TodoKanban({
         };
 
         setColumns((prev) => {
-            // Keep suspended cards visible in Complete even after they leave suspendedAnchors.
-            // This prevents completed maintenance cards from disappearing after the completion side effect runs.
-            const retainedCompletedSuspended = prev.complete.items.filter((item) => (
-                item.type === 'suspended'
+            // Keep completed maintenance cards visible even after they leave source datasets.
+            // Similarity cards resolve out of similarityGroups and suspended cards leave suspendedAnchors,
+            // but cards already moved to Complete should remain visible on the Todo board.
+            const retainedCompletedMaintenance = prev.complete.items.filter((item) => (
+                (item.type === 'suspended' || item.type === 'similarity')
                 && !itemMap.has(item.id)
                 && (kanbanState?.complete?.includes(item.id) ?? true)
             ));
 
-            retainedCompletedSuspended.forEach((item) => {
+            retainedCompletedMaintenance.forEach((item) => {
                 if (!newCols.complete.some((existing) => existing.id === item.id)) {
                     newCols.complete.push({ ...item, status: 'complete' });
                 }
