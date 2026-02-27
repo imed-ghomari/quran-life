@@ -70,6 +70,11 @@ interface SettingsToastItem {
     info?: string;
 }
 
+type BillingSummaryState = {
+    nextRenewalAt: string | null;
+    canManageSubscription: boolean;
+};
+
 const isMobileViewport = () =>
     typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -298,6 +303,13 @@ const toNonNegativeInt = (value: unknown): number | null => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 };
 
+const formatBillingDate = (value: string | null | undefined): string => {
+    if (!value) return 'N/A';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString();
+};
+
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
     const direct = toPositiveInt((node as any).surahId);
     if (direct) return direct;
@@ -466,6 +478,12 @@ export default function SettingsPage() {
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
+    const [billingSummary, setBillingSummary] = useState<BillingSummaryState>({
+        nextRenewalAt: null,
+        canManageSubscription: false,
+    });
+    const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
@@ -730,6 +748,88 @@ export default function SettingsPage() {
         }
     };
 
+    const markSignOutRoutingWindow = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('auth:signingOut', '1');
+        window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
+    }, []);
+
+    const handleSignOut = useCallback(async () => {
+        const ok = await confirm({
+            title: 'Sign Out',
+            message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
+            confirmLabel: 'Sign Out',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        markSignOutRoutingWindow();
+        await db.auth.signOut();
+        router.replace('/');
+    }, [confirm, markSignOutRoutingWindow, router]);
+
+    const handleOpenCustomerPortal = useCallback(async () => {
+        if (isOpeningPortal) return;
+        setIsOpeningPortal(true);
+
+        try {
+            const response = await fetch('/api/paddle/customer-portal', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok || !payload?.url) {
+                throw new Error(payload?.error || 'Could not open billing portal.');
+            }
+
+            window.location.assign(payload.url as string);
+        } catch (error) {
+            await alert({
+                title: 'Billing Portal Unavailable',
+                message: error instanceof Error ? error.message : 'Could not open billing portal. Please try again.',
+            });
+        } finally {
+            setIsOpeningPortal(false);
+        }
+    }, [alert, isOpeningPortal]);
+
+    const handleDeleteAccount = useCallback(async () => {
+        if (isDeletingAccount) return;
+        const ok = await confirm({
+            title: 'Delete My Account',
+            message:
+                'Your account will be scheduled for deletion. We retain your data for 30 days in case you return and restore access. Continue?',
+            confirmLabel: 'Request Deletion',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        setIsDeletingAccount(true);
+        try {
+            const response = await fetch('/api/account/delete-request', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not request account deletion.');
+            }
+
+            markSignOutRoutingWindow();
+            await db.auth.signOut();
+            router.replace('/');
+        } catch (error) {
+            await alert({
+                title: 'Delete Account Failed',
+                message: error instanceof Error ? error.message : 'Could not request account deletion. Please try again.',
+            });
+        } finally {
+            setIsDeletingAccount(false);
+        }
+    }, [alert, confirm, isDeletingAccount, markSignOutRoutingWindow, router]);
+
     useEffect(() => {
         // Initial load handled by hook
         // setSettings(getSettings());
@@ -779,6 +879,71 @@ export default function SettingsPage() {
         return sorted[0] ?? null;
     }, [subscriptions]);
 
+    useEffect(() => {
+        if (!user?.id) {
+            setBillingSummary({ nextRenewalAt: null, canManageSubscription: false });
+            return;
+        }
+
+        const canManageFromLocal = Boolean(
+            String(latestSubscription?.paddleCustomerId ?? '').trim()
+            && String(latestSubscription?.paddleSubscriptionId ?? '').trim(),
+        );
+
+        if (!isOnline) {
+            setBillingSummary({
+                nextRenewalAt: null,
+                canManageSubscription: canManageFromLocal,
+            });
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadBillingSummary = async () => {
+            try {
+                const response = await fetch('/api/paddle/billing-summary', {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load billing summary.');
+                }
+
+                const payload = await response.json();
+                if (cancelled) return;
+
+                setBillingSummary({
+                    nextRenewalAt:
+                        typeof payload?.billing?.nextRenewalAt === 'string' && payload.billing.nextRenewalAt
+                            ? payload.billing.nextRenewalAt
+                            : null,
+                    canManageSubscription: Boolean(payload?.billing?.canManageSubscription || canManageFromLocal),
+                });
+            } catch {
+                if (cancelled) return;
+                setBillingSummary({
+                    nextRenewalAt: null,
+                    canManageSubscription: canManageFromLocal,
+                });
+            }
+        };
+
+        void loadBillingSummary();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        isOnline,
+        latestSubscription?.id,
+        latestSubscription?.paddleCustomerId,
+        latestSubscription?.paddleSubscriptionId,
+        user?.id,
+    ]);
+
     const billingStatus = latestSubscription?.status ?? 'none';
     const isActiveBilling = ACTIVE_SUBSCRIPTION_STATUSES.has(billingStatus);
     const billingPlan =
@@ -789,9 +954,11 @@ export default function SettingsPage() {
                 : latestSubscription?.priceId
                     ? 'Custom'
                     : 'N/A';
-    const billingLastUpdated = latestSubscription?.updatedAt
-        ? new Date(latestSubscription.updatedAt).toLocaleString()
-        : 'N/A';
+    const billingNextRenewal = billingStatus === 'none'
+        ? 'N/A'
+        : billingSummary.nextRenewalAt
+            ? formatBillingDate(billingSummary.nextRenewalAt)
+            : (isActiveBilling ? 'Unavailable' : 'N/A');
 
     const renderBillingInfo = () => (
         <div
@@ -820,10 +987,79 @@ export default function SettingsPage() {
                     <span style={{ fontWeight: 600 }}>{billingPlan}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Updated</span>
-                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{billingLastUpdated}</span>
+                    <span style={{ color: 'var(--foreground-secondary)' }}>Renews On</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{billingNextRenewal}</span>
                 </div>
             </div>
+        </div>
+    );
+
+    const renderSignedInAccountActions = () => (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: '0.75rem',
+            alignItems: 'stretch',
+        }}>
+            <button
+                className="btn btn-secondary std-normal-btn"
+                onClick={handleOpenCustomerPortal}
+                disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
+                style={{
+                    width: '100%',
+                    minWidth: 0,
+                    padding: '0.85rem 0.65rem',
+                    borderRadius: '12px',
+                    fontFamily: 'inherit',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    lineHeight: 1.2,
+                    textAlign: 'center',
+                    cursor: 'pointer'
+                }}
+            >
+                {isOpeningPortal ? 'Opening billing portal...' : 'Manage My Subscription'}
+            </button>
+            <button
+                className="btn btn-secondary std-normal-btn"
+                onClick={handleSignOut}
+                style={{
+                    width: '100%',
+                    minWidth: 0,
+                    padding: '0.85rem 0.65rem',
+                    borderRadius: '12px',
+                    fontFamily: 'inherit',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    lineHeight: 1.2,
+                    textAlign: 'center',
+                    cursor: 'pointer'
+                }}
+            >
+                Sign Out
+            </button>
+            <button
+                className="btn std-normal-btn"
+                onClick={handleDeleteAccount}
+                disabled={!isOnline || isDeletingAccount}
+                style={{
+                    width: '100%',
+                    minWidth: 0,
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    fontFamily: 'inherit',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    lineHeight: 1.2,
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    border: '1px solid color-mix(in srgb, #ef4444 35%, var(--border))',
+                    background: 'color-mix(in srgb, #ef4444 10%, var(--background))',
+                    color: '#ef4444'
+                }}
+            >
+                {isDeletingAccount ? 'Submitting deletion request...' : 'Delete My Account'}
+            </button>
         </div>
     );
 
@@ -865,33 +1101,7 @@ export default function SettingsPage() {
 
                             {user ? (
                                 <>
-
-
-                                    <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                                        <button
-                                            className="btn btn-secondary std-normal-btn"
-                                            onClick={async () => {
-                                                // InstantDB handles sync automatically
-                                                const ok = await confirm({
-                                                    title: 'Sign Out',
-                                                    message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
-                                                    confirmLabel: 'Sign Out',
-                                                    isDestructive: true,
-                                                });
-                                                if (!ok) return;
-
-                                                // Flag sign-out so all guards route to landing instead of /auth.
-                                                window.localStorage.setItem('auth:signingOut', '1');
-                                                window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
-                                                // Sign out from InstantDB (it clears local storage token)
-                                                await db.auth.signOut();
-                                                router.replace('/');
-                                            }}
-                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
-                                        >
-                                            Sign Out
-                                        </button>
-                                    </div>
+                                    {renderSignedInAccountActions()}
                                 </>
                             ) : (
                                 <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1798,6 +2008,46 @@ export default function SettingsPage() {
                         </div>
                         <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
                     </button>
+
+                    <div
+                        className="settings-support-cta settings-support-cta-mobile"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.7rem',
+                            fontSize: '0.9rem',
+                            color: 'var(--foreground-secondary)',
+                            marginTop: '0.2rem',
+                            marginBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.2rem)',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                            transform: 'translateY(-2px)',
+                        }}
+                    >
+                        <span style={{ color: 'var(--foreground-secondary)' }}>
+                            Need help or more details? Join our Discord server.
+                        </span>
+                        <a
+                            className="settings-support-discord-link"
+                            href="https://discord.gg/6wy3YRG2qB"
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                                color: 'var(--foreground-secondary)',
+                                textDecoration: 'none',
+                                fontWeight: 600,
+                                fontSize: '0.85rem',
+                                lineHeight: 1,
+                                padding: '0.42rem 0.72rem',
+                                borderRadius: '12px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background)',
+                                transition: 'color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease',
+                            }}
+                        >
+                            Join Discord
+                        </a>
+                    </div>
                 </div>
             </div>
         );
@@ -2374,7 +2624,13 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             });
 
         if (hasExistingCustomPair || hasExistingOfficialPair) {
-            addToast('error', 'This mutashabih already exists');
+            const duplicateSource = hasExistingOfficialPair
+                ? 'an existing built-in mutashabih'
+                : 'an existing custom mutashabih';
+            await alert({
+                title: 'Duplicate Mutashabih',
+                message: `This originator/comparator pair already exists in ${duplicateSource}. Please choose a different pair.`,
+            });
             return false;
         }
 
@@ -2843,33 +3099,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
                                             {user ? (
                                                 <>
-
-
-                                                    <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                                                        <button
-                                                            className="btn btn-secondary std-normal-btn"
-                                                            onClick={async () => {
-                                                                // InstantDB handles sync automatically
-                                                                const ok = await confirm({
-                                                                    title: 'Sign Out',
-                                                                    message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
-                                                                    confirmLabel: 'Sign Out',
-                                                                    isDestructive: true,
-                                                                });
-                                                                if (!ok) return;
-
-                                                                // Flag sign-out so all guards route to landing instead of /auth.
-                                                                window.localStorage.setItem('auth:signingOut', '1');
-                                                                window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
-                                                                // Sign out from InstantDB (it clears local storage token)
-                                                                await db.auth.signOut();
-                                                                router.replace('/');
-                                                            }}
-                                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
-                                                        >
-                                                            Sign Out
-                                                        </button>
-                                                    </div>
+                                                    {renderSignedInAccountActions()}
                                                 </>
                                             ) : (
                                                 <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -4781,6 +5011,19 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
                 .settings-topbar-row {
                     flex-wrap: nowrap;
+                }
+
+                .settings-support-cta-mobile {
+                    margin-top: 0.2rem;
+                    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.2rem);
+                    white-space: normal;
+                    flex-wrap: wrap;
+                    align-items: flex-start;
+                    gap: 0.6rem;
+                    line-height: 1.35;
+                    transform: none;
+                    font-size: 0.9rem;
+                    color: var(--foreground-secondary);
                 }
 
                 .settings-support-discord-link {
