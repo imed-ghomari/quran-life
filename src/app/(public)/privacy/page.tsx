@@ -64,6 +64,13 @@ export default function PrivacyPage() {
               include authentication, database, analytics, and payment processing partners. They are only
               permitted to use your data to provide services to us.
             </p>
+            <p>
+              Current subprocessors include:
+            </p>
+            <ul>
+              <li>Paddle (payment processing and subscription billing).</li>
+              <li>InstantDB (authentication, database, and sync infrastructure).</li>
+            </ul>
           </section>
 
           <section className="legal-section">

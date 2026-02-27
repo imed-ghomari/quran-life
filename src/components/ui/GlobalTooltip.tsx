@@ -1,15 +1,23 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 type Placement = 'top' | 'bottom';
 
 interface TooltipState {
     visible: boolean;
     text: string;
-    x: number;
-    y: number;
+    anchorX: number;
+    anchorY: number;
     placement: Placement;
+}
+
+interface TooltipRenderState {
+    left: number;
+    top: number;
+    placement: Placement;
+    maxWidth: number;
+    maxHeight: number;
 }
 
 const SHOW_DELAY_MS = 80;
@@ -20,12 +28,20 @@ export default function GlobalTooltip() {
     const [state, setState] = useState<TooltipState>({
         visible: false,
         text: '',
-        x: 0,
-        y: 0,
+        anchorX: 0,
+        anchorY: 0,
         placement: 'top',
+    });
+    const [renderState, setRenderState] = useState<TooltipRenderState>({
+        left: 0,
+        top: 0,
+        placement: 'top',
+        maxWidth: 320,
+        maxHeight: 280,
     });
 
     const activeElRef = useRef<Element | null>(null);
+    const tooltipRef = useRef<HTMLDivElement | null>(null);
     const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const autoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,13 +119,13 @@ export default function GlobalTooltip() {
         setState((prev) => (prev.visible ? { ...prev, visible: false } : prev));
     };
 
-    const computePosition = (el: Element) => {
+    const computeAnchor = (el: Element) => {
         const rect = el.getBoundingClientRect();
         const preferTop = rect.top >= 56;
 
         return {
-            x: rect.left + rect.width / 2,
-            y: preferTop ? rect.top - 10 : rect.bottom + 10,
+            anchorX: rect.left + rect.width / 2,
+            anchorY: preferTop ? rect.top - 10 : rect.bottom + 10,
             placement: preferTop ? ('top' as const) : ('bottom' as const),
         };
     };
@@ -122,13 +138,77 @@ export default function GlobalTooltip() {
         }
 
         activeElRef.current = el;
-        const { x, y, placement } = computePosition(el);
+        const { anchorX, anchorY, placement } = computeAnchor(el);
 
         clearShowTimer();
         showTimerRef.current = setTimeout(() => {
-            setState({ visible: true, text, x, y, placement });
+            setState({ visible: true, text, anchorX, anchorY, placement });
         }, delayMs);
     };
+
+    useLayoutEffect(() => {
+        if (!state.visible || !tooltipRef.current) {
+            return;
+        }
+
+        const margin = 12;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const maxWidth = Math.max(180, Math.min(420, viewportWidth - margin * 2));
+        const maxHeight = Math.max(96, Math.min(320, Math.floor(viewportHeight * 0.42)));
+        const tooltipEl = tooltipRef.current;
+
+        tooltipEl.style.maxWidth = `${maxWidth}px`;
+        tooltipEl.style.maxHeight = `${maxHeight}px`;
+
+        const rect = tooltipEl.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        const clampedLeft = Math.min(
+            Math.max(state.anchorX - width / 2, margin),
+            viewportWidth - width - margin,
+        );
+
+        const topForBottom = state.anchorY;
+        const topForTop = state.anchorY - height;
+        let nextPlacement: Placement = state.placement;
+        let top = nextPlacement === 'top' ? topForTop : topForBottom;
+
+        if (nextPlacement === 'top' && top < margin) {
+            nextPlacement = 'bottom';
+            top = topForBottom;
+        } else if (nextPlacement === 'bottom' && top + height > viewportHeight - margin) {
+            nextPlacement = 'top';
+            top = topForTop;
+        }
+
+        if (top < margin) {
+            top = margin;
+        } else if (top + height > viewportHeight - margin) {
+            top = viewportHeight - height - margin;
+        }
+
+        setRenderState((prev) => {
+            if (
+                prev.left === clampedLeft
+                && prev.top === top
+                && prev.placement === nextPlacement
+                && prev.maxWidth === maxWidth
+                && prev.maxHeight === maxHeight
+            ) {
+                return prev;
+            }
+
+            return {
+                left: clampedLeft,
+                top,
+                placement: nextPlacement,
+                maxWidth,
+                maxHeight,
+            };
+        });
+    }, [state.visible, state.anchorX, state.anchorY, state.placement, state.text]);
 
     const findTooltipTarget = (target: EventTarget | null) => {
         if (!(target instanceof Element)) {
@@ -272,8 +352,8 @@ export default function GlobalTooltip() {
                 return;
             }
 
-            const { x, y, placement } = computePosition(activeElRef.current);
-            setState((prev) => ({ ...prev, x, y, placement }));
+            const { anchorX, anchorY, placement } = computeAnchor(activeElRef.current);
+            setState((prev) => ({ ...prev, anchorX, anchorY, placement }));
         };
 
         const onKeyDown = (event: KeyboardEvent) => {
@@ -317,14 +397,17 @@ export default function GlobalTooltip() {
 
     return (
         <div
+            ref={tooltipRef}
             className={`custom-hover-tooltip ${state.visible ? 'is-visible' : ''}`}
             role="tooltip"
             style={{
-                left: state.x,
-                top: state.y,
-                transform: state.placement === 'top'
-                    ? 'translate(-50%, -100%)'
-                    : 'translate(-50%, 0)',
+                left: renderState.left,
+                top: renderState.top,
+                maxWidth: renderState.maxWidth,
+                maxHeight: renderState.maxHeight,
+                transform: renderState.placement === 'top'
+                    ? 'translateY(-2px)'
+                    : 'translateY(2px)',
             }}
         >
             {state.text}

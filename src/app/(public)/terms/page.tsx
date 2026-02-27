@@ -71,7 +71,18 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>5. Acceptable Use</h2>
+            <h2>5. Subprocessors</h2>
+            <p>
+              We use trusted subprocessors to operate core parts of the Service, including:
+            </p>
+            <ul>
+              <li>Paddle (payment processing and subscription billing).</li>
+              <li>InstantDB (authentication, database, and sync infrastructure).</li>
+            </ul>
+          </section>
+
+          <section className="legal-section">
+            <h2>6. Acceptable Use</h2>
             <p>You agree not to misuse the Service. Examples of prohibited behavior include:</p>
             <ul>
               <li>Attempting to access other users' data or accounts.</li>
@@ -81,7 +92,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>6. Your Content</h2>
+            <h2>7. Your Content</h2>
             <p>
               You own the mindmaps, notes, and other content you create. By using the Service, you grant us a
               limited license to store, process, and display that content solely to provide and improve the
@@ -91,7 +102,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>7. Intellectual Property</h2>
+            <h2>8. Intellectual Property</h2>
             <p>
               The Service, including its software, branding, and design elements, is owned by Quran Life or
               its licensors. You may not copy, modify, or redistribute any part of the Service without
@@ -100,7 +111,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>8. Disclaimers</h2>
+            <h2>9. Disclaimers</h2>
             <p>
               Quran Life is an educational tool and is not a replacement for qualified teachers or religious
               guidance. The Service is provided as is without warranties of any kind, to the maximum extent
@@ -109,7 +120,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>9. Limitation of Liability</h2>
+            <h2>10. Limitation of Liability</h2>
             <p>
               To the extent permitted by law, Quran Life is not liable for indirect, incidental, or
               consequential damages arising from your use of the Service.
@@ -117,7 +128,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>10. Termination</h2>
+            <h2>11. Termination</h2>
             <p>
               You may stop using the Service at any time. We may suspend or terminate access if you violate
               these Terms or misuse the Service. Upon termination, your right to use the Service ends.
@@ -125,7 +136,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>11. Changes to These Terms</h2>
+            <h2>12. Changes to These Terms</h2>
             <p>
               We may update these Terms from time to time. If we make material changes, we will provide notice
               within the app or by email. Continued use of the Service after changes means you accept the
@@ -134,7 +145,7 @@ export default function TermsPage() {
           </section>
 
           <section className="legal-section">
-            <h2>12. Contact</h2>
+            <h2>13. Contact</h2>
             <p>
               If you have questions about these Terms, please contact us through the support options in the
               app.
