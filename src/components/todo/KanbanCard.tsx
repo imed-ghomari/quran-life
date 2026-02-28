@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { memo, useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
@@ -17,13 +17,13 @@ interface KanbanCardProps {
     hasSplits: boolean;
     appMode: 'owner' | 'user';
     docLink?: string;
-    onEditMindmap: () => Promise<void> | void;
-    onDeleteMindmap: () => Promise<void> | void;
-    onExportMindmap?: () => Promise<void> | void;
-    onResetMindmap?: (resetMemoryNodes: boolean) => Promise<void> | void;
-    onChangeSplits: () => Promise<void> | void;
-    onViewVerseContext?: () => Promise<void> | void;
-    onViewSimilarityContext?: () => Promise<void> | void;
+    onEditMindmap: (item: KanbanItem) => Promise<void> | void;
+    onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
+    onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onChangeSplits: (item: KanbanItem) => Promise<void> | void;
+    onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
+    onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
 }
 
 const KanbanCard = ({
@@ -48,12 +48,12 @@ const KanbanCard = ({
     const menuButtonRef = useRef<HTMLButtonElement>(null);
     const { confirm } = useConfirmDialog();
 
-    const handleMenuClick = (e: React.MouseEvent) => {
+    const handleMenuClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
         setMenuOpen(prev => !prev);
-    };
+    }, []);
 
-    const handleDeleteClick = async () => {
+    const handleDeleteClick = useCallback(async () => {
         setMenuOpen(false);
 
         const ok = await confirm({
@@ -66,16 +66,16 @@ const KanbanCard = ({
 
         setIsDeleting(true);
         try {
-            await onDeleteMindmap();
+            await onDeleteMindmap(item);
         } catch (e) {
             console.error("Delete failed", e);
         } finally {
             // Only reset if component is still mounted (React handles this mostly, but good practice)
             setIsDeleting(false);
         }
-    };
+    }, [confirm, item, onDeleteMindmap]);
 
-    const handleResetClick = async () => {
+    const handleResetClick = useCallback(async () => {
         setMenuOpen(false);
 
         const ok = await confirm({
@@ -96,13 +96,22 @@ const KanbanCard = ({
 
         setIsDeleting(true);
         try {
-            await onResetMindmap?.(resetMemoryNodes);
+            await onResetMindmap?.(item, resetMemoryNodes);
         } catch (e) {
             console.error("Reset failed", e);
         } finally {
             setIsDeleting(false);
         }
-    };
+    }, [confirm, item, onResetMindmap]);
+
+    const handleEditMindmap = useCallback(() => onEditMindmap(item), [item, onEditMindmap]);
+    const handleExportMindmap = useCallback(() => onExportMindmap?.(item), [item, onExportMindmap]);
+    const handleChangeSplits = useCallback(() => onChangeSplits(item), [item, onChangeSplits]);
+    const handleViewVerseContext = useCallback(() => onViewVerseContext?.(item), [item, onViewVerseContext]);
+    const handleViewSimilarityContext = useCallback(
+        () => onViewSimilarityContext?.(item),
+        [item, onViewSimilarityContext]
+    );
 
     // Responsive Spacing Config - Tighter for Mobile
     // const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-5';
@@ -148,16 +157,16 @@ const KanbanCard = ({
                             menuButtonRef,
                             handleMenuClick,
                             isMobile,
-                            onEditMindmap,
+                            onEditMindmap: handleEditMindmap,
                             onDeleteMindmap: handleDeleteClick,
-                            onExportMindmap,
+                            onExportMindmap: handleExportMindmap,
                             onResetMindmap: handleResetClick,
-                            onChangeSplits,
+                            onChangeSplits: handleChangeSplits,
                             hasSplits,
                             footerPad: 'pt-3',
                             docLink,
-                            onViewVerseContext,
-                            onViewSimilarityContext
+                            onViewVerseContext: handleViewVerseContext,
+                            onViewSimilarityContext: handleViewSimilarityContext
                         })}
                     </div>
                 )}
@@ -399,4 +408,7 @@ function renderCardZones({
     );
 }
 
-export default KanbanCard;
+const MemoizedKanbanCard = memo(KanbanCard);
+MemoizedKanbanCard.displayName = 'KanbanCard';
+
+export default MemoizedKanbanCard;
