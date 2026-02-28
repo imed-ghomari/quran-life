@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -94,6 +94,8 @@ const getViewportFlags = () => {
         isTablet: width >= 768 && width < 1100,
     };
 };
+
+const COLUMN_ORDER = ['backlog', 'in-progress', 'complete'] as const;
 
 export default function TodoKanban({
     suspendedAnchors,
@@ -341,7 +343,10 @@ export default function TodoKanban({
         return () => window.removeEventListener('resize', checkResponsive);
     }, []);
 
-    const getItemSearchText = (item: KanbanItem) => {
+    const normalizedSearchQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+    const hasActiveVisibilityFilter = filter !== 'all' || normalizedSearchQuery.length > 0;
+
+    const getItemSearchText = useCallback((item: KanbanItem) => {
         if (item.type === 'surah') return `${item.data.surah.id} ${item.data.surah.name} ${item.data.surah.arabicName || ''}`;
         if (item.type === 'part') {
             if (Number(item.data.part) === 0) return 'Part 0 Meta Mindmap relationships all parts';
@@ -355,22 +360,22 @@ export default function TodoKanban({
             return `${item.data.surah.name} ${item.data.surah.arabicName || ''} Similarity`;
         }
         return '';
-    };
+    }, []);
 
-    const filteredItem = (item: KanbanItem) => {
+    const filteredItem = useCallback((item: KanbanItem) => {
         let matchesFilter = true;
         if (filter === 'maintenance') matchesFilter = item.type === 'suspended' || item.type === 'similarity';
         if (filter === 'construction') matchesFilter = item.type === 'part' || item.type === 'surah';
-        
+
         if (!matchesFilter) return false;
 
-        if (searchQuery.trim()) {
+        if (normalizedSearchQuery) {
             const searchText = getItemSearchText(item).toLowerCase();
-            return searchText.includes(searchQuery.toLowerCase());
+            return searchText.includes(normalizedSearchQuery);
         }
 
         return true;
-    };
+    }, [filter, getItemSearchText, normalizedSearchQuery]);
 
     // Sync Props to Kanban State
     useEffect(() => {
@@ -595,7 +600,9 @@ export default function TodoKanban({
         setColumns(prev => {
             const sourceCol = prev[source.droppableId];
             const destCol = prev[destination.droppableId];
-            const sourceVisibleItems = sourceCol.items.filter(filteredItem);
+            const sourceVisibleItems = hasActiveVisibilityFilter
+                ? sourceCol.items.filter(filteredItem)
+                : sourceCol.items;
             const sourceVisibleIndex = sourceVisibleItems.findIndex(item => item.id === draggableId);
             const safeSourceIndex = sourceVisibleIndex !== -1 ? sourceVisibleIndex : source.index;
             const visibleItem = sourceVisibleItems[safeSourceIndex];
@@ -605,7 +612,9 @@ export default function TodoKanban({
             if (!movedItem) return prev;
 
             if (source.droppableId === destination.droppableId) {
-                const destVisibleItems = destCol.items.filter(filteredItem);
+                const destVisibleItems = hasActiveVisibilityFilter
+                    ? destCol.items.filter(filteredItem)
+                    : destCol.items;
                 const currentVisibleIndex = destVisibleItems.findIndex(item => item.id === movedItem.id);
                 if (currentVisibleIndex === destination.index) {
                     return prev;
@@ -630,7 +639,7 @@ export default function TodoKanban({
             sourceItems.splice(actualSourceIndex, 1);
 
             const destItems = source.droppableId === destination.droppableId ? sourceItems : [...destCol.items];
-            const filteredDestItems = destItems.filter(filteredItem);
+            const filteredDestItems = hasActiveVisibilityFilter ? destItems.filter(filteredItem) : destItems;
 
             let insertIndex = destItems.length;
             if (filteredDestItems.length > 0) {
@@ -702,7 +711,7 @@ export default function TodoKanban({
         if (nextStateToPersist) {
             persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
         }
-    }, [handleCompletionTrigger, addToast, getMindmapCompletionInfo, getMindmapRemovalInfo, getMaintenanceCardReviewInfo, hasMindmapForItem, filteredItem, persistKanbanState]);
+    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
@@ -1071,6 +1080,10 @@ export default function TodoKanban({
         return false;
     }, [getHasPremade]);
 
+    const handleCardClick = useCallback((item: KanbanItem) => {
+        setActiveItem(item);
+    }, []);
+
     const renderSlideOverContent = () => {
         if (!activeItem) return null;
 
@@ -1338,16 +1351,20 @@ export default function TodoKanban({
                 }
                     `}
                 >
-                    {Object.values(columns).map(col => (
+                    {COLUMN_ORDER.map((columnId) => {
+                        const col = columns[columnId];
+                        if (!col) return null;
+
+                        return (
                         <KanbanColumn
                             key={col.id}
                             id={col.id}
                             title={col.title}
-                            items={col.items.filter(filteredItem)}
+                            items={col.items}
                             isMobile={isMobile}
                             isTablet={isTablet}
                             appMode={appMode}
-                            onCardClick={(item) => setActiveItem(item)}
+                            onCardClick={handleCardClick}
                             onEditMindmap={handleCardEditMindmap}
                             onDeleteMindmap={handleCardDeleteMindmap}
                             onExportMindmap={handleCardExportMindmap}
@@ -1359,8 +1376,11 @@ export default function TodoKanban({
                             getHasSplits={getHasSplits}
                             getHasPremade={getHasPremadeForItem}
                             getDocLink={getDocLink}
+                            isItemVisible={filteredItem}
+                            hasActiveVisibilityFilter={hasActiveVisibilityFilter}
                         />
-                    ))}
+                        );
+                    })}
                 </div>
             </DragDropContext>
 

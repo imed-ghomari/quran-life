@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
@@ -87,7 +88,7 @@ class LassoingState extends StateNode {
         const shapes = this.editor.getCurrentPageRenderingShapesSorted();
         const lassoPoints = this.points.get();
         if (lassoPoints.length < 2) {
-            this.editor.setCurrentTool('select');
+            this.parent.transition('idle');
             return;
         }
         const selected = shapes.filter((shape) => {
@@ -100,7 +101,11 @@ class LassoingState extends StateNode {
             return true;
         });
         this.editor.setSelectedShapes(selected.map(s => s.id));
-        this.editor.setCurrentTool('select');
+        if (selected.length > 0) {
+            this.editor.setCurrentTool('select');
+            return;
+        }
+        this.parent.transition('idle');
     }
 }
 
@@ -217,6 +222,9 @@ const extractContextFromDocLink = (value?: string | null): string | null => {
 };
 
 const isInternalPath = (href: string) => href.startsWith('/') && !href.startsWith('//');
+const MINDMAP_DRAFT_STORAGE_PREFIX = 'mindmap-editor-draft:v1:';
+const SAVE_DRAIN_TIMEOUT_MS = 15000;
+const SAVE_DRAIN_POLL_MS = 50;
 
 /**
  * Prevents tldraw from getting stuck in pen mode when using pen/tablet devices.
@@ -247,17 +255,97 @@ function usePenModeUnstick(editor: Editor | null) {
 }
 
 function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink, contextLabel }: MindmapEditorProps) {
+    const router = useRouter();
     const [editor, setEditor] = useState<any>(null);
+    const [isExitActionPending, setIsExitActionPending] = useState(false);
     const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const pendingShapeTimestampUpdatesRef = useRef<Map<string, any>>(new Map());
     const timestampFlushTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const localDraftTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const isDirty = useRef<boolean>(false);
+    const isSavingRef = useRef<boolean>(false);
+    const queuedSaveRef = useRef<boolean>(false);
+    const queuedSaveWithImagesRef = useRef<boolean>(false);
+    const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+    const maxWaitTimer = useRef<NodeJS.Timeout | null>(null);
+    const isMountedRef = useRef(true);
+    const isExitActionInProgressRef = useRef(false);
+    const isRestoringHistoryRef = useRef(false);
+    const allowNextBackRef = useRef(false);
     const { theme } = useTheme();
+    const localDraftKey = useMemo(() => {
+        const draftScope = (docLink || contextLabel || title || 'default')
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9_-]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        return `${MINDMAP_DRAFT_STORAGE_PREFIX}${draftScope || 'default'}`;
+    }, [docLink, contextLabel, title]);
     const currentContextLabel = useMemo(
         () => contextLabel || extractContextFromDocLink(docLink) || extractContextFromTitle(title),
         [contextLabel, docLink, title]
     );
     const shouldShowContextLabel = useMemo(() => !!currentContextLabel, [currentContextLabel]);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    const clearLocalDraft = useCallback(() => {
+        try {
+            localStorage.removeItem(localDraftKey);
+        } catch (error) {
+            console.warn('Failed to clear local mindmap draft', error);
+        }
+    }, [localDraftKey]);
+
+    const persistLocalDraft = useCallback((snapshotOverride?: any) => {
+        try {
+            const snapshot = snapshotOverride || editorRef.current?.store?.getSnapshot?.();
+            const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
+            const storeSize = Object.keys(sanitizedSnapshot?.store || {}).length;
+
+            if (!storeSize) {
+                localStorage.removeItem(localDraftKey);
+                return;
+            }
+
+            localStorage.setItem(localDraftKey, JSON.stringify({
+                updatedAt: new Date().toISOString(),
+                snapshot: sanitizedSnapshot,
+            }));
+        } catch (error) {
+            console.warn('Failed to persist local mindmap draft', error);
+        }
+    }, [localDraftKey]);
+
+    const scheduleLocalDraftPersist = useCallback(() => {
+        if (localDraftTimerRef.current) {
+            clearTimeout(localDraftTimerRef.current);
+        }
+        localDraftTimerRef.current = setTimeout(() => {
+            localDraftTimerRef.current = null;
+            persistLocalDraft();
+        }, 400);
+    }, [persistLocalDraft]);
+
+    const loadLocalDraftSnapshot = useCallback(() => {
+        try {
+            const raw = localStorage.getItem(localDraftKey);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || !parsed.snapshot) return null;
+            return parsed.snapshot;
+        } catch (error) {
+            console.warn('Failed to load local mindmap draft', error);
+            return null;
+        }
+    }, [localDraftKey]);
 
     const flushPendingShapeTimestampUpdates = useCallback(() => {
         if (timestampFlushTimerRef.current) {
@@ -315,9 +403,12 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             };
         }
 
-        if (initialSnapshot) {
+        const localDraftSnapshot = loadLocalDraftSnapshot();
+        const snapshotToLoad = localDraftSnapshot || initialSnapshot;
+
+        if (snapshotToLoad) {
             try {
-                const sanitizedInitialSnapshot = sanitizeMindmapSnapshot(initialSnapshot) || initialSnapshot;
+                const sanitizedInitialSnapshot = sanitizeMindmapSnapshot(snapshotToLoad) || snapshotToLoad;
                 // Determine if we're loading a v4 snapshot or v3
                 // Standard Tldraw (v2+) uses getSnapshot/loadSnapshot
                 if (typeof editorInstance.loadSnapshot === 'function') {
@@ -332,6 +423,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                 setTimeout(() => {
                     editorInstance.zoomToFit();
                 }, 100);
+
+                if (localDraftSnapshot) {
+                    isDirty.current = true;
+                }
             } catch (e) {
                 console.warn('Failed to load snapshot', e);
             }
@@ -339,7 +434,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             // Default to lasso tool on new drawings too
             editorInstance.setCurrentTool('lasso-select');
         }
-    }, [initialSnapshot]);
+    }, [initialSnapshot, loadLocalDraftSnapshot]);
 
     useEffect(() => {
         // Prevent browser back gesture globally while editor is open
@@ -501,13 +596,6 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         };
     }, [editor, flushPendingShapeTimestampUpdates]);
 
-    const isDirty = useRef<boolean>(false);
-    const isSavingRef = useRef<boolean>(false);
-    const queuedSaveRef = useRef<boolean>(false);
-    const queuedSaveWithImagesRef = useRef<boolean>(false);
-    const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
-    const maxWaitTimer = useRef<NodeJS.Timeout | null>(null);
-
     const saveContent = useCallback(async (withImages: boolean = false) => {
         // Clear timers to prevent double save
         if (autoSaveTimer.current) {
@@ -526,7 +614,11 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         }
 
         const editorInst = editorRef.current;
-        if (!editorInst || !onSave) return;
+        if (!editorInst) return;
+        if (!onSave) {
+            persistLocalDraft();
+            return;
+        }
 
         isSavingRef.current = true;
         try {
@@ -584,9 +676,11 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
                 // Keep the persisted snapshot text-only and strip any media/file-backed records.
                 const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
+                persistLocalDraft(sanitizedSnapshot);
 
                 await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined, withImages);
                 isDirty.current = false;
+                clearLocalDraft();
                 
                 if (!withImages) {
                     // appLogger.addLog('[Editor] Auto-saved successfully', 'info');
@@ -603,26 +697,85 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     void saveContent(nextSaveWithImages);
                 }
             }
-    }, [onSave, flushPendingShapeTimestampUpdates]);
+    }, [onSave, flushPendingShapeTimestampUpdates, persistLocalDraft, clearLocalDraft]);
 
-    const handleClose = async () => {
-        // Clear any pending auto-save
+    const waitForSaveQueueToDrain = useCallback(async () => {
+        const startedAt = Date.now();
+        while (isSavingRef.current || queuedSaveRef.current) {
+            if (Date.now() - startedAt >= SAVE_DRAIN_TIMEOUT_MS) {
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, SAVE_DRAIN_POLL_MS));
+        }
+    }, []);
+
+    const ensureSavedBeforeExit = useCallback(async () => {
         if (autoSaveTimer.current) {
             clearTimeout(autoSaveTimer.current);
+            autoSaveTimer.current = null;
         }
         if (maxWaitTimer.current) {
             clearTimeout(maxWaitTimer.current);
+            maxWaitTimer.current = null;
         }
-        // Save only if user actually changed something
-        if (isDirty.current) {
+
+        flushPendingShapeTimestampUpdates();
+        persistLocalDraft();
+
+        if (isDirty.current || isSavingRef.current || queuedSaveRef.current) {
             await saveContent(false);
-            if (isDirty.current) {
-                console.error('Mindmap editor close prevented because latest save did not complete.');
-                return;
+            await waitForSaveQueueToDrain();
+        }
+
+        if (!isDirty.current) {
+            clearLocalDraft();
+            return true;
+        }
+
+        persistLocalDraft();
+        console.error('Mindmap editor exit prevented because latest save did not complete.');
+        return false;
+    }, [clearLocalDraft, flushPendingShapeTimestampUpdates, persistLocalDraft, saveContent, waitForSaveQueueToDrain]);
+
+    const runExitAction = useCallback(async (action: () => void | Promise<void>) => {
+        if (isExitActionInProgressRef.current) return;
+
+        isExitActionInProgressRef.current = true;
+        if (isMountedRef.current) {
+            setIsExitActionPending(true);
+        }
+
+        try {
+            const canExit = await ensureSavedBeforeExit();
+            if (!canExit) return;
+            await action();
+        } finally {
+            isExitActionInProgressRef.current = false;
+            if (isMountedRef.current) {
+                setIsExitActionPending(false);
             }
         }
-        onClose();
-    };
+    }, [ensureSavedBeforeExit]);
+
+    const handleClose = useCallback(async () => {
+        await runExitAction(async () => {
+            onClose();
+        });
+    }, [onClose, runExitAction]);
+
+    const handleDocNavigation = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
+        event.preventDefault();
+        if (!docLink) return;
+        if (isExitActionPending) return;
+
+        void runExitAction(async () => {
+            if (isInternalPath(docLink)) {
+                router.push(docLink);
+                return;
+            }
+            window.location.assign(docLink);
+        });
+    }, [docLink, isExitActionPending, router, runExitAction]);
 
     // Auto-save logic
     useEffect(() => {
@@ -630,6 +783,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
         const handleChange = () => {
             isDirty.current = true;
+            scheduleLocalDraftPersist();
             
             // Clear existing debounce timer
             if (autoSaveTimer.current) {
@@ -668,26 +822,78 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             if (maxWaitTimer.current) {
                 clearTimeout(maxWaitTimer.current);
             }
+            if (localDraftTimerRef.current) {
+                clearTimeout(localDraftTimerRef.current);
+                localDraftTimerRef.current = null;
+            }
         };
-    }, [editor, saveContent]);
+    }, [editor, saveContent, scheduleLocalDraftPersist]);
 
-    // Handle beforeunload to warn/save
     useEffect(() => {
+        const persistDraftOnLifecycleExit = () => {
+            if (isDirty.current || isSavingRef.current || queuedSaveRef.current) {
+                persistLocalDraft();
+            }
+        };
+
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (isDirty.current) {
-                // Try to trigger a save (async, might not complete)
-                saveContent(false);
-                
-                // Show confirmation dialog
-                e.preventDefault();
-                e.returnValue = '';
-                return '';
+            if (!isDirty.current && !isSavingRef.current && !queuedSaveRef.current) return;
+
+            persistDraftOnLifecycleExit();
+            void saveContent(false);
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        };
+
+        const handlePageHide = () => {
+            persistDraftOnLifecycleExit();
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                persistDraftOnLifecycleExit();
             }
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [saveContent]);
+        window.addEventListener('pagehide', handlePageHide);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            window.removeEventListener('pagehide', handlePageHide);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [persistLocalDraft, saveContent]);
+
+    useEffect(() => {
+        const handlePopState = () => {
+            if (allowNextBackRef.current) {
+                allowNextBackRef.current = false;
+                return;
+            }
+
+            if (isRestoringHistoryRef.current) {
+                isRestoringHistoryRef.current = false;
+                return;
+            }
+
+            isRestoringHistoryRef.current = true;
+            window.history.go(1);
+            setTimeout(() => {
+                isRestoringHistoryRef.current = false;
+            }, 0);
+
+            void runExitAction(async () => {
+                allowNextBackRef.current = true;
+                window.history.back();
+            });
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [runExitAction]);
 
     const uiOverrides = useMemo(() => ({
         tools(editorInst: any, tools: any) {
@@ -764,6 +970,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                             <Link
                                 className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                 href={docLink}
+                                onClick={handleDocNavigation}
+                                aria-disabled={isExitActionPending}
                             >
                                 Back to Documentation
                             </Link>
@@ -771,6 +979,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                             <a
                                 className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                 href={docLink}
+                                onClick={handleDocNavigation}
+                                aria-disabled={isExitActionPending}
                             >
                                 Back to Documentation
                             </a>
@@ -778,9 +988,10 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                     )}
                 </div>
                 <button
-                    onClick={handleClose}
+                    onClick={() => { void handleClose(); }}
                     className="mindmap-header-close ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
                     aria-label="Close editor"
+                    disabled={isExitActionPending}
                 >
                     <X size={24} />
                 </button>
