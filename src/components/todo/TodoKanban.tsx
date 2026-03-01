@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { flushSync } from 'react-dom';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -174,7 +173,6 @@ export default function TodoKanban({
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
     const [isMobile, setIsMobile] = useState(() => getViewportFlags().isMobile);
     const [isTablet, setIsTablet] = useState(() => getViewportFlags().isTablet);
-    const [isDropSettling, setIsDropSettling] = useState(false);
     // const [isDragging, setIsDragging] = useState(false); // Removed to avoid re-renders
     const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>(defaultFilter ?? 'all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -644,7 +642,6 @@ export default function TodoKanban({
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
     const onDragStart = useCallback(() => {
-        setIsDropSettling(false);
         // Manually toggle classes to avoid re-render
         if (containerRef.current) {
             containerRef.current.classList.remove('snap-x', 'snap-mandatory');
@@ -775,57 +772,59 @@ export default function TodoKanban({
             [destination.droppableId]: { ...destCol, items: destItems }
         };
 
-        flushSync(() => {
-            setColumns(newColsMap);
-            setIsDropSettling(true);
-        });
+        columnsRef.current = newColsMap;
+        setColumns(newColsMap);
 
-        requestAnimationFrame(() => {
-            setIsDropSettling(false);
-        });
+        const runPostDropSideEffects = () => {
+            if (onKanbanStateChange) {
+                const state: Record<string, string[]> = {};
+                Object.values(newColsMap).forEach(col => {
+                    state[col.id] = col.items.map(i => i.id);
+                });
+                pendingKanbanStateRef.current = state;
+                pendingKanbanStateAtRef.current = Date.now();
+                persistKanbanState(state, { rollbackColumns: prev, seq: persistSeq });
+            }
 
-        if (onKanbanStateChange) {
-            const state: Record<string, string[]> = {};
-            Object.values(newColsMap).forEach(col => {
-                state[col.id] = col.items.map(i => i.id);
-            });
-            pendingKanbanStateRef.current = state;
-            pendingKanbanStateAtRef.current = Date.now();
-            persistKanbanState(state, { rollbackColumns: prev, seq: persistSeq });
-        }
-
-        if (destination.droppableId === 'complete') {
-            if (movedItem.type === 'surah' || movedItem.type === 'part') {
-                if (movedItem.status !== 'complete') {
+            if (destination.droppableId === 'complete') {
+                if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                    if (movedItem.status !== 'complete') {
+                        void handleCompletionTrigger(movedItem, true).catch((err) => {
+                            console.error('Failed to persist completion trigger', err);
+                            addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                        });
+                        addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
+                    }
+                } else if (source.droppableId !== 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
                     void handleCompletionTrigger(movedItem, true).catch((err) => {
                         console.error('Failed to persist completion trigger', err);
                         addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
                     });
-                    addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
+                    addToast(movedItem.type, 'Marked complete', getMaintenanceCardReviewInfo(movedItem, true));
                 }
-            } else if (source.droppableId !== 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
-                void handleCompletionTrigger(movedItem, true).catch((err) => {
-                    console.error('Failed to persist completion trigger', err);
-                    addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
-                });
-                addToast(movedItem.type, 'Marked complete', getMaintenanceCardReviewInfo(movedItem, true));
-            }
-        } else if (source.droppableId === 'complete') {
-            if (movedItem.type === 'surah' || movedItem.type === 'part') {
-                void handleCompletionTrigger(movedItem, false).catch((err) => {
-                    console.error('Failed to persist completion trigger', err);
-                    addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
-                });
-                if (hasMindmapForItem(movedItem)) {
-                    addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
+            } else if (source.droppableId === 'complete') {
+                if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                    void handleCompletionTrigger(movedItem, false).catch((err) => {
+                        console.error('Failed to persist completion trigger', err);
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                    });
+                    if (hasMindmapForItem(movedItem)) {
+                        addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
+                    }
+                } else if (movedItem.type === 'suspended' || movedItem.type === 'similarity') {
+                    void handleCompletionTrigger(movedItem, false).catch((err) => {
+                        console.error('Failed to persist completion trigger', err);
+                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                    });
+                    addToast(movedItem.type, 'Moved out of Complete', getMaintenanceCardReviewInfo(movedItem, false));
                 }
-            } else if (movedItem.type === 'suspended' || movedItem.type === 'similarity') {
-                void handleCompletionTrigger(movedItem, false).catch((err) => {
-                    console.error('Failed to persist completion trigger', err);
-                    addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
-                });
-                addToast(movedItem.type, 'Moved out of Complete', getMaintenanceCardReviewInfo(movedItem, false));
             }
+        };
+
+        if (typeof window !== 'undefined') {
+            window.requestAnimationFrame(runPostDropSideEffects);
+        } else {
+            runPostDropSideEffects();
         }
     }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, persistKanbanState]);
 
@@ -1494,7 +1493,6 @@ export default function TodoKanban({
                             getDocLink={getDocLink}
                             isItemVisible={filteredItem}
                             hasActiveVisibilityFilter={hasActiveVisibilityFilter}
-                            forceStaticTransform={isDropSettling}
                         />
                         );
                     })}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
@@ -24,7 +24,6 @@ interface KanbanCardProps {
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
-    forceStaticTransform?: boolean;
 }
 
 const KanbanCard = ({
@@ -42,8 +41,7 @@ const KanbanCard = ({
     onResetMindmap,
     onChangeSplits,
     onViewVerseContext,
-    onViewSimilarityContext,
-    forceStaticTransform = false
+    onViewSimilarityContext
 }: KanbanCardProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -132,14 +130,11 @@ const KanbanCard = ({
         <>
             <Draggable draggableId={item.id} index={index}>
                 {(provided, snapshot) => {
-                    const disableTransformTransition = snapshot.isDragging || snapshot.isDropAnimating || forceStaticTransform;
-                    const shouldResetTransform = (snapshot.isDropAnimating || forceStaticTransform) && !snapshot.isDragging;
                     return (
                     <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        data-dragging={snapshot.isDragging ? 'true' : undefined}
                         className={`
                             roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
                             ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
@@ -148,13 +143,6 @@ const KanbanCard = ({
                         `}
                         style={{
                             ...provided.draggableProps.style,
-                            transform: shouldResetTransform
-                                ? 'none'
-                                : provided.draggableProps.style?.transform,
-                            transition: disableTransformTransition
-                                ? 'none'
-                                : provided.draggableProps.style?.transition,
-                            willChange: disableTransformTransition ? 'transform' : undefined,
                         }}
                     >
                         {renderCardZones({
@@ -422,7 +410,4 @@ function renderCardZones({
     );
 }
 
-const MemoizedKanbanCard = memo(KanbanCard);
-MemoizedKanbanCard.displayName = 'KanbanCard';
-
-export default MemoizedKanbanCard;
+export default KanbanCard;
