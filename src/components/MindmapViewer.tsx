@@ -116,6 +116,12 @@ export default function MindmapViewer({
     );
     const hasSnapshot = !!activeSnapshot;
     const hasRenderableSnapshot = useMemo(() => hasRenderableShapes(activeSnapshot), [activeSnapshot]);
+    const shouldFillParent = height === '100%';
+    const viewerSizeStyle = useMemo<React.CSSProperties>(() => (
+        shouldFillParent
+            ? { flex: 1, minHeight: 0 }
+            : { height, minHeight: height }
+    ), [height, shouldFillParent]);
     const displayUrl = isDark ? (imageUrlDark || imageUrl) : (imageUrl || imageUrlDark);
     const hasImage = !!displayUrl && !hasSnapshot && !imageFailed;
     const currentContextLabel = useMemo(
@@ -322,7 +328,7 @@ export default function MindmapViewer({
                     className={`relative w-full h-full group cursor-pointer overflow-hidden rounded-xl bg-[var(--background-secondary)] ${className || ''}`}
                     onClick={() => setIsFullScreen(true)}
                     data-mindmap-swipe-guard="true"
-                    style={{ height: height, minHeight: height, ...style }}
+                    style={{ ...viewerSizeStyle, ...style }}
                 >
                     <Image
                         src={displayUrl!}
@@ -379,7 +385,7 @@ export default function MindmapViewer({
                 <div 
                     className={`w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] relative ${className || ''}`} 
                     data-mindmap-swipe-guard="true"
-                    style={{ height: height, minHeight: height, ...style }}
+                    style={{ ...viewerSizeStyle, fontWeight: 400, ...style }}
                 >
                     {showInlineBackToContent && (
                         <div className="absolute top-3 left-3 z-10">
@@ -400,7 +406,7 @@ export default function MindmapViewer({
                             <Maximize2 size={18} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <div className="absolute inset-0 w-full h-full">
+                    <div className="absolute inset-0 w-full h-full" style={{ fontWeight: 400 }}>
                         <Tldraw
                             key="inline-preview"
                             snapshot={activeSnapshot}
@@ -415,8 +421,8 @@ export default function MindmapViewer({
 
         return (
             <div
-                className={`w-full h-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] ${className || ''}`}
-                style={{ height: height, minHeight: height, ...style }}
+                className={`w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] ${className || ''}`}
+                style={{ ...viewerSizeStyle, ...style }}
             >
                 <div className="h-full w-full flex items-center justify-center text-[var(--foreground-secondary)] text-sm">
                     {imageFailed ? 'Mindmap image unavailable' : 'Mindmap preview unavailable'}
@@ -469,7 +475,7 @@ export default function MindmapViewer({
                             <X size={24} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <div className="flex-1 relative bg-[var(--background-secondary)]" style={{ overscrollBehaviorX: 'none' }}>
+                    <div className="flex-1 relative bg-[var(--background-secondary)]" style={{ overscrollBehaviorX: 'none', fontWeight: 400 }}>
                         {hasSnapshot && activeSnapshot ? (
                             <Tldraw
                                 snapshot={activeSnapshot}

@@ -28,9 +28,9 @@ export const metadata: Metadata = {
     siteName: 'Quran Life',
     images: [
       {
-        url: '/seo-image.png',
-        width: 1424,
-        height: 752,
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
         alt: 'Quran Life social preview',
       },
     ],
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title,
     description,
-    images: ['/seo-image.png'],
+    images: ['/og-image.jpg'],
   },
 };
 
@@ -53,7 +53,7 @@ export default function Home() {
     operatingSystem: 'Web',
     description,
     url: siteUrl,
-    image: `${siteUrl}/seo-image.png`,
+    image: `${siteUrl}/og-image.jpg`,
     offers: {
       '@type': 'AggregateOffer',
       priceCurrency: 'USD',
