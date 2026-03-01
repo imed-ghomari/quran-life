@@ -66,6 +66,19 @@
   box-shadow: var(--landing-glow-shadow-strong);
 }
 
+/* Todo Kanban cards use drag transforms; avoid easing transform to prevent cursor lag. */
+.todo-kanban-card {
+  transition: box-shadow 0.2s ease;
+}
+
+.todo-kanban-card:hover {
+  transform: none;
+}
+
+.todo-kanban-card[data-dragging='true'] {
+  transition: none;
+}
+
 .roadmap-card h4 {
   font-size: 1rem;
   font-weight: 600;

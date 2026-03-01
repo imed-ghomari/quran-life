@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
@@ -129,14 +129,15 @@ const KanbanCard = ({
     return (
         <>
             <Draggable draggableId={item.id} index={index}>
-                {(provided, snapshot) => (
+                {(provided, snapshot) => {
+                    return (
                     <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         className={`
                             roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
-                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
+                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
                             ${item.status === 'complete' ? 'opacity-80' : ''}
                             ${isMobile ? 'min-w-[42vw] snap-center' : ''}
                         `}
@@ -169,7 +170,8 @@ const KanbanCard = ({
                             onViewSimilarityContext: handleViewSimilarityContext
                         })}
                     </div>
-                )}
+                    );
+                }}
             </Draggable>
         </>
     );
@@ -408,7 +410,4 @@ function renderCardZones({
     );
 }
 
-const MemoizedKanbanCard = memo(KanbanCard);
-MemoizedKanbanCard.displayName = 'KanbanCard';
-
-export default MemoizedKanbanCard;
+export default KanbanCard;

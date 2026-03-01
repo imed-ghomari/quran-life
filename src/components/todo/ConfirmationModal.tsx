@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmationModalProps {
@@ -27,27 +28,34 @@ export default function ConfirmationModal({
     onCancel
 }: ConfirmationModalProps) {
     const [isVisible, setIsVisible] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+    const previousBodyOverflow = useRef<string>('');
 
     useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!isMounted) return;
         if (isOpen) {
             setIsVisible(true);
-            // Prevent body scroll
+            previousBodyOverflow.current = document.body.style.overflow;
             document.body.style.overflow = 'hidden';
         } else {
             const timer = setTimeout(() => setIsVisible(false), 300);
-            document.body.style.overflow = '';
+            document.body.style.overflow = previousBodyOverflow.current;
             return () => clearTimeout(timer);
         }
-        return () => { document.body.style.overflow = ''; };
-    }, [isOpen]);
+        return () => { document.body.style.overflow = previousBodyOverflow.current; };
+    }, [isMounted, isOpen]);
 
-    if (!isVisible && !isOpen) return null;
+    if (!isMounted || (!isVisible && !isOpen)) return null;
 
     const showcontent = isOpen;
 
-    return (
+    const modal = (
         <div
-            className={`fixed inset-0 z-[20000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
+            className={`fixed inset-0 z-[30000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
             role="dialog"
             aria-modal="true"
         >
@@ -134,4 +142,6 @@ export default function ConfirmationModal({
             </div>
         </div>
     );
+
+    return createPortal(modal, document.body);
 }

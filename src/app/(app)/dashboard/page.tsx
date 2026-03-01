@@ -153,6 +153,13 @@ function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
     return groups;
 }
 
+function formatSurahContextLabel(surah?: { arabicName?: string; name?: string }): string {
+    const arabic = surah?.arabicName?.trim() || '';
+    const latin = surah?.name?.trim() || '';
+    if (arabic && latin) return `${arabic} (${latin})`;
+    return arabic || latin || 'Surah';
+}
+
 function getLocalDayKeyNow() {
     const now = new Date();
     const y = now.getFullYear();
@@ -1830,9 +1837,9 @@ export default function TodayPage() {
 
     const handleMindmapIncomplete = async (surahId: number) => {
         const ok = await confirm({
-            title: 'Mark Mindmap Incomplete',
-            message: 'Are you sure you want to mark this mindmap as incomplete? It will be removed from the review section until you mark it as complete again.',
-            confirmLabel: 'Mark Incomplete',
+            title: 'Edit Mindmap Later?',
+            message: 'This will move the mindmap out of the Complete column and suspend it until you continue editing.',
+            confirmLabel: 'Edit Later',
             isDestructive: true,
         });
         if (!ok) return;
@@ -1851,9 +1858,9 @@ export default function TodayPage() {
 
     const handlePartMindmapIncomplete = async (partId: QuranPart) => {
         const ok = await confirm({
-            title: 'Mark Part Mindmap Incomplete',
-            message: 'Are you sure you want to mark this part mindmap as incomplete? It will be removed from the review section until you mark it as complete again.',
-            confirmLabel: 'Mark Incomplete',
+            title: 'Edit Mindmap Later?',
+            message: 'This will move the mindmap out of the Complete column and suspend it until you continue editing.',
+            confirmLabel: 'Edit Later',
             isDestructive: true,
         });
         if (!ok) return;
@@ -2017,8 +2024,8 @@ export default function TodayPage() {
                                 {viewState.reviewExpanded && orderedDueNodes.length > 0 && activeContent && (
                                     <span className="review-header-context">
                                         {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
-                                            activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
-                                                `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`}
+                                            activeContent.type === 'mindmap' ? `${formatSurahContextLabel(activeContent.surah)} Mindmap` :
+                                                `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
                                     </span>
                                 )}
                                 <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
@@ -2044,8 +2051,8 @@ export default function TodayPage() {
                                             <div className="review-context-meta">
                                                 <span className="review-context-meta__label">
                                                     {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
-                                                        activeContent.type === 'mindmap' ? `${activeContent.surah?.arabicName} Mindmap` :
-                                                            `${activeContent.surah?.arabicName} (${activeContent.verses?.length || 0} verses)`}
+                                                        activeContent.type === 'mindmap' ? `${formatSurahContextLabel(activeContent.surah)} Mindmap` :
+                                                            `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
                                                 </span>
                                             </div>
                                         )}

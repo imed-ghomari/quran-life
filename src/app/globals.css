@@ -2670,6 +2670,19 @@ input:focus {
   padding: 1rem;
 }
 
+.splits-modal-slide-body {
+  overflow-y: hidden !important;
+  padding-bottom: 0;
+}
+
+.splits-mobile-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 0.75rem;
+}
+
 .close-btn {
   background: none;
   border: none;

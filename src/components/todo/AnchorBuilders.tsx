@@ -44,6 +44,7 @@ export function MobileAnchorBuilder({
     const { confirm } = useConfirmDialog();
     const [zoomLevel, setZoomLevel] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
+    const [scrollCenterPadding, setScrollCenterPadding] = useState(220);
     const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
     const shouldShowPreview = showMindmapPreview && !!displayUrl;
     const hasMindmap = !!(snapshot || displayUrl);
@@ -80,6 +81,27 @@ export function MobileAnchorBuilder({
 
         return () => observer.disconnect();
     }, [verseCount, isEditing, builderState.breaks]); // Re-run when layout changes
+
+    useEffect(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+
+        const updatePadding = () => {
+            const next = Math.max(140, Math.floor(el.clientHeight / 2));
+            setScrollCenterPadding(next);
+        };
+
+        updatePadding();
+
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updatePadding);
+            return () => window.removeEventListener('resize', updatePadding);
+        }
+
+        const observer = new ResizeObserver(updatePadding);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [isEditing, hasMindmap]);
 
     // Sort breaks and create segments for view mode
     const breaks = Array.from(new Set([...builderState.breaks]))
@@ -283,7 +305,7 @@ export function MobileAnchorBuilder({
             overflow: 'hidden',
             borderRadius: '16px',
             border: '1px solid var(--border)',
-            minHeight: '600px'
+            minHeight: 0
         }}>
             {/* Sticky Header Actions */}
             <div style={{
@@ -342,7 +364,7 @@ export function MobileAnchorBuilder({
                             title="Reference Map"
                             contextLabel={`Surah ${surahId}${surahName ? `. ${surahName}` : ''}`}
                             docLink={`/docs/mindmaps/surah-${surahId}`}
-                            height="100%"
+                            height={174}
                         />
                     </div>
                 )}
@@ -416,15 +438,16 @@ export function MobileAnchorBuilder({
                         position: 'absolute',
                         inset: 0,
                         overflowY: 'auto',
-                        scrollSnapType: 'y mandatory',
+                        scrollSnapType: 'y proximity',
+                        touchAction: 'pan-y',
                         WebkitOverflowScrolling: 'touch'
                     }}
                 >
                     <div style={{
                         position: 'relative',
                         // Large padding to allow first/last gap to reach center
-                        paddingTop: hasMindmap ? '0px' : '50vh',
-                        paddingBottom: '50vh',
+                        paddingTop: `${scrollCenterPadding}px`,
+                        paddingBottom: `${scrollCenterPadding}px`,
                     }}>
                         {Array.from({ length: verseCount }).map((_, i) => {
                             const vNum = i + 1;
