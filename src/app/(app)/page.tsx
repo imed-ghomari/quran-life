@@ -28,10 +28,10 @@ export const metadata: Metadata = {
     siteName: 'Quran Life',
     images: [
       {
-        url: '/landing/hero-light.png',
-        width: 1200,
-        height: 900,
-        alt: 'Quran Life visual mindmap preview',
+        url: '/seo-image.png',
+        width: 1424,
+        height: 752,
+        alt: 'Quran Life social preview',
       },
     ],
   },
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title,
     description,
-    images: ['/landing/hero-light.png'],
+    images: ['/seo-image.png'],
   },
 };
 
@@ -53,7 +53,7 @@ export default function Home() {
     operatingSystem: 'Web',
     description,
     url: siteUrl,
-    image: `${siteUrl}/landing/hero-light.png`,
+    image: `${siteUrl}/seo-image.png`,
     offers: {
       '@type': 'AggregateOffer',
       priceCurrency: 'USD',
