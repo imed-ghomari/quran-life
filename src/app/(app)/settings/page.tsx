@@ -1305,7 +1305,7 @@ export default function SettingsPage() {
 
                     <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <PauseCircle size={18} /> Active Part
+                            <Book size={18} /> Active Part
                         </h2>
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                             Choose the part you are focusing on for your daily portion and todo flow.
@@ -3254,7 +3254,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <div className="header-icon-badge">
-                                            <PauseCircle size={18} />
+                                            <Book size={18} />
                                         </div>
                                         <span>Active Part</span>
                                     </div>
@@ -3320,7 +3320,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <div className="header-icon-badge">
-                                            <Check size={18} />
+                                            <PauseCircle size={18} />
                                         </div>
                                         <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Skipped Surah</span>
                                     </div>
@@ -3966,7 +3966,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     cursor: 'pointer'
                                 }}>
                                 <div className="header-icon-badge">
-                                    <Check size={18} />
+                                    <Brain size={18} />
                                 </div>
                                 <div style={{
                                     display: 'flex',

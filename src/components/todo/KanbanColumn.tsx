@@ -28,6 +28,7 @@ interface KanbanColumnProps {
     getDocLink: (item: KanbanItem) => string | undefined;
     isItemVisible: (item: KanbanItem) => boolean;
     hasActiveVisibilityFilter: boolean;
+    forceStaticTransform?: boolean;
 }
 
 const getColumnIcon = (columnId: string) => {
@@ -59,7 +60,8 @@ const KanbanColumn = ({
     getHasPremade,
     getDocLink,
     isItemVisible,
-    hasActiveVisibilityFilter
+    hasActiveVisibilityFilter,
+    forceStaticTransform
 }: KanbanColumnProps) => {
     const visibleItems = useMemo(
         () => (hasActiveVisibilityFilter ? items.filter(isItemVisible) : items),
@@ -138,6 +140,7 @@ const KanbanColumn = ({
                                 onChangeSplits={onChangeSplits}
                                 onViewVerseContext={onViewVerseContext}
                                 onViewSimilarityContext={onViewSimilarityContext}
+                                forceStaticTransform={forceStaticTransform}
                             />
                         ))}
                         {provided.placeholder}

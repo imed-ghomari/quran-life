@@ -283,7 +283,7 @@ export function MobileAnchorBuilder({
             overflow: 'hidden',
             borderRadius: '16px',
             border: '1px solid var(--border)',
-            minHeight: '600px'
+            minHeight: 0
         }}>
             {/* Sticky Header Actions */}
             <div style={{
@@ -342,7 +342,7 @@ export function MobileAnchorBuilder({
                             title="Reference Map"
                             contextLabel={`Surah ${surahId}${surahName ? `. ${surahName}` : ''}`}
                             docLink={`/docs/mindmaps/surah-${surahId}`}
-                            height="100%"
+                            height={174}
                         />
                     </div>
                 )}
@@ -416,7 +416,8 @@ export function MobileAnchorBuilder({
                         position: 'absolute',
                         inset: 0,
                         overflowY: 'auto',
-                        scrollSnapType: 'y mandatory',
+                        scrollSnapType: 'y proximity',
+                        touchAction: 'pan-y',
                         WebkitOverflowScrolling: 'touch'
                     }}
                 >

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -97,6 +98,24 @@ const getViewportFlags = () => {
 
 const COLUMN_ORDER = ['backlog', 'in-progress', 'complete'] as const;
 
+const areKanbanStatesEqual = (
+    a?: Record<string, string[]>,
+    b?: Record<string, string[]>
+) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+        const left = a[key] || [];
+        const right = b[key] || [];
+        if (left.length !== right.length) return false;
+        for (let i = 0; i < left.length; i += 1) {
+            if (left[i] !== right[i]) return false;
+        }
+    }
+    return true;
+};
+
 const getSuspendedIdentitySignature = (item: {
     surahId?: number;
     startVerse?: number;
@@ -155,6 +174,7 @@ export default function TodoKanban({
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
     const [isMobile, setIsMobile] = useState(() => getViewportFlags().isMobile);
     const [isTablet, setIsTablet] = useState(() => getViewportFlags().isTablet);
+    const [isDropSettling, setIsDropSettling] = useState(false);
     // const [isDragging, setIsDragging] = useState(false); // Removed to avoid re-renders
     const [filter, setFilter] = useState<'all' | 'maintenance' | 'construction'>(defaultFilter ?? 'all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -184,6 +204,8 @@ export default function TodoKanban({
     const [toasts, setToasts] = useState<TodoToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const persistMoveSeqRef = useRef(0);
+    const pendingKanbanStateRef = useRef<Record<string, string[]> | null>(null);
+    const pendingKanbanStateAtRef = useRef(0);
 
     const addToast = useCallback((type: TodoToastType, message: string, info?: string, onUndo?: () => void, onExpire?: () => void) => {
         const key = `${type}|${message}|${info || ''}`;
@@ -214,6 +236,8 @@ export default function TodoKanban({
             if (options?.rollbackColumns && options?.seq && persistMoveSeqRef.current === options.seq) {
                 setColumns(options.rollbackColumns);
             }
+            pendingKanbanStateRef.current = null;
+            pendingKanbanStateAtRef.current = 0;
             addToast('surah', 'Failed to save board change', options?.rollbackColumns ? 'Change was reverted.' : 'Please try again.');
         });
     }, [onKanbanStateChange, addToast]);
@@ -342,7 +366,12 @@ export default function TodoKanban({
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
+    const columnsRef = useRef(columns);
     // Removed custom scroll refs as per request
+
+    useEffect(() => {
+        columnsRef.current = columns;
+    }, [columns]);
 
     useEffect(() => {
         const checkResponsive = () => {
@@ -393,6 +422,23 @@ export default function TodoKanban({
 
     // Sync Props to Kanban State
     useEffect(() => {
+        const pendingState = pendingKanbanStateRef.current;
+        const isPendingFresh = pendingState && (Date.now() - pendingKanbanStateAtRef.current < 3000);
+        let effectiveKanbanState = kanbanState;
+
+        if (pendingState) {
+            if (areKanbanStatesEqual(kanbanState, pendingState)) {
+                pendingKanbanStateRef.current = null;
+                pendingKanbanStateAtRef.current = 0;
+                effectiveKanbanState = kanbanState;
+            } else if (isPendingFresh) {
+                effectiveKanbanState = pendingState;
+            } else {
+                pendingKanbanStateRef.current = null;
+                pendingKanbanStateAtRef.current = 0;
+            }
+        }
+
         const itemMap = new Map<string, KanbanItem>();
         const activeSuspendedSignatures = new Set<string>();
 
@@ -482,8 +528,8 @@ export default function TodoKanban({
 
         const processedIds = new Set<string>();
 
-        if (kanbanState) {
-            Object.entries(kanbanState).forEach(([colId, itemIds]) => {
+        if (effectiveKanbanState) {
+            Object.entries(effectiveKanbanState).forEach(([colId, itemIds]) => {
                 if (!newCols[colId]) return;
                 itemIds.forEach(itemId => {
                     const item = itemMap.get(itemId);
@@ -598,6 +644,7 @@ export default function TodoKanban({
     }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
     const onDragStart = useCallback(() => {
+        setIsDropSettling(false);
         // Manually toggle classes to avoid re-render
         if (containerRef.current) {
             containerRef.current.classList.remove('snap-x', 'snap-mandatory');
@@ -614,7 +661,7 @@ export default function TodoKanban({
             if (destination && isMobileRef.current) {
                  const destCol = document.getElementById(destination.droppableId);
                  if (destCol) {
-                     destCol.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                     destCol.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
                  }
             }
         }
@@ -622,53 +669,82 @@ export default function TodoKanban({
         const { source, destination, draggableId } = result;
 
         if (!destination) return;
+        if (source.droppableId === destination.droppableId && kanbanSortOrder !== 'manual') return;
 
         const persistSeq = ++persistMoveSeqRef.current;
-        let nextStateToPersist: Record<string, string[]> | null = null;
-        let rollbackColumns: Record<string, KanbanColumnData> | null = null;
+        const prev = columnsRef.current;
+        const sourceCol = prev[source.droppableId];
+        const destCol = prev[destination.droppableId];
+        if (!sourceCol || !destCol) return;
 
-        setColumns(prev => {
-            const sourceCol = prev[source.droppableId];
-            const destCol = prev[destination.droppableId];
-            const sourceVisibleItems = hasActiveVisibilityFilter
-                ? sourceCol.items.filter(filteredItem)
-                : sourceCol.items;
-            const sourceVisibleIndex = sourceVisibleItems.findIndex(item => item.id === draggableId);
-            const safeSourceIndex = sourceVisibleIndex !== -1 ? sourceVisibleIndex : source.index;
-            const visibleItem = sourceVisibleItems[safeSourceIndex];
-            const movedItem = visibleItem?.id === draggableId
-                ? visibleItem
-                : sourceCol.items.find(item => item.id === draggableId);
-            if (!movedItem) return prev;
+        const sourceVisibleItems = hasActiveVisibilityFilter
+            ? sourceCol.items.filter(filteredItem)
+            : sourceCol.items;
+        const sourceVisibleIndex = sourceVisibleItems.findIndex(item => item.id === draggableId);
+        const safeSourceIndex = sourceVisibleIndex !== -1 ? sourceVisibleIndex : source.index;
+        const visibleItem = sourceVisibleItems[safeSourceIndex];
+        const movedItem = visibleItem?.id === draggableId
+            ? visibleItem
+            : sourceCol.items.find(item => item.id === draggableId);
+        if (!movedItem) return;
 
-            if (source.droppableId === destination.droppableId) {
-                const destVisibleItems = hasActiveVisibilityFilter
-                    ? destCol.items.filter(filteredItem)
-                    : destCol.items;
-                const currentVisibleIndex = destVisibleItems.findIndex(item => item.id === movedItem.id);
-                if (currentVisibleIndex === destination.index) {
-                    return prev;
+        if (source.droppableId === destination.droppableId) {
+            const destVisibleItems = hasActiveVisibilityFilter
+                ? destCol.items.filter(filteredItem)
+                : destCol.items;
+            const currentVisibleIndex = destVisibleItems.findIndex(item => item.id === movedItem.id);
+            if (currentVisibleIndex === destination.index) {
+                return;
+            }
+        }
+        const actualSourceIndex = sourceCol.items.findIndex(item => item.id === movedItem.id);
+        if (actualSourceIndex === -1) return;
+
+        if (destination.droppableId === 'complete'
+            && (movedItem.type === 'surah' || movedItem.type === 'part')
+            && !hasMindmapForItem(movedItem)
+        ) {
+            addToast(
+                movedItem.type,
+                'Cannot move to Complete',
+                'Create a mindmap for this card before completing it.'
+            );
+            return;
+        }
+
+        const sourceItems = [...sourceCol.items];
+        sourceItems.splice(actualSourceIndex, 1);
+
+        const sortDropItems = (items: KanbanItem[]) => {
+            if (kanbanSortOrder === 'manual') return items;
+            const getNumber = (item: KanbanItem) => {
+                if (item.type === 'surah') return item.data.surah.id;
+                if (item.type === 'part') return item.data.part;
+                if (item.type === 'suspended') return item.data.surahId;
+                if (item.type === 'similarity') return item.data.surah.id;
+                return 999;
+            };
+            return [...items].sort((a, b) => {
+                if (kanbanSortOrder === 'number_only') {
+                    return getNumber(a) - getNumber(b);
                 }
-            }
-            const actualSourceIndex = sourceCol.items.findIndex(item => item.id === movedItem.id);
-            if (actualSourceIndex === -1) return prev;
+                const typePriority: Record<string, number> = {
+                    suspended: 0,
+                    similarity: 1,
+                    part: 2,
+                    surah: 3,
+                };
+                const pA = typePriority[a.type] ?? 99;
+                const pB = typePriority[b.type] ?? 99;
+                if (pA !== pB) return pA - pB;
+                return getNumber(a) - getNumber(b);
+            });
+        };
 
-            if (destination.droppableId === 'complete'
-                && (movedItem.type === 'surah' || movedItem.type === 'part')
-                && !hasMindmapForItem(movedItem)
-            ) {
-                addToast(
-                    movedItem.type,
-                    'Cannot move to Complete',
-                    'Create a mindmap for this card before completing it.'
-                );
-                return prev;
-            }
+        const isManualSort = kanbanSortOrder === 'manual';
+        let destItems = source.droppableId === destination.droppableId ? sourceItems : [...destCol.items];
 
-            const sourceItems = [...sourceCol.items];
-            sourceItems.splice(actualSourceIndex, 1);
-
-            const destItems = source.droppableId === destination.droppableId ? sourceItems : [...destCol.items];
+        if (isManualSort) {
             const filteredDestItems = hasActiveVisibilityFilter ? destItems.filter(filteredItem) : destItems;
 
             let insertIndex = destItems.length;
@@ -683,65 +759,75 @@ export default function TodoKanban({
                     insertIndex = targetIndex === -1 ? destItems.length : targetIndex;
                 }
             }
-
             destItems.splice(insertIndex, 0, movedItem);
+        } else {
+            destItems.push(movedItem);
+            destItems = sortDropItems(destItems);
+        }
 
-            const newColsMap = {
-                ...prev,
-                [source.droppableId]: { ...sourceCol, items: sourceItems },
-                [destination.droppableId]: { ...destCol, items: destItems }
-            };
+        const nextSourceItems = source.droppableId === destination.droppableId
+            ? sourceItems
+            : (isManualSort ? sourceItems : sortDropItems(sourceItems));
 
-            if (onKanbanStateChange) {
-                const state: Record<string, string[]> = {};
-                Object.values(newColsMap).forEach(col => {
-                    state[col.id] = col.items.map(i => i.id);
-                });
-                nextStateToPersist = state;
-                rollbackColumns = prev;
-            }
+        const newColsMap = {
+            ...prev,
+            [source.droppableId]: { ...sourceCol, items: nextSourceItems },
+            [destination.droppableId]: { ...destCol, items: destItems }
+        };
 
-            if (destination.droppableId === 'complete') {
-                if (movedItem.type === 'surah' || movedItem.type === 'part') {
-                    if (movedItem.status !== 'complete') {
-                        void handleCompletionTrigger(movedItem, true).catch((err) => {
-                            console.error('Failed to persist completion trigger', err);
-                            addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
-                        });
-                        addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
-                    }
-                } else if (source.droppableId !== 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
+        flushSync(() => {
+            setColumns(newColsMap);
+            setIsDropSettling(true);
+        });
+
+        requestAnimationFrame(() => {
+            setIsDropSettling(false);
+        });
+
+        if (onKanbanStateChange) {
+            const state: Record<string, string[]> = {};
+            Object.values(newColsMap).forEach(col => {
+                state[col.id] = col.items.map(i => i.id);
+            });
+            pendingKanbanStateRef.current = state;
+            pendingKanbanStateAtRef.current = Date.now();
+            persistKanbanState(state, { rollbackColumns: prev, seq: persistSeq });
+        }
+
+        if (destination.droppableId === 'complete') {
+            if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                if (movedItem.status !== 'complete') {
                     void handleCompletionTrigger(movedItem, true).catch((err) => {
                         console.error('Failed to persist completion trigger', err);
                         addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
                     });
-                    addToast(movedItem.type, 'Marked complete', getMaintenanceCardReviewInfo(movedItem, true));
+                    addToast(movedItem.type, 'Moved to Complete', getMindmapCompletionInfo(movedItem));
                 }
-            } else if (source.droppableId === 'complete') {
-                if (movedItem.type === 'surah' || movedItem.type === 'part') {
-                    void handleCompletionTrigger(movedItem, false).catch((err) => {
-                        console.error('Failed to persist completion trigger', err);
-                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
-                    });
-                    if (hasMindmapForItem(movedItem)) {
-                        addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
-                    }
-                } else if (movedItem.type === 'suspended' || movedItem.type === 'similarity') {
-                    void handleCompletionTrigger(movedItem, false).catch((err) => {
-                        console.error('Failed to persist completion trigger', err);
-                        addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
-                    });
-                    addToast(movedItem.type, 'Moved out of Complete', getMaintenanceCardReviewInfo(movedItem, false));
-                }
+            } else if (source.droppableId !== 'complete' && (movedItem.type === 'suspended' || movedItem.type === 'similarity')) {
+                void handleCompletionTrigger(movedItem, true).catch((err) => {
+                    console.error('Failed to persist completion trigger', err);
+                    addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                });
+                addToast(movedItem.type, 'Marked complete', getMaintenanceCardReviewInfo(movedItem, true));
             }
-
-            return newColsMap;
-        });
-
-        if (nextStateToPersist) {
-            persistKanbanState(nextStateToPersist, { rollbackColumns: rollbackColumns || undefined, seq: persistSeq });
+        } else if (source.droppableId === 'complete') {
+            if (movedItem.type === 'surah' || movedItem.type === 'part') {
+                void handleCompletionTrigger(movedItem, false).catch((err) => {
+                    console.error('Failed to persist completion trigger', err);
+                    addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                });
+                if (hasMindmapForItem(movedItem)) {
+                    addToast(movedItem.type, 'Moved out of Complete', getMindmapRemovalInfo(movedItem));
+                }
+            } else if (movedItem.type === 'suspended' || movedItem.type === 'similarity') {
+                void handleCompletionTrigger(movedItem, false).catch((err) => {
+                    console.error('Failed to persist completion trigger', err);
+                    addToast(movedItem.type, 'Failed to save completion', 'Please try again.');
+                });
+                addToast(movedItem.type, 'Moved out of Complete', getMaintenanceCardReviewInfo(movedItem, false));
+            }
         }
-    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, persistKanbanState]);
+    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
@@ -1408,6 +1494,7 @@ export default function TodoKanban({
                             getDocLink={getDocLink}
                             isItemVisible={filteredItem}
                             hasActiveVisibilityFilter={hasActiveVisibilityFilter}
+                            forceStaticTransform={isDropSettling}
                         />
                         );
                     })}

@@ -24,6 +24,7 @@ interface KanbanCardProps {
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+    forceStaticTransform?: boolean;
 }
 
 const KanbanCard = ({
@@ -41,7 +42,8 @@ const KanbanCard = ({
     onResetMindmap,
     onChangeSplits,
     onViewVerseContext,
-    onViewSimilarityContext
+    onViewSimilarityContext,
+    forceStaticTransform = false
 }: KanbanCardProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -129,19 +131,30 @@ const KanbanCard = ({
     return (
         <>
             <Draggable draggableId={item.id} index={index}>
-                {(provided, snapshot) => (
+                {(provided, snapshot) => {
+                    const disableTransformTransition = snapshot.isDragging || snapshot.isDropAnimating || forceStaticTransform;
+                    const shouldResetTransform = (snapshot.isDropAnimating || forceStaticTransform) && !snapshot.isDragging;
+                    return (
                     <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
+                        data-dragging={snapshot.isDragging ? 'true' : undefined}
                         className={`
                             roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
-                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
+                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
                             ${item.status === 'complete' ? 'opacity-80' : ''}
                             ${isMobile ? 'min-w-[42vw] snap-center' : ''}
                         `}
                         style={{
                             ...provided.draggableProps.style,
+                            transform: shouldResetTransform
+                                ? 'none'
+                                : provided.draggableProps.style?.transform,
+                            transition: disableTransformTransition
+                                ? 'none'
+                                : provided.draggableProps.style?.transition,
+                            willChange: disableTransformTransition ? 'transform' : undefined,
                         }}
                     >
                         {renderCardZones({
@@ -169,7 +182,8 @@ const KanbanCard = ({
                             onViewSimilarityContext: handleViewSimilarityContext
                         })}
                     </div>
-                )}
+                    );
+                }}
             </Draggable>
         </>
     );
