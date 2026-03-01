@@ -58,6 +58,7 @@ import { OnlineStatusContext } from '@/components/Providers';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { clientEnv } from '@/lib/env/client';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -133,6 +134,12 @@ type DailyPortionSurahGroup = {
     verses: Verse[];
 };
 
+type PendingReviewAdvance = {
+    reviewedNodeId: string;
+    nextNodeId: string | null;
+    beforeIndex: number;
+};
+
 function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
     const groups: DailyPortionSurahGroup[] = [];
     for (const verse of verses) {
@@ -196,9 +203,11 @@ export default function TodayPage() {
     );
     const lastPortionKeyRef = useRef<string>('');
     const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
+    const previousReviewSortOrderRef = useRef<ReviewSortOrder>(normalizeReviewSortOrder(settings?.reviewSortOrder));
     const didRestoreActiveNodeRef = useRef(false);
     const reviewActionLockRef = useRef(false);
     const historyActionLockRef = useRef(false);
+    const pendingReviewAdvanceRef = useRef<PendingReviewAdvance | null>(null);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -234,6 +243,7 @@ export default function TodayPage() {
     const suspendedVerseGroupKeys = useMemo(() => {
         return deriveSuspendedVerseGroupKeys(reviewErrors, 3, settings?.suspendedVerseGroupsAcknowledged);
     }, [reviewErrors, settings?.suspendedVerseGroupsAcknowledged]);
+    const reviewSortOrder = useMemo(() => normalizeReviewSortOrder(settings?.reviewSortOrder), [settings?.reviewSortOrder]);
 
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
     const orderedDueNodes = useMemo(() => {
@@ -274,8 +284,6 @@ export default function TodayPage() {
         const filteredDueNodes = filterReviewQueueNodes(dueNodes, settings, mindmaps, suspendedVerseGroupKeys);
 
         if (!filteredDueNodes.length) return [];
-
-        const reviewSortOrder = settings?.reviewSortOrder ?? 'surah_grouped';
 
         if (reviewSortOrder === 'due_date') {
             return [...filteredDueNodes].sort((a, b) => {
@@ -343,7 +351,7 @@ export default function TodayPage() {
         }
 
         return ordered;
-    }, [dueNodes, settings, mindmaps, suspendedVerseGroupKeys, settings?.reviewSortOrder]);
+    }, [dueNodes, settings, mindmaps, suspendedVerseGroupKeys, reviewSortOrder]);
 
     // Ensure completed Kanban items are represented in FSRS (full-surah review + mindmaps)
     useEffect(() => {
@@ -552,6 +560,9 @@ export default function TodayPage() {
     }, [activeReviewNodeId]);
 
     useEffect(() => {
+        const previousReviewSortOrder = previousReviewSortOrderRef.current;
+        if (previousReviewSortOrder === reviewSortOrder) return;
+        previousReviewSortOrderRef.current = reviewSortOrder;
         if (!orderedDueNodes.length) return;
         const prevActiveNodeId = activeNodeBeforeSortChangeRef.current;
         if (!prevActiveNodeId) return;
@@ -559,7 +570,36 @@ export default function TodayPage() {
         if (preservedIndex >= 0 && preservedIndex !== currentReviewIndex) {
             setCurrentReviewIndex(preservedIndex);
         }
-    }, [settings?.reviewSortOrder, orderedDueNodes, currentReviewIndex]);
+    }, [reviewSortOrder, orderedDueNodes, currentReviewIndex]);
+
+    useEffect(() => {
+        const pending = pendingReviewAdvanceRef.current;
+        if (!pending) return;
+
+        const reviewedIndex = orderedDueNodes.findIndex(node => node.id === pending.reviewedNodeId);
+        if (reviewedIndex >= 0) return;
+
+        let targetIndex = currentReviewIndex;
+        if (pending.nextNodeId) {
+            const nextNodeIndex = orderedDueNodes.findIndex(node => node.id === pending.nextNodeId);
+            if (nextNodeIndex >= 0) {
+                targetIndex = nextNodeIndex;
+            } else if (orderedDueNodes.length > 0) {
+                targetIndex = Math.min(pending.beforeIndex, orderedDueNodes.length - 1);
+            } else {
+                targetIndex = 0;
+            }
+        } else if (orderedDueNodes.length > 0) {
+            targetIndex = Math.min(pending.beforeIndex, orderedDueNodes.length - 1);
+        } else {
+            targetIndex = 0;
+        }
+
+        pendingReviewAdvanceRef.current = null;
+        if (targetIndex !== currentReviewIndex) {
+            setCurrentReviewIndex(targetIndex);
+        }
+    }, [orderedDueNodes, currentReviewIndex]);
 
     useEffect(() => {
         if (!activeReviewNodeId) return;
@@ -1067,6 +1107,20 @@ export default function TodayPage() {
     }, [portionData]);
 
 
+    const queueReviewAdvance = useCallback((reviewedNodeId: string, beforeIndex: number) => {
+        const nextNodeId = beforeIndex + 1 < orderedDueNodes.length
+            ? orderedDueNodes[beforeIndex + 1].id
+            : null;
+        pendingReviewAdvanceRef.current = {
+            reviewedNodeId,
+            nextNodeId,
+            beforeIndex,
+        };
+        setRevealedChunks(0);
+        setCurrentVerseInReview(0);
+        setShowGrading(false);
+    }, [orderedDueNodes]);
+
 
     // Grade review
     const handleGrade = useCallback(async (remembered: boolean) => {
@@ -1211,17 +1265,8 @@ export default function TodayPage() {
         });
 
         addToast(toastType, toastMessage, info);
-
-        if (currentReviewIndex < orderedDueNodes.length - 1) {
-            setCurrentReviewIndex(prev => prev + 1);
-            // Move to next item - stay hidden until clicked
-            setRevealedChunks(0);
-            setCurrentVerseInReview(0);
-            setShowGrading(false);
-        } else {
-            // All done for now
-        }
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure]);
+        queueReviewAdvance(node.id, currentReviewIndex);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure, queueReviewAdvance]);
 
     const handlePostpone = useCallback(async () => {
         if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
@@ -1274,18 +1319,10 @@ export default function TodayPage() {
         });
 
         addToast('postpone', 'Postponed to tomorrow', info);
-
-        if (currentReviewIndex < orderedDueNodes.length - 1) {
-            setCurrentReviewIndex(prev => prev + 1);
-            setRevealedChunks(0);
-            setCurrentVerseInReview(0);
-            setShowGrading(false);
-        } else {
-            // All done for now
-        }
+        queueReviewAdvance(node.id, currentReviewIndex);
         reviewActionLockRef.current = false;
         setIsPersistingReviewAction(false);
-    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction, queueReviewAdvance]);
 
     const handleUndo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
         if (historyActionLockRef.current || reviewActionLockRef.current || isApplyingHistoryAction) return;
@@ -2070,41 +2107,42 @@ export default function TodayPage() {
 
                                         {/* Mindmap type content */}
                                         {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
-                                            <div className="review-mindmap-content">  
-                                                {!showGrading ? (
-                                                    <div className="verse-hidden verse-hidden--static-icon review-mindmap-placeholder">
-                                                        <EyeOff size={24} />
-                                                        <p>Mindmap hidden</p>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        {(() => {
-                                                            const hasContent = !!activeContent.mindmap?.imageUrl || !!activeContent.mindmap?.imageUrlDark || !!activeContent.mindmap?.tldrawSnapshot;
+                                            <div className="review-mindmap-content">
+                                                <div className="review-mindmap-stage">
+                                                    {!showGrading ? (
+                                                        <div className="verse-hidden verse-hidden--static-icon review-mindmap-placeholder">
+                                                            <EyeOff size={24} />
+                                                            <p>Mindmap hidden</p>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {(() => {
+                                                                const hasContent = !!activeContent.mindmap?.imageUrl || !!activeContent.mindmap?.imageUrlDark || !!activeContent.mindmap?.tldrawSnapshot;
 
-                                                            if (!hasContent) {
+                                                                if (!hasContent) {
+                                                                    return (
+                                                                        <div
+                                                                            className="verse-hidden review-mindmap-placeholder"
+                                                                            style={{ background: 'var(--accent-light)', border: '1px dashed var(--accent)', color: 'var(--accent)', cursor: 'pointer' }}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (activeContent.type === 'mindmap') {
+                                                                                    setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                                } else {
+                                                                                    setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <PenTool size={24} style={{ marginBottom: 8 }} />
+                                                                            <p>Preview missing (Lean Sync)</p>
+                                                                            <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Click to view & generate local preview</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+
                                                                 return (
-                                                                    <div
-                                                                        className="verse-hidden"
-                                                                        style={{ background: 'var(--accent-light)', border: '1px dashed var(--accent)', color: 'var(--accent)', cursor: 'pointer' }}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (activeContent.type === 'mindmap') {
-                                                                                setActiveMindmapEditor({ surahId: activeContent.surah!.id, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                            } else {
-                                                                                setActivePartEditor({ partId: activeContent.partId as QuranPart, snapshot: activeContent.mindmap?.tldrawSnapshot });
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        <PenTool size={24} style={{ marginBottom: 8 }} />
-                                                                        <p>Preview missing (Lean Sync)</p>
-                                                                        <p style={{ fontSize: '0.8rem', marginTop: 8 }}>Click to view & generate local preview</p>
-                                                                    </div>
-                                                                );
-                                                            }
-
-                                                            return (
-                                                                <div style={{ marginBottom: '1rem' }}>
                                                                     <MindmapViewer
+                                                                        className="review-mindmap-viewer"
                                                                         snapshot={activeContent.mindmap?.tldrawSnapshot}
                                                                         imageUrl={activeContent.mindmap?.imageUrl}
                                                                         imageUrlDark={activeContent.mindmap?.imageUrlDark}
@@ -2116,14 +2154,13 @@ export default function TodayPage() {
                                                                         docLink={activeContent.type === 'mindmap'
                                                                             ? `/docs/mindmaps/surah-${activeContent.surah?.id}`
                                                                             : `/docs/mindmaps/part-${activeContent.partId}`}
-                                                                        height={isMobile ? 'min(34vh, 280px)' : 'min(42vh, 320px)'}
+                                                                        height="100%"
                                                                     />
-                                                                </div>
-                                                            );
-                                                        })()}
-
-                                                    </div>
-                                                )}
+                                                                );
+                                                            })()}
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>

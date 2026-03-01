@@ -3,6 +3,7 @@ import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart } from '@/lib/types';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
+import { normalizeReviewSortOrder } from '@/lib/reviewSortOrder';
 
 const LOCKED_SKIPPED_SURAH_ID = 1;
 
@@ -219,6 +220,7 @@ export function useInstantSettings() {
                 ? ALL_QURAN_PART
                 : normalizedActivePart,
             skippedSurahs: normalizeSkippedSurahs((merged as any).skippedSurahs),
+            reviewSortOrder: normalizeReviewSortOrder((merged as any).reviewSortOrder),
         };
     }, [settingsEntry, user?.id]);
 
@@ -266,12 +268,28 @@ export function useInstantSettings() {
         }));
     }, [settingsEntry, user]);
 
+    useEffect(() => {
+        if (!user || !settingsEntry) return;
+
+        const normalizedReviewSortOrder = normalizeReviewSortOrder((settingsEntry as any).reviewSortOrder);
+        if ((settingsEntry as any).reviewSortOrder === normalizedReviewSortOrder) return;
+
+        const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
+        void db.transact(db.tx.settings[settingsId].update({
+            reviewSortOrder: normalizedReviewSortOrder,
+            lastSyncedAt: new Date().toISOString(),
+        }));
+    }, [settingsEntry, user]);
+
     const saveSettings = async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
 
         const normalizedSettings: Partial<AppSettings> = { ...newSettings };
         if (Object.prototype.hasOwnProperty.call(newSettings, 'skippedSurahs')) {
             normalizedSettings.skippedSurahs = normalizeSkippedSurahs(newSettings.skippedSurahs);
+        }
+        if (Object.prototype.hasOwnProperty.call(newSettings, 'reviewSortOrder')) {
+            normalizedSettings.reviewSortOrder = normalizeReviewSortOrder(newSettings.reviewSortOrder);
         }
 
         const syncedAt = new Date().toISOString();

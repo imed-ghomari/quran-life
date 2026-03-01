@@ -409,6 +409,24 @@ export default function TodoPage() {
         };
 
         const byGroup = new Map<string, any[]>();
+        const anchorsBySurahRange = new Map<number, Map<string, any>>();
+
+        const getCurrentAnchorForRange = (surahId: number, startVerse: number, endVerse: number) => {
+            const rangeKey = `${startVerse}-${endVerse}`;
+            const existing = anchorsBySurahRange.get(surahId);
+            if (existing) return existing.get(rangeKey);
+
+            const surahAnchors = getEffectiveSurahAnchors(surahId, mindmaps[surahId]);
+            const byRange = new Map<string, any>();
+            surahAnchors.forEach((anchor) => {
+                const anchorStart = Number(anchor?.startVerse);
+                const anchorEnd = Number(anchor?.endVerse);
+                if (!Number.isFinite(anchorStart) || !Number.isFinite(anchorEnd)) return;
+                byRange.set(`${anchorStart}-${anchorEnd}`, anchor);
+            });
+            anchorsBySurahRange.set(surahId, byRange);
+            return byRange.get(rangeKey);
+        };
 
         errors
             .filter(e => e.nodeType === 'verse_segment' && e.surahId)
@@ -422,8 +440,13 @@ export default function TodoPage() {
                         : (error.startVerse ?? 1);
                 const startVerse = error.startVerse ?? focusAyah;
                 const endVerse = error.endVerse ?? startVerse;
+                const currentAnchor = getCurrentAnchorForRange(errorSurahId, startVerse, endVerse);
+                if (!currentAnchor) {
+                    // Split/range no longer exists in current surah anchors; treat historical error as obsolete.
+                    return;
+                }
                 const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
-                const anchorId = error.anchorId || fallbackAnchorId;
+                const anchorId = currentAnchor.id || error.anchorId || fallbackAnchorId;
                 const groupKey = `${errorSurahId}-${anchorId}`;
                 const timestamp = error.timestamp || '';
                 const ts = Date.parse(timestamp);
@@ -433,7 +456,7 @@ export default function TodoPage() {
                     surahId: errorSurahId,
                     anchorId,
                     groupKey,
-                    label: error.anchorLabel || `Verses ${startVerse}-${endVerse}`,
+                    label: currentAnchor.label || error.anchorLabel || `Verses ${startVerse}-${endVerse}`,
                     startVerse,
                     endVerse,
                     focusAyah,
@@ -498,7 +521,7 @@ export default function TodoPage() {
             if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
             return a.endVerse - b.endVerse;
         });
-    }, [errors, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD]);
+    }, [errors, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD, mindmaps]);
 
 
 

@@ -55,6 +55,7 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
 
 interface MutashabihatDecision {
     id: string; // absoluteAyah or absoluteAyah-phraseId
@@ -440,7 +441,7 @@ export default function SettingsPage() {
         surahId?: number;
     } | null>(null);
     const [todoDefaultFilter, setTodoDefaultFilter] = useState<'all' | 'maintenance' | 'construction'>(settings.todoDefaultFilter ?? 'all');
-    const [reviewSortOrder, setReviewSortOrder] = useState<'surah_grouped' | 'due_date' | 'type_grouped'>(settings.reviewSortOrder ?? 'surah_grouped');
+    const [reviewSortOrder, setReviewSortOrder] = useState<ReviewSortOrder>(normalizeReviewSortOrder(settings.reviewSortOrder));
     const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
     const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
@@ -841,7 +842,7 @@ export default function SettingsPage() {
     }, [settings.todoDefaultFilter]);
 
     useEffect(() => {
-        setReviewSortOrder(settings.reviewSortOrder ?? 'surah_grouped');
+        setReviewSortOrder(normalizeReviewSortOrder(settings.reviewSortOrder));
     }, [settings.reviewSortOrder]);
 
     useEffect(() => {
