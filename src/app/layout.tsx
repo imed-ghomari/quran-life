@@ -35,9 +35,9 @@ export const metadata: Metadata = {
         siteName: 'Quran Life',
         images: [
             {
-                url: '/seo-image.png',
-                width: 1424,
-                height: 752,
+                url: '/og-image.jpg',
+                width: 1200,
+                height: 630,
                 alt: 'Quran Life social preview',
             },
         ],
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
         card: 'summary_large_image',
         title: 'Quran Life',
         description: 'Complete your learned Quran portions in manageable daily readings',
-        images: ['/seo-image.png'],
+        images: ['/og-image.jpg'],
     },
     manifest: '/manifest.json',
     icons: {

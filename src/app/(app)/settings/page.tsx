@@ -1040,7 +1040,7 @@ export default function SettingsPage() {
                 Sign Out
             </button>
             <button
-                className="btn std-normal-btn"
+                className="btn std-normal-btn std-normal-danger"
                 onClick={handleDeleteAccount}
                 disabled={!isOnline || isDeletingAccount}
                 style={{
@@ -1053,10 +1053,7 @@ export default function SettingsPage() {
                     fontSize: '0.9rem',
                     lineHeight: 1.2,
                     textAlign: 'center',
-                    cursor: 'pointer',
-                    border: '1px solid color-mix(in srgb, #ef4444 35%, var(--border))',
-                    background: 'color-mix(in srgb, #ef4444 10%, var(--background))',
-                    color: '#ef4444'
+                    cursor: 'pointer'
                 }}
             >
                 {isDeletingAccount ? 'Submitting deletion request...' : 'Delete My Account'}
