@@ -2011,22 +2011,24 @@ export default function SettingsPage() {
                     </button>
 
                     <div
-                        className="settings-support-cta settings-support-cta-mobile"
+                        className="settings-support-cta-mobile"
                         style={{
-                            display: 'inline-flex',
+                            display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
-                            gap: '0.7rem',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            width: '100%',
+                            paddingInline: '0.5rem',
+                            gap: '0.6rem',
                             fontSize: '0.9rem',
                             color: 'var(--foreground-secondary)',
                             marginTop: '0.2rem',
                             marginBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.2rem)',
-                            whiteSpace: 'nowrap',
-                            flexShrink: 0,
-                            transform: 'translateY(-2px)',
                         }}
                     >
                         <span style={{ color: 'var(--foreground-secondary)' }}>
-                            Need help or more details? Join our Discord server.
+                            Need support or more details? Join our Discord server.
                         </span>
                         <a
                             className="settings-support-discord-link"
@@ -3035,7 +3037,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     <div className="hidden md:flex items-center justify-between mb-6 settings-topbar-row">
                         <h1 className="text-2xl font-bold m-0">Settings</h1>
                         <div className="settings-support-cta">
-                            <span>Need help or more details? Join our Discord server.</span>
+                            <span>Need support or more details? Join our Discord server.</span>
                             <a
                                 className="settings-support-discord-link"
                                 href="https://discord.gg/6wy3YRG2qB"
@@ -5008,23 +5010,44 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     white-space: nowrap;
                     flex-shrink: 0;
                     transform: translateY(-2px);
+                    padding-inline: clamp(0.35rem, 2.5vw, 0.75rem);
+                    box-sizing: border-box;
                 }
 
                 .settings-topbar-row {
                     flex-wrap: nowrap;
                 }
 
+                .settings-support-cta > span {
+                    min-width: 0;
+                    overflow-wrap: anywhere;
+                }
+
                 .settings-support-cta-mobile {
+                    display: flex;
+                    flex-direction: column;
                     margin-top: 0.2rem;
                     margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.2rem);
                     white-space: normal;
-                    flex-wrap: wrap;
-                    align-items: flex-start;
+                    flex-wrap: nowrap;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
                     gap: 0.6rem;
                     line-height: 1.35;
                     transform: none;
                     font-size: 0.9rem;
                     color: var(--foreground-secondary);
+                    width: 100%;
+                    padding-inline: 0.5rem;
+                }
+
+                .settings-support-cta-mobile > span {
+                    text-align: center;
+                }
+
+                .settings-support-cta-mobile .settings-support-discord-link {
+                    align-self: center;
                 }
 
                 .settings-support-discord-link {
@@ -5045,6 +5068,27 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
                     background: var(--verse-bg);
                     transform: translateY(-1px);
+                }
+
+                @media (max-width: 1220px) {
+                    .settings-topbar-row {
+                        flex-wrap: wrap;
+                    }
+
+                    .settings-support-cta {
+                        white-space: normal;
+                        max-width: 100%;
+                    }
+                }
+
+                @media (max-width: 420px) {
+                    .settings-support-cta-mobile {
+                        gap: 0.5rem;
+                    }
+
+                    .settings-support-discord-link {
+                        max-width: 100%;
+                    }
                 }
 
                 .add-custom-mut-btn {
