@@ -97,6 +97,20 @@ const getViewportFlags = () => {
 
 const COLUMN_ORDER = ['backlog', 'in-progress', 'complete'] as const;
 
+const getSuspendedIdentitySignature = (item: {
+    surahId?: number;
+    startVerse?: number;
+    endVerse?: number;
+}) => {
+    const surahId = Number(item?.surahId);
+    const startVerse = Number(item?.startVerse);
+    const endVerse = Number(item?.endVerse);
+    if (!Number.isFinite(surahId) || !Number.isFinite(startVerse) || !Number.isFinite(endVerse)) {
+        return null;
+    }
+    return `${surahId}-${startVerse}-${endVerse}`;
+};
+
 export default function TodoKanban({
     suspendedAnchors,
     similarityGroups,
@@ -380,11 +394,14 @@ export default function TodoKanban({
     // Sync Props to Kanban State
     useEffect(() => {
         const itemMap = new Map<string, KanbanItem>();
+        const activeSuspendedSignatures = new Set<string>();
 
         suspendedAnchors.forEach(item => {
             const groupIdentity = item.groupKey || `${item.surahId}-${item.anchorId}`;
             const id = `suspended-${groupIdentity}`;
             itemMap.set(id, { id, type: 'suspended', data: item, status: 'backlog' });
+            const signature = getSuspendedIdentitySignature(item);
+            if (signature) activeSuspendedSignatures.add(signature);
         });
 
         similarityGroups.forEach(group => {
@@ -471,6 +488,11 @@ export default function TodoKanban({
                 itemIds.forEach(itemId => {
                     const item = itemMap.get(itemId);
                     if (item) {
+                        // Suspended cards that become active again should not stay pinned in Complete.
+                        // They re-enter as actionable work in Backlog.
+                        if (colId === 'complete' && item.type === 'suspended') {
+                            return;
+                        }
                         newCols[colId].push(item);
                         processedIds.add(itemId);
                     }
@@ -517,13 +539,21 @@ export default function TodoKanban({
             });
         };
 
+        const isObsoleteRetainedSuspended = (item: KanbanItem) => {
+            if (item.type !== 'suspended') return false;
+            const signature = getSuspendedIdentitySignature(item.data || {});
+            if (!signature) return false;
+            return activeSuspendedSignatures.has(signature);
+        };
+
         setColumns((prev) => {
-            // Keep completed maintenance cards visible even after they leave source datasets.
-            // Similarity cards resolve out of similarityGroups and suspended cards leave suspendedAnchors,
-            // but cards already moved to Complete should remain visible on the Todo board.
+            // Keep completed maintenance cards visible when appropriate after they leave source datasets.
+            // Similarity cards stay pinned in Complete.
+            // Suspended cards stay pinned unless a new active suspended item supersedes them.
             const retainedCompletedMaintenance = prev.complete.items.filter((item) => (
-                (item.type === 'suspended' || item.type === 'similarity')
+                (item.type === 'similarity' || item.type === 'suspended')
                 && !itemMap.has(item.id)
+                && !isObsoleteRetainedSuspended(item)
             ));
 
             retainedCompletedMaintenance.forEach((item) => {

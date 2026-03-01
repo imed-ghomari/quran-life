@@ -5,7 +5,6 @@ import './RoadmapSection.css';
 const RoadmapSection: React.FC = () => {
   const roadmapItems = {
     planned: [
-      { id: 1, title: 'Validation of Mindmaps & Methodology', tag: 'Planned' },
       { id: 2, title: 'Localization & Translation', tag: 'Planned' },
       {
         id: 12,
@@ -13,6 +12,11 @@ const RoadmapSection: React.FC = () => {
         tag: 'Planned'
       },
       { id: 13, title: 'Better Design for Mindmaps', tag: 'Planned' },
+      {
+        id: 16,
+        title: 'Conflict-safe mindmap sync (choose between device and cloud versions)',
+        tag: 'Planned'
+      },
     
       
     ],

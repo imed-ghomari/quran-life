@@ -47,7 +47,7 @@ export default function ConfirmationModal({
 
     return (
         <div
-            className={`fixed inset-0 z-[1000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
+            className={`fixed inset-0 z-[20000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
             role="dialog"
             aria-modal="true"
         >
