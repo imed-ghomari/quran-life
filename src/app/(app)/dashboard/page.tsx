@@ -68,6 +68,7 @@ const stableNodeId = (...parts: Array<string | number>) =>
 const ACTIVE_REVIEW_NODE_STORAGE_KEY = 'dashboard_active_review_node_id_v1';
 const FSRS_OPTIMIZATION_LOG_DELTA = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA);
 const FSRS_OPTIMIZATION_DELAY_MS = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS);
+const AUTO_NODE_CREATE_BATCH_SIZE = 20;
 
 const toPositiveInt = (value: unknown): number | null => {
     const parsed = Number(value);
@@ -214,6 +215,7 @@ export default function TodayPage() {
     const didRestoreActiveNodeRef = useRef(false);
     const reviewActionLockRef = useRef(false);
     const historyActionLockRef = useRef(false);
+    const pendingAutoCreateNodeIdsRef = useRef<Set<string>>(new Set());
     const pendingReviewAdvanceRef = useRef<PendingReviewAdvance | null>(null);
 
     // Local helper to find anchor for range using InstantDB mindmaps
@@ -444,9 +446,30 @@ export default function TodayPage() {
             }
         });
 
-        if (nodesToCreate.length > 0) {
-            nodesToCreate.forEach(node => updateInstantNode(node));
-        }
+        const nodesToPersist = nodesToCreate.filter((node) => !pendingAutoCreateNodeIdsRef.current.has(node.id));
+        if (nodesToPersist.length === 0) return;
+
+        nodesToPersist.forEach((node) => pendingAutoCreateNodeIdsRef.current.add(node.id));
+
+        let cancelled = false;
+        const persistMissingNodes = async () => {
+            try {
+                for (let i = 0; i < nodesToPersist.length; i += AUTO_NODE_CREATE_BATCH_SIZE) {
+                    if (cancelled) break;
+                    const batch = nodesToPersist.slice(i, i + AUTO_NODE_CREATE_BATCH_SIZE);
+                    await Promise.all(batch.map((node) => updateInstantNode(node)));
+                }
+            } catch (error) {
+                console.error('Failed to persist auto-created review nodes', error);
+            } finally {
+                nodesToPersist.forEach((node) => pendingAutoCreateNodeIdsRef.current.delete(node.id));
+            }
+        };
+
+        void persistMissingNodes();
+        return () => {
+            cancelled = true;
+        };
     }, [settings, nodes, mindmaps, partMindMaps, updateInstantNode]);
 
     const isLoaded = isVersesLoaded && !settingsLoading && !nodesLoading;

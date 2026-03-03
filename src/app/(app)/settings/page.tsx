@@ -236,6 +236,8 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
 const MUTASHABIH_NOTE_MAX_LENGTH = 300;
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const LOCKED_SKIPPED_SURAH_ID = 1;
+const SETTINGS_WRITE_DEBOUNCE_MS = 300;
+const MATURITY_UPDATE_BATCH_SIZE = 20;
 
 type SimilarityResolutionTarget = {
     phraseId: string;
@@ -447,6 +449,8 @@ export default function SettingsPage() {
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
     const [dailyReadingStyle, setDailyReadingStyle] = useState<'line_by_line' | 'paragraph'>(settings.dailyReadingStyle ?? 'line_by_line');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
+    const [completionDaysDraft, setCompletionDaysDraft] = useState<number>(settings.completionDays || 30);
+    const completionDaysSaveTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -869,6 +873,17 @@ export default function SettingsPage() {
         setTodayDefaultMode(settings.todayDefaultMode ?? 'daily');
     }, [settings.todayDefaultMode]);
 
+    useEffect(() => {
+        setCompletionDaysDraft(settings.completionDays || 30);
+    }, [settings.completionDays]);
+
+    useEffect(() => () => {
+        if (completionDaysSaveTimerRef.current !== null) {
+            window.clearTimeout(completionDaysSaveTimerRef.current);
+            completionDaysSaveTimerRef.current = null;
+        }
+    }, []);
+
     const latestSubscription = useMemo(() => {
         if (!subscriptions.length) return null;
 
@@ -1003,7 +1018,7 @@ export default function SettingsPage() {
             alignItems: 'stretch',
         }}>
             <button
-                className="btn btn-secondary std-normal-btn"
+                className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
                 onClick={handleOpenCustomerPortal}
                 disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
                 style={{
@@ -1013,16 +1028,16 @@ export default function SettingsPage() {
                     borderRadius: '12px',
                     fontFamily: 'inherit',
                     fontWeight: 600,
-                    fontSize: '0.9rem',
+                    fontSize: '0.86rem',
                     lineHeight: 1.2,
                     textAlign: 'center',
                     cursor: 'pointer'
                 }}
             >
-                {isOpeningPortal ? 'Opening billing portal...' : 'Manage My Subscription'}
+                {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
             </button>
             <button
-                className="btn btn-secondary std-normal-btn"
+                className="btn btn-secondary std-normal-btn account-action-btn"
                 onClick={handleSignOut}
                 style={{
                     width: '100%',
@@ -1040,7 +1055,7 @@ export default function SettingsPage() {
                 Sign Out
             </button>
             <button
-                className="btn std-normal-btn std-normal-danger"
+                className="btn std-normal-btn std-normal-danger account-action-btn"
                 onClick={handleDeleteAccount}
                 disabled={!isOnline || isDeletingAccount}
                 style={{
@@ -1297,7 +1312,7 @@ export default function SettingsPage() {
                             Set how many days you want to complete one full cycle of your active part.
                         </p>
                         <DailyCompletionSlider
-                            days={settings.completionDays || 30}
+                            days={completionDaysDraft}
                             onChange={handleCompletionDays}
                             activePart={settings.activePart}
                         />
@@ -2160,12 +2175,15 @@ export default function SettingsPage() {
         }
 
         try {
-            await Promise.all(nodesToUpdate.map(node =>
-                saveInstantNode({
-                    ...node,
-                    scheduler: { ...(node.scheduler as any), ...newState } as any
-                })
-            ));
+            for (let i = 0; i < nodesToUpdate.length; i += MATURITY_UPDATE_BATCH_SIZE) {
+                const batch = nodesToUpdate.slice(i, i + MATURITY_UPDATE_BATCH_SIZE);
+                await Promise.all(batch.map((node) =>
+                    saveInstantNode({
+                        ...node,
+                        scheduler: { ...(node.scheduler as any), ...newState } as any
+                    })
+                ));
+            }
         } catch (error) {
             console.error('Failed to save group maturity', error);
             await alert({
@@ -2181,9 +2199,16 @@ export default function SettingsPage() {
 
     const handleCompletionDays = (days: number) => {
         const clamped = Math.max(7, Math.min(120, days));
-        void saveSettings({ completionDays: clamped }).catch((error) => {
-            console.error('Failed to save completion schedule', error);
-        });
+        setCompletionDaysDraft(clamped);
+        if (completionDaysSaveTimerRef.current !== null) {
+            window.clearTimeout(completionDaysSaveTimerRef.current);
+        }
+        completionDaysSaveTimerRef.current = window.setTimeout(() => {
+            void saveSettings({ completionDays: clamped }).catch((error) => {
+                console.error('Failed to save completion schedule', error);
+            });
+            completionDaysSaveTimerRef.current = null;
+        }, SETTINGS_WRITE_DEBOUNCE_MS);
     };
 
     const handleActivePart = (part: QuranPart) => {
@@ -3226,7 +3251,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             Set how many days you want to complete one full cycle of your active part.
                                         </p>
                                         <DailyCompletionSlider
-                                            days={settings.completionDays || 30}
+                                            days={completionDaysDraft}
                                             onChange={handleCompletionDays}
                                             activePart={settings.activePart}
                                         />
@@ -3619,7 +3644,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="settings-sticky-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                            <div className="settings-sticky-table-wrap" style={{ margin: '0', padding: '0', width: '100%', maxWidth: '100%', borderRadius: '12px' }}>
                                                 <table className="debug-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%', tableLayout:'fixed'}}>
                                                     <thead>
                                                         <tr>
@@ -4098,7 +4123,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             })}
                                         </div>
                                     ) : (
-                                        <div className="settings-sticky-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                        <div className="settings-sticky-table-wrap" style={{ margin: '0', padding: '0', width: '100%', maxWidth: '100%', borderRadius: '12px' }}>
                                             <table className="debug-table mutashabihat-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
                                                 <thead>
                                                     <tr>
@@ -5124,6 +5149,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     }
                 }
 
+                :global(.settings-sticky-table-wrap) {
+                    width: 100%;
+                    max-width: 100%;
+                    overflow: visible;
+                }
+
                 @media (min-width: 768px) {
                     :global(.settings-sticky-table-wrap) {
                         overflow: visible !important;
@@ -5139,6 +5170,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 }
 
                 @media (min-width: 768px) and (max-width: 1024px) {
+                    :global(.settings-sticky-table-wrap) {
+                        overflow-x: auto !important;
+                        overflow-y: visible !important;
+                        -webkit-overflow-scrolling: touch;
+                    }
+
                     .mutashabihat-table {
                         min-width: 760px !important;
                     }
@@ -5608,6 +5645,15 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 @media (min-width: 900px) {
                     .adv-grid {
                         grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+
+                @media (max-width: 1024px) {
+                    .account-action-btn {
+                        font-size: 0.82rem !important;
+                        line-height: 1.15 !important;
+                        padding-left: 0.5rem !important;
+                        padding-right: 0.5rem !important;
                     }
                 }
                 `}</style>

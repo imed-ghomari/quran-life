@@ -456,14 +456,16 @@ export default function MindmapViewer({
                                         className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                         href={resolvedDocLink}
                                     >
-                                        Back to Documentation
+                                        <span className="hidden md:inline">Back to Documentation</span>
+                                        <span className="md:hidden">Back to Docs</span>
                                     </Link>
                                 ) : (
                                     <a
                                         className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                         href={resolvedDocLink}
                                     >
-                                        Back to Documentation
+                                        <span className="hidden md:inline">Back to Documentation</span>
+                                        <span className="md:hidden">Back to Docs</span>
                                     </a>
                                 )
                             )}
