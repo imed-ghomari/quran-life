@@ -31,7 +31,7 @@ export default function TermsPage() {
 
       <main className="legal-content">
         <article className="legal-card">
-          <div className="legal-meta">Effective date: February 5, 2026</div>
+          <div className="legal-meta">Effective date: March 3, 2026</div>
 
           <section className="legal-section">
             <h2>1. Agreement to Terms</h2>
@@ -66,7 +66,8 @@ export default function TermsPage() {
             <ul>
               <li>Billing is handled by our payment processor. We do not store your full payment details.</li>
               <li>Trial access ends automatically unless you subscribe before the trial expires.</li>
-              <li>Refund are provided upon request within two weeks, and will be handled by our payment provider.</li>
+              <li>You can cancel your subscription at any time to stop future renewals.</li>
+              <li>If you cancel after your trial period ends, paid amounts are non-refundable.</li>
             </ul>
           </section>
 
@@ -85,7 +86,7 @@ export default function TermsPage() {
             <h2>6. Acceptable Use</h2>
             <p>You agree not to misuse the Service. Examples of prohibited behavior include:</p>
             <ul>
-              <li>Attempting to access other users' data or accounts.</li>
+              <li>Attempting to access other users&apos; data or accounts.</li>
               <li>Reverse engineering, scraping, or disrupting our systems.</li>
               <li>Using the Service for unlawful, harmful, or abusive content.</li>
             </ul>
@@ -133,6 +134,11 @@ export default function TermsPage() {
               You may stop using the Service at any time. We may suspend or terminate access if you violate
               these Terms or misuse the Service. Upon termination, your right to use the Service ends.
             </p>
+            <ul>
+              <li>If you request account deletion, your subscription renewal is canceled and your account remains recoverable until the end of your current billing period.</li>
+              <li>Before that billing-period end date, you can sign back in and cancel the deletion request from Settings.</li>
+              <li>After that period ends, we may permanently delete retained account data.</li>
+            </ul>
           </section>
 
           <section className="legal-section">

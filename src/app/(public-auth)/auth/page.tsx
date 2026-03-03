@@ -683,6 +683,16 @@ function AuthContent() {
                         >
                             {isOpening ? 'Opening checkout...' : 'Proceed'}
                         </button>
+                        <p style={{
+                            marginTop: '0.75rem',
+                            marginBottom: 0,
+                            color: 'var(--foreground-secondary)',
+                            fontSize: '0.82rem',
+                            textAlign: 'center',
+                            lineHeight: 1.4
+                        }}>
+                            Cancel anytime. If you cancel after the trial ends, payments are non-refundable.
+                        </p>
                         <button
                             type="button"
                             onClick={async () => {
@@ -726,7 +736,8 @@ function AuthContent() {
                                 and{' '}
                                 <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                                     Privacy Policy
-                                </Link>.
+                                </Link>
+                                . Cancellation after trial is non-refundable.
                             </p>
                         </div>
                     </div>

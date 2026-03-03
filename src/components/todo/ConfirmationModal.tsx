@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
     showCancel?: boolean;
     isDestructive?: boolean;
     isProcessing?: boolean;
+    children?: React.ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -24,6 +25,7 @@ export default function ConfirmationModal({
     showCancel = true,
     isDestructive = false,
     isProcessing = false,
+    children,
     onConfirm,
     onCancel
 }: ConfirmationModalProps) {
@@ -115,6 +117,11 @@ export default function ConfirmationModal({
                     <p className="confirm-dialog-message text-[var(--foreground-secondary)] text-base sm:text-[1.02rem] leading-relaxed pt-1 pr-1">
                         {message}
                     </p>
+                    {children ? (
+                        <div className="mt-5">
+                            {children}
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Footer */}

@@ -126,4 +126,12 @@ export default {
       delete: "false",
     },
   },
+  accountDeletionFeedback: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
 };

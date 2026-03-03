@@ -178,6 +178,19 @@ export const schema = i.schema({
       priceId: i.string().optional(),
       processedAt: i.string().optional(),
     }),
+    // Feedback captured when users request account deletion.
+    accountDeletionFeedback: i.entity({
+      userId: i.string().indexed(),
+      reasonCode: i.string().optional(),
+      reasonDetail: i.string().optional(),
+      source: i.string().optional(),
+      subscriptionId: i.string().optional(),
+      customerId: i.string().optional(),
+      priceId: i.string().optional(),
+      accessEndsAt: i.string().optional(),
+      daysUntilAccessEnds: i.number().optional(),
+      createdAt: i.string().optional(),
+    }),
   },
 });
 

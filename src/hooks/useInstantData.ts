@@ -6,6 +6,7 @@ import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 import { normalizeReviewSortOrder } from '@/lib/reviewSortOrder';
 
 const LOCKED_SKIPPED_SURAH_ID = 1;
+const MAX_FSRS_REVIEW_LOGS = 3000;
 
 const normalizeSkippedSurahs = (value: unknown): number[] => {
     const normalized = new Set<number>([LOCKED_SKIPPED_SURAH_ID]);
@@ -730,13 +731,32 @@ export function useInstantReviewLogs() {
 
     const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
 
-    const saveLog = (log: any) => {
+    const saveLog = async (log: any) => {
         if (!user) return Promise.resolve();
         const logId = id();
-        return transactWithRetry(db.tx.fsrsReviewLogs[logId].update({
+        const writes: any[] = [db.tx.fsrsReviewLogs[logId].update({
             ...log,
             userId: user.id
-        }));
+        })];
+
+        const overflow = logs.length + 1 - MAX_FSRS_REVIEW_LOGS;
+        if (overflow > 0) {
+            const staleLogIds = logs
+                .map((entry) => ({
+                    id: String(entry?.id || ''),
+                    reviewedAtMs: Date.parse(String(entry?.review_time || entry?.timestamp || '')),
+                }))
+                .filter((entry) => isUuid(entry.id))
+                .sort((a, b) => (Number.isFinite(a.reviewedAtMs) ? a.reviewedAtMs : 0) - (Number.isFinite(b.reviewedAtMs) ? b.reviewedAtMs : 0))
+                .slice(0, overflow)
+                .map((entry) => entry.id);
+
+            staleLogIds.forEach((staleId) => {
+                writes.push(db.tx.fsrsReviewLogs[staleId].delete());
+            });
+        }
+
+        return transactWithRetry(writes.length === 1 ? writes[0] : writes);
     };
 
     return useMemo(() => ({ logs, saveLog, isLoading, error }), [logs, isLoading, error]);

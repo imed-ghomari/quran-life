@@ -231,6 +231,56 @@ function renderCardZones({
     let zone3 = "";
     let zone4Meta = "";
     const showSplitsAlert = cardType === 'surah' && hasMindmap && !hasSplits;
+    const mindmapStatusIcon = (() => {
+        if ((cardType !== 'surah' && cardType !== 'part') || !hasMindmap) return null;
+
+        const mindmap = (item as any).data?.mindmap;
+        const isPremade = mindmap?.source === 'premade';
+        const isEdited = isPremade && mindmap?.premadeEdited;
+        const hasResetAvailable = !isPremade && !!hasPremade;
+        const iconClass = 'text-[var(--accent)] opacity-80';
+
+        if (hasResetAvailable) {
+            return (
+                <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
+                    <Layers size={14} className={iconClass} />
+                </span>
+            );
+        }
+        if (isEdited) {
+            return (
+                <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map (edited)" aria-label="Official map (edited)">
+                    <PenSquare size={14} className={iconClass} />
+                </span>
+            );
+        }
+        if (isPremade) {
+            return (
+                <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map" aria-label="Official map">
+                    <BadgeCheck size={14} className={iconClass} />
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map" aria-label="Custom map">
+                <Brain size={14} className={iconClass} />
+            </span>
+        );
+    })();
+    const statusIcons = (showSplitsAlert || mindmapStatusIcon) ? (
+        <>
+            {showSplitsAlert && (
+                <span
+                    className="inline-flex items-center shrink-0 text-amber-500 kanban-title-icon"
+                    title="Splits missing"
+                    aria-label="Splits missing"
+                >
+                    <Scissors size={14} />
+                </span>
+            )}
+            {mindmapStatusIcon}
+        </>
+    ) : null;
 
     // Type-specific logic
     switch (item.type) {
@@ -343,54 +393,10 @@ function renderCardZones({
             <div className="mb-2">
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <h4 className="text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
+                        <h4 className="text-[0.82rem] md:text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
                             {zone2.english}
                         </h4>
-                        {showSplitsAlert && (
-                            <span
-                                className="inline-flex items-center shrink-0 text-amber-500 kanban-title-icon"
-                                title="Splits missing"
-                                aria-label="Splits missing"
-                            >
-                                <Scissors size={14} />
-                            </span>
-                        )}
-                        {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
-                            (() => {
-                                const mindmap = (item as any).data?.mindmap;
-                                const isPremade = mindmap?.source === 'premade';
-                                const isEdited = isPremade && mindmap?.premadeEdited;
-                                const hasResetAvailable = !isPremade && !!hasPremade;
-                                const iconClass = 'text-[var(--accent)] opacity-80';
-
-                                if (hasResetAvailable) {
-                                    return (
-                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
-                                            <Layers size={14} className={iconClass} />
-                                        </span>
-                                    );
-                                }
-                                if (isEdited) {
-                                    return (
-                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map (edited)" aria-label="Official map (edited)">
-                                            <PenSquare size={14} className={iconClass} />
-                                        </span>
-                                    );
-                                }
-                                if (isPremade) {
-                                    return (
-                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map" aria-label="Official map">
-                                            <BadgeCheck size={14} className={iconClass} />
-                                        </span>
-                                    );
-                                }
-                                return (
-                                    <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map" aria-label="Custom map">
-                                        <Brain size={14} className={iconClass} />
-                                    </span>
-                                );
-                            })()
-                        )}
+                        {!isMobile && statusIcons}
                     </div>
                     {zone2.arabic && (
                         <div className="text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 whitespace-nowrap">
@@ -399,6 +405,12 @@ function renderCardZones({
                     )}
                 </div>
             </div>
+
+            {isMobile && statusIcons && (
+                <div className="mt-2 mb-1 flex items-center gap-2">
+                    {statusIcons}
+                </div>
+            )}
 
             {/* Description */}
             {!isMobile && zone3 && (

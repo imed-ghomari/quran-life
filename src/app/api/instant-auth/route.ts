@@ -21,6 +21,28 @@ function cookieName() {
   return `instant_user_${clientEnv.NEXT_PUBLIC_INSTANT_APP_ID}`;
 }
 
+function readCookieValue(request: Request, name: string) {
+  const cookieHeader = request.headers.get('cookie');
+  if (!cookieHeader) return null;
+  const pairs = cookieHeader.split(';');
+  for (const pair of pairs) {
+    const [rawKey, ...rest] = pair.trim().split('=');
+    if (rawKey !== name) continue;
+    return rest.join('=');
+  }
+  return null;
+}
+
+function readTrustedCookieUser(request: Request): InstantUserCookie | null {
+  const raw = readCookieValue(request, cookieName());
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(raw)) as InstantUserCookie;
+  } catch {
+    return null;
+  }
+}
+
 function isHttpsRequest(request: Request) {
   const proto = request.headers.get('x-forwarded-proto');
   if (proto) return proto.includes('https');
@@ -55,6 +77,11 @@ export async function POST(request: Request) {
       path: '/',
       maxAge: 0,
     });
+    return response;
+  }
+
+  const existingCookieUser = readTrustedCookieUser(request);
+  if (existingCookieUser?.refresh_token === body.user.refresh_token) {
     return response;
   }
 

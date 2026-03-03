@@ -23,6 +23,7 @@ type PremadeIndex = {
 
 const premadeDir = path.join(process.cwd(), 'public', 'assets', 'premade-mindmaps');
 const indexPath = path.join(premadeDir, 'index.json');
+const isReadOnlyFsRuntime = process.env.NETLIFY === 'true' || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 async function canExportPremades() {
     const user = await getVerifiedInstantUser();
@@ -50,6 +51,13 @@ async function writeIndex(nextIndex: PremadeIndex) {
 export async function POST(req: Request) {
     if (!(await canExportPremades())) {
         return NextResponse.json({ error: 'Not allowed in user mode.' }, { status: 403 });
+    }
+
+    if (process.env.NODE_ENV === 'production' && isReadOnlyFsRuntime) {
+        return NextResponse.json(
+            { error: 'Premade export is unavailable on hosted runtime. Run this export locally.' },
+            { status: 501 }
+        );
     }
 
     let payload: ExportPayload;

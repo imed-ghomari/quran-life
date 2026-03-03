@@ -973,7 +973,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                                 onClick={handleDocNavigation}
                                 aria-disabled={isExitActionPending}
                             >
-                                Back to Documentation
+                                <span className="hidden md:inline">Back to Documentation</span>
+                                <span className="md:hidden">Back to Docs</span>
                             </Link>
                         ) : (
                             <a
@@ -982,7 +983,8 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                                 onClick={handleDocNavigation}
                                 aria-disabled={isExitActionPending}
                             >
-                                Back to Documentation
+                                <span className="hidden md:inline">Back to Documentation</span>
+                                <span className="md:hidden">Back to Docs</span>
                             </a>
                         )
                     )}
