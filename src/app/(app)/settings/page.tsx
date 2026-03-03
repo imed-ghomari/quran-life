@@ -49,6 +49,7 @@ import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import MindmapEditor from '@/components/MindmapEditor';
 import SplitsModal from '@/components/todo/SplitsModal';
+import ConfirmationModal from '@/components/todo/ConfirmationModal';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
@@ -74,6 +75,22 @@ interface SettingsToastItem {
 type BillingSummaryState = {
     nextRenewalAt: string | null;
     canManageSubscription: boolean;
+};
+
+type AccountDeletionStatusState = {
+    pending: boolean;
+    canCancel: boolean;
+    requestedAt: string | null;
+    expiresAt: string | null;
+    daysUntilAccessEnds: number | null;
+};
+
+const DEFAULT_ACCOUNT_DELETION_STATUS: AccountDeletionStatusState = {
+    pending: false,
+    canCancel: false,
+    requestedAt: null,
+    expiresAt: null,
+    daysUntilAccessEnds: null,
 };
 
 const isMobileViewport = () =>
@@ -238,6 +255,18 @@ const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing'])
 const LOCKED_SKIPPED_SURAH_ID = 1;
 const SETTINGS_WRITE_DEBOUNCE_MS = 300;
 const MATURITY_UPDATE_BATCH_SIZE = 20;
+const DELETE_REASON_DETAIL_MAX_LENGTH = 500;
+const DELETE_CHURN_REASONS = [
+    { id: 'price_too_high', label: 'Price is too high' },
+    { id: 'not_using_enough', label: 'Not using enough' },
+    { id: 'missing_features', label: 'Missing features' },
+    { id: 'technical_issues', label: 'Technical issues' },
+    { id: 'switching_tool', label: 'Switching to another tool' },
+    { id: 'temporary_break', label: 'Taking a temporary break' },
+    { id: 'other', label: 'Other reason' },
+    { id: 'prefer_not_to_say', label: 'Prefer not to say' },
+] as const;
+type DeleteChurnReasonCode = (typeof DELETE_CHURN_REASONS)[number]['id'];
 
 type SimilarityResolutionTarget = {
     phraseId: string;
@@ -311,6 +340,32 @@ const formatBillingDate = (value: string | null | undefined): string => {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return value;
     return parsed.toLocaleString();
+};
+
+const getDaysUntilIso = (value: string | null | undefined): number | null => {
+    if (!value) return null;
+    const parsedMs = Date.parse(value);
+    if (!Number.isFinite(parsedMs)) return null;
+    const remainingMs = parsedMs - Date.now();
+    if (remainingMs <= 0) return 0;
+    return Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+};
+
+const formatDaysLabel = (days: number | null): string | null => {
+    if (days === null) return null;
+    return `${days} day${days === 1 ? '' : 's'}`;
+};
+
+const normalizeAccountDeletionStatus = (payload: unknown): AccountDeletionStatusState => {
+    const raw = payload as Record<string, unknown> | null | undefined;
+    const daysRaw = Number(raw?.daysUntilAccessEnds);
+    return {
+        pending: Boolean(raw?.pending),
+        canCancel: Boolean(raw?.canCancel),
+        requestedAt: typeof raw?.requestedAt === 'string' && raw.requestedAt ? raw.requestedAt : null,
+        expiresAt: typeof raw?.expiresAt === 'string' && raw.expiresAt ? raw.expiresAt : null,
+        daysUntilAccessEnds: Number.isFinite(daysRaw) && daysRaw >= 0 ? daysRaw : null,
+    };
 };
 
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
@@ -487,8 +542,14 @@ export default function SettingsPage() {
         nextRenewalAt: null,
         canManageSubscription: false,
     });
+    const [accountDeletionStatus, setAccountDeletionStatus] = useState<AccountDeletionStatusState>(DEFAULT_ACCOUNT_DELETION_STATUS);
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const [isCancellingDeletion, setIsCancellingDeletion] = useState(false);
+    const [isDeleteFeedbackModalOpen, setIsDeleteFeedbackModalOpen] = useState(false);
+    const [deleteReasonCode, setDeleteReasonCode] = useState<DeleteChurnReasonCode>('prefer_not_to_say');
+    const [deleteReasonDetail, setDeleteReasonDetail] = useState('');
+    const [deleteReasonError, setDeleteReasonError] = useState<string | null>(null);
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
@@ -759,6 +820,29 @@ export default function SettingsPage() {
         window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
     }, []);
 
+    const loadAccountDeletionStatus = useCallback(async () => {
+        if (!user?.id) {
+            setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+            return;
+        }
+        if (!isOnline) return;
+
+        try {
+            const response = await fetch('/api/account/delete-request', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not load account deletion status.');
+            }
+            setAccountDeletionStatus(normalizeAccountDeletionStatus(payload?.deletion));
+        } catch {
+            setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+        }
+    }, [isOnline, user?.id]);
+
     const handleSignOut = useCallback(async () => {
         const ok = await confirm({
             title: 'Sign Out',
@@ -800,21 +884,48 @@ export default function SettingsPage() {
     }, [alert, isOpeningPortal]);
 
     const handleDeleteAccount = useCallback(async () => {
-        if (isDeletingAccount) return;
+        if (isDeletingAccount || isDeleteFeedbackModalOpen) return;
+        const estimatedDaysLeft = getDaysUntilIso(billingSummary.nextRenewalAt);
+        const estimatedDaysLabel = formatDaysLabel(estimatedDaysLeft);
+        const estimatedEndLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
+        const timelineNote = estimatedEndLabel
+            ? `You will lose app access in ${estimatedDaysLabel ?? '0 days'} (${estimatedEndLabel}) once renewal is stopped.`
+            : 'Access will end when your current billing period ends.';
         const ok = await confirm({
-            title: 'Delete My Account',
+            title: 'Request Account Deletion',
             message:
-                'Your account will be scheduled for deletion. We retain your data for 30 days in case you return and restore access. Continue?',
-            confirmLabel: 'Request Deletion',
+                `This will immediately sign you out, cancel future subscription renewals, and keep your account recoverable until the end of your current billing period. ${timelineNote} You can sign back in and cancel this deletion request before that date. Cancellation after trial is non-refundable.`,
+            confirmLabel: 'Delete & Stop Renewal',
             isDestructive: true,
         });
         if (!ok) return;
+        setDeleteReasonError(null);
+        setDeleteReasonCode('prefer_not_to_say');
+        setDeleteReasonDetail('');
+        setIsDeleteFeedbackModalOpen(true);
+    }, [billingSummary.nextRenewalAt, confirm, isDeleteFeedbackModalOpen, isDeletingAccount]);
+
+    const handleSubmitDeleteAccount = useCallback(async () => {
+        if (isDeletingAccount) return;
+
+        setDeleteReasonError(null);
+        if (!deleteReasonCode) {
+            setDeleteReasonError('Please choose one reason.');
+            return;
+        }
 
         setIsDeletingAccount(true);
         try {
             const response = await fetch('/api/account/delete-request', {
                 method: 'POST',
                 credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    reasonCode: deleteReasonCode,
+                    reasonDetail: deleteReasonDetail.trim().slice(0, DELETE_REASON_DETAIL_MAX_LENGTH),
+                }),
             });
             const payload = await response.json().catch(() => null);
 
@@ -822,6 +933,7 @@ export default function SettingsPage() {
                 throw new Error(payload?.error || 'Could not request account deletion.');
             }
 
+            setIsDeleteFeedbackModalOpen(false);
             markSignOutRoutingWindow();
             await db.auth.signOut();
             router.replace('/');
@@ -833,7 +945,44 @@ export default function SettingsPage() {
         } finally {
             setIsDeletingAccount(false);
         }
-    }, [alert, confirm, isDeletingAccount, markSignOutRoutingWindow, router]);
+    }, [alert, deleteReasonCode, deleteReasonDetail, isDeletingAccount, markSignOutRoutingWindow, router]);
+
+    const handleCancelDeletionRequest = useCallback(async () => {
+        if (isCancellingDeletion) return;
+        const ok = await confirm({
+            title: 'Cancel Account Deletion',
+            message:
+                'This will keep your account active, remove the pending deletion request, and restore subscription auto-renewal if it was canceled by the deletion request. Continue?',
+            confirmLabel: 'Keep Account & Renewal',
+            isDestructive: false,
+        });
+        if (!ok) return;
+
+        setIsCancellingDeletion(true);
+        try {
+            const response = await fetch('/api/account/delete-request', {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not cancel account deletion.');
+            }
+            setAccountDeletionStatus(normalizeAccountDeletionStatus(payload?.deletion));
+            await alert({
+                title: 'Deletion Canceled',
+                message: payload?.message || 'Your account deletion request has been canceled and subscription renewal is restored.',
+            });
+            await loadAccountDeletionStatus();
+        } catch (error) {
+            await alert({
+                title: 'Cancel Deletion Failed',
+                message: error instanceof Error ? error.message : 'Could not cancel account deletion. Please try again.',
+            });
+        } finally {
+            setIsCancellingDeletion(false);
+        }
+    }, [alert, confirm, isCancellingDeletion, loadAccountDeletionStatus]);
 
     useEffect(() => {
         // Initial load handled by hook
@@ -894,6 +1043,10 @@ export default function SettingsPage() {
         });
         return sorted[0] ?? null;
     }, [subscriptions]);
+
+    useEffect(() => {
+        void loadAccountDeletionStatus();
+    }, [loadAccountDeletionStatus]);
 
     useEffect(() => {
         if (!user?.id) {
@@ -962,6 +1115,12 @@ export default function SettingsPage() {
 
     const billingStatus = latestSubscription?.status ?? 'none';
     const isActiveBilling = ACTIVE_SUBSCRIPTION_STATUSES.has(billingStatus);
+    const hasPendingDeletionRequest = accountDeletionStatus.pending && accountDeletionStatus.canCancel;
+    const accountDeletionDaysLeft = accountDeletionStatus.daysUntilAccessEnds ?? getDaysUntilIso(accountDeletionStatus.expiresAt);
+    const accountDeletionDaysLabel = formatDaysLabel(accountDeletionDaysLeft);
+    const accountDeletionWindowEnds = accountDeletionStatus.expiresAt
+        ? formatBillingDate(accountDeletionStatus.expiresAt)
+        : 'the end of your current billing period';
     const billingPlan =
         latestSubscription?.priceId === paddlePriceIds.monthly
             ? 'Monthly'
@@ -975,6 +1134,12 @@ export default function SettingsPage() {
         : billingSummary.nextRenewalAt
             ? formatBillingDate(billingSummary.nextRenewalAt)
             : (isActiveBilling ? 'Unavailable' : 'N/A');
+    const preDeleteDaysLeft = getDaysUntilIso(billingSummary.nextRenewalAt);
+    const preDeleteDaysLabel = formatDaysLabel(preDeleteDaysLeft);
+    const preDeleteEndDateLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
+    const deleteFeedbackModalMessage = preDeleteEndDateLabel
+        ? `Before you leave, tell us why. You will lose app access in ${preDeleteDaysLabel ?? '0 days'} (${preDeleteEndDateLabel}) once renewal is stopped.`
+        : 'Before you leave, tell us why. Access will end when your current billing period ends once renewal is stopped.';
 
     const renderBillingInfo = () => (
         <div
@@ -1011,68 +1176,91 @@ export default function SettingsPage() {
     );
 
     const renderSignedInAccountActions = () => (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            gap: '0.75rem',
-            alignItems: 'stretch',
-        }}>
-            <button
-                className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
-                onClick={handleOpenCustomerPortal}
-                disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
-                style={{
-                    width: '100%',
-                    minWidth: 0,
-                    padding: '0.85rem 0.65rem',
-                    borderRadius: '12px',
-                    fontFamily: 'inherit',
-                    fontWeight: 600,
-                    fontSize: '0.86rem',
-                    lineHeight: 1.2,
-                    textAlign: 'center',
-                    cursor: 'pointer'
-                }}
-            >
-                {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
-            </button>
-            <button
-                className="btn btn-secondary std-normal-btn account-action-btn"
-                onClick={handleSignOut}
-                style={{
-                    width: '100%',
-                    minWidth: 0,
-                    padding: '0.85rem 0.65rem',
-                    borderRadius: '12px',
-                    fontFamily: 'inherit',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    lineHeight: 1.2,
-                    textAlign: 'center',
-                    cursor: 'pointer'
-                }}
-            >
-                Sign Out
-            </button>
-            <button
-                className="btn std-normal-btn std-normal-danger account-action-btn"
-                onClick={handleDeleteAccount}
-                disabled={!isOnline || isDeletingAccount}
-                style={{
-                    width: '100%',
-                    minWidth: 0,
-                    padding: '0.85rem',
-                    borderRadius: '12px',
-                    fontFamily: 'inherit',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    lineHeight: 1.2,
-                    textAlign: 'center',
-                    cursor: 'pointer'
-                }}
-            >
-                {isDeletingAccount ? 'Submitting deletion request...' : 'Delete My Account'}
-            </button>
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: '0.75rem',
+                alignItems: 'stretch',
+            }}>
+                <button
+                    className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
+                    onClick={handleOpenCustomerPortal}
+                    disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
+                    style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '0.85rem 0.65rem',
+                        borderRadius: '12px',
+                        fontFamily: 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.86rem',
+                        lineHeight: 1.2,
+                        textAlign: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
+                </button>
+                <button
+                    className="btn btn-secondary std-normal-btn account-action-btn"
+                    onClick={handleSignOut}
+                    style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '0.85rem 0.65rem',
+                        borderRadius: '12px',
+                        fontFamily: 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        lineHeight: 1.2,
+                        textAlign: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Sign Out
+                </button>
+                <button
+                    className={`btn std-normal-btn account-action-btn ${hasPendingDeletionRequest ? 'btn-secondary' : 'std-normal-danger'}`}
+                    onClick={hasPendingDeletionRequest ? handleCancelDeletionRequest : handleDeleteAccount}
+                    disabled={!isOnline || isDeletingAccount || isCancellingDeletion || isDeleteFeedbackModalOpen}
+                    style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '0.85rem',
+                        borderRadius: '12px',
+                        fontFamily: 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        lineHeight: 1.2,
+                        textAlign: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {hasPendingDeletionRequest
+                        ? (isCancellingDeletion ? 'Restoring renewal...' : 'Keep Account & Renewal')
+                        : (isDeletingAccount ? 'Stopping renewal...' : 'Delete & Stop Renewal')}
+                </button>
+            </div>
+
+            {hasPendingDeletionRequest && (
+                <p style={{
+                    margin: 0,
+                    padding: '0.65rem 0.75rem',
+                    borderRadius: '10px',
+                    border: '1px solid color-mix(in srgb, var(--accent) 28%, var(--border))',
+                    background: 'color-mix(in srgb, var(--accent) 10%, var(--background))',
+                    color: 'var(--foreground-secondary)',
+                    fontSize: '0.82rem',
+                    lineHeight: 1.4
+                }}>
+                    Deletion request is active. Future subscription renewals are canceled.
+                    {accountDeletionDaysLabel
+                        ? ` ${accountDeletionDaysLabel} left until access ends.`
+                        : ''}
+                    {' '}Cancel before <strong>{accountDeletionWindowEnds}</strong> to keep your account.
+                </p>
+            )}
         </div>
     );
 
@@ -5809,6 +5997,75 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     </div>
                 </div>
             )}
+
+            <ConfirmationModal
+                isOpen={isDeleteFeedbackModalOpen}
+                title="Before You Leave"
+                message={deleteFeedbackModalMessage}
+                confirmLabel={isDeletingAccount ? 'Stopping renewal...' : 'Delete & Stop Renewal'}
+                cancelLabel="Back"
+                isDestructive
+                isProcessing={isDeletingAccount}
+                onConfirm={handleSubmitDeleteAccount}
+                onCancel={() => {
+                    if (isDeletingAccount) return;
+                    setDeleteReasonError(null);
+                    setIsDeleteFeedbackModalOpen(false);
+                }}
+            >
+                <div style={{ display: 'grid', gap: '0.65rem' }}>
+                    {DELETE_CHURN_REASONS.map((option) => (
+                        <label
+                            key={option.id}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.55rem',
+                                fontSize: '0.9rem',
+                                color: 'var(--foreground)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <input
+                                type="radio"
+                                name="delete-churn-reason"
+                                value={option.id}
+                                checked={deleteReasonCode === option.id}
+                                onChange={() => setDeleteReasonCode(option.id)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            <span>{option.label}</span>
+                        </label>
+                    ))}
+
+                    <div style={{ display: 'grid', gap: '0.35rem', marginTop: '0.25rem' }}>
+                        <textarea
+                            value={deleteReasonDetail}
+                            onChange={(event) => setDeleteReasonDetail(event.target.value.slice(0, DELETE_REASON_DETAIL_MAX_LENGTH))}
+                            placeholder="Optional details (what we can improve)"
+                            rows={3}
+                            style={{
+                                width: '100%',
+                                borderRadius: '10px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                color: 'var(--foreground)',
+                                padding: '0.65rem 0.75rem',
+                                resize: 'vertical',
+                                minHeight: '86px',
+                            }}
+                        />
+                        <div style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', textAlign: 'right' }}>
+                            {deleteReasonDetail.length}/{DELETE_REASON_DETAIL_MAX_LENGTH}
+                        </div>
+                    </div>
+                    {deleteReasonError && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 600 }}>
+                            {deleteReasonError}
+                        </div>
+                    )}
+                </div>
+            </ConfirmationModal>
 
             <div
                 className="toast-container"
