@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
@@ -84,7 +84,7 @@ export default function ConfirmationModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="confirm-dialog-header flex items-center justify-between px-7 py-5 sm:px-8 sm:py-6 border-b border-[var(--border)]">
+                <div className="confirm-dialog-header flex items-center px-7 py-5 sm:px-8 sm:py-6 border-b border-[var(--border)]">
                     <div className="confirm-dialog-title-wrap flex items-center">
                         <div
                             className={`
@@ -100,14 +100,6 @@ export default function ConfirmationModal({
                             {title}
                         </h3>
                     </div>
-                    {!isProcessing && (
-                        <button
-                            onClick={onCancel}
-                            className="text-[var(--foreground-secondary)] hover:text-[var(--foreground)] transition-colors p-1 rounded-full hover:bg-[var(--bg-secondary)] cursor-pointer"
-                        >
-                            <X size={20} />
-                        </button>
-                    )}
                 </div>
 
                 {/* Body */}
