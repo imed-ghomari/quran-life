@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
     showCancel?: boolean;
     isDestructive?: boolean;
     isProcessing?: boolean;
+    disabled?: boolean;
     children?: React.ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
@@ -25,6 +26,7 @@ export default function ConfirmationModal({
     showCancel = true,
     isDestructive = false,
     isProcessing = false,
+    disabled = false,
     children,
     onConfirm,
     onCancel
@@ -82,7 +84,7 @@ export default function ConfirmationModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="confirm-dialog-header flex items-center justify-between px-7 py-5 sm:px-8 sm:py-6 border-b border-[var(--border)]">
+                <div className="confirm-dialog-header flex items-center px-7 py-5 sm:px-8 sm:py-6 border-b border-[var(--border)]">
                     <div className="confirm-dialog-title-wrap flex items-center">
                         <div
                             className={`
@@ -92,24 +94,12 @@ export default function ConfirmationModal({
                                     : 'bg-[var(--accent)]/10 text-[var(--accent)]'}
                             `}
                         >
-                            {isProcessing ? (
-                                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <AlertTriangle size={22} strokeWidth={2} />
-                            )}
+                            <AlertTriangle size={22} strokeWidth={2} />
                         </div>
                         <h3 className="text-lg font-bold text-[var(--foreground)]">
                             {title}
                         </h3>
                     </div>
-                    {!isProcessing && (
-                        <button
-                            onClick={onCancel}
-                            className="text-[var(--foreground-secondary)] hover:text-[var(--foreground)] transition-colors p-1 rounded-full hover:bg-[var(--bg-secondary)] cursor-pointer"
-                        >
-                            <X size={20} />
-                        </button>
-                    )}
                 </div>
 
                 {/* Body */}
@@ -137,7 +127,7 @@ export default function ConfirmationModal({
                     )}
                     <button
                         onClick={onConfirm}
-                        disabled={isProcessing}
+                        disabled={disabled || isProcessing}
                         className={`
                             btn std-normal-btn
                             ${isDestructive ? 'std-normal-danger' : 'btn-primary'}

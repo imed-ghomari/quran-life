@@ -1861,7 +1861,7 @@ export default function TodayPage() {
     const handleMindmapIncomplete = async (surahId: number) => {
         const ok = await confirm({
             title: 'Edit Mindmap Later?',
-            message: 'This will move the mindmap out of the Complete column and suspend it until you continue editing.',
+            message: 'This will move the mindmap out of the Complete column and suspend it until you complete the editing.',
             confirmLabel: 'Edit Later',
             isDestructive: true,
         });
@@ -1882,7 +1882,7 @@ export default function TodayPage() {
     const handlePartMindmapIncomplete = async (partId: QuranPart) => {
         const ok = await confirm({
             title: 'Edit Mindmap Later?',
-            message: 'This will move the mindmap out of the Complete column and suspend it until you continue editing.',
+            message: 'This will move the mindmap out of the Complete column and suspend it until you complete the editing.',
             confirmLabel: 'Edit Later',
             isDestructive: true,
         });
