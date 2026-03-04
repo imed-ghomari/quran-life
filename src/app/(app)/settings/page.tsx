@@ -49,12 +49,14 @@ import MutashabihNoteModal from '@/components/MutashabihNoteModal';
 import DailyCompletionSlider from '@/components/DailyCompletionSlider';
 import MindmapEditor from '@/components/MindmapEditor';
 import SplitsModal from '@/components/todo/SplitsModal';
+import ConfirmationModal from '@/components/todo/ConfirmationModal';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
 
 interface MutashabihatDecision {
     id: string; // absoluteAyah or absoluteAyah-phraseId
@@ -69,6 +71,27 @@ interface SettingsToastItem {
     message: string;
     info?: string;
 }
+
+type BillingSummaryState = {
+    nextRenewalAt: string | null;
+    canManageSubscription: boolean;
+};
+
+type AccountDeletionStatusState = {
+    pending: boolean;
+    canCancel: boolean;
+    requestedAt: string | null;
+    expiresAt: string | null;
+    daysUntilAccessEnds: number | null;
+};
+
+const DEFAULT_ACCOUNT_DELETION_STATUS: AccountDeletionStatusState = {
+    pending: false,
+    canCancel: false,
+    requestedAt: null,
+    expiresAt: null,
+    daysUntilAccessEnds: null,
+};
 
 const isMobileViewport = () =>
     typeof window !== 'undefined' && window.innerWidth < 768;
@@ -230,6 +253,20 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
 const MUTASHABIH_NOTE_MAX_LENGTH = 300;
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const LOCKED_SKIPPED_SURAH_ID = 1;
+const SETTINGS_WRITE_DEBOUNCE_MS = 300;
+const MATURITY_UPDATE_BATCH_SIZE = 20;
+const DELETE_REASON_DETAIL_MAX_LENGTH = 500;
+const DELETE_CHURN_REASONS = [
+    { id: 'price_too_high', label: 'Price is too high' },
+    { id: 'not_using_enough', label: 'Not using enough' },
+    { id: 'missing_features', label: 'Missing features' },
+    { id: 'technical_issues', label: 'Technical issues' },
+    { id: 'switching_tool', label: 'Switching to another tool' },
+    { id: 'temporary_break', label: 'Taking a temporary break' },
+    { id: 'other', label: 'Other reason' },
+    { id: 'prefer_not_to_say', label: 'Prefer not to say' },
+] as const;
+type DeleteChurnReasonCode = (typeof DELETE_CHURN_REASONS)[number]['id'];
 
 type SimilarityResolutionTarget = {
     phraseId: string;
@@ -296,6 +333,39 @@ const toPositiveInt = (value: unknown): number | null => {
 const toNonNegativeInt = (value: unknown): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+const formatBillingDate = (value: string | null | undefined): string => {
+    if (!value) return 'N/A';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString();
+};
+
+const getDaysUntilIso = (value: string | null | undefined): number | null => {
+    if (!value) return null;
+    const parsedMs = Date.parse(value);
+    if (!Number.isFinite(parsedMs)) return null;
+    const remainingMs = parsedMs - Date.now();
+    if (remainingMs <= 0) return 0;
+    return Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+};
+
+const formatDaysLabel = (days: number | null): string | null => {
+    if (days === null) return null;
+    return `${days} day${days === 1 ? '' : 's'}`;
+};
+
+const normalizeAccountDeletionStatus = (payload: unknown): AccountDeletionStatusState => {
+    const raw = payload as Record<string, unknown> | null | undefined;
+    const daysRaw = Number(raw?.daysUntilAccessEnds);
+    return {
+        pending: Boolean(raw?.pending),
+        canCancel: Boolean(raw?.canCancel),
+        requestedAt: typeof raw?.requestedAt === 'string' && raw.requestedAt ? raw.requestedAt : null,
+        expiresAt: typeof raw?.expiresAt === 'string' && raw.expiresAt ? raw.expiresAt : null,
+        daysUntilAccessEnds: Number.isFinite(daysRaw) && daysRaw >= 0 ? daysRaw : null,
+    };
 };
 
 const resolveNodeSurahId = (node: Partial<MemoryNode>): number | null => {
@@ -428,12 +498,14 @@ export default function SettingsPage() {
         surahId?: number;
     } | null>(null);
     const [todoDefaultFilter, setTodoDefaultFilter] = useState<'all' | 'maintenance' | 'construction'>(settings.todoDefaultFilter ?? 'all');
-    const [reviewSortOrder, setReviewSortOrder] = useState<'surah_grouped' | 'due_date' | 'type_grouped'>(settings.reviewSortOrder ?? 'surah_grouped');
+    const [reviewSortOrder, setReviewSortOrder] = useState<ReviewSortOrder>(normalizeReviewSortOrder(settings.reviewSortOrder));
     const [completeExitBehavior, setCompleteExitBehavior] = useState<'mindmap_only' | 'mindmap_and_verses'>(settings.completeExitBehavior ?? 'mindmap_only');
     const [kanbanSortOrder, setKanbanSortOrder] = useState<'type_then_number' | 'number_only' | 'manual'>(settings.kanbanSortOrder ?? 'type_then_number');
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
     const [dailyReadingStyle, setDailyReadingStyle] = useState<'line_by_line' | 'paragraph'>(settings.dailyReadingStyle ?? 'line_by_line');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
+    const [completionDaysDraft, setCompletionDaysDraft] = useState<number>(settings.completionDays || 30);
+    const completionDaysSaveTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -466,6 +538,18 @@ export default function SettingsPage() {
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
+    const [billingSummary, setBillingSummary] = useState<BillingSummaryState>({
+        nextRenewalAt: null,
+        canManageSubscription: false,
+    });
+    const [accountDeletionStatus, setAccountDeletionStatus] = useState<AccountDeletionStatusState>(DEFAULT_ACCOUNT_DELETION_STATUS);
+    const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const [isCancellingDeletion, setIsCancellingDeletion] = useState(false);
+    const [isDeleteFeedbackModalOpen, setIsDeleteFeedbackModalOpen] = useState(false);
+    const [deleteReasonCode, setDeleteReasonCode] = useState<DeleteChurnReasonCode>('prefer_not_to_say');
+    const [deleteReasonDetail, setDeleteReasonDetail] = useState('');
+    const [deleteReasonError, setDeleteReasonError] = useState<string | null>(null);
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
@@ -730,6 +814,176 @@ export default function SettingsPage() {
         }
     };
 
+    const markSignOutRoutingWindow = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('auth:signingOut', '1');
+        window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
+    }, []);
+
+    const loadAccountDeletionStatus = useCallback(async () => {
+        if (!user?.id) {
+            setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+            return;
+        }
+        if (!isOnline) return;
+
+        try {
+            const response = await fetch('/api/account/delete-request', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not load account deletion status.');
+            }
+            setAccountDeletionStatus(normalizeAccountDeletionStatus(payload?.deletion));
+        } catch {
+            setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+        }
+    }, [isOnline, user?.id]);
+
+    const handleSignOut = useCallback(async () => {
+        const ok = await confirm({
+            title: 'Sign Out',
+            message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
+            confirmLabel: 'Sign Out',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        markSignOutRoutingWindow();
+        await db.auth.signOut();
+        router.replace('/');
+    }, [confirm, markSignOutRoutingWindow, router]);
+
+    const handleOpenCustomerPortal = useCallback(async () => {
+        if (isOpeningPortal) return;
+        setIsOpeningPortal(true);
+
+        try {
+            const response = await fetch('/api/paddle/customer-portal', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok || !payload?.url) {
+                throw new Error(payload?.error || 'Could not open billing portal.');
+            }
+
+            window.location.assign(payload.url as string);
+        } catch (error) {
+            await alert({
+                title: 'Billing Portal Unavailable',
+                message: error instanceof Error ? error.message : 'Could not open billing portal. Please try again.',
+            });
+        } finally {
+            setIsOpeningPortal(false);
+        }
+    }, [alert, isOpeningPortal]);
+
+    const handleDeleteAccount = useCallback(async () => {
+        if (isDeletingAccount || isDeleteFeedbackModalOpen) return;
+        const estimatedDaysLeft = getDaysUntilIso(billingSummary.nextRenewalAt);
+        const estimatedDaysLabel = formatDaysLabel(estimatedDaysLeft);
+        const estimatedEndLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
+        const timelineNote = estimatedEndLabel
+            ? `You will lose app access in ${estimatedDaysLabel ?? '0 days'} (${estimatedEndLabel}) once renewal is stopped.`
+            : 'Access will end when your current billing period ends.';
+        const ok = await confirm({
+            title: 'Request Account Deletion',
+            message:
+                `This will immediately sign you out, cancel future subscription renewals, and keep your account recoverable until the end of your current billing period. ${timelineNote} You can sign back in and cancel this deletion request before that date. Cancellation after trial is non-refundable.`,
+            confirmLabel: 'Delete & Stop Renewal',
+            isDestructive: true,
+        });
+        if (!ok) return;
+        setDeleteReasonError(null);
+        setDeleteReasonCode('prefer_not_to_say');
+        setDeleteReasonDetail('');
+        setIsDeleteFeedbackModalOpen(true);
+    }, [billingSummary.nextRenewalAt, confirm, isDeleteFeedbackModalOpen, isDeletingAccount]);
+
+    const handleSubmitDeleteAccount = useCallback(async () => {
+        if (isDeletingAccount) return;
+
+        setDeleteReasonError(null);
+        if (!deleteReasonCode) {
+            setDeleteReasonError('Please choose one reason.');
+            return;
+        }
+
+        setIsDeletingAccount(true);
+        try {
+            const response = await fetch('/api/account/delete-request', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    reasonCode: deleteReasonCode,
+                    reasonDetail: deleteReasonDetail.trim().slice(0, DELETE_REASON_DETAIL_MAX_LENGTH),
+                }),
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not request account deletion.');
+            }
+
+            setIsDeleteFeedbackModalOpen(false);
+            markSignOutRoutingWindow();
+            await db.auth.signOut();
+            router.replace('/');
+        } catch (error) {
+            await alert({
+                title: 'Delete Account Failed',
+                message: error instanceof Error ? error.message : 'Could not request account deletion. Please try again.',
+            });
+        } finally {
+            setIsDeletingAccount(false);
+        }
+    }, [alert, deleteReasonCode, deleteReasonDetail, isDeletingAccount, markSignOutRoutingWindow, router]);
+
+    const handleCancelDeletionRequest = useCallback(async () => {
+        if (isCancellingDeletion) return;
+        const ok = await confirm({
+            title: 'Cancel Account Deletion',
+            message:
+                'This will keep your account active, remove the pending deletion request, and restore subscription auto-renewal if it was canceled by the deletion request. Continue?',
+            confirmLabel: 'Keep Account & Renewal',
+            isDestructive: false,
+        });
+        if (!ok) return;
+
+        setIsCancellingDeletion(true);
+        try {
+            const response = await fetch('/api/account/delete-request', {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not cancel account deletion.');
+            }
+            setAccountDeletionStatus(normalizeAccountDeletionStatus(payload?.deletion));
+            await alert({
+                title: 'Deletion Canceled',
+                message: payload?.message || 'Your account deletion request has been canceled and subscription renewal is restored.',
+            });
+            await loadAccountDeletionStatus();
+        } catch (error) {
+            await alert({
+                title: 'Cancel Deletion Failed',
+                message: error instanceof Error ? error.message : 'Could not cancel account deletion. Please try again.',
+            });
+        } finally {
+            setIsCancellingDeletion(false);
+        }
+    }, [alert, confirm, isCancellingDeletion, loadAccountDeletionStatus]);
+
     useEffect(() => {
         // Initial load handled by hook
         // setSettings(getSettings());
@@ -741,7 +995,7 @@ export default function SettingsPage() {
     }, [settings.todoDefaultFilter]);
 
     useEffect(() => {
-        setReviewSortOrder(settings.reviewSortOrder ?? 'surah_grouped');
+        setReviewSortOrder(normalizeReviewSortOrder(settings.reviewSortOrder));
     }, [settings.reviewSortOrder]);
 
     useEffect(() => {
@@ -768,6 +1022,17 @@ export default function SettingsPage() {
         setTodayDefaultMode(settings.todayDefaultMode ?? 'daily');
     }, [settings.todayDefaultMode]);
 
+    useEffect(() => {
+        setCompletionDaysDraft(settings.completionDays || 30);
+    }, [settings.completionDays]);
+
+    useEffect(() => () => {
+        if (completionDaysSaveTimerRef.current !== null) {
+            window.clearTimeout(completionDaysSaveTimerRef.current);
+            completionDaysSaveTimerRef.current = null;
+        }
+    }, []);
+
     const latestSubscription = useMemo(() => {
         if (!subscriptions.length) return null;
 
@@ -779,8 +1044,83 @@ export default function SettingsPage() {
         return sorted[0] ?? null;
     }, [subscriptions]);
 
+    useEffect(() => {
+        void loadAccountDeletionStatus();
+    }, [loadAccountDeletionStatus]);
+
+    useEffect(() => {
+        if (!user?.id) {
+            setBillingSummary({ nextRenewalAt: null, canManageSubscription: false });
+            return;
+        }
+
+        const canManageFromLocal = Boolean(
+            String(latestSubscription?.paddleCustomerId ?? '').trim()
+            && String(latestSubscription?.paddleSubscriptionId ?? '').trim(),
+        );
+
+        if (!isOnline) {
+            setBillingSummary({
+                nextRenewalAt: null,
+                canManageSubscription: canManageFromLocal,
+            });
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadBillingSummary = async () => {
+            try {
+                const response = await fetch('/api/paddle/billing-summary', {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load billing summary.');
+                }
+
+                const payload = await response.json();
+                if (cancelled) return;
+
+                setBillingSummary({
+                    nextRenewalAt:
+                        typeof payload?.billing?.nextRenewalAt === 'string' && payload.billing.nextRenewalAt
+                            ? payload.billing.nextRenewalAt
+                            : null,
+                    canManageSubscription: Boolean(payload?.billing?.canManageSubscription || canManageFromLocal),
+                });
+            } catch {
+                if (cancelled) return;
+                setBillingSummary({
+                    nextRenewalAt: null,
+                    canManageSubscription: canManageFromLocal,
+                });
+            }
+        };
+
+        void loadBillingSummary();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        isOnline,
+        latestSubscription?.id,
+        latestSubscription?.paddleCustomerId,
+        latestSubscription?.paddleSubscriptionId,
+        user?.id,
+    ]);
+
     const billingStatus = latestSubscription?.status ?? 'none';
     const isActiveBilling = ACTIVE_SUBSCRIPTION_STATUSES.has(billingStatus);
+    const hasPendingDeletionRequest = accountDeletionStatus.pending && accountDeletionStatus.canCancel;
+    const accountDeletionDaysLeft = accountDeletionStatus.daysUntilAccessEnds ?? getDaysUntilIso(accountDeletionStatus.expiresAt);
+    const accountDeletionDaysLabel = formatDaysLabel(accountDeletionDaysLeft);
+    const accountDeletionWindowEnds = accountDeletionStatus.expiresAt
+        ? formatBillingDate(accountDeletionStatus.expiresAt)
+        : 'the end of your current billing period';
     const billingPlan =
         latestSubscription?.priceId === paddlePriceIds.monthly
             ? 'Monthly'
@@ -789,9 +1129,17 @@ export default function SettingsPage() {
                 : latestSubscription?.priceId
                     ? 'Custom'
                     : 'N/A';
-    const billingLastUpdated = latestSubscription?.updatedAt
-        ? new Date(latestSubscription.updatedAt).toLocaleString()
-        : 'N/A';
+    const billingNextRenewal = billingStatus === 'none'
+        ? 'N/A'
+        : billingSummary.nextRenewalAt
+            ? formatBillingDate(billingSummary.nextRenewalAt)
+            : (isActiveBilling ? 'Unavailable' : 'N/A');
+    const preDeleteDaysLeft = getDaysUntilIso(billingSummary.nextRenewalAt);
+    const preDeleteDaysLabel = formatDaysLabel(preDeleteDaysLeft);
+    const preDeleteEndDateLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
+    const deleteFeedbackModalMessage = preDeleteEndDateLabel
+        ? `Before you leave, tell us why. You will lose app access in ${preDeleteDaysLabel ?? '0 days'} (${preDeleteEndDateLabel}) once renewal is stopped.`
+        : 'Before you leave, tell us why. Access will end when your current billing period ends once renewal is stopped.';
 
     const renderBillingInfo = () => (
         <div
@@ -820,10 +1168,99 @@ export default function SettingsPage() {
                     <span style={{ fontWeight: 600 }}>{billingPlan}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-                    <span style={{ color: 'var(--foreground-secondary)' }}>Last Updated</span>
-                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{billingLastUpdated}</span>
+                    <span style={{ color: 'var(--foreground-secondary)' }}>Renews On</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{billingNextRenewal}</span>
                 </div>
             </div>
+        </div>
+    );
+
+    const renderSignedInAccountActions = () => (
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: '0.75rem',
+                alignItems: 'stretch',
+            }}>
+                <button
+                    className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
+                    onClick={handleOpenCustomerPortal}
+                    disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
+                    style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '0.85rem 0.65rem',
+                        borderRadius: '12px',
+                        fontFamily: 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.86rem',
+                        lineHeight: 1.2,
+                        textAlign: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
+                </button>
+                <button
+                    className="btn btn-secondary std-normal-btn account-action-btn"
+                    onClick={handleSignOut}
+                    style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '0.85rem 0.65rem',
+                        borderRadius: '12px',
+                        fontFamily: 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        lineHeight: 1.2,
+                        textAlign: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Sign Out
+                </button>
+                <button
+                    className={`btn std-normal-btn account-action-btn ${hasPendingDeletionRequest ? 'btn-secondary' : 'std-normal-danger'}`}
+                    onClick={hasPendingDeletionRequest ? handleCancelDeletionRequest : handleDeleteAccount}
+                    disabled={!isOnline || isDeletingAccount || isCancellingDeletion || isDeleteFeedbackModalOpen}
+                    style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '0.85rem',
+                        borderRadius: '12px',
+                        fontFamily: 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        lineHeight: 1.2,
+                        textAlign: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {hasPendingDeletionRequest
+                        ? (isCancellingDeletion ? 'Restoring renewal...' : 'Keep Account & Renewal')
+                        : (isDeletingAccount ? 'Stopping renewal...' : 'Delete & Stop Renewal')}
+                </button>
+            </div>
+
+            {hasPendingDeletionRequest && (
+                <p style={{
+                    margin: 0,
+                    padding: '0.65rem 0.75rem',
+                    borderRadius: '10px',
+                    border: '1px solid color-mix(in srgb, var(--accent) 28%, var(--border))',
+                    background: 'color-mix(in srgb, var(--accent) 10%, var(--background))',
+                    color: 'var(--foreground-secondary)',
+                    fontSize: '0.82rem',
+                    lineHeight: 1.4
+                }}>
+                    Deletion request is active. Future subscription renewals are canceled.
+                    {accountDeletionDaysLabel
+                        ? ` ${accountDeletionDaysLabel} left until access ends.`
+                        : ''}
+                    {' '}Cancel before <strong>{accountDeletionWindowEnds}</strong> to keep your account.
+                </p>
+            )}
         </div>
     );
 
@@ -865,33 +1302,7 @@ export default function SettingsPage() {
 
                             {user ? (
                                 <>
-
-
-                                    <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                                        <button
-                                            className="btn btn-secondary std-normal-btn"
-                                            onClick={async () => {
-                                                // InstantDB handles sync automatically
-                                                const ok = await confirm({
-                                                    title: 'Sign Out',
-                                                    message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
-                                                    confirmLabel: 'Sign Out',
-                                                    isDestructive: true,
-                                                });
-                                                if (!ok) return;
-
-                                                // Flag sign-out so all guards route to landing instead of /auth.
-                                                window.localStorage.setItem('auth:signingOut', '1');
-                                                window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
-                                                // Sign out from InstantDB (it clears local storage token)
-                                                await db.auth.signOut();
-                                                router.replace('/');
-                                            }}
-                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
-                                        >
-                                            Sign Out
-                                        </button>
-                                    </div>
+                                    {renderSignedInAccountActions()}
                                 </>
                             ) : (
                                 <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1089,7 +1500,7 @@ export default function SettingsPage() {
                             Set how many days you want to complete one full cycle of your active part.
                         </p>
                         <DailyCompletionSlider
-                            days={settings.completionDays || 30}
+                            days={completionDaysDraft}
                             onChange={handleCompletionDays}
                             activePart={settings.activePart}
                         />
@@ -1097,7 +1508,7 @@ export default function SettingsPage() {
 
                     <div className="card modern-card" style={{ padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <PauseCircle size={18} /> Active Part
+                            <Book size={18} /> Active Part
                         </h2>
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                             Choose the part you are focusing on for your daily portion and todo flow.
@@ -1798,6 +2209,48 @@ export default function SettingsPage() {
                         </div>
                         <ChevronRight size={24} style={{ color: 'var(--foreground-secondary)' }} />
                     </button>
+
+                    <div
+                        className="settings-support-cta-mobile"
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            width: '100%',
+                            paddingInline: '0.5rem',
+                            gap: '0.6rem',
+                            fontSize: '0.9rem',
+                            color: 'var(--foreground-secondary)',
+                            marginTop: '0.2rem',
+                            marginBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.2rem)',
+                        }}
+                    >
+                        <span style={{ color: 'var(--foreground-secondary)' }}>
+                            Need support or more details? Join our Discord server.
+                        </span>
+                        <a
+                            className="settings-support-discord-link"
+                            href="https://discord.gg/6wy3YRG2qB"
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                                color: 'var(--foreground-secondary)',
+                                textDecoration: 'none',
+                                fontWeight: 600,
+                                fontSize: '0.85rem',
+                                lineHeight: 1,
+                                padding: '0.42rem 0.72rem',
+                                borderRadius: '12px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background)',
+                                transition: 'color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease',
+                            }}
+                        >
+                            Join Discord
+                        </a>
+                    </div>
                 </div>
             </div>
         );
@@ -1910,12 +2363,15 @@ export default function SettingsPage() {
         }
 
         try {
-            await Promise.all(nodesToUpdate.map(node =>
-                saveInstantNode({
-                    ...node,
-                    scheduler: { ...(node.scheduler as any), ...newState } as any
-                })
-            ));
+            for (let i = 0; i < nodesToUpdate.length; i += MATURITY_UPDATE_BATCH_SIZE) {
+                const batch = nodesToUpdate.slice(i, i + MATURITY_UPDATE_BATCH_SIZE);
+                await Promise.all(batch.map((node) =>
+                    saveInstantNode({
+                        ...node,
+                        scheduler: { ...(node.scheduler as any), ...newState } as any
+                    })
+                ));
+            }
         } catch (error) {
             console.error('Failed to save group maturity', error);
             await alert({
@@ -1931,9 +2387,16 @@ export default function SettingsPage() {
 
     const handleCompletionDays = (days: number) => {
         const clamped = Math.max(7, Math.min(120, days));
-        void saveSettings({ completionDays: clamped }).catch((error) => {
-            console.error('Failed to save completion schedule', error);
-        });
+        setCompletionDaysDraft(clamped);
+        if (completionDaysSaveTimerRef.current !== null) {
+            window.clearTimeout(completionDaysSaveTimerRef.current);
+        }
+        completionDaysSaveTimerRef.current = window.setTimeout(() => {
+            void saveSettings({ completionDays: clamped }).catch((error) => {
+                console.error('Failed to save completion schedule', error);
+            });
+            completionDaysSaveTimerRef.current = null;
+        }, SETTINGS_WRITE_DEBOUNCE_MS);
     };
 
     const handleActivePart = (part: QuranPart) => {
@@ -2374,7 +2837,13 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             });
 
         if (hasExistingCustomPair || hasExistingOfficialPair) {
-            addToast('error', 'This mutashabih already exists');
+            const duplicateSource = hasExistingOfficialPair
+                ? 'an existing built-in mutashabih'
+                : 'an existing custom mutashabih';
+            await alert({
+                title: 'Duplicate Mutashabih',
+                message: `This originator/comparator pair already exists in ${duplicateSource}. Please choose a different pair.`,
+            });
             return false;
         }
 
@@ -2778,7 +3247,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     <div className="hidden md:flex items-center justify-between mb-6 settings-topbar-row">
                         <h1 className="text-2xl font-bold m-0">Settings</h1>
                         <div className="settings-support-cta">
-                            <span>Need help or more details? Join our Discord server.</span>
+                            <span>Need support or more details? Join our Discord server.</span>
                             <a
                                 className="settings-support-discord-link"
                                 href="https://discord.gg/6wy3YRG2qB"
@@ -2843,33 +3312,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
                                             {user ? (
                                                 <>
-
-
-                                                    <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
-                                                        <button
-                                                            className="btn btn-secondary std-normal-btn"
-                                                            onClick={async () => {
-                                                                // InstantDB handles sync automatically
-                                                                const ok = await confirm({
-                                                                    title: 'Sign Out',
-                                                                    message: 'Are you sure you want to sign out? You will be redirected to the landing page and will need to sign in again to access the app.',
-                                                                    confirmLabel: 'Sign Out',
-                                                                    isDestructive: true,
-                                                                });
-                                                                if (!ok) return;
-
-                                                                // Flag sign-out so all guards route to landing instead of /auth.
-                                                                window.localStorage.setItem('auth:signingOut', '1');
-                                                                window.localStorage.setItem('auth:postSignOutUntil', String(Date.now() + 15000));
-                                                                // Sign out from InstantDB (it clears local storage token)
-                                                                await db.auth.signOut();
-                                                                router.replace('/');
-                                                            }}
-                                                            style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
-                                                        >
-                                                            Sign Out
-                                                        </button>
-                                                    </div>
+                                                    {renderSignedInAccountActions()}
                                                 </>
                                             ) : (
                                                 <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -2996,7 +3439,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             Set how many days you want to complete one full cycle of your active part.
                                         </p>
                                         <DailyCompletionSlider
-                                            days={settings.completionDays || 30}
+                                            days={completionDaysDraft}
                                             onChange={handleCompletionDays}
                                             activePart={settings.activePart}
                                         />
@@ -3024,7 +3467,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <div className="header-icon-badge">
-                                            <PauseCircle size={18} />
+                                            <Book size={18} />
                                         </div>
                                         <span>Active Part</span>
                                     </div>
@@ -3090,7 +3533,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <div className="header-icon-badge">
-                                            <Check size={18} />
+                                            <PauseCircle size={18} />
                                         </div>
                                         <span style={{ fontSize: 'clamp(1rem, 5vw, 1.1rem)' }}>Skipped Surah</span>
                                     </div>
@@ -3389,7 +3832,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="settings-sticky-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                            <div className="settings-sticky-table-wrap" style={{ margin: '0', padding: '0', width: '100%', maxWidth: '100%', borderRadius: '12px' }}>
                                                 <table className="debug-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%', tableLayout:'fixed'}}>
                                                     <thead>
                                                         <tr>
@@ -3736,7 +4179,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     cursor: 'pointer'
                                 }}>
                                 <div className="header-icon-badge">
-                                    <Check size={18} />
+                                    <Brain size={18} />
                                 </div>
                                 <div style={{
                                     display: 'flex',
@@ -3868,7 +4311,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             })}
                                         </div>
                                     ) : (
-                                        <div className="settings-sticky-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+                                        <div className="settings-sticky-table-wrap" style={{ margin: '0', padding: '0', width: '100%', maxWidth: '100%', borderRadius: '12px' }}>
                                             <table className="debug-table mutashabihat-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
                                                 <thead>
                                                     <tr>
@@ -4777,10 +5220,44 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     white-space: nowrap;
                     flex-shrink: 0;
                     transform: translateY(-2px);
+                    padding-inline: clamp(0.35rem, 2.5vw, 0.75rem);
+                    box-sizing: border-box;
                 }
 
                 .settings-topbar-row {
                     flex-wrap: nowrap;
+                }
+
+                .settings-support-cta > span {
+                    min-width: 0;
+                    overflow-wrap: anywhere;
+                }
+
+                .settings-support-cta-mobile {
+                    display: flex;
+                    flex-direction: column;
+                    margin-top: 0.2rem;
+                    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.2rem);
+                    white-space: normal;
+                    flex-wrap: nowrap;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
+                    gap: 0.6rem;
+                    line-height: 1.35;
+                    transform: none;
+                    font-size: 0.9rem;
+                    color: var(--foreground-secondary);
+                    width: 100%;
+                    padding-inline: 0.5rem;
+                }
+
+                .settings-support-cta-mobile > span {
+                    text-align: center;
+                }
+
+                .settings-support-cta-mobile .settings-support-discord-link {
+                    align-self: center;
                 }
 
                 .settings-support-discord-link {
@@ -4801,6 +5278,27 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
                     background: var(--verse-bg);
                     transform: translateY(-1px);
+                }
+
+                @media (max-width: 1220px) {
+                    .settings-topbar-row {
+                        flex-wrap: wrap;
+                    }
+
+                    .settings-support-cta {
+                        white-space: normal;
+                        max-width: 100%;
+                    }
+                }
+
+                @media (max-width: 420px) {
+                    .settings-support-cta-mobile {
+                        gap: 0.5rem;
+                    }
+
+                    .settings-support-discord-link {
+                        max-width: 100%;
+                    }
                 }
 
                 .add-custom-mut-btn {
@@ -4839,6 +5337,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     }
                 }
 
+                :global(.settings-sticky-table-wrap) {
+                    width: 100%;
+                    max-width: 100%;
+                    overflow: visible;
+                }
+
                 @media (min-width: 768px) {
                     :global(.settings-sticky-table-wrap) {
                         overflow: visible !important;
@@ -4854,6 +5358,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 }
 
                 @media (min-width: 768px) and (max-width: 1024px) {
+                    :global(.settings-sticky-table-wrap) {
+                        overflow-x: auto !important;
+                        overflow-y: visible !important;
+                        -webkit-overflow-scrolling: touch;
+                    }
+
                     .mutashabihat-table {
                         min-width: 760px !important;
                     }
@@ -5325,6 +5835,15 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                         grid-template-columns: repeat(2, minmax(0, 1fr));
                     }
                 }
+
+                @media (max-width: 1024px) {
+                    .account-action-btn {
+                        font-size: 0.82rem !important;
+                        line-height: 1.15 !important;
+                        padding-left: 0.5rem !important;
+                        padding-right: 0.5rem !important;
+                    }
+                }
                 `}</style>
 
             <AddCustomMutashabihModal
@@ -5478,6 +5997,75 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     </div>
                 </div>
             )}
+
+            <ConfirmationModal
+                isOpen={isDeleteFeedbackModalOpen}
+                title="Before You Leave"
+                message={deleteFeedbackModalMessage}
+                confirmLabel={isDeletingAccount ? 'Stopping renewal...' : 'Delete & Stop Renewal'}
+                cancelLabel="Back"
+                isDestructive
+                isProcessing={isDeletingAccount}
+                onConfirm={handleSubmitDeleteAccount}
+                onCancel={() => {
+                    if (isDeletingAccount) return;
+                    setDeleteReasonError(null);
+                    setIsDeleteFeedbackModalOpen(false);
+                }}
+            >
+                <div style={{ display: 'grid', gap: '0.65rem' }}>
+                    {DELETE_CHURN_REASONS.map((option) => (
+                        <label
+                            key={option.id}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.55rem',
+                                fontSize: '0.9rem',
+                                color: 'var(--foreground)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <input
+                                type="radio"
+                                name="delete-churn-reason"
+                                value={option.id}
+                                checked={deleteReasonCode === option.id}
+                                onChange={() => setDeleteReasonCode(option.id)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            <span>{option.label}</span>
+                        </label>
+                    ))}
+
+                    <div style={{ display: 'grid', gap: '0.35rem', marginTop: '0.25rem' }}>
+                        <textarea
+                            value={deleteReasonDetail}
+                            onChange={(event) => setDeleteReasonDetail(event.target.value.slice(0, DELETE_REASON_DETAIL_MAX_LENGTH))}
+                            placeholder="Optional details (what we can improve)"
+                            rows={3}
+                            style={{
+                                width: '100%',
+                                borderRadius: '10px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                color: 'var(--foreground)',
+                                padding: '0.65rem 0.75rem',
+                                resize: 'vertical',
+                                minHeight: '86px',
+                            }}
+                        />
+                        <div style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', textAlign: 'right' }}>
+                            {deleteReasonDetail.length}/{DELETE_REASON_DETAIL_MAX_LENGTH}
+                        </div>
+                    </div>
+                    {deleteReasonError && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 600 }}>
+                            {deleteReasonError}
+                        </div>
+                    )}
+                </div>
+            </ConfirmationModal>
 
             <div
                 className="toast-container"

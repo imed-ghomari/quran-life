@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/generate-search-index.js && next dev",
+    "dev": "node scripts/generate-search-index.js && next dev --webpack",
     "build": "node scripts/generate-search-index.js && next build --webpack",
     "start": "next start",
     "lint": "next lint",

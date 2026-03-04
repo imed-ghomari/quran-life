@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import type {
   SensorAPI,
   PreDragActions,
@@ -39,6 +39,8 @@ const idle: Idle = { type: 'IDLE' };
 export function useCustomTouchSensor(api: SensorAPI) {
   const phaseRef = useRef<Phase>(idle);
   const unbindEventsRef = useRef<() => void>(() => {});
+  const moveFrameRef = useRef<number | null>(null);
+  const pendingMovePointRef = useRef<Position | null>(null);
 
   const getPhase = useCallback(function getPhase(): Phase {
     return phaseRef.current;
@@ -58,6 +60,12 @@ export function useCustomTouchSensor(api: SensorAPI) {
     if (current.type === 'PENDING') {
       clearTimeout(current.longPressTimerId);
     }
+
+    if (moveFrameRef.current !== null) {
+      window.cancelAnimationFrame(moveFrameRef.current);
+      moveFrameRef.current = null;
+    }
+    pendingMovePointRef.current = null;
 
     setPhase(idle);
     unbindEventsRef.current();
@@ -98,6 +106,18 @@ export function useCustomTouchSensor(api: SensorAPI) {
 
   const bindCapturingEvents = useCallback(
     function bindCapturingEvents() {
+      const flushMove = () => {
+        moveFrameRef.current = null;
+        const phase: Phase = getPhase();
+        const point = pendingMovePointRef.current;
+        pendingMovePointRef.current = null;
+
+        if (!point || phase.type !== 'DRAGGING') {
+          return;
+        }
+        phase.actions.move(point);
+      };
+
       const onTouchMove = (event: TouchEvent) => {
         const phase: Phase = getPhase();
         if (phase.type !== 'DRAGGING') {
@@ -107,10 +127,12 @@ export function useCustomTouchSensor(api: SensorAPI) {
 
         phase.hasMoved = true;
         const { clientX, clientY } = event.touches[0];
-        const point: Position = { x: clientX, y: clientY };
+        pendingMovePointRef.current = { x: clientX, y: clientY };
 
         event.preventDefault();
-        phase.actions.move(point);
+        if (moveFrameRef.current === null) {
+          moveFrameRef.current = window.requestAnimationFrame(flushMove);
+        }
       };
 
       const onTouchEnd = (event: TouchEvent) => {
@@ -134,6 +156,10 @@ export function useCustomTouchSensor(api: SensorAPI) {
         cancel();
       };
 
+      const onContextMenu = (event: Event) => {
+        event.preventDefault();
+      };
+
       // Bind to window for drag events
       // Using passive: false to allow preventDefault
       const options = { capture: true, passive: false };
@@ -144,15 +170,20 @@ export function useCustomTouchSensor(api: SensorAPI) {
       // Also bind to orientation change / resize to cancel
       window.addEventListener('orientationchange', cancel);
       window.addEventListener('resize', cancel);
-      window.addEventListener('contextmenu', (e) => e.preventDefault());
+      window.addEventListener('contextmenu', onContextMenu);
 
       unbindEventsRef.current = function unbindAll() {
+        if (moveFrameRef.current !== null) {
+          window.cancelAnimationFrame(moveFrameRef.current);
+          moveFrameRef.current = null;
+        }
+        pendingMovePointRef.current = null;
         window.removeEventListener('touchmove', onTouchMove, options as any);
         window.removeEventListener('touchend', onTouchEnd, options as any);
         window.removeEventListener('touchcancel', onTouchCancel, options as any);
         window.removeEventListener('orientationchange', cancel);
         window.removeEventListener('resize', cancel);
-        window.removeEventListener('contextmenu', (e) => e.preventDefault());
+        window.removeEventListener('contextmenu', onContextMenu);
       };
     },
     [cancel, getPhase, stop],

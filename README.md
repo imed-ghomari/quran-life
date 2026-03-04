@@ -39,6 +39,10 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - Verse-group review creation uses splits (anchors). If a Surah has no saved splits, verse groups are not created, except for short Surahs with `<= 10` verses where a single implicit group (`1..N`) is used automatically.
 - Manual splits always override the short-Surah implicit group as soon as the user saves splits.
 - Mutashabihat-aware context expands preview until a non-similar verse is reached.
+- **Review due-time precision**:
+  - If a node due value includes a timestamp (ISO with `T`), it becomes due at that exact time (`due <= now`).
+  - If a node due value is date-only (`YYYY-MM-DD`), it becomes due for the full local day (from local midnight).
+  - Scheduling preview labels are day-rounded (`Today`, `1d`, `2d`, ...), so sub-day intervals may still display as `Today`.
 - Desktop nav docks right; mobile keeps bottom bar.
 
 ## Mutashabihat Logic (Maintainer, Simple Terms)
@@ -76,6 +80,13 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
     - it has unresolved similarity work, and
     - at least one comparator verse has already been reviewed at least once.
   - If none of the comparator verses have been reviewed yet, that similarity card stays hidden for now.
+  - If a Similarity card was already moved to **Complete**, it stays pinned there (it does not auto-move back).
+
+- Todo maintenance lifecycle (important):
+  - **Suspended** cards behave differently from Similarity cards.
+  - If a suspended group is acknowledged (moved to Complete) and then the same group fails again (3+ errors), it is automatically treated as active work again and re-enters **Backlog**.
+  - Suspended groups are matched against the **current** saved splits/anchors. If splits change and an old suspended range no longer exists, that old suspended card is removed from Todo immediately.
+  - If `anchorId/groupKey` changes for what is effectively the same suspended range, the old completed suspended card is considered obsolete and removed from Todo to avoid duplicate-looking cards.
 
 - Why this design:
   - Users first build basic review familiarity, then similarity warnings appear when they are actionable.

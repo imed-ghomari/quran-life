@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
@@ -17,13 +17,13 @@ interface KanbanCardProps {
     hasSplits: boolean;
     appMode: 'owner' | 'user';
     docLink?: string;
-    onEditMindmap: () => Promise<void> | void;
-    onDeleteMindmap: () => Promise<void> | void;
-    onExportMindmap?: () => Promise<void> | void;
-    onResetMindmap?: (resetMemoryNodes: boolean) => Promise<void> | void;
-    onChangeSplits: () => Promise<void> | void;
-    onViewVerseContext?: () => Promise<void> | void;
-    onViewSimilarityContext?: () => Promise<void> | void;
+    onEditMindmap: (item: KanbanItem) => Promise<void> | void;
+    onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
+    onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onChangeSplits: (item: KanbanItem) => Promise<void> | void;
+    onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
+    onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
 }
 
 const KanbanCard = ({
@@ -48,12 +48,12 @@ const KanbanCard = ({
     const menuButtonRef = useRef<HTMLButtonElement>(null);
     const { confirm } = useConfirmDialog();
 
-    const handleMenuClick = (e: React.MouseEvent) => {
+    const handleMenuClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
         setMenuOpen(prev => !prev);
-    };
+    }, []);
 
-    const handleDeleteClick = async () => {
+    const handleDeleteClick = useCallback(async () => {
         setMenuOpen(false);
 
         const ok = await confirm({
@@ -66,16 +66,16 @@ const KanbanCard = ({
 
         setIsDeleting(true);
         try {
-            await onDeleteMindmap();
+            await onDeleteMindmap(item);
         } catch (e) {
             console.error("Delete failed", e);
         } finally {
             // Only reset if component is still mounted (React handles this mostly, but good practice)
             setIsDeleting(false);
         }
-    };
+    }, [confirm, item, onDeleteMindmap]);
 
-    const handleResetClick = async () => {
+    const handleResetClick = useCallback(async () => {
         setMenuOpen(false);
 
         const ok = await confirm({
@@ -96,13 +96,22 @@ const KanbanCard = ({
 
         setIsDeleting(true);
         try {
-            await onResetMindmap?.(resetMemoryNodes);
+            await onResetMindmap?.(item, resetMemoryNodes);
         } catch (e) {
             console.error("Reset failed", e);
         } finally {
             setIsDeleting(false);
         }
-    };
+    }, [confirm, item, onResetMindmap]);
+
+    const handleEditMindmap = useCallback(() => onEditMindmap(item), [item, onEditMindmap]);
+    const handleExportMindmap = useCallback(() => onExportMindmap?.(item), [item, onExportMindmap]);
+    const handleChangeSplits = useCallback(() => onChangeSplits(item), [item, onChangeSplits]);
+    const handleViewVerseContext = useCallback(() => onViewVerseContext?.(item), [item, onViewVerseContext]);
+    const handleViewSimilarityContext = useCallback(
+        () => onViewSimilarityContext?.(item),
+        [item, onViewSimilarityContext]
+    );
 
     // Responsive Spacing Config - Tighter for Mobile
     // const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-5';
@@ -120,14 +129,15 @@ const KanbanCard = ({
     return (
         <>
             <Draggable draggableId={item.id} index={index}>
-                {(provided, snapshot) => (
+                {(provided, snapshot) => {
+                    return (
                     <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         className={`
                             roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
-                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)] rotate-2' : ''}
+                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
                             ${item.status === 'complete' ? 'opacity-80' : ''}
                             ${isMobile ? 'min-w-[42vw] snap-center' : ''}
                         `}
@@ -148,19 +158,20 @@ const KanbanCard = ({
                             menuButtonRef,
                             handleMenuClick,
                             isMobile,
-                            onEditMindmap,
+                            onEditMindmap: handleEditMindmap,
                             onDeleteMindmap: handleDeleteClick,
-                            onExportMindmap,
+                            onExportMindmap: handleExportMindmap,
                             onResetMindmap: handleResetClick,
-                            onChangeSplits,
+                            onChangeSplits: handleChangeSplits,
                             hasSplits,
                             footerPad: 'pt-3',
                             docLink,
-                            onViewVerseContext,
-                            onViewSimilarityContext
+                            onViewVerseContext: handleViewVerseContext,
+                            onViewSimilarityContext: handleViewSimilarityContext
                         })}
                     </div>
-                )}
+                    );
+                }}
             </Draggable>
         </>
     );
@@ -220,6 +231,56 @@ function renderCardZones({
     let zone3 = "";
     let zone4Meta = "";
     const showSplitsAlert = cardType === 'surah' && hasMindmap && !hasSplits;
+    const mindmapStatusIcon = (() => {
+        if ((cardType !== 'surah' && cardType !== 'part') || !hasMindmap) return null;
+
+        const mindmap = (item as any).data?.mindmap;
+        const isPremade = mindmap?.source === 'premade';
+        const isEdited = isPremade && mindmap?.premadeEdited;
+        const hasResetAvailable = !isPremade && !!hasPremade;
+        const iconClass = 'text-[var(--accent)] opacity-80';
+
+        if (hasResetAvailable) {
+            return (
+                <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
+                    <Layers size={14} className={iconClass} />
+                </span>
+            );
+        }
+        if (isEdited) {
+            return (
+                <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map (edited)" aria-label="Official map (edited)">
+                    <PenSquare size={14} className={iconClass} />
+                </span>
+            );
+        }
+        if (isPremade) {
+            return (
+                <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map" aria-label="Official map">
+                    <BadgeCheck size={14} className={iconClass} />
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map" aria-label="Custom map">
+                <Brain size={14} className={iconClass} />
+            </span>
+        );
+    })();
+    const statusIcons = (showSplitsAlert || mindmapStatusIcon) ? (
+        <>
+            {showSplitsAlert && (
+                <span
+                    className="inline-flex items-center shrink-0 text-amber-500 kanban-title-icon"
+                    title="Splits missing"
+                    aria-label="Splits missing"
+                >
+                    <Scissors size={14} />
+                </span>
+            )}
+            {mindmapStatusIcon}
+        </>
+    ) : null;
 
     // Type-specific logic
     switch (item.type) {
@@ -332,54 +393,10 @@ function renderCardZones({
             <div className="mb-2">
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <h4 className="text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
+                        <h4 className="text-[0.82rem] md:text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
                             {zone2.english}
                         </h4>
-                        {showSplitsAlert && (
-                            <span
-                                className="inline-flex items-center shrink-0 text-amber-500 kanban-title-icon"
-                                title="Splits missing"
-                                aria-label="Splits missing"
-                            >
-                                <Scissors size={14} />
-                            </span>
-                        )}
-                        {(cardType === 'surah' || cardType === 'part') && hasMindmap && (
-                            (() => {
-                                const mindmap = (item as any).data?.mindmap;
-                                const isPremade = mindmap?.source === 'premade';
-                                const isEdited = isPremade && mindmap?.premadeEdited;
-                                const hasResetAvailable = !isPremade && !!hasPremade;
-                                const iconClass = 'text-[var(--accent)] opacity-80';
-
-                                if (hasResetAvailable) {
-                                    return (
-                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map (official reset available)" aria-label="Custom map (official reset available)">
-                                            <Layers size={14} className={iconClass} />
-                                        </span>
-                                    );
-                                }
-                                if (isEdited) {
-                                    return (
-                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map (edited)" aria-label="Official map (edited)">
-                                            <PenSquare size={14} className={iconClass} />
-                                        </span>
-                                    );
-                                }
-                                if (isPremade) {
-                                    return (
-                                        <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Official map" aria-label="Official map">
-                                            <BadgeCheck size={14} className={iconClass} />
-                                        </span>
-                                    );
-                                }
-                                return (
-                                    <span className="inline-flex items-center shrink-0 kanban-title-icon" title="Custom map" aria-label="Custom map">
-                                        <Brain size={14} className={iconClass} />
-                                    </span>
-                                );
-                            })()
-                        )}
+                        {!isMobile && statusIcons}
                     </div>
                     {zone2.arabic && (
                         <div className="text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 whitespace-nowrap">
@@ -388,6 +405,12 @@ function renderCardZones({
                     )}
                 </div>
             </div>
+
+            {isMobile && statusIcons && (
+                <div className="mt-2 mb-1 flex items-center gap-2">
+                    {statusIcons}
+                </div>
+            )}
 
             {/* Description */}
             {!isMobile && zone3 && (

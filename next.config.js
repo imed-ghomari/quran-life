@@ -1,3 +1,35 @@
+const path = require('path');
+const fs = require('fs');
+
+const TL_DRAW_PACKAGES = [
+    'tldraw',
+    '@tldraw/editor',
+    '@tldraw/state',
+    '@tldraw/state-react',
+    '@tldraw/store',
+    '@tldraw/tlschema',
+    '@tldraw/utils',
+    '@tldraw/validate',
+];
+
+const resolvePackageRoot = (packageName) => {
+    let current = path.dirname(require.resolve(packageName));
+    const fsRoot = path.parse(current).root;
+
+    while (current && current !== fsRoot) {
+        if (fs.existsSync(path.join(current, 'package.json'))) {
+            return current;
+        }
+        current = path.dirname(current);
+    }
+
+    throw new Error(`Could not resolve package root for ${packageName}`);
+};
+
+const tldrawAliases = Object.fromEntries(
+    TL_DRAW_PACKAGES.map((packageName) => [packageName, resolvePackageRoot(packageName)])
+);
+
 const PWA_CACHE_VERSION = (
     process.env.VERCEL_GIT_COMMIT_SHA
     || process.env.VERCEL_DEPLOYMENT_ID
@@ -195,11 +227,22 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    turbopack: {},
+    turbopack: {
+        resolveAlias: tldrawAliases,
+    },
     images: {
         unoptimized: true,
     },
     serverExternalPackages: ['@open-spaced-repetition/binding'],
+    webpack(config) {
+        config.resolve = config.resolve || {};
+        config.resolve.alias = {
+            ...(config.resolve.alias || {}),
+            ...tldrawAliases,
+        };
+        config.resolve.symlinks = true;
+        return config;
+    },
     // Add security headers to all responses
     async headers() {
         return [

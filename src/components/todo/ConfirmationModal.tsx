@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmationModalProps {
@@ -10,6 +11,7 @@ interface ConfirmationModalProps {
     showCancel?: boolean;
     isDestructive?: boolean;
     isProcessing?: boolean;
+    children?: React.ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -23,31 +25,39 @@ export default function ConfirmationModal({
     showCancel = true,
     isDestructive = false,
     isProcessing = false,
+    children,
     onConfirm,
     onCancel
 }: ConfirmationModalProps) {
     const [isVisible, setIsVisible] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+    const previousBodyOverflow = useRef<string>('');
 
     useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!isMounted) return;
         if (isOpen) {
             setIsVisible(true);
-            // Prevent body scroll
+            previousBodyOverflow.current = document.body.style.overflow;
             document.body.style.overflow = 'hidden';
         } else {
             const timer = setTimeout(() => setIsVisible(false), 300);
-            document.body.style.overflow = '';
+            document.body.style.overflow = previousBodyOverflow.current;
             return () => clearTimeout(timer);
         }
-        return () => { document.body.style.overflow = ''; };
-    }, [isOpen]);
+        return () => { document.body.style.overflow = previousBodyOverflow.current; };
+    }, [isMounted, isOpen]);
 
-    if (!isVisible && !isOpen) return null;
+    if (!isMounted || (!isVisible && !isOpen)) return null;
 
     const showcontent = isOpen;
 
-    return (
+    const modal = (
         <div
-            className={`fixed inset-0 z-[1000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
+            className={`fixed inset-0 z-[30000] flex items-center justify-center p-4 transition-all duration-300 ${showcontent ? 'opacity-100' : 'opacity-0'}`}
             role="dialog"
             aria-modal="true"
         >
@@ -107,6 +117,11 @@ export default function ConfirmationModal({
                     <p className="confirm-dialog-message text-[var(--foreground-secondary)] text-base sm:text-[1.02rem] leading-relaxed pt-1 pr-1">
                         {message}
                     </p>
+                    {children ? (
+                        <div className="mt-5">
+                            {children}
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Footer */}
@@ -134,4 +149,6 @@ export default function ConfirmationModal({
             </div>
         </div>
     );
+
+    return createPortal(modal, document.body);
 }

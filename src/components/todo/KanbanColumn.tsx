@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import KanbanCard from './KanbanCard';
 import { KanbanItem } from './types';
@@ -26,6 +26,8 @@ interface KanbanColumnProps {
     getHasSplits: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;
     getDocLink: (item: KanbanItem) => string | undefined;
+    isItemVisible: (item: KanbanItem) => boolean;
+    hasActiveVisibilityFilter: boolean;
 }
 
 const getColumnIcon = (columnId: string) => {
@@ -55,8 +57,15 @@ const KanbanColumn = ({
     getHasMindmap,
     getHasSplits,
     getHasPremade,
-    getDocLink
+    getDocLink,
+    isItemVisible,
+    hasActiveVisibilityFilter
 }: KanbanColumnProps) => {
+    const visibleItems = useMemo(
+        () => (hasActiveVisibilityFilter ? items.filter(isItemVisible) : items),
+        [hasActiveVisibilityFilter, isItemVisible, items]
+    );
+
     return (
         <div 
             className={`
@@ -89,7 +98,7 @@ const KanbanColumn = ({
                 </div>
                 <h3>{title}</h3>
                 <span className="ml-auto text-xs font-medium text-[var(--foreground-secondary)] bg-[var(--background)] px-2 py-0.5 rounded-full border border-[var(--border)]">
-                    {items.length}
+                    {visibleItems.length}
                 </span>
             </div>
 
@@ -111,7 +120,7 @@ const KanbanColumn = ({
                             }
                         `}
                     >
-                        {items.map((item, index) => (
+                        {visibleItems.map((item, index) => (
                             <KanbanCard
                                 key={item.id}
                                 item={item}
@@ -122,13 +131,13 @@ const KanbanColumn = ({
                                 hasPremade={getHasPremade ? getHasPremade(item) : false}
                                 appMode={appMode}
                                 docLink={getDocLink(item)}
-                                onEditMindmap={() => onEditMindmap(item)}
-                                onDeleteMindmap={() => onDeleteMindmap(item)}
-                                onExportMindmap={onExportMindmap ? () => onExportMindmap(item) : undefined}
-                                onResetMindmap={onResetMindmap ? (resetMemoryNodes) => onResetMindmap(item, resetMemoryNodes) : undefined}
-                                onChangeSplits={() => onChangeSplits(item)}
-                                onViewVerseContext={onViewVerseContext ? () => onViewVerseContext(item) : undefined}
-                                onViewSimilarityContext={onViewSimilarityContext ? () => onViewSimilarityContext(item) : undefined}
+                                onEditMindmap={onEditMindmap}
+                                onDeleteMindmap={onDeleteMindmap}
+                                onExportMindmap={onExportMindmap}
+                                onResetMindmap={onResetMindmap}
+                                onChangeSplits={onChangeSplits}
+                                onViewVerseContext={onViewVerseContext}
+                                onViewSimilarityContext={onViewSimilarityContext}
                             />
                         ))}
                         {provided.placeholder}
@@ -139,4 +148,7 @@ const KanbanColumn = ({
     );
 };
 
-export default KanbanColumn;
+const MemoizedKanbanColumn = memo(KanbanColumn);
+MemoizedKanbanColumn.displayName = 'KanbanColumn';
+
+export default MemoizedKanbanColumn;

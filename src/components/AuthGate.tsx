@@ -215,7 +215,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (!isHydrated) {
     return (
-      <div style={{
+      <div suppressHydrationWarning={true} style={{
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
@@ -243,7 +243,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
     return (
-      <div style={{
+      <div suppressHydrationWarning={true} style={{
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
@@ -258,7 +258,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   if (shouldTreatAsOffline) {
     if (!user && !hasOfflineAccess) {
       return (
-        <div style={{
+        <div suppressHydrationWarning={true} style={{
           minHeight: '100vh',
           display: 'flex',
           alignItems: 'center',
@@ -274,7 +274,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (!user) {
     return (
-      <div style={{
+      <div suppressHydrationWarning={true} style={{
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',

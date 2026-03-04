@@ -32,6 +32,7 @@ const SW_MIGRATION_KEY = "sw-migration-2026-02-25-v22-remove-route-warmup";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
 const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
+const ACCESS_STATE_REFRESH_INTERVAL_MS = 60 * 1000;
 const SW_CACHE_PREFIXES_TO_CLEAR = [
   "serwist",
   "workbox",
@@ -162,6 +163,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [isAccessLoading, setIsAccessLoading] = useState(() => !cachedAccessState);
   const [hasLoadedAccessState, setHasLoadedAccessState] = useState(() => Boolean(cachedAccessState));
   const accessRequestSeqRef = useRef(0);
+  const lastAccessRefreshRef = useRef<{ identityKey: string; at: number } | null>(
+    cachedAccessState
+      ? { identityKey: cachedAccessState.identityKey, at: Number(cachedAccessState.cachedAt || 0) }
+      : null
+  );
 
   const authIdentity = useMemo(() => {
     if (!user) return null;
@@ -215,6 +221,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthLoading) return;
+    const lastRefresh = lastAccessRefreshRef.current;
+    const recentlyRefreshedSameIdentity = Boolean(
+      lastRefresh
+      && lastRefresh.identityKey === authIdentityKey
+      && Date.now() - lastRefresh.at < ACCESS_STATE_REFRESH_INTERVAL_MS
+    );
+    if (hasLoadedAccessState && recentlyRefreshedSameIdentity) {
+      return;
+    }
     const requestSeq = accessRequestSeqRef.current + 1;
     accessRequestSeqRef.current = requestSeq;
     const shouldBlockForThisRequest =
@@ -279,6 +294,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           }
         }
         lastResolvedIdentityRef.current = authIdentityKey;
+        lastAccessRefreshRef.current = { identityKey: authIdentityKey, at: Date.now() };
       } catch {
         // Non-blocking: auth and local UI can still function if this check fails.
       } finally {

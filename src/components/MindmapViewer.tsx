@@ -70,6 +70,25 @@ const extractContextFromTemplateUrl = (value?: string | null): string | null => 
 
 const isInternalPath = (href: string) => href.startsWith('/') && !href.startsWith('//');
 
+const normalizeSnapshot = (value: unknown): any | null => {
+    if (!value) return null;
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
+            return null;
+        }
+    }
+    if (typeof value === 'object') return value;
+    return null;
+};
+
+const hasRenderableShapes = (value: any | null): boolean => {
+    if (!value || !value.store || typeof value.store !== 'object') return false;
+    return Object.keys(value.store).some((key) => key.startsWith('shape:'));
+};
+
 export default function MindmapViewer({
     snapshot,
     templateUrl,
@@ -87,12 +106,24 @@ export default function MindmapViewer({
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [fetchedSnapshot, setFetchedSnapshot] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [imageFailed, setImageFailed] = useState(false);
     const [editor, setEditor] = useState<any>(null);
     const [inlineEditor, setInlineEditor] = useState<any>(null);
     const [showInlineBackToContent, setShowInlineBackToContent] = useState(false);
-    const activeSnapshot = fetchedSnapshot || snapshot;
-    const displayUrl = isDark ? (imageUrlDark || imageUrl) : imageUrl;
-    const hasImage = !!displayUrl && !activeSnapshot;
+    const activeSnapshot = useMemo(
+        () => normalizeSnapshot(fetchedSnapshot) || normalizeSnapshot(snapshot),
+        [fetchedSnapshot, snapshot]
+    );
+    const hasSnapshot = !!activeSnapshot;
+    const hasRenderableSnapshot = useMemo(() => hasRenderableShapes(activeSnapshot), [activeSnapshot]);
+    const shouldFillParent = height === '100%';
+    const viewerSizeStyle = useMemo<React.CSSProperties>(() => (
+        shouldFillParent
+            ? { flex: 1, minHeight: 0 }
+            : { height, minHeight: height }
+    ), [height, shouldFillParent]);
+    const displayUrl = isDark ? (imageUrlDark || imageUrl) : (imageUrl || imageUrlDark);
+    const hasImage = !!displayUrl && !hasSnapshot && !imageFailed;
     const currentContextLabel = useMemo(
         () => contextLabel || extractContextFromTemplateUrl(templateUrl) || extractContextFromTitle(title),
         [contextLabel, templateUrl, title]
@@ -152,6 +183,10 @@ export default function MindmapViewer({
                 });
         }
     }, [templateUrl]);
+
+    useEffect(() => {
+        setImageFailed(false);
+    }, [displayUrl]);
 
     useEffect(() => {
         if (isFullScreen) {
@@ -275,7 +310,7 @@ export default function MindmapViewer({
     // OR just use Tldraw inline if no image.
 
     // If no snapshot and no template, return nothing or placeholder
-    if (!snapshot && !templateUrl && !hasImage) return null;
+    if (!snapshot && !templateUrl && !displayUrl) return null;
 
     if (isLoading) {
         return (
@@ -293,12 +328,13 @@ export default function MindmapViewer({
                     className={`relative w-full h-full group cursor-pointer overflow-hidden rounded-xl bg-[var(--background-secondary)] ${className || ''}`}
                     onClick={() => setIsFullScreen(true)}
                     data-mindmap-swipe-guard="true"
-                    style={{ minHeight: height, ...style }}
+                    style={{ ...viewerSizeStyle, ...style }}
                 >
                     <Image
                         src={displayUrl!}
                         alt={title || "Mindmap"}
                         fill
+                        onError={() => setImageFailed(true)}
                         className="object-contain p-4 transition-transform duration-300 group-hover:scale-[1.02]"
                         sizes="(max-width: 768px) 100vw, 50vw"
                         priority={false}
@@ -313,7 +349,7 @@ export default function MindmapViewer({
         }
 
         // If no image, render Tldraw inline (might be heavy)
-        if (activeSnapshot) {
+        if (hasSnapshot && activeSnapshot) {
             // We need a specific key for Tldraw to force re-render/re-mount when toggling fullscreen
             // but for inline view, we just want it to be reliable.
             // Using a separate handleMount for inline to ensure zoom happens correctly there too.
@@ -349,7 +385,7 @@ export default function MindmapViewer({
                 <div 
                     className={`w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] relative ${className || ''}`} 
                     data-mindmap-swipe-guard="true"
-                    style={{ height: height, minHeight: height, ...style }}
+                    style={{ ...viewerSizeStyle, fontWeight: 400, ...style }}
                 >
                     {showInlineBackToContent && (
                         <div className="absolute top-3 left-3 z-10">
@@ -370,7 +406,7 @@ export default function MindmapViewer({
                             <Maximize2 size={18} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <div className="absolute inset-0 w-full h-full">
+                    <div className="absolute inset-0 w-full h-full" style={{ fontWeight: 400 }}>
                         <Tldraw
                             key="inline-preview"
                             snapshot={activeSnapshot}
@@ -383,7 +419,16 @@ export default function MindmapViewer({
             );
         }
 
-        return null;
+        return (
+            <div
+                className={`w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] ${className || ''}`}
+                style={{ ...viewerSizeStyle, ...style }}
+            >
+                <div className="h-full w-full flex items-center justify-center text-[var(--foreground-secondary)] text-sm">
+                    {imageFailed ? 'Mindmap image unavailable' : 'Mindmap preview unavailable'}
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -411,14 +456,16 @@ export default function MindmapViewer({
                                         className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                         href={resolvedDocLink}
                                     >
-                                        Back to Documentation
+                                        <span className="hidden md:inline">Back to Documentation</span>
+                                        <span className="md:hidden">Back to Docs</span>
                                     </Link>
                                 ) : (
                                     <a
                                         className="btn btn-secondary std-normal-btn mindmap-header-doclink"
                                         href={resolvedDocLink}
                                     >
-                                        Back to Documentation
+                                        <span className="hidden md:inline">Back to Documentation</span>
+                                        <span className="md:hidden">Back to Docs</span>
                                     </a>
                                 )
                             )}
@@ -430,8 +477,8 @@ export default function MindmapViewer({
                             <X size={24} className="text-[var(--foreground)]" />
                         </button>
                     </div>
-                    <div className="flex-1 relative bg-[var(--background-secondary)]" style={{ overscrollBehaviorX: 'none' }}>
-                        {activeSnapshot ? (
+                    <div className="flex-1 relative bg-[var(--background-secondary)]" style={{ overscrollBehaviorX: 'none', fontWeight: 400 }}>
+                        {hasSnapshot && activeSnapshot ? (
                             <Tldraw
                                 snapshot={activeSnapshot}
                                 components={fullScreenComponents}

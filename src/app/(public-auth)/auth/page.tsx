@@ -621,6 +621,7 @@ function AuthContent() {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                         <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly plan</span>
                                         <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Pay as you go</span>
+                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
                                     </div>
                                     <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>$10</span>
                                 </button>
@@ -667,6 +668,7 @@ function AuthContent() {
                                             <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly plan</span>
                                         </div>
                                         <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best value</span>
+                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
                                     </div>
                                     <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>$96</span>
                                 </button>
@@ -681,6 +683,16 @@ function AuthContent() {
                         >
                             {isOpening ? 'Opening checkout...' : 'Proceed'}
                         </button>
+                        <p style={{
+                            marginTop: '0.75rem',
+                            marginBottom: 0,
+                            color: 'var(--foreground-secondary)',
+                            fontSize: '0.82rem',
+                            textAlign: 'center',
+                            lineHeight: 1.4
+                        }}>
+                            Cancel anytime. If you cancel after the trial ends, payments are non-refundable.
+                        </p>
                         <button
                             type="button"
                             onClick={async () => {
@@ -724,7 +736,8 @@ function AuthContent() {
                                 and{' '}
                                 <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                                     Privacy Policy
-                                </Link>.
+                                </Link>
+                                . Cancellation after trial is non-refundable.
                             </p>
                         </div>
                     </div>

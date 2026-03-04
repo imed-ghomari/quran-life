@@ -96,8 +96,8 @@ export default function SplitsModal({
                             <X size={20} />
                         </button>
                     </div>
-                    <div className="slide-over-body" style={{ overflowX: 'hidden' }}>
-                        <div className="min-h-full pb-10">
+                    <div className="slide-over-body splits-modal-slide-body" style={{ overflowX: 'hidden' }}>
+                        <div className="splits-mobile-shell">
                             <MobileAnchorBuilder
                                 surahId={surahId}
                                 verseCount={verseCount}
@@ -176,7 +176,7 @@ return (
                             title="Reference Map"
                             contextLabel={`Surah ${surahId}${surahName ? `. ${surahName}` : ''}`}
                             docLink={`/docs/mindmaps/surah-${surahId}`}
-                            height="100%"
+                            height={280}
                         />
                     </div>
                 )}

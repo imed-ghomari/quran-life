@@ -28,6 +28,26 @@ export const metadata: Metadata = {
     metadataBase: new URL(getSiteUrl()),
     title: 'Quran Life',
     description: 'Complete your learned Quran portions in manageable daily readings',
+    openGraph: {
+        type: 'website',
+        title: 'Quran Life',
+        description: 'Complete your learned Quran portions in manageable daily readings',
+        siteName: 'Quran Life',
+        images: [
+            {
+                url: '/og-image.jpg',
+                width: 1200,
+                height: 630,
+                alt: 'Quran Life social preview',
+            },
+        ],
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'Quran Life',
+        description: 'Complete your learned Quran portions in manageable daily readings',
+        images: ['/og-image.jpg'],
+    },
     manifest: '/manifest.json',
     icons: {
         icon: [{ url: '/logo.png', type: 'image/png' }],
