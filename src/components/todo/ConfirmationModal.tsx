@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
     showCancel?: boolean;
     isDestructive?: boolean;
     isProcessing?: boolean;
+    disabled?: boolean;
     children?: React.ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
@@ -25,6 +26,7 @@ export default function ConfirmationModal({
     showCancel = true,
     isDestructive = false,
     isProcessing = false,
+    disabled = false,
     children,
     onConfirm,
     onCancel
@@ -92,11 +94,7 @@ export default function ConfirmationModal({
                                     : 'bg-[var(--accent)]/10 text-[var(--accent)]'}
                             `}
                         >
-                            {isProcessing ? (
-                                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <AlertTriangle size={22} strokeWidth={2} />
-                            )}
+                            <AlertTriangle size={22} strokeWidth={2} />
                         </div>
                         <h3 className="text-lg font-bold text-[var(--foreground)]">
                             {title}
@@ -137,7 +135,7 @@ export default function ConfirmationModal({
                     )}
                     <button
                         onClick={onConfirm}
-                        disabled={isProcessing}
+                        disabled={disabled || isProcessing}
                         className={`
                             btn std-normal-btn
                             ${isDestructive ? 'std-normal-danger' : 'btn-primary'}

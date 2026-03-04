@@ -264,7 +264,6 @@ const DELETE_CHURN_REASONS = [
     { id: 'switching_tool', label: 'Switching to another tool' },
     { id: 'temporary_break', label: 'Taking a temporary break' },
     { id: 'other', label: 'Other reason' },
-    { id: 'prefer_not_to_say', label: 'Prefer not to say' },
 ] as const;
 type DeleteChurnReasonCode = (typeof DELETE_CHURN_REASONS)[number]['id'];
 
@@ -547,7 +546,7 @@ export default function SettingsPage() {
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
     const [isCancellingDeletion, setIsCancellingDeletion] = useState(false);
     const [isDeleteFeedbackModalOpen, setIsDeleteFeedbackModalOpen] = useState(false);
-    const [deleteReasonCode, setDeleteReasonCode] = useState<DeleteChurnReasonCode>('prefer_not_to_say');
+    const [deleteReasonCode, setDeleteReasonCode] = useState<DeleteChurnReasonCode>('other');
     const [deleteReasonDetail, setDeleteReasonDetail] = useState('');
     const [deleteReasonError, setDeleteReasonError] = useState<string | null>(null);
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
@@ -900,7 +899,7 @@ export default function SettingsPage() {
         });
         if (!ok) return;
         setDeleteReasonError(null);
-        setDeleteReasonCode('prefer_not_to_say');
+        setDeleteReasonCode('other');
         setDeleteReasonDetail('');
         setIsDeleteFeedbackModalOpen(true);
     }, [billingSummary.nextRenewalAt, confirm, isDeleteFeedbackModalOpen, isDeletingAccount]);
@@ -911,6 +910,12 @@ export default function SettingsPage() {
         setDeleteReasonError(null);
         if (!deleteReasonCode) {
             setDeleteReasonError('Please choose one reason.');
+            return;
+        }
+
+        // Force user to write when selecting "Other" option
+        if (deleteReasonCode === 'other' && !deleteReasonDetail.trim()) {
+            setDeleteReasonError('Please provide details when selecting "Other".');
             return;
         }
 
@@ -1139,7 +1144,7 @@ export default function SettingsPage() {
     const preDeleteEndDateLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
     const deleteFeedbackModalMessage = preDeleteEndDateLabel
         ? `Before you leave, tell us why. You will lose app access in ${preDeleteDaysLabel ?? '0 days'} (${preDeleteEndDateLabel}) once renewal is stopped.`
-        : 'Before you leave, tell us why. Access will end when your current billing period ends once renewal is stopped.';
+        : 'Before you leave, tell us why.';
 
     const renderBillingInfo = () => (
         <div
@@ -3342,7 +3347,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         disabled={isAuthProcessing}
                                                         style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
                                                     >
-                                                        {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
+                                                        {isAuthProcessing ? 'Delete & Stop Renewal' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
                                                     </button>
 
                                                     {authStep === 'email' && (
@@ -6006,6 +6011,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 cancelLabel="Back"
                 isDestructive
                 isProcessing={isDeletingAccount}
+                disabled={deleteReasonCode === 'other' && !deleteReasonDetail.trim()}
                 onConfirm={handleSubmitDeleteAccount}
                 onCancel={() => {
                     if (isDeletingAccount) return;
@@ -6013,7 +6019,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     setIsDeleteFeedbackModalOpen(false);
                 }}
             >
-                <div style={{ display: 'grid', gap: '0.65rem' }}>
+                <div style={{ display: 'grid', gap: '0.65rem', marginTop: '1.5rem' }}>
                     {DELETE_CHURN_REASONS.map((option) => (
                         <label
                             key={option.id}
@@ -6042,12 +6048,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                         <textarea
                             value={deleteReasonDetail}
                             onChange={(event) => setDeleteReasonDetail(event.target.value.slice(0, DELETE_REASON_DETAIL_MAX_LENGTH))}
-                            placeholder="Optional details (what we can improve)"
+                            placeholder={deleteReasonCode === 'other' ? 'Please provide details (required)' : 'Optional details (what we can improve)'}
                             rows={3}
                             style={{
                                 width: '100%',
                                 borderRadius: '10px',
-                                border: '1px solid var(--border)',
+                                border: deleteReasonCode === 'other' && deleteReasonError && !deleteReasonDetail.trim() ? '1px solid var(--danger)' : '1px solid var(--border)',
                                 background: 'var(--background-secondary)',
                                 color: 'var(--foreground)',
                                 padding: '0.65rem 0.75rem',
