@@ -10,10 +10,20 @@ import Spinner from '@/components/ui/Spinner';
 import { getSurah } from '@/lib/quranData';
 import 'tldraw/tldraw.css';
 
+const applyMindmapStrokeSizes = (strokeSizes: any) => {
+    if (!strokeSizes) return;
+    // Keep renderer stroke widths aligned with MindmapEditor custom tuning.
+    strokeSizes.s = 0.1;
+    strokeSizes.m = 0.3;
+    strokeSizes.l = 0.6;
+    strokeSizes.xl = 1.2;
+};
+
 // Only load tldraw on the client
 const Tldraw = dynamic(
     async () => {
-        const { Tldraw } = await import('tldraw');
+        const { Tldraw, STROKE_SIZES } = await import('tldraw');
+        applyMindmapStrokeSizes(STROKE_SIZES);
         return Tldraw;
     },
     { ssr: false }

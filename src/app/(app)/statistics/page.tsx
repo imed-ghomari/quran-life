@@ -1325,7 +1325,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 }
 
 function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minDay: number; maxDay: number; dailyLoad: string }) {
-    const MAX_X_AXIS_LEGENDS = 6;
+    const DESKTOP_MAX_X_AXIS_LEGENDS = 6;
     const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
@@ -1387,16 +1387,25 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const step = groupWidth / span;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
-                        const labelStep = Math.max(1, Math.ceil(nonZeroData.length / MAX_X_AXIS_LEGENDS));
+                        const isSmallScreen = chartWidth <= 480;
+                        const isTablet = chartWidth > 480 && chartWidth <= 900;
+                        const maxXAxisLegends = isSmallScreen ? 4 : isTablet ? 5 : DESKTOP_MAX_X_AXIS_LEGENDS;
+                        const xAxisFontSize = isSmallScreen ? 9 : 10;
+                        const rotateLabels = step < (isSmallScreen ? 46 : 40);
                         const dailyLoadValue = Number(dailyLoad);
                         const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
                         const formatDayLabel = (day: number) => {
                             if (day === 0) return 'Today';
                             if (day === 1) return '1d';
-                            if (day === -1) return '1d ago';
-                            if (day < 0) return `${Math.abs(day)}d ago`;
+                            if (day === -1) return isTablet || isSmallScreen ? '1d' : '1d ago';
+                            if (day < 0) return isTablet || isSmallScreen ? `${Math.abs(day)}d` : `${Math.abs(day)}d ago`;
                             return `${day}d`;
                         };
+                        const baseLabelStep = Math.max(1, Math.ceil(nonZeroData.length / maxXAxisLegends));
+                        const longestLabelLength = Math.max(...nonZeroData.map(d => formatDayLabel(d.day).length), 1);
+                        const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
+                        const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
+                        const labelStep = Math.max(baseLabelStep, minStepForWidth);
 
                         const roundedPath = (x: number, y: number, w: number, h: number, rt: number, rb: number) => {
                             const right = x + w;
@@ -1487,16 +1496,19 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
 
                                 {/* X-axis labels */}
                                 {nonZeroData.map((d, i) => {
-                                    if (i % labelStep !== 0 && i !== nonZeroData.length - 1) return null;
+                                    const shouldShow = i === 0 || i === nonZeroData.length - 1 || d.day === 0 || i % labelStep === 0;
+                                    if (!shouldShow) return null;
                                     const x = getX(i);
+                                    const y = chartHeight - padding.bottom + 18;
                                     return (
                                         <text
                                             key={`label-${i}`}
                                             x={x}
-                                            y={chartHeight - padding.bottom + 18}
-                                            textAnchor="middle"
-                                            fontSize="10"
+                                            y={y}
+                                            textAnchor={rotateLabels ? 'end' : 'middle'}
+                                            fontSize={xAxisFontSize}
                                             fill="var(--foreground-secondary)"
+                                            transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
                                         >
                                             {formatDayLabel(d.day)}
                                         </text>
