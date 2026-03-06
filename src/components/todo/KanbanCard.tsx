@@ -136,7 +136,7 @@ const KanbanCard = ({
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         className={`
-                            roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
+                            kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
                             ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
                             ${item.status === 'complete' ? 'opacity-80' : ''}
                             ${isMobile ? 'min-w-[42vw] snap-center' : ''}
@@ -343,7 +343,7 @@ function renderCardZones({
     return (
         <>
             {/* Header: Pill + Menu */}
-            <div className="flex justify-between items-start mb-2.5">
+            <div className="flex justify-between items-start mb-4">
                 <span
                     className="status-pill"
                     style={{
@@ -390,7 +390,7 @@ function renderCardZones({
             </div>
 
             {/* Title Area */}
-            <div className="mb-2">
+            <div className="mt-1 mb-2">
                 <div className={`flex gap-2 min-w-0 ${isMobile ? 'flex-col items-start' : 'items-center justify-between'}`}>
                     <div className="flex items-center gap-2 min-w-0">
                         <h4 className="text-[0.82rem] md:text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5 break-words">
