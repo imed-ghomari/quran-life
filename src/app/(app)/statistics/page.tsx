@@ -432,7 +432,6 @@ export default function StatisticsPage() {
 
     // 6. Future Due Data
     const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
-    const [showBacklog, setShowBacklog] = useState(true);
 
     const futureDueStats = useMemo(() => {
         const today = new Date();
@@ -480,7 +479,7 @@ export default function StatisticsPage() {
             return hasAnchorForNode(node);
         });
 
-        const dayCounts: Record<number, number> = {};
+        const allDayCounts: Record<number, number> = {};
         let totalReviews = 0;
         let totalFutureReviews = 0;
         let backlogCount = 0;
@@ -492,41 +491,44 @@ export default function StatisticsPage() {
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return;
             const dueDate = new Date(dueStr);
+            if (isNaN(dueDate.getTime())) return;
             dueDate.setHours(0, 0, 0, 0);
 
             const diffTime = dueDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (!Number.isFinite(diffDays)) return;
 
             if (diffDays < 0) {
                 backlogCount++;
-                if (showBacklog) {
-                    dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
-                    totalReviews++;
-                }
             } else {
-                dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
-                totalReviews++;
                 totalFutureReviews++;
                 if (diffDays === 1) dueTomorrow++;
             }
+
+            allDayCounts[diffDays] = (allDayCounts[diffDays] || 0) + 1;
         });
 
+        const dayCounts = allDayCounts;
+
+        totalReviews = Object.values(dayCounts).reduce((sum, count) => sum + count, 0);
+
         const rangeDays = timeRange === '1m' ? 31 : timeRange === '3m' ? 90 : timeRange === '1y' ? 365 : 0;
+        const finiteDays = Object.keys(dayCounts).map(Number).filter(Number.isFinite);
 
         // Determine x-axis range
-        let minDay = showBacklog ? Math.min(...Object.keys(dayCounts).map(Number), -15) : 0;
-        let maxDay = rangeDays || Math.max(...Object.keys(dayCounts).map(Number), 30);
+        let minDay = Math.min(...finiteDays, -15);
+        let maxDay = rangeDays || Math.max(...finiteDays, 30);
 
         // If 'all', we might want to cap it or just show everything
         if (timeRange === 'all') {
-            maxDay = Math.max(...Object.keys(dayCounts).map(Number), 30);
+            maxDay = Math.max(...finiteDays, 30);
         }
 
         const data: { day: number; count: number; cumulative: number }[] = [];
         let cumulative = 0;
 
         // Calculate cumulative starting from the earliest day in dayCounts if backlog is shown
-        const sortedDays = Object.keys(dayCounts).map(Number).sort((a, b) => a - b);
+        const sortedDays = finiteDays.sort((a, b) => a - b);
         const earliestDay = sortedDays[0] || 0;
 
         for (let d = earliestDay; d <= maxDay; d++) {
@@ -609,7 +611,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, showBacklog, skippedSurahs, timeRange]);
+    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, skippedSurahs, timeRange]);
 
     const surahRiskStats = useMemo(() => {
         const nowMs = Date.now();
@@ -973,8 +975,6 @@ export default function StatisticsPage() {
                     <div className="stats-masonry-item">
                         <FutureDueSection
                             stats={futureDueStats}
-                            showBacklog={showBacklog}
-                            setShowBacklog={setShowBacklog}
                             timeRange={timeRange}
                             setTimeRange={setTimeRange}
                         />
@@ -1176,6 +1176,23 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                         const yLegendStep = Math.max(1, Math.ceil((allTicks.length - 1) / Math.max(1, MAX_Y_AXIS_LEGENDS - 1)));
                         const ticks = allTicks.filter((_, i) => i % yLegendStep === 0 || i === allTicks.length - 1);
                         const getYBars = (value: number) => chartHeight - padding.bottom - (value / maxNice) * plotHeight;
+                        const roundedPath = (x: number, y: number, w: number, h: number, rt: number, rb: number) => {
+                            const right = x + w;
+                            const bottom = y + h;
+                            const rTop = Math.min(rt, w / 2, h / 2);
+                            const rBottom = Math.min(rb, w / 2, h / 2);
+                            return [
+                                `M ${x} ${y + rTop}`,
+                                `Q ${x} ${y} ${x + rTop} ${y}`,
+                                `L ${right - rTop} ${y}`,
+                                `Q ${right} ${y} ${right} ${y + rTop}`,
+                                `L ${right} ${bottom - rBottom}`,
+                                `Q ${right} ${bottom} ${right - rBottom} ${bottom}`,
+                                `L ${x + rBottom} ${bottom}`,
+                                `Q ${x} ${bottom} ${x} ${bottom - rBottom}`,
+                                'Z'
+                            ].join(' ');
+                        };
                         return (
                             <>
                                 <rect x={padding.left} y={padding.top} width={plotWidth} height={plotHeight} rx={16} ry={16} fill="var(--reviews-chart-panel)" stroke="none" />
@@ -1189,13 +1206,13 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                         const tooltip = `${row.mistakes} mistakes`;
                                         return (
                                             <g key={row.surahId}>
-                                                <rect x={x} y={padding.top + 6} width={barWidth} height={plotHeight - 6} rx={8} fill="var(--border)" opacity="0.2" />
-                                                <rect
-                                                    x={x}
-                                                    y={y}
-                                                    width={barWidth}
-                                                    height={h}
-                                                    rx={8}
+                                                <path
+                                                    d={roundedPath(x, padding.top + 6, barWidth, plotHeight - 6, 14, 10)}
+                                                    fill="var(--border)"
+                                                    opacity="0.2"
+                                                />
+                                                <path
+                                                    d={roundedPath(x, y, barWidth, h, 14, 6)}
                                                     fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
                                                     opacity={i === 0 ? 0.95 : 0.7}
                                                     data-tooltip={tooltip}
@@ -1266,15 +1283,11 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
     );
 }
 
-function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTimeRange }: {
+function FutureDueSection({ stats, timeRange, setTimeRange }: {
     stats: any;
-    showBacklog: boolean;
-    setShowBacklog: (v: boolean) => void;
     timeRange: '1m' | '3m' | '1y' | 'all';
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
-    const hasOverdueReviews = (stats?.overdueCount || 0) > 0;
-
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1285,35 +1298,12 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Review Plan</h2>
                 </div>
                 <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button
-                        type="button"
-                        className="future-due-toggle std-normal-btn"
-                        onClick={() => setShowBacklog(!showBacklog)}
-                        disabled={!hasOverdueReviews}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            cursor: hasOverdueReviews ? 'pointer' : 'not-allowed',
-                            fontSize: '0.75rem',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            opacity: hasOverdueReviews ? 1 : 0.45,
-                        }}
-                    >
-                        {showBacklog ? 'Exclude Overdue' : 'Include Overdue'}
-                    </button>
-                    <select
-                        className="future-due-range"
-                        value={timeRange}
-                        onChange={(e) => setTimeRange(e.target.value as any)}
-                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.75rem', background: 'var(--background)', outline: 'none', color: 'var(--foreground)' }}
-                    >
-                        <option value="1m">1 Month</option>
-                        <option value="3m">3 Months</option>
-                        <option value="1y">1 Year</option>
-                        <option value="all">All Time</option>
-                    </select>
+                    <div className="segmented-compact">
+                        <button type="button" onClick={() => setTimeRange('1m')} className={`adv-seg-btn ${timeRange === '1m' ? 'adv-seg-active' : ''}`}>1m</button>
+                        <button type="button" onClick={() => setTimeRange('3m')} className={`adv-seg-btn ${timeRange === '3m' ? 'adv-seg-active' : ''}`}>3m</button>
+                        <button type="button" onClick={() => setTimeRange('1y')} className={`adv-seg-btn ${timeRange === '1y' ? 'adv-seg-active' : ''}`}>1y</button>
+                        <button type="button" onClick={() => setTimeRange('all')} className={`adv-seg-btn ${timeRange === 'all' ? 'adv-seg-active' : ''}`}>all</button>
+                    </div>
                 </div>
             </div>
 
@@ -1397,8 +1387,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const formatDayLabel = (day: number) => {
                             if (day === 0) return 'Today';
                             if (day === 1) return '1d';
-                            if (day === -1) return isTablet || isSmallScreen ? '1d' : '1d ago';
-                            if (day < 0) return isTablet || isSmallScreen ? `${Math.abs(day)}d` : `${Math.abs(day)}d ago`;
+                            if (day < 0) return `-${Math.abs(day)}d`;
                             return `${day}d`;
                         };
                         const baseLabelStep = Math.max(1, Math.ceil(nonZeroData.length / maxXAxisLegends));
@@ -1406,6 +1395,56 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
                         const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
                         const labelStep = Math.max(baseLabelStep, minStepForWidth);
+                        const minLabelGapPx = rotateLabels ? estimatedLabelWidth * 0.62 : estimatedLabelWidth;
+
+                        const candidateLabelIndices = nonZeroData
+                            .map((d, i) => {
+                                const shouldShow = i === 0 || i === nonZeroData.length - 1 || d.day === 0 || i % labelStep === 0;
+                                return shouldShow ? i : -1;
+                            })
+                            .filter((i): i is number => i >= 0);
+
+                        const todayIndex = nonZeroData.findIndex(d => d.day === 0);
+                        const visibleLabelIndices = new Set<number>();
+                        const canPlaceLabel = (index: number) => {
+                            const x = getX(index);
+                            for (const existingIndex of visibleLabelIndices) {
+                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        };
+
+                        const forcePlaceLabel = (index: number) => {
+                            const x = getX(index);
+                            Array.from(visibleLabelIndices).forEach(existingIndex => {
+                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) {
+                                    visibleLabelIndices.delete(existingIndex);
+                                }
+                            });
+                            visibleLabelIndices.add(index);
+                        };
+
+                        const priorityIndices = [todayIndex, 0, nonZeroData.length - 1].filter(
+                            (idx, pos, arr): idx is number => idx >= 0 && arr.indexOf(idx) === pos
+                        );
+
+                        priorityIndices.forEach(index => {
+                            if (index === todayIndex) {
+                                forcePlaceLabel(index);
+                                return;
+                            }
+                            if (canPlaceLabel(index)) {
+                                visibleLabelIndices.add(index);
+                            }
+                        });
+
+                        candidateLabelIndices.forEach(index => {
+                            if (!visibleLabelIndices.has(index) && canPlaceLabel(index)) {
+                                visibleLabelIndices.add(index);
+                            }
+                        });
 
                         const roundedPath = (x: number, y: number, w: number, h: number, rt: number, rb: number) => {
                             const right = x + w;
@@ -1496,8 +1535,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
 
                                 {/* X-axis labels */}
                                 {nonZeroData.map((d, i) => {
-                                    const shouldShow = i === 0 || i === nonZeroData.length - 1 || d.day === 0 || i % labelStep === 0;
-                                    if (!shouldShow) return null;
+                                    if (!visibleLabelIndices.has(i)) return null;
                                     const x = getX(i);
                                     const y = chartHeight - padding.bottom + 18;
                                     return (

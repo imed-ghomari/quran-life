@@ -72,6 +72,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         if (typeof window === 'undefined' || !hydrated) return;
         const root = window.document.documentElement;
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const subscribeToSystemTheme = (handler: (event: MediaQueryListEvent) => void) => {
+            if (mq.addEventListener) {
+                mq.addEventListener('change', handler);
+                return () => mq.removeEventListener('change', handler);
+            }
+
+            mq.addListener(handler);
+            return () => mq.removeListener(handler);
+        };
 
         if (!isPostAuthRoute) {
             const applyPublicTheme = () => {
@@ -82,8 +91,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             root.setAttribute('data-accent-theme', 'default');
             localStorage.setItem(PUBLIC_THEME_KEY, theme);
             if (theme === 'system') {
-                mq.addEventListener('change', applyPublicTheme);
-                return () => mq.removeEventListener('change', applyPublicTheme);
+                return subscribeToSystemTheme(applyPublicTheme);
             }
             return;
         }
@@ -98,8 +106,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const handleChange = () => {
             if (theme === 'system') applyTheme();
         };
-        mq.addEventListener('change', handleChange);
-        return () => mq.removeEventListener('change', handleChange);
+        return subscribeToSystemTheme(handleChange);
     }, [theme, hydrated, isPostAuthRoute]);
 
     useEffect(() => {
