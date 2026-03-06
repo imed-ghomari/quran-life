@@ -1167,7 +1167,6 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                         const groupStart = padding.left + (plotWidth - groupWidth) / 2;
                         const step = groupWidth / span;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
-                        const rotateLabels = step < 95;
                         const labelMaxChars = step < 70 ? 5 : step < 90 ? 7 : 10;
                         const tickCount = maxMistakes <= 8 ? Math.max(2, maxMistakes) : 4;
                         const tickStep = maxMistakes <= 8 ? 1 : Math.max(2, Math.ceil(maxMistakes / tickCount / 2) * 2);
@@ -1238,25 +1237,6 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                     const y = chartHeight - padding.bottom + 18;
                                     const label = shortSurahLabel(row.surahName, labelMaxChars);
                                     const isTruncated = label !== row.surahName;
-                                    if (rotateLabels) {
-                                        return (
-                                            <text
-                                                key={`x-${row.surahId}`}
-                                                x={x}
-                                                y={y}
-                                                textAnchor="end"
-                                                fontSize="9"
-                                                fill="var(--foreground-secondary)"
-                                                transform={`rotate(-24 ${x} ${y})`}
-                                                data-tooltip={isTruncated ? row.surahName : undefined}
-                                                data-tooltip-trigger={isTruncated ? 'tap' : undefined}
-                                                style={isTruncated ? { cursor: 'help' } : undefined}
-                                            >
-                                                {isTruncated ? <title>{row.surahName}</title> : null}
-                                                {label}
-                                            </text>
-                                        );
-                                    }
                                     return (
                                         <text
                                             key={`x-${row.surahId}`}
@@ -1395,7 +1375,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
                         const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
                         const labelStep = Math.max(baseLabelStep, minStepForWidth);
-                        const minLabelGapPx = rotateLabels ? estimatedLabelWidth * 0.62 : estimatedLabelWidth;
+                        const minLabelGapPx = estimatedLabelWidth;
 
                         const candidateLabelIndices = nonZeroData
                             .map((d, i) => {
@@ -1543,10 +1523,9 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                             key={`label-${i}`}
                                             x={x}
                                             y={y}
-                                            textAnchor={rotateLabels ? 'end' : 'middle'}
+                                            textAnchor="middle"
                                             fontSize={xAxisFontSize}
                                             fill="var(--foreground-secondary)"
-                                            transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
                                         >
                                             {formatDayLabel(d.day)}
                                         </text>

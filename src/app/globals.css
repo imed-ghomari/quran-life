@@ -1907,6 +1907,64 @@ h3 {
   color: color-mix(in srgb, var(--accent-hover) 72%, var(--accent) 28%);
 }
 
+/* Todo Kanban visuals are intentionally scoped to todo classes,
+   so landing/roadmap CSS changes cannot alter app-kanban appearance. */
+.todo-page .todo-kanban-column {
+  border: 1px solid var(--border);
+  background-color: var(--background-secondary);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.todo-page .todo-kanban-column-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-page .todo-kanban-column-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.todo-page .todo-kanban-card {
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 5%, transparent);
+  padding: 1rem;
+  transition: box-shadow 0.2s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 170px;
+}
+
+.todo-page .todo-kanban-card:hover {
+  transform: none;
+}
+
+.todo-page .todo-kanban-card[data-dragging='true'] {
+  transition: none;
+}
+
+.todo-kanban-load-more-sentinel {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 1px;
+}
+
+@media (max-width: 768px) {
+  .todo-page .kanban-column--mobile-flat {
+    border: none;
+    box-shadow: none;
+  }
+
+  .todo-kanban-load-more-sentinel {
+    width: 12px;
+    height: 100%;
+    flex: 0 0 12px;
+  }
+}
+
 @media (max-width: 767px) {
   .section-title {
     font-size: 0.9rem;

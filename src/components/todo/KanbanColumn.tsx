@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import KanbanCard from './KanbanCard';
 import { KanbanItem } from './types';
@@ -39,6 +39,11 @@ const getColumnIcon = (columnId: string) => {
     }
 };
 
+const MOBILE_INITIAL_CARD_COUNT = 12;
+const MOBILE_CARD_CHUNK_SIZE = 8;
+const DESKTOP_INITIAL_CARD_COUNT = 28;
+const DESKTOP_CARD_CHUNK_SIZE = 16;
+
 const KanbanColumn = ({
     id,
     title,
@@ -65,11 +70,56 @@ const KanbanColumn = ({
         () => (hasActiveVisibilityFilter ? items.filter(isItemVisible) : items),
         [hasActiveVisibilityFilter, isItemVisible, items]
     );
+    const initialCardCount = isMobile ? MOBILE_INITIAL_CARD_COUNT : DESKTOP_INITIAL_CARD_COUNT;
+    const cardChunkSize = isMobile ? MOBILE_CARD_CHUNK_SIZE : DESKTOP_CARD_CHUNK_SIZE;
+    const [renderedCount, setRenderedCount] = useState(() =>
+        Math.min(initialCardCount, visibleItems.length)
+    );
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        setRenderedCount(Math.min(initialCardCount, visibleItems.length));
+    }, [initialCardCount, visibleItems.length, id]);
+
+    const renderedItems = useMemo(
+        () => visibleItems.slice(0, renderedCount),
+        [visibleItems, renderedCount]
+    );
+    const hasMoreCards = renderedCount < visibleItems.length;
+
+    useEffect(() => {
+        if (!hasMoreCards) return;
+        if (typeof IntersectionObserver === 'undefined') {
+            setRenderedCount(visibleItems.length);
+            return;
+        }
+
+        const root = scrollContainerRef.current;
+        const sentinel = loadMoreRef.current;
+        if (!root || !sentinel) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const isVisible = entries.some((entry) => entry.isIntersecting);
+                if (!isVisible) return;
+                setRenderedCount((current) => Math.min(current + cardChunkSize, visibleItems.length));
+            },
+            {
+                root,
+                rootMargin: isMobile ? '120px' : '220px 0px',
+                threshold: 0.01
+            }
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [cardChunkSize, hasMoreCards, isMobile, visibleItems.length]);
 
     return (
         <div 
             className={`
-                kanban-column roadmap-column flex flex-col !rounded-[14px] ${
+                kanban-column todo-kanban-column flex flex-col !rounded-[14px] ${
                     id === 'backlog' || id === 'in-progress' || id === 'complete'
                         ? 'kanban-column--mobile-flat'
                         : ''
@@ -84,7 +134,7 @@ const KanbanColumn = ({
             {/* Header Area */}
             <div 
                 className={`
-                    column-header !mb-3 !pb-2 
+                    todo-kanban-column-header !mb-3 !pb-2 
                     ${isMobile ? 'sticky top-0 z-10 bg-[var(--background-secondary)] !-mt-3 !pt-3 !-mx-3 !px-3 border-b border-[var(--border)]' : ''}
                 `}
                 style={isMobile ? {
@@ -111,16 +161,19 @@ const KanbanColumn = ({
                 {(provided) => (
                     <div
                         {...provided.droppableProps}
-                        ref={provided.innerRef}
+                        ref={(node) => {
+                            provided.innerRef(node);
+                            scrollContainerRef.current = node;
+                        }}
                         className={`
-                            column-content min-h-[100px] relative
+                            todo-kanban-column-content min-h-[100px] relative
                             ${isMobile 
                                 ? '!flex !flex-row gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x snap-mandatory overscroll-x-contain !overflow-y-hidden' 
                                 : 'flex-1 overflow-y-auto custom-scrollbar pr-1 pb-24'
                             }
                         `}
                     >
-                        {visibleItems.map((item, index) => (
+                        {renderedItems.map((item, index) => (
                             <KanbanCard
                                 key={item.id}
                                 item={item}
@@ -141,6 +194,7 @@ const KanbanColumn = ({
                             />
                         ))}
                         {provided.placeholder}
+                        {hasMoreCards ? <div ref={loadMoreRef} className="todo-kanban-load-more-sentinel" aria-hidden="true" /> : null}
                     </div>
                 )}
             </Droppable>
