@@ -269,8 +269,12 @@ export default function TodoPage() {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');
             setSystemIsDark(mq.matches);
             const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
-            mq.addEventListener('change', handler);
-            return () => mq.removeEventListener('change', handler);
+            if (mq.addEventListener) {
+                mq.addEventListener('change', handler);
+                return () => mq.removeEventListener('change', handler);
+            }
+            mq.addListener(handler);
+            return () => mq.removeListener(handler);
         }
     }, []);
     const isDark = theme === 'system' ? systemIsDark : theme === 'dark';

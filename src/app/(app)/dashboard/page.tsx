@@ -649,8 +649,12 @@ export default function TodayPage() {
                 const mq = window.matchMedia('(prefers-color-scheme: dark)');
                 setIsDark(mq.matches);
                 const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-                mq.addEventListener('change', handler);
-                return () => mq.removeEventListener('change', handler);
+                if (mq.addEventListener) {
+                    mq.addEventListener('change', handler);
+                    return () => mq.removeEventListener('change', handler);
+                }
+                mq.addListener(handler);
+                return () => mq.removeListener(handler);
             }
         }
     }, [theme]);

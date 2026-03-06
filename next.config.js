@@ -30,6 +30,53 @@ const tldrawAliases = Object.fromEntries(
     TL_DRAW_PACKAGES.map((packageName) => [packageName, resolvePackageRoot(packageName)])
 );
 
+const CONTENT_DIR = path.join(process.cwd(), 'content');
+
+const collectMdxFiles = (dirPath, rootDir = dirPath, files = []) => {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+            collectMdxFiles(fullPath, rootDir, files);
+            continue;
+        }
+        if (!entry.isFile() || !entry.name.endsWith('.mdx')) continue;
+        files.push(path.relative(rootDir, fullPath));
+    }
+    return files;
+};
+
+const getDocsPrecacheEntries = (revision) => {
+    const routes = new Set(['/docs']);
+    if (!fs.existsSync(CONTENT_DIR)) {
+        return Array.from(routes).map((url) => ({ url, revision }));
+    }
+
+    const mdxFiles = collectMdxFiles(CONTENT_DIR);
+    for (const file of mdxFiles) {
+        const normalized = file.split(path.sep).join('/');
+        if (normalized === 'index.mdx') {
+            routes.add('/docs');
+            continue;
+        }
+
+        let slug = normalized.replace(/\.mdx$/, '');
+        if (slug.endsWith('/index')) {
+            slug = slug.slice(0, -'/index'.length);
+        }
+        if (!slug) {
+            routes.add('/docs');
+            continue;
+        }
+
+        routes.add(`/docs/${slug}`);
+    }
+
+    return Array.from(routes)
+        .sort()
+        .map((url) => ({ url, revision }));
+};
+
 const PWA_CACHE_VERSION = (
     process.env.VERCEL_GIT_COMMIT_SHA
     || process.env.VERCEL_DEPLOYMENT_ID
@@ -68,7 +115,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
             { url: '/todo', revision: PWA_CACHE_VERSION },
             { url: '/statistics', revision: PWA_CACHE_VERSION },
             { url: '/settings', revision: PWA_CACHE_VERSION },
-            { url: '/docs', revision: PWA_CACHE_VERSION },
+            ...getDocsPrecacheEntries(PWA_CACHE_VERSION),
             { url: '/offline-app', revision: PWA_CACHE_VERSION },
             { url: '/qpc-hafs-word-by-word.json', revision: PWA_CACHE_VERSION },
             { url: '/search-index.json', revision: PWA_CACHE_VERSION },
