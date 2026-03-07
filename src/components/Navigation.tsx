@@ -24,7 +24,18 @@ const getLocalDayKey = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
-function NavigationContent() {
+const routeMatchesNavItem = (pathname: string | null, href: string) => {
+    if (!pathname) return false;
+    if (href === '/docs') return pathname.startsWith('/docs');
+    return pathname === href;
+};
+
+type NavigationContentProps = {
+    pendingHref: string | null;
+    onNavigateStart: (href: string) => void;
+};
+
+function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
     const { settings } = useInstantSettings();
@@ -152,12 +163,14 @@ function NavigationContent() {
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
         { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },
     ];
+    const effectivePathname = pendingHref ?? pathname;
 
     return (
         <nav className="bottom-nav">
             {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || (item.href === '/docs' && pathname?.startsWith('/docs'));
+                const isActive = routeMatchesNavItem(effectivePathname, item.href);
+                const isCurrentPath = routeMatchesNavItem(pathname, item.href);
                 
                 return (
                     <Link
@@ -176,9 +189,9 @@ function NavigationContent() {
                                 return;
                             }
                             event.preventDefault();
-                            if (!isActive) {
-                                router.push(item.href);
-                            }
+                            if (isCurrentPath) return;
+                            onNavigateStart(item.href);
+                            router.push(item.href);
                         }}
                     >
                         <div className="nav-icon">
@@ -200,7 +213,12 @@ function NavigationContent() {
     );
 }
 
-export default function Navigation() {
+type NavigationProps = {
+    pendingHref: string | null;
+    onNavigateStart: (href: string) => void;
+};
+
+export default function Navigation({ pendingHref, onNavigateStart }: NavigationProps) {
     const pathname = usePathname();
     const isAuthOrHome = pathname === '/'
         || pathname === '/auth'
@@ -210,5 +228,5 @@ export default function Navigation() {
 
     if (isAuthOrHome) return null;
 
-    return <NavigationContent />;
+    return <NavigationContent pendingHref={pendingHref} onNavigateStart={onNavigateStart} />;
 }

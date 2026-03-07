@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { id } from '@instantdb/react';
 import Image from 'next/image';
-import Spinner from '@/components/ui/Spinner';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
@@ -1900,7 +1900,7 @@ export default function TodayPage() {
     const dailyReadingStyle = settings?.dailyReadingStyle ?? 'line_by_line';
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
 
-    if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
+    if (!isLoaded) return <FullScreenLoader text="Loading today..." />;
 
     return (
         <div className="content-wrapper tab-content">
