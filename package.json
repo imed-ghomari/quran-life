@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node scripts/generate-search-index.js && next dev --webpack",
     "build": "node scripts/generate-search-index.js && next build --webpack",
+    "docs:sync:legend": "node scripts/generate-mindmap-legend.js",
     "start": "next start",
     "lint": "next lint",
     "e2e:auth:url": "node scripts/e2e-auth-url.js",
