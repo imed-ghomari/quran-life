@@ -1676,6 +1676,7 @@ h3 {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  padding-top: 1rem;
 }
 
 .review-mindmap-content {
@@ -4274,6 +4275,13 @@ input:focus {
 /* Align kanban title icons with text */
 .kanban-title-icon {
   transform: translateY(5px);
+}
+
+/* On desktop todo cards, keep status icons tighter to the title baseline. */
+@media (min-width: 768px) {
+  .todo-page .todo-kanban-card .kanban-title-icon {
+    transform: translateY(1px);
+  }
 }
 
 /* Stronger hover/press highlight for Kanban card action menu rows */
