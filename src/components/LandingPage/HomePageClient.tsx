@@ -1,13 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
-
-const LandingPage = dynamic(() => import('./LandingPage'), {
-  ssr: false,
-});
+import LandingPage from './LandingPage';
 
 export default function HomePageClient() {
   const { user, isLoading: isAuthLoading } = db.useAuth();
@@ -42,7 +38,7 @@ export default function HomePageClient() {
     window.location.href = `/auth?plan=${cycle}`;
   };
 
-  if (isAuthLoading || user) {
+  if (user) {
     return null;
   }
 

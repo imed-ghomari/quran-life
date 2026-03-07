@@ -119,30 +119,40 @@ function readAccessStateCache(): AccessStateCache | null {
   return null;
 }
 
-function OnboardingWrapper() {
-  const pathname = usePathname();
-  const isAuthOrHome = pathname === '/' || pathname === '/auth';
-  const isDocs = pathname?.startsWith('/docs');
+function OnboardingSettingsGate() {
   const { settings, isLoading, user } = useInstantSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (isAuthOrHome || isDocs) {
-      if (showOnboarding) setShowOnboarding(false);
-      return;
-    }
-    
     if (user && !isLoading && settings && !settings.isOnboardingComplete) {
       setShowOnboarding(true);
+      return;
     }
-  }, [settings, isLoading, user, isAuthOrHome, isDocs, showOnboarding]);
+    if (showOnboarding) setShowOnboarding(false);
+  }, [settings, isLoading, user, showOnboarding]);
 
   if (!showOnboarding) return null;
 
   return <OnboardingModal onComplete={() => setShowOnboarding(false)} />;
 }
 
+function OnboardingWrapper() {
+  const pathname = usePathname();
+  const shouldCheckOnboarding =
+    pathname !== '/'
+    && pathname !== '/auth'
+    && pathname !== '/checkout'
+    && !pathname?.startsWith('/docs')
+    && !pathname?.startsWith('/privacy')
+    && !pathname?.startsWith('/terms')
+    && !pathname?.startsWith('/offline');
+
+  if (!shouldCheckOnboarding) return null;
+  return <OnboardingSettingsGate />;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine
   );
@@ -187,6 +197,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return `${authIdentity.id}:${authIdentity.type ?? "user"}:${authIdentity.isGuest ? "guest" : "member"}`;
   }, [authIdentity?.id, authIdentity?.type, authIdentity?.isGuest]);
   const lastResolvedIdentityRef = useRef<string>("boot");
+  const shouldResolveAccessState = useMemo(() => {
+    if (!pathname) return true;
+    if (pathname === '/') return false;
+    if (pathname.startsWith('/privacy') || pathname.startsWith('/terms')) return false;
+    return true;
+  }, [pathname]);
 
   useEffect(() => {
     if (!cachedAccessState) return;
@@ -220,6 +236,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!shouldResolveAccessState) {
+      setHasLoadedAccessState(true);
+      setIsAccessLoading(false);
+      return;
+    }
     if (isAuthLoading) return;
     const lastRefresh = lastAccessRefreshRef.current;
     const recentlyRefreshedSameIdentity = Boolean(
@@ -306,7 +327,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
 
     void syncAndRefreshAccessState();
-  }, [authIdentity, authIdentityKey, hasLoadedAccessState, isAuthLoading, isOnline]);
+  }, [authIdentity, authIdentityKey, hasLoadedAccessState, isAuthLoading, isOnline, shouldResolveAccessState]);
 
   useEffect(() => {
     if (!isAuthLoading) {

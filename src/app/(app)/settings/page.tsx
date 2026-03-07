@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useContext, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, startTransition } from 'react';
 import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
@@ -44,19 +45,21 @@ import {
     Sliders
 } from 'lucide-react';
 import { AccentTheme, Theme, useTheme } from '@/components/ThemeProvider';
-import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
-import MutashabihNoteModal from '@/components/MutashabihNoteModal';
-import DailyCompletionSlider from '@/components/DailyCompletionSlider';
-import MindmapEditor from '@/components/MindmapEditor';
-import SplitsModal from '@/components/todo/SplitsModal';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
+
+const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
+const MutashabihNoteModal = dynamic(() => import('@/components/MutashabihNoteModal'), { ssr: false });
+const DailyCompletionSlider = dynamic(() => import('@/components/DailyCompletionSlider'), { ssr: false });
+const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+const SplitsModal = dynamic(() => import('@/components/todo/SplitsModal'), { ssr: false });
+const GoogleOAuthProvider = dynamic(() => import('@react-oauth/google').then((mod) => mod.GoogleOAuthProvider), { ssr: false });
+const GoogleLogin = dynamic(() => import('@react-oauth/google').then((mod) => mod.GoogleLogin), { ssr: false });
 
 interface MutashabihatDecision {
     id: string; // absoluteAyah or absoluteAyah-phraseId
@@ -535,12 +538,23 @@ export default function SettingsPage() {
     const [settingsMindmapEditor, setSettingsMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [settingsSplitsSurahId, setSettingsSplitsSurahId] = useState<number | null>(null);
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
+    const hasLoadedVersesRef = useRef(false);
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
     const [billingSummary, setBillingSummary] = useState<BillingSummaryState>({
         nextRenewalAt: null,
         canManageSubscription: false,
     });
+    const verseByRefKey = useMemo(() => {
+        const map = new Map<string, { surahId: number; ayahId: number; text: string }>();
+        for (const verse of verses) {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        }
+        return map;
+    }, [verses]);
+    const getVerseByRef = useCallback((surahId: number, ayahId: number) => {
+        return verseByRefKey.get(`${surahId}:${ayahId}`);
+    }, [verseByRefKey]);
     const [accountDeletionStatus, setAccountDeletionStatus] = useState<AccountDeletionStatusState>(DEFAULT_ACCOUNT_DELETION_STATUS);
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -2263,8 +2277,30 @@ export default function SettingsPage() {
 
 
 
+    const ensureVersesLoaded = useCallback(async () => {
+        if (hasLoadedVersesRef.current) return;
+        hasLoadedVersesRef.current = true;
+        try {
+            const loadedVerses = await getQuranVerses();
+            startTransition(() => {
+                setVerses(loadedVerses);
+            });
+        } catch {
+            hasLoadedVersesRef.current = false;
+            startTransition(() => {
+                setVerses([]);
+            });
+        }
+    }, []);
+
     const toggleGroup = (groupId: string) => {
-        setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+        setExpandedGroups(prev => {
+            const nextValue = !prev[groupId];
+            if (groupId === 'verses' && nextValue) {
+                void ensureVersesLoaded();
+            }
+            return { ...prev, [groupId]: nextValue };
+        });
     };
 
     const getMaturityState = (level: 'reset' | 'medium' | 'strong' | 'mastered') => {
@@ -2387,8 +2423,9 @@ export default function SettingsPage() {
     };
 
     useEffect(() => {
-        getQuranVerses().then(setVerses).catch(() => setVerses([]));
-    }, []);
+        if (!Object.values(expandedSurahs).some(Boolean) && !expandedGroups['verses']) return;
+        void ensureVersesLoaded();
+    }, [expandedSurahs, expandedGroups, ensureVersesLoaded]);
 
     const handleCompletionDays = (days: number) => {
         const clamped = Math.max(7, Math.min(120, days));
@@ -4475,7 +4512,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                             {group.absRefs.map(absRef => {
                                                                                                                 const displayedAbs = settingsContextVerseCursor[absRef] ?? absRef;
                                                                                                                 const ref = absoluteToSurahAyah(displayedAbs);
-                                                                                                                const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                                                                                                const baseVerse = getVerseByRef(ref.surahId, ref.ayahId);
                                                                                                                 const mutEntry = group.entries.find(m => (m?.meta?.sourceAbs === absRef) || (m?.matches || []).includes(absRef));
                                                                                                                 if (!mutEntry || !baseVerse) return null;
 
@@ -4568,7 +4605,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                                         const displayedMatchAbs = settingsContextVerseCursor[matchAbs] ?? matchAbs;
                                                                                                                         const mref = absoluteToSurahAyah(displayedMatchAbs);
                                                                                                                         const msurah = getSurah(mref.surahId);
-                                                                                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                                                                                        const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                                                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
                                                                                                                         return (
@@ -5005,10 +5042,10 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             const sourceEntries = sortedAbsRefs.map(absRef => ({
                                                 absRef,
                                                 ref: absoluteToSurahAyah(absRef),
-                                                baseVerse: verses.find(v => {
+                                                baseVerse: (() => {
                                                     const r = absoluteToSurahAyah(absRef);
-                                                    return v.surahId === r.surahId && v.ayahId === r.ayahId;
-                                                }),
+                                                    return getVerseByRef(r.surahId, r.ayahId);
+                                                })(),
                                                 mutEntry: group.entries.find((entry: any) => entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)),
                                             })).filter(item => !!item.baseVerse && !!item.mutEntry) as Array<{
                                                 absRef: number;
@@ -5048,7 +5085,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
                                                             const displayedAbs = settingsContextVerseCursor[absRef] ?? absRef;
                                                             const displayedRef = absoluteToSurahAyah(displayedAbs);
-                                                            const displayedVerse = verses.find(v => v.surahId === displayedRef.surahId && v.ayahId === displayedRef.ayahId);
+                                                            const displayedVerse = getVerseByRef(displayedRef.surahId, displayedRef.ayahId);
                                                             const displayedRange = (mutEntry.meta as any).sourceAbs === displayedAbs
                                                                 ? (mutEntry.meta as any).sourceRange
                                                                 : matchRangeByAbs.get(displayedAbs);
@@ -5118,7 +5155,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                             const displayedMatchAbs = settingsContextVerseCursor[matchAbs] ?? matchAbs;
                                                             const mref = absoluteToSurahAyah(displayedMatchAbs);
                                                             const msurah = getSurah(mref.surahId);
-                                                            const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                            const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                             const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
                                                             return (

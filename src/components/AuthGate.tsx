@@ -3,7 +3,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
-import Spinner from '@/components/ui/Spinner';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
@@ -214,17 +214,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   ]);
 
   if (!isHydrated) {
-    return (
-      <div suppressHydrationWarning={true} style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--background)',
-      }}>
-        <Spinner text="Verifying access..." />
-      </div>
-    );
+    return <FullScreenLoader text="Verifying access..." />;
   }
 
   if (isPublic) {
@@ -242,48 +232,18 @@ export default function AuthGate({ children }: AuthGateProps) {
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
 
   if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
-    return (
-      <div suppressHydrationWarning={true} style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--background)',
-      }}>
-        <Spinner text="Verifying access..." />
-      </div>
-    );
+    return <FullScreenLoader text="Verifying access..." />;
   }
 
   if (shouldTreatAsOffline) {
     if (!user && !hasOfflineAccess) {
-      return (
-        <div suppressHydrationWarning={true} style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--background)',
-        }}>
-          <Spinner text="Offline access unavailable. Connect once to sign in." />
-        </div>
-      );
+      return <FullScreenLoader text="Offline access unavailable. Connect once to sign in." />;
     }
     return <>{children}</>;
   }
 
   if (!user) {
-    return (
-      <div suppressHydrationWarning={true} style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--background)',
-      }}>
-        <Spinner text="Redirecting to sign in..." />
-      </div>
-    );
+    return <FullScreenLoader text="Redirecting to sign in..." />;
   }
 
   return <>{children}</>;

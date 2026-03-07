@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback, useRef, useContext } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, useContext, startTransition } from 'react';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -25,15 +25,17 @@ import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { X } from 'lucide-react';
-import MindmapEditor from '@/components/MindmapEditor';
-import MindmapViewer from '@/components/MindmapViewer';
-import TodoKanban from '@/components/todo/TodoKanban';
+import dynamic from 'next/dynamic';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 import { AccessStateContext } from '@/components/Providers';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+
+const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const TodoKanban = dynamic(() => import('@/components/todo/TodoKanban'), { ssr: false });
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
@@ -116,10 +118,6 @@ export default function TodoPage() {
     // Raw lists from DB - might contain duplicates due to sync/offline issues
     const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
 
-    // Debug logging for development
-    useEffect(() => {
-        console.log('mindmapsList updated:', mindmapsList);
-    }, [mindmapsList]);
     const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
     const { errors } = useInstantReviewErrors();
 
@@ -284,11 +282,46 @@ export default function TodoPage() {
     const [activePartEditor, setActivePartEditor] = useState<{ partId: PartMindMapId; snapshot?: any } | null>(null);
     const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
 
-    useEffect(() => {
-        getQuranVerses()
-            .then(setVerses)
-            .catch(() => setVerses([]));
+    const hasLoadedVersesRef = useRef(false);
+    const loadVerses = useCallback(async () => {
+        if (hasLoadedVersesRef.current) return;
+        hasLoadedVersesRef.current = true;
+        try {
+            const loadedVerses = await getQuranVerses();
+            startTransition(() => {
+                setVerses(loadedVerses);
+            });
+        } catch {
+            hasLoadedVersesRef.current = false;
+            startTransition(() => {
+                setVerses([]);
+            });
+        }
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const kickOffLoad = () => {
+            if (cancelled) return;
+            void loadVerses();
+        };
+
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            const idleId = window.requestIdleCallback(() => {
+                kickOffLoad();
+            }, { timeout: 1500 });
+            return () => {
+                cancelled = true;
+                window.cancelIdleCallback(idleId);
+            };
+        }
+
+        const timerId = setTimeout(kickOffLoad, 0);
+        return () => {
+            cancelled = true;
+            clearTimeout(timerId);
+        };
+    }, [loadVerses]);
 
     const decisionsMap = useMemo(() => {
         const acc: Record<string, any> = {};
@@ -648,7 +681,6 @@ export default function TodoPage() {
 
     // Marks a Mindmap (Surah level) as complete/incomplete
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
-        console.log('handleMarkComplete called:', { surahId, forceState, currentMindmap });
         // Always prefer the latest persisted mindmap to avoid overwriting fresh splits
         // with stale card payloads during drag/drop completion transitions.
         const persisted = mindmaps[surahId];
@@ -656,7 +688,6 @@ export default function TodoPage() {
         const tldrawSnapshot = existing.tldrawSnapshot || currentMindmap?.tldrawSnapshot;
 
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
-        console.log('isNowComplete:', isNowComplete);
 
         const updated = {
             ...existing,
@@ -670,9 +701,7 @@ export default function TodoPage() {
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
-            console.log('Checking for existing mindmap MemoryNode for surah:', surahId);
             const existingNode = nodes.find(n => n.type === 'mindmap' && getMindmapSurahId(n) === surahId);
-            console.log('Existing node found:', existingNode);
             if (!existingNode) {
                 const newNode: MemoryNode = {
                     id: stableNodeId('memory_node', 'mindmap', surahId),
@@ -682,12 +711,8 @@ export default function TodoPage() {
                     scheduler: createNewFSRSState(),
                     createdAt: new Date().toISOString()
                 };
-                console.log('Creating new MemoryNode:', newNode);
                 await saveNode(newNode);
                 appLogger.addLog(`Created scheduling node for Surah ${surahId} mindmap`, 'info');
-                console.log('MemoryNode created successfully');
-            } else {
-                console.log('MemoryNode already exists, skipping creation');
             }
         } else {
             const behavior = settings.completeExitBehavior ?? 'mindmap_only';

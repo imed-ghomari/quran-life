@@ -4283,7 +4283,6 @@ input:focus {
 
 .card-action-menu-item.is-neutral:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 18%, var(--verse-bg));
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
   color: color-mix(in srgb, var(--accent) 84%, var(--foreground));
 }
 
@@ -4297,7 +4296,6 @@ input:focus {
 
 .card-action-menu-item.is-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 18%, var(--verse-bg));
-  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
   color: color-mix(in srgb, var(--danger) 84%, var(--foreground));
 }
 
