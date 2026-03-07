@@ -1140,6 +1140,26 @@ body {
   overflow-x: hidden;
 }
 
+.page-content-layer {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content-reveal {
+  animation: page-content-fade-in 300ms ease-out both;
+}
+
+@keyframes page-content-fade-in {
+  from {
+    opacity: 0.84;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .page-container.fixed-layout {
   height: 100vh;
   height: 100dvh;
@@ -1149,6 +1169,11 @@ body {
   flex-direction: column;
   padding-bottom: 80px;
   overscroll-behavior: none;
+}
+
+.page-container.fixed-layout .page-content-layer {
+  flex: 1;
+  min-height: 0;
 }
 
 .page-container.fixed-layout .content-wrapper {
@@ -1935,8 +1960,6 @@ h3 {
   box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 5%, transparent);
   padding: 1rem;
   transition: box-shadow 0.2s ease;
-  content-visibility: auto;
-  contain-intrinsic-size: 170px;
 }
 
 .todo-page .todo-kanban-card:hover {

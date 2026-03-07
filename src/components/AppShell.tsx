@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Navigation from './Navigation';
 import { usePathname } from 'next/navigation';
 import GlobalTooltip from './ui/GlobalTooltip';
@@ -13,6 +13,7 @@ interface AppShellProps {
 export default function AppShell({ children }: AppShellProps) {
     const pathname = usePathname();
     const [pendingHref, setPendingHref] = useState<string | null>(null);
+    const [revealTick, setRevealTick] = useState(0);
 
     const isAppRoute =
         pathname === '/dashboard'
@@ -30,6 +31,7 @@ export default function AppShell({ children }: AppShellProps) {
     useEffect(() => {
         if (hasReachedPendingRoute) {
             setPendingHref(null);
+            setRevealTick((prev) => prev + 1);
         }
     }, [hasReachedPendingRoute]);
 
@@ -38,6 +40,10 @@ export default function AppShell({ children }: AppShellProps) {
             setPendingHref(null);
         }
     }, [isAppRoute, pendingHref]);
+
+    const handleNavigateStart = useCallback((href: string) => {
+        setPendingHref(href);
+    }, []);
 
     if (!isAppRoute) {
         return <>{children}</>;
@@ -51,9 +57,18 @@ export default function AppShell({ children }: AppShellProps) {
 
     return (
         <div className="app-shell">
-            <Navigation pendingHref={pendingHref} onNavigateStart={setPendingHref} />
+            <Navigation pendingHref={pendingHref} onNavigateStart={handleNavigateStart} />
             <div className={`page-container ${isFixedLayout ? 'fixed-layout' : ''}`}>
-                {pendingHref ? <FullScreenLoader text="Loading..." /> : children}
+                {pendingHref ? (
+                    <FullScreenLoader text="Loading..." />
+                ) : (
+                    <div
+                        key={`content-${pathname}-${revealTick}`}
+                        className={`page-content-layer ${revealTick > 0 ? 'page-content-reveal' : ''}`}
+                    >
+                        {children}
+                    </div>
+                )}
             </div>
             <GlobalTooltip />
         </div>
