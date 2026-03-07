@@ -138,6 +138,111 @@ export default function StatisticsPage() {
 
     const activePart = settings?.activePart || ALL_QURAN_PART;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
+    const activePartSurahs = useMemo(
+        () => SURAHS.filter((surah) => activePart === ALL_QURAN_PART || surah.part === activePart),
+        [activePart],
+    );
+    const activePartSurahIds = useMemo(
+        () => new Set(activePartSurahs.map((surah) => surah.id)),
+        [activePartSurahs],
+    );
+    const activeUnskippedSurahs = useMemo(
+        () => activePartSurahs.filter((surah) => !skippedSurahs.has(surah.id)),
+        [activePartSurahs, skippedSurahs],
+    );
+
+    const mindmapBySurahId = useMemo(() => {
+        const map = new Map<number, any>();
+        for (const mindmap of mindmaps) {
+            const surahId = Number((mindmap as any)?.surahId);
+            if (!Number.isFinite(surahId) || map.has(surahId)) continue;
+            map.set(surahId, mindmap);
+        }
+        return map;
+    }, [mindmaps]);
+
+    const partMindMapByPartId = useMemo(() => {
+        const map = new Map<number, any>();
+        for (const partMindMap of partMindMaps) {
+            const partId = Number((partMindMap as any)?.partId);
+            if (!Number.isFinite(partId) || map.has(partId)) continue;
+            map.set(partId, partMindMap);
+        }
+        return map;
+    }, [partMindMaps]);
+
+    const nodeById = useMemo(() => new Map(memoryNodes.map((node) => [node.id, node])), [memoryNodes]);
+    const partMindmapNodeByPartId = useMemo(() => {
+        const map = new Map<number, MemoryNode>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'part_mindmap') continue;
+            const partId = resolveNodePartId(node);
+            if (partId === null || map.has(partId)) continue;
+            map.set(partId, node);
+        }
+        return map;
+    }, [memoryNodes]);
+    const mindmapNodeBySurahId = useMemo(() => {
+        const map = new Map<number, MemoryNode>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'mindmap') continue;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId || map.has(surahId)) continue;
+            map.set(surahId, node);
+        }
+        return map;
+    }, [memoryNodes]);
+    const verseSegmentNodesBySurahId = useMemo(() => {
+        const map = new Map<number, MemoryNode[]>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'verse_segment') continue;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) continue;
+            const bucket = map.get(surahId);
+            if (bucket) bucket.push(node);
+            else map.set(surahId, [node]);
+        }
+        return map;
+    }, [memoryNodes]);
+    const verseAndMindmapStabilityBySurahId = useMemo(() => {
+        const map = new Map<number, { totalStability: number; count: number }>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'verse_segment' && node.type !== 'mindmap') continue;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) continue;
+            const current = map.get(surahId) || { totalStability: 0, count: 0 };
+            map.set(surahId, {
+                totalStability: current.totalStability + getNodeStability(node),
+                count: current.count + 1,
+            });
+        }
+        return map;
+    }, [memoryNodes]);
+
+    const mutashabihatDecisionsByAbsolute = useMemo(() => {
+        const map = new Map<number, any[]>();
+        for (const decision of mutashabihatDecisions) {
+            const phraseId = String((decision as any)?.phraseId || '');
+            if (!phraseId) continue;
+            const absToken = phraseId.split('-')[0];
+            const absolute = Number.parseInt(absToken, 10);
+            if (!Number.isFinite(absolute)) continue;
+            const bucket = map.get(absolute);
+            if (bucket) bucket.push(decision);
+            else map.set(absolute, [decision]);
+        }
+        return map;
+    }, [mutashabihatDecisions]);
+
+    const listeningProgressByPartId = useMemo(() => {
+        const map = new Map<number, any>();
+        for (const progress of listeningProgress) {
+            const partId = Number((progress as any)?.partId);
+            if (!Number.isFinite(partId) || map.has(partId)) continue;
+            map.set(partId, progress);
+        }
+        return map;
+    }, [listeningProgress]);
 
     // 1. Part Mindmaps Data (Always Global)
     const partMindmapStats = useMemo(() => {
@@ -149,10 +254,10 @@ export default function StatisticsPage() {
         let learnedMastered = 0;
 
         CORE_QURAN_PARTS.forEach(p => {
-            const pmm = partMindMaps.find(m => Number((m as any).partId) === p);
+            const pmm = partMindMapByPartId.get(p);
             if (pmm) {
                 if (pmm.isComplete) {
-                    const node = memoryNodes.find(n => n.type === 'part_mindmap' && resolveNodePartId(n) === p);
+                    const node = partMindmapNodeByPartId.get(p);
                     const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                     if (maturity === 'mastered') learnedMastered++;
                     else if (maturity === 'strong') learnedStrong++;
@@ -177,12 +282,10 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [partMindMaps, memoryNodes]);
+    }, [partMindMapByPartId, partMindmapNodeByPartId]);
 
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
-        const targetSurahs = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart);
-        const learnedVerses = settings?.learnedVerses || {};
         let skipped = 0;
         let notCreated = 0;
         let notLearned = 0;
@@ -191,15 +294,14 @@ export default function StatisticsPage() {
         let learnedStrong = 0;
         let learnedMastered = 0;
 
-        targetSurahs.forEach(s => {
-            const isLearned = learnedVerses[s.id.toString()];
+        activePartSurahs.forEach(s => {
             if (skippedSurahs.has(s.id)) {
                 skipped++;
             } else {
-                const mm = mindmaps.find(m => Number((m as any).surahId) === s.id);
+                const mm = mindmapBySurahId.get(s.id);
                 if (mm) {
                     if (mm.isComplete) {
-                        const node = memoryNodes.find(n => n.type === 'mindmap' && resolveNodeSurahId(n) === s.id);
+                        const node = mindmapNodeBySurahId.get(s.id);
                         const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                         if (maturity === 'mastered') learnedMastered++;
                         else if (maturity === 'strong') learnedStrong++;
@@ -217,7 +319,7 @@ export default function StatisticsPage() {
         });
 
         return {
-            total: targetSurahs.length,
+            total: activePartSurahs.length,
             segments: [
                 { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Surahs excluded from cycle' },
                 { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Mindmap not created' },
@@ -228,11 +330,10 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, settings?.learnedVerses, mindmaps, memoryNodes, skippedSurahs]);
+    }, [activePartSurahs, skippedSurahs, mindmapBySurahId, mindmapNodeBySurahId]);
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
-        const targetSurahs = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart);
         let skipped = 0;
         let notLearned = 0;
         let learnedNew = 0;
@@ -240,7 +341,7 @@ export default function StatisticsPage() {
         let learnedStrong = 0;
         let learnedMastered = 0;
 
-        targetSurahs.forEach(s => {
+        activePartSurahs.forEach(s => {
             if (verseChunkMode === 'surahs') {
                 if (skippedSurahs.has(s.id)) {
                     skipped++;
@@ -251,7 +352,7 @@ export default function StatisticsPage() {
                         notLearned++;
                     } else {
                         // If it has any learned verses, we look at the maturity of its nodes
-                        const nodes = memoryNodes.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === s.id);
+                        const nodes = verseSegmentNodesBySurahId.get(s.id) || [];
                         if (nodes.length === 0) {
                             learnedNew++; // Learned but nodes not synced yet
                         } else {
@@ -291,8 +392,7 @@ export default function StatisticsPage() {
                                 const chunks = Math.ceil(segmentLength / 5);
 
                                 // Get maturity for this segment
-                                const nodes = memoryNodes.filter(n =>
-                                    n.type === 'verse_segment' &&
+                                const nodes = (verseSegmentNodesBySurahId.get(s.id) || []).filter(n =>
                                     resolveNodeSurahId(n) === s.id &&
                                     (n.startVerse ?? 0) >= segmentStart &&
                                     (n.endVerse ?? 0) <= segmentEnd
@@ -332,7 +432,7 @@ export default function StatisticsPage() {
             }
         });
 
-        const totalSegments = targetSurahs.reduce((acc, s) => {
+        const totalSegments = activePartSurahs.reduce((acc, s) => {
             if (verseChunkMode === 'surahs') return acc + 1;
             return acc + Math.ceil(s.verseCount / 5);
         }, 0);
@@ -348,18 +448,18 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, settings?.learnedVerses, memoryNodes, skippedSurahs, verseChunkMode]);
+    }, [activePartSurahs, settings?.learnedVerses, skippedSurahs, verseChunkMode, verseSegmentNodesBySurahId]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
-        const partProgress = listeningProgress.find(p => Number((p as any).partId) === Number(activePart))
+        const partProgress = listeningProgressByPartId.get(Number(activePart))
             ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
-                ? listeningProgress.find(p => Number((p as any).partId) === LEGACY_ALL_QURAN_PART)
+                ? listeningProgressByPartId.get(LEGACY_ALL_QURAN_PART)
                 : undefined);
         const progress = partProgress?.lastVerseIndex || 0;
         const cycles = partProgress?.cycles || 0;
 
-        const surahsInPart = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
+        const surahsInPart = activeUnskippedSurahs;
 
         const learnedVerseCount = progress;
 
@@ -382,15 +482,15 @@ export default function StatisticsPage() {
                 { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
             ]
         };
-    }, [activePart, skippedSurahs, listeningProgress]);
+    }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId]);
 
     // 5. Mutashabihat Coverage Data
     const mutashabihatStats = useMemo(() => {
         const allRefs = getAllMutashabihatRefs();
         const targetRefs = allRefs.filter(abs => {
             const { surahId } = absoluteToSurahAyah(abs);
-            const surah = SURAHS.find(s => s.id === surahId);
-            return activePart === ALL_QURAN_PART || surah?.part === activePart;
+            if (activePart === ALL_QURAN_PART) return true;
+            return activePartSurahIds.has(surahId);
         });
 
         const total = targetRefs.length;
@@ -403,7 +503,7 @@ export default function StatisticsPage() {
 
         targetRefs.forEach(abs => {
             // Find decisions for this absolute ayah
-            const verseDecisions = mutashabihatDecisions.filter(d => d.phraseId.startsWith(`${abs}-`) || d.phraseId === abs.toString());
+            const verseDecisions = mutashabihatDecisionsByAbsolute.get(abs) || [];
 
             if (verseDecisions.length > 0) {
                 const anySolvedMindmap = verseDecisions.some(d => d.status === 'solved_mindmap');
@@ -428,7 +528,7 @@ export default function StatisticsPage() {
                 { label: 'Solved (MM)', count: solvedMindmap, color: 'var(--chart-mastered)', description: 'Addressed within a mindmap' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, mutashabihatDecisions]);
+    }, [activePart, activePartSurahIds, mutashabihatDecisionsByAbsolute]);
 
     // 6. Future Due Data
     const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
@@ -437,7 +537,7 @@ export default function StatisticsPage() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const targetSurahs = new Set(SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).map(s => s.id));
+        const targetSurahs = activePartSurahIds;
         const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
         const completeExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
@@ -446,10 +546,10 @@ export default function StatisticsPage() {
             if (node.type !== 'verse_segment') return true;
             const surahId = resolveNodeSurahId(node);
             if (!surahId) return true;
-            const mm = mindmaps.find(m => Number(m.surahId) === surahId);
+            const mm = mindmapBySurahId.get(surahId);
             const anchors = mm?.anchors || [];
             if (anchors.length === 0) return false;
-            return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
+            return anchors.some((a: any) => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
         };
 
         const nodes = memoryNodes.filter(node => {
@@ -484,8 +584,6 @@ export default function StatisticsPage() {
         let totalFutureReviews = 0;
         let backlogCount = 0;
         let dueTomorrow = 0;
-
-        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
 
         nodes.forEach(node => {
             const dueStr = getNodeDueDate(node);
@@ -611,7 +709,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, skippedSurahs, timeRange]);
+    }, [activePart, activePartSurahIds, memoryNodes, mindmapBySurahId, nodeById, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, skippedSurahs, timeRange]);
 
     const surahRiskStats = useMemo(() => {
         const nowMs = Date.now();
@@ -622,9 +720,8 @@ export default function StatisticsPage() {
         const currentWindowStartMs = nowMs - trendWindowDays * dayMs;
         const previousWindowStartMs = currentWindowStartMs - trendWindowDays * dayMs;
 
-        const targetSurahs = SURAHS.filter(s => (activePart === ALL_QURAN_PART || s.part === activePart) && !skippedSurahs.has(s.id));
+        const targetSurahs = activeUnskippedSurahs;
         const targetSurahIds = new Set(targetSurahs.map(s => s.id));
-        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
 
         const toMs = (value: unknown): number | null => {
             const parsed = Date.parse(String(value || ''));
@@ -711,26 +808,12 @@ export default function StatisticsPage() {
 
         const surahMaturity = new Map<number, MaturityBucket>();
         targetSurahs.forEach(surah => {
-            const relatedNodes = memoryNodes.filter(n => {
-                if (n.type !== 'verse_segment' && n.type !== 'mindmap') return false;
-                return resolveNodeSurahId(n) === surah.id;
-            });
-
-            if (relatedNodes.length === 0) {
+            const stats = verseAndMindmapStabilityBySurahId.get(surah.id);
+            if (!stats || stats.count === 0) {
                 surahMaturity.set(surah.id, 'new');
                 return;
             }
-
-            const stabilities = relatedNodes
-                .map(node => getNodeStability(node))
-                .filter(value => Number.isFinite(value) && value >= 0);
-
-            if (stabilities.length === 0) {
-                surahMaturity.set(surah.id, 'new');
-                return;
-            }
-
-            const averageStability = stabilities.reduce((sum, value) => sum + value, 0) / stabilities.length;
+            const averageStability = stats.totalStability / stats.count;
             surahMaturity.set(surah.id, getMaturity(averageStability));
         });
 
@@ -779,7 +862,7 @@ export default function StatisticsPage() {
             rows,
             hasData: totalAttempts > 0 || totalMistakes > 0,
         };
-    }, [activePart, memoryNodes, reviewErrors, reviewLogs, skippedSurahs, surahRiskRange]);
+    }, [activeUnskippedSurahs, nodeById, reviewErrors, reviewLogs, surahRiskRange, verseAndMindmapStabilityBySurahId]);
 
     const reviewHeatmapStats = useMemo(() => {
         const rangeDays = 180;
@@ -788,8 +871,7 @@ export default function StatisticsPage() {
         const start = new Date(today);
         start.setDate(start.getDate() - (rangeDays - 1));
 
-        const targetSurahs = new Set(SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).map(s => s.id));
-        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
+        const targetSurahs = activePartSurahIds;
 
         const toDayKey = (date: Date) => {
             const y = date.getFullYear();
@@ -860,7 +942,7 @@ export default function StatisticsPage() {
             maxCount,
             averagePerDay: averagePerDay.toFixed(1),
         };
-    }, [activePart, memoryNodes, reviewLogs, skippedSurahs]);
+    }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs]);
 
     const hasRenderableData =
         Boolean(settings) ||

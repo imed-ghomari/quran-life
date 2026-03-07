@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'r
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
-import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
     LEGACY_ALL_QURAN_PART,
@@ -36,8 +36,6 @@ import {
 } from 'lucide-react';
 
 import dynamic from 'next/dynamic';
-import MindmapViewer from '@/components/MindmapViewer';
-import AudioPlayer from '@/components/AudioPlayer';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import {
     useInstantSettings,
@@ -62,6 +60,8 @@ import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const AudioPlayer = dynamic(() => import('@/components/AudioPlayer'), { ssr: false });
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
@@ -110,24 +110,6 @@ function splitIntoChunks(text: string | undefined | null, wordsPerChunk: number 
         chunks.push(words.slice(i, i + wordsPerChunk).join(' '));
     }
     return chunks;
-}
-
-function sanitizeVerses(input: unknown): Verse[] {
-    if (!Array.isArray(input)) return [];
-    const out: Verse[] = [];
-    for (const raw of input) {
-        if (!raw || typeof raw !== 'object') continue;
-        const v = raw as Partial<Verse>;
-        const surahId = Number(v.surahId);
-        const ayahId = Number(v.ayahId);
-        if (!Number.isFinite(surahId) || !Number.isFinite(ayahId)) continue;
-        out.push({
-            surahId,
-            ayahId,
-            text: typeof v.text === 'string' ? v.text : '',
-        });
-    }
-    return out;
 }
 
 type DailyPortionSurahGroup = {
@@ -179,16 +161,6 @@ export default function TodayPage() {
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
     const isOnline = useContext(OnlineStatusContext);
-
-    // Debug: Log nodes and due nodes
-    useEffect(() => {
-        console.log('Dashboard Debug:', {
-            allNodes: dueNodes.length > 0 ? dueNodes.map(n => ({ id: n.id, type: n.type, surahId: n.surahId, partId: n.partId, scheduler: n.scheduler })) : 'no due nodes',
-            dueNodesCount: dueNodes.length,
-            totalNodes: dueNodes.length,
-            dueNodesTypes: dueNodes.map(n => n.type)
-        });
-    }, [dueNodes]);
 
     const [allVerses, setAllVerses] = useState<Verse[]>([]);
     const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
@@ -977,68 +949,27 @@ export default function TodayPage() {
         return undefined;
     }, [listeningProgress, settings]);
 
-    // Load data
+    // Load verses through shared loader/cache to avoid duplicate parse work.
     useEffect(() => {
-        const readCachedQuranResponse = async (): Promise<Response | null> => {
-            if (!('caches' in window)) return null;
-            const candidates = [
-                '/qpc-hafs-word-by-word.json',
-                `${window.location.origin}/qpc-hafs-word-by-word.json`,
-            ];
-            for (const candidate of candidates) {
-                const match = await caches.match(candidate, {
-                    ignoreSearch: true,
-                    ignoreVary: true,
-                });
-                if (match) return match;
-            }
-            return null;
-        };
-
-        async function load() {
-            // Check session storage first
-            const cached = sessionStorage.getItem('quran_verses_cache_v2');
-            if (cached) {
-                try {
-                    setAllVerses(sanitizeVerses(JSON.parse(cached)));
-                    setIsVersesLoaded(true);
-                    return;
-                } catch {
-                    sessionStorage.removeItem('quran_verses_cache_v2');
-                }
-            }
-
+        let cancelled = false;
+        const load = async () => {
             try {
-                const response = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
-                if (!response.ok) throw new Error(`Failed to load quran JSON: ${response.status}`);
-                const data = await response.json() as Record<string, any>;
-                const verses = sanitizeVerses(parseQuranJson(data));
+                const verses = await getQuranVerses();
+                if (cancelled) return;
                 setAllVerses(verses);
-                setIsVersesLoaded(true);
-
-                try {
-                    sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
-                } catch (e) {
-                    console.warn('Failed to cache verses in sessionStorage', e);
-                }
-            } catch (_e) {
-                try {
-                    const cachedRes = await readCachedQuranResponse();
-                    if (cachedRes) {
-                        const data = await cachedRes.json() as Record<string, any>;
-                        const verses = sanitizeVerses(parseQuranJson(data));
-                        setAllVerses(verses);
-                        setIsVersesLoaded(true);
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('Failed to load verses from cache', e);
-                }
+            } catch {
+                if (cancelled) return;
                 setAllVerses([]);
-                setIsVersesLoaded(true);
+            } finally {
+                if (!cancelled) {
+                    setIsVersesLoaded(true);
+                }
             }
-        }
-        load();
+        };
+        void load();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
 
