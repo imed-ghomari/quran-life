@@ -99,6 +99,33 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - Run `npm run build` to verify production readiness.
 - Static assets served from `/public`.
 
+## Mindmap Legend Symbols (Maintainer)
+- Canonical source images live in `symbol meanings/` (project root).
+- `npm run dev` / `npm run build` only run docs indexing (`node scripts/generate-search-index.js`).
+- Legend/image sync is manual when symbols change:
+  - `npm run docs:sync:legend`
+- The legend generator does 2 things:
+  - Regenerates `content/mindmaps/legend.mdx` (grouped tables + consistent thumbnail sizing).
+  - Syncs image assets to `public/assets/symbol-meanings/`.
+
+### Replace an Existing Symbol Image
+1. Keep the same source filename in `symbol meanings/` (same base name, any supported extension: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`).
+2. Replace the file.
+3. Run `npm run docs:sync:legend`.
+4. Run `npm run build` to refresh search index and verify production build.
+
+### Add a New Symbol
+1. Add the new image to `symbol meanings/`.
+   - The filename (without extension) is the symbol meaning shown in column 2.
+2. Open `scripts/generate-mindmap-legend.js`.
+3. Add the new meaning string to the right group in `SYMBOL_GROUPS`.
+4. Run `npm run docs:sync:legend` to regenerate legend and public assets.
+5. Run `npm run build` to refresh search index and verify production build.
+
+### Important
+- Do not manually edit `content/mindmaps/legend.mdx` for long-term changes unless you also update `SYMBOL_GROUPS`.
+- The generator rewrites `legend.mdx` only when `npm run docs:sync:legend` is executed.
+
 ## Mindmap Source Verification (Maintainer)
 - Scope: `content/mindmaps/part-*.mdx` and `content/mindmaps/surah-*.mdx`.
 - Each file has a `## Source Verification` section with 5 source pills and page placeholders (`p.___`).
