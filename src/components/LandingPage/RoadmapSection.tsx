@@ -47,7 +47,7 @@ const RoadmapSection: React.FC = () => {
         title: 'Offline Mode',
         badge: { label: 'Beta', tone: 'progress' }
       },
-      { id: 3, title: 'Audio Mode' }
+      { id: 3, title: 'Audio Mode', badge: { label: 'Beta', tone: 'progress' } }
     ]
   };
 

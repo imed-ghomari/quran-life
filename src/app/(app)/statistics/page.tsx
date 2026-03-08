@@ -1561,6 +1561,11 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                         const bgY = padding.top + 6;
                                         const bgHeight = plotHeight - 6;
                                         const isPeak = d.count === maxCount;
+                                        const hasXAxisLabel = visibleLabelIndices.has(i);
+                                        const reviewLabel = `${d.count} review${d.count === 1 ? '' : 's'}`;
+                                        const tooltip = hasXAxisLabel
+                                            ? reviewLabel
+                                            : `${reviewLabel} (${formatDayLabel(d.day)})`;
                                         return (
                                             <g key={i}>
                                                 <path
@@ -1572,7 +1577,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
                                                     fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
                                                     opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
-                                                    data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'}`}
+                                                    data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
                                                 />

@@ -318,7 +318,7 @@ function renderCardZones({
                     arabic: 'الخريطة الشاملة'
                 };
                 zone3 = 'Global relationship map across Parts 1-7.';
-                zone4Meta = "Always visible";
+                zone4Meta = zone3;
             } else {
                 zone2 = {
                     english: `Part ${partTask.part}`,
@@ -412,9 +412,16 @@ function renderCardZones({
                 </div>
             </div>
 
-            {isMobile && statusIcons && (
-                <div className="mt-2 mb-1 flex items-center gap-2">
-                    {statusIcons}
+            {isMobile && (statusIcons || zone4Meta) && (
+                <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
+                        {statusIcons}
+                    </div>
+                    {zone4Meta && (
+                        <p className="flex-1 min-w-0 text-right text-[0.66rem] leading-snug text-[var(--foreground-secondary)] truncate">
+                            {zone4Meta}
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -424,6 +431,7 @@ function renderCardZones({
                     {zone3}
                 </p>
             )}
+
         </>
     );
 }

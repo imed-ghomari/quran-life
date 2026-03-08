@@ -566,7 +566,10 @@ export default function SettingsPage() {
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
+    const mobileOverlayHistorySyncRef = useRef(false);
     const mobileHistoryKey = 'mobileSettingsPage';
+    const mobileOverlayHistoryKey = 'mobileSettingsOverlayOpen';
+    const wasMobileOverlayOpenRef = useRef(false);
 
     const latestPartMindmaps = useMemo(() => {
         const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
@@ -676,6 +679,16 @@ export default function SettingsPage() {
         setActiveMutSlideOver(null);
     };
 
+    const closeSettingsSlideOvers = useCallback(() => {
+        setActiveSlideOverGroup(null);
+        setActiveMutSlideOver(null);
+        if (!isMobile || typeof window === 'undefined') return;
+        const currentState = window.history.state || {};
+        if (currentState[mobileOverlayHistoryKey]) {
+            window.history.back();
+        }
+    }, [isMobile, mobileOverlayHistoryKey]);
+
     const getFilteredNodesForSlideOver = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number) => {
         if (type === 'verse_segment' && surahId) {
             return filteredVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId);
@@ -711,19 +724,28 @@ export default function SettingsPage() {
         if (!isMobile) return;
 
         const currentState = window.history.state || {};
-        if (currentState[mobileHistoryKey] === undefined) {
-            window.history.replaceState({ ...currentState, [mobileHistoryKey]: null }, '');
+        if (currentState[mobileHistoryKey] === undefined || currentState[mobileOverlayHistoryKey] === undefined) {
+            window.history.replaceState({
+                ...currentState,
+                [mobileHistoryKey]: currentState[mobileHistoryKey] ?? null,
+                [mobileOverlayHistoryKey]: currentState[mobileOverlayHistoryKey] ?? false
+            }, '');
         }
 
         const handlePopState = (event: PopStateEvent) => {
+            mobileOverlayHistorySyncRef.current = true;
             mobileHistorySyncRef.current = true;
             const nextPage = event.state?.[mobileHistoryKey] ?? null;
             setActiveMobilePage(nextPage);
+            if (activeSlideOverGroup || activeMutSlideOver) {
+                setActiveSlideOverGroup(null);
+                setActiveMutSlideOver(null);
+            }
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [isMobile, mobileHistoryKey]);
+    }, [activeMutSlideOver, activeSlideOverGroup, isMobile, mobileHistoryKey, mobileOverlayHistoryKey]);
 
     useEffect(() => {
         if (!isMobile) return;
@@ -742,6 +764,30 @@ export default function SettingsPage() {
             window.history.pushState({ ...currentState, [mobileHistoryKey]: activeMobilePage }, '');
         }
     }, [activeMobilePage, isMobile, mobileHistoryKey]);
+
+    useEffect(() => {
+        if (!isMobile) {
+            wasMobileOverlayOpenRef.current = false;
+            return;
+        }
+        if (mobileOverlayHistorySyncRef.current) {
+            mobileOverlayHistorySyncRef.current = false;
+            wasMobileOverlayOpenRef.current = !!(activeSlideOverGroup || activeMutSlideOver);
+            return;
+        }
+
+        const isOverlayOpen = !!(activeSlideOverGroup || activeMutSlideOver);
+        const wasOpen = wasMobileOverlayOpenRef.current;
+        wasMobileOverlayOpenRef.current = isOverlayOpen;
+        if (isOverlayOpen && !wasOpen) {
+            const currentState = window.history.state || {};
+            window.history.pushState({
+                ...currentState,
+                [mobileHistoryKey]: activeMobilePage,
+                [mobileOverlayHistoryKey]: true
+            }, '');
+        }
+    }, [activeMobilePage, activeMutSlideOver, activeSlideOverGroup, isMobile, mobileHistoryKey, mobileOverlayHistoryKey]);
 
     const [sectionsExpanded, setSectionsExpanded] = useState(getInitialSectionExpansion);
 
@@ -4949,7 +4995,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
                 const customId = isCustom ? group.customIds[0] : undefined;
                 return (
-                    <div className="slide-over-overlay" onClick={() => setActiveMutSlideOver(null)}>
+                    <div className="slide-over-overlay" onClick={closeSettingsSlideOvers}>
                         <div className="slide-over-content" onClick={e => e.stopPropagation()}>
                             <div className="slide-over-header">
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -4958,7 +5004,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     </div>
                                     <h3 style={{ margin: 0, fontSize: '1rem' }}>{activeMutSlideOver.title}</h3>
                                 </div>
-                                <button className="close-btn" onClick={() => setActiveMutSlideOver(null)}>
+                                <button className="close-btn" onClick={closeSettingsSlideOvers}>
                                     <X size={20} />
                                 </button>
                             </div>
@@ -5021,7 +5067,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             className="bulk-btn reset-mut"
                                             onClick={async () => {
                                                 await handleDeleteCustomMutashabih(customId);
-                                                setActiveMutSlideOver(null);
+                                                closeSettingsSlideOvers();
                                             }}
                                             style={{ minWidth: '140px' }}
                                         >
@@ -5599,6 +5645,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                         flex: 1;
                         overflow-y: auto;
                         padding: 1.25rem;
+                        padding-bottom: calc(1.25rem + var(--mobile-bottom-toolbar-offset, 0px));
                         -webkit-overflow-scrolling: touch;
                     }
 
@@ -5915,7 +5962,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
             {/* Mobile Slide-over for Node Management */}
             {activeSlideOverGroup && (
-                <div className="slide-over-overlay" onClick={() => setActiveSlideOverGroup(null)}>
+                <div className="slide-over-overlay" onClick={closeSettingsSlideOvers}>
                     <div className="slide-over-content" onClick={e => e.stopPropagation()}>
                         <div className="slide-over-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -5924,7 +5971,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                 </div>
                                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{activeSlideOverGroup.title}</h3>
                             </div>
-                            <button className="close-btn" onClick={() => setActiveSlideOverGroup(null)}>
+                            <button className="close-btn" onClick={closeSettingsSlideOvers}>
                                 <X size={20} />
                             </button>
                         </div>
