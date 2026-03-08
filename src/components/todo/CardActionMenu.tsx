@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
+import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 
 interface CardActionMenuProps {
     isMobile: boolean;
@@ -109,7 +110,7 @@ export default function CardActionMenu({
                     label: 'View Documentation',
                     icon: <FileText size={20} />,
                     isLink: true,
-                    href: docLink,
+                    href: withDocsSidebarReveal(docLink),
                     disabled: false
                 });
             }

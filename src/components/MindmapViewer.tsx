@@ -4,6 +4,7 @@ import { useCallback, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import Link from 'next/link';
+import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
@@ -464,7 +465,7 @@ export default function MindmapViewer({
                                 isInternalPath(resolvedDocLink) ? (
                                     <Link
                                         className="btn btn-secondary std-normal-btn mindmap-header-doclink"
-                                        href={resolvedDocLink}
+                                        href={withDocsSidebarReveal(resolvedDocLink)}
                                     >
                                         <span className="hidden md:inline">Back to Documentation</span>
                                         <span className="md:hidden">Back to Docs</span>

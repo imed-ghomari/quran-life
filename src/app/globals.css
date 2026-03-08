@@ -1089,6 +1089,16 @@ article.prose pre {
   --chart-mastered: color-mix(in srgb, var(--success) 82%, var(--accent-secondary) 18%);
 }
 
+:root {
+  --mobile-bottom-toolbar-offset: calc(5.2rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  :root {
+    --mobile-bottom-toolbar-offset: 0px;
+  }
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -2189,6 +2199,10 @@ input:focus {
   z-index: 50;
 }
 
+body[data-mindmap-open="true"] .bottom-nav {
+  display: none !important;
+}
+
 .nav-item {
   display: flex;
   flex-direction: column;
@@ -2750,6 +2764,7 @@ input:focus {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
+  padding-bottom: calc(1rem + var(--mobile-bottom-toolbar-offset, 0px));
 }
 
 .splits-modal-slide-body {
@@ -3764,6 +3779,7 @@ input:focus {
 /* Verse Context (Todo modal) spacing */
 .verse-context-modal .verse-context-content {
   padding: 1.25rem 1.5rem !important;
+  padding-bottom: calc(1.25rem + var(--mobile-bottom-toolbar-offset, 0px)) !important;
 }
 
 .verse-context-modal .verse-context-verse {
@@ -3810,6 +3826,7 @@ input:focus {
 /* Similarity Context (Todo modal) spacing to match Verse Context */
 .similarity-context-modal .similarity-context-content {
   padding: 1.25rem 1.5rem !important;
+  padding-bottom: calc(1.25rem + var(--mobile-bottom-toolbar-offset, 0px)) !important;
 }
 
 .similarity-context-modal .similarity-context-header {

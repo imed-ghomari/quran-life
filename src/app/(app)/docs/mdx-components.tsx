@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import type { MDXComponents } from 'mdx/types';
+import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 
 export const mdxComponents: MDXComponents = {
     a: ({ href, children, ...props }: any) => {
         if (href?.startsWith('/') || href?.startsWith('./') || href?.startsWith('../')) {
             return (
-                <Link href={href} className="text-[var(--accent)] hover:underline" {...props}>
+                <Link href={withDocsSidebarReveal(href)} className="text-[var(--accent)] hover:underline" {...props}>
                     {children}
                 </Link>
             );

@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'r
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import Spinner from '@/components/ui/Spinner';
 import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
@@ -155,8 +156,8 @@ export default function TodayPage() {
     const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
-    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
-    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
+    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
     const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
@@ -189,6 +190,9 @@ export default function TodayPage() {
     const historyActionLockRef = useRef(false);
     const pendingAutoCreateNodeIdsRef = useRef<Set<string>>(new Set());
     const pendingReviewAdvanceRef = useRef<PendingReviewAdvance | null>(null);
+    const [pendingAutoCreateJobs, setPendingAutoCreateJobs] = useState(0);
+    const [hasResolvedInitialReviewSelection, setHasResolvedInitialReviewSelection] = useState(false);
+    const [hasHydratedReviewQueue, setHasHydratedReviewQueue] = useState(false);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -422,6 +426,7 @@ export default function TodayPage() {
         if (nodesToPersist.length === 0) return;
 
         nodesToPersist.forEach((node) => pendingAutoCreateNodeIdsRef.current.add(node.id));
+        setPendingAutoCreateJobs((count) => count + 1);
 
         let cancelled = false;
         const persistMissingNodes = async () => {
@@ -435,6 +440,7 @@ export default function TodayPage() {
                 console.error('Failed to persist auto-created review nodes', error);
             } finally {
                 nodesToPersist.forEach((node) => pendingAutoCreateNodeIdsRef.current.delete(node.id));
+                setPendingAutoCreateJobs((count) => Math.max(0, count - 1));
             }
         };
 
@@ -537,6 +543,7 @@ export default function TodayPage() {
         const storedNodeId = window.sessionStorage.getItem(ACTIVE_REVIEW_NODE_STORAGE_KEY);
         if (!storedNodeId || orderedDueNodes.length === 0) {
             didRestoreActiveNodeRef.current = true;
+            setHasResolvedInitialReviewSelection(true);
             return;
         }
 
@@ -545,7 +552,24 @@ export default function TodayPage() {
             setCurrentReviewIndex(restoredIndex);
         }
         didRestoreActiveNodeRef.current = true;
+        setHasResolvedInitialReviewSelection(true);
     }, [orderedDueNodes, currentReviewIndex]);
+
+    useEffect(() => {
+        if (hasHydratedReviewQueue) return;
+        const queueDataReady = !settingsLoading && !nodesLoading && !mindmapsLoading && !reviewErrorsLoading;
+        const isAutoCreatingNodes = pendingAutoCreateJobs > 0;
+        if (!queueDataReady || !hasResolvedInitialReviewSelection || isAutoCreatingNodes) return;
+        setHasHydratedReviewQueue(true);
+    }, [
+        hasHydratedReviewQueue,
+        settingsLoading,
+        nodesLoading,
+        mindmapsLoading,
+        reviewErrorsLoading,
+        hasResolvedInitialReviewSelection,
+        pendingAutoCreateJobs,
+    ]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1899,6 +1923,7 @@ export default function TodayPage() {
     const redoTooltip = getHistoryTooltip(redoStack[redoStack.length - 1], 'redo');
     const dailyReadingStyle = settings?.dailyReadingStyle ?? 'line_by_line';
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
+    const isReviewQueueHydrating = !hasHydratedReviewQueue;
 
     if (!isLoaded) return <FullScreenLoader text="Loading today..." />;
 
@@ -1994,8 +2019,12 @@ export default function TodayPage() {
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
                             <div className="today-card-content">
-                                {/* Empty state */}
-                                {orderedDueNodes.length === 0 ? (
+                                {isReviewQueueHydrating ? (
+                                    <div className="empty-state">
+                                        <Spinner text="Preparing reviews..." />
+                                    </div>
+                                ) : orderedDueNodes.length === 0 ? (
+                                    /* Empty state */
                                     <div className="empty-state">
                                         <CheckCircle size={40} className="empty-icon" />
                                         <p>No reviews due!</p>
@@ -2131,7 +2160,7 @@ export default function TodayPage() {
                                     </div>
                                 )}
                             </div>
-                            {orderedDueNodes.length > 0 && activeContent && (
+                            {!isReviewQueueHydrating && orderedDueNodes.length > 0 && activeContent && (
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
                                         <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>

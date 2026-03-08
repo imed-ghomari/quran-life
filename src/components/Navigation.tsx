@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import {
@@ -38,19 +38,27 @@ type NavigationContentProps = {
 function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { settings } = useInstantSettings();
-    const { dueNodes } = useInstantNodes();
-    const { mindmaps, partMindMaps } = useInstantMindMaps();
+    const { settings, isLoading: settingsLoading } = useInstantSettings();
+    const { dueNodes, isLoading: nodesLoading } = useInstantNodes();
+    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
     const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
-    const { errors } = useInstantReviewErrors();
-    const { progress: listeningProgress } = useInstantListeningProgress();
+    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useInstantListeningProgress();
+    const [hasHydratedNavMetrics, setHasHydratedNavMetrics] = useState(false);
+    const navDataLoading = settingsLoading || nodesLoading || mindmapsLoading || reviewErrorsLoading || listeningProgressLoading;
+
+    useEffect(() => {
+        if (navDataLoading) return;
+        setHasHydratedNavMetrics(true);
+    }, [navDataLoading]);
 
     const navMetrics = useMemo(() => {
-        if (!settings) {
+        if (!settings || !hasHydratedNavMetrics) {
             return {
                 pendingCount: 0,
                 todayTasks: 0,
                 isDailyPortionComplete: false,
+                hideBadges: true,
             };
         }
 
@@ -153,12 +161,13 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
             pendingCount,
             todayTasks: filterReviewQueueNodes(dueNodes, settings, mindmaps).length,
             isDailyPortionComplete,
+            hideBadges: false,
         };
-    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress]);
+    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress, hasHydratedNavMetrics]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', badge: navMetrics.pendingCount, showStatusDot: false },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.hideBadges ? undefined : navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
+        { href: '/todo', icon: ListTodo, label: 'Todo', badge: navMetrics.hideBadges ? undefined : navMetrics.pendingCount, showStatusDot: false },
         { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
         { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },
