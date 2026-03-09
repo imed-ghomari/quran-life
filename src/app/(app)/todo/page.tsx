@@ -32,7 +32,7 @@ import { AccessStateContext } from '@/components/Providers';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
-import Spinner from '@/components/ui/Spinner';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
 
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
@@ -129,7 +129,6 @@ export default function TodoPage() {
     const autoImportInFlightRef = useRef(false);
     const [isAutoImportingPremades, setIsAutoImportingPremades] = useState(false);
     const [hasHydratedTodoData, setHasHydratedTodoData] = useState(false);
-    const [isKanbanResponsiveReady, setIsKanbanResponsiveReady] = useState(false);
     const { alert } = useConfirmDialog();
 
     // -- 2. Data Memoization & Deduplication --
@@ -1108,12 +1107,12 @@ export default function TodoPage() {
         setHasHydratedTodoData(true);
     }, [todoDataReady]);
 
-    const handleKanbanResponsiveReadyChange = useCallback((isReady: boolean) => {
-        setIsKanbanResponsiveReady(isReady);
-    }, []);
+    const showTodoLoader = !hasHydratedTodoData;
+    const todoLoaderText = 'Preparing Todo...';
 
-    const showTodoLoader = !hasHydratedTodoData || !isKanbanResponsiveReady;
-    const todoLoaderText = hasHydratedTodoData ? 'Finalizing Todo layout...' : 'Preparing Todo...';
+    if (showTodoLoader) {
+        return <FullScreenLoader text={todoLoaderText} />;
+    }
 
     return (
         <div className="content-wrapper tab-content todo-page">
@@ -1179,75 +1178,67 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <div className="relative w-full h-full flex flex-col px-2 sm:px-4 md:px-6 py-2 sm:py-4" aria-busy={showTodoLoader}>
-                {showTodoLoader && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--background)]">
-                        <Spinner text={todoLoaderText} />
-                    </div>
-                )}
-                {hasHydratedTodoData && (
-                    <div className={isKanbanResponsiveReady ? 'h-full w-full' : 'invisible pointer-events-none h-full w-full'}>
-                        <TodoKanban
-                            suspendedAnchors={suspendedAnchors}
-                            similarityGroups={groupedSimilarity}
-                            partTasks={partTasks}
-                            surahTasks={surahTasks}
-                            verses={verses}
-                            mindmaps={mindmaps}
-                            isDark={isDark}
-                            // Persisted State
-                            kanbanState={settings.kanbanColumns}
-                            defaultFilter={settings.todoDefaultFilter ?? 'all'}
-                            completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
-                            kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
-                            onKanbanStateChange={async (cols) => {
-                                await queueSettingsUpdate({
-                                    kanbanColumns: cols
-                                });
-                            }}
-                            onFixConfirm={handleFixConfirm}
-                            onSimilarityDecision={handleSimilarityDecision}
-                            onPartComplete={handlePartComplete}
-                            onSurahComplete={handleMarkComplete}
-                            onImportPremade={handleImportPremade}
-                            onExportPremade={isEditor ? handleExportPremade : undefined}
-                            onResetMindmap={!isEditor ? handleResetMindmap : undefined}
-                            onEditMindmap={(id, snapshot, isPart) => {
-                                if (isPart) {
-                                    setActivePartEditor({ partId: id as any, snapshot });
-                                } else {
-                                    setActiveMindmapEditor({ surahId: id, snapshot });
+            <div className="relative w-full h-full flex flex-col px-2 sm:px-4 md:px-6 py-2 sm:py-4" aria-busy={false}>
+                <div className="h-full w-full">
+                    <TodoKanban
+                        suspendedAnchors={suspendedAnchors}
+                        similarityGroups={groupedSimilarity}
+                        partTasks={partTasks}
+                        surahTasks={surahTasks}
+                        verses={verses}
+                        mindmaps={mindmaps}
+                        isDark={isDark}
+                        // Persisted State
+                        kanbanState={settings.kanbanColumns}
+                        defaultFilter={settings.todoDefaultFilter ?? 'all'}
+                        completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
+                        kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
+                        onKanbanStateChange={async (cols) => {
+                            await queueSettingsUpdate({
+                                kanbanColumns: cols
+                            });
+                        }}
+                        onFixConfirm={handleFixConfirm}
+                        onSimilarityDecision={handleSimilarityDecision}
+                        onPartComplete={handlePartComplete}
+                        onSurahComplete={handleMarkComplete}
+                        onImportPremade={handleImportPremade}
+                        onExportPremade={isEditor ? handleExportPremade : undefined}
+                        onResetMindmap={!isEditor ? handleResetMindmap : undefined}
+                        onEditMindmap={(id, snapshot, isPart) => {
+                            if (isPart) {
+                                setActivePartEditor({ partId: id as any, snapshot });
+                            } else {
+                                setActiveMindmapEditor({ surahId: id, snapshot });
+                            }
+                        }}
+                        onDeleteMindmap={async (type, id) => {
+                            if (type === 'surah') {
+                                // Find specific entity to delete
+                                const entity = mindmapsList.find((m: any) => Number(m.surahId) === id);
+                                if (entity && (entity as any).id) {
+                                    await deleteMindMap((entity as any).id);
                                 }
-                            }}
-                            onDeleteMindmap={async (type, id) => {
-                                if (type === 'surah') {
-                                    // Find specific entity to delete
-                                    const entity = mindmapsList.find((m: any) => Number(m.surahId) === id);
-                                    if (entity && (entity as any).id) {
-                                        await deleteMindMap((entity as any).id);
-                                    }
-                                } else {
-                                    // Find specific part entity to delete
-                                    const pId = id as QuranPart;
-                                    const entity = partMindmapsList.find((m: any) => Number(m.partId) === pId);
-                                    if (entity && (entity as any).id) {
-                                        await deletePartMindMap((entity as any).id);
-                                    }
+                            } else {
+                                // Find specific part entity to delete
+                                const pId = id as QuranPart;
+                                const entity = partMindmapsList.find((m: any) => Number(m.partId) === pId);
+                                if (entity && (entity as any).id) {
+                                    await deletePartMindMap((entity as any).id);
                                 }
-                            }}
-                            appMode={appMode}
-                            getHasPremade={hasPremadeMindmap}
-                            mutashabihatDecisions={decisions}
-                            onMutashabihatDecisionUpdate={handleMutashabihatDecisionUpdate}
-                            getBuilderState={getBuilderState}
-                            onAddBreak={(sid, val) => handleAddBreak(sid, val)}
-                            onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
-                            onSaveAnchors={handleSaveAnchors}
-                            hasReviewedChunks={hasReviewedChunks}
-                            onResponsiveReadyChange={handleKanbanResponsiveReadyChange}
-                        />
-                    </div>
-                )}
+                            }
+                        }}
+                        appMode={appMode}
+                        getHasPremade={hasPremadeMindmap}
+                        mutashabihatDecisions={decisions}
+                        onMutashabihatDecisionUpdate={handleMutashabihatDecisionUpdate}
+                        getBuilderState={getBuilderState}
+                        onAddBreak={(sid, val) => handleAddBreak(sid, val)}
+                        onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
+                        onSaveAnchors={handleSaveAnchors}
+                        hasReviewedChunks={hasReviewedChunks}
+                    />
+                </div>
             </div>
         </div >
     );
