@@ -38,6 +38,7 @@ import {
 
 import dynamic from 'next/dynamic';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
     useInstantSettings,
     useInstantNodes,
@@ -658,6 +659,7 @@ export default function TodayPage() {
     // Mindmap Editor States
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
+    useMindmapBackGestureGuard(Boolean(activeMindmapEditor || activePartEditor));
 
     const toggleSection = (section: 'review' | 'daily') => {
         setViewState(prev => {

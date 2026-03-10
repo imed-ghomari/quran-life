@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
 import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
     clipboardHasBlockedMedia,
     dataTransferHasBlockedMedia,
@@ -437,19 +438,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         }
     }, [initialSnapshot, loadLocalDraftSnapshot]);
 
-    useEffect(() => {
-        // Prevent browser back gesture globally while editor is open
-        const originalBodyOverscroll = document.body.style.overscrollBehaviorX;
-        const originalHtmlOverscroll = document.documentElement.style.overscrollBehaviorX;
-        
-        document.body.style.overscrollBehaviorX = 'none';
-        document.documentElement.style.overscrollBehaviorX = 'none';
-        
-        return () => {
-            document.body.style.overscrollBehaviorX = originalBodyOverscroll;
-            document.documentElement.style.overscrollBehaviorX = originalHtmlOverscroll;
-        };
-    }, []);
+    useMindmapBackGestureGuard(true);
 
     useEffect(() => {
         document.body.setAttribute('data-mindmap-open', 'true');

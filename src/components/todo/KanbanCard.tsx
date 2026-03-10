@@ -350,7 +350,8 @@ function renderCardZones({
                         backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 84%)`,
                         color: zone1.color,
                         fontSize: '0.65rem',
-                        padding: '0.2rem 0.6rem'
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '999px'
                     }}
                 >
                     {zone1.label}

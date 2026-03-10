@@ -33,6 +33,7 @@ import { AccessStateContext } from '@/components/Providers';
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
@@ -286,6 +287,7 @@ export default function TodoPage() {
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: PartMindMapId; snapshot?: any } | null>(null);
     const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
+    useMindmapBackGestureGuard(Boolean(activeMindmapEditor || activePartEditor));
 
     const hasLoadedVersesRef = useRef(false);
     const loadVerses = useCallback(async () => {
