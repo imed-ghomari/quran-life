@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import SidebarLink from './SidebarLink';
+import { useDocsNavigation } from './DocsNavigationState';
 
 export interface SidebarItem {
     title: string;
@@ -17,9 +17,8 @@ interface SidebarNavProps {
 }
 
 export default function SidebarNav({ items, level = 0, onLinkClick }: SidebarNavProps) {
-    const pathname = usePathname();
+    const { activePath } = useDocsNavigation();
     const normalize = (p: string) => p.replace(/\/$/, '') || '/';
-    const activePath = normalize(pathname || '');
 
     const [expandedPath, setExpandedPath] = useState<string | null>(null);
 

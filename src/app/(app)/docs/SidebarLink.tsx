@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { DOCS_SIDEBAR_REVEAL_PARAM } from '@/lib/docsSidebarReveal';
+import { useDocsNavigation } from './DocsNavigationState';
 
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
@@ -25,13 +26,14 @@ export default function SidebarLink({
 }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const { activePath, setPendingPath } = useDocsNavigation();
 
     // Normalize paths for comparison
     const normalize = (p: string) => p.replace(/\/$/, '') || '/';
-    const activePath = normalize(pathname || '');
     const targetPath = normalize(href);
     const isActive = activePath === targetPath || (hasChildren && activePath.startsWith(targetPath + '/'));
     const isCurrent = activePath === targetPath;
+    const isPathnameCurrent = normalize(pathname || '') === targetPath;
     const shouldRevealCurrentFile = searchParams?.get(DOCS_SIDEBAR_REVEAL_PARAM) === '1';
     const linkRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +57,7 @@ export default function SidebarLink({
     };
 
     useEffect(() => {
-        if (!isCurrent || !shouldRevealCurrentFile || !linkRef.current) return;
+        if (!isPathnameCurrent || !shouldRevealCurrentFile || !linkRef.current) return;
 
         const element = linkRef.current;
         const scrollContainer = getScrollableAncestor(element);
@@ -117,10 +119,10 @@ export default function SidebarLink({
         }
 
         consumeRevealIntent();
-    }, [isCurrent, shouldRevealCurrentFile]);
+    }, [isPathnameCurrent, shouldRevealCurrentFile]);
 
     useEffect(() => {
-        if (!isCurrent || shouldRevealCurrentFile || !linkRef.current) return;
+        if (!isPathnameCurrent || shouldRevealCurrentFile || !linkRef.current) return;
         const raw = window.sessionStorage.getItem(SIDEBAR_SCROLL_MEMORY_KEY);
         if (!raw) return;
 
@@ -135,7 +137,7 @@ export default function SidebarLink({
             scrollContainer.scrollTop = savedScrollTop;
         }
         window.sessionStorage.removeItem(SIDEBAR_SCROLL_MEMORY_KEY);
-    }, [isCurrent, shouldRevealCurrentFile, pathname]);
+    }, [isPathnameCurrent, shouldRevealCurrentFile, pathname]);
 
     return (
         <div ref={linkRef} style={{ display: 'flex', alignItems: 'center' }}>
@@ -175,6 +177,9 @@ export default function SidebarLink({
                     href={href}
                     onClick={() => {
                         rememberSidebarScrollTop();
+                        if (normalize(href) !== activePath) {
+                            setPendingPath(href);
+                        }
                         onClick?.();
                     }}
                     style={{

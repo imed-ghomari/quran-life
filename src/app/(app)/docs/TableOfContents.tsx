@@ -72,7 +72,7 @@ export default function TableOfContents() {
 
     return (
         <aside className="custom-scrollbar" style={{ height: '100%' }}>
-            {headings.length > 0 && (
+            {headings.length > 0 ? (
                 <>
                     <div style={{ 
                         fontSize: '0.75rem', 
@@ -111,6 +111,14 @@ export default function TableOfContents() {
                         </ul>
                     </nav>
                 </>
+            ) : (
+                <div style={{
+                    fontSize: '0.8125rem',
+                    color: 'var(--foreground-secondary)',
+                    lineHeight: '1.4'
+                }}>
+                    There is no heading in this file.
+                </div>
             )}
         </aside>
     );

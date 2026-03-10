@@ -48,6 +48,7 @@ import { AccentTheme, Theme, useTheme } from '@/components/ThemeProvider';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
@@ -538,6 +539,7 @@ export default function SettingsPage() {
     const [settingsMindmapEditor, setSettingsMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [settingsSplitsSurahId, setSettingsSplitsSurahId] = useState<number | null>(null);
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
+    useMindmapBackGestureGuard(Boolean(settingsMindmapEditor));
     const hasLoadedVersesRef = useRef(false);
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
