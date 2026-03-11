@@ -3,13 +3,9 @@
 import Link from 'next/link';
 import styles from './not-found.module.css';
 import { db } from '@/lib/instant';
-import type { InstantUser } from '@instantdb/react';
 
 export default function NotFound() {
-  const authState = db.useAuth() as {
-    user?: InstantUser | null;
-    isLoading?: boolean;
-  };
+  const authState = db.useAuth();
   const { user, isLoading } = authState ?? {};
   const showDashboard = Boolean(user);
   const showLanding = !user && !isLoading;
