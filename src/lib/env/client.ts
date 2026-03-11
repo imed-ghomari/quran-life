@@ -25,6 +25,7 @@ const defaultOptimizationDelayMs = fsrsOptimizationMode === 'test' ? 0 : 5000;
 
 export const clientEnv = {
   NEXT_PUBLIC_PADDLE_ENV: paddleEnv,
+  NEXT_PUBLIC_DEPLOYMENT_ID: process.env.NEXT_PUBLIC_DEPLOYMENT_ID ?? '',
   NEXT_PUBLIC_PADDLE_CLIENT_TOKEN:
     (isProduction
       ? process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN_PRODUCTION

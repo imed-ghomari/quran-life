@@ -277,6 +277,9 @@ const nextConfig = {
     turbopack: {
         resolveAlias: tldrawAliases,
     },
+    env: {
+        NEXT_PUBLIC_DEPLOYMENT_ID: PWA_CACHE_VERSION,
+    },
     images: {
         unoptimized: true,
     },
