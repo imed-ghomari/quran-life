@@ -8,6 +8,7 @@ import { ThemeProvider } from "./ThemeProvider";
 import { useInstantSettings } from "@/hooks/useInstantData";
 import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
+import { ServiceWorkerUpdateBanner } from "./ServiceWorkerUpdateBanner";
 import { db } from "@/lib/instant";
 import { clientEnv } from "@/lib/env/client";
 
@@ -28,7 +29,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = "sw-migration-2026-03-06-v23-precache-docs-routes";
+const SW_MIGRATION_KEY = "sw-migration-2026-03-11-v24-update-banner";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
 const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -400,6 +401,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <SyncProvider>
           <ThemeProvider>
             <ConfirmDialogProvider>
+              <ServiceWorkerUpdateBanner isOnline={isOnline} />
               {children}
               <OnboardingWrapper />
             </ConfirmDialogProvider>

@@ -68,6 +68,7 @@ const AudioPlayer = dynamic(() => import('@/components/AudioPlayer'), { ssr: fal
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 const ACTIVE_REVIEW_NODE_STORAGE_KEY = 'dashboard_active_review_node_id_v1';
+const FSRS_OPTIMIZATION_ENABLED = clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED;
 const FSRS_OPTIMIZATION_LOG_DELTA = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA);
 const FSRS_OPTIMIZATION_DELAY_MS = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS);
 const AUTO_NODE_CREATE_BATCH_SIZE = 20;
@@ -907,6 +908,10 @@ export default function TodayPage() {
     const { meta: optimizationMeta, weights: customWeights, saveMeta: saveOptimizationMeta, saveWeights: saveCustomWeights } = useInstantOptimization();
 
     useEffect(() => {
+        if (!FSRS_OPTIMIZATION_ENABLED) {
+            return;
+        }
+
         const checkOptimization = async () => {
             const count = reviewLogs.length;
 
