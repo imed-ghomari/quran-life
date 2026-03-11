@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type WorkboxLike = {
   addEventListener: (event: string, callback: (event?: any) => void) => void;
   removeEventListener: (event: string, callback: (event?: any) => void) => void;
-  messageSkipWaiting: () => Promise<void>;
-  register?: () => Promise<void>;
+  messageSkipWaiting: () => void | Promise<void>;
+  register?: () => void | Promise<void>;
 };
 
 const getWorkbox = async (): Promise<WorkboxLike | null> => {
@@ -18,7 +18,7 @@ const getWorkbox = async (): Promise<WorkboxLike | null> => {
     const { Workbox } = await import("workbox-window");
     const wb = new Workbox("/sw.js");
     await wb.register();
-    return wb as WorkboxLike;
+    return wb as unknown as WorkboxLike;
   } catch {
     return null;
   }
