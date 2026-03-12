@@ -447,7 +447,7 @@ export default function MindmapViewer({
             {renderInline()}
 
             {isFullScreen && createPortal(
-                <div className="fixed inset-0 z-[13000] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
+                <div className="fixed inset-0 z-[15000] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
                     <div
                         className="mindmap-viewer-header flex items-center border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
                         style={{ height: '50px', padding: '0 1rem' }}
