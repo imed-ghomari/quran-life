@@ -4,9 +4,7 @@ Quran Life uses the advanced **FSRS (Free Spaced Repetition Scheduler)** algorit
 
 ## How Your Brain Remembers
 
-Memories fade over time. However, if you review information just as you are about to forget it, that memory becomes significantly stronger. FSRS calculates this "forgetting curve" precisely for every single verse group.
-
-*Our system uses [Visual Mindmaps](/docs/philosophy/mindmap-strategy) as the primary review unit to give your brain a physical 'place' to store these memories.*
+Memories fade over time, but if you review information just as you are about to forget it, that memory becomes significantly stronger. FSRS calculates this “forgetting curve” precisely for every review item (verse group/mindmaps), ensuring minimal wasted effort through spaced repetition. This way, you don’t spend time reviewing what you already know well, and you don’t lose progress on what you’ve just learned—the app handles the “when,” so you can focus on the “what.”
 
 ## The Review Process
 
@@ -16,19 +14,21 @@ The smart system schedules reviews at optimal intervals to minimize your workloa
 - **Recall, Don't Read**: The goal is to recall the verse from memory *before* clicking to reveal it.
 - **Grading Your Performance**: After revealing the verses, you have two simple choices:
     -   **Remembered**: You successfully recalled the verse. The system will increase the interval until you see it again.
-    -   **Not Remembered**: You couldn't recall it or made a significant mistake. The system will show it again sooner to help you relearn it.
--   **Not Sure**: If you make a mistake but aren't sure if it was a genuine memory gap (e.g., an accidental click or distraction), use the **Not Sure** button. This postpones the review by one day, without resetting your progress entirely.
+    -   **Not Remembered**: You couldn't recall it or made a mistake. The system will show it again sooner to help you relearn it.
+-   **Not Sure**: If you make a mistake but aren't sure if it was a genuine memory gap (e.g., an accidental click), use the **Not Sure** button. This postpones the review by one day, without resetting your progress.
 
 ## Efficient Learning
 
 FSRS is highly efficient. As you prove your mastery, you will see items much less often—eventually reaching a "Mastered" state where reviews occur years apart. This saves you hours of unnecessary review time in the long run.
 
+Note that there is an optimization mechanism that is triggered after a certain number of reviews to further customize the intervals for each user; however, this feature has not yet been enabled, pending further testing.
+
 ## Why Reviews Sometimes Reset
 
 Occasionally, a review interval might be shortened or reset. This happens to ensure your memory stays perfectly aligned with the app:
-1. **Manual Changes**: If you mark a Surah as "To Learn" and then back to "Learned."
-2. **Changing Verse Ranges**: If you change the start or end of a verse chunk. Because the "chunk" you memorized has changed, the app asks you to verify it again.
-3. **Repeated Mistakes**: If you mark "Not Remembered" multiple times, the system will naturally show that item more frequently until you've mastered it again.
+1. **Manual Changes**: If you manualy reset a mindmap or verse group in the knowledge tracking setting section.
+2. **Changing Verse Ranges**: If you change the start or end of a verse chunk by changing the splits in the splits configuration modal. This is necessary because the "chunk" you memorized has changed, therefore the app asks you to verify it again.
+3. **[Repeated Mistakes](docs/philosophy/re-learning)**: If you mark "Not Remembered" multiple times, the system will naturally show that item more frequently until you've mastered it again.
 
 ## Keyboard Shortcuts
 
@@ -36,6 +36,3 @@ For a faster and more focused review experience on desktop, you can use the foll
 - **Arrow Right**: Reveal the next verse chunk, or mark as **Remembered**.
 - **Arrow Left**: Mark as **Not Sure** (Postpone).
 - **Arrow Down**: Mark as **Not Remembered**.
-
-## Why This Matters
-Spaced repetition ensures **minimal wasted effort**. You don't spend time reviewing what you already know well, and you don't lose progress on what you've just learned. The app handles the "when", so you can focus on the "what".
