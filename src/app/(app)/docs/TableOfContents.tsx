@@ -24,7 +24,7 @@ export default function TableOfContents() {
             if (!article) return;
 
             const updateHeadings = () => {
-                const elements = Array.from(article.querySelectorAll('h2, h3'))
+                const elements = Array.from(article.querySelectorAll('h2, h3, h4, h5'))
                     .map((elem) => ({
                         id: elem.id || elem.textContent?.toLowerCase().replace(/\s+/g, '-') || '',
                         text: elem.textContent || '',
@@ -32,7 +32,7 @@ export default function TableOfContents() {
                     }));
                 
                 // Ensure elements have IDs for linking
-                article.querySelectorAll('h2, h3').forEach((elem) => {
+                article.querySelectorAll('h2, h3, h4, h5').forEach((elem) => {
                     if (!elem.id) {
                         elem.id = elem.textContent?.toLowerCase().replace(/\s+/g, '-') || '';
                     }
@@ -59,7 +59,7 @@ export default function TableOfContents() {
                 { rootMargin: '0px 0px -80% 0px' }
             );
 
-            article.querySelectorAll('h2, h3').forEach((elem) => intersectionObserver.observe(elem));
+            article.querySelectorAll('h2, h3, h4, h5').forEach((elem) => intersectionObserver.observe(elem));
 
             return () => {
                 mutationObserver.disconnect();
@@ -96,8 +96,22 @@ export default function TableOfContents() {
                                         }}
                                         style={{
                                             display: 'block',
-                                            fontSize: heading.level === 2 ? '0.875rem' : '0.8125rem',
-                                            paddingLeft: heading.level === 2 ? '0' : '1rem',
+                                            fontSize:
+                                                heading.level === 2
+                                                    ? '0.875rem'
+                                                    : heading.level === 3
+                                                        ? '0.8125rem'
+                                                        : heading.level === 4
+                                                            ? '0.78125rem'
+                                                            : '0.75rem',
+                                            paddingLeft:
+                                                heading.level === 2
+                                                    ? '0'
+                                                    : heading.level === 3
+                                                        ? '1rem'
+                                                        : heading.level === 4
+                                                            ? '1.75rem'
+                                                            : '2.5rem',
                                             color: activeId === heading.id ? 'var(--accent)' : 'var(--foreground-secondary)',
                                             textDecoration: 'none',
                                             transition: 'color 0.2s ease',

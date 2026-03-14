@@ -28,7 +28,10 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
-const SW_MIGRATION_KEY = `sw-migration-2026-03-11-v25-deploy-reset-${clientEnv.NEXT_PUBLIC_DEPLOYMENT_ID || "dev"}`;
+const SW_MIGRATION_KEY = "sw-migration-2026-03-14-v26-deploy-reset";
+const SW_MIGRATION_STORAGE_KEY = "sw:migrationKey";
+const SW_MIGRATION_SESSION_KEY = "sw:migrationSessionKey";
+const DEPLOYMENT_VERSION_ENDPOINT = "/api/version";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
 const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -339,8 +342,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const runServiceWorkerMigration = async () => {
       try {
-        if (window.localStorage.getItem(SW_MIGRATION_KEY) === "done") return;
         if (!navigator.onLine) return;
+
+        let deploymentVersion = "";
+        try {
+          const response = await fetch(DEPLOYMENT_VERSION_ENDPOINT, { cache: "no-store" });
+          if (response.ok) {
+            const data = await response.json();
+            deploymentVersion = String(data?.version ?? "");
+          }
+        } catch {
+          deploymentVersion = "";
+        }
+        if (!deploymentVersion) return;
+
+        const desiredMigrationKey = `${SW_MIGRATION_KEY}:${deploymentVersion}`;
+        if (window.localStorage.getItem(SW_MIGRATION_STORAGE_KEY) === desiredMigrationKey) return;
+        if (window.sessionStorage.getItem(SW_MIGRATION_SESSION_KEY) === desiredMigrationKey) return;
+        try {
+          window.sessionStorage.setItem(SW_MIGRATION_SESSION_KEY, desiredMigrationKey);
+        } catch {
+          // Best-effort session guard to prevent reload loops.
+        }
 
         if ("serviceWorker" in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
@@ -367,11 +390,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
           // Non-fatal; migration still succeeds.
         }
 
-        window.localStorage.setItem(SW_MIGRATION_KEY, "done");
+        try {
+          window.localStorage.setItem(SW_MIGRATION_STORAGE_KEY, desiredMigrationKey);
+        } catch {
+          // Best-effort cache write.
+        }
         window.location.reload();
       } catch (error) {
         console.warn("Service worker migration failed", error);
-        window.localStorage.removeItem(SW_MIGRATION_KEY);
+        window.localStorage.removeItem(SW_MIGRATION_STORAGE_KEY);
       }
     };
 

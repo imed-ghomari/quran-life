@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
@@ -60,7 +60,7 @@ export default function CardActionMenu({
     const DESKTOP_MENU_GAP = 12;
     const DESKTOP_MENU_MIN_WIDTH = 270;
 
-    const runMenuAction = async (action?: () => Promise<void> | void) => {
+    const runMenuAction = useCallback(async (action?: () => Promise<void> | void) => {
         if (!action || isActionPending) return;
         setIsActionPending(true);
         try {
@@ -71,10 +71,10 @@ export default function CardActionMenu({
         } finally {
             setIsActionPending(false);
         }
-    };
+    }, [isActionPending, onClose]);
 
     // Define Menu Items based on Context
-    const getMenuItems = () => {
+    const menuItems = useMemo(() => {
         const items = [];
 
         // 1. Mindmap Actions (Surah/Part)
@@ -172,16 +172,29 @@ export default function CardActionMenu({
         }
 
         return items;
-    };
+    }, [
+        cardType,
+        hasMindmap,
+        isProcessing,
+        showExport,
+        showDelete,
+        showReset,
+        docLink,
+        onEditMindmap,
+        onDeleteMindmap,
+        onExportMindmap,
+        onResetMindmap,
+        onChangeSplits,
+        onViewVerseContext,
+        onViewSimilarityContext
+    ]);
 
-    const menuItems = getMenuItems();
-
-    const estimateMenuHeight = () => {
+    const estimatedMenuHeight = useMemo(() => {
         const actionRows = menuItems.filter((item) => item.type !== 'divider').length;
         const dividerRows = menuItems.length - actionRows;
         // p-4 container plus per-row height estimate keeps first render stable.
         return 32 + actionRows * 50 + dividerRows * 10;
-    };
+    }, [menuItems]);
 
     // Calculate position for desktop dropdown - useLayoutEffect to prevent flash
     React.useLayoutEffect(() => {
@@ -193,7 +206,7 @@ export default function CardActionMenu({
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             const measuredWidth = menuRef.current?.offsetWidth ?? DESKTOP_MENU_MIN_WIDTH;
-            const measuredHeight = menuRef.current?.offsetHeight ?? estimateMenuHeight();
+            const measuredHeight = menuRef.current?.offsetHeight ?? estimatedMenuHeight;
             const leftBound = DESKTOP_VIEWPORT_MARGIN;
             const rightBound = viewportWidth - measuredWidth - DESKTOP_VIEWPORT_MARGIN;
             const belowTop = rect.bottom + DESKTOP_MENU_GAP;
@@ -220,7 +233,7 @@ export default function CardActionMenu({
             window.cancelAnimationFrame(rafId);
             window.removeEventListener('resize', updatePosition);
         };
-    }, [isOpen, anchorRef, isMobile, menuItems.length]);
+    }, [isOpen, anchorRef, isMobile, menuItems.length, estimatedMenuHeight]);
 
     // Close on outside click (desktop only)
     useEffect(() => {

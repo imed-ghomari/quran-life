@@ -203,6 +203,22 @@ export default function TodoKanban({
     }
     const [toasts, setToasts] = useState<TodoToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
+
+    const wrapToastText = useCallback((text: string, wordsPerLine = 6) => {
+        if (!text) return text;
+        return text
+            .split('\n')
+            .map((line) => {
+                const words = line.trim().split(/\s+/).filter(Boolean);
+                if (words.length <= wordsPerLine) return line.trim();
+                const lines: string[] = [];
+                for (let i = 0; i < words.length; i += wordsPerLine) {
+                    lines.push(words.slice(i, i + wordsPerLine).join(' '));
+                }
+                return lines.join('\n');
+            })
+            .join('\n');
+    }, []);
     const persistMoveSeqRef = useRef(0);
     const pendingKanbanStateRef = useRef<Record<string, string[]> | null>(null);
     const pendingKanbanStateAtRef = useRef(0);
@@ -2096,7 +2112,16 @@ export default function TodoKanban({
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 {t.type === 'similarity' ? <Brain size={18} /> : <Check size={18} />}
-                                <span style={{ fontWeight: 600 }}>{t.message}</span>
+                                <span style={{
+                                    fontWeight: 600,
+                                    flex: '1 1 auto',
+                                    minWidth: 0,
+                                    whiteSpace: 'pre-line',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere'
+                                }}>
+                                    {wrapToastText(t.message, 6)}
+                                </span>
                                 {t.onUndo && (
                                     <button
                                         onClick={() => {
@@ -2140,9 +2165,11 @@ export default function TodoKanban({
                                     fontSize: '0.8rem',
                                     opacity: 0.9,
                                     paddingLeft: '28px',
-                                    whiteSpace: 'pre-line'
+                                    whiteSpace: 'pre-line',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere'
                                 }}>
-                                    {t.info}
+                                    {wrapToastText(t.info, 8)}
                                 </div>
                             )}
                             <div
