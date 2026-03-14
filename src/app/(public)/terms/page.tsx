@@ -31,7 +31,7 @@ export default function TermsPage() {
 
       <main className="legal-content">
         <article className="legal-card">
-          <div className="legal-meta">Effective date: March 3, 2026</div>
+          <div className="legal-meta">Effective date: March 14, 2026</div>
 
           <section className="legal-section">
             <h2>1. Agreement to Terms</h2>
@@ -65,10 +65,19 @@ export default function TermsPage() {
             </p>
             <ul>
               <li>Billing is handled by our payment processor. We do not store your full payment details.</li>
-              <li>Trial access ends automatically unless you subscribe before the trial expires.</li>
+              <li>If a free trial is offered, your subscription will automatically convert to a paid plan when the trial ends unless you cancel beforehand.</li>
               <li>You can cancel your subscription at any time to stop future renewals.</li>
-              <li>If you cancel after your trial period ends, paid amounts are non-refundable.</li>
+              <li>Refund requests must be submitted within 14 days of your initial purchase or most recent renewal.</li>
+              <li>We do not offer prorated refunds for partial billing periods.</li>
             </ul>
+            <p>
+              After the 14-day refund window, fees are non-refundable except where required by law or where Paddle
+              approves a refund in its sole discretion.
+            </p>
+            <p>
+              Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record
+              for all our orders. Paddle provides all customer service inquiries and handles returns.
+            </p>
           </section>
 
           <section className="legal-section">
