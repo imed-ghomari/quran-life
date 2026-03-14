@@ -698,7 +698,7 @@ function AuthContent() {
                                 <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                                     Privacy Policy
                                 </Link>
-                                . Cancellation after trial is non-refundable.
+                                . Refunds are available only within our 14-day refund window (see Terms).
                             </p>
                         </div>
                     </div>

@@ -955,7 +955,7 @@ export default function SettingsPage() {
         const ok = await confirm({
             title: 'Request Account Deletion',
             message:
-                `This will immediately sign you out, cancel future subscription renewals, and keep your account recoverable until the end of your current billing period. ${timelineNote} You can sign back in and cancel this deletion request before that date. Cancellation after trial is non-refundable.`,
+                `This will immediately sign you out, cancel future subscription renewals, and keep your account recoverable until the end of your current billing period. ${timelineNote} You can sign back in and cancel this deletion request before that date. Refunds are available only within our 14-day refund window (see Terms).`,
             confirmLabel: 'Delete & Stop Renewal',
             isDestructive: true,
         });
