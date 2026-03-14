@@ -6,8 +6,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { id } from '@instantdb/react';
 import Image from 'next/image';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import Spinner from '@/components/ui/Spinner';
-import { parseQuranJson, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
     LEGACY_ALL_QURAN_PART,
@@ -36,9 +37,8 @@ import {
 } from 'lucide-react';
 
 import dynamic from 'next/dynamic';
-import MindmapViewer from '@/components/MindmapViewer';
-import AudioPlayer from '@/components/AudioPlayer';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
     useInstantSettings,
     useInstantNodes,
@@ -62,10 +62,13 @@ import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const AudioPlayer = dynamic(() => import('@/components/AudioPlayer'), { ssr: false });
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map(part => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 const ACTIVE_REVIEW_NODE_STORAGE_KEY = 'dashboard_active_review_node_id_v1';
+const FSRS_OPTIMIZATION_ENABLED = clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED;
 const FSRS_OPTIMIZATION_LOG_DELTA = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA);
 const FSRS_OPTIMIZATION_DELAY_MS = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS);
 const AUTO_NODE_CREATE_BATCH_SIZE = 20;
@@ -112,24 +115,6 @@ function splitIntoChunks(text: string | undefined | null, wordsPerChunk: number 
     return chunks;
 }
 
-function sanitizeVerses(input: unknown): Verse[] {
-    if (!Array.isArray(input)) return [];
-    const out: Verse[] = [];
-    for (const raw of input) {
-        if (!raw || typeof raw !== 'object') continue;
-        const v = raw as Partial<Verse>;
-        const surahId = Number(v.surahId);
-        const ayahId = Number(v.ayahId);
-        if (!Number.isFinite(surahId) || !Number.isFinite(ayahId)) continue;
-        out.push({
-            surahId,
-            ayahId,
-            text: typeof v.text === 'string' ? v.text : '',
-        });
-    }
-    return out;
-}
-
 type DailyPortionSurahGroup = {
     surahId: number;
     verses: Verse[];
@@ -173,22 +158,12 @@ export default function TodayPage() {
     const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
-    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError } = useInstantReviewErrors();
-    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap } = useInstantMindMaps();
+    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
     const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
     const isOnline = useContext(OnlineStatusContext);
-
-    // Debug: Log nodes and due nodes
-    useEffect(() => {
-        console.log('Dashboard Debug:', {
-            allNodes: dueNodes.length > 0 ? dueNodes.map(n => ({ id: n.id, type: n.type, surahId: n.surahId, partId: n.partId, scheduler: n.scheduler })) : 'no due nodes',
-            dueNodesCount: dueNodes.length,
-            totalNodes: dueNodes.length,
-            dueNodesTypes: dueNodes.map(n => n.type)
-        });
-    }, [dueNodes]);
 
     const [allVerses, setAllVerses] = useState<Verse[]>([]);
     const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
@@ -217,6 +192,9 @@ export default function TodayPage() {
     const historyActionLockRef = useRef(false);
     const pendingAutoCreateNodeIdsRef = useRef<Set<string>>(new Set());
     const pendingReviewAdvanceRef = useRef<PendingReviewAdvance | null>(null);
+    const [pendingAutoCreateJobs, setPendingAutoCreateJobs] = useState(0);
+    const [hasResolvedInitialReviewSelection, setHasResolvedInitialReviewSelection] = useState(false);
+    const [hasHydratedReviewQueue, setHasHydratedReviewQueue] = useState(false);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -450,6 +428,7 @@ export default function TodayPage() {
         if (nodesToPersist.length === 0) return;
 
         nodesToPersist.forEach((node) => pendingAutoCreateNodeIdsRef.current.add(node.id));
+        setPendingAutoCreateJobs((count) => count + 1);
 
         let cancelled = false;
         const persistMissingNodes = async () => {
@@ -463,6 +442,7 @@ export default function TodayPage() {
                 console.error('Failed to persist auto-created review nodes', error);
             } finally {
                 nodesToPersist.forEach((node) => pendingAutoCreateNodeIdsRef.current.delete(node.id));
+                setPendingAutoCreateJobs((count) => Math.max(0, count - 1));
             }
         };
 
@@ -565,6 +545,7 @@ export default function TodayPage() {
         const storedNodeId = window.sessionStorage.getItem(ACTIVE_REVIEW_NODE_STORAGE_KEY);
         if (!storedNodeId || orderedDueNodes.length === 0) {
             didRestoreActiveNodeRef.current = true;
+            setHasResolvedInitialReviewSelection(true);
             return;
         }
 
@@ -573,7 +554,24 @@ export default function TodayPage() {
             setCurrentReviewIndex(restoredIndex);
         }
         didRestoreActiveNodeRef.current = true;
+        setHasResolvedInitialReviewSelection(true);
     }, [orderedDueNodes, currentReviewIndex]);
+
+    useEffect(() => {
+        if (hasHydratedReviewQueue) return;
+        const queueDataReady = !settingsLoading && !nodesLoading && !mindmapsLoading && !reviewErrorsLoading;
+        const isAutoCreatingNodes = pendingAutoCreateJobs > 0;
+        if (!queueDataReady || !hasResolvedInitialReviewSelection || isAutoCreatingNodes) return;
+        setHasHydratedReviewQueue(true);
+    }, [
+        hasHydratedReviewQueue,
+        settingsLoading,
+        nodesLoading,
+        mindmapsLoading,
+        reviewErrorsLoading,
+        hasResolvedInitialReviewSelection,
+        pendingAutoCreateJobs,
+    ]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -649,8 +647,12 @@ export default function TodayPage() {
                 const mq = window.matchMedia('(prefers-color-scheme: dark)');
                 setIsDark(mq.matches);
                 const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-                mq.addEventListener('change', handler);
-                return () => mq.removeEventListener('change', handler);
+                if (mq.addEventListener) {
+                    mq.addEventListener('change', handler);
+                    return () => mq.removeEventListener('change', handler);
+                }
+                mq.addListener(handler);
+                return () => mq.removeListener(handler);
             }
         }
     }, [theme]);
@@ -658,6 +660,7 @@ export default function TodayPage() {
     // Mindmap Editor States
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: QuranPart; snapshot?: any } | null>(null);
+    useMindmapBackGestureGuard(Boolean(activeMindmapEditor || activePartEditor));
 
     const toggleSection = (section: 'review' | 'daily') => {
         setViewState(prev => {
@@ -905,6 +908,10 @@ export default function TodayPage() {
     const { meta: optimizationMeta, weights: customWeights, saveMeta: saveOptimizationMeta, saveWeights: saveCustomWeights } = useInstantOptimization();
 
     useEffect(() => {
+        if (!FSRS_OPTIMIZATION_ENABLED) {
+            return;
+        }
+
         const checkOptimization = async () => {
             const count = reviewLogs.length;
 
@@ -973,68 +980,27 @@ export default function TodayPage() {
         return undefined;
     }, [listeningProgress, settings]);
 
-    // Load data
+    // Load verses through shared loader/cache to avoid duplicate parse work.
     useEffect(() => {
-        const readCachedQuranResponse = async (): Promise<Response | null> => {
-            if (!('caches' in window)) return null;
-            const candidates = [
-                '/qpc-hafs-word-by-word.json',
-                `${window.location.origin}/qpc-hafs-word-by-word.json`,
-            ];
-            for (const candidate of candidates) {
-                const match = await caches.match(candidate, {
-                    ignoreSearch: true,
-                    ignoreVary: true,
-                });
-                if (match) return match;
-            }
-            return null;
-        };
-
-        async function load() {
-            // Check session storage first
-            const cached = sessionStorage.getItem('quran_verses_cache_v2');
-            if (cached) {
-                try {
-                    setAllVerses(sanitizeVerses(JSON.parse(cached)));
-                    setIsVersesLoaded(true);
-                    return;
-                } catch {
-                    sessionStorage.removeItem('quran_verses_cache_v2');
-                }
-            }
-
+        let cancelled = false;
+        const load = async () => {
             try {
-                const response = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
-                if (!response.ok) throw new Error(`Failed to load quran JSON: ${response.status}`);
-                const data = await response.json() as Record<string, any>;
-                const verses = sanitizeVerses(parseQuranJson(data));
+                const verses = await getQuranVerses();
+                if (cancelled) return;
                 setAllVerses(verses);
-                setIsVersesLoaded(true);
-
-                try {
-                    sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(verses));
-                } catch (e) {
-                    console.warn('Failed to cache verses in sessionStorage', e);
-                }
-            } catch (_e) {
-                try {
-                    const cachedRes = await readCachedQuranResponse();
-                    if (cachedRes) {
-                        const data = await cachedRes.json() as Record<string, any>;
-                        const verses = sanitizeVerses(parseQuranJson(data));
-                        setAllVerses(verses);
-                        setIsVersesLoaded(true);
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('Failed to load verses from cache', e);
-                }
+            } catch {
+                if (cancelled) return;
                 setAllVerses([]);
-                setIsVersesLoaded(true);
+            } finally {
+                if (!cancelled) {
+                    setIsVersesLoaded(true);
+                }
             }
-        }
-        load();
+        };
+        void load();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
 
@@ -1861,7 +1827,7 @@ export default function TodayPage() {
     const handleMindmapIncomplete = async (surahId: number) => {
         const ok = await confirm({
             title: 'Edit Mindmap Later?',
-            message: 'This will move the mindmap out of the Complete column and suspend it until you continue editing.',
+            message: 'This will move the mindmap out of the Complete column and suspend it until you complete the editing.',
             confirmLabel: 'Edit Later',
             isDestructive: true,
         });
@@ -1882,7 +1848,7 @@ export default function TodayPage() {
     const handlePartMindmapIncomplete = async (partId: QuranPart) => {
         const ok = await confirm({
             title: 'Edit Mindmap Later?',
-            message: 'This will move the mindmap out of the Complete column and suspend it until you continue editing.',
+            message: 'This will move the mindmap out of the Complete column and suspend it until you complete the editing.',
             confirmLabel: 'Edit Later',
             isDestructive: true,
         });
@@ -1964,8 +1930,9 @@ export default function TodayPage() {
     const redoTooltip = getHistoryTooltip(redoStack[redoStack.length - 1], 'redo');
     const dailyReadingStyle = settings?.dailyReadingStyle ?? 'line_by_line';
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
+    const isReviewQueueHydrating = !hasHydratedReviewQueue;
 
-    if (!isLoaded) return <div className="content-wrapper flex items-center justify-center h-full"><Spinner text="Loading..." /></div>;
+    if (!isLoaded) return <FullScreenLoader text="Loading today..." />;
 
     return (
         <div className="content-wrapper tab-content">
@@ -2059,8 +2026,12 @@ export default function TodayPage() {
                     {viewState.reviewExpanded && (
                         <div className="review-section-content">
                             <div className="today-card-content">
-                                {/* Empty state */}
-                                {orderedDueNodes.length === 0 ? (
+                                {isReviewQueueHydrating ? (
+                                    <div className="empty-state">
+                                        <Spinner text="Preparing reviews..." />
+                                    </div>
+                                ) : orderedDueNodes.length === 0 ? (
+                                    /* Empty state */
                                     <div className="empty-state">
                                         <CheckCircle size={40} className="empty-icon" />
                                         <p>No reviews due!</p>
@@ -2196,7 +2167,7 @@ export default function TodayPage() {
                                     </div>
                                 )}
                             </div>
-                            {orderedDueNodes.length > 0 && activeContent && (
+                            {!isReviewQueueHydrating && orderedDueNodes.length > 0 && activeContent && (
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
                                         <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>

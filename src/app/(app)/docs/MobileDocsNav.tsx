@@ -33,10 +33,11 @@ export default function MobileDocsNav({ items }: { items: SidebarItem[] }) {
                     position: 'fixed',
                     inset: 0,
                     top: '3.5rem', /* Account for docs header */
-                    zIndex: 100,
+                    zIndex: 12000,
                     backgroundColor: 'var(--background)',
                     overflowY: 'auto',
                     padding: '1.5rem',
+                    paddingBottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))',
                     animation: 'fadeUp 0.2s ease'
                   }}
                 >

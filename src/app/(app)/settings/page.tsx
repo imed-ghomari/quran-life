@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useContext, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, startTransition } from 'react';
 import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
@@ -44,19 +45,22 @@ import {
     Sliders
 } from 'lucide-react';
 import { AccentTheme, Theme, useTheme } from '@/components/ThemeProvider';
-import AddCustomMutashabihModal from '@/components/AddCustomMutashabihModal';
-import MutashabihNoteModal from '@/components/MutashabihNoteModal';
-import DailyCompletionSlider from '@/components/DailyCompletionSlider';
-import MindmapEditor from '@/components/MindmapEditor';
-import SplitsModal from '@/components/todo/SplitsModal';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
+
+const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
+const MutashabihNoteModal = dynamic(() => import('@/components/MutashabihNoteModal'), { ssr: false });
+const DailyCompletionSlider = dynamic(() => import('@/components/DailyCompletionSlider'), { ssr: false });
+const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+const SplitsModal = dynamic(() => import('@/components/todo/SplitsModal'), { ssr: false });
+const GoogleOAuthProvider = dynamic(() => import('@react-oauth/google').then((mod) => mod.GoogleOAuthProvider), { ssr: false });
+const GoogleLogin = dynamic(() => import('@react-oauth/google').then((mod) => mod.GoogleLogin), { ssr: false });
 
 interface MutashabihatDecision {
     id: string; // absoluteAyah or absoluteAyah-phraseId
@@ -264,7 +268,6 @@ const DELETE_CHURN_REASONS = [
     { id: 'switching_tool', label: 'Switching to another tool' },
     { id: 'temporary_break', label: 'Taking a temporary break' },
     { id: 'other', label: 'Other reason' },
-    { id: 'prefer_not_to_say', label: 'Prefer not to say' },
 ] as const;
 type DeleteChurnReasonCode = (typeof DELETE_CHURN_REASONS)[number]['id'];
 
@@ -536,24 +539,39 @@ export default function SettingsPage() {
     const [settingsMindmapEditor, setSettingsMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [settingsSplitsSurahId, setSettingsSplitsSurahId] = useState<number | null>(null);
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
+    useMindmapBackGestureGuard(Boolean(settingsMindmapEditor));
+    const hasLoadedVersesRef = useRef(false);
 
     const [activeMobilePage, setActiveMobilePage] = useState<'account' | 'plan' | 'tracking' | 'advanced' | null>(null);
     const [billingSummary, setBillingSummary] = useState<BillingSummaryState>({
         nextRenewalAt: null,
         canManageSubscription: false,
     });
+    const verseByRefKey = useMemo(() => {
+        const map = new Map<string, { surahId: number; ayahId: number; text: string }>();
+        for (const verse of verses) {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        }
+        return map;
+    }, [verses]);
+    const getVerseByRef = useCallback((surahId: number, ayahId: number) => {
+        return verseByRefKey.get(`${surahId}:${ayahId}`);
+    }, [verseByRefKey]);
     const [accountDeletionStatus, setAccountDeletionStatus] = useState<AccountDeletionStatusState>(DEFAULT_ACCOUNT_DELETION_STATUS);
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
     const [isCancellingDeletion, setIsCancellingDeletion] = useState(false);
     const [isDeleteFeedbackModalOpen, setIsDeleteFeedbackModalOpen] = useState(false);
-    const [deleteReasonCode, setDeleteReasonCode] = useState<DeleteChurnReasonCode>('prefer_not_to_say');
+    const [deleteReasonCode, setDeleteReasonCode] = useState<DeleteChurnReasonCode>('other');
     const [deleteReasonDetail, setDeleteReasonDetail] = useState('');
     const [deleteReasonError, setDeleteReasonError] = useState<string | null>(null);
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
+    const mobileOverlayHistorySyncRef = useRef(false);
     const mobileHistoryKey = 'mobileSettingsPage';
+    const mobileOverlayHistoryKey = 'mobileSettingsOverlayOpen';
+    const wasMobileOverlayOpenRef = useRef(false);
 
     const latestPartMindmaps = useMemo(() => {
         const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
@@ -663,6 +681,16 @@ export default function SettingsPage() {
         setActiveMutSlideOver(null);
     };
 
+    const closeSettingsSlideOvers = useCallback(() => {
+        setActiveSlideOverGroup(null);
+        setActiveMutSlideOver(null);
+        if (!isMobile || typeof window === 'undefined') return;
+        const currentState = window.history.state || {};
+        if (currentState[mobileOverlayHistoryKey]) {
+            window.history.back();
+        }
+    }, [isMobile, mobileOverlayHistoryKey]);
+
     const getFilteredNodesForSlideOver = (type: 'verse_segment' | 'mindmap' | 'part_mindmap', surahId?: number) => {
         if (type === 'verse_segment' && surahId) {
             return filteredVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId);
@@ -698,19 +726,28 @@ export default function SettingsPage() {
         if (!isMobile) return;
 
         const currentState = window.history.state || {};
-        if (currentState[mobileHistoryKey] === undefined) {
-            window.history.replaceState({ ...currentState, [mobileHistoryKey]: null }, '');
+        if (currentState[mobileHistoryKey] === undefined || currentState[mobileOverlayHistoryKey] === undefined) {
+            window.history.replaceState({
+                ...currentState,
+                [mobileHistoryKey]: currentState[mobileHistoryKey] ?? null,
+                [mobileOverlayHistoryKey]: currentState[mobileOverlayHistoryKey] ?? false
+            }, '');
         }
 
         const handlePopState = (event: PopStateEvent) => {
+            mobileOverlayHistorySyncRef.current = true;
             mobileHistorySyncRef.current = true;
             const nextPage = event.state?.[mobileHistoryKey] ?? null;
             setActiveMobilePage(nextPage);
+            if (activeSlideOverGroup || activeMutSlideOver) {
+                setActiveSlideOverGroup(null);
+                setActiveMutSlideOver(null);
+            }
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [isMobile, mobileHistoryKey]);
+    }, [activeMutSlideOver, activeSlideOverGroup, isMobile, mobileHistoryKey, mobileOverlayHistoryKey]);
 
     useEffect(() => {
         if (!isMobile) return;
@@ -729,6 +766,30 @@ export default function SettingsPage() {
             window.history.pushState({ ...currentState, [mobileHistoryKey]: activeMobilePage }, '');
         }
     }, [activeMobilePage, isMobile, mobileHistoryKey]);
+
+    useEffect(() => {
+        if (!isMobile) {
+            wasMobileOverlayOpenRef.current = false;
+            return;
+        }
+        if (mobileOverlayHistorySyncRef.current) {
+            mobileOverlayHistorySyncRef.current = false;
+            wasMobileOverlayOpenRef.current = !!(activeSlideOverGroup || activeMutSlideOver);
+            return;
+        }
+
+        const isOverlayOpen = !!(activeSlideOverGroup || activeMutSlideOver);
+        const wasOpen = wasMobileOverlayOpenRef.current;
+        wasMobileOverlayOpenRef.current = isOverlayOpen;
+        if (isOverlayOpen && !wasOpen) {
+            const currentState = window.history.state || {};
+            window.history.pushState({
+                ...currentState,
+                [mobileHistoryKey]: activeMobilePage,
+                [mobileOverlayHistoryKey]: true
+            }, '');
+        }
+    }, [activeMobilePage, activeMutSlideOver, activeSlideOverGroup, isMobile, mobileHistoryKey, mobileOverlayHistoryKey]);
 
     const [sectionsExpanded, setSectionsExpanded] = useState(getInitialSectionExpansion);
 
@@ -894,13 +955,13 @@ export default function SettingsPage() {
         const ok = await confirm({
             title: 'Request Account Deletion',
             message:
-                `This will immediately sign you out, cancel future subscription renewals, and keep your account recoverable until the end of your current billing period. ${timelineNote} You can sign back in and cancel this deletion request before that date. Cancellation after trial is non-refundable.`,
+                `This will immediately sign you out, cancel future subscription renewals, and keep your account recoverable until the end of your current billing period. ${timelineNote} You can sign back in and cancel this deletion request before that date. Refunds are available only within our 14-day refund window (see Terms).`,
             confirmLabel: 'Delete & Stop Renewal',
             isDestructive: true,
         });
         if (!ok) return;
         setDeleteReasonError(null);
-        setDeleteReasonCode('prefer_not_to_say');
+        setDeleteReasonCode('other');
         setDeleteReasonDetail('');
         setIsDeleteFeedbackModalOpen(true);
     }, [billingSummary.nextRenewalAt, confirm, isDeleteFeedbackModalOpen, isDeletingAccount]);
@@ -911,6 +972,12 @@ export default function SettingsPage() {
         setDeleteReasonError(null);
         if (!deleteReasonCode) {
             setDeleteReasonError('Please choose one reason.');
+            return;
+        }
+
+        // Force user to write when selecting "Other" option
+        if (deleteReasonCode === 'other' && !deleteReasonDetail.trim()) {
+            setDeleteReasonError('Please provide details when selecting "Other".');
             return;
         }
 
@@ -1139,7 +1206,7 @@ export default function SettingsPage() {
     const preDeleteEndDateLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
     const deleteFeedbackModalMessage = preDeleteEndDateLabel
         ? `Before you leave, tell us why. You will lose app access in ${preDeleteDaysLabel ?? '0 days'} (${preDeleteEndDateLabel}) once renewal is stopped.`
-        : 'Before you leave, tell us why. Access will end when your current billing period ends once renewal is stopped.';
+        : 'Before you leave, tell us why.';
 
     const renderBillingInfo = () => (
         <div
@@ -2258,8 +2325,30 @@ export default function SettingsPage() {
 
 
 
+    const ensureVersesLoaded = useCallback(async () => {
+        if (hasLoadedVersesRef.current) return;
+        hasLoadedVersesRef.current = true;
+        try {
+            const loadedVerses = await getQuranVerses();
+            startTransition(() => {
+                setVerses(loadedVerses);
+            });
+        } catch {
+            hasLoadedVersesRef.current = false;
+            startTransition(() => {
+                setVerses([]);
+            });
+        }
+    }, []);
+
     const toggleGroup = (groupId: string) => {
-        setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+        setExpandedGroups(prev => {
+            const nextValue = !prev[groupId];
+            if (groupId === 'verses' && nextValue) {
+                void ensureVersesLoaded();
+            }
+            return { ...prev, [groupId]: nextValue };
+        });
     };
 
     const getMaturityState = (level: 'reset' | 'medium' | 'strong' | 'mastered') => {
@@ -2382,8 +2471,9 @@ export default function SettingsPage() {
     };
 
     useEffect(() => {
-        getQuranVerses().then(setVerses).catch(() => setVerses([]));
-    }, []);
+        if (!Object.values(expandedSurahs).some(Boolean) && !expandedGroups['verses']) return;
+        void ensureVersesLoaded();
+    }, [expandedSurahs, expandedGroups, ensureVersesLoaded]);
 
     const handleCompletionDays = (days: number) => {
         const clamped = Math.max(7, Math.min(120, days));
@@ -3342,7 +3432,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         disabled={isAuthProcessing}
                                                         style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}
                                                     >
-                                                        {isAuthProcessing ? 'Processing...' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
+                                                        {isAuthProcessing ? 'Delete & Stop Renewal' : (authStep === 'email' ? 'Send Code' : 'Verify Code')}
                                                     </button>
 
                                                     {authStep === 'email' && (
@@ -4470,7 +4560,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                             {group.absRefs.map(absRef => {
                                                                                                                 const displayedAbs = settingsContextVerseCursor[absRef] ?? absRef;
                                                                                                                 const ref = absoluteToSurahAyah(displayedAbs);
-                                                                                                                const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                                                                                                                const baseVerse = getVerseByRef(ref.surahId, ref.ayahId);
                                                                                                                 const mutEntry = group.entries.find(m => (m?.meta?.sourceAbs === absRef) || (m?.matches || []).includes(absRef));
                                                                                                                 if (!mutEntry || !baseVerse) return null;
 
@@ -4563,7 +4653,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                                         const displayedMatchAbs = settingsContextVerseCursor[matchAbs] ?? matchAbs;
                                                                                                                         const mref = absoluteToSurahAyah(displayedMatchAbs);
                                                                                                                         const msurah = getSurah(mref.surahId);
-                                                                                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                                                                                        const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                                                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
                                                                                                                         return (
@@ -4907,7 +4997,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
                 const customId = isCustom ? group.customIds[0] : undefined;
                 return (
-                    <div className="slide-over-overlay" onClick={() => setActiveMutSlideOver(null)}>
+                    <div className="slide-over-overlay" onClick={closeSettingsSlideOvers}>
                         <div className="slide-over-content" onClick={e => e.stopPropagation()}>
                             <div className="slide-over-header">
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -4916,7 +5006,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     </div>
                                     <h3 style={{ margin: 0, fontSize: '1rem' }}>{activeMutSlideOver.title}</h3>
                                 </div>
-                                <button className="close-btn" onClick={() => setActiveMutSlideOver(null)}>
+                                <button className="close-btn" onClick={closeSettingsSlideOvers}>
                                     <X size={20} />
                                 </button>
                             </div>
@@ -4979,7 +5069,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             className="bulk-btn reset-mut"
                                             onClick={async () => {
                                                 await handleDeleteCustomMutashabih(customId);
-                                                setActiveMutSlideOver(null);
+                                                closeSettingsSlideOvers();
                                             }}
                                             style={{ minWidth: '140px' }}
                                         >
@@ -5000,10 +5090,10 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             const sourceEntries = sortedAbsRefs.map(absRef => ({
                                                 absRef,
                                                 ref: absoluteToSurahAyah(absRef),
-                                                baseVerse: verses.find(v => {
+                                                baseVerse: (() => {
                                                     const r = absoluteToSurahAyah(absRef);
-                                                    return v.surahId === r.surahId && v.ayahId === r.ayahId;
-                                                }),
+                                                    return getVerseByRef(r.surahId, r.ayahId);
+                                                })(),
                                                 mutEntry: group.entries.find((entry: any) => entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)),
                                             })).filter(item => !!item.baseVerse && !!item.mutEntry) as Array<{
                                                 absRef: number;
@@ -5043,7 +5133,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
                                                             const displayedAbs = settingsContextVerseCursor[absRef] ?? absRef;
                                                             const displayedRef = absoluteToSurahAyah(displayedAbs);
-                                                            const displayedVerse = verses.find(v => v.surahId === displayedRef.surahId && v.ayahId === displayedRef.ayahId);
+                                                            const displayedVerse = getVerseByRef(displayedRef.surahId, displayedRef.ayahId);
                                                             const displayedRange = (mutEntry.meta as any).sourceAbs === displayedAbs
                                                                 ? (mutEntry.meta as any).sourceRange
                                                                 : matchRangeByAbs.get(displayedAbs);
@@ -5113,7 +5203,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                             const displayedMatchAbs = settingsContextVerseCursor[matchAbs] ?? matchAbs;
                                                             const mref = absoluteToSurahAyah(displayedMatchAbs);
                                                             const msurah = getSurah(mref.surahId);
-                                                            const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                            const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                             const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
                                                             return (
@@ -5557,6 +5647,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                         flex: 1;
                         overflow-y: auto;
                         padding: 1.25rem;
+                        padding-bottom: calc(1.25rem + var(--mobile-bottom-toolbar-offset, 0px));
                         -webkit-overflow-scrolling: touch;
                     }
 
@@ -5873,7 +5964,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
             {/* Mobile Slide-over for Node Management */}
             {activeSlideOverGroup && (
-                <div className="slide-over-overlay" onClick={() => setActiveSlideOverGroup(null)}>
+                <div className="slide-over-overlay" onClick={closeSettingsSlideOvers}>
                     <div className="slide-over-content" onClick={e => e.stopPropagation()}>
                         <div className="slide-over-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -5882,7 +5973,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                 </div>
                                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{activeSlideOverGroup.title}</h3>
                             </div>
-                            <button className="close-btn" onClick={() => setActiveSlideOverGroup(null)}>
+                            <button className="close-btn" onClick={closeSettingsSlideOvers}>
                                 <X size={20} />
                             </button>
                         </div>
@@ -6006,6 +6097,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 cancelLabel="Back"
                 isDestructive
                 isProcessing={isDeletingAccount}
+                disabled={deleteReasonCode === 'other' && !deleteReasonDetail.trim()}
                 onConfirm={handleSubmitDeleteAccount}
                 onCancel={() => {
                     if (isDeletingAccount) return;
@@ -6013,7 +6105,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     setIsDeleteFeedbackModalOpen(false);
                 }}
             >
-                <div style={{ display: 'grid', gap: '0.65rem' }}>
+                <div style={{ display: 'grid', gap: '0.65rem', marginTop: '1.5rem' }}>
                     {DELETE_CHURN_REASONS.map((option) => (
                         <label
                             key={option.id}
@@ -6042,12 +6134,12 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                         <textarea
                             value={deleteReasonDetail}
                             onChange={(event) => setDeleteReasonDetail(event.target.value.slice(0, DELETE_REASON_DETAIL_MAX_LENGTH))}
-                            placeholder="Optional details (what we can improve)"
+                            placeholder={deleteReasonCode === 'other' ? 'Please provide details (required)' : 'Optional details (what we can improve)'}
                             rows={3}
                             style={{
                                 width: '100%',
                                 borderRadius: '10px',
-                                border: '1px solid var(--border)',
+                                border: deleteReasonCode === 'other' && deleteReasonError && !deleteReasonDetail.trim() ? '1px solid var(--danger)' : '1px solid var(--border)',
                                 background: 'var(--background-secondary)',
                                 color: 'var(--foreground)',
                                 padding: '0.65rem 0.75rem',

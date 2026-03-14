@@ -68,7 +68,10 @@ export default function SlideOver({
                     </div>
 
                     {/* Content */}
-                    <div className={`flex-1 overflow-y-auto px-10 py-8 ${contentClassName ?? ''}`.trim()}>
+                    <div
+                        className={`flex-1 overflow-y-auto px-10 py-8 ${contentClassName ?? ''}`.trim()}
+                        style={{ paddingBottom: 'calc(2rem + var(--mobile-bottom-toolbar-offset, 0px))' }}
+                    >
                         {children}
                     </div>
                 </div>

@@ -1089,6 +1089,16 @@ article.prose pre {
   --chart-mastered: color-mix(in srgb, var(--success) 82%, var(--accent-secondary) 18%);
 }
 
+:root {
+  --mobile-bottom-toolbar-offset: calc(5.2rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  :root {
+    --mobile-bottom-toolbar-offset: 0px;
+  }
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -1140,6 +1150,26 @@ body {
   overflow-x: hidden;
 }
 
+.page-content-layer {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content-reveal {
+  animation: page-content-fade-in 300ms ease-out both;
+}
+
+@keyframes page-content-fade-in {
+  from {
+    opacity: 0.84;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .page-container.fixed-layout {
   height: 100vh;
   height: 100dvh;
@@ -1149,6 +1179,11 @@ body {
   flex-direction: column;
   padding-bottom: 80px;
   overscroll-behavior: none;
+}
+
+.page-container.fixed-layout .page-content-layer {
+  flex: 1;
+  min-height: 0;
 }
 
 .page-container.fixed-layout .content-wrapper {
@@ -1676,6 +1711,7 @@ h3 {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  padding-top: 1rem;
 }
 
 .review-mindmap-content {
@@ -1907,6 +1943,62 @@ h3 {
   color: color-mix(in srgb, var(--accent-hover) 72%, var(--accent) 28%);
 }
 
+/* Todo Kanban visuals are intentionally scoped to todo classes,
+   so landing/roadmap CSS changes cannot alter app-kanban appearance. */
+.todo-page .todo-kanban-column {
+  border: 1px solid var(--border);
+  background-color: var(--background-secondary);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.todo-page .todo-kanban-column-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-page .todo-kanban-column-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.todo-page .todo-kanban-card {
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 5%, transparent);
+  padding: 1rem;
+  transition: box-shadow 0.2s ease;
+}
+
+.todo-page .todo-kanban-card:hover {
+  transform: none;
+}
+
+.todo-page .todo-kanban-card[data-dragging='true'] {
+  transition: none;
+}
+
+.todo-kanban-load-more-sentinel {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 1px;
+}
+
+@media (max-width: 768px) {
+  .todo-page .kanban-column--mobile-flat {
+    border: none;
+    box-shadow: none;
+  }
+
+  .todo-kanban-load-more-sentinel {
+    width: 12px;
+    height: 100%;
+    flex: 0 0 12px;
+  }
+}
+
 @media (max-width: 767px) {
   .section-title {
     font-size: 0.9rem;
@@ -2105,6 +2197,10 @@ input:focus {
   border-top: 1px solid var(--border);
   padding: 0.35rem 0.5rem calc(env(safe-area-inset-bottom) + 0.35rem);
   z-index: 50;
+}
+
+body[data-mindmap-open="true"] .bottom-nav {
+  display: none !important;
 }
 
 .nav-item {
@@ -2668,6 +2764,7 @@ input:focus {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
+  padding-bottom: calc(1rem + var(--mobile-bottom-toolbar-offset, 0px));
 }
 
 .splits-modal-slide-body {
@@ -3682,6 +3779,7 @@ input:focus {
 /* Verse Context (Todo modal) spacing */
 .verse-context-modal .verse-context-content {
   padding: 1.25rem 1.5rem !important;
+  padding-bottom: calc(1.25rem + var(--mobile-bottom-toolbar-offset, 0px)) !important;
 }
 
 .verse-context-modal .verse-context-verse {
@@ -3728,6 +3826,7 @@ input:focus {
 /* Similarity Context (Todo modal) spacing to match Verse Context */
 .similarity-context-modal .similarity-context-content {
   padding: 1.25rem 1.5rem !important;
+  padding-bottom: calc(1.25rem + var(--mobile-bottom-toolbar-offset, 0px)) !important;
 }
 
 .similarity-context-modal .similarity-context-header {
@@ -4218,14 +4317,25 @@ input:focus {
   transform: translateY(5px);
 }
 
+/* On desktop todo cards, keep status icons tighter to the title baseline. */
+@media (min-width: 768px) {
+  .todo-page .todo-kanban-card .kanban-title-icon {
+    transform: translateY(1px);
+  }
+}
+
 /* Stronger hover/press highlight for Kanban card action menu rows */
 .card-action-menu-item.is-neutral {
   color: var(--foreground);
 }
 
+.card-action-menu-item.adv-seg-btn {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  will-change: background-color, color;
+}
+
 .card-action-menu-item.is-neutral:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 18%, var(--verse-bg));
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
   color: color-mix(in srgb, var(--accent) 84%, var(--foreground));
 }
 
@@ -4239,7 +4349,6 @@ input:focus {
 
 .card-action-menu-item.is-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 18%, var(--verse-bg));
-  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
   color: color-mix(in srgb, var(--danger) 84%, var(--foreground));
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import {
@@ -24,22 +24,41 @@ const getLocalDayKey = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
-function NavigationContent() {
+const routeMatchesNavItem = (pathname: string | null, href: string) => {
+    if (!pathname) return false;
+    if (href === '/docs') return pathname.startsWith('/docs');
+    return pathname === href;
+};
+
+type NavigationContentProps = {
+    pendingHref: string | null;
+    onNavigateStart: (href: string) => void;
+};
+
+function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { settings } = useInstantSettings();
-    const { dueNodes } = useInstantNodes();
-    const { mindmaps, partMindMaps } = useInstantMindMaps();
+    const { settings, isLoading: settingsLoading } = useInstantSettings();
+    const { dueNodes, isLoading: nodesLoading } = useInstantNodes();
+    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
     const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
-    const { errors } = useInstantReviewErrors();
-    const { progress: listeningProgress } = useInstantListeningProgress();
+    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useInstantListeningProgress();
+    const [hasHydratedNavMetrics, setHasHydratedNavMetrics] = useState(false);
+    const navDataLoading = settingsLoading || nodesLoading || mindmapsLoading || reviewErrorsLoading || listeningProgressLoading;
+
+    useEffect(() => {
+        if (navDataLoading) return;
+        setHasHydratedNavMetrics(true);
+    }, [navDataLoading]);
 
     const navMetrics = useMemo(() => {
-        if (!settings) {
+        if (!settings || !hasHydratedNavMetrics) {
             return {
                 pendingCount: 0,
                 todayTasks: 0,
                 isDailyPortionComplete: false,
+                hideBadges: true,
             };
         }
 
@@ -142,22 +161,25 @@ function NavigationContent() {
             pendingCount,
             todayTasks: filterReviewQueueNodes(dueNodes, settings, mindmaps).length,
             isDailyPortionComplete,
+            hideBadges: false,
         };
-    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress]);
+    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress, hasHydratedNavMetrics]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', badge: navMetrics.pendingCount, showStatusDot: false },
+        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.hideBadges ? undefined : navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
+        { href: '/todo', icon: ListTodo, label: 'Todo', badge: navMetrics.hideBadges ? undefined : navMetrics.pendingCount, showStatusDot: false },
         { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
         { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },
     ];
+    const effectivePathname = pendingHref ?? pathname;
 
     return (
         <nav className="bottom-nav">
             {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || (item.href === '/docs' && pathname?.startsWith('/docs'));
+                const isActive = routeMatchesNavItem(effectivePathname, item.href);
+                const isCurrentPath = routeMatchesNavItem(pathname, item.href);
                 
                 return (
                     <Link
@@ -176,9 +198,9 @@ function NavigationContent() {
                                 return;
                             }
                             event.preventDefault();
-                            if (!isActive) {
-                                router.push(item.href);
-                            }
+                            if (isCurrentPath) return;
+                            onNavigateStart(item.href);
+                            router.push(item.href);
                         }}
                     >
                         <div className="nav-icon">
@@ -200,7 +222,12 @@ function NavigationContent() {
     );
 }
 
-export default function Navigation() {
+type NavigationProps = {
+    pendingHref: string | null;
+    onNavigateStart: (href: string) => void;
+};
+
+export default function Navigation({ pendingHref, onNavigateStart }: NavigationProps) {
     const pathname = usePathname();
     const isAuthOrHome = pathname === '/'
         || pathname === '/auth'
@@ -210,5 +237,5 @@ export default function Navigation() {
 
     if (isAuthOrHome) return null;
 
-    return <NavigationContent />;
+    return <NavigationContent pendingHref={pendingHref} onNavigateStart={onNavigateStart} />;
 }

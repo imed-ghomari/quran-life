@@ -294,22 +294,39 @@ export function useInstantSettings() {
         }
 
         const syncedAt = new Date().toISOString();
-        if (settingsEntry) {
-            const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
-            await db.transact(db.tx.settings[settingsId].update({
+        const settingsId = settingsEntry
+            ? resolveEntityId(settingsEntry.id, 'settings', user.id)
+            : stableEntityId('settings', user.id);
+        const basePayload = {
+            ...DEFAULT_SETTINGS_BASE,
+            ...normalizedSettings,
+            userId: user.id,
+            partSystemVersion: 2,
+            lastSyncedAt: syncedAt,
+        };
+        const updatePayload = settingsEntry
+            ? {
                 ...normalizedSettings,
                 partSystemVersion: 2,
-                lastSyncedAt: syncedAt
-            }));
-        } else {
-            const settingsId = stableEntityId('settings', user.id);
-            await db.transact(db.tx.settings[settingsId].update({
-                ...DEFAULT_SETTINGS_BASE,
-                ...normalizedSettings,
-                userId: user.id,
                 lastSyncedAt: syncedAt,
-            }));
-        }
+            }
+            : basePayload;
+        const updateTx = db.tx.settings[settingsId].update(updatePayload);
+        const createTx = db.tx.settings[settingsId].create(basePayload);
+
+        await transactWithRetry(updateTx).catch(async (updateError) => {
+            if (!isInstantMissingEntityUpdateError(updateError)) {
+                throw updateError;
+            }
+            try {
+                return await transactWithRetry(createTx);
+            } catch (createError) {
+                if (!isInstantAlreadyExistingCreateError(createError)) {
+                    throw createError;
+                }
+                return transactWithRetry(updateTx);
+            }
+        });
     };
 
     const results = useMemo(() => ({

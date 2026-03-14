@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback, useRef, useContext } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, useContext, startTransition } from 'react';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     useInstantSettings,
@@ -25,15 +25,19 @@ import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { X } from 'lucide-react';
-import MindmapEditor from '@/components/MindmapEditor';
-import MindmapViewer from '@/components/MindmapViewer';
-import TodoKanban from '@/components/todo/TodoKanban';
+import dynamic from 'next/dynamic';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 import { AccessStateContext } from '@/components/Providers';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
+
+const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const TodoKanban = dynamic(() => import('@/components/todo/TodoKanban'), { ssr: false });
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
@@ -105,28 +109,27 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
  */
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
-    const { settings, saveSettings } = useInstantSettings();
+    const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
     const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
     const queueSettingsUpdate = useCallback((update: Partial<AppSettings>) => {
         const queued = settingsWriteQueueRef.current.then(() => saveSettings(update));
         settingsWriteQueueRef.current = queued.catch(() => { });
         return queued;
     }, [saveSettings]);
-    const { nodes, saveNode, deleteNode } = useInstantNodes();
+    const { nodes, saveNode, deleteNode, isLoading: nodesLoading } = useInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
     const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
 
-    // Debug logging for development
-    useEffect(() => {
-        console.log('mindmapsList updated:', mindmapsList);
-    }, [mindmapsList]);
-    const { decisions, custom: customMutashabihat, saveDecision, saveCustom } = useInstantMutashabihat();
-    const { errors } = useInstantReviewErrors();
+    const { decisions, custom: customMutashabihat, saveDecision, saveCustom, isLoading: mutashabihatLoading } = useInstantMutashabihat();
+    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
 
     const { isEditor } = useContext(AccessStateContext);
     const appMode = isEditor ? 'owner' : 'user';
     const [premadeIndex, setPremadeIndex] = useState<{ surah: number[]; part: number[]; updatedAt?: string } | null>(null);
     const autoImportedRef = useRef<Set<string>>(new Set());
+    const autoImportInFlightRef = useRef(false);
+    const [isAutoImportingPremades, setIsAutoImportingPremades] = useState(false);
+    const [hasHydratedTodoData, setHasHydratedTodoData] = useState(false);
     const { alert } = useConfirmDialog();
 
     // -- 2. Data Memoization & Deduplication --
@@ -183,6 +186,7 @@ export default function TodoPage() {
     // Keep scheduler nodes aligned when split anchors change in Todo.
     // Without this, Today counters can lag until the Dashboard mount sync runs.
     useEffect(() => {
+        if (settingsLoading || nodesLoading || mindmapsLoading) return;
         const completedIds = settings?.kanbanColumns?.complete || [];
         if (completedIds.length === 0) return;
 
@@ -259,7 +263,7 @@ export default function TodoPage() {
         Promise.all(nodesToCreate.map(node => saveNode(node))).catch((err) => {
             console.error('Failed syncing Todo split changes to FSRS nodes', err);
         });
-    }, [settings?.kanbanColumns, nodes, mindmaps, partMindmapsMap, saveNode]);
+    }, [settings?.kanbanColumns, nodes, mindmaps, partMindmapsMap, saveNode, settingsLoading, nodesLoading, mindmapsLoading]);
 
     // Theme detection
     const { theme } = useTheme();
@@ -269,8 +273,12 @@ export default function TodoPage() {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');
             setSystemIsDark(mq.matches);
             const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
-            mq.addEventListener('change', handler);
-            return () => mq.removeEventListener('change', handler);
+            if (mq.addEventListener) {
+                mq.addEventListener('change', handler);
+                return () => mq.removeEventListener('change', handler);
+            }
+            mq.addListener(handler);
+            return () => mq.removeListener(handler);
         }
     }, []);
     const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
@@ -279,12 +287,48 @@ export default function TodoPage() {
     const [activeMindmapEditor, setActiveMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [activePartEditor, setActivePartEditor] = useState<{ partId: PartMindMapId; snapshot?: any } | null>(null);
     const [activeMindmapPreview, setActiveMindmapPreview] = useState<{ surahId: number; snapshot?: any; imageUrl?: string | null; imageUrlDark?: string | null } | null>(null);
+    useMindmapBackGestureGuard(Boolean(activeMindmapEditor || activePartEditor));
+
+    const hasLoadedVersesRef = useRef(false);
+    const loadVerses = useCallback(async () => {
+        if (hasLoadedVersesRef.current) return;
+        hasLoadedVersesRef.current = true;
+        try {
+            const loadedVerses = await getQuranVerses();
+            startTransition(() => {
+                setVerses(loadedVerses);
+            });
+        } catch {
+            hasLoadedVersesRef.current = false;
+            startTransition(() => {
+                setVerses([]);
+            });
+        }
+    }, []);
 
     useEffect(() => {
-        getQuranVerses()
-            .then(setVerses)
-            .catch(() => setVerses([]));
-    }, []);
+        let cancelled = false;
+        const kickOffLoad = () => {
+            if (cancelled) return;
+            void loadVerses();
+        };
+
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            const idleId = window.requestIdleCallback(() => {
+                kickOffLoad();
+            }, { timeout: 1500 });
+            return () => {
+                cancelled = true;
+                window.cancelIdleCallback(idleId);
+            };
+        }
+
+        const timerId = setTimeout(kickOffLoad, 0);
+        return () => {
+            cancelled = true;
+            clearTimeout(timerId);
+        };
+    }, [loadVerses]);
 
     const decisionsMap = useMemo(() => {
         const acc: Record<string, any> = {};
@@ -644,7 +688,6 @@ export default function TodoPage() {
 
     // Marks a Mindmap (Surah level) as complete/incomplete
     const handleMarkComplete = async (surahId: number, currentMindmap?: any, forceState?: boolean) => {
-        console.log('handleMarkComplete called:', { surahId, forceState, currentMindmap });
         // Always prefer the latest persisted mindmap to avoid overwriting fresh splits
         // with stale card payloads during drag/drop completion transitions.
         const persisted = mindmaps[surahId];
@@ -652,7 +695,6 @@ export default function TodoPage() {
         const tldrawSnapshot = existing.tldrawSnapshot || currentMindmap?.tldrawSnapshot;
 
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
-        console.log('isNowComplete:', isNowComplete);
 
         const updated = {
             ...existing,
@@ -666,9 +708,7 @@ export default function TodoPage() {
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
-            console.log('Checking for existing mindmap MemoryNode for surah:', surahId);
             const existingNode = nodes.find(n => n.type === 'mindmap' && getMindmapSurahId(n) === surahId);
-            console.log('Existing node found:', existingNode);
             if (!existingNode) {
                 const newNode: MemoryNode = {
                     id: stableNodeId('memory_node', 'mindmap', surahId),
@@ -678,12 +718,8 @@ export default function TodoPage() {
                     scheduler: createNewFSRSState(),
                     createdAt: new Date().toISOString()
                 };
-                console.log('Creating new MemoryNode:', newNode);
                 await saveNode(newNode);
                 appLogger.addLog(`Created scheduling node for Surah ${surahId} mindmap`, 'info');
-                console.log('MemoryNode created successfully');
-            } else {
-                console.log('MemoryNode already exists, skipping creation');
             }
         } else {
             const behavior = settings.completeExitBehavior ?? 'mindmap_only';
@@ -897,8 +933,11 @@ export default function TodoPage() {
 
         const hasAnyPremade = premadeIndex.surah.length > 0 || premadeIndex.part.length > 0;
         if (!hasAnyPremade) return;
+        if (autoImportInFlightRef.current) return;
 
-        (async () => {
+        autoImportInFlightRef.current = true;
+        setIsAutoImportingPremades(true);
+        void (async () => {
             let importedAny = false;
 
             for (const id of premadeIndex.surah) {
@@ -930,7 +969,10 @@ export default function TodoPage() {
             if (importedAny) {
                 appLogger.addLog('Auto-imported premade mindmaps (per missing item)', 'info');
             }
-        })();
+        })().finally(() => {
+            autoImportInFlightRef.current = false;
+            setIsAutoImportingPremades(false);
+        });
     }, [isEditor, premadeIndex, mindmaps, partMindmapsMap, mindmapsLoading, handleImportPremade]);
 
     const hasPremadeMindmap = useCallback((type: 'surah' | 'part', id: number) => {
@@ -1052,6 +1094,28 @@ export default function TodoPage() {
         }
     }, [activePartEditor, partMindmapsMap, savePartMindMap]);
 
+    const isPremadeIndexSettled = isEditor || premadeIndex !== null;
+    const todoDataReady =
+        !settingsLoading
+        && !nodesLoading
+        && !mindmapsLoading
+        && !mutashabihatLoading
+        && !reviewErrorsLoading
+        && isPremadeIndexSettled
+        && !isAutoImportingPremades;
+
+    useEffect(() => {
+        if (!todoDataReady) return;
+        setHasHydratedTodoData(true);
+    }, [todoDataReady]);
+
+    const showTodoLoader = !hasHydratedTodoData;
+    const todoLoaderText = 'Preparing Todo...';
+
+    if (showTodoLoader) {
+        return <FullScreenLoader text={todoLoaderText} />;
+    }
+
     return (
         <div className="content-wrapper tab-content todo-page">
             {/* Surah Mindmap Editor */}
@@ -1116,65 +1180,67 @@ export default function TodoPage() {
                 </div>
             )}
             {/* Kanban Board Replacement */}
-            <div className="w-full h-full flex flex-col px-2 sm:px-4 md:px-6 py-2 sm:py-4">
-                <TodoKanban
-                    suspendedAnchors={suspendedAnchors}
-                    similarityGroups={groupedSimilarity}
-                    partTasks={partTasks}
-                    surahTasks={surahTasks}
-                    verses={verses}
-                    mindmaps={mindmaps}
-                    isDark={isDark}
-                    // Persisted State
-                    kanbanState={settings.kanbanColumns}
-                    defaultFilter={settings.todoDefaultFilter ?? 'all'}
-                    completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
-                    kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
-                    onKanbanStateChange={async (cols) => {
-                        await queueSettingsUpdate({
-                            kanbanColumns: cols
-                        });
-                    }}
-                    onFixConfirm={handleFixConfirm}
-                    onSimilarityDecision={handleSimilarityDecision}
-                    onPartComplete={handlePartComplete}
-                    onSurahComplete={handleMarkComplete}
-                    onImportPremade={handleImportPremade}
-                    onExportPremade={isEditor ? handleExportPremade : undefined}
-                    onResetMindmap={!isEditor ? handleResetMindmap : undefined}
-                    onEditMindmap={(id, snapshot, isPart) => {
-                        if (isPart) {
-                            setActivePartEditor({ partId: id as any, snapshot });
-                        } else {
-                            setActiveMindmapEditor({ surahId: id, snapshot });
-                        }
-                    }}
-                    onDeleteMindmap={async (type, id) => {
-                        if (type === 'surah') {
-                            // Find specific entity to delete
-                            const entity = mindmapsList.find((m: any) => Number(m.surahId) === id);
-                            if (entity && (entity as any).id) {
-                                await deleteMindMap((entity as any).id);
+            <div className="relative w-full h-full flex flex-col px-2 sm:px-4 md:px-6 py-2 sm:py-4" aria-busy={false}>
+                <div className="h-full w-full">
+                    <TodoKanban
+                        suspendedAnchors={suspendedAnchors}
+                        similarityGroups={groupedSimilarity}
+                        partTasks={partTasks}
+                        surahTasks={surahTasks}
+                        verses={verses}
+                        mindmaps={mindmaps}
+                        isDark={isDark}
+                        // Persisted State
+                        kanbanState={settings.kanbanColumns}
+                        defaultFilter={settings.todoDefaultFilter ?? 'all'}
+                        completeExitBehavior={settings.completeExitBehavior ?? 'mindmap_only'}
+                        kanbanSortOrder={settings.kanbanSortOrder ?? 'type_then_number'}
+                        onKanbanStateChange={async (cols) => {
+                            await queueSettingsUpdate({
+                                kanbanColumns: cols
+                            });
+                        }}
+                        onFixConfirm={handleFixConfirm}
+                        onSimilarityDecision={handleSimilarityDecision}
+                        onPartComplete={handlePartComplete}
+                        onSurahComplete={handleMarkComplete}
+                        onImportPremade={handleImportPremade}
+                        onExportPremade={isEditor ? handleExportPremade : undefined}
+                        onResetMindmap={!isEditor ? handleResetMindmap : undefined}
+                        onEditMindmap={(id, snapshot, isPart) => {
+                            if (isPart) {
+                                setActivePartEditor({ partId: id as any, snapshot });
+                            } else {
+                                setActiveMindmapEditor({ surahId: id, snapshot });
                             }
-                        } else {
-                            // Find specific part entity to delete
-                            const pId = id as QuranPart;
-                            const entity = partMindmapsList.find((m: any) => Number(m.partId) === pId);
-                            if (entity && (entity as any).id) {
-                                await deletePartMindMap((entity as any).id);
+                        }}
+                        onDeleteMindmap={async (type, id) => {
+                            if (type === 'surah') {
+                                // Find specific entity to delete
+                                const entity = mindmapsList.find((m: any) => Number(m.surahId) === id);
+                                if (entity && (entity as any).id) {
+                                    await deleteMindMap((entity as any).id);
+                                }
+                            } else {
+                                // Find specific part entity to delete
+                                const pId = id as QuranPart;
+                                const entity = partMindmapsList.find((m: any) => Number(m.partId) === pId);
+                                if (entity && (entity as any).id) {
+                                    await deletePartMindMap((entity as any).id);
+                                }
                             }
-                        }
-                    }}
-                    appMode={appMode}
-                    getHasPremade={hasPremadeMindmap}
-                    mutashabihatDecisions={decisions}
-                    onMutashabihatDecisionUpdate={handleMutashabihatDecisionUpdate}
-                    getBuilderState={getBuilderState}
-                    onAddBreak={(sid, val) => handleAddBreak(sid, val)}
-                    onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
-                    onSaveAnchors={handleSaveAnchors}
-                    hasReviewedChunks={hasReviewedChunks}
-                />
+                        }}
+                        appMode={appMode}
+                        getHasPremade={hasPremadeMindmap}
+                        mutashabihatDecisions={decisions}
+                        onMutashabihatDecisionUpdate={handleMutashabihatDecisionUpdate}
+                        getBuilderState={getBuilderState}
+                        onAddBreak={(sid, val) => handleAddBreak(sid, val)}
+                        onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
+                        onSaveAnchors={handleSaveAnchors}
+                        hasReviewedChunks={hasReviewedChunks}
+                    />
+                </div>
             </div>
         </div >
     );

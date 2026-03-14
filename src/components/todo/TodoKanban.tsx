@@ -82,6 +82,7 @@ interface TodoKanbanProps {
     defaultFilter?: 'all' | 'maintenance' | 'construction';
     completeExitBehavior?: 'mindmap_only' | 'mindmap_and_verses';
     kanbanSortOrder?: 'type_then_number' | 'number_only' | 'manual';
+    onResponsiveReadyChange?: (isReady: boolean) => void;
 }
 
 const getViewportFlags = () => {
@@ -159,7 +160,8 @@ export default function TodoKanban({
     onKanbanStateChange,
     defaultFilter,
     completeExitBehavior,
-    kanbanSortOrder
+    kanbanSortOrder,
+    onResponsiveReadyChange
 }: TodoKanbanProps) {
     const router = useRouter();
     const pathname = usePathname();
@@ -201,6 +203,22 @@ export default function TodoKanban({
     }
     const [toasts, setToasts] = useState<TodoToastItem[]>([]);
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
+
+    const wrapToastText = useCallback((text: string, wordsPerLine = 6) => {
+        if (!text) return text;
+        return text
+            .split('\n')
+            .map((line) => {
+                const words = line.trim().split(/\s+/).filter(Boolean);
+                if (words.length <= wordsPerLine) return line.trim();
+                const lines: string[] = [];
+                for (let i = 0; i < words.length; i += wordsPerLine) {
+                    lines.push(words.slice(i, i + wordsPerLine).join(' '));
+                }
+                return lines.join('\n');
+            })
+            .join('\n');
+    }, []);
     const persistMoveSeqRef = useRef(0);
     const pendingKanbanStateRef = useRef<Record<string, string[]> | null>(null);
     const pendingKanbanStateAtRef = useRef(0);
@@ -361,6 +379,9 @@ export default function TodoKanban({
     const [expandedSimilarityMatches, setExpandedSimilarityMatches] = useState<Record<string, boolean>>({});
     const [contextVerseCursor, setContextVerseCursor] = useState<Record<number, number>>({});
     const lastToolRequestKeyRef = useRef<string>('');
+    const mobileTodoOverlayHistoryKey = 'todoMobileContextOverlayOpen';
+    const wasMobileTodoOverlayOpenRef = useRef(false);
+    const hasReportedInitialResponsiveReadyRef = useRef(false);
 
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -372,17 +393,73 @@ export default function TodoKanban({
     }, [columns]);
 
     useEffect(() => {
+        hasReportedInitialResponsiveReadyRef.current = false;
+        onResponsiveReadyChange?.(false);
+
+        let readyAnimationFrameId: number | null = null;
         const checkResponsive = () => {
             const { isMobile: mobile, isTablet: tablet } = getViewportFlags();
             setIsMobile(mobile);
             setIsTablet(tablet);
             isMobileRef.current = mobile;
             isTabletRef.current = tablet;
+
+            if (!hasReportedInitialResponsiveReadyRef.current && onResponsiveReadyChange) {
+                if (readyAnimationFrameId !== null) {
+                    window.cancelAnimationFrame(readyAnimationFrameId);
+                }
+                readyAnimationFrameId = window.requestAnimationFrame(() => {
+                    hasReportedInitialResponsiveReadyRef.current = true;
+                    onResponsiveReadyChange(true);
+                });
+            }
         };
+
         checkResponsive();
         window.addEventListener('resize', checkResponsive);
-        return () => window.removeEventListener('resize', checkResponsive);
-    }, []);
+        return () => {
+            if (readyAnimationFrameId !== null) {
+                window.cancelAnimationFrame(readyAnimationFrameId);
+            }
+            window.removeEventListener('resize', checkResponsive);
+        };
+    }, [onResponsiveReadyChange]);
+
+    const closeMobileContextOverlays = useCallback(() => {
+        setVerseContextItem(null);
+        setActiveSimilarityContext(null);
+        if (!isMobile || typeof window === 'undefined') return;
+        const currentState = window.history.state || {};
+        if (currentState[mobileTodoOverlayHistoryKey]) {
+            window.history.back();
+        }
+    }, [isMobile]);
+
+    useEffect(() => {
+        if (!isMobile) {
+            wasMobileTodoOverlayOpenRef.current = false;
+            return;
+        }
+        const isOverlayOpen = !!(verseContextItem || activeSimilarityContext);
+        const wasOpen = wasMobileTodoOverlayOpenRef.current;
+        wasMobileTodoOverlayOpenRef.current = isOverlayOpen;
+        if (isOverlayOpen && !wasOpen) {
+            const currentState = window.history.state || {};
+            window.history.pushState({ ...currentState, [mobileTodoOverlayHistoryKey]: true }, '');
+        }
+    }, [activeSimilarityContext, isMobile, verseContextItem]);
+
+    useEffect(() => {
+        if (!isMobile) return;
+        const handlePopState = () => {
+            if (verseContextItem || activeSimilarityContext) {
+                setVerseContextItem(null);
+                setActiveSimilarityContext(null);
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [activeSimilarityContext, isMobile, verseContextItem]);
 
     const normalizedSearchQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
     const hasActiveVisibilityFilter = filter !== 'all' || normalizedSearchQuery.length > 0;
@@ -1630,11 +1707,11 @@ export default function TodoKanban({
 
                 if (isMobile || isTablet) {
                     return (
-                        <div className="slide-over-overlay" onClick={() => setVerseContextItem(null)}>
+                        <div className="slide-over-overlay" onClick={closeMobileContextOverlays}>
                             <div className="slide-over-content verse-context-modal" onClick={e => e.stopPropagation()}>
                                 <div className="slide-over-header verse-context-header">
                                     <h3 className="verse-context-title" style={{ margin: 0, fontSize: '1rem' }}>Suspension Context (Last 3 Errors)</h3>
-                                    <button className="close-btn verse-context-close" onClick={() => setVerseContextItem(null)}>
+                                    <button className="close-btn verse-context-close" onClick={closeMobileContextOverlays}>
                                         <X size={20} />
                                     </button>
                                 </div>
@@ -1948,7 +2025,7 @@ export default function TodoKanban({
 
                 if (isMobile || isTablet) {
                     return (
-                        <div className="slide-over-overlay" onClick={() => setActiveSimilarityContext(null)}>
+                        <div className="slide-over-overlay" onClick={closeMobileContextOverlays}>
                             <div className="slide-over-content similarity-context-modal" onClick={e => e.stopPropagation()}>
                                 <div className="slide-over-header similarity-context-header">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1959,7 +2036,7 @@ export default function TodoKanban({
                                             {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
                                         </h3>
                                     </div>
-                                    <button className="close-btn similarity-context-close" onClick={() => setActiveSimilarityContext(null)}>
+                                    <button className="close-btn similarity-context-close" onClick={closeMobileContextOverlays}>
                                         <X size={20} />
                                     </button>
                                 </div>
@@ -2035,7 +2112,16 @@ export default function TodoKanban({
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 {t.type === 'similarity' ? <Brain size={18} /> : <Check size={18} />}
-                                <span style={{ fontWeight: 600 }}>{t.message}</span>
+                                <span style={{
+                                    fontWeight: 600,
+                                    flex: '1 1 auto',
+                                    minWidth: 0,
+                                    whiteSpace: 'pre-line',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere'
+                                }}>
+                                    {wrapToastText(t.message, 6)}
+                                </span>
                                 {t.onUndo && (
                                     <button
                                         onClick={() => {
@@ -2079,9 +2165,11 @@ export default function TodoKanban({
                                     fontSize: '0.8rem',
                                     opacity: 0.9,
                                     paddingLeft: '28px',
-                                    whiteSpace: 'pre-line'
+                                    whiteSpace: 'pre-line',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere'
                                 }}>
-                                    {t.info}
+                                    {wrapToastText(t.info, 8)}
                                 </div>
                             )}
                             <div

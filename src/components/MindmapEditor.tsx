@@ -2,12 +2,14 @@
 
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
 import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
+import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
     clipboardHasBlockedMedia,
     dataTransferHasBlockedMedia,
@@ -436,17 +438,12 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         }
     }, [initialSnapshot, loadLocalDraftSnapshot]);
 
+    useMindmapBackGestureGuard(true);
+
     useEffect(() => {
-        // Prevent browser back gesture globally while editor is open
-        const originalBodyOverscroll = document.body.style.overscrollBehaviorX;
-        const originalHtmlOverscroll = document.documentElement.style.overscrollBehaviorX;
-        
-        document.body.style.overscrollBehaviorX = 'none';
-        document.documentElement.style.overscrollBehaviorX = 'none';
-        
+        document.body.setAttribute('data-mindmap-open', 'true');
         return () => {
-            document.body.style.overscrollBehaviorX = originalBodyOverscroll;
-            document.documentElement.style.overscrollBehaviorX = originalHtmlOverscroll;
+            document.body.removeAttribute('data-mindmap-open');
         };
     }, []);
 
@@ -770,7 +767,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
 
         void runExitAction(async () => {
             if (isInternalPath(docLink)) {
-                router.push(docLink);
+                router.push(withDocsSidebarReveal(docLink));
                 return;
             }
             window.location.assign(docLink);
@@ -969,7 +966,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
                         isInternalPath(docLink) ? (
                             <Link
                                 className="btn btn-secondary std-normal-btn mindmap-header-doclink"
-                                href={docLink}
+                                href={withDocsSidebarReveal(docLink)}
                                 onClick={handleDocNavigation}
                                 aria-disabled={isExitActionPending}
                             >

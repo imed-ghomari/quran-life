@@ -4,16 +4,27 @@ import { useCallback, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import Link from 'next/link';
+import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 import { getSurah } from '@/lib/quranData';
 import 'tldraw/tldraw.css';
 
+const applyMindmapStrokeSizes = (strokeSizes: any) => {
+    if (!strokeSizes) return;
+    // Keep renderer stroke widths aligned with MindmapEditor custom tuning.
+    strokeSizes.s = 0.1;
+    strokeSizes.m = 0.3;
+    strokeSizes.l = 0.6;
+    strokeSizes.xl = 1.2;
+};
+
 // Only load tldraw on the client
 const Tldraw = dynamic(
     async () => {
-        const { Tldraw } = await import('tldraw');
+        const { Tldraw, STROKE_SIZES } = await import('tldraw');
+        applyMindmapStrokeSizes(STROKE_SIZES);
         return Tldraw;
     },
     { ssr: false }
@@ -436,7 +447,7 @@ export default function MindmapViewer({
             {renderInline()}
 
             {isFullScreen && createPortal(
-                <div className="fixed inset-0 z-[13000] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
+                <div className="fixed inset-0 z-[15000] bg-[var(--background)] flex flex-col animate-in fade-in duration-200" data-mindmap-swipe-guard="true">
                     <div
                         className="mindmap-viewer-header flex items-center border-b border-[var(--border)] bg-[var(--background)] shadow-sm"
                         style={{ height: '50px', padding: '0 1rem' }}
@@ -454,7 +465,7 @@ export default function MindmapViewer({
                                 isInternalPath(resolvedDocLink) ? (
                                     <Link
                                         className="btn btn-secondary std-normal-btn mindmap-header-doclink"
-                                        href={resolvedDocLink}
+                                        href={withDocsSidebarReveal(resolvedDocLink)}
                                     >
                                         <span className="hidden md:inline">Back to Documentation</span>
                                         <span className="md:hidden">Back to Docs</span>

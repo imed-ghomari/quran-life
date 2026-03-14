@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
@@ -43,6 +43,82 @@ const KanbanCard = ({
     onViewVerseContext,
     onViewSimilarityContext
 }: KanbanCardProps) => {
+    return (
+        <>
+            <Draggable draggableId={item.id} index={index}>
+                {(provided, snapshot) => {
+                    return (
+                    <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className={`
+                            kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
+                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
+                            ${item.status === 'complete' ? 'opacity-80' : ''}
+                            ${isMobile ? 'min-w-[42vw] snap-center' : ''}
+                        `}
+                        style={{
+                            ...provided.draggableProps.style,
+                        }}
+                    >
+                        <KanbanCardBody
+                            item={item}
+                            hasMindmap={hasMindmap}
+                            hasPremade={hasPremade}
+                            hasSplits={hasSplits}
+                            appMode={appMode}
+                            docLink={docLink}
+                            isMobile={isMobile}
+                            onEditMindmap={onEditMindmap}
+                            onDeleteMindmap={onDeleteMindmap}
+                            onExportMindmap={onExportMindmap}
+                            onResetMindmap={onResetMindmap}
+                            onChangeSplits={onChangeSplits}
+                            onViewVerseContext={onViewVerseContext}
+                            onViewSimilarityContext={onViewSimilarityContext}
+                        />
+                    </div>
+                    );
+                }}
+            </Draggable>
+        </>
+    );
+};
+
+interface KanbanCardBodyProps {
+    item: KanbanItem;
+    isMobile: boolean;
+    hasMindmap: boolean;
+    hasPremade?: boolean;
+    hasSplits: boolean;
+    appMode: 'owner' | 'user';
+    docLink?: string;
+    onEditMindmap: (item: KanbanItem) => Promise<void> | void;
+    onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
+    onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onChangeSplits: (item: KanbanItem) => Promise<void> | void;
+    onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
+    onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+}
+
+const KanbanCardBody = memo(({
+    item,
+    isMobile,
+    hasMindmap,
+    hasPremade,
+    hasSplits,
+    appMode,
+    docLink,
+    onEditMindmap,
+    onDeleteMindmap,
+    onExportMindmap,
+    onResetMindmap,
+    onChangeSplits,
+    onViewVerseContext,
+    onViewSimilarityContext
+}: KanbanCardBodyProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -126,56 +202,33 @@ const KanbanCard = ({
     const showDelete = appMode === 'owner' && hasMindmap;
     const showReset = appMode === 'user' && hasMindmap && !!hasPremade;
 
-    return (
-        <>
-            <Draggable draggableId={item.id} index={index}>
-                {(provided, snapshot) => {
-                    return (
-                    <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className={`
-                            roadmap-card kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
-                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
-                            ${item.status === 'complete' ? 'opacity-80' : ''}
-                            ${isMobile ? 'min-w-[42vw] snap-center' : ''}
-                        `}
-                        style={{
-                            ...provided.draggableProps.style,
-                        }}
-                    >
-                        {renderCardZones({
-                            item,
-                            hasMindmap,
-                            hasPremade,
-                            showExport,
-                            showDelete,
-                            showReset,
-                            cardType,
-                            menuOpen,
-                            setMenuOpen,
-                            menuButtonRef,
-                            handleMenuClick,
-                            isMobile,
-                            onEditMindmap: handleEditMindmap,
-                            onDeleteMindmap: handleDeleteClick,
-                            onExportMindmap: handleExportMindmap,
-                            onResetMindmap: handleResetClick,
-                            onChangeSplits: handleChangeSplits,
-                            hasSplits,
-                            footerPad: 'pt-3',
-                            docLink,
-                            onViewVerseContext: handleViewVerseContext,
-                            onViewSimilarityContext: handleViewSimilarityContext
-                        })}
-                    </div>
-                    );
-                }}
-            </Draggable>
-        </>
-    );
-};
+    return renderCardZones({
+        item,
+        hasMindmap,
+        hasPremade,
+        showExport,
+        showDelete,
+        showReset,
+        cardType,
+        menuOpen,
+        setMenuOpen,
+        menuButtonRef,
+        handleMenuClick,
+        isMobile,
+        onEditMindmap: handleEditMindmap,
+        onDeleteMindmap: handleDeleteClick,
+        onExportMindmap: handleExportMindmap,
+        onResetMindmap: handleResetClick,
+        onChangeSplits: handleChangeSplits,
+        hasSplits,
+        footerPad: 'pt-3',
+        docLink,
+        onViewVerseContext: handleViewVerseContext,
+        onViewSimilarityContext: handleViewSimilarityContext
+    });
+});
+
+KanbanCardBody.displayName = 'KanbanCardBody';
 
 interface RenderZoneProps {
     item: KanbanItem;
@@ -318,7 +371,7 @@ function renderCardZones({
                     arabic: 'الخريطة الشاملة'
                 };
                 zone3 = 'Global relationship map across Parts 1-7.';
-                zone4Meta = "Always visible";
+                zone4Meta = zone3;
             } else {
                 zone2 = {
                     english: `Part ${partTask.part}`,
@@ -343,14 +396,15 @@ function renderCardZones({
     return (
         <>
             {/* Header: Pill + Menu */}
-            <div className="flex justify-between items-start mb-2.5">
+            <div className="flex justify-between items-start mb-4">
                 <span
                     className="status-pill"
                     style={{
                         backgroundColor: `color-mix(in srgb, ${zone1.color}, transparent 84%)`,
                         color: zone1.color,
                         fontSize: '0.65rem',
-                        padding: '0.2rem 0.6rem'
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '999px'
                     }}
                 >
                     {zone1.label}
@@ -390,25 +444,38 @@ function renderCardZones({
             </div>
 
             {/* Title Area */}
-            <div className="mb-2">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <h4 className="text-[0.82rem] md:text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5">
+            <div className="mt-1 mb-2">
+                <div className={`flex gap-2 min-w-0 ${isMobile ? 'flex-col items-start' : 'items-center justify-between'}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <h4 className="text-[0.82rem] md:text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5 break-words">
                             {zone2.english}
                         </h4>
                         {!isMobile && statusIcons}
                     </div>
                     {zone2.arabic && (
-                        <div className="text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 whitespace-nowrap">
+                        <div
+                            className={`text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 ${
+                                isMobile
+                                    ? 'w-full text-right whitespace-normal break-words leading-snug'
+                                    : 'whitespace-nowrap'
+                            }`}
+                        >
                             {zone2.arabic}
                         </div>
                     )}
                 </div>
             </div>
 
-            {isMobile && statusIcons && (
-                <div className="mt-2 mb-1 flex items-center gap-2">
-                    {statusIcons}
+            {isMobile && (statusIcons || zone4Meta) && (
+                <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
+                        {statusIcons}
+                    </div>
+                    {zone4Meta && (
+                        <p className="flex-1 min-w-0 text-right text-[0.66rem] leading-snug text-[var(--foreground-secondary)] truncate">
+                            {zone4Meta}
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -418,8 +485,12 @@ function renderCardZones({
                     {zone3}
                 </p>
             )}
+
         </>
     );
 }
 
-export default KanbanCard;
+const MemoizedKanbanCard = memo(KanbanCard);
+MemoizedKanbanCard.displayName = 'KanbanCard';
+
+export default MemoizedKanbanCard;

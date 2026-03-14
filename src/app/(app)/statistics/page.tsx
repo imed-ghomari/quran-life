@@ -138,6 +138,111 @@ export default function StatisticsPage() {
 
     const activePart = settings?.activePart || ALL_QURAN_PART;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
+    const activePartSurahs = useMemo(
+        () => SURAHS.filter((surah) => activePart === ALL_QURAN_PART || surah.part === activePart),
+        [activePart],
+    );
+    const activePartSurahIds = useMemo(
+        () => new Set(activePartSurahs.map((surah) => surah.id)),
+        [activePartSurahs],
+    );
+    const activeUnskippedSurahs = useMemo(
+        () => activePartSurahs.filter((surah) => !skippedSurahs.has(surah.id)),
+        [activePartSurahs, skippedSurahs],
+    );
+
+    const mindmapBySurahId = useMemo(() => {
+        const map = new Map<number, any>();
+        for (const mindmap of mindmaps) {
+            const surahId = Number((mindmap as any)?.surahId);
+            if (!Number.isFinite(surahId) || map.has(surahId)) continue;
+            map.set(surahId, mindmap);
+        }
+        return map;
+    }, [mindmaps]);
+
+    const partMindMapByPartId = useMemo(() => {
+        const map = new Map<number, any>();
+        for (const partMindMap of partMindMaps) {
+            const partId = Number((partMindMap as any)?.partId);
+            if (!Number.isFinite(partId) || map.has(partId)) continue;
+            map.set(partId, partMindMap);
+        }
+        return map;
+    }, [partMindMaps]);
+
+    const nodeById = useMemo(() => new Map(memoryNodes.map((node) => [node.id, node])), [memoryNodes]);
+    const partMindmapNodeByPartId = useMemo(() => {
+        const map = new Map<number, MemoryNode>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'part_mindmap') continue;
+            const partId = resolveNodePartId(node);
+            if (partId === null || map.has(partId)) continue;
+            map.set(partId, node);
+        }
+        return map;
+    }, [memoryNodes]);
+    const mindmapNodeBySurahId = useMemo(() => {
+        const map = new Map<number, MemoryNode>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'mindmap') continue;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId || map.has(surahId)) continue;
+            map.set(surahId, node);
+        }
+        return map;
+    }, [memoryNodes]);
+    const verseSegmentNodesBySurahId = useMemo(() => {
+        const map = new Map<number, MemoryNode[]>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'verse_segment') continue;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) continue;
+            const bucket = map.get(surahId);
+            if (bucket) bucket.push(node);
+            else map.set(surahId, [node]);
+        }
+        return map;
+    }, [memoryNodes]);
+    const verseAndMindmapStabilityBySurahId = useMemo(() => {
+        const map = new Map<number, { totalStability: number; count: number }>();
+        for (const node of memoryNodes) {
+            if (node.type !== 'verse_segment' && node.type !== 'mindmap') continue;
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) continue;
+            const current = map.get(surahId) || { totalStability: 0, count: 0 };
+            map.set(surahId, {
+                totalStability: current.totalStability + getNodeStability(node),
+                count: current.count + 1,
+            });
+        }
+        return map;
+    }, [memoryNodes]);
+
+    const mutashabihatDecisionsByAbsolute = useMemo(() => {
+        const map = new Map<number, any[]>();
+        for (const decision of mutashabihatDecisions) {
+            const phraseId = String((decision as any)?.phraseId || '');
+            if (!phraseId) continue;
+            const absToken = phraseId.split('-')[0];
+            const absolute = Number.parseInt(absToken, 10);
+            if (!Number.isFinite(absolute)) continue;
+            const bucket = map.get(absolute);
+            if (bucket) bucket.push(decision);
+            else map.set(absolute, [decision]);
+        }
+        return map;
+    }, [mutashabihatDecisions]);
+
+    const listeningProgressByPartId = useMemo(() => {
+        const map = new Map<number, any>();
+        for (const progress of listeningProgress) {
+            const partId = Number((progress as any)?.partId);
+            if (!Number.isFinite(partId) || map.has(partId)) continue;
+            map.set(partId, progress);
+        }
+        return map;
+    }, [listeningProgress]);
 
     // 1. Part Mindmaps Data (Always Global)
     const partMindmapStats = useMemo(() => {
@@ -149,10 +254,10 @@ export default function StatisticsPage() {
         let learnedMastered = 0;
 
         CORE_QURAN_PARTS.forEach(p => {
-            const pmm = partMindMaps.find(m => Number((m as any).partId) === p);
+            const pmm = partMindMapByPartId.get(p);
             if (pmm) {
                 if (pmm.isComplete) {
-                    const node = memoryNodes.find(n => n.type === 'part_mindmap' && resolveNodePartId(n) === p);
+                    const node = partMindmapNodeByPartId.get(p);
                     const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                     if (maturity === 'mastered') learnedMastered++;
                     else if (maturity === 'strong') learnedStrong++;
@@ -177,12 +282,10 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [partMindMaps, memoryNodes]);
+    }, [partMindMapByPartId, partMindmapNodeByPartId]);
 
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
-        const targetSurahs = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart);
-        const learnedVerses = settings?.learnedVerses || {};
         let skipped = 0;
         let notCreated = 0;
         let notLearned = 0;
@@ -191,15 +294,14 @@ export default function StatisticsPage() {
         let learnedStrong = 0;
         let learnedMastered = 0;
 
-        targetSurahs.forEach(s => {
-            const isLearned = learnedVerses[s.id.toString()];
+        activePartSurahs.forEach(s => {
             if (skippedSurahs.has(s.id)) {
                 skipped++;
             } else {
-                const mm = mindmaps.find(m => Number((m as any).surahId) === s.id);
+                const mm = mindmapBySurahId.get(s.id);
                 if (mm) {
                     if (mm.isComplete) {
-                        const node = memoryNodes.find(n => n.type === 'mindmap' && resolveNodeSurahId(n) === s.id);
+                        const node = mindmapNodeBySurahId.get(s.id);
                         const maturity = node ? getMaturity(getNodeStability(node)) : 'new';
                         if (maturity === 'mastered') learnedMastered++;
                         else if (maturity === 'strong') learnedStrong++;
@@ -217,7 +319,7 @@ export default function StatisticsPage() {
         });
 
         return {
-            total: targetSurahs.length,
+            total: activePartSurahs.length,
             segments: [
                 { label: 'Skipped', count: skipped, color: 'var(--chart-skipped)', description: 'Surahs excluded from cycle' },
                 { label: 'Not Created', count: notCreated, color: 'var(--chart-not-created)', description: 'Mindmap not created' },
@@ -228,11 +330,10 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, settings?.learnedVerses, mindmaps, memoryNodes, skippedSurahs]);
+    }, [activePartSurahs, skippedSurahs, mindmapBySurahId, mindmapNodeBySurahId]);
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
-        const targetSurahs = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart);
         let skipped = 0;
         let notLearned = 0;
         let learnedNew = 0;
@@ -240,7 +341,7 @@ export default function StatisticsPage() {
         let learnedStrong = 0;
         let learnedMastered = 0;
 
-        targetSurahs.forEach(s => {
+        activePartSurahs.forEach(s => {
             if (verseChunkMode === 'surahs') {
                 if (skippedSurahs.has(s.id)) {
                     skipped++;
@@ -251,7 +352,7 @@ export default function StatisticsPage() {
                         notLearned++;
                     } else {
                         // If it has any learned verses, we look at the maturity of its nodes
-                        const nodes = memoryNodes.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === s.id);
+                        const nodes = verseSegmentNodesBySurahId.get(s.id) || [];
                         if (nodes.length === 0) {
                             learnedNew++; // Learned but nodes not synced yet
                         } else {
@@ -291,8 +392,7 @@ export default function StatisticsPage() {
                                 const chunks = Math.ceil(segmentLength / 5);
 
                                 // Get maturity for this segment
-                                const nodes = memoryNodes.filter(n =>
-                                    n.type === 'verse_segment' &&
+                                const nodes = (verseSegmentNodesBySurahId.get(s.id) || []).filter(n =>
                                     resolveNodeSurahId(n) === s.id &&
                                     (n.startVerse ?? 0) >= segmentStart &&
                                     (n.endVerse ?? 0) <= segmentEnd
@@ -332,7 +432,7 @@ export default function StatisticsPage() {
             }
         });
 
-        const totalSegments = targetSurahs.reduce((acc, s) => {
+        const totalSegments = activePartSurahs.reduce((acc, s) => {
             if (verseChunkMode === 'surahs') return acc + 1;
             return acc + Math.ceil(s.verseCount / 5);
         }, 0);
@@ -348,18 +448,18 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, settings?.learnedVerses, memoryNodes, skippedSurahs, verseChunkMode]);
+    }, [activePartSurahs, settings?.learnedVerses, skippedSurahs, verseChunkMode, verseSegmentNodesBySurahId]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
-        const partProgress = listeningProgress.find(p => Number((p as any).partId) === Number(activePart))
+        const partProgress = listeningProgressByPartId.get(Number(activePart))
             ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
-                ? listeningProgress.find(p => Number((p as any).partId) === LEGACY_ALL_QURAN_PART)
+                ? listeningProgressByPartId.get(LEGACY_ALL_QURAN_PART)
                 : undefined);
         const progress = partProgress?.lastVerseIndex || 0;
         const cycles = partProgress?.cycles || 0;
 
-        const surahsInPart = SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).filter(s => !skippedSurahs.has(s.id));
+        const surahsInPart = activeUnskippedSurahs;
 
         const learnedVerseCount = progress;
 
@@ -382,15 +482,15 @@ export default function StatisticsPage() {
                 { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
             ]
         };
-    }, [activePart, skippedSurahs, listeningProgress]);
+    }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId]);
 
     // 5. Mutashabihat Coverage Data
     const mutashabihatStats = useMemo(() => {
         const allRefs = getAllMutashabihatRefs();
         const targetRefs = allRefs.filter(abs => {
             const { surahId } = absoluteToSurahAyah(abs);
-            const surah = SURAHS.find(s => s.id === surahId);
-            return activePart === ALL_QURAN_PART || surah?.part === activePart;
+            if (activePart === ALL_QURAN_PART) return true;
+            return activePartSurahIds.has(surahId);
         });
 
         const total = targetRefs.length;
@@ -403,7 +503,7 @@ export default function StatisticsPage() {
 
         targetRefs.forEach(abs => {
             // Find decisions for this absolute ayah
-            const verseDecisions = mutashabihatDecisions.filter(d => d.phraseId.startsWith(`${abs}-`) || d.phraseId === abs.toString());
+            const verseDecisions = mutashabihatDecisionsByAbsolute.get(abs) || [];
 
             if (verseDecisions.length > 0) {
                 const anySolvedMindmap = verseDecisions.some(d => d.status === 'solved_mindmap');
@@ -428,17 +528,16 @@ export default function StatisticsPage() {
                 { label: 'Solved (MM)', count: solvedMindmap, color: 'var(--chart-mastered)', description: 'Addressed within a mindmap' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, mutashabihatDecisions]);
+    }, [activePart, activePartSurahIds, mutashabihatDecisionsByAbsolute]);
 
     // 6. Future Due Data
     const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
-    const [showBacklog, setShowBacklog] = useState(true);
 
     const futureDueStats = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const targetSurahs = new Set(SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).map(s => s.id));
+        const targetSurahs = activePartSurahIds;
         const hasKanbanState = !!settings?.kanbanColumns && Object.keys(settings.kanbanColumns).length > 0;
         const completeIds = new Set<string>(hasKanbanState ? (settings?.kanbanColumns?.complete || []) : []);
         const completeExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
@@ -447,10 +546,10 @@ export default function StatisticsPage() {
             if (node.type !== 'verse_segment') return true;
             const surahId = resolveNodeSurahId(node);
             if (!surahId) return true;
-            const mm = mindmaps.find(m => Number(m.surahId) === surahId);
+            const mm = mindmapBySurahId.get(surahId);
             const anchors = mm?.anchors || [];
             if (anchors.length === 0) return false;
-            return anchors.some(a => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
+            return anchors.some((a: any) => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
         };
 
         const nodes = memoryNodes.filter(node => {
@@ -480,53 +579,54 @@ export default function StatisticsPage() {
             return hasAnchorForNode(node);
         });
 
-        const dayCounts: Record<number, number> = {};
+        const allDayCounts: Record<number, number> = {};
         let totalReviews = 0;
         let totalFutureReviews = 0;
         let backlogCount = 0;
         let dueTomorrow = 0;
 
-        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
-
         nodes.forEach(node => {
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return;
             const dueDate = new Date(dueStr);
+            if (isNaN(dueDate.getTime())) return;
             dueDate.setHours(0, 0, 0, 0);
 
             const diffTime = dueDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (!Number.isFinite(diffDays)) return;
 
             if (diffDays < 0) {
                 backlogCount++;
-                if (showBacklog) {
-                    dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
-                    totalReviews++;
-                }
             } else {
-                dayCounts[diffDays] = (dayCounts[diffDays] || 0) + 1;
-                totalReviews++;
                 totalFutureReviews++;
                 if (diffDays === 1) dueTomorrow++;
             }
+
+            allDayCounts[diffDays] = (allDayCounts[diffDays] || 0) + 1;
         });
 
+        const dayCounts = allDayCounts;
+
+        totalReviews = Object.values(dayCounts).reduce((sum, count) => sum + count, 0);
+
         const rangeDays = timeRange === '1m' ? 31 : timeRange === '3m' ? 90 : timeRange === '1y' ? 365 : 0;
+        const finiteDays = Object.keys(dayCounts).map(Number).filter(Number.isFinite);
 
         // Determine x-axis range
-        let minDay = showBacklog ? Math.min(...Object.keys(dayCounts).map(Number), -15) : 0;
-        let maxDay = rangeDays || Math.max(...Object.keys(dayCounts).map(Number), 30);
+        let minDay = Math.min(...finiteDays, -15);
+        let maxDay = rangeDays || Math.max(...finiteDays, 30);
 
         // If 'all', we might want to cap it or just show everything
         if (timeRange === 'all') {
-            maxDay = Math.max(...Object.keys(dayCounts).map(Number), 30);
+            maxDay = Math.max(...finiteDays, 30);
         }
 
         const data: { day: number; count: number; cumulative: number }[] = [];
         let cumulative = 0;
 
         // Calculate cumulative starting from the earliest day in dayCounts if backlog is shown
-        const sortedDays = Object.keys(dayCounts).map(Number).sort((a, b) => a - b);
+        const sortedDays = finiteDays.sort((a, b) => a - b);
         const earliestDay = sortedDays[0] || 0;
 
         for (let d = earliestDay; d <= maxDay; d++) {
@@ -609,7 +709,7 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, memoryNodes, mindmaps, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, showBacklog, skippedSurahs, timeRange]);
+    }, [activePart, activePartSurahIds, memoryNodes, mindmapBySurahId, nodeById, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, skippedSurahs, timeRange]);
 
     const surahRiskStats = useMemo(() => {
         const nowMs = Date.now();
@@ -620,9 +720,8 @@ export default function StatisticsPage() {
         const currentWindowStartMs = nowMs - trendWindowDays * dayMs;
         const previousWindowStartMs = currentWindowStartMs - trendWindowDays * dayMs;
 
-        const targetSurahs = SURAHS.filter(s => (activePart === ALL_QURAN_PART || s.part === activePart) && !skippedSurahs.has(s.id));
+        const targetSurahs = activeUnskippedSurahs;
         const targetSurahIds = new Set(targetSurahs.map(s => s.id));
-        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
 
         const toMs = (value: unknown): number | null => {
             const parsed = Date.parse(String(value || ''));
@@ -709,26 +808,12 @@ export default function StatisticsPage() {
 
         const surahMaturity = new Map<number, MaturityBucket>();
         targetSurahs.forEach(surah => {
-            const relatedNodes = memoryNodes.filter(n => {
-                if (n.type !== 'verse_segment' && n.type !== 'mindmap') return false;
-                return resolveNodeSurahId(n) === surah.id;
-            });
-
-            if (relatedNodes.length === 0) {
+            const stats = verseAndMindmapStabilityBySurahId.get(surah.id);
+            if (!stats || stats.count === 0) {
                 surahMaturity.set(surah.id, 'new');
                 return;
             }
-
-            const stabilities = relatedNodes
-                .map(node => getNodeStability(node))
-                .filter(value => Number.isFinite(value) && value >= 0);
-
-            if (stabilities.length === 0) {
-                surahMaturity.set(surah.id, 'new');
-                return;
-            }
-
-            const averageStability = stabilities.reduce((sum, value) => sum + value, 0) / stabilities.length;
+            const averageStability = stats.totalStability / stats.count;
             surahMaturity.set(surah.id, getMaturity(averageStability));
         });
 
@@ -777,7 +862,7 @@ export default function StatisticsPage() {
             rows,
             hasData: totalAttempts > 0 || totalMistakes > 0,
         };
-    }, [activePart, memoryNodes, reviewErrors, reviewLogs, skippedSurahs, surahRiskRange]);
+    }, [activeUnskippedSurahs, nodeById, reviewErrors, reviewLogs, surahRiskRange, verseAndMindmapStabilityBySurahId]);
 
     const reviewHeatmapStats = useMemo(() => {
         const rangeDays = 180;
@@ -786,8 +871,7 @@ export default function StatisticsPage() {
         const start = new Date(today);
         start.setDate(start.getDate() - (rangeDays - 1));
 
-        const targetSurahs = new Set(SURAHS.filter(s => activePart === ALL_QURAN_PART || s.part === activePart).map(s => s.id));
-        const nodeById = new Map(memoryNodes.map(n => [n.id, n]));
+        const targetSurahs = activePartSurahIds;
 
         const toDayKey = (date: Date) => {
             const y = date.getFullYear();
@@ -858,7 +942,7 @@ export default function StatisticsPage() {
             maxCount,
             averagePerDay: averagePerDay.toFixed(1),
         };
-    }, [activePart, memoryNodes, reviewLogs, skippedSurahs]);
+    }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs]);
 
     const hasRenderableData =
         Boolean(settings) ||
@@ -973,8 +1057,6 @@ export default function StatisticsPage() {
                     <div className="stats-masonry-item">
                         <FutureDueSection
                             stats={futureDueStats}
-                            showBacklog={showBacklog}
-                            setShowBacklog={setShowBacklog}
                             timeRange={timeRange}
                             setTimeRange={setTimeRange}
                         />
@@ -1167,7 +1249,6 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                         const groupStart = padding.left + (plotWidth - groupWidth) / 2;
                         const step = groupWidth / span;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
-                        const rotateLabels = step < 95;
                         const labelMaxChars = step < 70 ? 5 : step < 90 ? 7 : 10;
                         const tickCount = maxMistakes <= 8 ? Math.max(2, maxMistakes) : 4;
                         const tickStep = maxMistakes <= 8 ? 1 : Math.max(2, Math.ceil(maxMistakes / tickCount / 2) * 2);
@@ -1176,6 +1257,23 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                         const yLegendStep = Math.max(1, Math.ceil((allTicks.length - 1) / Math.max(1, MAX_Y_AXIS_LEGENDS - 1)));
                         const ticks = allTicks.filter((_, i) => i % yLegendStep === 0 || i === allTicks.length - 1);
                         const getYBars = (value: number) => chartHeight - padding.bottom - (value / maxNice) * plotHeight;
+                        const roundedPath = (x: number, y: number, w: number, h: number, rt: number, rb: number) => {
+                            const right = x + w;
+                            const bottom = y + h;
+                            const rTop = Math.min(rt, w / 2, h / 2);
+                            const rBottom = Math.min(rb, w / 2, h / 2);
+                            return [
+                                `M ${x} ${y + rTop}`,
+                                `Q ${x} ${y} ${x + rTop} ${y}`,
+                                `L ${right - rTop} ${y}`,
+                                `Q ${right} ${y} ${right} ${y + rTop}`,
+                                `L ${right} ${bottom - rBottom}`,
+                                `Q ${right} ${bottom} ${right - rBottom} ${bottom}`,
+                                `L ${x + rBottom} ${bottom}`,
+                                `Q ${x} ${bottom} ${x} ${bottom - rBottom}`,
+                                'Z'
+                            ].join(' ');
+                        };
                         return (
                             <>
                                 <rect x={padding.left} y={padding.top} width={plotWidth} height={plotHeight} rx={16} ry={16} fill="var(--reviews-chart-panel)" stroke="none" />
@@ -1189,13 +1287,13 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                         const tooltip = `${row.mistakes} mistakes`;
                                         return (
                                             <g key={row.surahId}>
-                                                <rect x={x} y={padding.top + 6} width={barWidth} height={plotHeight - 6} rx={8} fill="var(--border)" opacity="0.2" />
-                                                <rect
-                                                    x={x}
-                                                    y={y}
-                                                    width={barWidth}
-                                                    height={h}
-                                                    rx={8}
+                                                <path
+                                                    d={roundedPath(x, padding.top + 6, barWidth, plotHeight - 6, 14, 10)}
+                                                    fill="var(--border)"
+                                                    opacity="0.2"
+                                                />
+                                                <path
+                                                    d={roundedPath(x, y, barWidth, h, 14, 6)}
                                                     fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
                                                     opacity={i === 0 ? 0.95 : 0.7}
                                                     data-tooltip={tooltip}
@@ -1221,25 +1319,6 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
                                     const y = chartHeight - padding.bottom + 18;
                                     const label = shortSurahLabel(row.surahName, labelMaxChars);
                                     const isTruncated = label !== row.surahName;
-                                    if (rotateLabels) {
-                                        return (
-                                            <text
-                                                key={`x-${row.surahId}`}
-                                                x={x}
-                                                y={y}
-                                                textAnchor="end"
-                                                fontSize="9"
-                                                fill="var(--foreground-secondary)"
-                                                transform={`rotate(-24 ${x} ${y})`}
-                                                data-tooltip={isTruncated ? row.surahName : undefined}
-                                                data-tooltip-trigger={isTruncated ? 'tap' : undefined}
-                                                style={isTruncated ? { cursor: 'help' } : undefined}
-                                            >
-                                                {isTruncated ? <title>{row.surahName}</title> : null}
-                                                {label}
-                                            </text>
-                                        );
-                                    }
                                     return (
                                         <text
                                             key={`x-${row.surahId}`}
@@ -1266,15 +1345,11 @@ function SurahRiskBarsChart({ rows, rangeLabel }: { rows: SurahRiskRow[]; rangeL
     );
 }
 
-function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTimeRange }: {
+function FutureDueSection({ stats, timeRange, setTimeRange }: {
     stats: any;
-    showBacklog: boolean;
-    setShowBacklog: (v: boolean) => void;
     timeRange: '1m' | '3m' | '1y' | 'all';
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
-    const hasOverdueReviews = (stats?.overdueCount || 0) > 0;
-
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1285,35 +1360,12 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Review Plan</h2>
                 </div>
                 <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button
-                        type="button"
-                        className="future-due-toggle std-normal-btn"
-                        onClick={() => setShowBacklog(!showBacklog)}
-                        disabled={!hasOverdueReviews}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            cursor: hasOverdueReviews ? 'pointer' : 'not-allowed',
-                            fontSize: '0.75rem',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            opacity: hasOverdueReviews ? 1 : 0.45,
-                        }}
-                    >
-                        {showBacklog ? 'Exclude Overdue' : 'Include Overdue'}
-                    </button>
-                    <select
-                        className="future-due-range"
-                        value={timeRange}
-                        onChange={(e) => setTimeRange(e.target.value as any)}
-                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.75rem', background: 'var(--background)', outline: 'none', color: 'var(--foreground)' }}
-                    >
-                        <option value="1m">1 Month</option>
-                        <option value="3m">3 Months</option>
-                        <option value="1y">1 Year</option>
-                        <option value="all">All Time</option>
-                    </select>
+                    <div className="segmented-compact">
+                        <button type="button" onClick={() => setTimeRange('1m')} className={`adv-seg-btn ${timeRange === '1m' ? 'adv-seg-active' : ''}`}>1m</button>
+                        <button type="button" onClick={() => setTimeRange('3m')} className={`adv-seg-btn ${timeRange === '3m' ? 'adv-seg-active' : ''}`}>3m</button>
+                        <button type="button" onClick={() => setTimeRange('1y')} className={`adv-seg-btn ${timeRange === '1y' ? 'adv-seg-active' : ''}`}>1y</button>
+                        <button type="button" onClick={() => setTimeRange('all')} className={`adv-seg-btn ${timeRange === 'all' ? 'adv-seg-active' : ''}`}>all</button>
+                    </div>
                 </div>
             </div>
 
@@ -1325,7 +1377,7 @@ function FutureDueSection({ stats, showBacklog, setShowBacklog, timeRange, setTi
 }
 
 function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minDay: number; maxDay: number; dailyLoad: string }) {
-    const MAX_X_AXIS_LEGENDS = 6;
+    const DESKTOP_MAX_X_AXIS_LEGENDS = 6;
     const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
@@ -1387,16 +1439,74 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const step = groupWidth / span;
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
-                        const labelStep = Math.max(1, Math.ceil(nonZeroData.length / MAX_X_AXIS_LEGENDS));
+                        const isSmallScreen = chartWidth <= 480;
+                        const isTablet = chartWidth > 480 && chartWidth <= 900;
+                        const maxXAxisLegends = isSmallScreen ? 4 : isTablet ? 5 : DESKTOP_MAX_X_AXIS_LEGENDS;
+                        const xAxisFontSize = isSmallScreen ? 9 : 10;
+                        const rotateLabels = step < (isSmallScreen ? 46 : 40);
                         const dailyLoadValue = Number(dailyLoad);
                         const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
                         const formatDayLabel = (day: number) => {
                             if (day === 0) return 'Today';
                             if (day === 1) return '1d';
-                            if (day === -1) return '1d ago';
-                            if (day < 0) return `${Math.abs(day)}d ago`;
+                            if (day < 0) return `-${Math.abs(day)}d`;
                             return `${day}d`;
                         };
+                        const baseLabelStep = Math.max(1, Math.ceil(nonZeroData.length / maxXAxisLegends));
+                        const longestLabelLength = Math.max(...nonZeroData.map(d => formatDayLabel(d.day).length), 1);
+                        const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
+                        const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
+                        const labelStep = Math.max(baseLabelStep, minStepForWidth);
+                        const minLabelGapPx = estimatedLabelWidth;
+
+                        const candidateLabelIndices = nonZeroData
+                            .map((d, i) => {
+                                const shouldShow = i === 0 || i === nonZeroData.length - 1 || d.day === 0 || i % labelStep === 0;
+                                return shouldShow ? i : -1;
+                            })
+                            .filter((i): i is number => i >= 0);
+
+                        const todayIndex = nonZeroData.findIndex(d => d.day === 0);
+                        const visibleLabelIndices = new Set<number>();
+                        const canPlaceLabel = (index: number) => {
+                            const x = getX(index);
+                            for (const existingIndex of visibleLabelIndices) {
+                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        };
+
+                        const forcePlaceLabel = (index: number) => {
+                            const x = getX(index);
+                            Array.from(visibleLabelIndices).forEach(existingIndex => {
+                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) {
+                                    visibleLabelIndices.delete(existingIndex);
+                                }
+                            });
+                            visibleLabelIndices.add(index);
+                        };
+
+                        const priorityIndices = [todayIndex, 0, nonZeroData.length - 1].filter(
+                            (idx, pos, arr): idx is number => idx >= 0 && arr.indexOf(idx) === pos
+                        );
+
+                        priorityIndices.forEach(index => {
+                            if (index === todayIndex) {
+                                forcePlaceLabel(index);
+                                return;
+                            }
+                            if (canPlaceLabel(index)) {
+                                visibleLabelIndices.add(index);
+                            }
+                        });
+
+                        candidateLabelIndices.forEach(index => {
+                            if (!visibleLabelIndices.has(index) && canPlaceLabel(index)) {
+                                visibleLabelIndices.add(index);
+                            }
+                        });
 
                         const roundedPath = (x: number, y: number, w: number, h: number, rt: number, rb: number) => {
                             const right = x + w;
@@ -1451,6 +1561,11 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                         const bgY = padding.top + 6;
                                         const bgHeight = plotHeight - 6;
                                         const isPeak = d.count === maxCount;
+                                        const hasXAxisLabel = visibleLabelIndices.has(i);
+                                        const reviewLabel = `${d.count} review${d.count === 1 ? '' : 's'}`;
+                                        const tooltip = hasXAxisLabel
+                                            ? reviewLabel
+                                            : `${reviewLabel} (${formatDayLabel(d.day)})`;
                                         return (
                                             <g key={i}>
                                                 <path
@@ -1462,7 +1577,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
                                                     fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
                                                     opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
-                                                    data-tooltip={`${d.count} review${d.count === 1 ? '' : 's'}`}
+                                                    data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
                                                 />
@@ -1487,15 +1602,16 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
 
                                 {/* X-axis labels */}
                                 {nonZeroData.map((d, i) => {
-                                    if (i % labelStep !== 0 && i !== nonZeroData.length - 1) return null;
+                                    if (!visibleLabelIndices.has(i)) return null;
                                     const x = getX(i);
+                                    const y = chartHeight - padding.bottom + 18;
                                     return (
                                         <text
                                             key={`label-${i}`}
                                             x={x}
-                                            y={chartHeight - padding.bottom + 18}
+                                            y={y}
                                             textAnchor="middle"
-                                            fontSize="10"
+                                            fontSize={xAxisFontSize}
                                             fill="var(--foreground-secondary)"
                                         >
                                             {formatDayLabel(d.day)}

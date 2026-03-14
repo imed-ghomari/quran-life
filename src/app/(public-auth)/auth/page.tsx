@@ -14,6 +14,7 @@ import { Mail, ArrowRight, Loader2, Lock, Hash } from 'lucide-react';
 import { Suspense } from 'react';
 
 // Import custom Spinner component and Google OAuth components
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
@@ -203,17 +204,7 @@ function AuthContent() {
 
     // Render a loading spinner while initial authentication status is being verified
     if (isAuthLoading) {
-        return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--background)'
-            }}>
-                <Spinner text="Verifying authentication..." />
-            </div>
-        );
+        return <FullScreenLoader text="Verifying authentication..." />;
     }
 
     // Render an error message if there's an issue with the authentication state
@@ -239,31 +230,11 @@ function AuthContent() {
     }
 
     if (user && shouldBlockOnSubscriptionLoad) {
-        return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--background)'
-            }}>
-                <Spinner text="Checking subscription..." />
-            </div>
-        );
+        return <FullScreenLoader text="Checking subscription..." />;
     }
 
     if (user && (hasActiveSubscription || isPaymentBypass)) {
-        return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--background)'
-            }}>
-                <Spinner text="Redirecting to dashboard..." />
-            </div>
-        );
+        return <FullScreenLoader text="Redirecting to dashboard..." />;
     }
 
     if (!isOnline) {
@@ -683,16 +654,6 @@ function AuthContent() {
                         >
                             {isOpening ? 'Opening checkout...' : 'Proceed'}
                         </button>
-                        <p style={{
-                            marginTop: '0.75rem',
-                            marginBottom: 0,
-                            color: 'var(--foreground-secondary)',
-                            fontSize: '0.82rem',
-                            textAlign: 'center',
-                            lineHeight: 1.4
-                        }}>
-                            Cancel anytime. If you cancel after the trial ends, payments are non-refundable.
-                        </p>
                         <button
                             type="button"
                             onClick={async () => {
@@ -737,7 +698,7 @@ function AuthContent() {
                                 <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                                     Privacy Policy
                                 </Link>
-                                . Cancellation after trial is non-refundable.
+                                . Refunds are available only within our 14-day refund window (see Terms).
                             </p>
                         </div>
                     </div>
@@ -803,15 +764,7 @@ export default function AuthPage() {
     return (
         <Suspense fallback={
             // Fallback UI while AuthContent is loading (e.g., during initial Google OAuth script load)
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--background)'
-            }}>
-                <Spinner text="Loading..." />
-            </div>
+            <FullScreenLoader text="Loading..." />
         }>
             <AuthContent />
         </Suspense>

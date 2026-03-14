@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import SlideOver from '../SlideOver'; // Using generic SlideOver for behavior consistency? Or replicating styles?
@@ -41,6 +42,7 @@ export default function SplitsModal({
     hasReviewedHistory
 }: SplitsModalProps) {
     const surahName = getSurah(surahId)?.name;
+    const surahLabel = surahName ? `Surah ${surahId} · ${surahName}` : `Surah ${surahId}`;
     const [visible, setVisible] = useState(isOpen);
     const [useSlideOver, setUseSlideOver] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -85,13 +87,17 @@ export default function SplitsModal({
 
     if (!visible && !isOpen) return null;
 
-    // Mobile: SlideOver Presentation (match settings mobile slideover)
-    if (isMobile || useSlideOver) {
-        return (
-            <div className="slide-over-overlay" onClick={onClose} style={{ zIndex: 12000 }}>
+    const modalContent = (isMobile || useSlideOver)
+        ? (
+            <div className="slide-over-overlay" onClick={onClose} style={{ zIndex: 14000 }}>
                 <div className="slide-over-content" onClick={e => e.stopPropagation()}>
                     <div className="slide-over-header">
-                        <h3 style={{ margin: 0, fontSize: '1rem' }}>Splits Configuration</h3>
+                        <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                            <h3 style={{ margin: 0, fontSize: '1rem' }}>Splits Configuration</h3>
+                            <span className="mindmap-header-context self-center lg:-translate-y-0.5">
+                                {surahLabel}
+                            </span>
+                        </div>
                         <button className="close-btn" onClick={onClose}>
                             <X size={20} />
                         </button>
@@ -116,42 +122,46 @@ export default function SplitsModal({
                     </div>
                 </div>
             </div>
-        );
-    }
-return (
-    <div className="fixed inset-0 z-[12000] flex items-center justify-center">
-        {/* Backdrop */}
-        <div
-            className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'
-                }`}
-            onClick={onClose}
-            aria-hidden="true"
-        />
+        )
+        : (
+            <div className="fixed inset-0 z-[14000] flex items-center justify-center">
+                {/* Backdrop */}
+                <div
+                    className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'
+                        }`}
+                    onClick={onClose}
+                    aria-hidden="true"
+                />
 
-        {/* Modal */}
-        <div
-            className={`
-                relative w-2xl 
-                max-h-[calc(100vh-4rem)]
-                mx-auto
-                bg-[var(--background)]
-                border border-[var(--border)]
-                rounded-2xl
-                shadow-2xl
-                overflow-hidden
-                flex flex-col
-                transform transition-all duration-300
-                ${isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
-            `}
-        >
+                {/* Modal */}
+                <div
+                    className={`
+                        relative w-2xl 
+                        max-h-[calc(100vh-4rem)]
+                        mx-auto
+                        bg-[var(--background)]
+                        border border-[var(--border)]
+                        rounded-2xl
+                        shadow-2xl
+                        overflow-hidden
+                        flex flex-col
+                        transform transition-all duration-300
+                        ${isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
+                    `}
+                >
            
             {/* Header */}
 <div className="flex items-start justify-between px-6 pt-5 pb-4 gap-4" style={{ paddingLeft: '16px', paddingRight: '14px', paddingTop: '17px' }}>
     <div className="flex-1">
-        <h2 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
-            Splits Configuration
-        </h2>
-        <p className="text-sm text-[var(--foreground-secondary)] mt-1 !mb-3">
+        <div className="flex items-center lg:items-baseline gap-2 flex-wrap">
+            <h2 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
+                Splits Configuration
+            </h2>
+            <span className="mindmap-header-context self-center lg:-translate-y-1">
+                {surahLabel}
+            </span>
+        </div>
+        <p className="text-sm text-[var(--foreground-secondary)] mt-2 !mb-3">
             Adjust split points for optimal memorization
         </p>
     </div>
@@ -191,7 +201,10 @@ return (
                     hasReviewedHistory={hasReviewedHistory}
                 />
             </div>
-        </div>
-    </div>
-);
+                </div>
+            </div>
+        );
+
+    if (typeof document === 'undefined') return null;
+    return createPortal(modalContent, document.body);
 }

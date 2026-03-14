@@ -10,6 +10,14 @@ const parsePositiveInt = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+const parseBoolean = (value: string | undefined, fallback: boolean) => {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+};
+
 const fsrsOptimizationModeRaw = (process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_MODE ?? 'normal').trim().toLowerCase();
 const fsrsOptimizationMode = fsrsOptimizationModeRaw === 'test' ? 'test' : 'normal';
 const defaultOptimizationLogDelta = fsrsOptimizationMode === 'test' ? 5 : 400;
@@ -17,6 +25,7 @@ const defaultOptimizationDelayMs = fsrsOptimizationMode === 'test' ? 0 : 5000;
 
 export const clientEnv = {
   NEXT_PUBLIC_PADDLE_ENV: paddleEnv,
+  NEXT_PUBLIC_DEPLOYMENT_ID: process.env.NEXT_PUBLIC_DEPLOYMENT_ID ?? '',
   NEXT_PUBLIC_PADDLE_CLIENT_TOKEN:
     (isProduction
       ? process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN_PRODUCTION
@@ -37,6 +46,10 @@ export const clientEnv = {
     '',
   NEXT_PUBLIC_INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? '',
   NEXT_PUBLIC_FSRS_OPTIMIZATION_MODE: fsrsOptimizationMode,
+  NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED: parseBoolean(
+    process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED,
+    false
+  ),
   NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA: parsePositiveInt(
     process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA,
     defaultOptimizationLogDelta

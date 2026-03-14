@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
 import {
-    SplitSquareHorizontal, Check, PenTool, X, Trash2, Plus, Minus, ImageIcon
+    SplitSquareHorizontal, Check, PenTool, X, Trash2
 } from 'lucide-react';
 import MindmapViewer from '../MindmapViewer';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
@@ -40,14 +39,12 @@ export function MobileAnchorBuilder({
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [currentSplitPoint, setCurrentSplitPoint] = useState<number>(1);
     const [isEditing, setIsEditing] = useState(false);
-    const [showFullMindmap, setShowFullMindmap] = useState(false);
     const { confirm } = useConfirmDialog();
-    const [zoomLevel, setZoomLevel] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     const [scrollCenterPadding, setScrollCenterPadding] = useState(220);
     const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
-    const shouldShowPreview = showMindmapPreview && !!displayUrl;
     const hasMindmap = !!(snapshot || displayUrl);
+    const shouldShowPreview = showMindmapPreview && hasMindmap;
 
     // Height of one "verse unit" in pixels
     const VERSE_HEIGHT = 50;
@@ -110,65 +107,6 @@ export function MobileAnchorBuilder({
 
     const boundaries = Array.from(new Set([1, ...breaks.map(b => b + 1), verseCount + 1])).sort((a, b) => a - b);
 
-    // Full Screen Mindmap Overlay
-    if (showFullMindmap && shouldShowPreview) {
-        return (
-            <div
-                style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 100,
-                    background: 'var(--background)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}
-                onClick={() => setShowFullMindmap(false)}
-            >
-                <div style={{ position: 'absolute', top: 20, right: 20, color: 'var(--foreground)', zIndex: 101, display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setZoomLevel(z => Math.max(0.5, z - 0.25)); }}
-                        style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '50%', width: '40px', height: '40px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
-                        <Minus size={24} />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setZoomLevel(z => Math.min(3, z + 0.25)); }}
-                        style={{ background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '50%', width: '40px', height: '40px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
-                        <Plus size={24} />
-                    </button>
-                    <button
-                        onClick={() => setShowFullMindmap(false)}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--foreground)', cursor: 'pointer', marginLeft: '0.5rem' }}
-                    >
-                        <X size={32} />
-                    </button>
-                </div>
-                <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                    {shouldShowPreview && (
-                        <Image
-                            src={displayUrl}
-                            alt="Full Mindmap"
-                            fill
-                            style={{
-                                objectFit: 'contain',
-                                transform: `scale(${zoomLevel})`,
-                                transition: 'transform 0.2s ease-out',
-                                cursor: zoomLevel > 1 ? 'grab' : 'default'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    )}
-                </div>
-                <span style={{ position: 'absolute', bottom: 30, color: 'var(--foreground)', background: 'var(--background-secondary)', border: '1px solid var(--border)', padding: '8px 16px', borderRadius: '20px' }}>
-                    Tap anywhere to close • Zoom: {Math.round(zoomLevel * 100)}%
-                </span>
-            </div>
-        );
-    }
-
     // View Mode: List of Segments
     if (!isEditing) {
         return (
@@ -197,34 +135,19 @@ export function MobileAnchorBuilder({
                                 borderRadius: '8px',
                                 overflow: 'hidden',
                                 background: 'var(--background-secondary)',
-                                position: 'relative',
-                                cursor: 'pointer'
+                                position: 'relative'
                             }}
-                            onClick={() => setShowFullMindmap(true)}
                         >
-                            <Image
-                                src={displayUrl}
-                                alt="Mindmap Preview"
-                                fill
-                                style={{ objectFit: 'contain' }}
+                            <MindmapViewer
+                                snapshot={snapshot}
+                                imageUrl={mindmapImageUrl || undefined}
+                                imageUrlDark={mindmapImageUrlDark || undefined}
+                                isDark={isDark || false}
+                                title="Reference Map"
+                                contextLabel={`Surah ${surahId}${surahName ? `. ${surahName}` : ''}`}
+                                docLink={`/docs/mindmaps/surah-${surahId}`}
+                                height={150}
                             />
-                            <div style={{
-                                position: 'absolute',
-                                bottom: 8,
-                                right: 8,
-                                background: 'var(--background)',
-                                color: 'var(--foreground)',
-                                border: '1px solid var(--border)',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4
-                            }}>
-                                <ImageIcon size={12} />
-                                Tap to Zoom
-                            </div>
                         </div>
                     )}
                     <button

@@ -24,6 +24,30 @@ const REQUIRED_SUBSCRIPTION_EVENTS = new Set([
   'subscription.canceled',
 ]);
 
+const DEFAULT_WEBHOOK_DOMAIN = 'https://quran-life.org';
+
+function normalizeBaseUrl(rawUrl) {
+  if (!rawUrl) return DEFAULT_WEBHOOK_DOMAIN;
+  const trimmed = String(rawUrl).trim();
+  if (!trimmed) return DEFAULT_WEBHOOK_DOMAIN;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed.replace(/\/+$/, '');
+  }
+  return `https://${trimmed.replace(/\/+$/, '')}`;
+}
+
+function getExpectedWebhookUrl() {
+  const baseUrl = normalizeBaseUrl(
+    process.env.PADDLE_WEBHOOK_DOMAIN
+      || process.env.NEXT_PUBLIC_SITE_URL
+      || process.env.SITE_URL
+      || process.env.VERCEL_PROJECT_PRODUCTION_URL
+      || process.env.VERCEL_URL
+      || DEFAULT_WEBHOOK_DOMAIN
+  );
+  return `${baseUrl}/api/webhooks/paddle`;
+}
+
 const checks = [];
 let hasFailure = false;
 
@@ -118,6 +142,17 @@ async function verifyWebhookSettings(paddle) {
     'Found active Paddle webhook destination',
     `${webhookSetting.id} -> ${webhookSetting.destination}`
   );
+
+  const expectedWebhookUrl = getExpectedWebhookUrl();
+  if (String(webhookSetting.destination || '') !== expectedWebhookUrl) {
+    pushCheck(
+      'FAIL',
+      'Webhook destination does not match expected domain',
+      `expected=${expectedWebhookUrl} actual=${webhookSetting.destination}`
+    );
+  } else {
+    pushCheck('PASS', 'Webhook destination matches expected domain', expectedWebhookUrl);
+  }
 
   const subscribed = new Set((webhookSetting.subscribedEvents || []).map((event) => event.name));
   const missingEvents = [...REQUIRED_SUBSCRIPTION_EVENTS].filter((name) => !subscribed.has(name));

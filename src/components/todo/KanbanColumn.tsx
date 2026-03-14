@@ -69,7 +69,7 @@ const KanbanColumn = ({
     return (
         <div 
             className={`
-                kanban-column roadmap-column flex flex-col !rounded-[14px] ${
+                kanban-column todo-kanban-column flex flex-col !rounded-[14px] ${
                     id === 'backlog' || id === 'in-progress' || id === 'complete'
                         ? 'kanban-column--mobile-flat'
                         : ''
@@ -84,7 +84,7 @@ const KanbanColumn = ({
             {/* Header Area */}
             <div 
                 className={`
-                    column-header !mb-3 !pb-2 
+                    todo-kanban-column-header !mb-3 !pb-2 
                     ${isMobile ? 'sticky top-0 z-10 bg-[var(--background-secondary)] !-mt-3 !pt-3 !-mx-3 !px-3 border-b border-[var(--border)]' : ''}
                 `}
                 style={isMobile ? {
@@ -113,7 +113,7 @@ const KanbanColumn = ({
                         {...provided.droppableProps}
                         ref={provided.innerRef}
                         className={`
-                            column-content min-h-[100px] relative
+                            todo-kanban-column-content min-h-[100px] relative
                             ${isMobile 
                                 ? '!flex !flex-row gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x snap-mandatory overscroll-x-contain !overflow-y-hidden' 
                                 : 'flex-1 overflow-y-auto custom-scrollbar pr-1 pb-24'

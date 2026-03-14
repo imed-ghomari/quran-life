@@ -206,8 +206,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
     applyTheme();
     if (theme === 'system') {
-      media.addEventListener('change', applyTheme);
-      return () => media.removeEventListener('change', applyTheme);
+      if (media.addEventListener) {
+        media.addEventListener('change', applyTheme);
+        return () => media.removeEventListener('change', applyTheme);
+      }
+      media.addListener(applyTheme);
+      return () => media.removeListener(applyTheme);
     }
   }, [theme]);
 

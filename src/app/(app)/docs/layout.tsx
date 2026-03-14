@@ -8,6 +8,8 @@ import DocsSearch from './DocsSearch';
 import DocsBreadcrumbs from './DocsBreadcrumbs';
 import SearchHighlight from './SearchHighlight';
 import { ScrollOnNavigate } from './ScrollOnNavigate';
+import { DocsNavigationProvider } from './DocsNavigationState';
+import DocsContentShell from './DocsContentShell';
 
 function getSidebarData(dirPath: string, baseRoute = '/docs'): SidebarItem[] {
     const metaPath = path.join(dirPath, '_meta.json');
@@ -50,10 +52,11 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
     const sidebarItems = getSidebarData(contentDir);
 
     return (
-        <div className="content-wrapper !max-w-full h-full flex flex-col">
-            <Suspense fallback={null}>
-                <ScrollOnNavigate />
-            </Suspense>
+        <DocsNavigationProvider>
+            <div className="content-wrapper !max-w-full h-full flex flex-col">
+                <Suspense fallback={null}>
+                    <ScrollOnNavigate />
+                </Suspense>
             
             {/* Mobile Header */}
 <div className="flex items-center justify-between shrink-0 md:hidden px-5 pt-5">
@@ -102,12 +105,12 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
     padding: '0',
     borderRadius: '16px'
 }}>
-                     <article className="docs-content p-5 pt-6 md:p-6 md:pt-6">
-                            <Suspense fallback={null}>
-                                <SearchHighlight />
-                            </Suspense>
-                            {children}
-                        </article>
+                    <article className="docs-content p-5 pt-6 md:p-6 md:pt-6">
+                        <Suspense fallback={null}>
+                            <SearchHighlight />
+                        </Suspense>
+                        <DocsContentShell>{children}</DocsContentShell>
+                    </article>
                     </main>
                 </div>
 
@@ -126,7 +129,8 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 </aside>
             </div>
 
-        </div>
+            </div>
+        </DocsNavigationProvider>
     );
 }
 
