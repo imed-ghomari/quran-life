@@ -4329,6 +4329,11 @@ body[data-mindmap-open="true"] .bottom-nav {
   color: var(--foreground);
 }
 
+.card-action-menu-item.adv-seg-btn {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  will-change: background-color, color;
+}
+
 .card-action-menu-item.is-neutral:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 18%, var(--verse-bg));
   color: color-mix(in srgb, var(--accent) 84%, var(--foreground));

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
 import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
@@ -43,6 +43,82 @@ const KanbanCard = ({
     onViewVerseContext,
     onViewSimilarityContext
 }: KanbanCardProps) => {
+    return (
+        <>
+            <Draggable draggableId={item.id} index={index}>
+                {(provided, snapshot) => {
+                    return (
+                    <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className={`
+                            kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
+                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
+                            ${item.status === 'complete' ? 'opacity-80' : ''}
+                            ${isMobile ? 'min-w-[42vw] snap-center' : ''}
+                        `}
+                        style={{
+                            ...provided.draggableProps.style,
+                        }}
+                    >
+                        <KanbanCardBody
+                            item={item}
+                            hasMindmap={hasMindmap}
+                            hasPremade={hasPremade}
+                            hasSplits={hasSplits}
+                            appMode={appMode}
+                            docLink={docLink}
+                            isMobile={isMobile}
+                            onEditMindmap={onEditMindmap}
+                            onDeleteMindmap={onDeleteMindmap}
+                            onExportMindmap={onExportMindmap}
+                            onResetMindmap={onResetMindmap}
+                            onChangeSplits={onChangeSplits}
+                            onViewVerseContext={onViewVerseContext}
+                            onViewSimilarityContext={onViewSimilarityContext}
+                        />
+                    </div>
+                    );
+                }}
+            </Draggable>
+        </>
+    );
+};
+
+interface KanbanCardBodyProps {
+    item: KanbanItem;
+    isMobile: boolean;
+    hasMindmap: boolean;
+    hasPremade?: boolean;
+    hasSplits: boolean;
+    appMode: 'owner' | 'user';
+    docLink?: string;
+    onEditMindmap: (item: KanbanItem) => Promise<void> | void;
+    onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
+    onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onChangeSplits: (item: KanbanItem) => Promise<void> | void;
+    onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
+    onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+}
+
+const KanbanCardBody = memo(({
+    item,
+    isMobile,
+    hasMindmap,
+    hasPremade,
+    hasSplits,
+    appMode,
+    docLink,
+    onEditMindmap,
+    onDeleteMindmap,
+    onExportMindmap,
+    onResetMindmap,
+    onChangeSplits,
+    onViewVerseContext,
+    onViewSimilarityContext
+}: KanbanCardBodyProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -126,56 +202,33 @@ const KanbanCard = ({
     const showDelete = appMode === 'owner' && hasMindmap;
     const showReset = appMode === 'user' && hasMindmap && !!hasPremade;
 
-    return (
-        <>
-            <Draggable draggableId={item.id} index={index}>
-                {(provided, snapshot) => {
-                    return (
-                    <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className={`
-                            kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
-                            ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
-                            ${item.status === 'complete' ? 'opacity-80' : ''}
-                            ${isMobile ? 'min-w-[42vw] snap-center' : ''}
-                        `}
-                        style={{
-                            ...provided.draggableProps.style,
-                        }}
-                    >
-                        {renderCardZones({
-                            item,
-                            hasMindmap,
-                            hasPremade,
-                            showExport,
-                            showDelete,
-                            showReset,
-                            cardType,
-                            menuOpen,
-                            setMenuOpen,
-                            menuButtonRef,
-                            handleMenuClick,
-                            isMobile,
-                            onEditMindmap: handleEditMindmap,
-                            onDeleteMindmap: handleDeleteClick,
-                            onExportMindmap: handleExportMindmap,
-                            onResetMindmap: handleResetClick,
-                            onChangeSplits: handleChangeSplits,
-                            hasSplits,
-                            footerPad: 'pt-3',
-                            docLink,
-                            onViewVerseContext: handleViewVerseContext,
-                            onViewSimilarityContext: handleViewSimilarityContext
-                        })}
-                    </div>
-                    );
-                }}
-            </Draggable>
-        </>
-    );
-};
+    return renderCardZones({
+        item,
+        hasMindmap,
+        hasPremade,
+        showExport,
+        showDelete,
+        showReset,
+        cardType,
+        menuOpen,
+        setMenuOpen,
+        menuButtonRef,
+        handleMenuClick,
+        isMobile,
+        onEditMindmap: handleEditMindmap,
+        onDeleteMindmap: handleDeleteClick,
+        onExportMindmap: handleExportMindmap,
+        onResetMindmap: handleResetClick,
+        onChangeSplits: handleChangeSplits,
+        hasSplits,
+        footerPad: 'pt-3',
+        docLink,
+        onViewVerseContext: handleViewVerseContext,
+        onViewSimilarityContext: handleViewSimilarityContext
+    });
+});
+
+KanbanCardBody.displayName = 'KanbanCardBody';
 
 interface RenderZoneProps {
     item: KanbanItem;
@@ -437,4 +490,7 @@ function renderCardZones({
     );
 }
 
-export default KanbanCard;
+const MemoizedKanbanCard = memo(KanbanCard);
+MemoizedKanbanCard.displayName = 'KanbanCard';
+
+export default MemoizedKanbanCard;
