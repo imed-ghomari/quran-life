@@ -28,6 +28,7 @@ const RoadmapSection: React.FC = () => {
     ],
     planned: [
       { id: 12, title: 'Completing Mindmaps (Parts 1-6)' },
+      { id: 22, title: 'FSRS Optimization' },
       { id: 21, title: 'Defer Similarity by Surah Conditions' },
       {
         id: 16,
