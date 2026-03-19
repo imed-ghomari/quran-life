@@ -1,19 +1,13 @@
 import type { Metadata, Viewport } from 'next';
-import { Outfit } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import InstantDataProvider from '@/components/InstantDataProvider';
 import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityController';
 import { getSiteUrl } from '@/lib/siteUrl';
-
-const outfit = Outfit({ 
-    subsets: ['latin'],
-    variable: '--font-outfit',
-    display: 'swap',
-});
 
 export const viewport: Viewport = {
     width: 'device-width',
@@ -102,7 +96,7 @@ export default function RootLayout({
 `;
 
     return (
-        <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
+        <html lang="ar" dir="ltr" suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}
@@ -110,9 +104,11 @@ export default function RootLayout({
                 <ScrollbarVisibilityController />
                 <Providers>
                     <ErrorBoundary>
-                        <AppShell>
-                            {children}
-                        </AppShell>
+                        <InstantDataProvider>
+                            <AppShell>
+                                {children}
+                            </AppShell>
+                        </InstantDataProvider>
                     </ErrorBoundary>
                 </Providers>
             </body>

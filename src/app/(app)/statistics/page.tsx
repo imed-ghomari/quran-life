@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+    useSharedInstantListeningProgress,
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
 import { SURAHS } from '@/lib/quranData';
 import {
-    useInstantSettings,
-    useInstantMindMaps,
-    useInstantNodes,
-    useInstantListeningProgress,
-    useInstantMutashabihat,
     useInstantReviewLogs,
-    useInstantReviewErrors,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import {
@@ -123,13 +125,13 @@ const resolveSurahIdFromErrorNodeRef = (nodeRef: unknown): number | null => {
 };
 
 export default function StatisticsPage() {
-    const { settings, isLoading: settingsLoading } = useInstantSettings();
-    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
-    const { nodes: memoryNodes, isLoading: nodesLoading } = useInstantNodes();
-    const { progress: listeningProgress, isLoading: progressLoading } = useInstantListeningProgress();
-    const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useInstantMutashabihat();
+    const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { nodes: memoryNodes, isLoading: nodesLoading } = useSharedInstantNodes();
+    const { progress: listeningProgress, isLoading: progressLoading } = useSharedInstantListeningProgress();
+    const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
     const { logs: reviewLogs, isLoading: reviewLogsLoading } = useInstantReviewLogs();
-    const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
 
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
     const [surahRiskRange, setSurahRiskRange] = useState<SurahRiskRange>('30d');

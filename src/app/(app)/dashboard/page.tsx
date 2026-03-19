@@ -38,17 +38,19 @@ import {
 
 import dynamic from 'next/dynamic';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import {
+    useSharedInstantListeningProgress,
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
-    useInstantSettings,
-    useInstantNodes,
     useInstantReviewLogs,
-    useInstantReviewErrors,
-    useInstantMindMaps,
     useInstantOptimization,
     useInstantListeningStats,
-    useInstantListeningProgress,
-    useInstantMutashabihat,
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
@@ -155,14 +157,14 @@ function getLocalDayKeyNow() {
 }
 
 export default function TodayPage() {
-    const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
-    const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
+    const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
-    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
-    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
-    const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useInstantMutashabihat();
+    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
+    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
-    const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
+    const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useSharedInstantListeningProgress();
     const isOnline = useContext(OnlineStatusContext);
 
     const [allVerses, setAllVerses] = useState<Verse[]>([]);

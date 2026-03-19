@@ -380,7 +380,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 </p>
 
                 <ul className="features-list">
-                  <li><Check size={20} className="check-icon" /> Unlimited Visual Mindmaps</li>
+                  <li><Check size={20} className="check-icon" /> Official Pre-Made Mindmaps</li>
                   <li><Check size={20} className="check-icon" /> Daily Portion Generator</li>
                   <li><Check size={20} className="check-icon" /> Advanced Spaced Repetition System</li>
                   <li><Check size={20} className="check-icon" /> Mutashabihat (Similar Verses) Tool</li>

@@ -36,6 +36,7 @@ interface MindmapViewerProps {
     imageUrl?: string | null;
     imageUrlDark?: string | null;
     isDark: boolean;
+    officialOnly?: boolean;
     title?: string;
     contextLabel?: string;
     docLink?: string | null;
@@ -106,6 +107,7 @@ export default function MindmapViewer({
     imageUrl,
     imageUrlDark,
     isDark,
+    officialOnly = false,
     title,
     contextLabel,
     docLink,
@@ -121,10 +123,11 @@ export default function MindmapViewer({
     const [editor, setEditor] = useState<any>(null);
     const [inlineEditor, setInlineEditor] = useState<any>(null);
     const [showInlineBackToContent, setShowInlineBackToContent] = useState(false);
-    const activeSnapshot = useMemo(
-        () => normalizeSnapshot(fetchedSnapshot) || normalizeSnapshot(snapshot),
-        [fetchedSnapshot, snapshot]
-    );
+    const activeSnapshot = useMemo(() => {
+        const templateSnapshot = normalizeSnapshot(fetchedSnapshot);
+        if (officialOnly) return templateSnapshot;
+        return templateSnapshot || normalizeSnapshot(snapshot);
+    }, [fetchedSnapshot, snapshot, officialOnly]);
     const hasSnapshot = !!activeSnapshot;
     const hasRenderableSnapshot = useMemo(() => hasRenderableShapes(activeSnapshot), [activeSnapshot]);
     const shouldFillParent = height === '100%';
@@ -133,7 +136,7 @@ export default function MindmapViewer({
             ? { flex: 1, minHeight: 0 }
             : { height, minHeight: height }
     ), [height, shouldFillParent]);
-    const displayUrl = isDark ? (imageUrlDark || imageUrl) : (imageUrl || imageUrlDark);
+    const displayUrl = officialOnly ? null : (isDark ? (imageUrlDark || imageUrl) : (imageUrl || imageUrlDark));
     const hasImage = !!displayUrl && !hasSnapshot && !imageFailed;
     const currentContextLabel = useMemo(
         () => contextLabel || extractContextFromTemplateUrl(templateUrl) || extractContextFromTitle(title),
@@ -176,15 +179,18 @@ export default function MindmapViewer({
                         }
                         throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
                     }
-                    const contentType = res.headers.get("content-type");
-                    if (!contentType || !contentType.includes("application/json")) {
-                        throw new Error("Received non-JSON response");
-                    }
-                    return res.json();
+                    return res.text();
                 })
-                .then(data => {
-                    if (data) {
-                        setFetchedSnapshot(data);
+                .then(text => {
+                    if (!text) {
+                        setIsLoading(false);
+                        return;
+                    }
+                    try {
+                        const parsed = JSON.parse(text);
+                        setFetchedSnapshot(parsed);
+                    } catch (parseError) {
+                        console.warn('Could not parse mindmap template JSON:', parseError);
                     }
                     setIsLoading(false);
                 })

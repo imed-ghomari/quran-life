@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef, useContext, startTransition } from 'react';
-import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
-    useInstantSettings,
-    useInstantNodes,
-    useInstantMindMaps,
-    useInstantMutashabihat,
-    useInstantReviewErrors
-} from '@/hooks/useInstantData';
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
+import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
     AppSettings,
@@ -109,19 +109,19 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
  */
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
-    const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
+    const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
     const queueSettingsUpdate = useCallback((update: Partial<AppSettings>) => {
         const queued = settingsWriteQueueRef.current.then(() => saveSettings(update));
         settingsWriteQueueRef.current = queued.catch(() => { });
         return queued;
     }, [saveSettings]);
-    const { nodes, saveNode, deleteNode, isLoading: nodesLoading } = useInstantNodes();
+    const { nodes, saveNode, deleteNode, isLoading: nodesLoading } = useSharedInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
-    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
+    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
 
-    const { decisions, custom: customMutashabihat, saveDecision, saveCustom, isLoading: mutashabihatLoading } = useInstantMutashabihat();
-    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { decisions, custom: customMutashabihat, saveDecision, saveCustom, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
+    const { errors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
 
     const { isEditor } = useContext(AccessStateContext);
     const appMode = isEditor ? 'owner' : 'user';

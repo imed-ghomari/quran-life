@@ -5,13 +5,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import {
-    useInstantSettings,
-    useInstantNodes,
-    useInstantMindMaps,
-    useInstantMutashabihat,
-    useInstantReviewErrors,
-    useInstantListeningProgress
-} from '@/hooks/useInstantData';
+    useSharedInstantListeningProgress,
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
@@ -38,12 +38,12 @@ type NavigationContentProps = {
 function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { settings, isLoading: settingsLoading } = useInstantSettings();
-    const { dueNodes, isLoading: nodesLoading } = useInstantNodes();
-    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
-    const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
-    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
-    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useInstantListeningProgress();
+    const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { dueNodes, isLoading: nodesLoading } = useSharedInstantNodes();
+    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { decisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
+    const { errors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
+    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useSharedInstantListeningProgress();
     const [hasHydratedNavMetrics, setHasHydratedNavMetrics] = useState(false);
     const navDataLoading = settingsLoading || nodesLoading || mindmapsLoading || reviewErrorsLoading || listeningProgressLoading;
 
@@ -145,7 +145,73 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
             return { id, column: itemColumn.get(id) ?? 'backlog' };
         });
 
-        const pendingCount = [...surahItems, ...partItems, ...similarityItems]
+        const SUSPEND_ERROR_THRESHOLD = 3;
+        const acknowledgedAtByGroup = settings.suspendedVerseGroupsAcknowledged || {};
+        const anchorsBySurahRange = new Map<number, Map<string, any>>();
+
+        const getCurrentAnchorForRange = (surahId: number, startVerse: number, endVerse: number) => {
+            const rangeKey = `${startVerse}-${endVerse}`;
+            const existing = anchorsBySurahRange.get(surahId);
+            if (existing) return existing.get(rangeKey);
+
+            const currentMindmap = mindmapBySurah.get(surahId);
+            const surahAnchors = Array.isArray(currentMindmap?.anchors) ? currentMindmap.anchors : [];
+            const byRange = new Map<string, any>();
+            surahAnchors.forEach((anchor: any) => {
+                const anchorStart = Number(anchor?.startVerse);
+                const anchorEnd = Number(anchor?.endVerse);
+                if (!Number.isFinite(anchorStart) || !Number.isFinite(anchorEnd)) return;
+                byRange.set(`${anchorStart}-${anchorEnd}`, anchor);
+            });
+            anchorsBySurahRange.set(surahId, byRange);
+            return byRange.get(rangeKey);
+        };
+
+        const suspendedErrorsByGroup = new Map<string, { timestampMs: number }[]>();
+        errors.forEach((error) => {
+            if (error.nodeType !== 'verse_segment' || !error.surahId) return;
+
+            const surahId = Number(error.surahId);
+            if (!Number.isFinite(surahId) || surahId <= 0) return;
+
+            const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
+            const focusAyah =
+                absoluteRef && absoluteRef.surahId === surahId
+                    ? absoluteRef.ayahId
+                    : (error.startVerse ?? 1);
+            const startVerse = error.startVerse ?? focusAyah;
+            const endVerse = error.endVerse ?? startVerse;
+            const currentAnchor = getCurrentAnchorForRange(surahId, startVerse, endVerse);
+            if (!currentAnchor) return;
+
+            const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
+            const anchorId = currentAnchor.id || error.anchorId || fallbackAnchorId;
+            const groupKey = `${surahId}-${anchorId}`;
+            const timestampMs = Date.parse(error.timestamp || '');
+
+            const group = suspendedErrorsByGroup.get(groupKey) || [];
+            group.push({ timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0 });
+            suspendedErrorsByGroup.set(groupKey, group);
+        });
+
+        const suspendedItems = Array.from(suspendedErrorsByGroup.entries())
+            .filter(([groupKey, groupErrors]) => {
+                if (groupErrors.length < SUSPEND_ERROR_THRESHOLD) return false;
+                const latestTimestampMs = Math.max(...groupErrors.map((entry) => entry.timestampMs));
+                const ackMs = Date.parse(acknowledgedAtByGroup[groupKey] || '');
+                return !Number.isFinite(ackMs) || ackMs < latestTimestampMs;
+            })
+            .map(([groupKey]) => {
+                const id = `suspended-${groupKey}`;
+                const column = itemColumn.get(id);
+                return {
+                    id,
+                    // Active suspended cards should count as pending even if stale kanban state still says complete.
+                    column: column === 'complete' ? 'backlog' : (column ?? 'backlog'),
+                };
+            });
+
+        const pendingCount = [...surahItems, ...partItems, ...similarityItems, ...suspendedItems]
             .filter(item => item.column === 'backlog' || item.column === 'in-progress')
             .length;
 

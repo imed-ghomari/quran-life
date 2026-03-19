@@ -27,18 +27,16 @@ const RoadmapSection: React.FC = () => {
       { id: 13, title: 'Better Design for Mindmaps' }
     ],
     planned: [
-      { id: 12, title: 'Completing Mindmaps (Parts 1-6)' },
+      { id: 12, title: 'Completing Pre-made Mindmaps (Parts 1-6)' },
+      { id: 22, title: 'FSRS Optimization' },
       { id: 21, title: 'Defer Similarity by Surah Conditions' },
-      {
-        id: 16,
-        title: 'Conflict-safe mindmap sync (choose between device and cloud versions)'
-      }
+      { id: 16, title: 'Conflict-safe mindmap sync via choice'}
     ],
     inProgress: [
-      { id: 7, title: 'Part 7 Mindmaps Integration (Surah 67-114)' },
-      { id: 14, title: 'Community Platform (Discord)' }
+      { id: 23, title: 'App Launch' }
     ],
     launched: [
+      { id: 7, title: 'Part 7 Pre-made Mindmaps (Surah 67-114)' },
       { id: 10, title: 'Documentation' },
       { id: 8, title: 'Spaced Repetition Algorithm' },
       { id: 9, title: 'Similar Verse Support' },
