@@ -3,7 +3,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useContext, startTransition } from 'react';
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
@@ -205,7 +205,10 @@ export default function TodayPage() {
     const [highlightedWordIndex, setHighlightedWordIndex] = useState<number>(-1);
     const [isVersesLoaded, setIsVersesLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
-    const [readOnlyMode, setReadOnlyMode] = useState(true);
+    const [readOnlyMode, setReadOnlyMode] = useState(() => {
+        if (!isOnline) return true;
+        return (settings?.dailyPortionMode ?? 'audio') === 'reading';
+    });
     const [isPersistingReviewAction, setIsPersistingReviewAction] = useState(false);
     const [isPersistingDailyComplete, setIsPersistingDailyComplete] = useState(false);
     const [isApplyingHistoryAction, setIsApplyingHistoryAction] = useState(false);
@@ -215,6 +218,7 @@ export default function TodayPage() {
         settings?.todayDefaultMode === 'review' ? 'review' : 'daily'
     );
     const lastPortionKeyRef = useRef<string>('');
+    const wordElementRefs = useRef<Array<HTMLSpanElement | null>>([]);
     const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
     const previousReviewSortOrderRef = useRef<ReviewSortOrder>(normalizeReviewSortOrder(settings?.reviewSortOrder));
     const didRestoreActiveNodeRef = useRef(false);
@@ -261,6 +265,15 @@ export default function TodayPage() {
         return deriveSuspendedVerseGroupKeys(reviewErrors, 3, settings?.suspendedVerseGroupsAcknowledged);
     }, [reviewErrors, settings?.suspendedVerseGroupsAcknowledged]);
     const reviewSortOrder = useMemo(() => normalizeReviewSortOrder(settings?.reviewSortOrder), [settings?.reviewSortOrder]);
+    const currentDailyVerse = todaysPortion[currentVerseIndex] ?? null;
+    const dailyPreviewWords = useMemo(() => {
+        return (currentDailyVerse?.text ?? '').split(' ').filter(Boolean);
+    }, [currentDailyVerse?.text]);
+    const handleAudioWordIndexChange = useCallback((index: number) => {
+        startTransition(() => {
+            setHighlightedWordIndex(index);
+        });
+    }, []);
 
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
     const orderedDueNodes = useMemo(() => {
@@ -520,7 +533,7 @@ export default function TodayPage() {
 
     useEffect(() => {
         if (highlightedWordIndex !== -1 && verseContainerRef.current) {
-            const wordEl = document.getElementById(`word-${highlightedWordIndex}`);
+            const wordEl = wordElementRefs.current[highlightedWordIndex];
             if (wordEl) {
                 const container = verseContainerRef.current;
                 const containerRect = container.getBoundingClientRect();
@@ -534,7 +547,7 @@ export default function TodayPage() {
                 }
             }
         }
-    }, [highlightedWordIndex, smoothScrollContainer]);
+    }, [currentVerseIndex, highlightedWordIndex, smoothScrollContainer]);
 
     useEffect(() => {
         const defaultMode = settings?.dailyPortionMode ?? 'audio';
@@ -2360,9 +2373,9 @@ export default function TodayPage() {
                                                     <AudioPlayer
                                                         verses={todaysPortion}
                                                         currentVerseIndex={currentVerseIndex}
-                                                        currentVerseWordCount={todaysPortion[currentVerseIndex]?.text?.split(' ').length || 0}
+                                                        currentVerseWordCount={dailyPreviewWords.length}
                                                         onVerseChange={setCurrentVerseIndex}
-                                                        onWordIndexChange={setHighlightedWordIndex}
+                                                        onWordIndexChange={handleAudioWordIndexChange}
                                                     />
                                                 </div>
 
@@ -2377,14 +2390,14 @@ export default function TodayPage() {
                                                         minHeight: 0
                                                     }}
                                                 >
-                                                    {todaysPortion[currentVerseIndex] && (
+                                                    {currentDailyVerse && (
                                                         <>
-                                                            <div className="verse-ref">
-                                                                {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
+                                                            <div className="verse-ref font-arabic">
+                                                                {getSurah(currentDailyVerse.surahId)?.arabicName} : {currentDailyVerse.ayahId}
                                                             </div>
-                                                            {todaysPortion[currentVerseIndex].ayahId === 1 ? (
-                                                                todaysPortion[currentVerseIndex].surahId !== 1 &&
-                                                                todaysPortion[currentVerseIndex].surahId !== 9 && (
+                                                            {currentDailyVerse.ayahId === 1 ? (
+                                                                currentDailyVerse.surahId !== 1 &&
+                                                                currentDailyVerse.surahId !== 9 && (
                                                                     <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
                                                                         بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                                                                     </div>
@@ -2397,10 +2410,12 @@ export default function TodayPage() {
                                                                 )
                                                             )}
                                                             <div className="arabic-text">
-                                                                {(todaysPortion[currentVerseIndex]?.text ?? '').split(' ').filter(Boolean).map((word, i) => (
+                                                                {dailyPreviewWords.map((word, i) => (
                                                                     <span
                                                                         key={i}
-                                                                        id={`word-${i}`}
+                                                                        ref={(element) => {
+                                                                            wordElementRefs.current[i] = element;
+                                                                        }}
                                                                         className={`audio-word ${i === highlightedWordIndex ? 'audio-word--active' : ''}`}
                                                                     >
                                                                         {word} {' '}
@@ -2423,7 +2438,7 @@ export default function TodayPage() {
                                                             <div key={`${group.surahId}-${groupIndex}`}>
                                                                 {surah && (
                                                                     <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                                                                        <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                        <h3 className="font-arabic" style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
                                                                         {firstVerse.ayahId === 1 ? (
                                                                             surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
                                                                         ) : (
@@ -2467,7 +2482,7 @@ export default function TodayPage() {
                                                             <div key={idx}>
                                                                 {isNewSurah && surah && (
                                                                     <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                                                                        <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                        <h3 className="font-arabic" style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
                                                                         {v.ayahId === 1 ? (
                                                                             surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
                                                                         ) : (
