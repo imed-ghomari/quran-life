@@ -156,6 +156,34 @@ function getLocalDayKeyNow() {
     return `${y}-${m}-${d}`;
 }
 
+function TodayPageLoadingShell({ text }: { text: string }) {
+    return (
+        <div className="content-wrapper tab-content">
+            <div className="today-header">
+                <h1 className="text-2xl font-bold">Today</h1>
+            </div>
+            <div className="today-grid" aria-busy="true">
+                <div className="card today-card today-card--review">
+                    <div
+                        className="today-card-content"
+                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Spinner size={30} text={text} />
+                    </div>
+                </div>
+                <div className="card today-card">
+                    <div
+                        className="today-card-content"
+                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Spinner size={24} text="Warming daily portion..." />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function TodayPage() {
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
@@ -1934,7 +1962,10 @@ export default function TodayPage() {
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
     const isReviewQueueHydrating = !hasHydratedReviewQueue;
 
-    if (!isLoaded) return <FullScreenLoader text="Loading today..." />;
+    if (!isLoaded) {
+        const loadingText = isVersesLoaded ? 'Preparing today...' : 'Loading Quran text...';
+        return <TodayPageLoadingShell text={loadingText} />;
+    }
 
     return (
         <div className="content-wrapper tab-content">

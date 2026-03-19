@@ -14,9 +14,8 @@
 }
 
 :root {
-  --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-jakarta: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-ui-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-jakarta: var(--font-outfit);
+  --font-ui-sans: var(--font-outfit);
   --font-arabic-sans: "Segoe UI", Tahoma, Arial, sans-serif;
   --font-arabic-serif: Georgia, "Times New Roman", serif;
 }
