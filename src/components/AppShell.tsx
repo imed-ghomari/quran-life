@@ -81,7 +81,8 @@ export default function AppShell({ children }: AppShellProps) {
                             background: 'color-mix(in srgb, var(--background) 72%, transparent)',
                             backdropFilter: 'blur(6px)',
                             zIndex: 1,
-                            pointerEvents: 'none',
+                            pointerEvents: 'auto',
+                            cursor: 'progress',
                         }}
                     >
                         <div

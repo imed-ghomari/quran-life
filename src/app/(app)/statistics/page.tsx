@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import Spinner from '@/components/ui/Spinner';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -959,7 +960,7 @@ export default function StatisticsPage() {
     if (isLoading && !hasRenderableData) {
         return (
             <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                <Spinner size={32} text="Loading statistics..." />
             </div>
         );
     }

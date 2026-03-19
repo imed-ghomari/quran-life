@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import localFont from 'next/font/local';
 import Script from 'next/script';
 import './globals.css';
 import 'tldraw/tldraw.css';
@@ -8,6 +9,13 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import InstantDataProvider from '@/components/InstantDataProvider';
 import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityController';
 import { getSiteUrl } from '@/lib/siteUrl';
+
+const outfit = localFont({
+    src: '../../Outfit/Outfit-VariableFont_wght.ttf',
+    variable: '--font-outfit',
+    weight: '100 900',
+    display: 'swap',
+});
 
 export const viewport: Viewport = {
     width: 'device-width',
@@ -96,7 +104,7 @@ export default function RootLayout({
 `;
 
     return (
-        <html lang="ar" dir="ltr" suppressHydrationWarning={true}>
+        <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}

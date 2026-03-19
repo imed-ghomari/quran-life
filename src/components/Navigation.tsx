@@ -241,7 +241,11 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
     const effectivePathname = pendingHref ?? pathname;
 
     return (
-        <nav className="bottom-nav">
+        <nav
+            className="bottom-nav"
+            aria-busy={pendingHref ? 'true' : 'false'}
+            style={pendingHref ? { pointerEvents: 'none' } : undefined}
+        >
             {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = routeMatchesNavItem(effectivePathname, item.href);
@@ -263,6 +267,7 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
                             ) {
                                 return;
                             }
+                            if (pendingHref) return;
                             event.preventDefault();
                             if (isCurrentPath) return;
                             onNavigateStart(item.href);
