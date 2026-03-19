@@ -15,7 +15,7 @@ import {
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
-import { ALL_QURAN_PART, CORE_QURAN_PARTS, LEGACY_ALL_QURAN_PART } from '@/lib/types';
+import { ALL_QURAN_PART, CORE_QURAN_PARTS, hasNodeBeenReviewed, LEGACY_ALL_QURAN_PART, MemoryNode } from '@/lib/types';
 
 const getLocalDayKey = (date: Date) => {
     const y = date.getFullYear();
@@ -35,11 +35,27 @@ type NavigationContentProps = {
     onNavigateStart: (href: string) => void;
 };
 
+const getVerseSegmentSurahId = (node: MemoryNode): number | null => {
+    if (node.type !== 'verse_segment') return null;
+
+    const direct = Number((node as any).surahId);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+
+    const target = String((node as any).targetId || '');
+    const fromAnchor = target.match(/^anchor-(\d+)-\d+-\d+$/);
+    if (fromAnchor) {
+        const parsed = Number(fromAnchor[1]);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+
+    return null;
+};
+
 function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
     const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
-    const { dueNodes, isLoading: nodesLoading } = useSharedInstantNodes();
+    const { nodes, dueNodes, isLoading: nodesLoading } = useSharedInstantNodes();
     const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
     const { decisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
     const { errors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
@@ -126,6 +142,19 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
             });
         };
 
+        const hasComparatorBeenReviewed = (absoluteComparator: number) => {
+            const comparatorRef = absoluteToSurahAyah(absoluteComparator);
+            return nodes.some((node) => {
+                if (node.type !== 'verse_segment') return false;
+                if (getVerseSegmentSurahId(node) !== comparatorRef.surahId) return false;
+                const start = Number(node.startVerse || 0);
+                const end = Number(node.endVerse || 0);
+                if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+                if (comparatorRef.ayahId < start || comparatorRef.ayahId > end) return false;
+                return hasNodeBeenReviewed(node.scheduler);
+            });
+        };
+
         const similaritySurahIds = new Set<number>();
         errors.forEach((error) => {
             if (error.type !== 'similarity' || !error.absoluteAyah) return;
@@ -136,6 +165,11 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
             const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
             const unresolvedPhrases = muts.filter((entry: any) => !isPhraseResolved(absolute, entry));
             if (unresolvedPhrases.length === 0) return;
+            const comparators = Array.from(new Set(
+                muts.flatMap((entry: any) => (Array.isArray(entry?.matches) ? entry.matches : []))
+            )).filter((absRef: number) => absRef !== absolute);
+            const hasReviewedComparator = comparators.some(hasComparatorBeenReviewed);
+            if (!hasReviewedComparator) return;
 
             similaritySurahIds.add(absoluteToSurahAyah(absolute).surahId);
         });
@@ -229,7 +263,7 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
             isDailyPortionComplete,
             hideBadges: false,
         };
-    }, [settings, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress, hasHydratedNavMetrics]);
+    }, [settings, nodes, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress, hasHydratedNavMetrics]);
 
     const navItems = [
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.hideBadges ? undefined : navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
