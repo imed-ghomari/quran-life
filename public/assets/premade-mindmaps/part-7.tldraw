@@ -134793,13 +134793,13 @@
           }
         ],
         "isPen": true,
-        "size": "m",
+        "size": "xl",
         "color": "black"
       },
       "type": "draw",
       "y": 1274.864100967075,
       "meta": {
-        "updatedAt": "2026-02-28T20:16:36.788Z"
+        "updatedAt": "2026-03-13T15:12:31.985Z"
       },
       "opacity": 1
     },
