@@ -16,8 +16,9 @@
 :root {
   --font-jakarta: var(--font-outfit);
   --font-ui-sans: var(--font-outfit);
-  --font-arabic-sans: "Segoe UI", Tahoma, Arial, sans-serif;
-  --font-arabic-serif: Georgia, "Times New Roman", serif;
+  --font-arabic: var(--font-arabic-local);
+  --font-arabic-sans: var(--font-arabic-local), "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-arabic-serif: var(--font-arabic-local), Georgia, "Times New Roman", serif;
 }
 
 html {
@@ -498,6 +499,29 @@ article.prose pre {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+@keyframes app-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-spinner__rotor {
+  animation: app-spinner-rotate 0.85s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-spinner__rotor {
+    animation: none;
+  }
 }
 
 /* Search Highlighting */
@@ -1124,6 +1148,10 @@ body {
 }
 
 /* Arabic text */
+.font-arabic {
+  font-family: var(--font-arabic-sans);
+}
+
 .arabic-text {
   font-family: var(--font-arabic-sans);
   font-size: 1.5rem;
@@ -2601,7 +2629,7 @@ body[data-mindmap-open="true"] .bottom-nav {
 }
 
 .surah-arabic {
-  font-family: var(--font-arabic-serif);
+  font-family: var(--font-arabic);
   font-size: 1.1rem;
   color: var(--foreground);
 }

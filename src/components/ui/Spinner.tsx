@@ -25,16 +25,13 @@ export default function Spinner({
         >
             <span
                 aria-hidden="true"
-                className="animate-spin motion-reduce:animate-none"
+                className="app-spinner__rotor"
                 style={{
                     width: size,
                     height: size,
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    willChange: 'transform',
-                    transform: 'translateZ(0)',
-                    backfaceVisibility: 'hidden',
                 }}
             >
                 <span

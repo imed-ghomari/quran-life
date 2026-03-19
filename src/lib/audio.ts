@@ -107,13 +107,6 @@ const ALLOWED_RECITERS: Reciter[] = [
         hasSegments: true
     },
     {
-        id: 'ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-955',
-        name: 'Mahmoud Khalil Al Husary Murattal',
-        type: 'surah-based',
-        relativePath: '/recitations/surah-recitation-mahmoud-husary-murattal',
-        hasSegments: true
-    },
-    {
         id: 'surah-recitation-mahmoud-husary-muallim',
         name: 'Mahmoud Husary Muallim',
         type: 'surah-based',
@@ -290,9 +283,27 @@ export function getAudioInfoForVerse(
 
         const getTimingStart = (candidate: any): number | null => {
             const timestampFrom = toFiniteNumber(candidate?.timestamp_from);
-            if (timestampFrom !== null) return timestampFrom;
             const segmentBounds = getSegmentBounds(candidate?.segments);
-            return segmentBounds?.start ?? null;
+            const segmentStart = segmentBounds?.start ?? null;
+
+            if (timestampFrom === null) return segmentStart;
+            if (segmentStart === null) return timestampFrom;
+
+            const delta = segmentStart - timestampFrom;
+
+            // Some reciters have slightly late `timestamp_from` values that clip
+            // the opening, while others include a short lead-in before speech.
+            // Prefer the first segment when the difference is plausible, but
+            // ignore extreme outliers from noisy segment imports.
+            if (delta < 0 && Math.abs(delta) <= 1500) {
+                return segmentStart;
+            }
+
+            if (delta > 200 && delta <= 2500) {
+                return segmentStart;
+            }
+
+            return timestampFrom;
         };
 
         const getTimingEnd = (candidate: any): number | null => {

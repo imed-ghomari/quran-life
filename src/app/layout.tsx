@@ -11,9 +11,16 @@ import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityContr
 import { getSiteUrl } from '@/lib/siteUrl';
 
 const outfit = localFont({
-    src: '../../Outfit/Outfit-VariableFont_wght.ttf',
+    src: '../assets/fonts/Outfit-VariableFont_wght.ttf',
     variable: '--font-outfit',
     weight: '100 900',
+    display: 'swap',
+});
+
+const notoNaskhArabic = localFont({
+    src: '../assets/fonts/NotoNaskhArabic-VariableFont_wght.ttf',
+    variable: '--font-arabic-local',
+    weight: '400 700',
     display: 'swap',
 });
 
@@ -104,7 +111,7 @@ export default function RootLayout({
 `;
 
     return (
-        <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
+        <html lang="ar" dir="ltr" className={`${outfit.variable} ${notoNaskhArabic.variable}`} suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}
