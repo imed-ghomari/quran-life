@@ -377,7 +377,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                                 {isSkipped && <EyeOff size={14} color="var(--background)" />}
                                             </div>
                                             <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{surah.name}</span>
-                                            <span style={{ fontFamily: 'Amiri, serif', color: 'var(--foreground-secondary)' }}>{surah.arabicName}</span>
+                                            <span style={{ fontFamily: 'Georgia, serif', color: 'var(--foreground-secondary)' }}>{surah.arabicName}</span>
                                             {isLocked && (
                                                 <span style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)' }}>Always skipped</span>
                                             )}

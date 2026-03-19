@@ -4,6 +4,13 @@ import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, s
 import { id } from '@instantdb/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import {
+    useSharedInstantListeningProgress,
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
 import { OnlineStatusContext } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
@@ -19,7 +26,6 @@ import {
     getNodeDueDate
 } from '@/lib/types';
 import { db } from '@/lib/instant';
-import { useInstantSettings, useInstantNodes, useInstantMutashabihat, useInstantListeningProgress, useInstantMindMaps } from '@/hooks/useInstantData';
 import { createNewFSRSState } from '@/lib/fsrs';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
@@ -433,11 +439,11 @@ export default function SettingsPage() {
         },
     });
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
-    const { settings, saveSettings } = useInstantSettings();
-    const { nodes: instantNodes, saveNode: saveInstantNode } = useInstantNodes();
-    const { mindmaps: instantMindmaps, saveMindMap } = useInstantMindMaps();
-    const { progress: listeningProgress } = useInstantListeningProgress();
-    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useInstantMutashabihat();
+    const { settings, saveSettings } = useSharedInstantSettings();
+    const { nodes: instantNodes, saveNode: saveInstantNode } = useSharedInstantNodes();
+    const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
+    const { progress: listeningProgress } = useSharedInstantListeningProgress();
+    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useSharedInstantMutashabihat();
     const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
     const [systemIsDark, setSystemIsDark] = useState(false);
     const { confirm, alert } = useConfirmDialog();

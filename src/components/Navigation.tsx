@@ -5,13 +5,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
 import {
-    useInstantSettings,
-    useInstantNodes,
-    useInstantMindMaps,
-    useInstantMutashabihat,
-    useInstantReviewErrors,
-    useInstantListeningProgress
-} from '@/hooks/useInstantData';
+    useSharedInstantListeningProgress,
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
 import { filterReviewQueueNodes } from '@/lib/reviewQueue';
@@ -38,12 +38,12 @@ type NavigationContentProps = {
 function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { settings, isLoading: settingsLoading } = useInstantSettings();
-    const { dueNodes, isLoading: nodesLoading } = useInstantNodes();
-    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useInstantMindMaps();
-    const { decisions, custom: customMutashabihat } = useInstantMutashabihat();
-    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
-    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useInstantListeningProgress();
+    const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { dueNodes, isLoading: nodesLoading } = useSharedInstantNodes();
+    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { decisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
+    const { errors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
+    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useSharedInstantListeningProgress();
     const [hasHydratedNavMetrics, setHasHydratedNavMetrics] = useState(false);
     const navDataLoading = settingsLoading || nodesLoading || mindmapsLoading || reviewErrorsLoading || listeningProgressLoading;
 

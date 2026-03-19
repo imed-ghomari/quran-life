@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useSharedInstantSettings } from '@/components/InstantDataProvider';
 import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
-import { useInstantSettings } from '@/hooks/useInstantData';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -31,7 +31,7 @@ export default function AudioPlayer({
     onPlayStateChange,
     onWordIndexChange
 }: AudioPlayerProps) {
-    const { settings, saveSettings } = useInstantSettings();
+    const { settings, saveSettings } = useSharedInstantSettings();
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);

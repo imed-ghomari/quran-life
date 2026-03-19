@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
@@ -12,6 +11,14 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+}
+
+:root {
+  --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-jakarta: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-ui-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-arabic-sans: "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-arabic-serif: Georgia, "Times New Roman", serif;
 }
 
 html {
@@ -1111,7 +1118,7 @@ body {
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: var(--font-outfit), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-outfit), -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--background);
   color: var(--foreground);
   line-height: 1.6;
@@ -1119,7 +1126,7 @@ body {
 
 /* Arabic text */
 .arabic-text {
-  font-family: 'Tajawal', sans-serif;
+  font-family: var(--font-arabic-sans);
   font-size: 1.5rem;
   line-height: 2.2;
   direction: rtl;
@@ -2510,7 +2517,7 @@ body[data-mindmap-open="true"] .bottom-nav {
   font-size: 0.8rem;
   color: var(--accent);
   margin-bottom: 0.25rem;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui-sans);
 }
 
 /* Grade buttons */
@@ -2595,7 +2602,7 @@ body[data-mindmap-open="true"] .bottom-nav {
 }
 
 .surah-arabic {
-  font-family: 'Amiri', serif;
+  font-family: var(--font-arabic-serif);
   font-size: 1.1rem;
   color: var(--foreground);
 }
