@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -130,6 +130,22 @@ const getSuspendedIdentitySignature = (item: {
     return `${surahId}-${startVerse}-${endVerse}`;
 };
 
+const isMutashabihatDecisionResolved = (decision: any) => {
+    if (!decision) return false;
+    return decision.status === 'ignored' || decision.status === 'solved_mindmap' || decision.status === 'solved_note' || !!decision.confirmedAt;
+};
+
+const scheduleAfterNextPaint = (callback: () => void) => {
+    if (typeof window === 'undefined') {
+        callback();
+        return;
+    }
+
+    window.requestAnimationFrame(() => {
+        window.setTimeout(callback, 0);
+    });
+};
+
 export default function TodoKanban({
     suspendedAnchors,
     similarityGroups,
@@ -231,10 +247,14 @@ export default function TodoKanban({
         }
         lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
-        setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }]);
+        startTransition(() => {
+            setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }]);
+        });
         setTimeout(() => {
             if (onExpire) onExpire();
-            setToasts(prev => prev.filter(t => t.id !== id));
+            startTransition(() => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            });
         }, 6000);
         return id;
     }, []);
@@ -609,11 +629,6 @@ export default function TodoKanban({
                 itemIds.forEach(itemId => {
                     const item = itemMap.get(itemId);
                     if (item) {
-                        // Suspended cards that become active again should not stay pinned in Complete.
-                        // They re-enter as actionable work in Backlog.
-                        if (colId === 'complete' && item.type === 'suspended') {
-                            return;
-                        }
                         newCols[colId].push(item);
                         processedIds.add(itemId);
                     }
@@ -898,12 +913,8 @@ export default function TodoKanban({
             }
         };
 
-        if (typeof window !== 'undefined') {
-            window.requestAnimationFrame(runPostDropSideEffects);
-        } else {
-            runPostDropSideEffects();
-        }
-    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, persistKanbanState]);
+        scheduleAfterNextPaint(runPostDropSideEffects);
+    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, onKanbanStateChange, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
@@ -1150,7 +1161,7 @@ export default function TodoKanban({
             const targetAbs = phraseAbsRefs.find((abs) => {
                 const key = `${abs}-${phraseId}`;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === key);
-                return existing && existing.status !== 'pending';
+                return isMutashabihatDecisionResolved(existing);
             }) || phraseAbsRefs[0];
             return {
                 phraseId,
@@ -1160,7 +1171,9 @@ export default function TodoKanban({
         });
 
         const firstResolvedTarget = resolutionTargets.find(target =>
-            (mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.status || 'pending') !== 'pending'
+            isMutashabihatDecisionResolved(
+                mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)
+            )
         );
         const primaryTarget = firstResolvedTarget || resolutionTargets[0];
 
@@ -1751,6 +1764,9 @@ export default function TodoKanban({
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
                 const { decisionKey, group, surah } = activeSimilarityContext;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
+                const existingStatus = existing.status === 'pending' && !!existing.confirmedAt
+                    ? 'solved_note'
+                    : existing.status;
                 const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
                 const isConfirmed = group.resolutionTargets.some(target => !!mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.confirmedAt);
                 const sortedAbsRefs = [...group.absRefs].sort((a, b) => a - b);
@@ -1794,7 +1810,7 @@ export default function TodoKanban({
                             <div style={{ flex: 1, minWidth: '140px' }}>
                                 <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
                                 <select
-                                    value={existing.status}
+                                    value={existingStatus}
                                     onChange={e => applyDecisionToGroup(targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
                                     className="maturity-select"
                                     style={{ width: '100%', padding: '8px' }}
@@ -2106,7 +2122,7 @@ export default function TodoKanban({
                             color: 'var(--foreground)',
                             minWidth: '180px',
                             fontSize: '0.85rem',
-                            pointerEvents: 'auto',
+                            pointerEvents: 'none',
                             backdropFilter: 'blur(12px)',
                             opacity: 1
                         }}>
@@ -2122,43 +2138,47 @@ export default function TodoKanban({
                                 }}>
                                     {wrapToastText(t.message, 6)}
                                 </span>
-                                {t.onUndo && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', pointerEvents: 'auto' }}>
+                                    {t.onUndo && (
+                                        <button
+                                            onClick={() => {
+                                                t.onUndo?.();
+                                                startTransition(() => {
+                                                    setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                                });
+                                            }}
+                                            style={{
+                                                background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                                border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                                color: 'inherit',
+                                                padding: '0.2rem 0.5rem',
+                                                borderRadius: '4px',
+                                                fontSize: '0.7rem',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Undo
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => {
-                                            t.onUndo?.();
-                                            setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                            startTransition(() => {
+                                                setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                            });
                                         }}
                                         style={{
-                                            background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
-                                            border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                            background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                            border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
                                             color: 'inherit',
                                             padding: '0.2rem 0.5rem',
                                             borderRadius: '4px',
                                             fontSize: '0.7rem',
-                                            cursor: 'pointer',
-                                            marginLeft: 'auto'
+                                            cursor: 'pointer'
                                         }}
                                     >
-                                        Undo
+                                        Skip
                                     </button>
-                                )}
-                                <button
-                                    onClick={() => {
-                                        setToasts(prev => prev.filter(toast => toast.id !== t.id));
-                                    }}
-                                    style={{
-                                        background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
-                                        border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
-                                        color: 'inherit',
-                                        padding: '0.2rem 0.5rem',
-                                        borderRadius: '4px',
-                                        fontSize: '0.7rem',
-                                        cursor: 'pointer',
-                                        marginLeft: t.onUndo ? 0 : 'auto'
-                                    }}
-                                >
-                                    Skip
-                                </button>
+                                </div>
                             </div>
                             {t.info && (
                                 <div style={{
