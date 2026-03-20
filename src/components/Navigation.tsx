@@ -115,7 +115,7 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
         });
 
         const partsToConsider = activePart === ALL_QURAN_PART ? Array.from(CORE_QURAN_PARTS) : [activePart as number];
-        const partItems = partsToConsider.map((partId) => {
+        const partItems = [0, ...partsToConsider].map((partId) => {
             const id = `part-${partId}`;
             const partMindmap = partMindmapByPart.get(partId);
             const isComplete = partMindmap?.isComplete && (!!partMindmap?.imageUrl || !!partMindmap?.tldrawSnapshot || !!partMindmap?.imageUrlDark);
@@ -245,8 +245,9 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
                 };
             });
 
+        const pendingColumns = new Set(['backlog', 'in-progress']);
         const pendingCount = [...surahItems, ...partItems, ...similarityItems, ...suspendedItems]
-            .filter(item => item.column === 'backlog' || item.column === 'in-progress')
+            .filter(item => pendingColumns.has(item.column))
             .length;
 
         const activeProgress = listeningProgress.find(progress => progress.partId === settings.activePart)
