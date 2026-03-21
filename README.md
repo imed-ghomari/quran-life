@@ -188,4 +188,18 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - You can override either mode with:
   - `NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA=<number>`
   - `NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS=<number>`
+
+## Audio Player Reciter Mode
+- The Today-page audio player list is controlled by:
+  - `NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE=ayah-only`
+  - or `NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE=all`
+- `ayah-only` is the safer mode when you want to avoid the known instability of surah-based reciters.
+- `all` brings surah-based reciters back into the player list for testing or broader choice.
+- Current ayah-only player list includes:
+  - Abdur Rahman As Sudais
+  - Abdul Basit Abdul Samad Murattal
+  - Hani Ar Rifai Murattal
+  - Mahmoud Khalil Al Husary Murattal
+  - Mohamed Al Tablawi Murattal
+  - Saad Al Ghamdi Murattal
 # quran-life

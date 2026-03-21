@@ -1,9 +1,9 @@
 ---
 name: quran-life-audio-player-stability
-description: Maintain and extend the Quran Life Today-page audio player without reintroducing verse-start flicker, cut-off openings, laggy preview switching, or excessive InstantDB writes. Use when changing `src/components/AudioPlayer.tsx`, verse preview sync on the dashboard, reciter loading, playback persistence, or reciter-type transport behavior.
+description: Maintain and extend the Quran Life Today-page audio player without reintroducing verse-start flicker, cut-off openings, skipped surah-based verses, laggy preview switching, or excessive InstantDB writes. Use when changing `src/components/AudioPlayer.tsx`, `src/lib/audio.ts`, verse preview sync on the dashboard, playback persistence, reciter-type transport behavior, or when adding, removing, or retyping reciters in the allowed reciter list.
 ---
 
-Use this skill when working on the Today-page audio player or related verse-preview sync.
+Use this skill when working on the Today-page audio player, related verse-preview sync, or the reciter list in `src/lib/audio.ts`.
 
 ## Primary Files
 
@@ -11,6 +11,48 @@ Use this skill when working on the Today-page audio player or related verse-prev
 - `src/app/(app)/dashboard/page.tsx`
 - `src/lib/audio.ts`
 - `src/hooks/useInstantData.ts`
+
+## Current Reciter Map
+
+Trust the `type` field, not the id naming.
+
+## Current Player Availability
+
+- The audio player currently uses `getAudioPlayerReciters()` from `src/lib/audio.ts`.
+- Player availability is controlled by `NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE`.
+- Supported values:
+  - `ayah-only`
+  - `all`
+- The current env-backed mode is `ayah-only`.
+- This hides surah-based reciters from the Today-page player without deleting them from the master list.
+- `getReciters()` still returns the full master list for non-player consumers.
+
+### Surah-based reciters
+
+- Abdul Basit Abdul Samad Mujawwad
+- Abdul Rahman Al Sudais Murattal
+- Abu Bakr Al Shatri Murattal
+- Ahmad Alnufais
+- Hady Toure
+- Khalid Al Jalil
+- Khalifa Al Tunaiji Murattal
+- Maher Al Mu Aiqly Murattal
+- Mahmoud Khaleel Al Husary
+- Mahmoud Husary Muallim
+- Mishari Rashid Al Afasy Murattal
+- Muhammad Jibreel
+- Muhammad Siddiq Al Minshawi Murattal
+- Saud Al Shuraim Murattal
+- Yasser Al Dosari Murattal
+
+### Ayah-based reciters
+
+- Abdur Rahman As Sudais
+- Abdul Basit Abdul Samad Murattal
+- Hani Ar Rifai Murattal
+- Mahmoud Khalil Al Husary Murattal
+- Mohamed Al Tablawi Murattal
+- Saad Al Ghamdi Murattal
 
 ## Golden Rules
 
@@ -25,6 +67,13 @@ Use this skill when working on the Today-page audio player or related verse-prev
 
 - Load the surah file once and keep playback continuous inside the same file.
 - Auto-advance the verse preview from current time instead of pausing and reseeking on every verse boundary.
+- For normal same-source surah handoffs, switch on the next verse start time.
+- When the next verse is the last visible verse or the last verse before a surah boundary, bias the handoff earlier by using the earlier of:
+  - the current verse end time
+  - the next verse start time
+- This keeps most verse openings intact while still protecting the last-verse edge case.
+- If the next verse is in a different surah/file, let the current verse finish using the current verse end boundary before swapping files.
+- If the next verse is in a different surah/file, or there is no next verse in the daily portion, do not reuse the same-source handoff rule.
 - Use the seamless handoff path in `AudioPlayer.tsx`:
   - `seamlessSurahAdvanceKeyRef`
   - `surahAdvanceGuardRef`
@@ -69,6 +118,8 @@ Use this skill when working on the Today-page audio player or related verse-prev
 
 - Pausing + reseeking at every surah-based verse boundary.
 - Allowing seamless surah-based auto-advance to trigger twice before the next verse UI state settles.
+- Using a next-surah start time from a different file as if it were a boundary inside the current surah file.
+- Using the “earlier of current end and next start” rule for every same-source surah handoff. Keep that bias only for handoffs into a last verse.
 - Triggering duplicate verse setup for the same verse/audio target.
 - Showing a visible loader during every same-file surah-based auto-switch.
 - Resetting highlighted word state during seamless surah-based handoff unless necessary.
@@ -95,3 +146,5 @@ Then manually verify:
 
 - If the golden transport model changes, update this skill in the same task.
 - If a bug fix depends on a dataset exception for specific reciters, document that here immediately.
+- If you add/remove/retype a reciter in `src/lib/audio.ts`, update the frontmatter description if needed and keep the reciter map above in sync in the same change.
+- If you change `NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE` or `getAudioPlayerReciters()`, update the availability section above in the same task.

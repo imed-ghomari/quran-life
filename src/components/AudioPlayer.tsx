@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSharedInstantSettings } from '@/components/InstantDataProvider';
 import { PlaybackSpeed, Verse } from '@/lib/types';
-import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
+import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -226,7 +226,7 @@ export default function AudioPlayer({
 
     // Initialize reciters list once.
     useEffect(() => {
-        getReciters().then(list => {
+        getAudioPlayerReciters().then(list => {
             setReciters(list);
         });
     }, []);
@@ -770,6 +770,8 @@ export default function AudioPlayer({
     const nextVerseInfo = useMemo(() => {
         return getAudioInfoForVerseIndex(currentVerseIndex + 1);
     }, [currentVerseIndex, getAudioInfoForVerseIndex]);
+    const nextVerseStartTime = nextVerseInfo?.startTime ?? null;
+    const nextVerseUsesCurrentSource = (nextVerseInfo?.url ?? '') !== '' && nextVerseInfo?.url === currentVerseAudioUrl;
 
     useEffect(() => {
         const nextUrl = nextVerseInfo?.url ?? '';
@@ -815,6 +817,7 @@ export default function AudioPlayer({
     const maybeAdvanceVerse = useCallback((currentTime: number) => {
         const verseKey = `${currentVerse?.surahId ?? 0}:${currentVerse?.ayahId ?? 0}:${currentVerseIndex}`;
         const nextVerse = currentVerseIndex < totalVerses - 1 ? verses[currentVerseIndex + 1] : null;
+        const verseAfterNext = currentVerseIndex < totalVerses - 2 ? verses[currentVerseIndex + 2] : null;
         const nextVerseKey = nextVerse ? `${nextVerse.surahId}:${nextVerse.ayahId}` : '';
 
         if (verseEndTime === null) return false;
@@ -828,8 +831,18 @@ export default function AudioPlayer({
             return false;
         }
 
+        const nextVerseIsLastVisibleVerse = currentVerseIndex + 1 === totalVerses - 1;
+        const nextVerseIsLastVerseInSurah = nextVerse !== null && (!verseAfterNext || verseAfterNext.surahId !== nextVerse.surahId);
+        const shouldBiasEarlyForSameSourceHandoff = nextVerseIsLastVisibleVerse || nextVerseIsLastVerseInSurah;
+        const surahAdvanceThreshold = selectedReciterType === 'surah-based'
+            ? nextVerseUsesCurrentSource
+                ? shouldBiasEarlyForSameSourceHandoff
+                    ? Math.max(0, Math.min(verseEndTime, nextVerseStartTime ?? verseEndTime) - SURAH_PREVIEW_ADVANCE_EPSILON_SEC)
+                    : Math.max(0, (nextVerseStartTime ?? verseEndTime) - SURAH_PREVIEW_ADVANCE_EPSILON_SEC)
+                : verseEndTime + VERSE_END_GRACE_SEC
+            : null;
         const boundaryReached = selectedReciterType === 'surah-based'
-            ? currentTime >= Math.max(0, verseEndTime - SURAH_PREVIEW_ADVANCE_EPSILON_SEC)
+            ? currentTime >= (surahAdvanceThreshold ?? 0)
             : currentTime >= verseEndTime + VERSE_END_GRACE_SEC;
 
         if (!boundaryReached) return false;
@@ -865,7 +878,7 @@ export default function AudioPlayer({
         }
 
         return true;
-    }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex, totalVerses, verses, verseEndTime, selectedReciterType, pausePlaybackAt, onVerseChange]);
+    }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex, totalVerses, verses, verseEndTime, nextVerseStartTime, nextVerseUsesCurrentSource, selectedReciterType, pausePlaybackAt, onVerseChange]);
 
     useEffect(() => {
         if (selectedReciterType !== 'surah-based' || !isPlaying || !isAudioReady || pendingTrackRef.current || verseEndTime === null) {
