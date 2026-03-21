@@ -20,6 +20,8 @@ const parseBoolean = (value: string | undefined, fallback: boolean) => {
 
 const fsrsOptimizationModeRaw = (process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_MODE ?? 'normal').trim().toLowerCase();
 const fsrsOptimizationMode = fsrsOptimizationModeRaw === 'test' ? 'test' : 'normal';
+const audioPlayerReciterModeRaw = (process.env.NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE ?? 'ayah-only').trim().toLowerCase();
+const audioPlayerReciterMode = audioPlayerReciterModeRaw === 'all' ? 'all' : 'ayah-only';
 const defaultOptimizationLogDelta = fsrsOptimizationMode === 'test' ? 5 : 400;
 const defaultOptimizationDelayMs = fsrsOptimizationMode === 'test' ? 0 : 5000;
 
@@ -45,6 +47,7 @@ export const clientEnv = {
     process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID ??
     '',
   NEXT_PUBLIC_INSTANT_APP_ID: process.env.NEXT_PUBLIC_INSTANT_APP_ID ?? '',
+  NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE: audioPlayerReciterMode,
   NEXT_PUBLIC_FSRS_OPTIMIZATION_MODE: fsrsOptimizationMode,
   NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED: parseBoolean(
     process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED,

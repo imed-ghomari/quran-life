@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSharedInstantSettings } from '@/components/InstantDataProvider';
 import { PlaybackSpeed, Verse } from '@/lib/types';
-import { Reciter, getReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
+import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -22,6 +22,8 @@ const MEDIA_READY_STATE_FUTURE_DATA = 3;
 const SEEK_TOLERANCE_SEC = 0.08;
 const BUFFER_GUARD_SEC = 0.18;
 const VERSE_END_GRACE_SEC = 0.12;
+const SURAH_PREVIEW_ADVANCE_EPSILON_SEC = 0.01;
+const SURAH_ADVANCE_SETTLE_MS = 180;
 
 const sortSegmentsByStart = (segments: number[][] | null): number[][] | null => {
     if (!segments || segments.length === 0) return segments;
@@ -92,6 +94,12 @@ export default function AudioPlayer({
     const pendingTrackRef = useRef<{ key: string; targetTime: number; shouldAutoplay: boolean } | null>(null);
     const configuredTrackKeyRef = useRef('');
     const lastStableTimeRef = useRef(0);
+    const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const lastQueuedAudioSettingsKeyRef = useRef('');
+    const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
+    const preloadedTrackKeyRef = useRef('');
+    const seamlessSurahAdvanceKeyRef = useRef('');
+    const surahAdvanceGuardRef = useRef<{ verseKey: string; until: number }>({ verseKey: '', until: 0 });
 
     const currentVerse = verses[currentVerseIndex];
     const currentSurahId = currentVerse?.surahId ?? null;
@@ -135,6 +143,61 @@ export default function AudioPlayer({
         stallCheckRef.current = { t: 0, wall: 0 };
     }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex]);
 
+    useEffect(() => {
+        const currentVerseKeyForGuard = currentVerse?.surahId && currentVerse?.ayahId
+            ? `${currentVerse.surahId}:${currentVerse.ayahId}`
+            : '';
+        if (surahAdvanceGuardRef.current.verseKey !== currentVerseKeyForGuard) {
+            surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
+        }
+    }, [currentVerse?.surahId, currentVerse?.ayahId]);
+
+    const queueAudioSettingsPersist = useCallback((payload: {
+        reciterId?: string;
+        playbackSpeed?: PlaybackSpeed;
+        playbackState?: {
+            reciterId?: string;
+            surahId: number;
+            ayahId: number;
+            timestamp: number;
+        };
+    }) => {
+        const reciterId = payload.reciterId ?? selectedReciterId;
+        if (!reciterId) return Promise.resolve();
+
+        const nextPayload = {
+            selectedReciterId: reciterId,
+            playbackSpeed: payload.playbackSpeed ?? speedRef.current,
+            updatedAt: new Date().toISOString(),
+            ...(payload.playbackState ? { playbackState: payload.playbackState } : {})
+        };
+        const dedupeKey = JSON.stringify({
+            selectedReciterId: nextPayload.selectedReciterId,
+            playbackSpeed: nextPayload.playbackSpeed,
+            playbackState: nextPayload.playbackState ?? null
+        });
+
+        if (dedupeKey === lastQueuedAudioSettingsKeyRef.current) {
+            return settingsWriteQueueRef.current;
+        }
+
+        lastQueuedAudioSettingsKeyRef.current = dedupeKey;
+        const queued = settingsWriteQueueRef.current.then(async () => {
+            try {
+                await saveSettings({
+                    audioSettings: nextPayload
+                });
+            } catch (err) {
+                if (lastQueuedAudioSettingsKeyRef.current === dedupeKey) {
+                    lastQueuedAudioSettingsKeyRef.current = '';
+                }
+                console.error('Failed to persist audio settings', err);
+            }
+        });
+        settingsWriteQueueRef.current = queued;
+        return queued;
+    }, [saveSettings, selectedReciterId]);
+
     const persistPlaybackState = useCallback((opts?: {
         timestamp?: number;
         verse?: Verse;
@@ -149,26 +212,21 @@ export default function AudioPlayer({
             ? Math.max(0, opts?.timestamp as number)
             : Math.max(0, fallbackTimestamp);
 
-        void saveSettings({
-            audioSettings: {
-                selectedReciterId: reciterId,
-                playbackSpeed: speed,
-                updatedAt: new Date().toISOString(),
-                playbackState: {
-                    reciterId,
-                    surahId: verse.surahId,
-                    ayahId: verse.ayahId,
-                    timestamp
-                }
+        void queueAudioSettingsPersist({
+            reciterId,
+            playbackSpeed: speedRef.current,
+            playbackState: {
+                reciterId,
+                surahId: verse.surahId,
+                ayahId: verse.ayahId,
+                timestamp
             }
-        }).catch((err) => {
-            console.error('Failed to persist audio playback state', err);
         });
-    }, [currentVerse, selectedReciterId, speed, saveSettings, verseStartTime]);
+    }, [currentVerse, selectedReciterId, queueAudioSettingsPersist, verseStartTime]);
 
     // Initialize reciters list once.
     useEffect(() => {
-        getReciters().then(list => {
+        getAudioPlayerReciters().then(list => {
             setReciters(list);
         });
     }, []);
@@ -478,6 +536,7 @@ export default function AudioPlayer({
         const segments = sortSegmentsByStart(info.segments || null);
 
         if (url) {
+            let usedSeamlessSurahAdvance = false;
             if (audioRef.current) {
                 const currentSrcPath = audioRef.current.src.split('?')[0]; // basic check
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
@@ -514,7 +573,24 @@ export default function AudioPlayer({
                 }
 
                 configuredTrackKeyRef.current = trackKey;
-                if (currentSrcPath !== newSrcPath) {
+                const canContinueSeamlessly = selectedReciterType === 'surah-based'
+                    && seamlessSurahAdvanceKeyRef.current === currentVerseKey
+                    && currentSrcPath === newSrcPath
+                    && audioRef.current.readyState > 0
+                    && audioRef.current.currentTime >= Math.max(0, startTime - VERSE_END_GRACE_SEC)
+                    && (endTime === null || audioRef.current.currentTime <= endTime + BUFFER_GUARD_SEC);
+
+                if (canContinueSeamlessly) {
+                    usedSeamlessSurahAdvance = true;
+                    seamlessSurahAdvanceKeyRef.current = '';
+                    pendingTrackRef.current = null;
+                    pendingSeekTimeRef.current = null;
+                    pendingAutoplayRef.current = false;
+                    setIsAudioPreparing(false);
+                    setIsAudioReady(true);
+                    setElapsedTime(audioRef.current.currentTime);
+                } else if (currentSrcPath !== newSrcPath) {
+                    seamlessSurahAdvanceKeyRef.current = '';
                     preparePendingTrack({
                         targetTime,
                         shouldAutoplay
@@ -523,6 +599,7 @@ export default function AudioPlayer({
                     audioRef.current.src = url;
                     audioRef.current.load();
                 } else {
+                    seamlessSurahAdvanceKeyRef.current = '';
                     const canSwitchInstantly = isAudioBufferedAt(audioRef.current, targetTime);
                     if (canSwitchInstantly) {
                         setPendingTrackWithoutLoader({
@@ -548,9 +625,11 @@ export default function AudioPlayer({
                 }
                 
                 audioRef.current.playbackRate = speedRef.current;
-                setElapsedTime(desiredStartTime);
+                if (!canContinueSeamlessly) {
+                    setElapsedTime(desiredStartTime);
+                }
                 
-                if (currentSrcPath === newSrcPath) {
+                if (currentSrcPath === newSrcPath && !canContinueSeamlessly) {
                     void finalizePendingPlayback();
                 }
             }
@@ -559,7 +638,8 @@ export default function AudioPlayer({
             setActiveSegments(segments);
 
             let initialIndex = -1;
-            if (onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0 && isPlayingRef.current) {
+            const shouldSkipInitialWordReset = usedSeamlessSurahAdvance;
+            if (!shouldSkipInitialWordReset && onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0 && isPlayingRef.current) {
                 if (segments && segments.length > 0) {
                     const maxWordIndex = segments.reduce((max, s) => Math.max(max, s[0] ?? 0), 0);
                     const indexOffset = maxWordIndex === currentVerseWordCount ? -1 : 0;
@@ -657,6 +737,166 @@ export default function AudioPlayer({
         };
     }, [persistPlaybackState]);
 
+    const getRecitationDataForVerse = useCallback((verse: Verse | undefined) => {
+        if (!verse || !selectedReciterType) return null;
+        if (selectedReciterType === 'surah-based') {
+            return recitationDataMap[verse.surahId] ?? (recitationData?.surahId === verse.surahId ? recitationData : null);
+        }
+        return recitationData;
+    }, [selectedReciterType, recitationDataMap, recitationData]);
+
+    const getAudioInfoForVerseIndex = useCallback((verseIndex: number) => {
+        if (verseIndex < 0 || verseIndex >= verses.length) return null;
+        if (!selectedReciterId || !selectedReciterType || !selectedReciterPath) return null;
+
+        const verse = verses[verseIndex];
+        if (!verse) return null;
+
+        const verseRecitationData = getRecitationDataForVerse(verse);
+        if (!verseRecitationData) return null;
+
+        return getAudioInfoForVerse({
+            id: selectedReciterId,
+            name: '',
+            type: selectedReciterType,
+            relativePath: selectedReciterPath
+        }, verseRecitationData, verse.surahId, verse.ayahId);
+    }, [verses, selectedReciterId, selectedReciterType, selectedReciterPath, getRecitationDataForVerse]);
+
+    const currentVerseAudioUrl = useMemo(() => {
+        return getAudioInfoForVerseIndex(currentVerseIndex)?.url ?? '';
+    }, [currentVerseIndex, getAudioInfoForVerseIndex]);
+
+    const nextVerseInfo = useMemo(() => {
+        return getAudioInfoForVerseIndex(currentVerseIndex + 1);
+    }, [currentVerseIndex, getAudioInfoForVerseIndex]);
+    const nextVerseStartTime = nextVerseInfo?.startTime ?? null;
+    const nextVerseUsesCurrentSource = (nextVerseInfo?.url ?? '') !== '' && nextVerseInfo?.url === currentVerseAudioUrl;
+
+    useEffect(() => {
+        const nextUrl = nextVerseInfo?.url ?? '';
+        if (!nextUrl || !selectedReciterId || nextUrl === currentVerseAudioUrl) {
+            preloadedTrackKeyRef.current = '';
+            if (preloadAudioRef.current) {
+                preloadAudioRef.current.pause();
+                preloadAudioRef.current.removeAttribute('src');
+                preloadAudioRef.current.load();
+                preloadAudioRef.current = null;
+            }
+            return;
+        }
+
+        const preloadKey = `${selectedReciterId}:${currentVerseIndex + 1}:${nextUrl}`;
+        if (preloadKey === preloadedTrackKeyRef.current) return;
+
+        if (preloadAudioRef.current) {
+            preloadAudioRef.current.pause();
+            preloadAudioRef.current.removeAttribute('src');
+            preloadAudioRef.current.load();
+        }
+
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = nextUrl;
+        audio.load();
+
+        preloadAudioRef.current = audio;
+        preloadedTrackKeyRef.current = preloadKey;
+    }, [currentVerseAudioUrl, currentVerseIndex, nextVerseInfo?.url, selectedReciterId]);
+
+    useEffect(() => {
+        return () => {
+            if (!preloadAudioRef.current) return;
+            preloadAudioRef.current.pause();
+            preloadAudioRef.current.removeAttribute('src');
+            preloadAudioRef.current.load();
+            preloadAudioRef.current = null;
+        };
+    }, []);
+
+    const maybeAdvanceVerse = useCallback((currentTime: number) => {
+        const verseKey = `${currentVerse?.surahId ?? 0}:${currentVerse?.ayahId ?? 0}:${currentVerseIndex}`;
+        const nextVerse = currentVerseIndex < totalVerses - 1 ? verses[currentVerseIndex + 1] : null;
+        const verseAfterNext = currentVerseIndex < totalVerses - 2 ? verses[currentVerseIndex + 2] : null;
+        const nextVerseKey = nextVerse ? `${nextVerse.surahId}:${nextVerse.ayahId}` : '';
+
+        if (verseEndTime === null) return false;
+
+        const now = Date.now();
+        if (
+            selectedReciterType === 'surah-based'
+            && surahAdvanceGuardRef.current.verseKey === verseKey
+            && now < surahAdvanceGuardRef.current.until
+        ) {
+            return false;
+        }
+
+        const nextVerseIsLastVisibleVerse = currentVerseIndex + 1 === totalVerses - 1;
+        const nextVerseIsLastVerseInSurah = nextVerse !== null && (!verseAfterNext || verseAfterNext.surahId !== nextVerse.surahId);
+        const shouldBiasEarlyForSameSourceHandoff = nextVerseIsLastVisibleVerse || nextVerseIsLastVerseInSurah;
+        const surahAdvanceThreshold = selectedReciterType === 'surah-based'
+            ? nextVerseUsesCurrentSource
+                ? shouldBiasEarlyForSameSourceHandoff
+                    ? Math.max(0, Math.min(verseEndTime, nextVerseStartTime ?? verseEndTime) - SURAH_PREVIEW_ADVANCE_EPSILON_SEC)
+                    : Math.max(0, (nextVerseStartTime ?? verseEndTime) - SURAH_PREVIEW_ADVANCE_EPSILON_SEC)
+                : verseEndTime + VERSE_END_GRACE_SEC
+            : null;
+        const boundaryReached = selectedReciterType === 'surah-based'
+            ? currentTime >= (surahAdvanceThreshold ?? 0)
+            : currentTime >= verseEndTime + VERSE_END_GRACE_SEC;
+
+        if (!boundaryReached) return false;
+
+        const state = autoAdvanceStateRef.current;
+        if (state.key === verseKey && now - state.at < 700) {
+            return true;
+        }
+
+        autoAdvanceStateRef.current = {
+            key: verseKey,
+            at: now,
+            attempts: state.key === verseKey ? state.attempts + 1 : 1
+        };
+
+        if (currentVerseIndex < totalVerses - 1) {
+            if (selectedReciterType === 'surah-based' && nextVerseKey) {
+                seamlessSurahAdvanceKeyRef.current = nextVerseKey;
+                surahAdvanceGuardRef.current = {
+                    verseKey: nextVerseKey,
+                    until: now + SURAH_ADVANCE_SETTLE_MS
+                };
+            } else {
+                pausePlaybackAt(verseEndTime);
+            }
+            onVerseChange(currentVerseIndex + 1);
+        } else {
+            seamlessSurahAdvanceKeyRef.current = '';
+            surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
+            pausePlaybackAt(verseEndTime);
+            setIsPlaying(false);
+            setIsCompleted(true);
+        }
+
+        return true;
+    }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex, totalVerses, verses, verseEndTime, nextVerseStartTime, nextVerseUsesCurrentSource, selectedReciterType, pausePlaybackAt, onVerseChange]);
+
+    useEffect(() => {
+        if (selectedReciterType !== 'surah-based' || !isPlaying || !isAudioReady || pendingTrackRef.current || verseEndTime === null) {
+            return;
+        }
+
+        let frameId = 0;
+        const tick = () => {
+            const audio = audioRef.current;
+            if (!audio || audio.paused || audio.ended) return;
+            maybeAdvanceVerse(audio.currentTime);
+            frameId = window.requestAnimationFrame(tick);
+        };
+
+        frameId = window.requestAnimationFrame(tick);
+        return () => window.cancelAnimationFrame(frameId);
+    }, [selectedReciterType, isPlaying, isAudioReady, verseEndTime, maybeAdvanceVerse]);
+
 
     const handleTimeUpdate = useCallback(() => {
         if (audioRef.current) {
@@ -665,33 +905,8 @@ export default function AudioPlayer({
             }
 
             const current = audioRef.current.currentTime;
-            const verseKey = `${currentVerse?.surahId ?? 0}:${currentVerse?.ayahId ?? 0}:${currentVerseIndex}`;
             
-            // Check for verse end in Surah mode
-            if (verseEndTime !== null && current >= verseEndTime + VERSE_END_GRACE_SEC) {
-                const now = Date.now();
-                const state = autoAdvanceStateRef.current;
-                if (state.key === verseKey && now - state.at < 700) {
-                    return;
-                }
-                autoAdvanceStateRef.current = {
-                    key: verseKey,
-                    at: now,
-                    attempts: state.key === verseKey ? state.attempts + 1 : 1
-                };
-
-                // Freeze playback at the verse boundary before the next verse
-                // state propagates, so same-file reciters don't leak a split second
-                // of the following ayah and then replay it after seek.
-                pausePlaybackAt(verseEndTime);
-
-                // Determine what to do
-                if (currentVerseIndex < totalVerses - 1) {
-                    onVerseChange(currentVerseIndex + 1);
-                } else {
-                    setIsPlaying(false);
-                    setIsCompleted(true);
-                }
+            if (maybeAdvanceVerse(current)) {
                 return;
             }
 
@@ -766,7 +981,7 @@ export default function AudioPlayer({
                 onWordIndexChange?.(nextIndex);
             }
         }
-    }, [verseEndTime, verseStartTime, currentVerseIndex, totalVerses, onVerseChange, activeSegments, onWordIndexChange, currentVerseWordCount, currentVerse?.surahId, currentVerse?.ayahId, isAudioPreparing, isAudioReady, pausePlaybackAt]);
+    }, [verseEndTime, verseStartTime, activeSegments, onWordIndexChange, currentVerseWordCount, isAudioPreparing, isAudioReady, maybeAdvanceVerse]);
 
     const handleEnded = useCallback(() => {
         if (pendingTrackRef.current || isAudioPreparing || !isAudioReady) {
@@ -827,6 +1042,8 @@ export default function AudioPlayer({
         const reciter = reciters.find(r => r.id === id);
         if (reciter) {
             audioRef.current?.pause();
+            seamlessSurahAdvanceKeyRef.current = '';
+            surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
             setRecitationData(null);
             setRecitationDataMap({});
             setActiveSegments(null);
@@ -844,14 +1061,9 @@ export default function AudioPlayer({
             localStorage.setItem('selected_reciter_id', id);
             
             // Save to synced settings
-            void saveSettings({
-                audioSettings: {
-                    selectedReciterId: id,
-                    playbackSpeed: speed,
-                    updatedAt: new Date().toISOString()
-                }
-            }).catch((err) => {
-                console.error('Failed to persist selected reciter', err);
+            void queueAudioSettingsPersist({
+                reciterId: id,
+                playbackSpeed: speedRef.current
             });
             
             setIsPlaying(false); // Stop on change
@@ -878,6 +1090,8 @@ export default function AudioPlayer({
     const restartDailyPortion = () => {
         if (!selectedReciter || verses.length === 0) return;
         setIsCompleted(false);
+        seamlessSurahAdvanceKeyRef.current = '';
+        surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
 
         const firstVerse = verses[0];
         const firstVerseData = selectedReciter.type === 'surah-based'
@@ -931,14 +1145,9 @@ export default function AudioPlayer({
         localStorage.setItem(SPEED_STORAGE_KEY, newSpeed.toString());
 
         if (selectedReciter) {
-            void saveSettings({
-                audioSettings: {
-                    selectedReciterId: selectedReciter.id,
-                    playbackSpeed: newSpeed,
-                    updatedAt: new Date().toISOString()
-                }
-            }).catch((err) => {
-                console.error('Failed to persist playback speed', err);
+            void queueAudioSettingsPersist({
+                reciterId: selectedReciter.id,
+                playbackSpeed: newSpeed
             });
         }
     };
@@ -1064,6 +1273,8 @@ export default function AudioPlayer({
                     onClick={() => {
                         const nextIndex = Math.max(0, currentVerseIndex - 1);
                         const nextVerse = verses[nextIndex];
+                        seamlessSurahAdvanceKeyRef.current = '';
+                        surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
                         onVerseChange(nextIndex);
                         if (!isPlaying && nextVerse && selectedReciter) {
                             persistPlaybackState({
@@ -1099,6 +1310,8 @@ export default function AudioPlayer({
                     onClick={() => {
                         const nextIndex = Math.min(totalVerses - 1, currentVerseIndex + 1);
                         const nextVerse = verses[nextIndex];
+                        seamlessSurahAdvanceKeyRef.current = '';
+                        surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
                         onVerseChange(nextIndex);
                         if (!isPlaying && nextVerse && selectedReciter) {
                             persistPlaybackState({

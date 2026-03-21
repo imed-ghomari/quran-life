@@ -1,3 +1,3 @@
-1-6 | Verses 1-6
-7-30 | Verses 7-30
-31-56 | Verses 31-56
+1-7 | Verses 1-6
+8-31 | Verses 7-30
+32-56 | Verses 31-56

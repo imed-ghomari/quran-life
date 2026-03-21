@@ -26,6 +26,7 @@ import {
     getNodeDueDate
 } from '@/lib/types';
 import { db } from '@/lib/instant';
+import { transactWithRetry } from '@/lib/instantTransact';
 import { createNewFSRSState } from '@/lib/fsrs';
 import {
     Check, Clock, PauseCircle, RotateCcw, Download,
@@ -2509,7 +2510,7 @@ export default function SettingsPage() {
                     })
                     .filter((tx): tx is NonNullable<typeof tx> => !!tx);
                 if (!writes.length) continue;
-                await db.transact(writes.length === 1 ? writes[0] : writes);
+                await transactWithRetry(writes.length === 1 ? writes[0] : writes);
                 updateBulkOperationProgress(Math.min(preparedNodes.length, i + batch.length), preparedNodes.length);
             }
         } catch (error) {
@@ -2729,7 +2730,7 @@ export default function SettingsPage() {
                 ? listeningProgress.find(p => p.partId === LEGACY_ALL_QURAN_PART)
                 : undefined);
         if (entry?.id) {
-            await db.transact(db.tx.listeningProgress[entry.id].delete());
+            await transactWithRetry(db.tx.listeningProgress[entry.id].delete());
         }
     };
 
@@ -2769,7 +2770,7 @@ export default function SettingsPage() {
                         })
                         .filter((tx): tx is NonNullable<typeof tx> => !!tx);
                     if (!writes.length) continue;
-                    await db.transact(writes.length === 1 ? writes[0] : writes);
+                    await transactWithRetry(writes.length === 1 ? writes[0] : writes);
                     updateBulkOperationProgress(Math.min(decisionsToDelete.length, i + batch.length), decisionsToDelete.length);
                 }
                 startTransition(() => {
@@ -2874,7 +2875,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             const sorted = [...mindmap.anchors].sort((a: any, b: any) => a.startVerse - b.startVerse);
             const breaks = sorted
                 .slice(0, -1)
-                .map((a: any) => Math.min(Math.max(1, Number(a.endVerse) + 1), verseCount - 1));
+                .map((a: any) => Math.min(Math.max(1, Number(a.endVerse)), verseCount - 1));
             const labels: Record<number, string> = {};
             sorted.forEach((a: any, idx: number) => {
                 labels[idx] = a.label;
@@ -2898,7 +2899,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
     const handleSettingsSaveAnchors = useCallback(async (surahId: number, verseCount: number) => {
         const builder = getSettingsBuilderState(surahId);
-        const boundaries = [1, ...builder.breaks, verseCount + 1];
+        const boundaries = [1, ...builder.breaks.map((b) => b + 1), verseCount + 1];
         const anchors = boundaries.slice(0, -1).map((start, idx) => {
             const end = boundaries[idx + 1] - 1;
             const label = builder.labels[idx] || `Verses ${start}-${end}`;
@@ -3067,7 +3068,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
         ];
 
         try {
-            await db.transact(deletes);
+            await transactWithRetry(deletes);
         } catch (error) {
             console.error('Failed to delete custom mutashabih', error);
             await alert({
@@ -3127,7 +3128,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
         reader.readAsText(file);
     };
 
-    const collectSurahMutSourceGroups = (surahId: number) => {
+    const collectSurahMutSourceGroups = useCallback((surahId: number) => {
         const sourceMap: Record<string, {
             phraseId: string;
             phraseIds: string[];
@@ -3320,7 +3321,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
         });
 
         return mergedGroups;
-    };
+    }, [instantCustomMutashabihat]);
 
     const mutashabihatBySurah = useMemo(() => {
         const map: Record<number, number> = {};
@@ -3328,7 +3329,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             map[surah.id] = collectSurahMutSourceGroups(surah.id).length;
         });
         return map;
-    }, [settings.activePart, instantCustomMutashabihat]);
+    }, [settings.activePart, collectSurahMutSourceGroups]);
 
     const mutashabihatSurahs = useMemo(() => {
         return getSurahsByPart(settings.activePart)
