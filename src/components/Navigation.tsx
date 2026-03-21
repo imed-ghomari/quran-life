@@ -14,7 +14,7 @@ import {
 } from '@/components/InstantDataProvider';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { SURAHS } from '@/lib/quranData';
-import { filterReviewQueueNodes } from '@/lib/reviewQueue';
+import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { ALL_QURAN_PART, CORE_QURAN_PARTS, hasNodeBeenReviewed, LEGACY_ALL_QURAN_PART, MemoryNode } from '@/lib/types';
 
 const getLocalDayKey = (date: Date) => {
@@ -258,9 +258,15 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
         const progressDayKey = activeProgress?.updatedAt ? getLocalDayKey(new Date(activeProgress.updatedAt)) : null;
         const isDailyPortionComplete = !!progressDayKey && progressDayKey === todayKey;
 
+        const suspendedVerseGroupKeys = deriveSuspendedVerseGroupKeys(
+            errors,
+            3,
+            settings?.suspendedVerseGroupsAcknowledged
+        );
+
         return {
             pendingCount,
-            todayTasks: filterReviewQueueNodes(dueNodes, settings, mindmaps).length,
+            todayTasks: filterReviewQueueNodes(dueNodes, settings, mindmaps, suspendedVerseGroupKeys).length,
             isDailyPortionComplete,
             hideBadges: false,
         };

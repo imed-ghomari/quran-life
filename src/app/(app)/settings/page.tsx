@@ -264,7 +264,7 @@ const MUTASHABIH_NOTE_MAX_LENGTH = 300;
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const LOCKED_SKIPPED_SURAH_ID = 1;
 const SETTINGS_WRITE_DEBOUNCE_MS = 300;
-const MATURITY_UPDATE_BATCH_SIZE = 20;
+const MATURITY_TRANSACTION_BATCH_SIZE = 60;
 const DELETE_REASON_DETAIL_MAX_LENGTH = 500;
 const DELETE_CHURN_REASONS = [
     { id: 'price_too_high', label: 'Price is too high' },
@@ -572,6 +572,17 @@ export default function SettingsPage() {
     const [deleteReasonDetail, setDeleteReasonDetail] = useState('');
     const [deleteReasonError, setDeleteReasonError] = useState<string | null>(null);
     const [toasts, setToasts] = useState<SettingsToastItem[]>([]);
+    const [bulkOperationState, setBulkOperationState] = useState<{
+        active: boolean;
+        label: string;
+        completed: number;
+        total: number;
+    }>({
+        active: false,
+        label: '',
+        completed: 0,
+        total: 0,
+    });
     const lastToastRef = useRef<{ key: string; at: number } | null>(null);
     const mobileHistorySyncRef = useRef(false);
     const mobileOverlayHistorySyncRef = useRef(false);
@@ -2357,6 +2368,30 @@ export default function SettingsPage() {
         });
     };
 
+    const beginBulkOperation = useCallback((label: string, total: number) => {
+        setBulkOperationState({
+            active: true,
+            label,
+            completed: 0,
+            total: Math.max(1, total),
+        });
+    }, []);
+
+    const updateBulkOperationProgress = useCallback((completed: number, total: number) => {
+        setBulkOperationState((prev) => ({
+            ...prev,
+            completed: Math.min(Math.max(0, completed), Math.max(1, total)),
+            total: Math.max(1, total),
+        }));
+    }, []);
+
+    const endBulkOperation = useCallback(() => {
+        setBulkOperationState((prev) => ({
+            ...prev,
+            active: false,
+        }));
+    }, []);
+
     const getMaturityState = (level: 'reset' | 'medium' | 'strong' | 'mastered') => {
         const now = new Date().toISOString();
         switch (level) {
@@ -2457,15 +2492,25 @@ export default function SettingsPage() {
             return;
         }
 
+        beginBulkOperation(`Updating ${typeLabel}`, nodesToUpdate.length);
         try {
-            for (let i = 0; i < nodesToUpdate.length; i += MATURITY_UPDATE_BATCH_SIZE) {
-                const batch = nodesToUpdate.slice(i, i + MATURITY_UPDATE_BATCH_SIZE);
-                await Promise.all(batch.map((node) =>
-                    saveInstantNode({
-                        ...node,
-                        scheduler: { ...(node.scheduler as any), ...newState } as any
+            const preparedNodes = nodesToUpdate.map((node) => ({
+                ...node,
+                scheduler: { ...(node.scheduler as any), ...newState } as any
+            }));
+
+            for (let i = 0; i < preparedNodes.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
+                const batch = preparedNodes.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
+                const writes = batch
+                    .map((node) => {
+                        const nodeId = String(node.id || '').trim();
+                        if (!nodeId) return null;
+                        return db.tx.memoryNodes[nodeId].update(node as any);
                     })
-                ));
+                    .filter((tx): tx is NonNullable<typeof tx> => !!tx);
+                if (!writes.length) continue;
+                await db.transact(writes.length === 1 ? writes[0] : writes);
+                updateBulkOperationProgress(Math.min(preparedNodes.length, i + batch.length), preparedNodes.length);
             }
         } catch (error) {
             console.error('Failed to save group maturity', error);
@@ -2473,6 +2518,8 @@ export default function SettingsPage() {
                 title: 'Save Failed',
                 message: 'Could not update group maturity. Please try again.',
             });
+        } finally {
+            endBulkOperation();
         }
     };
 
@@ -2710,14 +2757,39 @@ export default function SettingsPage() {
         });
 
         if (decisionsToDelete.length > 0) {
+            beginBulkOperation('Resetting Similar Verse Decisions', decisionsToDelete.length);
             try {
-                await db.transact(decisionsToDelete.map(d => db.tx.mutashabihatDecisions[d.id].delete()));
+                for (let i = 0; i < decisionsToDelete.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
+                    const batch = decisionsToDelete.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
+                    const writes = batch
+                        .map((decision) => {
+                            const decisionId = String(decision?.id || '').trim();
+                            if (!decisionId) return null;
+                            return db.tx.mutashabihatDecisions[decisionId].delete();
+                        })
+                        .filter((tx): tx is NonNullable<typeof tx> => !!tx);
+                    if (!writes.length) continue;
+                    await db.transact(writes.length === 1 ? writes[0] : writes);
+                    updateBulkOperationProgress(Math.min(decisionsToDelete.length, i + batch.length), decisionsToDelete.length);
+                }
+                startTransition(() => {
+                    setDecisions((prev) => {
+                        const next = { ...prev };
+                        decisionsToDelete.forEach((decision) => {
+                            delete next[String(decision?.phraseId || '')];
+                        });
+                        return next;
+                    });
+                });
+                addToast('success', 'Decisions Reset', `${decisionsToDelete.length} similar-verse decision(s) removed.`);
             } catch (error) {
                 console.error('Failed to reset mutashabihat decisions', error);
                 await alert({
                     title: 'Reset Failed',
                     message: 'Could not reset similar verse coverage. Please try again.',
                 });
+            } finally {
+                endBulkOperation();
             }
         }
     };
@@ -6236,6 +6308,61 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                     </div>
                 ))}
             </div>
+
+            {bulkOperationState.active && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 5000,
+                        background: 'color-mix(in srgb, var(--background) 72%, transparent)',
+                        backdropFilter: 'blur(3px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem',
+                    }}
+                >
+                    <div
+                        className="card"
+                        style={{
+                            width: 'min(520px, 96vw)',
+                            borderRadius: '16px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--background)',
+                            boxShadow: '0 14px 40px rgba(0, 0, 0, 0.25)',
+                            padding: '1.1rem 1rem',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.8rem' }}>
+                            <Activity size={18} style={{ color: 'var(--accent)' }} />
+                            <div style={{ fontWeight: 700, fontSize: '0.96rem' }}>{bulkOperationState.label}</div>
+                        </div>
+                        <div
+                            style={{
+                                height: '10px',
+                                borderRadius: '999px',
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                overflow: 'hidden',
+                                marginBottom: '0.65rem',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    height: '100%',
+                                    width: `${Math.min(100, Math.round((bulkOperationState.completed / Math.max(1, bulkOperationState.total)) * 100))}%`,
+                                    background: 'var(--accent)',
+                                    transition: 'width 140ms ease-out',
+                                }}
+                            />
+                        </div>
+                        <div style={{ fontSize: '0.83rem', color: 'var(--foreground-secondary)' }}>
+                            {bulkOperationState.completed} / {bulkOperationState.total} updates applied
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

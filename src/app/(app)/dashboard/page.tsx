@@ -64,7 +64,17 @@ import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
-const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), {
+    ssr: false,
+    loading: () => (
+        <div
+            className="review-mindmap-viewer"
+            style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+            <Spinner text="Loading mindmap viewer..." />
+        </div>
+    )
+});
 const AudioPlayer = dynamic(() => import('@/components/AudioPlayer'), { ssr: false });
 
 const stableNodeId = (...parts: Array<string | number>) =>
@@ -229,6 +239,7 @@ export default function TodayPage() {
     const [pendingAutoCreateJobs, setPendingAutoCreateJobs] = useState(0);
     const [hasResolvedInitialReviewSelection, setHasResolvedInitialReviewSelection] = useState(false);
     const [hasHydratedReviewQueue, setHasHydratedReviewQueue] = useState(false);
+    const [isMindmapRevealPending, setIsMindmapRevealPending] = useState(false);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -941,9 +952,13 @@ export default function TodayPage() {
         }
         lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
-        setToasts(prev => [...prev, { id, type, message, info }]);
+        startTransition(() => {
+            setToasts(prev => [...prev, { id, type, message, info }].slice(-3));
+        });
         setTimeout(() => {
-            setToasts(prev => prev.filter(t => t.id !== id));
+            startTransition(() => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            });
         }, 6000);
     }, []);
 
@@ -1586,8 +1601,28 @@ export default function TodayPage() {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [handleUndo, handleRedo]);
 
-    // Get content
-    const getCurrentReviewContent = () => {
+    const versesBySurah = useMemo(() => {
+        const map = new Map<number, Verse[]>();
+        allVerses.forEach((verse) => {
+            const existing = map.get(verse.surahId);
+            if (existing) {
+                existing.push(verse);
+                return;
+            }
+            map.set(verse.surahId, [verse]);
+        });
+        return map;
+    }, [allVerses]);
+
+    const verseLookupBySurahAyah = useMemo(() => {
+        const map = new Map<string, Verse>();
+        allVerses.forEach((verse) => {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        });
+        return map;
+    }, [allVerses]);
+
+    const activeContent = useMemo(() => {
         if (orderedDueNodes.length === 0 || currentReviewIndex >= orderedDueNodes.length) return null;
         const node = orderedDueNodes[currentReviewIndex];
 
@@ -1595,51 +1630,46 @@ export default function TodayPage() {
             const partId = resolveNodePartId(node);
             if (partId === null) return null;
             const pm = partMindMaps.find(m => Number(m.partId) === partId);
-            return { type: 'part_mindmap', partId, mindmap: pm };
-        } else if (node.type === 'mindmap') {
+            return { type: 'part_mindmap', partId, mindmap: pm } as const;
+        }
+
+        if (node.type === 'mindmap') {
             const surahId = resolveNodeSurahId(node);
             if (!surahId) return null;
-            const s = getSurah(surahId);
-            const m = mindmaps.find(mm => Number(mm.surahId) === surahId);
-
-            // For mindmap reviews, include verses from anchors for gradual revelation
+            const surah = getSurah(surahId);
+            const mindmap = mindmaps.find(mm => Number(mm.surahId) === surahId);
             const verses: Verse[] = [];
-            if (m?.anchors?.length) {
-                // Get all verses from all anchors
-                m.anchors.forEach(anchor => {
+            if (mindmap?.anchors?.length) {
+                mindmap.anchors.forEach(anchor => {
                     for (let ayahId = anchor.startVerse; ayahId <= anchor.endVerse; ayahId++) {
-                        const verse = allVerses.find(v => v.surahId === anchor.surahId && v.ayahId === ayahId);
+                        const verse = verseLookupBySurahAyah.get(`${anchor.surahId}:${ayahId}`);
                         if (verse) verses.push(verse);
                     }
                 });
             }
-
-            return { type: 'mindmap', surah: s, mindmap: m, verses };
-        } else {
-            const surahId = resolveNodeSurahId(node);
-            if (!surahId) return null;
-            const s = getSurah(surahId);
-            const vs = allVerses.filter(v => v.surahId === surahId && v.ayahId >= (node.startVerse || 1) && v.ayahId <= (node.endVerse || 999));
-
-            // Context with mutashabihat-aware expansion
-            const contextVerses: Verse[] = [];
-            const start = node.startVerse || 1;
-            let lookback = 1;
-            while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, start - lookback + 1)))) {
-                const candidate = allVerses.find(v => v.surahId === surahId && v.ayahId === start - lookback);
-                if (!candidate) break;
-                contextVerses.unshift(candidate);
-                const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
-                if (!hasMutashabihForAbsolute(abs) && contextVerses.length >= 2) break;
-                lookback++;
-            }
-
-            return { type: 'verse', surah: s, verses: vs, contextVerses };
+            return { type: 'mindmap', surah, mindmap, verses } as const;
         }
-    };
 
-    const reviewContent = getCurrentReviewContent();
-    const activeContent = reviewContent;
+        const surahId = resolveNodeSurahId(node);
+        if (!surahId) return null;
+        const surah = getSurah(surahId);
+        const surahVerses = versesBySurah.get(surahId) || [];
+        const startVerse = node.startVerse || 1;
+        const endVerse = node.endVerse || 999;
+        const verses = surahVerses.filter(v => v.ayahId >= startVerse && v.ayahId <= endVerse);
+        const contextVerses: Verse[] = [];
+        let lookback = 1;
+        while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, startVerse - lookback + 1)))) {
+            const candidate = verseLookupBySurahAyah.get(`${surahId}:${startVerse - lookback}`);
+            if (!candidate) break;
+            contextVerses.unshift(candidate);
+            const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
+            if (!hasMutashabihForAbsolute(abs) && contextVerses.length >= 2) break;
+            lookback++;
+        }
+
+        return { type: 'verse', surah, verses, contextVerses } as const;
+    }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah]);
 
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;
@@ -1669,9 +1699,17 @@ export default function TodayPage() {
             : -1;
     const nextRevealChunkIndex = hasCurrentVerseNextChunk ? revealedChunks : 0;
 
+    const handleRevealMindmap = useCallback(() => {
+        setShowGrading(true);
+        setIsMindmapRevealPending(true);
+        requestAnimationFrame(() => {
+            setIsMindmapRevealPending(false);
+        });
+    }, []);
+
     const handleRevealNext = useCallback(() => {
         if (activeContent && (activeContent.type === 'mindmap' || activeContent.type === 'part_mindmap')) {
-            setShowGrading(true);
+            handleRevealMindmap();
             return;
         }
         if (revealedChunks < totalChunks) {
@@ -1680,7 +1718,18 @@ export default function TodayPage() {
             setCurrentVerseInReview(prev => prev + 1);
             setRevealedChunks(1); // One click moves and reveals first chunk
         }
-    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent]);
+    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent, handleRevealMindmap]);
+
+    useEffect(() => {
+        if (!activeContent || (activeContent.type !== 'mindmap' && activeContent.type !== 'part_mindmap')) return;
+        void import('@/components/MindmapViewer');
+    }, [activeContent?.type, activeContent?.type === 'mindmap' ? activeContent?.surah?.id : activeContent?.partId]);
+
+    useEffect(() => {
+        if (!showGrading) {
+            setIsMindmapRevealPending(false);
+        }
+    }, [showGrading, currentReviewIndex]);
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -2161,6 +2210,10 @@ export default function TodayPage() {
                                                             <EyeOff size={24} />
                                                             <p>Mindmap hidden</p>
                                                         </div>
+                                                    ) : isMindmapRevealPending ? (
+                                                        <div className="review-mindmap-viewer" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Spinner text="Loading mindmap..." />
+                                                        </div>
                                                     ) : (
                                                         <>
                                                             {(() => {
@@ -2263,7 +2316,7 @@ export default function TodayPage() {
                                     )}
                                     {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
                                         !showGrading ? (
-                                            <button className="btn btn-primary btn-full std-normal-btn" onClick={() => setShowGrading(true)}>
+                                            <button className="btn btn-primary btn-full std-normal-btn" onClick={handleRevealMindmap}>
                                                 Reveal Mindmap
                                             </button>
                                         ) : (

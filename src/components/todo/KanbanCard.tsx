@@ -370,8 +370,6 @@ function renderCardZones({
                     english: 'Part 0 Meta Mindmap',
                     arabic: 'الخريطة الشاملة'
                 };
-                zone3 = 'Global relationship map across Parts 1-7.';
-                zone4Meta = zone3;
             } else {
                 zone2 = {
                     english: `Part ${partTask.part}`,

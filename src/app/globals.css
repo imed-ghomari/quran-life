@@ -3966,6 +3966,17 @@ body[data-mindmap-open="true"] .bottom-nav {
   background: transparent;
 }
 
+.todo-context-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  contain: layout paint style;
+}
+
+.todo-context-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 180px;
+}
+
 /* Confirmation dialog spacing guardrails */
 .confirm-dialog {
   max-width: 560px !important;
