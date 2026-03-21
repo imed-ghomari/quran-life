@@ -1320,7 +1320,7 @@ export default function TodayPage() {
 
         addToast(toastType, toastMessage, info);
         queueReviewAdvance(node.id, currentReviewIndex);
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure, queueReviewAdvance]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure, findAnchorForRange, pushUndoEntry, queueReviewAdvance]);
 
     const handlePostpone = useCallback(async () => {
         if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
@@ -1376,7 +1376,7 @@ export default function TodayPage() {
         queueReviewAdvance(node.id, currentReviewIndex);
         reviewActionLockRef.current = false;
         setIsPersistingReviewAction(false);
-    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction, queueReviewAdvance]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction, pushUndoEntry, queueReviewAdvance]);
 
     const handleUndo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
         if (historyActionLockRef.current || reviewActionLockRef.current || isApplyingHistoryAction) return;
@@ -1720,10 +1720,17 @@ export default function TodayPage() {
         }
     }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent, handleRevealMindmap]);
 
+    const activeContentPreloadKey = useMemo(() => {
+        if (!activeContent || (activeContent.type !== 'mindmap' && activeContent.type !== 'part_mindmap')) {
+            return null;
+        }
+        return activeContent.type === 'mindmap' ? `mindmap-${activeContent?.surah?.id}` : `part-${activeContent?.partId}`;
+    }, [activeContent]);
+
     useEffect(() => {
-        if (!activeContent || (activeContent.type !== 'mindmap' && activeContent.type !== 'part_mindmap')) return;
+        if (!activeContentPreloadKey) return;
         void import('@/components/MindmapViewer');
-    }, [activeContent?.type, activeContent?.type === 'mindmap' ? activeContent?.surah?.id : activeContent?.partId]);
+    }, [activeContentPreloadKey]);
 
     useEffect(() => {
         if (!showGrading) {
@@ -1927,9 +1934,8 @@ export default function TodayPage() {
 
         const mm = mindmaps.find(m => Number((m as any).surahId) === Number(surahId));
         if (mm) {
-            const updated = { ...mm, isComplete: false };
             try {
-                await saveMindMap(surahId, updated);
+                await saveMindMap(surahId, { isComplete: false }, { mergeExisting: false });
                 await moveMindmapToInProgress(`surah-${surahId}`);
             } catch (err) {
                 console.error('Failed to mark mindmap incomplete', err);
@@ -1948,9 +1954,8 @@ export default function TodayPage() {
 
         const mm = partMindMaps.find(m => Number((m as any).partId) === Number(partId));
         if (mm) {
-            const updated = { ...mm, isComplete: false };
             try {
-                await savePartMindMap(partId, updated);
+                await savePartMindMap(partId, { isComplete: false }, { mergeExisting: false });
                 await moveMindmapToInProgress(`part-${partId}`);
             } catch (err) {
                 console.error('Failed to mark part mindmap incomplete', err);

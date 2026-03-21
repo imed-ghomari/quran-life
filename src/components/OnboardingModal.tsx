@@ -18,6 +18,7 @@ import DailyCompletionSlider from './DailyCompletionSlider';
 import { useInstantSettings, useInstantNodes } from '@/hooks/useInstantData';
 import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
+import { transactWithRetry } from '@/lib/instantTransact';
 import { SURAHS } from '@/lib/quranData';
 import { ALL_QURAN_PART, PART_NAMES, QuranPart, getMaturityState } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
@@ -133,7 +134,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         // Large first-time setups can timeout if sent as one mutation; commit in batches.
         for (let i = 0; i < transactions.length; i += ONBOARDING_TX_BATCH_SIZE) {
             const batch = transactions.slice(i, i + ONBOARDING_TX_BATCH_SIZE);
-            await db.transact(batch);
+            await transactWithRetry(batch);
         }
         onComplete();
     };

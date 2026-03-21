@@ -1,2 +1,2 @@
-1-4 | Verses 1-4
-5-19 | Verses 5-19
+1-5 | Verses 1-4
+6-19 | Verses 5-19

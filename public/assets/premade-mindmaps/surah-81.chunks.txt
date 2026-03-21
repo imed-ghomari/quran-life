@@ -1,3 +1,3 @@
-1-8 | Verses 1-8
-9-17 | Verses 9-17
-18-29 | Verses 18-29
+1-9 | Verses 1-8
+10-18 | Verses 9-17
+19-29 | Verses 18-29

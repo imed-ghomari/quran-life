@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
+import { transactWithRetry } from '@/lib/instantTransact';
 import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart } from '@/lib/types';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 import { normalizeReviewSortOrder } from '@/lib/reviewSortOrder';
@@ -114,13 +115,6 @@ const getLocalDayKeyFromMs = (ms: number) => {
     return `${y}-${m}-${day}`;
 };
 
-const waitMs = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const isInstantTransactionTimeoutError = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error || '');
-    return message.toLowerCase().includes('transaction timed out');
-};
-
 const isInstantMissingEntityUpdateError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error || '');
     return message.includes("Updating entities that don't exist");
@@ -129,22 +123,6 @@ const isInstantMissingEntityUpdateError = (error: unknown) => {
 const isInstantAlreadyExistingCreateError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error || '');
     return message.includes('Creating entities that already exist');
-};
-
-const transactWithRetry = async (tx: any, maxAttempts: number = 3) => {
-    let attempt = 0;
-    while (attempt < maxAttempts) {
-        try {
-            return await db.transact(tx);
-        } catch (error) {
-            attempt += 1;
-            if (!isInstantTransactionTimeoutError(error) || attempt >= maxAttempts) {
-                throw error;
-            }
-            await waitMs(100 * attempt);
-        }
-    }
-    throw new Error('Instant transact retry exhausted');
 };
 
 const memoryNodeLogicalKey = (node: MemoryNode) => {
@@ -238,7 +216,7 @@ export function useInstantSettings() {
                 : (isValidQuranPart(rawActivePart) ? rawActivePart : ALL_QURAN_PART);
 
         const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
-        void db.transact(db.tx.settings[settingsId].update({
+        void transactWithRetry(db.tx.settings[settingsId].update({
             activePart: migratedActivePart,
             partSystemVersion: 2,
             lastSyncedAt: new Date().toISOString(),
@@ -263,7 +241,7 @@ export function useInstantSettings() {
         if (!hasDiff) return;
 
         const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
-        void db.transact(db.tx.settings[settingsId].update({
+        void transactWithRetry(db.tx.settings[settingsId].update({
             skippedSurahs: normalizedSkippedSurahs,
             lastSyncedAt: new Date().toISOString(),
         }));
@@ -276,13 +254,13 @@ export function useInstantSettings() {
         if ((settingsEntry as any).reviewSortOrder === normalizedReviewSortOrder) return;
 
         const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
-        void db.transact(db.tx.settings[settingsId].update({
+        void transactWithRetry(db.tx.settings[settingsId].update({
             reviewSortOrder: normalizedReviewSortOrder,
             lastSyncedAt: new Date().toISOString(),
         }));
     }, [settingsEntry, user]);
 
-    const saveSettings = async (newSettings: Partial<AppSettings>) => {
+    const saveSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
 
         const normalizedSettings: Partial<AppSettings> = { ...newSettings };
@@ -327,7 +305,7 @@ export function useInstantSettings() {
                 return transactWithRetry(updateTx);
             }
         });
-    };
+    }, [settingsEntry, user]);
 
     const results = useMemo(() => ({
         settings: { ...currentSettings, id: settingsEntry?.id },
@@ -335,7 +313,7 @@ export function useInstantSettings() {
         isLoading: isAuthLoading || isDataLoading,
         error,
         user
-    }), [currentSettings, settingsEntry?.id, isAuthLoading, isDataLoading, error, user]);
+    }), [currentSettings, settingsEntry?.id, saveSettings, isAuthLoading, isDataLoading, error, user]);
 
     return results;
 }
@@ -398,7 +376,7 @@ export function useInstantNodes() {
             .filter(nodeId => isUuid(nodeId))
             .map(nodeId => db.tx.memoryNodes[nodeId].delete());
         if (tx.length === 0) return;
-        void db.transact(tx);
+        void transactWithRetry(tx);
     }, [user, transitionIds]);
 
     useEffect(() => {
@@ -462,7 +440,7 @@ export function useInstantNodes() {
         return due.getTime() <= dueNowMs;
     }), [canonicalNodes, dueNowMs]);
 
-    const saveNode = (node: MemoryNode) => {
+    const saveNode = useCallback((node: MemoryNode) => {
         if (!user) return Promise.resolve();
         const canReuseCandidateId = isUuid(node.id) && canonicalNodes.some(existingNode => existingNode.id === node.id);
         const nodeId = canReuseCandidateId
@@ -494,13 +472,13 @@ export function useInstantNodes() {
             .finally(() => {
                 setDueNowMs(Date.now());
             });
-    };
+    }, [user, canonicalNodes]);
 
-    const deleteNode = async (nodeId: string) => {
+    const deleteNode = useCallback(async (nodeId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(nodeId)) return Promise.resolve();
         try {
-            return await db.transact(db.tx.memoryNodes[nodeId].delete());
+            return await transactWithRetry(db.tx.memoryNodes[nodeId].delete());
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error || '');
             if (message.includes('not perms-pass')) {
@@ -511,7 +489,7 @@ export function useInstantNodes() {
         } finally {
             setDueNowMs(Date.now());
         }
-    };
+    }, [user]);
 
     return useMemo(() => ({
         nodes: canonicalNodes,
@@ -520,7 +498,7 @@ export function useInstantNodes() {
         deleteNode,
         isLoading,
         error
-    }), [canonicalNodes, dueNodes, isLoading, error]);
+    }), [canonicalNodes, dueNodes, saveNode, deleteNode, isLoading, error]);
 }
 
 // ==========================================
@@ -544,13 +522,14 @@ export function useInstantMindMaps() {
     const mindmaps = useMemo(() => (data?.mindMaps || []) as unknown as MindMap[], [data?.mindMaps]);
     const partMindMaps = useMemo(() => (data?.partMindMaps || []) as unknown as any[], [data?.partMindMaps]);
 
-    const saveMindMap = (surahId: number, mapData: Partial<MindMap>) => {
+    const saveMindMap = useCallback((surahId: number, mapData: Partial<MindMap>, options?: { mergeExisting?: boolean }) => {
         if (!user) return Promise.resolve();
         const existing = mindmaps.find(m => Number((m as any).surahId) === surahId);
         const mapId = resolveEntityId((existing as any)?.id, 'mindmap', user.id, surahId);
+        const mergeExisting = options?.mergeExisting !== false;
 
         // Merge existing data with new data to preserve fields like anchors
-        const mergedData = existing ? { ...existing, ...mapData } : mapData;
+        const mergedData = mergeExisting && existing ? { ...existing, ...mapData } : mapData;
         
         const sanitizedData: any = { ...mergedData };
         delete sanitizedData.imageUrl;
@@ -559,21 +538,22 @@ export function useInstantMindMaps() {
             sanitizedData.tldrawSnapshot = sanitizeMindmapSnapshot(sanitizedData.tldrawSnapshot);
         }
 
-        return db.transact(db.tx.mindMaps[mapId].update({
+        return transactWithRetry(db.tx.mindMaps[mapId].update({
             ...sanitizedData,
             surahId,
             userId: user.id,
             updatedAt: new Date().toISOString()
         }));
-    };
+    }, [user, mindmaps]);
 
-    const savePartMindMap = (partId: number, mapData: any) => {
+    const savePartMindMap = useCallback((partId: number, mapData: any, options?: { mergeExisting?: boolean }) => {
         if (!user) return Promise.resolve();
         const existing = partMindMaps.find(m => Number((m as any).partId) === partId);
         const mapId = resolveEntityId(existing?.id, 'part_mindmap', user.id, partId);
+        const mergeExisting = options?.mergeExisting !== false;
 
         // Merge existing data with new data to preserve all fields
-        const mergedData = existing ? { ...existing, ...mapData } : mapData;
+        const mergedData = mergeExisting && existing ? { ...existing, ...mapData } : mapData;
         const sanitizedData: any = { ...mergedData };
         delete sanitizedData.imageUrl;
         delete sanitizedData.imageUrlDark;
@@ -581,25 +561,25 @@ export function useInstantMindMaps() {
             sanitizedData.tldrawSnapshot = sanitizeMindmapSnapshot(sanitizedData.tldrawSnapshot);
         }
 
-        return db.transact(db.tx.partMindMaps[mapId].update({
+        return transactWithRetry(db.tx.partMindMaps[mapId].update({
             ...sanitizedData,
             partId,
             userId: user.id,
             updatedAt: new Date().toISOString()
         }));
-    };
+    }, [user, partMindMaps]);
 
-    const deleteMindMap = (mindMapId: string) => {
+    const deleteMindMap = useCallback((mindMapId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(mindMapId)) return Promise.resolve();
-        return db.transact(db.tx.mindMaps[mindMapId].delete());
-    };
+        return transactWithRetry(db.tx.mindMaps[mindMapId].delete());
+    }, [user]);
 
-    const deletePartMindMap = (partMindMapId: string) => {
+    const deletePartMindMap = useCallback((partMindMapId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(partMindMapId)) return Promise.resolve();
-        return db.transact(db.tx.partMindMaps[partMindMapId].delete());
-    };
+        return transactWithRetry(db.tx.partMindMaps[partMindMapId].delete());
+    }, [user]);
 
     return useMemo(() => ({
         mindmaps,
@@ -610,7 +590,7 @@ export function useInstantMindMaps() {
         deletePartMindMap,
         isLoading,
         error
-    }), [mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading, error]);
+    }), [mindmaps, partMindMaps, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading, error]);
 }
 
 // ==========================================
@@ -626,26 +606,26 @@ export function useInstantListeningStats() {
 
     const stats = useMemo(() => (data?.listeningStats || []) as unknown as any[], [data?.listeningStats]);
 
-    const saveStats = (surahId: number, newStats: any) => {
+    const saveStats = useCallback((surahId: number, newStats: any) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
         const statsId = resolveEntityId(existing?.id, 'listening_stats', user.id, surahId);
 
-        return db.transact(db.tx.listeningStats[statsId].update({
+        return transactWithRetry(db.tx.listeningStats[statsId].update({
             ...newStats,
             surahId,
             userId: user.id
         }));
-    };
+    }, [user, stats]);
 
-    const deleteStats = (surahId: number) => {
+    const deleteStats = useCallback((surahId: number) => {
         if (!user) return Promise.resolve();
         const existing = stats.find(s => s.surahId === surahId);
         if (!isUuid(existing?.id)) return Promise.resolve();
-        return db.transact(db.tx.listeningStats[existing.id].delete());
-    };
+        return transactWithRetry(db.tx.listeningStats[existing.id].delete());
+    }, [user, stats]);
 
-    return useMemo(() => ({ stats, saveStats, deleteStats, isLoading, error }), [stats, isLoading, error]);
+    return useMemo(() => ({ stats, saveStats, deleteStats, isLoading, error }), [stats, saveStats, deleteStats, isLoading, error]);
 }
 
 // ==========================================
@@ -661,28 +641,28 @@ export function useInstantListeningProgress() {
 
     const progress = useMemo(() => (data?.listeningProgress || []) as unknown as any[], [data?.listeningProgress]);
 
-    const saveProgress = (partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
+    const saveProgress = useCallback((partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
         const progressId = resolveEntityId(existing?.id, 'listening_progress', user.id, partId);
 
-        return db.transact(db.tx.listeningProgress[progressId].update({
+        return transactWithRetry(db.tx.listeningProgress[progressId].update({
             partId,
             lastVerseIndex,
             cycles: cycles !== undefined ? cycles : (existing?.cycles || 0),
             updatedAt: updatedAt || new Date().toISOString(),
             userId: user.id
         }));
-    };
+    }, [user, progress]);
 
-    const deleteProgress = (partId: number) => {
+    const deleteProgress = useCallback((partId: number) => {
         if (!user) return Promise.resolve();
         const existing = progress.find(p => p.partId === partId);
         if (!isUuid(existing?.id)) return Promise.resolve();
-        return db.transact(db.tx.listeningProgress[existing.id].delete());
-    };
+        return transactWithRetry(db.tx.listeningProgress[existing.id].delete());
+    }, [user, progress]);
 
-    return useMemo(() => ({ progress, saveProgress, deleteProgress, isLoading, error }), [progress, isLoading, error]);
+    return useMemo(() => ({ progress, saveProgress, deleteProgress, isLoading, error }), [progress, saveProgress, deleteProgress, isLoading, error]);
 }
 
 // ==========================================
@@ -698,33 +678,33 @@ export function useInstantMutashabihat() {
     const decisions = useMemo(() => (data?.mutashabihatDecisions || []) as unknown as any[], [data?.mutashabihatDecisions]);
     const custom = useMemo(() => (data?.customMutashabihat || []) as unknown as any[], [data?.customMutashabihat]);
 
-    const saveDecision = (phraseId: string, update: any) => {
+    const saveDecision = useCallback((phraseId: string, update: any) => {
         if (!user) return Promise.resolve();
         const existing = decisions.find(d => d.phraseId === phraseId);
         const decisionId = resolveEntityId(existing?.id, 'mut_decision', user.id, phraseId);
 
-        return db.transact(db.tx.mutashabihatDecisions[decisionId].update({
+        return transactWithRetry(db.tx.mutashabihatDecisions[decisionId].update({
             ...update,
             phraseId,
             timestamp: new Date().toISOString(),
             userId: user.id
         }));
-    };
+    }, [user, decisions]);
 
-    const saveCustom = (item: any) => {
+    const saveCustom = useCallback((item: any) => {
         if (!user) return Promise.resolve();
         const customId = isUuid(item.id) ? item.id : id();
-        return db.transact(db.tx.customMutashabihat[customId].update({
+        return transactWithRetry(db.tx.customMutashabihat[customId].update({
             ...item,
             userId: user.id
         }));
-    };
+    }, [user]);
 
-    const deleteCustom = (customId: string) => {
+    const deleteCustom = useCallback((customId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(customId)) return Promise.resolve();
-        return db.transact(db.tx.customMutashabihat[customId].delete());
-    };
+        return transactWithRetry(db.tx.customMutashabihat[customId].delete());
+    }, [user]);
 
     return useMemo(() => ({
         decisions,
@@ -734,7 +714,7 @@ export function useInstantMutashabihat() {
         deleteCustom,
         isLoading,
         error
-    }), [decisions, custom, isLoading, error]);
+    }), [decisions, custom, saveDecision, saveCustom, deleteCustom, isLoading, error]);
 }
 
 // ==========================================
@@ -748,7 +728,7 @@ export function useInstantReviewLogs() {
 
     const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
 
-    const saveLog = async (log: any) => {
+    const saveLog = useCallback(async (log: any) => {
         if (!user) return Promise.resolve();
         const logId = id();
         const writes: any[] = [db.tx.fsrsReviewLogs[logId].update({
@@ -774,9 +754,9 @@ export function useInstantReviewLogs() {
         }
 
         return transactWithRetry(writes.length === 1 ? writes[0] : writes);
-    };
+    }, [user, logs]);
 
-    return useMemo(() => ({ logs, saveLog, isLoading, error }), [logs, isLoading, error]);
+    return useMemo(() => ({ logs, saveLog, isLoading, error }), [logs, saveLog, isLoading, error]);
 }
 
 // ==========================================
@@ -790,22 +770,22 @@ export function useInstantReviewErrors() {
 
     const errors = useMemo(() => (data?.reviewErrors || []) as unknown as any[], [data?.reviewErrors]);
 
-    const saveError = (errorItem: any) => {
+    const saveError = useCallback((errorItem: any) => {
         if (!user) return Promise.resolve();
         const errorId = isUuid(errorItem.id) ? errorItem.id : id();
         return transactWithRetry(db.tx.reviewErrors[errorId].update({
             ...errorItem,
             userId: user.id
         }));
-    };
+    }, [user]);
 
-    const deleteError = (errorId: string) => {
+    const deleteError = useCallback((errorId: string) => {
         if (!user) return Promise.resolve();
         if (!isUuid(errorId)) return Promise.resolve();
         return transactWithRetry(db.tx.reviewErrors[errorId].delete());
-    };
+    }, [user]);
 
-    return useMemo(() => ({ errors, saveError, deleteError, isLoading, error }), [errors, isLoading, error]);
+    return useMemo(() => ({ errors, saveError, deleteError, isLoading, error }), [errors, saveError, deleteError, isLoading, error]);
 }
 
 // ==========================================
@@ -825,23 +805,23 @@ export function useInstantOptimization() {
 
     const weights = useMemo(() => data?.customWeights?.[0]?.weights || [], [data?.customWeights]);
 
-    const saveMeta = (newMeta: any) => {
+    const saveMeta = useCallback((newMeta: any) => {
         if (!user) return Promise.resolve();
         const metaId = isUuid(data?.optimizationMeta?.[0]?.id) ? data?.optimizationMeta?.[0]?.id : id();
-        return db.transact(db.tx.optimizationMeta[metaId].update({
+        return transactWithRetry(db.tx.optimizationMeta[metaId].update({
             ...newMeta,
             userId: user.id
         }));
-    };
+    }, [user, data?.optimizationMeta]);
 
-    const saveWeights = (newWeights: any[]) => {
+    const saveWeights = useCallback((newWeights: any[]) => {
         if (!user) return Promise.resolve();
         const weightsId = isUuid(data?.customWeights?.[0]?.id) ? data?.customWeights?.[0]?.id : id();
-        return db.transact(db.tx.customWeights[weightsId].update({
+        return transactWithRetry(db.tx.customWeights[weightsId].update({
             weights: newWeights,
             userId: user.id
         }));
-    };
+    }, [user, data?.customWeights]);
 
-    return useMemo(() => ({ meta, weights, saveMeta, saveWeights, isLoading, error }), [meta, weights, isLoading, error]);
+    return useMemo(() => ({ meta, weights, saveMeta, saveWeights, isLoading, error }), [meta, weights, saveMeta, saveWeights, isLoading, error]);
 }

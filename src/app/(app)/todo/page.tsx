@@ -579,7 +579,7 @@ export default function TodoPage() {
         // If anchors exist in DB, rehydrate the builder state
         if (mindmap?.anchors?.length) {
             const sorted = [...mindmap.anchors].sort((a, b) => a.startVerse - b.startVerse);
-            const breaks = sorted.slice(0, -1).map(a => Math.min(Math.max(1, a.endVerse + 1), verseCount - 1));
+            const breaks = sorted.slice(0, -1).map(a => Math.min(Math.max(1, a.endVerse), verseCount - 1));
             const labels: Record<number, string> = {};
             sorted.forEach((a, idx) => { labels[idx] = a.label; });
             return { breaks, labels };
@@ -602,7 +602,7 @@ export default function TodoPage() {
 
     const handleSaveAnchors = async (surahId: number, verseCount: number) => {
         const builder = getBuilderState(surahId);
-        const boundaries = [1, ...builder.breaks, verseCount + 1];
+        const boundaries = [1, ...builder.breaks.map(b => b + 1), verseCount + 1];
         const anchors = boundaries.slice(0, -1).map((start, idx) => {
             const end = boundaries[idx + 1] - 1;
             const label = builder.labels[idx] || `Verses ${start}-${end}`;
@@ -692,19 +692,11 @@ export default function TodoPage() {
         // with stale card payloads during drag/drop completion transitions.
         const persisted = mindmaps[surahId];
         const existing = persisted || currentMindmap || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const tldrawSnapshot = existing.tldrawSnapshot || currentMindmap?.tldrawSnapshot;
-
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
 
-        const updated = {
-            ...existing,
-            imageUrl: undefined, // Clear images to save storage
-            imageUrlDark: undefined,
-            tldrawSnapshot,
+        await saveMindMap(surahId, {
             isComplete: isNowComplete
-        };
-
-        await saveMindMap(surahId, updated);
+        }, { mergeExisting: false });
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
@@ -984,7 +976,9 @@ export default function TodoPage() {
         const existing = partMindmapsMap[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
         const updated = { ...existing, isComplete: isNowComplete };
-        await savePartMindMap(part, updated);
+        await savePartMindMap(part, {
+            isComplete: isNowComplete
+        }, { mergeExisting: false });
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
