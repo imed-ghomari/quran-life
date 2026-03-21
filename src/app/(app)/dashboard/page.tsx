@@ -116,15 +116,65 @@ const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
 };
 
 
-function splitIntoChunks(text: string | undefined | null, wordsPerChunk: number = 3): string[] {
-    const normalized = typeof text === 'string' ? text : '';
-    const words = normalized.split(/\s+/).filter(Boolean);
-    if (words.length <= wordsPerChunk + 2) return [normalized];
-    const chunks: string[] = [];
-    for (let i = 0; i < words.length; i += wordsPerChunk) {
-        chunks.push(words.slice(i, i + wordsPerChunk).join(' '));
+const CONTEXTUAL_BREAK_SUFFIXES = ['ۘ', 'ۙ', 'ۚ', 'ۖ', 'ۗ', 'ۛ', 'ۜ', '۝'] as const;
+const CONTEXTUAL_BREAK_TOKENS = new Set<string>([
+    ...CONTEXTUAL_BREAK_SUFFIXES,
+    'ج',
+    'قلى',
+    'صلى',
+    'م',
+    'لا',
+]);
+const MAX_REVEAL_WORDS = 10;
+
+function splitLongSegment(tokens: string[], maxWords: number): string[][] {
+    if (tokens.length <= maxWords) return [tokens];
+
+    const midpoint = Math.ceil(tokens.length / 2);
+    return [
+        ...splitLongSegment(tokens.slice(0, midpoint), maxWords),
+        ...splitLongSegment(tokens.slice(midpoint), maxWords),
+    ];
+}
+
+function splitIntoChunks(text: string | undefined | null): string[] {
+    const normalized = typeof text === 'string' ? text.trim() : '';
+    if (!normalized) return [];
+
+    const rawTokens = normalized.split(/\s+/).filter(Boolean);
+    const tokens: string[] = [];
+
+    for (const rawToken of rawTokens) {
+        if (tokens.length > 0 && CONTEXTUAL_BREAK_TOKENS.has(rawToken)) {
+            tokens[tokens.length - 1] = `${tokens[tokens.length - 1]}${rawToken}`;
+            continue;
+        }
+
+        tokens.push(rawToken);
     }
-    return chunks;
+
+    if (tokens.length === 0) return [];
+
+    const primarySegments: string[][] = [];
+    let currentSegment: string[] = [];
+
+    for (const token of tokens) {
+        currentSegment.push(token);
+
+        if (CONTEXTUAL_BREAK_SUFFIXES.some(mark => token.endsWith(mark))) {
+            primarySegments.push(currentSegment);
+            currentSegment = [];
+        }
+    }
+
+    if (currentSegment.length > 0) {
+        primarySegments.push(currentSegment);
+    }
+
+    return primarySegments
+        .flatMap(segment => splitLongSegment(segment, MAX_REVEAL_WORDS))
+        .map(segment => segment.join(' '))
+        .filter(Boolean);
 }
 
 type DailyPortionSurahGroup = {
