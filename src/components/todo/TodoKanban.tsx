@@ -248,7 +248,7 @@ export default function TodoKanban({
         lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
         startTransition(() => {
-            setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }]);
+            setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }].slice(-3));
         });
         setTimeout(() => {
             if (onExpire) onExpire();
@@ -406,6 +406,13 @@ export default function TodoKanban({
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
     const columnsRef = useRef(columns);
+    const verseLookupBySurahAyah = useMemo(() => {
+        const map = new Map<string, any>();
+        verses.forEach((verse: any) => {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        });
+        return map;
+    }, [verses]);
     // Removed custom scroll refs as per request
 
     useEffect(() => {
@@ -1633,7 +1640,7 @@ export default function TodoKanban({
                     .slice(0, 3);
                 const mistakeAyahIds = new Set<number>(mistakeEntries.map((entry: any) => entry.ayahId));
                 const mistakeCountByAyah = new Map<number, number>(mistakeEntries.map((entry: any) => [entry.ayahId, entry.count]));
-                const getVerseText = (ayahId: number) => verses.find((v: any) => v.surahId === surahId && v.ayahId === ayahId)?.text || '';
+                const getVerseText = (ayahId: number) => verseLookupBySurahAyah.get(`${surahId}:${ayahId}`)?.text || '';
                 const mergedContextRanges = (() => {
                     const rawRanges = mistakeEntries
                         .map((entry: any) => ({
@@ -1658,7 +1665,7 @@ export default function TodoKanban({
                     const highlight = mistakeAyahIds.has(ayahId);
                     const count = mistakeCountByAyah.get(ayahId) || 1;
                     return (
-                        <div key={`${ayahId}-${count}`} className="verse-context-verse bg-[var(--background-secondary)] p-5 rounded-lg">
+                        <div key={`${ayahId}-${count}`} className="verse-context-verse todo-context-row bg-[var(--background-secondary)] p-5 rounded-lg">
                             <div className="verse-context-label text-xs text-[var(--foreground-secondary)] mb-2">
                                 {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
                             </div>
@@ -1678,8 +1685,8 @@ export default function TodoKanban({
                 };
 
                 const contextStackClassName = (isMobile || isTablet)
-                    ? 'verse-context-stack pr-1 space-y-4'
-                    : 'verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4';
+                    ? 'verse-context-stack todo-context-scroll pr-1 space-y-4'
+                    : 'verse-context-stack todo-context-scroll max-h-[52vh] overflow-y-auto pr-1 space-y-4';
 
                 const content = mistakeEntries.length > 0 ? (
                     <div className={contextStackClassName}>
@@ -1728,7 +1735,7 @@ export default function TodoKanban({
                                         <X size={20} />
                                     </button>
                                 </div>
-                                <div className="slide-over-body verse-context-content">
+                                <div className="slide-over-body verse-context-content todo-context-scroll">
                                     {content}
                                 </div>
                             </div>
@@ -1749,7 +1756,7 @@ export default function TodoKanban({
                                     <X size={18} />
                                 </button>
                             </div>
-                            <div className="verse-context-content px-8 py-7 space-y-5 overflow-y-auto max-h-[calc(85vh-70px)]">
+                            <div className="verse-context-content todo-context-scroll px-8 py-7 space-y-5 overflow-y-auto max-h-[calc(85vh-70px)]">
                                 <div className="rounded-xl border border-[var(--border)] bg-[var(--background-secondary)]/60 px-4 py-3 text-sm text-[var(--foreground-secondary)]">
                                     {issue.label || 'Verse group'} • {Math.max(0, Number(issue.mistakeCount) || 0)} total errors in this group
                                 </div>
@@ -1772,7 +1779,7 @@ export default function TodoKanban({
                 const sortedAbsRefs = [...group.absRefs].sort((a, b) => a - b);
                 const sourceEntries = sortedAbsRefs.map(absRef => {
                     const ref = absoluteToSurahAyah(absRef);
-                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                    const baseVerse = verseLookupBySurahAyah.get(`${ref.surahId}:${ref.ayahId}`);
                     const mutEntry = group.entries.find((entry: any) =>
                         entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)
                     );
@@ -1847,7 +1854,7 @@ export default function TodoKanban({
                                 {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
                                     const displayedAbs = contextVerseCursor[absRef] ?? absRef;
                                     const displayedRef = absoluteToSurahAyah(displayedAbs);
-                                    const displayedVerse = verses.find(v => v.surahId === displayedRef.surahId && v.ayahId === displayedRef.ayahId);
+                                    const displayedVerse = verseLookupBySurahAyah.get(`${displayedRef.surahId}:${displayedRef.ayahId}`);
                                     const sourceRange = mutEntry?.meta?.sourceRange;
                                     const isSource = mutEntry?.meta?.sourceAbs === displayedAbs;
                                     const matchRange = isSource
@@ -1855,7 +1862,7 @@ export default function TodoKanban({
                                         : matchRangeByAbs.get(displayedAbs);
 
                                     return (
-                                        <div key={absRef} className="mut-text mut-detail-source" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
+                                        <div key={absRef} className="mut-text mut-detail-source todo-context-row" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
                                             <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
                                                 {getSurah(displayedRef.surahId)?.name} - {displayedRef.ayahId}
                                             </div>
@@ -1934,11 +1941,11 @@ export default function TodoKanban({
                                                         const displayedMatchAbs = contextVerseCursor[matchAbs] ?? matchAbs;
                                                         const mref = absoluteToSurahAyah(displayedMatchAbs);
                                                         const msurah = getSurah(mref.surahId);
-                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                        const mVerse = verseLookupBySurahAyah.get(`${mref.surahId}:${mref.ayahId}`);
                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
                                                         return (
-                                                            <div key={idx} className="mut-match-item mut-compare-card" style={{ marginBottom: '0.85rem' }}>
+                                                            <div key={idx} className="mut-match-item mut-compare-card todo-context-row" style={{ marginBottom: '0.85rem' }}>
                                                                 <div className="mut-match-label mut-compare-label">
                                                                     Compare: Surah {msurah?.name} - {mref.ayahId}
                                                                 </div>
@@ -2056,7 +2063,7 @@ export default function TodoKanban({
                                         <X size={20} />
                                     </button>
                                 </div>
-                                <div className="slide-over-body similarity-context-content">
+                                <div className="slide-over-body similarity-context-content todo-context-scroll">
                                     {similarityContent}
                                 </div>
                             </div>
@@ -2081,7 +2088,7 @@ export default function TodoKanban({
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="similarity-context-content px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
+                            <div className="similarity-context-content todo-context-scroll px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
                                 {similarityContent}
                             </div>
                         </div>
