@@ -1,17 +1,26 @@
 import type { Metadata, Viewport } from 'next';
-import { Outfit } from 'next/font/google';
+import localFont from 'next/font/local';
 import Script from 'next/script';
 import './globals.css';
 import 'tldraw/tldraw.css';
 import { Providers } from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import InstantDataProvider from '@/components/InstantDataProvider';
 import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityController';
 import { getSiteUrl } from '@/lib/siteUrl';
 
-const outfit = Outfit({ 
-    subsets: ['latin'],
+const outfit = localFont({
+    src: '../assets/fonts/Outfit-VariableFont_wght.ttf',
     variable: '--font-outfit',
+    weight: '100 900',
+    display: 'swap',
+});
+
+const notoNaskhArabic = localFont({
+    src: '../assets/fonts/NotoNaskhArabic-VariableFont_wght.ttf',
+    variable: '--font-arabic-local',
+    weight: '400 700',
     display: 'swap',
 });
 
@@ -102,7 +111,7 @@ export default function RootLayout({
 `;
 
     return (
-        <html lang="ar" dir="ltr" className={outfit.variable} suppressHydrationWarning={true}>
+        <html lang="ar" dir="ltr" className={`${outfit.variable} ${notoNaskhArabic.variable}`} suppressHydrationWarning={true}>
             <body suppressHydrationWarning={true}>
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}
@@ -110,9 +119,11 @@ export default function RootLayout({
                 <ScrollbarVisibilityController />
                 <Providers>
                     <ErrorBoundary>
-                        <AppShell>
-                            {children}
-                        </AppShell>
+                        <InstantDataProvider>
+                            <AppShell>
+                                {children}
+                            </AppShell>
+                        </InstantDataProvider>
                     </ErrorBoundary>
                 </Providers>
             </body>

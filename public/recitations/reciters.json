@@ -77,13 +77,6 @@
     "hasSegments": true
   },
   {
-    "id": "ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-955",
-    "name": "Mahmoud Khalil Al Husary Murattal",
-    "type": "ayah-based",
-    "relativePath": "/recitations/ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-955.json",
-    "hasSegments": true
-  },
-  {
     "id": "ayah-recitation-mishari-rashid-al-afasy-murattal-hafs-953",
     "name": "Mishari Rashid Al Afasy Murattal",
     "type": "ayah-based",

@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef, useContext, startTransition } from 'react';
-import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
-    useInstantSettings,
-    useInstantNodes,
-    useInstantMindMaps,
-    useInstantMutashabihat,
-    useInstantReviewErrors
-} from '@/hooks/useInstantData';
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
+import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
     AppSettings,
@@ -109,19 +109,19 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
  */
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
-    const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
+    const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
     const queueSettingsUpdate = useCallback((update: Partial<AppSettings>) => {
         const queued = settingsWriteQueueRef.current.then(() => saveSettings(update));
         settingsWriteQueueRef.current = queued.catch(() => { });
         return queued;
     }, [saveSettings]);
-    const { nodes, saveNode, deleteNode, isLoading: nodesLoading } = useInstantNodes();
+    const { nodes, saveNode, deleteNode, isLoading: nodesLoading } = useSharedInstantNodes();
     // Raw lists from DB - might contain duplicates due to sync/offline issues
-    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
+    const { mindmaps: mindmapsList, partMindMaps: partMindmapsList, saveMindMap, savePartMindMap, deleteMindMap, deletePartMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
 
-    const { decisions, custom: customMutashabihat, saveDecision, saveCustom, isLoading: mutashabihatLoading } = useInstantMutashabihat();
-    const { errors, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
+    const { decisions, custom: customMutashabihat, saveDecision, saveCustom, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
+    const { errors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
 
     const { isEditor } = useContext(AccessStateContext);
     const appMode = isEditor ? 'owner' : 'user';
@@ -131,6 +131,13 @@ export default function TodoPage() {
     const [isAutoImportingPremades, setIsAutoImportingPremades] = useState(false);
     const [hasHydratedTodoData, setHasHydratedTodoData] = useState(false);
     const { alert } = useConfirmDialog();
+
+    const runInBatches = useCallback(async <T,>(items: T[], batchSize: number, worker: (item: T) => Promise<unknown>) => {
+        for (let i = 0; i < items.length; i += batchSize) {
+            const batch = items.slice(i, i + batchSize);
+            await Promise.all(batch.map(worker));
+        }
+    }, []);
 
     // -- 2. Data Memoization & Deduplication --
     // We map raw lists to a dictionary for O(1) access. 
@@ -579,7 +586,7 @@ export default function TodoPage() {
         // If anchors exist in DB, rehydrate the builder state
         if (mindmap?.anchors?.length) {
             const sorted = [...mindmap.anchors].sort((a, b) => a.startVerse - b.startVerse);
-            const breaks = sorted.slice(0, -1).map(a => Math.min(Math.max(1, a.endVerse + 1), verseCount - 1));
+            const breaks = sorted.slice(0, -1).map(a => Math.min(Math.max(1, a.endVerse), verseCount - 1));
             const labels: Record<number, string> = {};
             sorted.forEach((a, idx) => { labels[idx] = a.label; });
             return { breaks, labels };
@@ -602,7 +609,7 @@ export default function TodoPage() {
 
     const handleSaveAnchors = async (surahId: number, verseCount: number) => {
         const builder = getBuilderState(surahId);
-        const boundaries = [1, ...builder.breaks, verseCount + 1];
+        const boundaries = [1, ...builder.breaks.map(b => b + 1), verseCount + 1];
         const anchors = boundaries.slice(0, -1).map((start, idx) => {
             const end = boundaries[idx + 1] - 1;
             const label = builder.labels[idx] || `Verses ${start}-${end}`;
@@ -620,7 +627,7 @@ export default function TodoPage() {
             endVerse: a.end,
             label: a.label,
         }));
-        await saveMindMap(surahId, { ...existing, anchors: newAnchors });
+        await saveMindMap(surahId, { anchors: newAnchors }, { mergeExisting: false });
 
         // Keep existing verse-segment nodes in sync with updated splits.
         // We create new range nodes only when this surah currently participates in verse review
@@ -640,7 +647,9 @@ export default function TodoPage() {
 
         const staleNodes = existingVerseNodes.filter(n => !nextRanges.has(rangeKey(Number(n.startVerse), Number(n.endVerse))));
         if (staleNodes.length > 0) {
-            await Promise.all(staleNodes.map(n => deleteNode(n.id)));
+            await runInBatches(staleNodes, 8, async (node) => {
+                await deleteNode(node.id);
+            });
         }
 
         if (shouldCreateMissingRanges) {
@@ -655,7 +664,7 @@ export default function TodoPage() {
                 const existingNode = existingByRange.get(key);
 
                 if (existingNode) {
-                    return saveNode({
+                    return {
                         ...existingNode,
                         id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
                         type: 'verse_segment',
@@ -665,10 +674,10 @@ export default function TodoPage() {
                         targetId: anchor.id,
                         scheduler: shouldResetAllForComplete ? createNewFSRSState() : existingNode.scheduler,
                         createdAt: shouldResetAllForComplete ? nowIso : existingNode.createdAt,
-                    } as MemoryNode);
+                    } as MemoryNode;
                 }
 
-                return saveNode({
+                return {
                     id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
                     type: 'verse_segment',
                     surahId,
@@ -677,11 +686,13 @@ export default function TodoPage() {
                     targetId: anchor.id,
                     scheduler: createNewFSRSState(),
                     createdAt: nowIso
-                } as MemoryNode);
+                } as MemoryNode;
             });
 
             if (upserts.length > 0) {
-                await Promise.all(upserts);
+                await runInBatches(upserts, 8, async (node) => {
+                    await saveNode(node);
+                });
             }
         }
     };
@@ -692,19 +703,11 @@ export default function TodoPage() {
         // with stale card payloads during drag/drop completion transitions.
         const persisted = mindmaps[surahId];
         const existing = persisted || currentMindmap || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const tldrawSnapshot = existing.tldrawSnapshot || currentMindmap?.tldrawSnapshot;
-
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
 
-        const updated = {
-            ...existing,
-            imageUrl: undefined, // Clear images to save storage
-            imageUrlDark: undefined,
-            tldrawSnapshot,
+        await saveMindMap(surahId, {
             isComplete: isNowComplete
-        };
-
-        await saveMindMap(surahId, updated);
+        }, { mergeExisting: false });
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {
@@ -791,11 +794,7 @@ export default function TodoPage() {
             if (type === 'surah') {
                 const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
                 const updated = {
-                    ...existing,
-                    surahId: id, // Ensure ID matches
                     anchors: importedAnchors.length > 0 ? importedAnchors : (existing.anchors || []),
-                    imageUrl: undefined,
-                    imageUrlDark: undefined,
                     tldrawSnapshot: data,
                     // Importing a premade map should not change kanban completion state.
                     isComplete: !!existing.isComplete,
@@ -804,15 +803,11 @@ export default function TodoPage() {
                     premadeImportedAt: new Date().toISOString(),
                     premadeEdited: false
                 };
-                await saveMindMap(id, updated);
+                await saveMindMap(id, updated, { mergeExisting: false });
             } else {
                 const pId = id as QuranPart;
                 const existing = partMindmapsMap[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
                 const updated = {
-                    ...existing,
-                    partId: pId,
-                    imageUrl: undefined,
-                    imageUrlDark: undefined,
                     tldrawSnapshot: data,
                     // Importing a premade map should not change kanban completion state.
                     isComplete: !!existing.isComplete,
@@ -821,7 +816,7 @@ export default function TodoPage() {
                     premadeImportedAt: new Date().toISOString(),
                     premadeEdited: false
                 };
-                await savePartMindMap(pId, updated);
+                await savePartMindMap(pId, updated, { mergeExisting: false });
             }
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
             if (!options?.silent) {
@@ -896,14 +891,17 @@ export default function TodoPage() {
         });
         if (matching.length === 0) return;
 
-        await Promise.all(matching.map(node => saveNode({
-            ...node,
-            scheduler: createNewFSRSState(),
-            createdAt: new Date().toISOString()
-        })));
+        const resetAt = new Date().toISOString();
+        await runInBatches(matching, 8, async (node) => {
+            await saveNode({
+                ...node,
+                scheduler: createNewFSRSState(),
+                createdAt: resetAt
+            });
+        });
 
         appLogger.addLog(`Reset memory nodes for ${type} ${id} mindmap`, 'info');
-    }, [nodes, saveNode]);
+    }, [nodes, runInBatches, saveNode]);
 
     const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => {
         await handleImportPremade(type, id);
@@ -984,7 +982,9 @@ export default function TodoPage() {
         const existing = partMindmapsMap[part] || { partId: part, imageUrl: null, description: '', isComplete: false };
         const isNowComplete = forceState !== undefined ? forceState : !existing.isComplete;
         const updated = { ...existing, isComplete: isNowComplete };
-        await savePartMindMap(part, updated);
+        await savePartMindMap(part, {
+            isComplete: isNowComplete
+        }, { mergeExisting: false });
 
         // If marking as complete, ensure a MemoryNode exists for scheduling
         if (isNowComplete) {

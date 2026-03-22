@@ -3,7 +3,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useContext, startTransition } from 'react';
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
@@ -38,17 +38,19 @@ import {
 
 import dynamic from 'next/dynamic';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
+import {
+    useSharedInstantListeningProgress,
+    useSharedInstantMindMaps,
+    useSharedInstantMutashabihat,
+    useSharedInstantNodes,
+    useSharedInstantReviewErrors,
+    useSharedInstantSettings,
+} from '@/components/InstantDataProvider';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
-    useInstantSettings,
-    useInstantNodes,
     useInstantReviewLogs,
-    useInstantReviewErrors,
-    useInstantMindMaps,
     useInstantOptimization,
     useInstantListeningStats,
-    useInstantListeningProgress,
-    useInstantMutashabihat,
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
@@ -62,7 +64,17 @@ import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
-const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), {
+    ssr: false,
+    loading: () => (
+        <div
+            className="review-mindmap-viewer"
+            style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+            <Spinner text="Loading mindmap viewer..." />
+        </div>
+    )
+});
 const AudioPlayer = dynamic(() => import('@/components/AudioPlayer'), { ssr: false });
 
 const stableNodeId = (...parts: Array<string | number>) =>
@@ -104,15 +116,65 @@ const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
 };
 
 
-function splitIntoChunks(text: string | undefined | null, wordsPerChunk: number = 3): string[] {
-    const normalized = typeof text === 'string' ? text : '';
-    const words = normalized.split(/\s+/).filter(Boolean);
-    if (words.length <= wordsPerChunk + 2) return [normalized];
-    const chunks: string[] = [];
-    for (let i = 0; i < words.length; i += wordsPerChunk) {
-        chunks.push(words.slice(i, i + wordsPerChunk).join(' '));
+const CONTEXTUAL_BREAK_SUFFIXES = ['ۘ', 'ۙ', 'ۚ', 'ۖ', 'ۗ', 'ۛ', 'ۜ', '۝'] as const;
+const CONTEXTUAL_BREAK_TOKENS = new Set<string>([
+    ...CONTEXTUAL_BREAK_SUFFIXES,
+    'ج',
+    'قلى',
+    'صلى',
+    'م',
+    'لا',
+]);
+const MAX_REVEAL_WORDS = 10;
+
+function splitLongSegment(tokens: string[], maxWords: number): string[][] {
+    if (tokens.length <= maxWords) return [tokens];
+
+    const midpoint = Math.ceil(tokens.length / 2);
+    return [
+        ...splitLongSegment(tokens.slice(0, midpoint), maxWords),
+        ...splitLongSegment(tokens.slice(midpoint), maxWords),
+    ];
+}
+
+function splitIntoChunks(text: string | undefined | null): string[] {
+    const normalized = typeof text === 'string' ? text.trim() : '';
+    if (!normalized) return [];
+
+    const rawTokens = normalized.split(/\s+/).filter(Boolean);
+    const tokens: string[] = [];
+
+    for (const rawToken of rawTokens) {
+        if (tokens.length > 0 && CONTEXTUAL_BREAK_TOKENS.has(rawToken)) {
+            tokens[tokens.length - 1] = `${tokens[tokens.length - 1]}${rawToken}`;
+            continue;
+        }
+
+        tokens.push(rawToken);
     }
-    return chunks;
+
+    if (tokens.length === 0) return [];
+
+    const primarySegments: string[][] = [];
+    let currentSegment: string[] = [];
+
+    for (const token of tokens) {
+        currentSegment.push(token);
+
+        if (CONTEXTUAL_BREAK_SUFFIXES.some(mark => token.endsWith(mark))) {
+            primarySegments.push(currentSegment);
+            currentSegment = [];
+        }
+    }
+
+    if (currentSegment.length > 0) {
+        primarySegments.push(currentSegment);
+    }
+
+    return primarySegments
+        .flatMap(segment => splitLongSegment(segment, MAX_REVEAL_WORDS))
+        .map(segment => segment.join(' '))
+        .filter(Boolean);
 }
 
 type DailyPortionSurahGroup = {
@@ -154,15 +216,43 @@ function getLocalDayKeyNow() {
     return `${y}-${m}-${d}`;
 }
 
+function TodayPageLoadingShell({ text }: { text: string }) {
+    return (
+        <div className="content-wrapper tab-content">
+            <div className="today-header">
+                <h1 className="text-2xl font-bold">Today</h1>
+            </div>
+            <div className="today-grid" aria-busy="true">
+                <div className="card today-card today-card--review">
+                    <div
+                        className="today-card-content"
+                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Spinner size={30} text={text} />
+                    </div>
+                </div>
+                <div className="card today-card">
+                    <div
+                        className="today-card-content"
+                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Spinner size={24} text="Warming daily portion..." />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function TodayPage() {
-    const { settings, saveSettings, isLoading: settingsLoading } = useInstantSettings();
-    const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useInstantNodes();
+    const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
-    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useInstantReviewErrors();
-    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useInstantMindMaps();
-    const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useInstantMutashabihat();
+    const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
+    const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
-    const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useInstantListeningProgress();
+    const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useSharedInstantListeningProgress();
     const isOnline = useContext(OnlineStatusContext);
 
     const [allVerses, setAllVerses] = useState<Verse[]>([]);
@@ -175,7 +265,10 @@ export default function TodayPage() {
     const [highlightedWordIndex, setHighlightedWordIndex] = useState<number>(-1);
     const [isVersesLoaded, setIsVersesLoaded] = useState(false);
     const [listeningComplete, setListeningComplete] = useState(false);
-    const [readOnlyMode, setReadOnlyMode] = useState(true);
+    const [readOnlyMode, setReadOnlyMode] = useState(() => {
+        if (!isOnline) return true;
+        return (settings?.dailyPortionMode ?? 'audio') === 'reading';
+    });
     const [isPersistingReviewAction, setIsPersistingReviewAction] = useState(false);
     const [isPersistingDailyComplete, setIsPersistingDailyComplete] = useState(false);
     const [isApplyingHistoryAction, setIsApplyingHistoryAction] = useState(false);
@@ -185,6 +278,7 @@ export default function TodayPage() {
         settings?.todayDefaultMode === 'review' ? 'review' : 'daily'
     );
     const lastPortionKeyRef = useRef<string>('');
+    const wordElementRefs = useRef<Array<HTMLSpanElement | null>>([]);
     const activeNodeBeforeSortChangeRef = useRef<string | null>(null);
     const previousReviewSortOrderRef = useRef<ReviewSortOrder>(normalizeReviewSortOrder(settings?.reviewSortOrder));
     const didRestoreActiveNodeRef = useRef(false);
@@ -195,6 +289,7 @@ export default function TodayPage() {
     const [pendingAutoCreateJobs, setPendingAutoCreateJobs] = useState(0);
     const [hasResolvedInitialReviewSelection, setHasResolvedInitialReviewSelection] = useState(false);
     const [hasHydratedReviewQueue, setHasHydratedReviewQueue] = useState(false);
+    const [isMindmapRevealPending, setIsMindmapRevealPending] = useState(false);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -231,6 +326,15 @@ export default function TodayPage() {
         return deriveSuspendedVerseGroupKeys(reviewErrors, 3, settings?.suspendedVerseGroupsAcknowledged);
     }, [reviewErrors, settings?.suspendedVerseGroupsAcknowledged]);
     const reviewSortOrder = useMemo(() => normalizeReviewSortOrder(settings?.reviewSortOrder), [settings?.reviewSortOrder]);
+    const currentDailyVerse = todaysPortion[currentVerseIndex] ?? null;
+    const dailyPreviewWords = useMemo(() => {
+        return (currentDailyVerse?.text ?? '').split(' ').filter(Boolean);
+    }, [currentDailyVerse?.text]);
+    const handleAudioWordIndexChange = useCallback((index: number) => {
+        startTransition(() => {
+            setHighlightedWordIndex(index);
+        });
+    }, []);
 
     // Order due nodes to keep mindmap + full-surah verses adjacent by surah
     const orderedDueNodes = useMemo(() => {
@@ -490,7 +594,7 @@ export default function TodayPage() {
 
     useEffect(() => {
         if (highlightedWordIndex !== -1 && verseContainerRef.current) {
-            const wordEl = document.getElementById(`word-${highlightedWordIndex}`);
+            const wordEl = wordElementRefs.current[highlightedWordIndex];
             if (wordEl) {
                 const container = verseContainerRef.current;
                 const containerRect = container.getBoundingClientRect();
@@ -504,7 +608,7 @@ export default function TodayPage() {
                 }
             }
         }
-    }, [highlightedWordIndex, smoothScrollContainer]);
+    }, [currentVerseIndex, highlightedWordIndex, smoothScrollContainer]);
 
     useEffect(() => {
         const defaultMode = settings?.dailyPortionMode ?? 'audio';
@@ -898,9 +1002,13 @@ export default function TodayPage() {
         }
         lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
-        setToasts(prev => [...prev, { id, type, message, info }]);
+        startTransition(() => {
+            setToasts(prev => [...prev, { id, type, message, info }].slice(-3));
+        });
         setTimeout(() => {
-            setToasts(prev => prev.filter(t => t.id !== id));
+            startTransition(() => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            });
         }, 6000);
     }, []);
 
@@ -1262,7 +1370,7 @@ export default function TodayPage() {
 
         addToast(toastType, toastMessage, info);
         queueReviewAdvance(node.id, currentReviewIndex);
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure, queueReviewAdvance]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure, findAnchorForRange, pushUndoEntry, queueReviewAdvance]);
 
     const handlePostpone = useCallback(async () => {
         if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
@@ -1318,7 +1426,7 @@ export default function TodayPage() {
         queueReviewAdvance(node.id, currentReviewIndex);
         reviewActionLockRef.current = false;
         setIsPersistingReviewAction(false);
-    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction, queueReviewAdvance]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, updateInstantNode, isPersistingReviewAction, isApplyingHistoryAction, pushUndoEntry, queueReviewAdvance]);
 
     const handleUndo = useCallback(async (source: 'toast' | 'keyboard', toastId?: string) => {
         if (historyActionLockRef.current || reviewActionLockRef.current || isApplyingHistoryAction) return;
@@ -1543,8 +1651,28 @@ export default function TodayPage() {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [handleUndo, handleRedo]);
 
-    // Get content
-    const getCurrentReviewContent = () => {
+    const versesBySurah = useMemo(() => {
+        const map = new Map<number, Verse[]>();
+        allVerses.forEach((verse) => {
+            const existing = map.get(verse.surahId);
+            if (existing) {
+                existing.push(verse);
+                return;
+            }
+            map.set(verse.surahId, [verse]);
+        });
+        return map;
+    }, [allVerses]);
+
+    const verseLookupBySurahAyah = useMemo(() => {
+        const map = new Map<string, Verse>();
+        allVerses.forEach((verse) => {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        });
+        return map;
+    }, [allVerses]);
+
+    const activeContent = useMemo(() => {
         if (orderedDueNodes.length === 0 || currentReviewIndex >= orderedDueNodes.length) return null;
         const node = orderedDueNodes[currentReviewIndex];
 
@@ -1552,51 +1680,46 @@ export default function TodayPage() {
             const partId = resolveNodePartId(node);
             if (partId === null) return null;
             const pm = partMindMaps.find(m => Number(m.partId) === partId);
-            return { type: 'part_mindmap', partId, mindmap: pm };
-        } else if (node.type === 'mindmap') {
+            return { type: 'part_mindmap', partId, mindmap: pm } as const;
+        }
+
+        if (node.type === 'mindmap') {
             const surahId = resolveNodeSurahId(node);
             if (!surahId) return null;
-            const s = getSurah(surahId);
-            const m = mindmaps.find(mm => Number(mm.surahId) === surahId);
-
-            // For mindmap reviews, include verses from anchors for gradual revelation
+            const surah = getSurah(surahId);
+            const mindmap = mindmaps.find(mm => Number(mm.surahId) === surahId);
             const verses: Verse[] = [];
-            if (m?.anchors?.length) {
-                // Get all verses from all anchors
-                m.anchors.forEach(anchor => {
+            if (mindmap?.anchors?.length) {
+                mindmap.anchors.forEach(anchor => {
                     for (let ayahId = anchor.startVerse; ayahId <= anchor.endVerse; ayahId++) {
-                        const verse = allVerses.find(v => v.surahId === anchor.surahId && v.ayahId === ayahId);
+                        const verse = verseLookupBySurahAyah.get(`${anchor.surahId}:${ayahId}`);
                         if (verse) verses.push(verse);
                     }
                 });
             }
-
-            return { type: 'mindmap', surah: s, mindmap: m, verses };
-        } else {
-            const surahId = resolveNodeSurahId(node);
-            if (!surahId) return null;
-            const s = getSurah(surahId);
-            const vs = allVerses.filter(v => v.surahId === surahId && v.ayahId >= (node.startVerse || 1) && v.ayahId <= (node.endVerse || 999));
-
-            // Context with mutashabihat-aware expansion
-            const contextVerses: Verse[] = [];
-            const start = node.startVerse || 1;
-            let lookback = 1;
-            while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, start - lookback + 1)))) {
-                const candidate = allVerses.find(v => v.surahId === surahId && v.ayahId === start - lookback);
-                if (!candidate) break;
-                contextVerses.unshift(candidate);
-                const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
-                if (!hasMutashabihForAbsolute(abs) && contextVerses.length >= 2) break;
-                lookback++;
-            }
-
-            return { type: 'verse', surah: s, verses: vs, contextVerses };
+            return { type: 'mindmap', surah, mindmap, verses } as const;
         }
-    };
 
-    const reviewContent = getCurrentReviewContent();
-    const activeContent = reviewContent;
+        const surahId = resolveNodeSurahId(node);
+        if (!surahId) return null;
+        const surah = getSurah(surahId);
+        const surahVerses = versesBySurah.get(surahId) || [];
+        const startVerse = node.startVerse || 1;
+        const endVerse = node.endVerse || 999;
+        const verses = surahVerses.filter(v => v.ayahId >= startVerse && v.ayahId <= endVerse);
+        const contextVerses: Verse[] = [];
+        let lookback = 1;
+        while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, startVerse - lookback + 1)))) {
+            const candidate = verseLookupBySurahAyah.get(`${surahId}:${startVerse - lookback}`);
+            if (!candidate) break;
+            contextVerses.unshift(candidate);
+            const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
+            if (!hasMutashabihForAbsolute(abs) && contextVerses.length >= 2) break;
+            lookback++;
+        }
+
+        return { type: 'verse', surah, verses, contextVerses } as const;
+    }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah]);
 
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;
@@ -1626,9 +1749,17 @@ export default function TodayPage() {
             : -1;
     const nextRevealChunkIndex = hasCurrentVerseNextChunk ? revealedChunks : 0;
 
+    const handleRevealMindmap = useCallback(() => {
+        setShowGrading(true);
+        setIsMindmapRevealPending(true);
+        requestAnimationFrame(() => {
+            setIsMindmapRevealPending(false);
+        });
+    }, []);
+
     const handleRevealNext = useCallback(() => {
         if (activeContent && (activeContent.type === 'mindmap' || activeContent.type === 'part_mindmap')) {
-            setShowGrading(true);
+            handleRevealMindmap();
             return;
         }
         if (revealedChunks < totalChunks) {
@@ -1637,7 +1768,25 @@ export default function TodayPage() {
             setCurrentVerseInReview(prev => prev + 1);
             setRevealedChunks(1); // One click moves and reveals first chunk
         }
-    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent]);
+    }, [revealedChunks, totalChunks, currentVerseInReview, totalVerses, activeContent, handleRevealMindmap]);
+
+    const activeContentPreloadKey = useMemo(() => {
+        if (!activeContent || (activeContent.type !== 'mindmap' && activeContent.type !== 'part_mindmap')) {
+            return null;
+        }
+        return activeContent.type === 'mindmap' ? `mindmap-${activeContent?.surah?.id}` : `part-${activeContent?.partId}`;
+    }, [activeContent]);
+
+    useEffect(() => {
+        if (!activeContentPreloadKey) return;
+        void import('@/components/MindmapViewer');
+    }, [activeContentPreloadKey]);
+
+    useEffect(() => {
+        if (!showGrading) {
+            setIsMindmapRevealPending(false);
+        }
+    }, [showGrading, currentReviewIndex]);
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -1835,9 +1984,8 @@ export default function TodayPage() {
 
         const mm = mindmaps.find(m => Number((m as any).surahId) === Number(surahId));
         if (mm) {
-            const updated = { ...mm, isComplete: false };
             try {
-                await saveMindMap(surahId, updated);
+                await saveMindMap(surahId, { isComplete: false }, { mergeExisting: false });
                 await moveMindmapToInProgress(`surah-${surahId}`);
             } catch (err) {
                 console.error('Failed to mark mindmap incomplete', err);
@@ -1856,9 +2004,8 @@ export default function TodayPage() {
 
         const mm = partMindMaps.find(m => Number((m as any).partId) === Number(partId));
         if (mm) {
-            const updated = { ...mm, isComplete: false };
             try {
-                await savePartMindMap(partId, updated);
+                await savePartMindMap(partId, { isComplete: false }, { mergeExisting: false });
                 await moveMindmapToInProgress(`part-${partId}`);
             } catch (err) {
                 console.error('Failed to mark part mindmap incomplete', err);
@@ -1932,7 +2079,10 @@ export default function TodayPage() {
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
     const isReviewQueueHydrating = !hasHydratedReviewQueue;
 
-    if (!isLoaded) return <FullScreenLoader text="Loading today..." />;
+    if (!isLoaded) {
+        const loadingText = isVersesLoaded ? 'Preparing today...' : 'Loading Quran text...';
+        return <TodayPageLoadingShell text={loadingText} />;
+    }
 
     return (
         <div className="content-wrapper tab-content">
@@ -2115,6 +2265,10 @@ export default function TodayPage() {
                                                             <EyeOff size={24} />
                                                             <p>Mindmap hidden</p>
                                                         </div>
+                                                    ) : isMindmapRevealPending ? (
+                                                        <div className="review-mindmap-viewer" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Spinner text="Loading mindmap..." />
+                                                        </div>
                                                     ) : (
                                                         <>
                                                             {(() => {
@@ -2217,7 +2371,7 @@ export default function TodayPage() {
                                     )}
                                     {(activeContent.type === 'part_mindmap' || activeContent.type === 'mindmap') && (
                                         !showGrading ? (
-                                            <button className="btn btn-primary btn-full std-normal-btn" onClick={() => setShowGrading(true)}>
+                                            <button className="btn btn-primary btn-full std-normal-btn" onClick={handleRevealMindmap}>
                                                 Reveal Mindmap
                                             </button>
                                         ) : (
@@ -2327,9 +2481,9 @@ export default function TodayPage() {
                                                     <AudioPlayer
                                                         verses={todaysPortion}
                                                         currentVerseIndex={currentVerseIndex}
-                                                        currentVerseWordCount={todaysPortion[currentVerseIndex]?.text?.split(' ').length || 0}
+                                                        currentVerseWordCount={dailyPreviewWords.length}
                                                         onVerseChange={setCurrentVerseIndex}
-                                                        onWordIndexChange={setHighlightedWordIndex}
+                                                        onWordIndexChange={handleAudioWordIndexChange}
                                                     />
                                                 </div>
 
@@ -2344,14 +2498,14 @@ export default function TodayPage() {
                                                         minHeight: 0
                                                     }}
                                                 >
-                                                    {todaysPortion[currentVerseIndex] && (
+                                                    {currentDailyVerse && (
                                                         <>
-                                                            <div className="verse-ref">
-                                                                {getSurah(todaysPortion[currentVerseIndex].surahId)?.arabicName} : {todaysPortion[currentVerseIndex].ayahId}
+                                                            <div className="verse-ref font-arabic">
+                                                                {getSurah(currentDailyVerse.surahId)?.arabicName} : {currentDailyVerse.ayahId}
                                                             </div>
-                                                            {todaysPortion[currentVerseIndex].ayahId === 1 ? (
-                                                                todaysPortion[currentVerseIndex].surahId !== 1 &&
-                                                                todaysPortion[currentVerseIndex].surahId !== 9 && (
+                                                            {currentDailyVerse.ayahId === 1 ? (
+                                                                currentDailyVerse.surahId !== 1 &&
+                                                                currentDailyVerse.surahId !== 9 && (
                                                                     <div className="arabic-text" style={{ fontSize: '1.1rem', opacity: 0.8, marginBottom: '0.5rem', textAlign: 'center' }}>
                                                                         بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                                                                     </div>
@@ -2364,10 +2518,12 @@ export default function TodayPage() {
                                                                 )
                                                             )}
                                                             <div className="arabic-text">
-                                                                {(todaysPortion[currentVerseIndex]?.text ?? '').split(' ').filter(Boolean).map((word, i) => (
+                                                                {dailyPreviewWords.map((word, i) => (
                                                                     <span
                                                                         key={i}
-                                                                        id={`word-${i}`}
+                                                                        ref={(element) => {
+                                                                            wordElementRefs.current[i] = element;
+                                                                        }}
                                                                         className={`audio-word ${i === highlightedWordIndex ? 'audio-word--active' : ''}`}
                                                                     >
                                                                         {word} {' '}
@@ -2390,7 +2546,7 @@ export default function TodayPage() {
                                                             <div key={`${group.surahId}-${groupIndex}`}>
                                                                 {surah && (
                                                                     <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                                                                        <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                        <h3 className="font-arabic" style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
                                                                         {firstVerse.ayahId === 1 ? (
                                                                             surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
                                                                         ) : (
@@ -2434,7 +2590,7 @@ export default function TodayPage() {
                                                             <div key={idx}>
                                                                 {isNewSurah && surah && (
                                                                     <div className="surah-header-transition" style={{ textAlign: 'center', padding: '1rem 0', margin: '1rem 0', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                                                                        <h3 style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
+                                                                        <h3 className="font-arabic" style={{ fontSize: '1.2rem', marginBottom: 4 }}>{surah.arabicName}</h3>
                                                                         {v.ayahId === 1 ? (
                                                                             surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
                                                                         ) : (

@@ -1,5 +1,6 @@
 
 import { Verse } from './types';
+import { clientEnv } from './env/client';
 
 export interface Reciter {
     id: string;
@@ -21,6 +22,8 @@ export interface AyahRecitationData {
     segments?: number[][];
 }
 
+const AUDIO_PLAYER_RECITER_MODE = clientEnv.NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE;
+
 const ALLOWED_RECITERS: Reciter[] = [
     {
         id: 'ayah-recitation-abdul-basit-abdul-samad-mujawwad-hafs-949',
@@ -41,6 +44,13 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Abdul Rahman Al Sudais Murattal',
         type: 'surah-based',
         relativePath: '/recitations/surah-recitation-abdul-rahman-al-sudais',
+        hasSegments: true
+    },
+    {
+        id: 'ayah-recitation-abdur-rahman-as-sudais-recitation',
+        name: 'Abdur Rahman As Sudais',
+        type: 'ayah-based',
+        relativePath: '/recitations/ayah-recitation-abdur-rahman-as-sudais-recitation.json',
         hasSegments: true
     },
     {
@@ -100,17 +110,10 @@ const ALLOWED_RECITERS: Reciter[] = [
         hasSegments: true
     },
     {
-        id: 'ayah-recitation-mahmoud-khalil-al-husary-mujawwad-hafs-956',
-        name: 'Mahmoud Khalil Al Husary Mujawwad',
-        type: 'ayah-based',
-        relativePath: '/recitations/ayah-recitation-mahmoud-khalil-al-husary-mujawwad-hafs-956.json',
-        hasSegments: true
-    },
-    {
-        id: 'ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-955',
+        id: 'ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957',
         name: 'Mahmoud Khalil Al Husary Murattal',
-        type: 'surah-based',
-        relativePath: '/recitations/surah-recitation-mahmoud-husary-murattal',
+        type: 'ayah-based',
+        relativePath: '/recitations/ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957.json',
         hasSegments: true
     },
     {
@@ -175,6 +178,13 @@ const ALLOWED_RECITERS: Reciter[] = [
 const recitationCache: Record<string, any> = {};
 
 export async function getReciters(): Promise<Reciter[]> {
+    return ALLOWED_RECITERS;
+}
+
+export async function getAudioPlayerReciters(): Promise<Reciter[]> {
+    if (AUDIO_PLAYER_RECITER_MODE === 'ayah-only') {
+        return ALLOWED_RECITERS.filter((reciter) => reciter.type === 'ayah-based');
+    }
     return ALLOWED_RECITERS;
 }
 
@@ -290,9 +300,27 @@ export function getAudioInfoForVerse(
 
         const getTimingStart = (candidate: any): number | null => {
             const timestampFrom = toFiniteNumber(candidate?.timestamp_from);
-            if (timestampFrom !== null) return timestampFrom;
             const segmentBounds = getSegmentBounds(candidate?.segments);
-            return segmentBounds?.start ?? null;
+            const segmentStart = segmentBounds?.start ?? null;
+
+            if (timestampFrom === null) return segmentStart;
+            if (segmentStart === null) return timestampFrom;
+
+            const delta = segmentStart - timestampFrom;
+
+            // Some reciters have slightly late `timestamp_from` values that clip
+            // the opening, while others include a short lead-in before speech.
+            // Prefer the first segment when the difference is plausible, but
+            // ignore extreme outliers from noisy segment imports.
+            if (delta < 0 && Math.abs(delta) <= 1500) {
+                return segmentStart;
+            }
+
+            if (delta > 200 && delta <= 2500) {
+                return segmentStart;
+            }
+
+            return timestampFrom;
         };
 
         const getTimingEnd = (candidate: any): number | null => {

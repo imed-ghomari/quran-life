@@ -8,7 +8,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
-import { Mail, ArrowRight, Loader2, Lock, Hash } from 'lucide-react';
+import { Mail, ArrowRight, Lock, Hash } from 'lucide-react';
 
 // Import Suspense for handling asynchronous components
 import { Suspense } from 'react';
@@ -423,7 +423,7 @@ function AuthContent() {
                             }}
                         >
                             {authLoading ? (
-                                <Loader2 size={20} className="animate-spin" />
+                                <Spinner size={18} color="currentColor" />
                             ) : (
                                 <>
                                     {authStep === 'email' ? 'Send Magic Link' : 'Verify Code'}

@@ -1,3 +1,3 @@
-1-10 | Verses 1-10
-11-18 | Verses 11-18
-19-20 | Verses 19-20
+1-9 | Verses 1-10
+10-19 | Verses 11-18
+20-20 | Verses 19-20

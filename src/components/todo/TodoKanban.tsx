@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import { DragDropContext, DropResult, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useCustomTouchSensor } from '@/lib/dnd/useCustomTouchSensor';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -130,6 +130,22 @@ const getSuspendedIdentitySignature = (item: {
     return `${surahId}-${startVerse}-${endVerse}`;
 };
 
+const isMutashabihatDecisionResolved = (decision: any) => {
+    if (!decision) return false;
+    return decision.status === 'ignored' || decision.status === 'solved_mindmap' || decision.status === 'solved_note' || !!decision.confirmedAt;
+};
+
+const scheduleAfterNextPaint = (callback: () => void) => {
+    if (typeof window === 'undefined') {
+        callback();
+        return;
+    }
+
+    window.requestAnimationFrame(() => {
+        window.setTimeout(callback, 0);
+    });
+};
+
 export default function TodoKanban({
     suspendedAnchors,
     similarityGroups,
@@ -231,10 +247,14 @@ export default function TodoKanban({
         }
         lastToastRef.current = { key, at: now };
         const id = Math.random().toString(36).substring(2, 9);
-        setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }]);
+        startTransition(() => {
+            setToasts(prev => [...prev, { id, type, message, info, onUndo, onExpire }].slice(-3));
+        });
         setTimeout(() => {
             if (onExpire) onExpire();
-            setToasts(prev => prev.filter(t => t.id !== id));
+            startTransition(() => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            });
         }, 6000);
         return id;
     }, []);
@@ -386,6 +406,13 @@ export default function TodoKanban({
     // Auto-scroll refs
     const containerRef = useRef<HTMLDivElement>(null);
     const columnsRef = useRef(columns);
+    const verseLookupBySurahAyah = useMemo(() => {
+        const map = new Map<string, any>();
+        verses.forEach((verse: any) => {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        });
+        return map;
+    }, [verses]);
     // Removed custom scroll refs as per request
 
     useEffect(() => {
@@ -609,11 +636,6 @@ export default function TodoKanban({
                 itemIds.forEach(itemId => {
                     const item = itemMap.get(itemId);
                     if (item) {
-                        // Suspended cards that become active again should not stay pinned in Complete.
-                        // They re-enter as actionable work in Backlog.
-                        if (colId === 'complete' && item.type === 'suspended') {
-                            return;
-                        }
                         newCols[colId].push(item);
                         processedIds.add(itemId);
                     }
@@ -898,12 +920,8 @@ export default function TodoKanban({
             }
         };
 
-        if (typeof window !== 'undefined') {
-            window.requestAnimationFrame(runPostDropSideEffects);
-        } else {
-            runPostDropSideEffects();
-        }
-    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, persistKanbanState]);
+        scheduleAfterNextPaint(runPostDropSideEffects);
+    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, onKanbanStateChange, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
@@ -1150,7 +1168,7 @@ export default function TodoKanban({
             const targetAbs = phraseAbsRefs.find((abs) => {
                 const key = `${abs}-${phraseId}`;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === key);
-                return existing && existing.status !== 'pending';
+                return isMutashabihatDecisionResolved(existing);
             }) || phraseAbsRefs[0];
             return {
                 phraseId,
@@ -1160,7 +1178,9 @@ export default function TodoKanban({
         });
 
         const firstResolvedTarget = resolutionTargets.find(target =>
-            (mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.status || 'pending') !== 'pending'
+            isMutashabihatDecisionResolved(
+                mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)
+            )
         );
         const primaryTarget = firstResolvedTarget || resolutionTargets[0];
 
@@ -1620,7 +1640,7 @@ export default function TodoKanban({
                     .slice(0, 3);
                 const mistakeAyahIds = new Set<number>(mistakeEntries.map((entry: any) => entry.ayahId));
                 const mistakeCountByAyah = new Map<number, number>(mistakeEntries.map((entry: any) => [entry.ayahId, entry.count]));
-                const getVerseText = (ayahId: number) => verses.find((v: any) => v.surahId === surahId && v.ayahId === ayahId)?.text || '';
+                const getVerseText = (ayahId: number) => verseLookupBySurahAyah.get(`${surahId}:${ayahId}`)?.text || '';
                 const mergedContextRanges = (() => {
                     const rawRanges = mistakeEntries
                         .map((entry: any) => ({
@@ -1645,7 +1665,7 @@ export default function TodoKanban({
                     const highlight = mistakeAyahIds.has(ayahId);
                     const count = mistakeCountByAyah.get(ayahId) || 1;
                     return (
-                        <div key={`${ayahId}-${count}`} className="verse-context-verse bg-[var(--background-secondary)] p-5 rounded-lg">
+                        <div key={`${ayahId}-${count}`} className="verse-context-verse todo-context-row bg-[var(--background-secondary)] p-5 rounded-lg">
                             <div className="verse-context-label text-xs text-[var(--foreground-secondary)] mb-2">
                                 {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
                             </div>
@@ -1665,8 +1685,8 @@ export default function TodoKanban({
                 };
 
                 const contextStackClassName = (isMobile || isTablet)
-                    ? 'verse-context-stack pr-1 space-y-4'
-                    : 'verse-context-stack max-h-[52vh] overflow-y-auto pr-1 space-y-4';
+                    ? 'verse-context-stack todo-context-scroll pr-1 space-y-4'
+                    : 'verse-context-stack todo-context-scroll max-h-[52vh] overflow-y-auto pr-1 space-y-4';
 
                 const content = mistakeEntries.length > 0 ? (
                     <div className={contextStackClassName}>
@@ -1715,7 +1735,7 @@ export default function TodoKanban({
                                         <X size={20} />
                                     </button>
                                 </div>
-                                <div className="slide-over-body verse-context-content">
+                                <div className="slide-over-body verse-context-content todo-context-scroll">
                                     {content}
                                 </div>
                             </div>
@@ -1736,7 +1756,7 @@ export default function TodoKanban({
                                     <X size={18} />
                                 </button>
                             </div>
-                            <div className="verse-context-content px-8 py-7 space-y-5 overflow-y-auto max-h-[calc(85vh-70px)]">
+                            <div className="verse-context-content todo-context-scroll px-8 py-7 space-y-5 overflow-y-auto max-h-[calc(85vh-70px)]">
                                 <div className="rounded-xl border border-[var(--border)] bg-[var(--background-secondary)]/60 px-4 py-3 text-sm text-[var(--foreground-secondary)]">
                                     {issue.label || 'Verse group'} • {Math.max(0, Number(issue.mistakeCount) || 0)} total errors in this group
                                 </div>
@@ -1751,12 +1771,15 @@ export default function TodoKanban({
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
                 const { decisionKey, group, surah } = activeSimilarityContext;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
+                const existingStatus = existing.status === 'pending' && !!existing.confirmedAt
+                    ? 'solved_note'
+                    : existing.status;
                 const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
                 const isConfirmed = group.resolutionTargets.some(target => !!mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)?.confirmedAt);
                 const sortedAbsRefs = [...group.absRefs].sort((a, b) => a - b);
                 const sourceEntries = sortedAbsRefs.map(absRef => {
                     const ref = absoluteToSurahAyah(absRef);
-                    const baseVerse = verses.find(v => v.surahId === ref.surahId && v.ayahId === ref.ayahId);
+                    const baseVerse = verseLookupBySurahAyah.get(`${ref.surahId}:${ref.ayahId}`);
                     const mutEntry = group.entries.find((entry: any) =>
                         entry?.meta?.sourceAbs === absRef || (entry?.matches || []).includes(absRef)
                     );
@@ -1794,7 +1817,7 @@ export default function TodoKanban({
                             <div style={{ flex: 1, minWidth: '140px' }}>
                                 <label style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
                                 <select
-                                    value={existing.status}
+                                    value={existingStatus}
                                     onChange={e => applyDecisionToGroup(targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
                                     className="maturity-select"
                                     style={{ width: '100%', padding: '8px' }}
@@ -1831,7 +1854,7 @@ export default function TodoKanban({
                                 {sourceEntries.map(({ absRef, ref, baseVerse, mutEntry }) => {
                                     const displayedAbs = contextVerseCursor[absRef] ?? absRef;
                                     const displayedRef = absoluteToSurahAyah(displayedAbs);
-                                    const displayedVerse = verses.find(v => v.surahId === displayedRef.surahId && v.ayahId === displayedRef.ayahId);
+                                    const displayedVerse = verseLookupBySurahAyah.get(`${displayedRef.surahId}:${displayedRef.ayahId}`);
                                     const sourceRange = mutEntry?.meta?.sourceRange;
                                     const isSource = mutEntry?.meta?.sourceAbs === displayedAbs;
                                     const matchRange = isSource
@@ -1839,7 +1862,7 @@ export default function TodoKanban({
                                         : matchRangeByAbs.get(displayedAbs);
 
                                     return (
-                                        <div key={absRef} className="mut-text mut-detail-source" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
+                                        <div key={absRef} className="mut-text mut-detail-source todo-context-row" style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
                                             <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
                                                 {getSurah(displayedRef.surahId)?.name} - {displayedRef.ayahId}
                                             </div>
@@ -1918,11 +1941,11 @@ export default function TodoKanban({
                                                         const displayedMatchAbs = contextVerseCursor[matchAbs] ?? matchAbs;
                                                         const mref = absoluteToSurahAyah(displayedMatchAbs);
                                                         const msurah = getSurah(mref.surahId);
-                                                        const mVerse = verses.find(v => v.surahId === mref.surahId && v.ayahId === mref.ayahId);
+                                                        const mVerse = verseLookupBySurahAyah.get(`${mref.surahId}:${mref.ayahId}`);
                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
                                                         return (
-                                                            <div key={idx} className="mut-match-item mut-compare-card" style={{ marginBottom: '0.85rem' }}>
+                                                            <div key={idx} className="mut-match-item mut-compare-card todo-context-row" style={{ marginBottom: '0.85rem' }}>
                                                                 <div className="mut-match-label mut-compare-label">
                                                                     Compare: Surah {msurah?.name} - {mref.ayahId}
                                                                 </div>
@@ -2040,7 +2063,7 @@ export default function TodoKanban({
                                         <X size={20} />
                                     </button>
                                 </div>
-                                <div className="slide-over-body similarity-context-content">
+                                <div className="slide-over-body similarity-context-content todo-context-scroll">
                                     {similarityContent}
                                 </div>
                             </div>
@@ -2065,7 +2088,7 @@ export default function TodoKanban({
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="similarity-context-content px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
+                            <div className="similarity-context-content todo-context-scroll px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
                                 {similarityContent}
                             </div>
                         </div>
@@ -2106,7 +2129,7 @@ export default function TodoKanban({
                             color: 'var(--foreground)',
                             minWidth: '180px',
                             fontSize: '0.85rem',
-                            pointerEvents: 'auto',
+                            pointerEvents: 'none',
                             backdropFilter: 'blur(12px)',
                             opacity: 1
                         }}>
@@ -2122,43 +2145,47 @@ export default function TodoKanban({
                                 }}>
                                     {wrapToastText(t.message, 6)}
                                 </span>
-                                {t.onUndo && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', pointerEvents: 'auto' }}>
+                                    {t.onUndo && (
+                                        <button
+                                            onClick={() => {
+                                                t.onUndo?.();
+                                                startTransition(() => {
+                                                    setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                                });
+                                            }}
+                                            style={{
+                                                background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                                border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                                color: 'inherit',
+                                                padding: '0.2rem 0.5rem',
+                                                borderRadius: '4px',
+                                                fontSize: '0.7rem',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Undo
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => {
-                                            t.onUndo?.();
-                                            setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                            startTransition(() => {
+                                                setToasts(prev => prev.filter(toast => toast.id !== t.id));
+                                            });
                                         }}
                                         style={{
-                                            background: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
-                                            border: '1px solid color-mix(in srgb, var(--foreground) 12%, transparent)',
+                                            background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+                                            border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
                                             color: 'inherit',
                                             padding: '0.2rem 0.5rem',
                                             borderRadius: '4px',
                                             fontSize: '0.7rem',
-                                            cursor: 'pointer',
-                                            marginLeft: 'auto'
+                                            cursor: 'pointer'
                                         }}
                                     >
-                                        Undo
+                                        Skip
                                     </button>
-                                )}
-                                <button
-                                    onClick={() => {
-                                        setToasts(prev => prev.filter(toast => toast.id !== t.id));
-                                    }}
-                                    style={{
-                                        background: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
-                                        border: '1px solid color-mix(in srgb, var(--foreground) 10%, transparent)',
-                                        color: 'inherit',
-                                        padding: '0.2rem 0.5rem',
-                                        borderRadius: '4px',
-                                        fontSize: '0.7rem',
-                                        cursor: 'pointer',
-                                        marginLeft: t.onUndo ? 0 : 'auto'
-                                    }}
-                                >
-                                    Skip
-                                </button>
+                                </div>
                             </div>
                             {t.info && (
                                 <div style={{
