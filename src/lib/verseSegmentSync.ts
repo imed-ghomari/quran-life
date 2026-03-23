@@ -22,6 +22,11 @@ type SyncVerseSegmentNodesResult = {
     deleted: number;
 };
 
+type VerseSegmentSyncOperation =
+    | { type: 'delete'; nodeId: string }
+    | { type: 'update'; nodeId: string; payload: MemoryNode }
+    | { type: 'create'; nodeId: string; payload: MemoryNode & { userId: string } };
+
 const getRangeKey = (startVerse: number, endVerse: number) => `${startVerse}-${endVerse}`;
 
 const getVerseSegmentEntityId = (userId: string, surahId: number, startVerse: number, endVerse: number) =>
@@ -31,6 +36,24 @@ const getVerseSegmentEntityId = (userId: string, surahId: number, startVerse: nu
         userId,
         stableEntityId('memory_node', 'verse_segment', surahId, startVerse, endVerse)
     );
+
+const isInstantAlreadyExistingCreateError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return message.includes('Creating entities that exist');
+};
+
+const buildTx = (operation: VerseSegmentSyncOperation, createMode: 'create' | 'update' = 'create') => {
+    if (operation.type === 'delete') {
+        return db.tx.memoryNodes[operation.nodeId].delete();
+    }
+    if (operation.type === 'update') {
+        return db.tx.memoryNodes[operation.nodeId].update(operation.payload as any);
+    }
+    if (createMode === 'update') {
+        return db.tx.memoryNodes[operation.nodeId].update(operation.payload as any);
+    }
+    return db.tx.memoryNodes[operation.nodeId].create(operation.payload as any);
+};
 
 export const syncVerseSegmentNodesForSurah = async ({
     userId,
@@ -43,18 +66,29 @@ export const syncVerseSegmentNodesForSurah = async ({
     nowIso = new Date().toISOString(),
     onProgress,
 }: SyncVerseSegmentNodesInput): Promise<SyncVerseSegmentNodesResult> => {
-    const desiredAnchors = anchors
-        .map((anchor) => ({
-            id: anchor.id || `anchor-${surahId}-${Number(anchor.startVerse)}-${Number(anchor.endVerse)}`,
-            startVerse: Number(anchor.startVerse),
-            endVerse: Number(anchor.endVerse),
-        }))
-        .filter((anchor) =>
-            Number.isFinite(anchor.startVerse) &&
-            Number.isFinite(anchor.endVerse) &&
-            anchor.startVerse > 0 &&
-            anchor.endVerse >= anchor.startVerse
-        );
+    const desiredAnchorsByRange = new Map<string, {
+        id: string;
+        startVerse: number;
+        endVerse: number;
+    }>();
+    anchors.forEach((anchor) => {
+        const startVerse = Number(anchor.startVerse);
+        const endVerse = Number(anchor.endVerse);
+        if (
+            !Number.isFinite(startVerse) ||
+            !Number.isFinite(endVerse) ||
+            startVerse <= 0 ||
+            endVerse < startVerse
+        ) {
+            return;
+        }
+        desiredAnchorsByRange.set(getRangeKey(startVerse, endVerse), {
+            id: anchor.id || `anchor-${surahId}-${startVerse}-${endVerse}`,
+            startVerse,
+            endVerse,
+        });
+    });
+    const desiredAnchors = Array.from(desiredAnchorsByRange.values());
 
     const desiredRangeKeys = new Set(desiredAnchors.map((anchor) => getRangeKey(anchor.startVerse, anchor.endVerse)));
     const existingByRange = new Map<string, MemoryNode>();
@@ -65,7 +99,7 @@ export const syncVerseSegmentNodesForSurah = async ({
         existingByRange.set(getRangeKey(startVerse, endVerse), node);
     });
 
-    const operations: Array<{ tx: any }> = [];
+    const operations: VerseSegmentSyncOperation[] = [];
     let created = 0;
     let updated = 0;
     let deleted = 0;
@@ -75,9 +109,7 @@ export const syncVerseSegmentNodesForSurah = async ({
         const endVerse = Number(node.endVerse);
         if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return;
         if (desiredRangeKeys.has(getRangeKey(startVerse, endVerse))) return;
-        operations.push({
-            tx: db.tx.memoryNodes[String(node.id)].delete(),
-        });
+        operations.push({ type: 'delete', nodeId: String(node.id) });
         deleted += 1;
     });
 
@@ -88,7 +120,9 @@ export const syncVerseSegmentNodesForSurah = async ({
 
             if (existingNode) {
                 operations.push({
-                    tx: db.tx.memoryNodes[String(existingNode.id)].update({
+                    type: 'update',
+                    nodeId: String(existingNode.id),
+                    payload: {
                         ...existingNode,
                         type: 'verse_segment',
                         surahId,
@@ -97,7 +131,7 @@ export const syncVerseSegmentNodesForSurah = async ({
                         targetId: anchor.id,
                         scheduler: shouldResetSchedulers ? createNewFSRSState() : existingNode.scheduler,
                         createdAt: shouldResetSchedulers ? nowIso : existingNode.createdAt,
-                    } as MemoryNode),
+                    } as MemoryNode,
                 });
                 updated += 1;
                 return;
@@ -105,7 +139,9 @@ export const syncVerseSegmentNodesForSurah = async ({
 
             const nodeId = getVerseSegmentEntityId(userId, surahId, anchor.startVerse, anchor.endVerse);
             operations.push({
-                tx: db.tx.memoryNodes[nodeId].create({
+                type: 'create',
+                nodeId,
+                payload: {
                     id: nodeId,
                     type: 'verse_segment',
                     surahId,
@@ -115,7 +151,7 @@ export const syncVerseSegmentNodesForSurah = async ({
                     scheduler: createNewFSRSState(),
                     createdAt: nowIso,
                     userId,
-                } as any),
+                } as MemoryNode & { userId: string },
             });
             created += 1;
         });
@@ -127,8 +163,17 @@ export const syncVerseSegmentNodesForSurah = async ({
     }
 
     for (let i = 0; i < operations.length; i += batchSize) {
-        const batch = operations.slice(i, i + batchSize).map((entry) => entry.tx);
-        await transactWithRetry(batch.length === 1 ? batch[0] : batch);
+        const batch = operations.slice(i, i + batchSize);
+        try {
+            const tx = batch.map((entry) => buildTx(entry));
+            await transactWithRetry(tx.length === 1 ? tx[0] : tx);
+        } catch (error) {
+            if (!isInstantAlreadyExistingCreateError(error)) throw error;
+            const fallbackTx = batch.map((entry) =>
+                entry.type === 'create' ? buildTx(entry, 'update') : buildTx(entry)
+            );
+            await transactWithRetry(fallbackTx.length === 1 ? fallbackTx[0] : fallbackTx);
+        }
         onProgress?.(Math.min(operations.length, i + batch.length), operations.length);
     }
 
