@@ -620,10 +620,6 @@ export default function TodoPage() {
             return { start, end, label };
         });
 
-        const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const previousAnchorRanges = new Set(
-            (existing.anchors || []).map((a: any) => `${Number(a.startVerse)}-${Number(a.endVerse)}`)
-        );
         const newAnchors = anchors.map(a => ({
             id: `anchor-${surahId}-${a.start}-${a.end}`,
             surahId,
@@ -636,18 +632,11 @@ export default function TodoPage() {
         // Keep existing verse-segment nodes in sync with updated splits.
         // We create new range nodes only when this surah currently participates in verse review
         // (either still in Complete or already has verse-segment nodes).
-        const rangeKey = (start: number, end: number) => `${start}-${end}`;
-        const nextRanges = new Set(newAnchors.map(a => rangeKey(Number(a.startVerse), Number(a.endVerse))));
         const existingVerseNodes = nodes.filter(n => n.type === 'verse_segment' && getVerseSegmentSurahId(n) === surahId);
 
         const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
         const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
         const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
-        const nextRangeKeys = Array.from(nextRanges).sort();
-        const prevRangeKeys = Array.from(previousAnchorRanges).sort();
-        const splitsChanged =
-            nextRangeKeys.length !== prevRangeKeys.length ||
-            nextRangeKeys.some((key, idx) => key !== prevRangeKeys[idx]);
 
         await syncVerseSegmentNodesForSurah({
             userId: user.id,
@@ -655,7 +644,6 @@ export default function TodoPage() {
             anchors: newAnchors,
             existingNodes: existingVerseNodes,
             shouldCreateMissingRanges,
-            shouldResetSchedulers: isInCompleteColumn && splitsChanged,
         });
     };
 

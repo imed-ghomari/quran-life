@@ -10,7 +10,6 @@ type SyncVerseSegmentNodesInput = {
     anchors: Array<Pick<Anchor, 'id' | 'startVerse' | 'endVerse'>>;
     existingNodes: MemoryNode[];
     shouldCreateMissingRanges: boolean;
-    shouldResetSchedulers: boolean;
     batchSize?: number;
     nowIso?: string;
     onProgress?: (completed: number, total: number) => void;
@@ -61,7 +60,6 @@ export const syncVerseSegmentNodesForSurah = async ({
     anchors,
     existingNodes,
     shouldCreateMissingRanges,
-    shouldResetSchedulers,
     batchSize = 25,
     nowIso = new Date().toISOString(),
     onProgress,
@@ -129,8 +127,8 @@ export const syncVerseSegmentNodesForSurah = async ({
                         startVerse: anchor.startVerse,
                         endVerse: anchor.endVerse,
                         targetId: anchor.id,
-                        scheduler: shouldResetSchedulers ? createNewFSRSState() : existingNode.scheduler,
-                        createdAt: shouldResetSchedulers ? nowIso : existingNode.createdAt,
+                        scheduler: existingNode.scheduler,
+                        createdAt: existingNode.createdAt,
                     } as MemoryNode,
                 });
                 updated += 1;

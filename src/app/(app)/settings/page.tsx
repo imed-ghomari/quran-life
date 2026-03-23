@@ -2970,21 +2970,10 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             };
         });
 
-        const existing = settingsMindmapsBySurah[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const previousAnchorRanges = new Set(
-            (existing.anchors || []).map((a: any) => `${Number(a.startVerse)}-${Number(a.endVerse)}`)
-        );
         await saveMindMap(surahId, {
-            ...existing,
             anchors,
         });
 
-        const rangeKey = (startVerse: number, endVerse: number) => `${startVerse}-${endVerse}`;
-        const nextRangeKeys = anchors.map((anchor) => rangeKey(Number(anchor.startVerse), Number(anchor.endVerse))).sort();
-        const prevRangeKeys = Array.from(previousAnchorRanges).sort();
-        const splitsChanged =
-            nextRangeKeys.length !== prevRangeKeys.length ||
-            nextRangeKeys.some((key, idx) => key !== prevRangeKeys[idx]);
         const existingVerseNodes = instantNodes.filter(
             (node) => node.type === 'verse_segment' && resolveNodeSurahId(node) === surahId
         );
@@ -3000,7 +2989,6 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 anchors,
                 existingNodes: existingVerseNodes,
                 shouldCreateMissingRanges,
-                shouldResetSchedulers: isInCompleteColumn && splitsChanged,
                 batchSize: MATURITY_TRANSACTION_BATCH_SIZE,
                 onProgress: (completed, total) => {
                     updateBulkOperationProgress(completed, Math.max(1, total));
