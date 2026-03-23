@@ -24,11 +24,13 @@ import {
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 import { AccessStateContext } from '@/components/Providers';
+import { db } from '@/lib/instant';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
@@ -109,6 +111,7 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
  */
 export default function TodoPage() {
     // -- 1. Data Hooks: Syncing with InstantDB --
+    const { user } = db.useAuth();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
     const queueSettingsUpdate = useCallback((update: Partial<AppSettings>) => {
@@ -608,6 +611,7 @@ export default function TodoPage() {
     };
 
     const handleSaveAnchors = async (surahId: number, verseCount: number) => {
+        if (!user?.id) return;
         const builder = getBuilderState(surahId);
         const boundaries = [1, ...builder.breaks.map(b => b + 1), verseCount + 1];
         const anchors = boundaries.slice(0, -1).map((start, idx) => {
@@ -616,10 +620,6 @@ export default function TodoPage() {
             return { start, end, label };
         });
 
-        const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const previousAnchorRanges = new Set(
-            (existing.anchors || []).map((a: any) => `${Number(a.startVerse)}-${Number(a.endVerse)}`)
-        );
         const newAnchors = anchors.map(a => ({
             id: `anchor-${surahId}-${a.start}-${a.end}`,
             surahId,
@@ -632,69 +632,19 @@ export default function TodoPage() {
         // Keep existing verse-segment nodes in sync with updated splits.
         // We create new range nodes only when this surah currently participates in verse review
         // (either still in Complete or already has verse-segment nodes).
-        const rangeKey = (start: number, end: number) => `${start}-${end}`;
-        const nextRanges = new Set(newAnchors.map(a => rangeKey(Number(a.startVerse), Number(a.endVerse))));
         const existingVerseNodes = nodes.filter(n => n.type === 'verse_segment' && getVerseSegmentSurahId(n) === surahId);
 
         const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
         const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
         const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
-        const nextRangeKeys = Array.from(nextRanges).sort();
-        const prevRangeKeys = Array.from(previousAnchorRanges).sort();
-        const splitsChanged =
-            nextRangeKeys.length !== prevRangeKeys.length ||
-            nextRangeKeys.some((key, idx) => key !== prevRangeKeys[idx]);
 
-        const staleNodes = existingVerseNodes.filter(n => !nextRanges.has(rangeKey(Number(n.startVerse), Number(n.endVerse))));
-        if (staleNodes.length > 0) {
-            await runInBatches(staleNodes, 8, async (node) => {
-                await deleteNode(node.id);
-            });
-        }
-
-        if (shouldCreateMissingRanges) {
-            const existingByRange = new Map<string, MemoryNode>(
-                existingVerseNodes.map(n => [rangeKey(Number(n.startVerse), Number(n.endVerse)), n] as const)
-            );
-            const shouldResetAllForComplete = isInCompleteColumn && splitsChanged;
-            const nowIso = new Date().toISOString();
-
-            const upserts = newAnchors.map(anchor => {
-                const key = rangeKey(Number(anchor.startVerse), Number(anchor.endVerse));
-                const existingNode = existingByRange.get(key);
-
-                if (existingNode) {
-                    return {
-                        ...existingNode,
-                        id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
-                        type: 'verse_segment',
-                        surahId,
-                        startVerse: anchor.startVerse,
-                        endVerse: anchor.endVerse,
-                        targetId: anchor.id,
-                        scheduler: shouldResetAllForComplete ? createNewFSRSState() : existingNode.scheduler,
-                        createdAt: shouldResetAllForComplete ? nowIso : existingNode.createdAt,
-                    } as MemoryNode;
-                }
-
-                return {
-                    id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
-                    type: 'verse_segment',
-                    surahId,
-                    startVerse: anchor.startVerse,
-                    endVerse: anchor.endVerse,
-                    targetId: anchor.id,
-                    scheduler: createNewFSRSState(),
-                    createdAt: nowIso
-                } as MemoryNode;
-            });
-
-            if (upserts.length > 0) {
-                await runInBatches(upserts, 8, async (node) => {
-                    await saveNode(node);
-                });
-            }
-        }
+        await syncVerseSegmentNodesForSurah({
+            userId: user.id,
+            surahId,
+            anchors: newAnchors,
+            existingNodes: existingVerseNodes,
+            shouldCreateMissingRanges,
+        });
     };
 
     // Marks a Mindmap (Surah level) as complete/incomplete

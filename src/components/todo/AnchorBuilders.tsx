@@ -156,7 +156,7 @@ export function MobileAnchorBuilder({
                             if (hasReviewedHistory) {
                                 const ok = await confirm({
                                     title: 'Confirm Split Changes',
-                                    message: 'This surah has verse chunks that have already been reviewed. Modifying splits will reset review progress for these chunks. Do you want to proceed?',
+                                    message: 'This surah already has reviewed verse groups. Only the verse groups affected by your split changes will reset. Any unchanged verse groups will keep their current progress. Do you want to continue?',
                                     confirmLabel: 'Proceed',
                                     isDestructive: true,
                                 });
@@ -586,7 +586,7 @@ export function DesktopAnchorBuilder({
                             if (hasReviewedHistory) {
                                 const ok = await confirm({
                                     title: 'Confirm Split Changes',
-                                    message: 'This surah has verse chunks that have already been reviewed. Modifying splits will reset review progress for these chunks. Do you want to proceed?',
+                                    message: 'This surah already has reviewed verse groups. Only the verse groups affected by your split changes will reset. Any unchanged verse groups will keep their current progress. Do you want to continue?',
                                     confirmLabel: 'Proceed',
                                     isDestructive: true,
                                 });

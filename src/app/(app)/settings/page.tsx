@@ -59,6 +59,7 @@ import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
 
 const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
@@ -623,25 +624,6 @@ export default function SettingsPage() {
         return Object.values(latestMap);
     }, [memoryNodes]);
 
-    const latestVerseSegments = useMemo(() => {
-        const verseNodes = memoryNodes.filter(n => n.type === 'verse_segment');
-        const latestMap: Record<string, MemoryNode> = {};
-        verseNodes.forEach(node => {
-            const surahId = resolveNodeSurahId(node);
-            if (!surahId) return;
-            const key = `${surahId}-${node.startVerse}-${node.endVerse}`;
-            const existing = latestMap[key];
-            if (!existing) {
-                latestMap[key] = node;
-                return;
-            }
-            if (node.createdAt && (!existing.createdAt || new Date(node.createdAt) > new Date(existing.createdAt))) {
-                latestMap[key] = node;
-            }
-        });
-        return Object.values(latestMap);
-    }, [memoryNodes]);
-
     const settingsMindmapsBySurah = useMemo(() => {
         const acc: Record<number, any> = {};
         instantMindmaps.forEach((mm: any) => {
@@ -660,6 +642,37 @@ export default function SettingsPage() {
         });
         return acc;
     }, [instantMindmaps]);
+
+    const currentVerseGroupKeysBySurah = useMemo(() => {
+        const bySurah: Record<number, Set<string>> = {};
+        SURAHS.forEach((surah) => {
+            const anchors = getEffectiveSurahAnchors(surah.id, settingsMindmapsBySurah[surah.id]);
+            bySurah[surah.id] = new Set(
+                anchors.map((anchor) => `${surah.id}-${Number(anchor.startVerse)}-${Number(anchor.endVerse)}`)
+            );
+        });
+        return bySurah;
+    }, [settingsMindmapsBySurah]);
+
+    const latestVerseSegments = useMemo(() => {
+        const verseNodes = memoryNodes.filter(n => n.type === 'verse_segment');
+        const latestMap: Record<string, MemoryNode> = {};
+        verseNodes.forEach(node => {
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return;
+            const key = `${surahId}-${node.startVerse}-${node.endVerse}`;
+            if (!currentVerseGroupKeysBySurah[surahId]?.has(key)) return;
+            const existing = latestMap[key];
+            if (!existing) {
+                latestMap[key] = node;
+                return;
+            }
+            if (node.createdAt && (!existing.createdAt || new Date(node.createdAt) > new Date(existing.createdAt))) {
+                latestMap[key] = node;
+            }
+        });
+        return Object.values(latestMap);
+    }, [currentVerseGroupKeysBySurah, memoryNodes]);
 
     const getKnowledgeDueKey = (due: string | null): string | null => {
         if (!due) return null;
@@ -2393,6 +2406,34 @@ export default function SettingsPage() {
         }));
     }, []);
 
+    const bulkCreateVerseSegmentNodes = useCallback(async (
+        nodesToCreate: MemoryNode[],
+        label: string
+    ) => {
+        if (nodesToCreate.length === 0) return 0;
+
+        beginBulkOperation(label, nodesToCreate.length);
+        try {
+            for (let i = 0; i < nodesToCreate.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
+                const batch = nodesToCreate.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
+                const writes = batch
+                    .map((node) => {
+                        const nodeId = String(node.id || '').trim();
+                        if (!nodeId) return null;
+                        return db.tx.memoryNodes[nodeId].create(node as any);
+                    })
+                    .filter((tx): tx is NonNullable<typeof tx> => !!tx);
+                if (!writes.length) continue;
+                await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+                updateBulkOperationProgress(Math.min(nodesToCreate.length, i + batch.length), nodesToCreate.length);
+            }
+        } finally {
+            endBulkOperation();
+        }
+
+        return nodesToCreate.length;
+    }, [beginBulkOperation, endBulkOperation, updateBulkOperationProgress]);
+
     const getMaturityState = (level: 'reset' | 'medium' | 'strong' | 'mastered') => {
         const now = new Date().toISOString();
         switch (level) {
@@ -2609,52 +2650,64 @@ export default function SettingsPage() {
             );
         const autoShortTargets = targets.filter((target) => target.usesAutoShortSurahGroup).length;
         const targetScopeText = targets.length > 0
-            ? `${targets.length} surah card(s) already outside Complete${autoShortTargets > 0 ? ` (${autoShortTargets} using automatic short-surah verse groups)` : ''}`
+            ? `${targets.length} surah card(s) already outside Complete`
+            : '';
+        const autoShortNote = autoShortTargets > 0
+            ? `\n\nThis includes ${autoShortTargets} short surah card(s) that use automatic verse groups.`
             : '';
 
         const currentSettingDescription = nextBehavior === 'mindmap_only'
-            ? 'Current setting: Suspend Mindmap Only. When a surah leaves Complete, only the mindmap is suspended. Verse groups include manual splits and auto short-surah groups.'
-            : 'Current setting: Suspend Mindmap + Verses. When a surah leaves Complete, both mindmap and verse groups are suspended. Verse groups include manual splits and auto short-surah groups.';
-
-        const optionalQuestion = nextBehavior === 'mindmap_only'
             ? (
                 targets.length > 0
-                    ? `Also show verse groups now for ${targetScopeText}?`
-                    : 'No surah cards outside Complete need verse-group updates now.\nKeep this setting for future moves only?'
+                    ? `From now on, moving a surah out of Complete will pause only the mindmap and keep its verse groups active.\n\nYou already have ${targetScopeText}.${autoShortNote}\n\nDo you want to turn those verse groups back on now for those existing cards?`
+                    : 'From now on, moving a surah out of Complete will pause only the mindmap and keep its verse groups active.\n\nThere are no existing cards outside Complete that need updating right now.'
             )
             : (
                 targets.length > 0
-                    ? `Also suspend verse groups now for ${targetScopeText}?`
-                    : 'No surah cards outside Complete need verse-group suspension now.\nKeep this setting for future moves only?'
+                    ? `From now on, moving a surah out of Complete will pause both the mindmap and its verse groups.\n\nYou already have ${targetScopeText}.${autoShortNote}\n\nDo you want to pause those verse groups now for those existing cards?`
+                    : 'From now on, moving a surah out of Complete will pause both the mindmap and its verse groups.\n\nThere are no existing cards outside Complete that need updating right now.'
             );
 
         if (targets.length === 0) return;
 
         if (nextBehavior === 'mindmap_only') {
             const apply = await confirm({
-                title: 'Optional: Apply To Existing Cards',
-                message: `${currentSettingDescription}\n\nOptional:\n${optionalQuestion}`,
-                confirmLabel: targets.length > 0 ? 'Show Verse Groups' : 'Keep Setting',
-                cancelLabel: 'Keep As-Is',
+                title: 'Apply This To Existing Cards?',
+                message: currentSettingDescription,
+                confirmLabel: targets.length > 0 ? 'Turn Verse Groups Back On' : 'Keep Setting',
+                cancelLabel: 'Future Moves Only',
             });
             if (!apply) return;
 
             try {
-                let created = 0;
+                const existingVerseGroupKeys = new Set(
+                    instantNodes
+                        .filter((node) => node.type === 'verse_segment')
+                        .map((node) => {
+                            const surahId = resolveNodeSurahId(node);
+                            const startVerse = Number(node.startVerse);
+                            const endVerse = Number(node.endVerse);
+                            if (!Number.isFinite(surahId) || !Number.isFinite(startVerse) || !Number.isFinite(endVerse)) {
+                                return null;
+                            }
+                            return `${surahId}:${startVerse}:${endVerse}`;
+                        })
+                        .filter((key): key is string => !!key)
+                );
+                const nowIso = new Date().toISOString();
+                const nodesToCreate: MemoryNode[] = [];
+
                 for (const target of targets) {
                     for (const anchor of target.anchors) {
                         const startVerse = Number(anchor?.startVerse);
                         const endVerse = Number(anchor?.endVerse);
                         if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) continue;
-                        const exists = instantNodes.some((node) =>
-                            node.type === 'verse_segment' &&
-                            resolveNodeSurahId(node) === target.surahId &&
-                            Number(node.startVerse) === startVerse &&
-                            Number(node.endVerse) === endVerse
-                        );
-                        if (exists) continue;
+                        const verseGroupKey = `${target.surahId}:${startVerse}:${endVerse}`;
+                        if (existingVerseGroupKeys.has(verseGroupKey)) continue;
+
+                        existingVerseGroupKeys.add(verseGroupKey);
                         const targetId = anchor?.id || `anchor-${target.surahId}-${startVerse}-${endVerse}`;
-                        await saveInstantNode({
+                        nodesToCreate.push({
                             id: stableNodeId('memory_node', 'verse_segment', target.surahId, startVerse, endVerse),
                             type: 'verse_segment',
                             surahId: target.surahId,
@@ -2662,11 +2715,15 @@ export default function SettingsPage() {
                             endVerse,
                             targetId,
                             scheduler: createNewFSRSState(),
-                            createdAt: new Date().toISOString(),
+                            createdAt: nowIso,
                         } as MemoryNode);
-                        created += 1;
                     }
                 }
+
+                const created = await bulkCreateVerseSegmentNodes(
+                    nodesToCreate,
+                    'Adding Verse Groups For Existing Cards'
+                );
                 addToast(
                     'success',
                     'Applied',
@@ -2685,10 +2742,10 @@ export default function SettingsPage() {
         }
 
         const apply = await confirm({
-            title: 'Optional: Apply To Existing Cards',
-            message: `${currentSettingDescription}\n\nOptional:\n${optionalQuestion}`,
-            confirmLabel: targets.length > 0 ? 'Suspend Verse Groups' : 'Keep Setting',
-            cancelLabel: 'Keep As-Is',
+            title: 'Apply This To Existing Cards?',
+            message: currentSettingDescription,
+            confirmLabel: targets.length > 0 ? 'Pause Verse Groups Now' : 'Keep Setting',
+            cancelLabel: 'Future Moves Only',
         });
         if (!apply) return;
 
@@ -2898,6 +2955,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
     }, [getSettingsBuilderState]);
 
     const handleSettingsSaveAnchors = useCallback(async (surahId: number, verseCount: number) => {
+        if (!user?.id) return;
         const builder = getSettingsBuilderState(surahId);
         const boundaries = [1, ...builder.breaks.map((b) => b + 1), verseCount + 1];
         const anchors = boundaries.slice(0, -1).map((start, idx) => {
@@ -2912,12 +2970,34 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
             };
         });
 
-        const existing = settingsMindmapsBySurah[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
         await saveMindMap(surahId, {
-            ...existing,
             anchors,
         });
-    }, [getSettingsBuilderState, saveMindMap, settingsMindmapsBySurah]);
+
+        const existingVerseNodes = instantNodes.filter(
+            (node) => node.type === 'verse_segment' && resolveNodeSurahId(node) === surahId
+        );
+        const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
+        const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
+        const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
+
+        beginBulkOperation('Syncing Verse Groups', Math.max(1, anchors.length + existingVerseNodes.length));
+        try {
+            await syncVerseSegmentNodesForSurah({
+                userId: user.id,
+                surahId,
+                anchors,
+                existingNodes: existingVerseNodes,
+                shouldCreateMissingRanges,
+                batchSize: MATURITY_TRANSACTION_BATCH_SIZE,
+                onProgress: (completed, total) => {
+                    updateBulkOperationProgress(completed, Math.max(1, total));
+                },
+            });
+        } finally {
+            endBulkOperation();
+        }
+    }, [beginBulkOperation, endBulkOperation, getSettingsBuilderState, instantNodes, saveMindMap, settings.kanbanColumns, settingsMindmapsBySurah, updateBulkOperationProgress, user?.id]);
 
     const openMindmapFromMutContext = useCallback((surahId: number) => {
         setSettingsMindmapEditor({
