@@ -24,6 +24,7 @@ import {
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -457,6 +458,11 @@ export default function TodoPage() {
     const SUSPEND_ERROR_THRESHOLD = 3;
 
     const suspendedAnchors = useMemo(() => {
+        const skippedSurahIds = new Set<number>(
+            (settings?.skippedSurahs || [])
+                .map((surahId) => Number(surahId))
+                .filter((surahId) => Number.isFinite(surahId) && surahId > 0)
+        );
         const toSurahId = (value: unknown): number | null => {
             const parsed = Number(value);
             return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -528,6 +534,7 @@ export default function TodoPage() {
             if (sorted.length < SUSPEND_ERROR_THRESHOLD) return;
 
             const latest = sorted[0];
+            if (skippedSurahIds.has(Number(latest.surahId))) return;
             const ackIso = acknowledgedAtByGroup[groupKey];
             const ackMs = ackIso ? Date.parse(ackIso) : Number.NaN;
             if (Number.isFinite(ackMs) && ackMs >= (latest.timestampMs || 0)) {
@@ -575,7 +582,7 @@ export default function TodoPage() {
             if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
             return a.endVerse - b.endVerse;
         });
-    }, [errors, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD, mindmaps]);
+    }, [errors, settings?.skippedSurahs, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD, mindmaps]);
 
 
 
@@ -620,6 +627,11 @@ export default function TodoPage() {
             return { start, end, label };
         });
 
+        const previousAnchors = (mindmaps[surahId]?.anchors || []).map((anchor: any) => ({
+            id: anchor?.id || `anchor-${surahId}-${Number(anchor?.startVerse)}-${Number(anchor?.endVerse)}`,
+            startVerse: Number(anchor?.startVerse),
+            endVerse: Number(anchor?.endVerse),
+        }));
         const newAnchors = anchors.map(a => ({
             id: `anchor-${surahId}-${a.start}-${a.end}`,
             surahId,
@@ -645,6 +657,26 @@ export default function TodoPage() {
             existingNodes: existingVerseNodes,
             shouldCreateMissingRanges,
         });
+
+        const impactedGroupKeys = getImpactedSplitVerseGroupKeys({
+            surahId,
+            previousAnchors,
+            nextAnchors: newAnchors,
+        });
+        const suspendedCleanup = getSuspendedReviewErrorCleanupPlan({
+            errors,
+            groupKeys: impactedGroupKeys,
+            acknowledgedAtByGroup: settings?.suspendedVerseGroupsAcknowledged,
+            kanbanColumns: settings?.kanbanColumns,
+        });
+        if (suspendedCleanup.errorIds.length > 0) {
+            await deleteReviewErrorsByIds(suspendedCleanup.errorIds);
+        }
+        if (suspendedCleanup.groupCount > 0) {
+            await queueSettingsUpdate({
+                kanbanColumns: removeSuspendedKanbanItems(settings.kanbanColumns, impactedGroupKeys),
+            });
+        }
     };
 
     // Marks a Mindmap (Surah level) as complete/incomplete
@@ -1137,6 +1169,7 @@ export default function TodoPage() {
                         similarityGroups={groupedSimilarity}
                         partTasks={partTasks}
                         surahTasks={surahTasks}
+                        skippedSurahIds={settings.skippedSurahs || []}
                         verses={verses}
                         mindmaps={mindmaps}
                         isDark={isDark}

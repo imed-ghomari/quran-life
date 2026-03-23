@@ -48,6 +48,7 @@ interface TodoKanbanProps {
     similarityGroups: any[];
     partTasks: any[];
     surahTasks: any[];
+    skippedSurahIds?: number[];
 
     // Data & State
     verses: any[];
@@ -151,6 +152,7 @@ export default function TodoKanban({
     similarityGroups,
     partTasks,
     surahTasks,
+    skippedSurahIds = [],
     verses,
     mindmaps,
     isDark,
@@ -490,6 +492,11 @@ export default function TodoKanban({
 
     const normalizedSearchQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
     const hasActiveVisibilityFilter = filter !== 'all' || normalizedSearchQuery.length > 0;
+    const skippedSurahIdSet = useMemo(() => new Set(
+        skippedSurahIds
+            .map((surahId) => Number(surahId))
+            .filter((surahId) => Number.isFinite(surahId) && surahId > 0)
+    ), [skippedSurahIds]);
 
     const getItemSearchText = useCallback((item: KanbanItem) => {
         if (item.type === 'surah') return `${item.data.surah.id} ${item.data.surah.name} ${item.data.surah.arabicName || ''}`;
@@ -695,6 +702,7 @@ export default function TodoKanban({
             // Suspended cards stay pinned unless a new active suspended item supersedes them.
             const retainedCompletedMaintenance = prev.complete.items.filter((item) => (
                 (item.type === 'similarity' || item.type === 'suspended')
+                && !(item.type === 'suspended' && skippedSurahIdSet.has(Number(item.data?.surahId)))
                 && !itemMap.has(item.id)
                 && !isObsoleteRetainedSuspended(item)
             ));
@@ -712,7 +720,7 @@ export default function TodoKanban({
             };
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, kanbanSortOrder]);
+    }, [suspendedAnchors, similarityGroups, partTasks, skippedSurahIdSet, surahTasks, kanbanState, kanbanSortOrder]);
 
     const handleCompletionTrigger = useCallback(async (item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
@@ -1420,6 +1428,7 @@ export default function TodoKanban({
                                     onRemoveBreak={(val) => onRemoveBreak(id, val)}
                                     onSave={() => onSaveAnchors(id, data.surah.verseCount)}
                                     hasReviewedHistory={hasReviewedChunks(id)}
+                                    hasSuspendedCards={suspendedAnchors.some((item) => item.surahId === id)}
                                 />
                             ) : (
                                 <div className="h-[500px]">
@@ -1434,6 +1443,7 @@ export default function TodoKanban({
                                         onRemoveBreak={(val) => onRemoveBreak(id, val)}
                                         onSave={() => onSaveAnchors(id, data.surah.verseCount)}
                                         hasReviewedHistory={hasReviewedChunks(id)}
+                                        hasSuspendedCards={suspendedAnchors.some((item) => item.surahId === id)}
                                     />
                                 </div>
                             )}
@@ -1621,6 +1631,7 @@ export default function TodoKanban({
                     onRemoveBreak={(val) => onRemoveBreak(splitsData.surahId, val)}
                     onSave={() => onSaveAnchors(splitsData.surahId, splitsData.verseCount)}
                     hasReviewedHistory={hasReviewedChunks(splitsData.surahId)}
+                    hasSuspendedCards={suspendedAnchors.some((item) => item.surahId === splitsData.surahId)}
                 />
             )}
 

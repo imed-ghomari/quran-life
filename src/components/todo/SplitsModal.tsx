@@ -23,6 +23,7 @@ interface SplitsModalProps {
     onRemoveBreak: (val: number) => void;
     onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
+    hasSuspendedCards?: boolean;
 }
 
 export default function SplitsModal({
@@ -39,7 +40,8 @@ export default function SplitsModal({
     onAddBreak,
     onRemoveBreak,
     onSave,
-    hasReviewedHistory
+    hasReviewedHistory,
+    hasSuspendedCards = false,
 }: SplitsModalProps) {
     const surahName = getSurah(surahId)?.name;
     const surahLabel = surahName ? `Surah ${surahId} · ${surahName}` : `Surah ${surahId}`;
@@ -117,6 +119,7 @@ export default function SplitsModal({
                                 onRemoveBreak={onRemoveBreak}
                                 onSave={handleSaveAndClose}
                                 hasReviewedHistory={hasReviewedHistory}
+                                hasSuspendedCards={hasSuspendedCards}
                             />
                         </div>
                     </div>
@@ -199,6 +202,7 @@ export default function SplitsModal({
                     onRemoveBreak={onRemoveBreak}
                     onSave={handleSaveAndClose}
                     hasReviewedHistory={hasReviewedHistory}
+                    hasSuspendedCards={hasSuspendedCards}
                 />
             </div>
                 </div>
