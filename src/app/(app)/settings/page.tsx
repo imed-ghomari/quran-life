@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, startTransition } from 'react';
 import { id } from '@instantdb/react';
+import { stableEntityId } from '@/lib/instantIds';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
@@ -21,6 +22,7 @@ import {
     LEGACY_ALL_QURAN_PART,
     QuranPart,
     MemoryNode,
+    hasNodeBeenReviewed,
     getNodeStability,
     getNodeDifficulty,
     getNodeReps,
@@ -50,7 +52,8 @@ import {
     Moon,
     Monitor,
     Palette,
-    Sliders
+    Sliders,
+    Lock
 } from 'lucide-react';
 import { AccentTheme, Theme, useTheme } from '@/components/ThemeProvider';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
@@ -446,6 +449,14 @@ export default function SettingsPage() {
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
     const { settings, saveSettings } = useSharedInstantSettings();
     const { nodes: instantNodes, saveNode: saveInstantNode } = useSharedInstantNodes();
+
+    const checkIsSurahLearned = useCallback((surahId: number) => {
+        return instantNodes.some((node) => {
+            if (node.type !== 'verse_segment') return false;
+            if (resolveNodeSurahId(node) !== surahId) return false;
+            return hasNodeBeenReviewed(node.scheduler);
+        });
+    }, [instantNodes]);
     const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
     const { errors: reviewErrors } = useSharedInstantReviewErrors();
     const { progress: listeningProgress } = useSharedInstantListeningProgress();
@@ -627,6 +638,13 @@ export default function SettingsPage() {
         });
         return Object.values(latestMap);
     }, [memoryNodes]);
+
+    // All surahs in the active part that could have a mindmap, including those without memory nodes
+    const allActivePartSurahsForMindmaps = useMemo(() => {
+        return SURAHS
+            .filter(s => (settings.activePart === ALL_QURAN_PART || s.part === settings.activePart) && !settings.skippedSurahs?.includes(s.id))
+            .sort((a, b) => a.id - b.id);
+    }, [settings.activePart, settings.skippedSurahs]);
 
     const settingsMindmapsBySurah = useMemo(() => {
         const acc: Record<number, any> = {};
@@ -1831,15 +1849,32 @@ export default function SettingsPage() {
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
-                                        <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                            id: 'mindmaps-surah',
-                                            title: 'Surah Mindmaps',
-                                            type: 'mindmap' as any as any,
-                                            nodes: filteredSurahMindmaps
-                                        })}>
+                                        <div className="mobile-subgroup-item" onClick={() => {
+                                            // Build a full list: existing mindmap nodes + placeholders for surahs without nodes
+                                            const existingBySurah = new Map(latestSurahMindmaps.map(n => [resolveNodeSurahId(n), n]));
+                                            const fullNodes = allActivePartSurahsForMindmaps.map(s => {
+                                                const existing = existingBySurah.get(s.id);
+                                                if (existing) return existing;
+                                                // Create a placeholder node so the SlideOver can render it
+                                                return {
+                                                    id: `placeholder-mindmap-${s.id}`,
+                                                    type: 'mindmap' as const,
+                                                    surahId: s.id,
+                                                    targetId: `mindmap-${s.id}`,
+                                                    scheduler: null,
+                                                    createdAt: null,
+                                                } as unknown as MemoryNode;
+                                            });
+                                            setActiveSlideOverGroup({
+                                                id: 'mindmaps-surah',
+                                                title: 'Surah Mindmaps',
+                                                type: 'mindmap' as any,
+                                                nodes: fullNodes
+                                            });
+                                        }}>
                                             <span>Surah Mindmaps</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span className="status-badge">{filteredSurahMindmaps.length}</span>
+                                                <span className="status-badge">{allActivePartSurahsForMindmaps.length}</span>
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
@@ -2552,12 +2587,48 @@ export default function SettingsPage() {
             ? getSuspendedCleanupForNodes([node])
             : { errorIds: [] as string[], groupCount: 0 };
 
-        if (suspendedCleanup.groupCount > 0) {
+        const kanbanCols = settings?.kanbanColumns || {};
+        const completeIds = kanbanCols.complete || [];
+        const currentExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
+
+        let kanbanCardId: string | null = null;
+        let requiresKanbanMove = false;
+
+        if (node.type === 'mindmap' || node.type === 'part_mindmap' || node.type === 'verse_segment' || node.type === 'verse') {
+            const surahId = resolveNodeSurahId(node);
+            const partId = node.type === 'part_mindmap' ? (node as any).partId : null;
+
+            if (node.type === 'part_mindmap' && partId) {
+                kanbanCardId = `part-${partId}`;
+            } else if (surahId) {
+                kanbanCardId = `surah-${surahId}`;
+            }
+
+            if (kanbanCardId && !completeIds.includes(kanbanCardId)) {
+                if (node.type === 'verse_segment' && currentExitBehavior === 'mindmap_only') {
+                    requiresKanbanMove = false;
+                } else {
+                    requiresKanbanMove = true;
+                }
+            }
+        }
+
+        let warningText = '';
+        if (requiresKanbanMove) {
+            warningText = `\n\n⚠️ This surah is not yet in your active reviews. It will be added to the review queue so the changes take effect.`;
+        }
+
+        if (suspendedCleanup.groupCount > 0 || requiresKanbanMove) {
+            const levelLabel = level === 'reset' ? 'New' : level.charAt(0).toUpperCase() + level.slice(1);
+            const baseMessage = suspendedCleanup.groupCount > 0
+                ? `This will also clear ${suspendedCleanup.groupCount} paused review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} for this verse group.`
+                : `This will set the level to "${levelLabel}".`;
+
             const ok = await confirm({
-                title: 'Reset Verse Group',
-                message: `This reset will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to this verse group.`,
-                confirmLabel: 'Reset',
-                isDestructive: true,
+                title: suspendedCleanup.groupCount > 0 ? 'Update Verse Group' : 'Update Level',
+                message: `${baseMessage}${warningText}`,
+                confirmLabel: level === 'reset' && suspendedCleanup.groupCount > 0 ? 'Reset' : 'Update',
+                isDestructive: level === 'reset' || requiresKanbanMove,
             });
             if (!ok) return;
         }
@@ -2571,11 +2642,25 @@ export default function SettingsPage() {
             if (suspendedCleanup.errorIds.length > 0) {
                 await deleteReviewErrorsByIds(suspendedCleanup.errorIds, MATURITY_TRANSACTION_BATCH_SIZE);
             }
+
+            let modifiedCols = kanbanCols;
             if (suspendedCleanup.groupCount > 0) {
                 const groupKey = getCurrentVerseGroupKeyForNode(node);
                 if (groupKey) {
-                    await removeSuspendedCardsFromKanban([groupKey]);
+                    modifiedCols = removeSuspendedKanbanItems(modifiedCols, [groupKey]);
                 }
+            }
+            if (requiresKanbanMove && kanbanCardId) {
+                const newCols = { ...modifiedCols };
+                Object.keys(newCols).forEach(k => {
+                    newCols[k] = newCols[k].filter(id => id !== kanbanCardId);
+                });
+                newCols.complete = [kanbanCardId, ...(newCols.complete || [])];
+                modifiedCols = newCols;
+            }
+            
+            if (suspendedCleanup.groupCount > 0 || requiresKanbanMove) {
+                await saveSettings({ kanbanColumns: modifiedCols });
             }
         } catch (error) {
             console.error('Failed to save node maturity', error);
@@ -2597,36 +2682,193 @@ export default function SettingsPage() {
         const targetType = type === 'verse' ? 'verse_segment' : type;
         const newState = getMaturityState(level);
 
-        const nodesToUpdate = instantNodes.filter(node => {
+        let nodesToUpdate = instantNodes.filter(node => {
             if (node.type !== targetType) return false;
             if (surahId && resolveNodeSurahId(node) !== surahId) return false;
             return true;
         });
 
+        // If no nodes exist yet, create them on the fly so the user can set maturity
+        // for surahs that haven't entered the review queue yet.
+        let nodesToCreate: MemoryNode[] = [];
         if (nodesToUpdate.length === 0) {
-            await alert({
-                title: 'Nothing to Update',
-                message: 'No nodes found to update.',
-            });
-            return;
+            const nowIso = new Date().toISOString();
+            if (targetType === 'verse_segment') {
+                // Build verse segment nodes from anchors for the target surah(s)
+                const targetSurahIds = surahId
+                    ? [surahId]
+                    : SURAHS
+                        .filter(s => (settings.activePart === ALL_QURAN_PART || s.part === settings.activePart) && !settings.skippedSurahs?.includes(s.id))
+                        .map(s => s.id);
+
+                const existingKeys = new Set(
+                    instantNodes
+                        .filter(n => n.type === 'verse_segment')
+                        .map(n => {
+                            const sid = resolveNodeSurahId(n);
+                            return sid ? `${sid}:${n.startVerse}:${n.endVerse}` : null;
+                        })
+                        .filter((k): k is string => !!k)
+                );
+
+                for (const sid of targetSurahIds) {
+                    const mm = settingsMindmapsBySurah[sid];
+                    const anchors = getEffectiveSurahAnchors(sid, mm);
+                    for (const anchor of anchors) {
+                        const startVerse = Number(anchor?.startVerse);
+                        const endVerse = Number(anchor?.endVerse);
+                        if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) continue;
+                        const key = `${sid}:${startVerse}:${endVerse}`;
+                        if (existingKeys.has(key)) continue;
+                        existingKeys.add(key);
+                        const targetId = anchor?.id || `anchor-${sid}-${startVerse}-${endVerse}`;
+                        nodesToCreate.push({
+                            id: stableEntityId('memory_node', 'verse_segment', sid, startVerse, endVerse),
+                            type: 'verse_segment',
+                            surahId: sid,
+                            startVerse,
+                            endVerse,
+                            targetId,
+                            userId: user?.id || '',
+                            scheduler: { ...createNewFSRSState(), ...newState } as any,
+                            createdAt: nowIso,
+                        } as MemoryNode);
+                    }
+                }
+            } else if (targetType === 'mindmap') {
+                // Build mindmap nodes for surahs that have a mindmap record but no memory node
+                const targetSurahIds = surahId
+                    ? [surahId]
+                    : SURAHS
+                        .filter(s => (settings.activePart === ALL_QURAN_PART || s.part === settings.activePart) && !settings.skippedSurahs?.includes(s.id))
+                        .map(s => s.id);
+
+                const existingMindmapSurahIds = new Set(
+                    instantNodes.filter(n => n.type === 'mindmap').map(n => resolveNodeSurahId(n)).filter((id): id is number => !!id)
+                );
+
+                for (const sid of targetSurahIds) {
+                    if (existingMindmapSurahIds.has(sid)) continue;
+                    nodesToCreate.push({
+                        id: stableEntityId('memory_node', 'mindmap', sid),
+                        type: 'mindmap',
+                        surahId: sid,
+                        targetId: `mindmap-${sid}`,
+                        userId: user?.id || '',
+                        scheduler: { ...createNewFSRSState(), ...newState } as any,
+                        createdAt: nowIso,
+                    } as MemoryNode);
+                }
+            }
+
+            if (nodesToCreate.length === 0) {
+                await alert({
+                    title: 'Nothing to Update',
+                    message: 'There are no review items to update for this selection.',
+                });
+                return;
+            }
         }
 
         const suspendedCleanup = level === 'reset'
             ? getSuspendedCleanupForNodes(nodesToUpdate)
             : { errorIds: [] as string[], groupCount: 0 };
 
+        const kanbanCols = settings?.kanbanColumns || {};
+        const completeIds = kanbanCols.complete || [];
+        const currentExitBehavior = settings?.completeExitBehavior ?? 'mindmap_only';
+
+        const cardsToMove = new Set<string>();
+
+        // Check existing nodes for cards to move
+        for (const node of nodesToUpdate) {
+            let kanbanCardId: string | null = null;
+            const nidSurahId = resolveNodeSurahId(node);
+            const partId = node.type === 'part_mindmap' ? (node as any).partId : null;
+
+            if (node.type === 'part_mindmap' && partId) {
+                kanbanCardId = `part-${partId}`;
+            } else if (nidSurahId) {
+                kanbanCardId = `surah-${nidSurahId}`;
+            }
+
+            if (kanbanCardId && !completeIds.includes(kanbanCardId)) {
+                if (node.type === 'verse_segment' && currentExitBehavior === 'mindmap_only') {
+                    // verses remain active even when not in complete column under this setting
+                } else {
+                    cardsToMove.add(kanbanCardId);
+                }
+            }
+        }
+
+        // Check nodes to create for cards to move
+        for (const node of nodesToCreate) {
+            let kanbanCardId: string | null = null;
+            const nidSurahId = (node as any).surahId ? Number((node as any).surahId) : null;
+            const partId = node.type === 'part_mindmap' ? (node as any).partId : null;
+
+            if (node.type === 'part_mindmap' && partId) {
+                kanbanCardId = `part-${partId}`;
+            } else if (nidSurahId) {
+                kanbanCardId = `surah-${nidSurahId}`;
+            }
+
+            if (kanbanCardId && !completeIds.includes(kanbanCardId)) {
+                if (node.type === 'verse_segment' && currentExitBehavior === 'mindmap_only') {
+                    // verses remain active even when not in complete column under this setting
+                } else {
+                    cardsToMove.add(kanbanCardId);
+                }
+            }
+        }
+
+        let warningText = '';
+        if (cardsToMove.size > 0) {
+            warningText = `\n\n⚠️ ${cardsToMove.size === 1 ? 'The associated surah is' : `${cardsToMove.size} associated surahs are`} not yet in the review queue. ${cardsToMove.size === 1 ? 'It' : 'They'} will be added to your active reviews so the changes take effect.`;
+        }
+
+        const totalItems = nodesToUpdate.length + nodesToCreate.length;
+        const levelLabel = level === 'reset' ? 'New' : level.charAt(0).toUpperCase() + level.slice(1);
+        const confirmMessage = nodesToCreate.length > 0 && nodesToUpdate.length === 0
+            ? `This will add ${nodesToCreate.length} new review item${nodesToCreate.length === 1 ? '' : 's'} and set ${nodesToCreate.length === 1 ? 'its' : 'their'} level to "${levelLabel}".${warningText}`
+            : suspendedCleanup.groupCount > 0
+                ? `This will update ${typeLabel} to "${levelLabel}".\n\n${suspendedCleanup.groupCount} paused review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} will also be cleared.${warningText}`
+                : `This will update ${typeLabel} to "${levelLabel}".${warningText}`;
+
         const ok = await confirm({
             title: 'Set Maturity',
-            message: suspendedCleanup.groupCount > 0
-                ? `Are you sure you want to set the maturity of ${typeLabel} to ${level}?\n\nThis will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to the verse group${suspendedCleanup.groupCount === 1 ? '' : 's'} being reset.`
-                : `Are you sure you want to set the maturity of ${typeLabel} to ${level}?`,
+            message: confirmMessage,
             confirmLabel: 'Update',
             isDestructive: true,
         });
         if (!ok) return;
 
-        beginBulkOperation(`Updating ${typeLabel}`, nodesToUpdate.length + suspendedCleanup.errorIds.length);
+        beginBulkOperation(`Updating ${typeLabel}`, totalItems + suspendedCleanup.errorIds.length);
         try {
+            // Create new nodes if needed — use .update() which handles
+            // both create-if-missing and update-if-exists via InstantDB semantics.
+            // IDs are stable UUIDs generated by stableEntityId so duplicates
+            // are automatically deduplicated.
+            if (nodesToCreate.length > 0) {
+                for (let i = 0; i < nodesToCreate.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
+                    const batch = nodesToCreate.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
+                    const writes = batch
+                        .map((node) => {
+                            const nodeId = String(node.id || '').trim();
+                            if (!nodeId) return null;
+                            return db.tx.memoryNodes[nodeId].update(node as any);
+                        })
+                        .filter((tx): tx is NonNullable<typeof tx> => !!tx);
+                    if (!writes.length) continue;
+                    await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+                    updateBulkOperationProgress(
+                        Math.min(nodesToCreate.length, i + batch.length),
+                        totalItems + suspendedCleanup.errorIds.length
+                    );
+                }
+            }
+
+            // Update existing nodes
             const preparedNodes = nodesToUpdate.map((node) => ({
                 ...node,
                 scheduler: { ...(node.scheduler as any), ...newState } as any
@@ -2644,8 +2886,8 @@ export default function SettingsPage() {
                 if (!writes.length) continue;
                 await transactWithRetry(writes.length === 1 ? writes[0] : writes);
                 updateBulkOperationProgress(
-                    Math.min(preparedNodes.length, i + batch.length),
-                    nodesToUpdate.length + suspendedCleanup.errorIds.length
+                    Math.min(preparedNodes.length, nodesToCreate.length + i + batch.length),
+                    totalItems + suspendedCleanup.errorIds.length
                 );
             }
 
@@ -2655,17 +2897,34 @@ export default function SettingsPage() {
                     MATURITY_TRANSACTION_BATCH_SIZE,
                     (completed) => {
                         updateBulkOperationProgress(
-                            nodesToUpdate.length + completed,
-                            nodesToUpdate.length + suspendedCleanup.errorIds.length
+                            totalItems + completed,
+                            totalItems + suspendedCleanup.errorIds.length
                         );
                     }
                 );
             }
+            let modifiedCols = kanbanCols;
             if (suspendedCleanup.groupCount > 0) {
                 const groupKeysToRemove = nodesToUpdate
                     .map((node) => getCurrentVerseGroupKeyForNode(node))
                     .filter((groupKey): groupKey is string => !!groupKey);
-                await removeSuspendedCardsFromKanban(groupKeysToRemove);
+                modifiedCols = removeSuspendedKanbanItems(modifiedCols, groupKeysToRemove);
+            }
+
+            if (cardsToMove.size > 0) {
+                const newCols = { ...modifiedCols };
+                const moveArray = Array.from(cardsToMove);
+                Object.keys(newCols).forEach(k => {
+                    if (Array.isArray(newCols[k])) {
+                        newCols[k] = newCols[k].filter(id => !moveArray.includes(id));
+                    }
+                });
+                newCols.complete = [...moveArray, ...(newCols.complete || [])];
+                modifiedCols = newCols;
+            }
+
+            if (suspendedCleanup.groupCount > 0 || cardsToMove.size > 0) {
+                await saveSettings({ kanbanColumns: modifiedCols });
             }
         } catch (error) {
             console.error('Failed to save group maturity', error);
@@ -3029,8 +3288,20 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
 
     const applyDecisionToTargets = (targets: SimilarityResolutionTarget[], updater: (existing: MutashabihatDecision) => MutashabihatDecision) => {
         targets.forEach(target => {
+            const targetRef = absoluteToSurahAyah(target.representativeAbs);
+            const isLearned = checkIsSurahLearned(targetRef.surahId);
             const existing = decisions[target.decisionKey] || { id: target.decisionKey, phraseId: target.decisionKey, status: 'pending' };
-            void handleDecisionUpdate(target.representativeAbs, updater(existing), target.decisionKey);
+            const updated = updater(existing);
+            
+            const isTryingToConfirm = !!updated.confirmedAt && !existing.confirmedAt;
+            const isAllowedToConfirm = isLearned || updated.status === 'ignored';
+            
+            if (isTryingToConfirm && !isAllowedToConfirm) {
+                const { confirmedAt, ...rest } = updated;
+                void handleDecisionUpdate(target.representativeAbs, rest as any, target.decisionKey);
+            } else {
+                void handleDecisionUpdate(target.representativeAbs, updated, target.decisionKey);
+            }
         });
     };
 
@@ -4138,15 +4409,30 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
-                                                            <div className="mobile-subgroup-item" onClick={() => setActiveSlideOverGroup({
-                                                                id: 'mindmaps-surah',
-                                                                title: 'Surah Mindmaps',
-                                                                type: 'mindmap' as any,
-                                                                nodes: filteredSurahMindmaps
-                                                            })}>
+                                                            <div className="mobile-subgroup-item" onClick={() => {
+                                                                const existingBySurah = new Map(latestSurahMindmaps.map(n => [resolveNodeSurahId(n), n]));
+                                                                const fullNodes = allActivePartSurahsForMindmaps.map(s => {
+                                                                    const existing = existingBySurah.get(s.id);
+                                                                    if (existing) return existing;
+                                                                    return {
+                                                                        id: `placeholder-mindmap-${s.id}`,
+                                                                        type: 'mindmap' as const,
+                                                                        surahId: s.id,
+                                                                        targetId: `mindmap-${s.id}`,
+                                                                        scheduler: null,
+                                                                        createdAt: null,
+                                                                    } as unknown as MemoryNode;
+                                                                });
+                                                                setActiveSlideOverGroup({
+                                                                    id: 'mindmaps-surah',
+                                                                    title: 'Surah Mindmaps',
+                                                                    type: 'mindmap' as any,
+                                                                    nodes: fullNodes
+                                                                });
+                                                            }}>
                                                                 <span>Surah Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{filteredSurahMindmaps.length}</span>
+                                                                    <span className="status-badge">{allActivePartSurahsForMindmaps.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -4365,22 +4651,24 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                     </td>
                                                                 </tr>
                                                                 {expandedGroups['mindmaps-surah'] && (
-                                                                    filteredSurahMindmaps.length > 0 ? (
-                                                                        filteredSurahMindmaps
-                                                                            .sort((a, b) => (resolveNodeSurahId(a) || 0) - (resolveNodeSurahId(b) || 0))
-                                                                            .map(node => {
-                                                                                const due = getNodeDueDate(node);
-                                                                                const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
-                                                                                const surahId = resolveNodeSurahId(node);
-                                                                                return (
-                                                                                <tr key={node.id} className="node-row">
-                                                                                    <td>{surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-'}</td>
+                                                                    allActivePartSurahsForMindmaps.length > 0 ? (
+                                                                        allActivePartSurahsForMindmaps.map(surah => {
+                                                                            const existingNode = latestSurahMindmaps.find(n => resolveNodeSurahId(n) === surah.id);
+                                                                            const due = existingNode ? getNodeDueDate(existingNode) : null;
+                                                                            const isOverdue = existingNode ? (due || '') <= new Date().toISOString().split('T')[0] : false;
+                                                                            return (
+                                                                                <tr key={`surah-mm-${surah.id}`} className="node-row" style={!existingNode ? { opacity: 0.6 } : undefined}>
+                                                                                    <td>{surah.id}. {surah.name}</td>
                                                                                     <td>
                                                                                         <select
                                                                                             value=""
                                                                                             onChange={async (e) => {
                                                                                                 if (!e.target.value) return;
-                                                                                                await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                                if (existingNode) {
+                                                                                                    await handleNodeMaturityReset(existingNode.id, e.target.value as any);
+                                                                                                } else {
+                                                                                                    await handleGroupMaturityReset('mindmap', e.target.value as any, surah.id, surah.name);
+                                                                                                }
                                                                                             }}
                                                                                             className="maturity-select"
                                                                                         >
@@ -4391,13 +4679,13 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                             <option value="mastered">Mastered</option>
                                                                                         </select>
                                                                                     </td>
-                                                                                    <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
-                                                                                    <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
-                                                                                    <td>{getNodeReps(node)}</td>
-                                                                                    <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
+                                                                                    <td>{existingNode ? formatKnowledgeTrackingInterval(getNodeStability(existingNode)) : '—'}</td>
+                                                                                    <td>{existingNode ? formatKnowledgeTrackingDifficulty(getNodeDifficulty(existingNode)) : '—'}</td>
+                                                                                    <td>{existingNode ? getNodeReps(existingNode) : '—'}</td>
+                                                                                    <td className={isOverdue ? 'status-overdue' : ''}>{existingNode ? formatKnowledgeTrackingDueDate(due) : '—'}</td>
                                                                                 </tr>
                                                                             );
-                                                                            })
+                                                                        })
                                                                     ) : (
                                                                         <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
                                                                     )
@@ -4945,6 +5233,30 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                                 if (group.absRefs.includes(matchAbs)) return false;
                                                                                                                 const matchRef = absoluteToSurahAyah(matchAbs);
                                                                                                                 return matchRef.surahId !== surah.id;
+                                                                                                            }).sort((a, b) => {
+                                                                                                                const aRef = absoluteToSurahAyah(a);
+                                                                                                                const bRef = absoluteToSurahAyah(b);
+                                                                                                                const aLearned = checkIsSurahLearned(aRef.surahId);
+                                                                                                                const bLearned = checkIsSurahLearned(bRef.surahId);
+                                                                                                                
+                                                                                                                if (aLearned !== bLearned) {
+                                                                                                                    return aLearned ? -1 : 1;
+                                                                                                                }
+
+                                                                                                                const getIsResolved = (abs: number) => {
+                                                                                                                    const target = group.resolutionTargets.find((t: any) => t.representativeAbs === abs);
+                                                                                                                    const decision = target ? decisions[target.decisionKey] : null;
+                                                                                                                    return decision?.status === 'ignored' || !!decision?.confirmedAt;
+                                                                                                                };
+                                                                                                                
+                                                                                                                const aResolved = getIsResolved(a);
+                                                                                                                const bResolved = getIsResolved(b);
+                                                                                                                
+                                                                                                                if (aResolved !== bResolved) {
+                                                                                                                    return aResolved ? 1 : -1;
+                                                                                                                }
+                                                                                                                
+                                                                                                                return a - b;
                                                                                                             });
                                                                                                             const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
                                                                                                             const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
@@ -4959,10 +5271,19 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                                                         const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                                                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
+                                                                                                                        const isLearned = checkIsSurahLearned(mref.surahId);
+                                                                                                                        const target = group.resolutionTargets.find((t: any) => t.representativeAbs === displayedMatchAbs);
+                                                                                                                        const decision = target ? decisions[target.decisionKey] : null;
+                                                                                                                        const isResolved = decision?.status === 'ignored' || !!decision?.confirmedAt;
+
                                                                                                                         return (
-                                                                                                                            <div key={`${decisionKey}-match-${idx}`} className="mut-text mut-compare-card">
-                                                                                                                                <div className="mut-text-label mut-compare-label">
-                                                                                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                                                                                            <div key={`${decisionKey}-match-${idx}`} className={`mut-text mut-compare-card ${!isLearned ? 'opacity-60' : ''}`}>
+                                                                                                                                <div className="mut-text-label mut-compare-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                                                                    <span>Compare: Surah {msurah?.name} - {mref.ayahId}</span>
+                                                                                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                                                                        {!isLearned && <span title="Surah is not in study queue"><Lock size={14} color="var(--foreground-secondary)" /></span>}
+                                                                                                                                        {isLearned && isResolved && <span title="Resolved"><Check size={14} color="var(--success)" /></span>}
+                                                                                                                                    </span>
                                                                                                                                 </div>
                                                                                                                                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
                                                                                                                                     <button
@@ -5421,6 +5742,31 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                     if (sortedAbsRefs.includes(matchAbs)) return false;
                                                     const matchRef = absoluteToSurahAyah(matchAbs);
                                                     return matchRef.surahId !== activeMutSlideOver.surahId;
+                                                })
+                                                .sort((a, b) => {
+                                                    const aRef = absoluteToSurahAyah(a);
+                                                    const bRef = absoluteToSurahAyah(b);
+                                                    const aLearned = checkIsSurahLearned(aRef.surahId);
+                                                    const bLearned = checkIsSurahLearned(bRef.surahId);
+                                                    
+                                                    if (aLearned !== bLearned) {
+                                                        return aLearned ? -1 : 1;
+                                                    }
+
+                                                    const getIsResolved = (abs: number) => {
+                                                        const target = group.resolutionTargets.find((t: any) => t.representativeAbs === abs);
+                                                        const decision = target ? decisions[target.decisionKey] : null;
+                                                        return decision?.status === 'ignored' || !!decision?.confirmedAt;
+                                                    };
+                                                    
+                                                    const aResolved = getIsResolved(a);
+                                                    const bResolved = getIsResolved(b);
+                                                    
+                                                    if (aResolved !== bResolved) {
+                                                        return aResolved ? 1 : -1;
+                                                    }
+                                                    
+                                                    return a - b;
                                                 });
 
                                             const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
@@ -5509,10 +5855,19 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                             const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                             const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
+                                                            const isLearned = checkIsSurahLearned(mref.surahId);
+                                                            const target = group.resolutionTargets.find((t: any) => t.representativeAbs === displayedMatchAbs);
+                                                            const decision = target ? decisions[target.decisionKey] : null;
+                                                            const isResolved = decision?.status === 'ignored' || !!decision?.confirmedAt;
+
                                                             return (
-                                                                <div key={idx} className="mut-match-item mut-compare-card" style={{ marginBottom: '0.85rem' }}>
-                                                                    <div className="mut-match-label mut-compare-label">
-                                                                        Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                                <div key={idx} className={`mut-match-item mut-compare-card ${!isLearned ? 'opacity-60' : ''}`} style={{ marginBottom: '0.85rem' }}>
+                                                                    <div className="mut-match-label mut-compare-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <span>Compare: Surah {msurah?.name} - {mref.ayahId}</span>
+                                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                            {!isLearned && <span title="Surah is not in study queue"><Lock size={14} color="var(--foreground-secondary)" /></span>}
+                                                                            {isLearned && isResolved && <span title="Resolved"><Check size={14} color="var(--success)" /></span>}
+                                                                        </span>
                                                                     </div>
                                                                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
                                                                         <button
@@ -6322,8 +6677,10 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             if (activeSlideOverGroup.type === 'mindmap') return (resolveNodeSurahId(a) || 0) - (resolveNodeSurahId(b) || 0);
                                             return (resolveNodePartId(a) || 0) - (resolveNodePartId(b) || 0);
                                         })
-                                        .map(node => (
-                                            <div key={node.id} className="mobile-node-card">
+                                        .map(node => {
+                                            const isPlaceholder = String(node.id).startsWith('placeholder-');
+                                            return (
+                                            <div key={node.id} className="mobile-node-card" style={isPlaceholder ? { opacity: 0.6 } : undefined}>
                                                 <div className="node-card-main">
                                                     <div className="node-target">
                                                         {activeSlideOverGroup.type === 'verse_segment' ? `Ayat ${node.startVerse}-${node.endVerse}` :
@@ -6342,7 +6699,14 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         onChange={async (e) => {
                                                             const val = e.target.value as any;
                                                             if (!val) return;
-                                                            await handleNodeMaturityReset(node.id, val);
+                                                            if (isPlaceholder) {
+                                                                const placeholderSurahId = resolveNodeSurahId(node);
+                                                                if (placeholderSurahId) {
+                                                                    await handleGroupMaturityReset('mindmap', val, placeholderSurahId, getSurah(placeholderSurahId)?.name);
+                                                                }
+                                                            } else {
+                                                                await handleNodeMaturityReset(node.id, val);
+                                                            }
 
                                                             // Update local nodes in slideover
                                                             setActiveSlideOverGroup(prev => {
@@ -6364,25 +6728,26 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                 <div className="node-card-details">
                                                     <div className="stat-item">
                                                         <span className="stat-label">Interval</span>
-                                                        <span className="stat-value">{formatKnowledgeTrackingInterval(getNodeStability(node))}</span>
+                                                        <span className="stat-value">{isPlaceholder ? '—' : formatKnowledgeTrackingInterval(getNodeStability(node))}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Difficulty</span>
-                                                        <span className="stat-value">{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</span>
+                                                        <span className="stat-value">{isPlaceholder ? '—' : formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Reps</span>
-                                                        <span className="stat-value">{getNodeReps(node)}</span>
+                                                        <span className="stat-value">{isPlaceholder ? '—' : getNodeReps(node)}</span>
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Next</span>
-                                                        <span className={`stat-value ${(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
-                                                            {formatKnowledgeTrackingDueDate(getNodeDueDate(node))}
+                                                        <span className={`stat-value ${!isPlaceholder && (getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
+                                                            {isPlaceholder ? '—' : formatKnowledgeTrackingDueDate(getNodeDueDate(node))}
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))
+                                            );
+                                        })
                                 ) : (
                                     <div className="empty-state">No items found</div>
                                 )}

@@ -9,6 +9,7 @@ import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import Spinner from '@/components/ui/Spinner';
 import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { getDailyPortion } from '@/lib/dailyPortions';
 import {
     ALL_QURAN_PART,
     LEGACY_ALL_QURAN_PART,
@@ -1131,52 +1132,16 @@ export default function TodayPage() {
         const totalVerses = allVersesInPart.length;
         if (totalVerses === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
-        const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
-
         // Use InstantDB listening progress
         const partProgress = resolveActivePartProgress();
         const startIdx = partProgress?.lastVerseIndex || 0;
-        let endIdx = startIdx + versesPerDay;
 
-        // Intelligent Division: Merge short trailing surah segments
-        if (endIdx < totalVerses) {
-            const lastVerseInProposed = allVersesInPart[endIdx - 1];
-            const nextVerse = allVersesInPart[endIdx];
-            if (nextVerse && nextVerse.surahId === lastVerseInProposed.surahId) {
-                // Check how many are left in this surah
-                let i = endIdx;
-                let remainingCount = 0;
-                let remainingLength = 0;
-                while (i < totalVerses && allVersesInPart[i].surahId === lastVerseInProposed.surahId) {
-                    remainingCount++;
-                    remainingLength += (allVersesInPart[i]?.text || '').length;
-                    i++;
-                }
-                // If <= 5 verses or total text is short (< 400 chars)
-                if (remainingCount <= 5 || remainingLength < 400) {
-                    // Ignore surahs with very long verses (e.g. Baqarah 282)
-                    const surahVerses = allVersesInPart.filter(v => v.surahId === lastVerseInProposed.surahId);
-                    const hasVeryLongVerses = surahVerses.some(v => (v?.text || '').length > 600);
-
-                    if (!hasVeryLongVerses) {
-                        endIdx = i;
-                    }
-                }
-            }
-        }
-
-        let portion: Verse[];
-        if (endIdx <= totalVerses) {
-            portion = allVersesInPart.slice(startIdx, endIdx);
-        } else {
-            // Handle wrap-around
-            portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
-        }
+        const portionResult = getDailyPortion(allVersesInPart, startIdx, settings.completionDays);
 
         return {
-            portion,
+            portion: portionResult.portion,
             startVerseIndex: 0,
-            versesPerDay,
+            versesPerDay: portionResult.portion.length,
             totalVerses,
             lastUpdateAt: partProgress?.updatedAt
         };

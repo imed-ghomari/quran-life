@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
+import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 
@@ -167,6 +167,13 @@ export default function CardActionMenu({
                 label: 'Open Similarity Context',
                 icon: <Search size={20} />,
                 onClick: onViewSimilarityContext,
+                disabled: isProcessing
+            });
+            items.push({
+                label: 'Open in Settings',
+                icon: <Settings size={20} />,
+                isLink: true,
+                href: '/settings?tab=tracking',
                 disabled: isProcessing
             });
         }

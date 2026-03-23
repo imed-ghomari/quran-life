@@ -11,7 +11,7 @@ import { KanbanItem, KanbanColumnData } from './types';
 import { DesktopAnchorBuilder, MobileAnchorBuilder, AnchorBuilderState } from './AnchorBuilders';
 import MindmapViewer from '../MindmapViewer';
 import SplitsModal from './SplitsModal';
-import { PenTool, Download, Search, X, Brain, Check, SplitSquareHorizontal, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { PenTool, Download, Search, X, Brain, Check, SplitSquareHorizontal, ChevronLeft, ChevronRight, RotateCcw, Lock } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { PartMindMapId, MutashabihatDecision } from '@/lib/types';
@@ -76,6 +76,7 @@ interface TodoKanbanProps {
     onRemoveBreak: (surahId: number, val: number) => void;
     onSaveAnchors: (surahId: number, verseCount: number) => void;
     hasReviewedChunks: (surahId: number) => boolean;
+    isSurahLearned?: (surahId: number) => boolean;
 
     // Persistence
     kanbanState?: Record<string, string[]>;
@@ -174,6 +175,7 @@ export default function TodoKanban({
     onRemoveBreak,
     onSaveAnchors,
     hasReviewedChunks,
+    isSurahLearned,
     kanbanState,
     onKanbanStateChange,
     defaultFilter,
@@ -1811,14 +1813,51 @@ export default function TodoKanban({
                         if (group.absRefs.includes(matchAbs)) return false;
                         const matchRef = absoluteToSurahAyah(matchAbs);
                         return matchRef.surahId !== group.surahId;
+                    })
+                    .sort((a, b) => {
+                        const aRef = absoluteToSurahAyah(a);
+                        const bRef = absoluteToSurahAyah(b);
+                        const aLearned = isSurahLearned ? isSurahLearned(aRef.surahId) : false;
+                        const bLearned = isSurahLearned ? isSurahLearned(bRef.surahId) : false;
+                        
+                        if (aLearned !== bLearned) {
+                            return aLearned ? -1 : 1;
+                        }
+
+                        const getIsResolved = (abs: number) => {
+                            const target = group.resolutionTargets.find((t: any) => t.representativeAbs === abs);
+                            const decision = target ? mutashabihatDecisions.find(d => d.phraseId === target.decisionKey) : null;
+                            return decision?.status === 'ignored' || !!decision?.confirmedAt;
+                        };
+                        
+                        const aResolved = getIsResolved(a);
+                        const bResolved = getIsResolved(b);
+                        
+                        if (aResolved !== bResolved) {
+                            return aResolved ? 1 : -1;
+                        }
+                        
+                        return a - b;
                     });
                 const isExpanded = expandedSimilarityMatches[`${decisionKey}-full`] || false;
                 const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
                 const hasMore = matches.length > 4;
                 const applyDecisionToGroup = (updater: (targetExisting: any) => any) => {
                     group.resolutionTargets.forEach((target) => {
+                        const targetRef = absoluteToSurahAyah(target.representativeAbs);
+                        const isLearned = isSurahLearned ? isSurahLearned(targetRef.surahId) : false;
                         const targetExisting = mutashabihatDecisions.find(d => d.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
-                        onMutashabihatDecisionUpdate(target.representativeAbs, updater(targetExisting), target.decisionKey);
+                        const updated = updater(targetExisting);
+                        
+                        const isTryingToConfirm = !!updated.confirmedAt && !targetExisting.confirmedAt;
+                        const isAllowedToConfirm = isLearned || updated.status === 'ignored';
+                        
+                        if (isTryingToConfirm && !isAllowedToConfirm) {
+                            const { confirmedAt, ...rest } = updated;
+                            onMutashabihatDecisionUpdate(target.representativeAbs, rest, target.decisionKey);
+                        } else {
+                            onMutashabihatDecisionUpdate(target.representativeAbs, updated, target.decisionKey);
+                        }
                     });
                 };
 
@@ -1955,10 +1994,19 @@ export default function TodoKanban({
                                                         const mVerse = verseLookupBySurahAyah.get(`${mref.surahId}:${mref.ayahId}`);
                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
+                                                        const isLearned = isSurahLearned ? isSurahLearned(mref.surahId) : false;
+                                                        const target = group.resolutionTargets.find((t: any) => t.representativeAbs === displayedMatchAbs);
+                                                        const decision = target ? mutashabihatDecisions.find((d: any) => d.phraseId === target.decisionKey) : null;
+                                                        const isResolved = decision?.status === 'ignored' || !!decision?.confirmedAt;
+
                                                         return (
-                                                            <div key={idx} className="mut-match-item mut-compare-card todo-context-row" style={{ marginBottom: '0.85rem' }}>
-                                                                <div className="mut-match-label mut-compare-label">
-                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                            <div key={idx} className={`mut-match-item mut-compare-card todo-context-row ${!isLearned ? 'opacity-60' : ''}`} style={{ marginBottom: '0.85rem' }}>
+                                                                <div className="mut-match-label mut-compare-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span>Compare: Surah {msurah?.name} - {mref.ayahId}</span>
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        {!isLearned && <span title="Surah is not in study queue"><Lock size={14} color="var(--foreground-secondary)" /></span>}
+                                                                        {isLearned && isResolved && <span title="Resolved"><Check size={14} color="var(--success)" /></span>}
+                                                                    </span>
                                                                 </div>
                                                                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.75rem' }}>
                                                                     <button
