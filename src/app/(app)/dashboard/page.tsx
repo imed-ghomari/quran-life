@@ -1384,9 +1384,11 @@ export default function TodayPage() {
             node.type === 'mindmap' ? getSurah(resolvedSurahId || 0)?.arabicName :
                 `${getSurah(resolvedSurahId || 0)?.arabicName} (${node.startVerse}-${node.endVerse})`;
 
-        // Postpone by 1 day
+        // Postpone relative to now, not the existing due date.
+        // If a card is already overdue, adding a day to its stale due date can
+        // still leave it due today and require multiple taps to leave the queue.
         const scheduler = node.scheduler as any;
-        const due = new Date(scheduler.due || scheduler.dueDate || new Date());
+        const due = new Date();
         due.setDate(due.getDate() + 1);
 
         const afterNode = {
