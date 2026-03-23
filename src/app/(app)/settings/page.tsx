@@ -9,6 +9,7 @@ import {
     useSharedInstantMindMaps,
     useSharedInstantMutashabihat,
     useSharedInstantNodes,
+    useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
 import { OnlineStatusContext } from '@/components/Providers';
@@ -59,7 +60,9 @@ import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
 import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
+import { getVerseGroupKey } from '@/lib/reviewQueue';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
 
 const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
@@ -444,6 +447,7 @@ export default function SettingsPage() {
     const { settings, saveSettings } = useSharedInstantSettings();
     const { nodes: instantNodes, saveNode: saveInstantNode } = useSharedInstantNodes();
     const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
+    const { errors: reviewErrors } = useSharedInstantReviewErrors();
     const { progress: listeningProgress } = useSharedInstantListeningProgress();
     const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useSharedInstantMutashabihat();
     const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
@@ -2482,9 +2486,81 @@ export default function SettingsPage() {
         }
     };
 
+    const getCurrentVerseGroupKeyForNode = useCallback((node: MemoryNode) => {
+        if (node.type !== 'verse_segment') return null;
+        const surahId = resolveNodeSurahId(node);
+        const startVerse = Number((node as any)?.startVerse);
+        const endVerse = Number((node as any)?.endVerse);
+        if (!surahId || !Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return null;
+
+        const currentAnchor = getEffectiveSurahAnchors(surahId, settingsMindmapsBySurah[surahId])
+            .find((anchor) => Number(anchor.startVerse) === startVerse && Number(anchor.endVerse) === endVerse);
+
+        return getVerseGroupKey({
+            surahId,
+            anchorId: currentAnchor?.id || (node as any)?.targetId,
+            startVerse,
+            endVerse,
+        });
+    }, [settingsMindmapsBySurah]);
+
+    const getCurrentVerseGroupKeyForError = useCallback((error: any) => {
+        const surahId = Number(error?.surahId);
+        const startVerse = Number(error?.startVerse);
+        const endVerse = Number(error?.endVerse);
+        if (!Number.isFinite(surahId) || surahId <= 0 || !Number.isFinite(startVerse) || !Number.isFinite(endVerse)) {
+            return null;
+        }
+
+        const currentAnchor = getEffectiveSurahAnchors(surahId, settingsMindmapsBySurah[surahId])
+            .find((anchor) => Number(anchor.startVerse) === startVerse && Number(anchor.endVerse) === endVerse);
+        if (!currentAnchor) return null;
+
+        return getVerseGroupKey({
+            surahId,
+            anchorId: currentAnchor.id || error?.anchorId,
+            startVerse,
+            endVerse,
+        });
+    }, [settingsMindmapsBySurah]);
+
+    const getSuspendedCleanupForNodes = useCallback((nodes: MemoryNode[]) => {
+        const groupKeys = nodes
+            .map((node) => getCurrentVerseGroupKeyForNode(node))
+            .filter((groupKey): groupKey is string => !!groupKey);
+
+        return getSuspendedReviewErrorCleanupPlan({
+            errors: reviewErrors,
+            groupKeys,
+            acknowledgedAtByGroup: settings?.suspendedVerseGroupsAcknowledged,
+            kanbanColumns: settings?.kanbanColumns,
+            resolveGroupKeyFromError: getCurrentVerseGroupKeyForError,
+        });
+    }, [getCurrentVerseGroupKeyForError, getCurrentVerseGroupKeyForNode, reviewErrors, settings?.kanbanColumns, settings?.suspendedVerseGroupsAcknowledged]);
+
+    const removeSuspendedCardsFromKanban = useCallback(async (groupKeys: Iterable<string>) => {
+        await saveSettings({
+            kanbanColumns: removeSuspendedKanbanItems(settings?.kanbanColumns, groupKeys),
+        });
+    }, [saveSettings, settings?.kanbanColumns]);
+
     const handleNodeMaturityReset = async (nodeId: string, level: 'reset' | 'medium' | 'strong' | 'mastered') => {
         const node = instantNodes.find(n => n.id === nodeId);
         if (!node) return;
+
+        const suspendedCleanup = level === 'reset'
+            ? getSuspendedCleanupForNodes([node])
+            : { errorIds: [] as string[], groupCount: 0 };
+
+        if (suspendedCleanup.groupCount > 0) {
+            const ok = await confirm({
+                title: 'Reset Verse Group',
+                message: `This reset will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to this verse group.`,
+                confirmLabel: 'Reset',
+                isDestructive: true,
+            });
+            if (!ok) return;
+        }
 
         const newState = getMaturityState(level);
         try {
@@ -2492,6 +2568,15 @@ export default function SettingsPage() {
                 ...node,
                 scheduler: { ...(node.scheduler as any), ...newState } as any
             });
+            if (suspendedCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(suspendedCleanup.errorIds, MATURITY_TRANSACTION_BATCH_SIZE);
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                const groupKey = getCurrentVerseGroupKeyForNode(node);
+                if (groupKey) {
+                    await removeSuspendedCardsFromKanban([groupKey]);
+                }
+            }
         } catch (error) {
             console.error('Failed to save node maturity', error);
             await alert({
@@ -2508,14 +2593,6 @@ export default function SettingsPage() {
         } else {
             typeLabel = type === 'verse_segment' || type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
         }
-
-        const ok = await confirm({
-            title: 'Set Maturity',
-            message: `Are you sure you want to set the maturity of ${typeLabel} to ${level}?`,
-            confirmLabel: 'Update',
-            isDestructive: true,
-        });
-        if (!ok) return;
 
         const targetType = type === 'verse' ? 'verse_segment' : type;
         const newState = getMaturityState(level);
@@ -2534,7 +2611,21 @@ export default function SettingsPage() {
             return;
         }
 
-        beginBulkOperation(`Updating ${typeLabel}`, nodesToUpdate.length);
+        const suspendedCleanup = level === 'reset'
+            ? getSuspendedCleanupForNodes(nodesToUpdate)
+            : { errorIds: [] as string[], groupCount: 0 };
+
+        const ok = await confirm({
+            title: 'Set Maturity',
+            message: suspendedCleanup.groupCount > 0
+                ? `Are you sure you want to set the maturity of ${typeLabel} to ${level}?\n\nThis will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to the verse group${suspendedCleanup.groupCount === 1 ? '' : 's'} being reset.`
+                : `Are you sure you want to set the maturity of ${typeLabel} to ${level}?`,
+            confirmLabel: 'Update',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        beginBulkOperation(`Updating ${typeLabel}`, nodesToUpdate.length + suspendedCleanup.errorIds.length);
         try {
             const preparedNodes = nodesToUpdate.map((node) => ({
                 ...node,
@@ -2552,7 +2643,29 @@ export default function SettingsPage() {
                     .filter((tx): tx is NonNullable<typeof tx> => !!tx);
                 if (!writes.length) continue;
                 await transactWithRetry(writes.length === 1 ? writes[0] : writes);
-                updateBulkOperationProgress(Math.min(preparedNodes.length, i + batch.length), preparedNodes.length);
+                updateBulkOperationProgress(
+                    Math.min(preparedNodes.length, i + batch.length),
+                    nodesToUpdate.length + suspendedCleanup.errorIds.length
+                );
+            }
+
+            if (suspendedCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(
+                    suspendedCleanup.errorIds,
+                    MATURITY_TRANSACTION_BATCH_SIZE,
+                    (completed) => {
+                        updateBulkOperationProgress(
+                            nodesToUpdate.length + completed,
+                            nodesToUpdate.length + suspendedCleanup.errorIds.length
+                        );
+                    }
+                );
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                const groupKeysToRemove = nodesToUpdate
+                    .map((node) => getCurrentVerseGroupKeyForNode(node))
+                    .filter((groupKey): groupKey is string => !!groupKey);
+                await removeSuspendedCardsFromKanban(groupKeysToRemove);
             }
         } catch (error) {
             console.error('Failed to save group maturity', error);
@@ -2969,6 +3082,11 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 label,
             };
         });
+        const previousAnchors = (settingsMindmapsBySurah[surahId]?.anchors || []).map((anchor: any) => ({
+            id: anchor?.id || `anchor-${surahId}-${Number(anchor?.startVerse)}-${Number(anchor?.endVerse)}`,
+            startVerse: Number(anchor?.startVerse),
+            endVerse: Number(anchor?.endVerse),
+        }));
 
         await saveMindMap(surahId, {
             anchors,
@@ -2980,8 +3098,19 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
         const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
         const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
         const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
+        const impactedGroupKeys = getImpactedSplitVerseGroupKeys({
+            surahId,
+            previousAnchors,
+            nextAnchors: anchors,
+        });
+        const suspendedCleanup = getSuspendedReviewErrorCleanupPlan({
+            errors: reviewErrors,
+            groupKeys: impactedGroupKeys,
+            acknowledgedAtByGroup: settings?.suspendedVerseGroupsAcknowledged,
+            kanbanColumns: settings?.kanbanColumns,
+        });
 
-        beginBulkOperation('Syncing Verse Groups', Math.max(1, anchors.length + existingVerseNodes.length));
+        beginBulkOperation('Syncing Verse Groups', Math.max(1, anchors.length + existingVerseNodes.length + suspendedCleanup.errorIds.length));
         try {
             await syncVerseSegmentNodesForSurah({
                 userId: user.id,
@@ -2991,13 +3120,28 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 shouldCreateMissingRanges,
                 batchSize: MATURITY_TRANSACTION_BATCH_SIZE,
                 onProgress: (completed, total) => {
-                    updateBulkOperationProgress(completed, Math.max(1, total));
+                    updateBulkOperationProgress(completed, Math.max(1, total + suspendedCleanup.errorIds.length));
                 },
             });
+            if (suspendedCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(
+                    suspendedCleanup.errorIds,
+                    MATURITY_TRANSACTION_BATCH_SIZE,
+                    (completed) => {
+                        updateBulkOperationProgress(
+                            anchors.length + existingVerseNodes.length + completed,
+                            Math.max(1, anchors.length + existingVerseNodes.length + suspendedCleanup.errorIds.length)
+                        );
+                    }
+                );
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                await removeSuspendedCardsFromKanban(impactedGroupKeys);
+            }
         } finally {
             endBulkOperation();
         }
-    }, [beginBulkOperation, endBulkOperation, getSettingsBuilderState, instantNodes, saveMindMap, settings.kanbanColumns, settingsMindmapsBySurah, updateBulkOperationProgress, user?.id]);
+    }, [beginBulkOperation, endBulkOperation, getSettingsBuilderState, instantNodes, removeSuspendedCardsFromKanban, reviewErrors, saveMindMap, settings.kanbanColumns, settings?.suspendedVerseGroupsAcknowledged, settingsMindmapsBySurah, updateBulkOperationProgress, user?.id]);
 
     const openMindmapFromMutContext = useCallback((surahId: number) => {
         setSettingsMindmapEditor({

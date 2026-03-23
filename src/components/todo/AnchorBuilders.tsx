@@ -21,6 +21,7 @@ export function MobileAnchorBuilder({
     onRemoveBreak,
     onSave,
     hasReviewedHistory,
+    hasSuspendedCards = false,
 }: {
     surahId: number;
     verseCount: number;
@@ -34,6 +35,7 @@ export function MobileAnchorBuilder({
     onRemoveBreak: (val: number) => void;
     onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
+    hasSuspendedCards?: boolean;
 }) {
     const surahName = getSurah(surahId)?.name;
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -45,6 +47,11 @@ export function MobileAnchorBuilder({
     const displayUrl = isDark ? (mindmapImageUrlDark || mindmapImageUrl) : (mindmapImageUrl || mindmapImageUrlDark);
     const hasMindmap = !!(snapshot || displayUrl);
     const shouldShowPreview = showMindmapPreview && hasMindmap;
+    const splitWarningMessage = hasReviewedHistory && hasSuspendedCards
+        ? 'This surah has reviewed verse groups and suspended fix cards. Only the verse groups affected by your split changes will reset, while unchanged verse groups will keep their current progress. Any suspended fix card tied to a changed verse group will also be cleared. Do you want to continue?'
+        : hasReviewedHistory
+            ? 'This surah already has reviewed verse groups. Only the verse groups affected by your split changes will reset, while unchanged verse groups will keep their current progress. Do you want to continue?'
+            : 'This surah has suspended fix cards. If a changed verse group is currently suspended, its suspended fix card will be cleared because that old verse group no longer exists. Do you want to continue?';
 
     // Height of one "verse unit" in pixels
     const VERSE_HEIGHT = 50;
@@ -153,10 +160,10 @@ export function MobileAnchorBuilder({
                     <button
                         className="btn btn-secondary btn-full std-normal-btn"
                         onClick={async () => {
-                            if (hasReviewedHistory) {
+                            if (hasReviewedHistory || hasSuspendedCards) {
                                 const ok = await confirm({
                                     title: 'Confirm Split Changes',
-                                    message: 'This surah already has reviewed verse groups. Only the verse groups affected by your split changes will reset. Any unchanged verse groups will keep their current progress. Do you want to continue?',
+                                    message: splitWarningMessage,
                                     confirmLabel: 'Proceed',
                                     isDestructive: true,
                                 });
@@ -471,6 +478,7 @@ export function DesktopAnchorBuilder({
     onRemoveBreak,
     onSave,
     hasReviewedHistory,
+    hasSuspendedCards = false,
 }: {
     surahId: number;
     verseCount: number;
@@ -479,6 +487,7 @@ export function DesktopAnchorBuilder({
     onRemoveBreak: (val: number) => void;
     onSave: () => Promise<void> | void;
     hasReviewedHistory: boolean;
+    hasSuspendedCards?: boolean;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [hoverVal, setHoverVal] = useState<number | null>(null);
@@ -492,6 +501,11 @@ export function DesktopAnchorBuilder({
     const barRef = useRef<HTMLDivElement>(null);
     const trackViewportRef = useRef<HTMLDivElement>(null);
     const { confirm } = useConfirmDialog();
+    const splitWarningMessage = hasReviewedHistory && hasSuspendedCards
+        ? 'This surah has reviewed verse groups and suspended fix cards. Only the verse groups affected by your split changes will reset, while unchanged verse groups will keep their current progress. Any suspended fix card tied to a changed verse group will also be cleared. Do you want to continue?'
+        : hasReviewedHistory
+            ? 'This surah already has reviewed verse groups. Only the verse groups affected by your split changes will reset, while unchanged verse groups will keep their current progress. Do you want to continue?'
+            : 'This surah has suspended fix cards. If a changed verse group is currently suspended, its suspended fix card will be cleared because that old verse group no longer exists. Do you want to continue?';
 
     const breaks = Array.from(new Set([...builderState.breaks]))
         .sort((a, b) => a - b)
@@ -583,10 +597,10 @@ export function DesktopAnchorBuilder({
                         className="btn btn-secondary std-normal-btn"
                         style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                         onClick={async () => {
-                            if (hasReviewedHistory) {
+                            if (hasReviewedHistory || hasSuspendedCards) {
                                 const ok = await confirm({
                                     title: 'Confirm Split Changes',
-                                    message: 'This surah already has reviewed verse groups. Only the verse groups affected by your split changes will reset. Any unchanged verse groups will keep their current progress. Do you want to continue?',
+                                    message: splitWarningMessage,
                                     confirmLabel: 'Proceed',
                                     isDestructive: true,
                                 });
