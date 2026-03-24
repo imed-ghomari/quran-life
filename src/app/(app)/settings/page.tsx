@@ -66,7 +66,7 @@ import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedRe
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { getVerseGroupKey } from '@/lib/reviewQueue';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
-import { getSimilarityEntryResolutionMeta } from '@/lib/mutashabihatResolution';
+import { buildMutashabihatDecisionKey, getSimilarityEntryResolutionMeta } from '@/lib/mutashabihatResolution';
 import { getSimilarityComparatorCardStyle, SimilarityComparatorStatusBadge } from '@/components/SimilarityComparatorStatus';
 
 const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
@@ -470,7 +470,7 @@ export default function SettingsPage() {
     const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
     const { errors: reviewErrors } = useSharedInstantReviewErrors();
     const { progress: listeningProgress } = useSharedInstantListeningProgress();
-    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, saveCustom: updateInstantCustom } = useSharedInstantMutashabihat();
+    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision } = useSharedInstantMutashabihat();
     const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
     const [systemIsDark, setSystemIsDark] = useState(false);
     const { confirm, alert } = useConfirmDialog();
@@ -3164,7 +3164,22 @@ export default function SettingsPage() {
 
     const handleResetMutashabihat = async () => {
         const partName = settings?.activePart === ALL_QURAN_PART ? 'the whole Quran' : `Part ${settings?.activePart}`;
-        const msg = `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`;
+        const partSurahIds = new Set(
+            SURAHS
+                .filter((surah) => settings?.activePart === ALL_QURAN_PART || surah.part === settings?.activePart)
+                .map((surah) => surah.id)
+        );
+        const similarityKanbanIds = Array.from(partSurahIds, (surahId) => `similarity-${surahId}`);
+        const currentKanbanIds = new Set(
+            Object.values(settings?.kanbanColumns || {}).flat().map((itemId) => String(itemId))
+        );
+        const similarityCardsToRemoveCount = similarityKanbanIds.filter((itemId) => currentKanbanIds.has(itemId)).length;
+        const msg = [
+            `Are you sure you want to reset ALL mutashabihat decisions for ${partName}? This cannot be undone.`,
+            similarityCardsToRemoveCount > 0
+                ? `This will also remove ${similarityCardsToRemoveCount} similarity todo card${similarityCardsToRemoveCount === 1 ? '' : 's'} for this scope.`
+                : 'This will also clear any similarity todo cards for this scope.',
+        ].join('\n\n');
         const ok = await confirm({
             title: 'Reset Mutashabihat',
             message: msg,
@@ -3184,23 +3199,45 @@ export default function SettingsPage() {
             const abs = d.phraseId.split('-')[0];
             return ayahSet.has(abs);
         });
+        const similarityErrorsToDelete = reviewErrors.filter((error) => (
+            error?.type === 'similarity'
+            && error?.absoluteAyah
+            && ayahSet.has(String(error.absoluteAyah))
+            && String(error?.id || '').trim().length > 0
+        ));
+        const similarityKanbanIdsToRemove = similarityKanbanIds.filter((itemId) => currentKanbanIds.has(itemId));
+        const nextKanbanColumns = similarityKanbanIdsToRemove.length > 0
+            ? Object.fromEntries(
+                Object.entries(settings?.kanbanColumns || {}).map(([columnId, itemIds]) => [
+                    columnId,
+                    (itemIds || []).filter((itemId) => !similarityKanbanIdsToRemove.includes(String(itemId))),
+                ])
+            )
+            : null;
+        const deleteWrites = [
+            ...decisionsToDelete.map((decision) => {
+                const decisionId = String(decision?.id || '').trim();
+                return decisionId ? db.tx.mutashabihatDecisions[decisionId].delete() : null;
+            }),
+            ...similarityErrorsToDelete.map((error) => db.tx.reviewErrors[String(error.id)].delete()),
+        ].filter((tx): tx is NonNullable<typeof tx> => !!tx);
+        const totalOperations = deleteWrites.length + (nextKanbanColumns ? 1 : 0);
 
-        if (decisionsToDelete.length > 0) {
-            beginBulkOperation('Resetting Similar Verse Decisions', decisionsToDelete.length);
+        if (totalOperations > 0) {
+            beginBulkOperation('Resetting Similar Verse Decisions', totalOperations);
             try {
-                for (let i = 0; i < decisionsToDelete.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
-                    const batch = decisionsToDelete.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
-                    const writes = batch
-                        .map((decision) => {
-                            const decisionId = String(decision?.id || '').trim();
-                            if (!decisionId) return null;
-                            return db.tx.mutashabihatDecisions[decisionId].delete();
-                        })
-                        .filter((tx): tx is NonNullable<typeof tx> => !!tx);
-                    if (!writes.length) continue;
-                    await transactWithRetry(writes.length === 1 ? writes[0] : writes);
-                    updateBulkOperationProgress(Math.min(decisionsToDelete.length, i + batch.length), decisionsToDelete.length);
+                for (let i = 0; i < deleteWrites.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
+                    const batch = deleteWrites.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
+                    if (!batch.length) continue;
+                    await transactWithRetry(batch.length === 1 ? batch[0] : batch);
+                    updateBulkOperationProgress(Math.min(deleteWrites.length, i + batch.length), totalOperations);
                 }
+
+                if (nextKanbanColumns) {
+                    await saveSettings({ kanbanColumns: nextKanbanColumns });
+                    updateBulkOperationProgress(totalOperations, totalOperations);
+                }
+
                 startTransition(() => {
                     setDecisions((prev) => {
                         const next = { ...prev };
@@ -3210,7 +3247,11 @@ export default function SettingsPage() {
                         return next;
                     });
                 });
-                addToast('success', 'Decisions Reset', `${decisionsToDelete.length} similar-verse decision(s) removed.`);
+                addToast(
+                    'success',
+                    'Decisions Reset',
+                    `${decisionsToDelete.length} decision(s), ${similarityErrorsToDelete.length} similarity review record(s), and ${similarityKanbanIdsToRemove.length} todo card(s) cleared.`
+                );
             } catch (error) {
                 console.error('Failed to reset mutashabihat decisions', error);
                 await alert({
@@ -3220,6 +3261,8 @@ export default function SettingsPage() {
             } finally {
                 endBulkOperation();
             }
+        } else {
+            addToast('success', 'Nothing To Reset', 'No mutashabihat decisions or similarity todo cards were found for this scope.');
         }
     };
 
@@ -3524,7 +3567,57 @@ export default function SettingsPage() {
         };
 
         try {
-            await updateInstantCustom(customItem);
+            const nowIso = new Date().toISOString();
+            const writes: any[] = [
+                db.tx.customMutashabihat[customItem.id].update({
+                    ...customItem,
+                    userId: user?.id || '',
+                }),
+            ];
+            const noteText = String(customItem.notes || '').trim();
+            const shouldCreateDecision = customItem.status !== 'pending' || noteText.length > 0;
+            const decisionKeys = Array.from(new Set([abs1, abs2]))
+                .map((absolute) => buildMutashabihatDecisionKey(absolute, `custom-${customItem.id}`));
+
+            if (shouldCreateDecision) {
+                decisionKeys.forEach((decisionKey) => {
+                    const existingDecision = decisions[decisionKey];
+                    writes.push(
+                        db.tx.mutashabihatDecisions[existingDecision?.id || decisionKey].update({
+                            ...(existingDecision || {}),
+                            phraseId: decisionKey,
+                            status: customItem.status,
+                            confirmedAt: customItem.status === 'pending' ? null : nowIso,
+                            notes: customItem.notes ?? '',
+                            timestamp: nowIso,
+                            userId: user?.id || '',
+                        })
+                    );
+                });
+            }
+
+            await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+
+            if (shouldCreateDecision) {
+                startTransition(() => {
+                    setDecisions((prev) => {
+                        const next = { ...prev };
+                        decisionKeys.forEach((decisionKey) => {
+                            next[decisionKey] = {
+                                ...(next[decisionKey] || { id: decisionKey, phraseId: decisionKey }),
+                                phraseId: decisionKey,
+                                status: customItem.status,
+                                confirmedAt: customItem.status === 'pending' ? undefined : nowIso,
+                                notes: customItem.notes ?? '',
+                                timestamp: nowIso,
+                                userId: user?.id,
+                            } as MutashabihatDecision;
+                        });
+                        return next;
+                    });
+                });
+            }
+
             addToast('success', 'Custom mutashabih added');
             return true;
         } catch (error) {

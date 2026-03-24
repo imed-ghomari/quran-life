@@ -24,6 +24,7 @@ import {
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
+import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
@@ -379,14 +380,25 @@ export default function TodoPage() {
         });
     }, [nodes]);
 
+    const suspendedVerseGroupKeys = useMemo(() => (
+        deriveSuspendedVerseGroupKeys(errors, 3, settings?.suspendedVerseGroupsAcknowledged)
+    ), [errors, settings?.suspendedVerseGroupsAcknowledged]);
+
     const activeReviewQueueSurahIds = useMemo(() => {
         const surahIds = new Set<number>();
-        nodes.forEach((node) => {
+        const activeReviewQueueNodes = filterReviewQueueNodes(
+            nodes,
+            settings,
+            Object.values(mindmaps),
+            suspendedVerseGroupKeys
+        );
+
+        activeReviewQueueNodes.forEach((node) => {
             const surahId = getVerseSegmentSurahId(node);
             if (surahId) surahIds.add(surahId);
         });
         return surahIds;
-    }, [nodes]);
+    }, [mindmaps, nodes, settings, suspendedVerseGroupKeys]);
 
     // Filter Surahs based on the user's active part setting
     const surahTasks = useMemo(() => {
