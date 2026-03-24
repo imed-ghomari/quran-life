@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, startTransition } from 'react';
 import { id } from '@instantdb/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
     useSharedInstantListeningProgress,
@@ -21,12 +21,14 @@ import {
     LEGACY_ALL_QURAN_PART,
     QuranPart,
     MemoryNode,
+    hasNodeBeenReviewed,
     getNodeStability,
     getNodeDifficulty,
     getNodeReps,
     getNodeDueDate
 } from '@/lib/types';
 import { db } from '@/lib/instant';
+import { stableEntityId } from '@/lib/instantIds';
 import { transactWithRetry } from '@/lib/instantTransact';
 import { createNewFSRSState } from '@/lib/fsrs';
 import {
@@ -64,6 +66,8 @@ import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedRe
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { getVerseGroupKey } from '@/lib/reviewQueue';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
+import { getSimilarityEntryResolutionMeta } from '@/lib/mutashabihatResolution';
+import { getSimilarityComparatorCardStyle, SimilarityComparatorStatusBadge } from '@/components/SimilarityComparatorStatus';
 
 const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
 const MutashabihNoteModal = dynamic(() => import('@/components/MutashabihNoteModal'), { ssr: false });
@@ -86,6 +90,8 @@ interface SettingsToastItem {
     message: string;
     info?: string;
 }
+
+type MaturityLevel = 'reset' | 'medium' | 'strong' | 'mastered';
 
 type BillingSummaryState = {
     nextRenewalAt: string | null;
@@ -301,6 +307,9 @@ type SimilaritySurahGroup = {
     resolutionTargets: SimilarityResolutionTarget[];
 };
 
+const getMutashabihatRowId = (decisionKey: string) => `mutashabihat-row-${decisionKey}`;
+const MISSING_KNOWLEDGE_NODE_PREFIX = 'missing-knowledge-node';
+
 const formatKnowledgeTrackingDueDate = (due: string | null): string => {
     if (!due) return '-';
     const parsed = new Date(due);
@@ -405,6 +414,9 @@ const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map((part) => String(part).trim().replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
 
+const isMissingKnowledgeNode = (node: Partial<MemoryNode>) =>
+    String(node.id || '').startsWith(MISSING_KNOWLEDGE_NODE_PREFIX);
+
 /**
  * Renders Arabic text with highlighted word ranges
  */
@@ -434,6 +446,7 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 
 export default function SettingsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
     const { user } = db.useAuth();
     const { data: subscriptionData } = db.useQuery({
@@ -446,6 +459,14 @@ export default function SettingsPage() {
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
     const { settings, saveSettings } = useSharedInstantSettings();
     const { nodes: instantNodes, saveNode: saveInstantNode } = useSharedInstantNodes();
+
+    const checkIsSurahLearned = useCallback((surahId: number) => {
+        return instantNodes.some((node) => {
+            if (node.type !== 'verse_segment') return false;
+            if (resolveNodeSurahId(node) !== surahId) return false;
+            return hasNodeBeenReviewed(node.scheduler);
+        });
+    }, [instantNodes]);
     const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
     const { errors: reviewErrors } = useSharedInstantReviewErrors();
     const { progress: listeningProgress } = useSharedInstantListeningProgress();
@@ -548,6 +569,7 @@ export default function SettingsPage() {
         representativeAbs: number;
     } | null>(null);
     const [settingsContextVerseCursor, setSettingsContextVerseCursor] = useState<Record<number, number>>({});
+    const handledMutRouteKeyRef = useRef('');
     const [settingsMindmapEditor, setSettingsMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [settingsSplitsSurahId, setSettingsSplitsSurahId] = useState<number | null>(null);
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
@@ -647,6 +669,25 @@ export default function SettingsPage() {
         return acc;
     }, [instantMindmaps]);
 
+    const eligibleKnowledgeSurahs = useMemo(() => (
+        SURAHS
+            .filter((surah) =>
+                (settings.activePart === ALL_QURAN_PART || surah.part === settings.activePart)
+                && !settings.skippedSurahs?.includes(surah.id)
+            )
+            .sort((a, b) => a.id - b.id)
+    ), [settings.activePart, settings.skippedSurahs]);
+
+    const latestSurahMindmapBySurah = useMemo(() => {
+        const bySurah = new Map<number, MemoryNode>();
+        latestSurahMindmaps.forEach((node) => {
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return;
+            bySurah.set(surahId, node);
+        });
+        return bySurah;
+    }, [latestSurahMindmaps]);
+
     const currentVerseGroupKeysBySurah = useMemo(() => {
         const bySurah: Record<number, Set<string>> = {};
         SURAHS.forEach((surah) => {
@@ -678,6 +719,21 @@ export default function SettingsPage() {
         return Object.values(latestMap);
     }, [currentVerseGroupKeysBySurah, memoryNodes]);
 
+    const latestVerseSegmentsBySurah = useMemo(() => {
+        const bySurah = new Map<number, MemoryNode[]>();
+        latestVerseSegments.forEach((node) => {
+            const surahId = resolveNodeSurahId(node);
+            if (!surahId) return;
+            const existing = bySurah.get(surahId);
+            if (existing) {
+                existing.push(node);
+                return;
+            }
+            bySurah.set(surahId, [node]);
+        });
+        return bySurah;
+    }, [latestVerseSegments]);
+
     const getKnowledgeDueKey = (due: string | null): string | null => {
         if (!due) return null;
         const parsed = new Date(due);
@@ -702,6 +758,20 @@ export default function SettingsPage() {
     const filteredPartMindmaps = latestPartMindmaps.filter(matchesKnowledgeFilter);
     const filteredSurahMindmaps = latestSurahMindmaps.filter(matchesKnowledgeFilter);
     const filteredVerseSegments = latestVerseSegments.filter(matchesKnowledgeFilter);
+    const displayedSurahMindmapNodes = useMemo(() => {
+        if (knowledgeFilter !== 'all') return filteredSurahMindmaps;
+        return eligibleKnowledgeSurahs.map((surah) => {
+            const existing = latestSurahMindmapBySurah.get(surah.id);
+            if (existing) return existing;
+            return {
+                id: `${MISSING_KNOWLEDGE_NODE_PREFIX}-mindmap-${surah.id}`,
+                type: 'mindmap',
+                surahId: surah.id,
+                targetId: `mindmap-${surah.id}`,
+                scheduler: undefined,
+            } as unknown as MemoryNode;
+        });
+    }, [eligibleKnowledgeSurahs, filteredSurahMindmaps, knowledgeFilter, latestSurahMindmapBySurah]);
     const hasExpandedKnowledgeItems = Object.values(expandedGroups).some(Boolean);
     const hasExpandedSimilarVerseItems = Object.values(expandedSurahs).some(Boolean) || Object.values(expandedMutItems).some(Boolean);
 
@@ -730,7 +800,7 @@ export default function SettingsPage() {
         if (type === 'verse_segment' && surahId) {
             return filteredVerseSegments.filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId);
         }
-        if (type === 'mindmap') return filteredSurahMindmaps;
+        if (type === 'mindmap') return displayedSurahMindmapNodes;
         if (type === 'part_mindmap') return filteredPartMindmaps;
         return [];
     };
@@ -1835,11 +1905,11 @@ export default function SettingsPage() {
                                             id: 'mindmaps-surah',
                                             title: 'Surah Mindmaps',
                                             type: 'mindmap' as any as any,
-                                            nodes: filteredSurahMindmaps
+                                            nodes: displayedSurahMindmapNodes
                                         })}>
                                             <span>Surah Mindmaps</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span className="status-badge">{filteredSurahMindmaps.length}</span>
+                                                <span className="status-badge">{displayedSurahMindmapNodes.length}</span>
                                                 <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                             </div>
                                         </div>
@@ -2544,6 +2614,49 @@ export default function SettingsPage() {
         });
     }, [saveSettings, settings?.kanbanColumns]);
 
+    const buildScopedKnowledgeSurahIds = useCallback((specificSurahId?: number) => (
+        specificSurahId
+            ? [specificSurahId]
+            : eligibleKnowledgeSurahs.map((surah) => surah.id)
+    ), [eligibleKnowledgeSurahs]);
+
+    const getMemoryNodeEntityId = useCallback((input: {
+        type: 'mindmap' | 'part_mindmap' | 'verse_segment';
+        surahId?: number;
+        partId?: number;
+        startVerse?: number;
+        endVerse?: number;
+    }) => {
+        const logicalKey = input.type === 'mindmap'
+            ? stableEntityId('memory_node', 'mindmap', input.surahId ?? 'na')
+            : input.type === 'part_mindmap'
+                ? stableEntityId('memory_node', 'part_mindmap', input.partId ?? 'na')
+                : stableEntityId('memory_node', 'verse_segment', input.surahId ?? 'na', input.startVerse ?? 'na', input.endVerse ?? 'na');
+
+        return stableEntityId('memory_node', user?.id || 'anonymous', logicalKey);
+    }, [user?.id]);
+
+    const moveKanbanItemsToComplete = useCallback(async (itemIds: string[]) => {
+        const uniqueItemIds = Array.from(new Set(itemIds.map((itemId) => String(itemId).trim()).filter(Boolean)));
+        if (uniqueItemIds.length === 0) return 0;
+
+        const alreadyComplete = new Set((settings?.kanbanColumns?.complete || []).map((itemId) => String(itemId)));
+        const pendingMoves = uniqueItemIds.filter((itemId) => !alreadyComplete.has(itemId));
+        if (pendingMoves.length === 0) return 0;
+
+        const current = settings?.kanbanColumns || {};
+        const moveSet = new Set(pendingMoves);
+        const next: Record<string, string[]> = {};
+
+        Object.entries(current).forEach(([columnId, itemIdsForColumn]) => {
+            next[columnId] = (itemIdsForColumn || []).filter((itemId) => !moveSet.has(String(itemId)));
+        });
+
+        next.complete = [...pendingMoves, ...(next.complete || [])];
+        await saveSettings({ kanbanColumns: next });
+        return pendingMoves.length;
+    }, [saveSettings, settings?.kanbanColumns]);
+
     const handleNodeMaturityReset = async (nodeId: string, level: 'reset' | 'medium' | 'strong' | 'mastered') => {
         const node = instantNodes.find(n => n.id === nodeId);
         if (!node) return;
@@ -2586,27 +2699,128 @@ export default function SettingsPage() {
         }
     };
 
-    const handleGroupMaturityReset = async (type: 'verse_segment' | 'mindmap' | 'part_mindmap' | 'verse', level: 'reset' | 'medium' | 'strong' | 'mastered', surahId?: number, surahName?: string) => {
-        let typeLabel = '';
-        if (surahName) {
-            typeLabel = `all Verses for ${surahName}`;
-        } else {
-            typeLabel = type === 'verse_segment' || type === 'verse' ? 'all Verses' : (type === 'mindmap' ? 'all Surah Mindmaps' : 'all Part Mindmaps');
-        }
-
+    const handleGroupMaturityReset = async (type: 'verse_segment' | 'mindmap' | 'part_mindmap' | 'verse', level: MaturityLevel, surahId?: number, surahName?: string) => {
         const targetType = type === 'verse' ? 'verse_segment' : type;
         const newState = getMaturityState(level);
+        const nowIso = new Date().toISOString();
+        const scopedSurahIds = buildScopedKnowledgeSurahIds(surahId);
 
-        const nodesToUpdate = instantNodes.filter(node => {
-            if (node.type !== targetType) return false;
-            if (surahId && resolveNodeSurahId(node) !== surahId) return false;
-            return true;
-        });
+        const typeLabel = surahId
+            ? (
+                targetType === 'mindmap'
+                    ? `${surahName || `Surah ${surahId}`} Mindmap`
+                    : `${surahName || `Surah ${surahId}`} Verse Groups`
+            )
+            : (
+                targetType === 'verse_segment'
+                    ? 'all Verse Groups'
+                    : targetType === 'mindmap'
+                        ? 'all Surah Mindmaps'
+                        : 'all Part Mindmaps'
+            );
 
-        if (nodesToUpdate.length === 0) {
+        const nodesToUpdate: MemoryNode[] = [];
+        const nodesToCreate: Array<MemoryNode & { userId: string }> = [];
+        const kanbanItemsToComplete = new Set<string>();
+        const noSplitSurahIds = new Set<number>();
+
+        if (targetType === 'mindmap') {
+            scopedSurahIds.forEach((currentSurahId) => {
+                const existingNode = latestSurahMindmapBySurah.get(currentSurahId);
+                if (existingNode) {
+                    nodesToUpdate.push({
+                        ...existingNode,
+                        scheduler: { ...(existingNode.scheduler as any), ...newState } as any,
+                    });
+                    return;
+                }
+
+                kanbanItemsToComplete.add(`surah-${currentSurahId}`);
+                nodesToCreate.push({
+                    id: getMemoryNodeEntityId({ type: 'mindmap', surahId: currentSurahId }),
+                    type: 'mindmap',
+                    surahId: currentSurahId,
+                    targetId: `mindmap-${currentSurahId}`,
+                    scheduler: { ...createNewFSRSState(), ...newState } as any,
+                    createdAt: nowIso,
+                    userId: user?.id || '',
+                });
+            });
+        } else if (targetType === 'verse_segment') {
+            scopedSurahIds.forEach((currentSurahId) => {
+                const existingNodes = latestVerseSegmentsBySurah.get(currentSurahId) || [];
+                const existingByRange = new Map<string, MemoryNode>();
+                existingNodes.forEach((node) => {
+                    existingByRange.set(`${Number(node.startVerse)}-${Number(node.endVerse)}`, node);
+                });
+
+                const anchors = getEffectiveSurahAnchors(currentSurahId, settingsMindmapsBySurah[currentSurahId]);
+                if (existingNodes.length === 0) {
+                    kanbanItemsToComplete.add(`surah-${currentSurahId}`);
+                }
+                if (anchors.length === 0) {
+                    noSplitSurahIds.add(currentSurahId);
+                    return;
+                }
+
+                anchors.forEach((anchor) => {
+                    const startVerse = Number(anchor.startVerse);
+                    const endVerse = Number(anchor.endVerse);
+                    const existingNode = existingByRange.get(`${startVerse}-${endVerse}`);
+
+                    if (existingNode) {
+                        nodesToUpdate.push({
+                            ...existingNode,
+                            scheduler: { ...(existingNode.scheduler as any), ...newState } as any,
+                        });
+                        return;
+                    }
+
+                    nodesToCreate.push({
+                        id: getMemoryNodeEntityId({
+                            type: 'verse_segment',
+                            surahId: currentSurahId,
+                            startVerse,
+                            endVerse,
+                        }),
+                        type: 'verse_segment',
+                        surahId: currentSurahId,
+                        startVerse,
+                        endVerse,
+                        targetId: anchor.id || `anchor-${currentSurahId}-${startVerse}-${endVerse}`,
+                        scheduler: { ...createNewFSRSState(), ...newState } as any,
+                        createdAt: nowIso,
+                        userId: user?.id || '',
+                    });
+                });
+            });
+        } else {
+            const existingNodes = instantNodes.filter((node) => {
+                if (node.type !== targetType) return false;
+                if (surahId && resolveNodeSurahId(node) !== surahId) return false;
+                return true;
+            });
+
+            existingNodes.forEach((node) => {
+                nodesToUpdate.push({
+                    ...node,
+                    scheduler: { ...(node.scheduler as any), ...newState } as any,
+                });
+            });
+        }
+
+        if (nodesToCreate.length > 0 && !user?.id) {
+            await alert({
+                title: 'Sign In Required',
+                message: 'Please sign in before creating review nodes from Settings.',
+            });
+            return;
+        }
+
+        if (nodesToUpdate.length === 0 && nodesToCreate.length === 0 && kanbanItemsToComplete.size === 0) {
             await alert({
                 title: 'Nothing to Update',
-                message: 'No nodes found to update.',
+                message: 'No matching items were found to update.',
             });
             return;
         }
@@ -2615,37 +2829,75 @@ export default function SettingsPage() {
             ? getSuspendedCleanupForNodes(nodesToUpdate)
             : { errorIds: [] as string[], groupCount: 0 };
 
+        const levelLabel = level === 'reset'
+            ? 'Reset'
+            : level.charAt(0).toUpperCase() + level.slice(1);
+        const warningLines: string[] = [];
+
+        if (nodesToCreate.length > 0 || kanbanItemsToComplete.size > 0) {
+            if (targetType === 'mindmap') {
+                warningLines.push(
+                    nodesToCreate.length > 0
+                        ? `${kanbanItemsToComplete.size} surah card${kanbanItemsToComplete.size === 1 ? '' : 's'} will be moved to Complete so the missing mindmap review node${nodesToCreate.length === 1 ? '' : 's'} can be created at ${levelLabel} maturity.`
+                        : `${kanbanItemsToComplete.size} surah card${kanbanItemsToComplete.size === 1 ? '' : 's'} will be moved to Complete to match this maturity change.`
+                );
+            } else if (targetType === 'verse_segment') {
+                warningLines.push(
+                    nodesToCreate.length > 0
+                        ? `${kanbanItemsToComplete.size} surah card${kanbanItemsToComplete.size === 1 ? '' : 's'} will be moved to Complete so the missing verse review node${nodesToCreate.length === 1 ? '' : 's'} can be created at ${levelLabel} maturity.`
+                        : `${kanbanItemsToComplete.size} surah card${kanbanItemsToComplete.size === 1 ? '' : 's'} will be moved to Complete to match this maturity change.`
+                );
+            }
+        }
+
+        if (noSplitSurahIds.size > 0) {
+            warningLines.push(
+                `${noSplitSurahIds.size} surah${noSplitSurahIds.size === 1 ? '' : 's'} do not have verse splits yet, so no verse review nodes can be created for them until splits exist.`
+            );
+        }
+
+        if (suspendedCleanup.groupCount > 0) {
+            warningLines.push(
+                `This will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to the verse group${suspendedCleanup.groupCount === 1 ? '' : 's'} being reset.`
+            );
+        }
+
         const ok = await confirm({
             title: 'Set Maturity',
-            message: suspendedCleanup.groupCount > 0
-                ? `Are you sure you want to set the maturity of ${typeLabel} to ${level}?\n\nThis will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to the verse group${suspendedCleanup.groupCount === 1 ? '' : 's'} being reset.`
-                : `Are you sure you want to set the maturity of ${typeLabel} to ${level}?`,
+            message: [
+                `Are you sure you want to set the maturity of ${typeLabel} to ${level}?`,
+                ...warningLines,
+            ].join('\n\n'),
             confirmLabel: 'Update',
-            isDestructive: true,
+            isDestructive: level === 'reset',
         });
         if (!ok) return;
 
-        beginBulkOperation(`Updating ${typeLabel}`, nodesToUpdate.length + suspendedCleanup.errorIds.length);
-        try {
-            const preparedNodes = nodesToUpdate.map((node) => ({
-                ...node,
-                scheduler: { ...(node.scheduler as any), ...newState } as any
-            }));
+        const totalOperations =
+            nodesToUpdate.length
+            + nodesToCreate.length
+            + suspendedCleanup.errorIds.length
+            + (kanbanItemsToComplete.size > 0 ? 1 : 0);
 
-            for (let i = 0; i < preparedNodes.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
-                const batch = preparedNodes.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
-                const writes = batch
-                    .map((node) => {
-                        const nodeId = String(node.id || '').trim();
-                        if (!nodeId) return null;
-                        return db.tx.memoryNodes[nodeId].update(node as any);
-                    })
-                    .filter((tx): tx is NonNullable<typeof tx> => !!tx);
-                if (!writes.length) continue;
+        beginBulkOperation(`Updating ${typeLabel}`, totalOperations);
+        try {
+            const nodeWrites = [
+                ...nodesToUpdate.map((node) => ({ mode: 'update' as const, node })),
+                ...nodesToCreate.map((node) => ({ mode: 'create' as const, node })),
+            ];
+
+            for (let i = 0; i < nodeWrites.length; i += MATURITY_TRANSACTION_BATCH_SIZE) {
+                const batch = nodeWrites.slice(i, i + MATURITY_TRANSACTION_BATCH_SIZE);
+                const writes = batch.map(({ mode, node }) =>
+                    mode === 'create'
+                        ? db.tx.memoryNodes[String(node.id)].create(node as any)
+                        : db.tx.memoryNodes[String(node.id)].update(node as any)
+                );
+                if (writes.length === 0) continue;
                 await transactWithRetry(writes.length === 1 ? writes[0] : writes);
                 updateBulkOperationProgress(
-                    Math.min(preparedNodes.length, i + batch.length),
-                    nodesToUpdate.length + suspendedCleanup.errorIds.length
+                    Math.min(nodeWrites.length, i + batch.length),
+                    totalOperations
                 );
             }
 
@@ -2655,17 +2907,23 @@ export default function SettingsPage() {
                     MATURITY_TRANSACTION_BATCH_SIZE,
                     (completed) => {
                         updateBulkOperationProgress(
-                            nodesToUpdate.length + completed,
-                            nodesToUpdate.length + suspendedCleanup.errorIds.length
+                            nodeWrites.length + completed,
+                            totalOperations
                         );
                     }
                 );
             }
+
             if (suspendedCleanup.groupCount > 0) {
                 const groupKeysToRemove = nodesToUpdate
                     .map((node) => getCurrentVerseGroupKeyForNode(node))
                     .filter((groupKey): groupKey is string => !!groupKey);
                 await removeSuspendedCardsFromKanban(groupKeysToRemove);
+            }
+
+            if (kanbanItemsToComplete.size > 0) {
+                await moveKanbanItemsToComplete(Array.from(kanbanItemsToComplete));
+                updateBulkOperationProgress(totalOperations, totalOperations);
             }
         } catch (error) {
             console.error('Failed to save group maturity', error);
@@ -2987,50 +3245,62 @@ export default function SettingsPage() {
         persistSettingsUpdate({ skippedSurahs: currentSkipped.filter(s => s !== id) }, 'skipped surah list');
     };
 
-const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
-    const { id: _ignored, ...updateWithoutId } = update;
-    const previousDecision = decisions[phraseId];
+    const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatDecision, phraseId: string) => {
+        const { id: _ignored, ...updateWithoutId } = update;
+        const previousDecision = decisions[phraseId];
 
-    // Convert undefined to null for database compatibility
-    const cleanUpdate = {
-        ...updateWithoutId,
-        confirmedAt: updateWithoutId.confirmedAt ?? null
+        // Convert undefined to null for database compatibility
+        const cleanUpdate = {
+            ...updateWithoutId,
+            confirmedAt: updateWithoutId.confirmedAt ?? null
+        };
+
+        // Optimistic local update so UI reflects changes immediately
+        setDecisions(prev => ({
+            ...prev,
+            [phraseId]: {
+                ...(prev[phraseId] || { id: phraseId, phraseId, status: 'pending' }),
+                ...cleanUpdate,
+                phraseId
+            } as MutashabihatDecision
+        }));
+
+        try {
+            await updateInstantDecision(phraseId, cleanUpdate);
+        } catch (error) {
+            console.error('Failed to save similar verse decision', error);
+            setDecisions(prev => {
+                const next = { ...prev };
+                if (previousDecision) {
+                    next[phraseId] = previousDecision;
+                } else {
+                    delete next[phraseId];
+                }
+                return next;
+            });
+            await alert({
+                title: 'Save Failed',
+                message: 'Could not save similar verse update. Please try again.',
+            });
+        }
     };
-
-    // Optimistic local update so UI reflects changes immediately
-    setDecisions(prev => ({
-        ...prev,
-        [phraseId]: {
-            ...(prev[phraseId] || { id: phraseId, phraseId, status: 'pending' }),
-            ...cleanUpdate,
-            phraseId
-        } as MutashabihatDecision
-    }));
-
-    try {
-        await updateInstantDecision(phraseId, cleanUpdate);
-    } catch (error) {
-        console.error('Failed to save similar verse decision', error);
-        setDecisions(prev => {
-            const next = { ...prev };
-            if (previousDecision) {
-                next[phraseId] = previousDecision;
-            } else {
-                delete next[phraseId];
-            }
-            return next;
-        });
-        await alert({
-            title: 'Save Failed',
-            message: 'Could not save similar verse update. Please try again.',
-        });
-    }
-};
 
     const applyDecisionToTargets = (targets: SimilarityResolutionTarget[], updater: (existing: MutashabihatDecision) => MutashabihatDecision) => {
         targets.forEach(target => {
+            const targetRef = absoluteToSurahAyah(target.representativeAbs);
+            const isLearned = checkIsSurahLearned(targetRef.surahId);
             const existing = decisions[target.decisionKey] || { id: target.decisionKey, phraseId: target.decisionKey, status: 'pending' };
-            void handleDecisionUpdate(target.representativeAbs, updater(existing), target.decisionKey);
+            const updated = updater(existing);
+            const isTryingToConfirm = !!updated.confirmedAt && !existing.confirmedAt;
+            const isAllowedToConfirm = isLearned || updated.status === 'ignored';
+
+            if (isTryingToConfirm && !isAllowedToConfirm) {
+                const { confirmedAt, ...rest } = updated;
+                void handleDecisionUpdate(target.representativeAbs, rest as MutashabihatDecision, target.decisionKey);
+                return;
+            }
+
+            void handleDecisionUpdate(target.representativeAbs, updated, target.decisionKey);
         });
     };
 
@@ -3569,7 +3839,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
         }
     }, [mutashabihatSurahs, selectedMutSurah]);
 
-    const buildSurahMutGroups = (surahId: number): SimilaritySurahGroup[] => {
+    const buildSurahMutGroups = useCallback((surahId: number): SimilaritySurahGroup[] => {
         return collectSurahMutSourceGroups(surahId)
             .map((group): SimilaritySurahGroup => {
                 const resolutionTargets: SimilarityResolutionTarget[] = group.phraseIds.map((phraseId) => {
@@ -3599,7 +3869,84 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                 };
             })
             .sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
-    };
+    }, [collectSurahMutSourceGroups, decisions]);
+
+    useEffect(() => {
+        const requestedTab = searchParams.get('tab');
+        const targetSurahId = Number(searchParams.get('mutSurah'));
+        const targetDecisionKey = searchParams.get('mutDecision');
+
+        if (requestedTab === 'tracking' && isMobile && activeMobilePage !== 'tracking') {
+            setActiveMobilePage('tracking');
+        }
+
+        if (requestedTab !== 'tracking' && (!Number.isFinite(targetSurahId) || targetSurahId <= 0) && !targetDecisionKey) {
+            return;
+        }
+
+        const routeKey = `${requestedTab || ''}|${targetSurahId || ''}|${targetDecisionKey || ''}|${isMobile ? 'mobile' : 'desktop'}`;
+        if (handledMutRouteKeyRef.current === routeKey) return;
+
+        if (requestedTab === 'tracking') {
+            setSectionsExpanded((prev) => prev.mutashabihat ? prev : { ...prev, mutashabihat: true });
+        }
+
+        if (!Number.isFinite(targetSurahId) || targetSurahId <= 0) {
+            handledMutRouteKeyRef.current = routeKey;
+            return;
+        }
+
+        const groups = buildSurahMutGroups(targetSurahId);
+        if (groups.length === 0) return;
+
+        const targetGroup = targetDecisionKey
+            ? groups.find((group) =>
+                group.decisionKey === targetDecisionKey
+                || group.resolutionTargets.some((target) => target.decisionKey === targetDecisionKey)
+            )
+            : groups[0];
+        if (!targetGroup) return;
+
+        const resolvedTarget = targetDecisionKey
+            ? targetGroup.resolutionTargets.find((target) => target.decisionKey === targetDecisionKey)
+            : null;
+        const resolvedDecisionKey = resolvedTarget?.decisionKey || targetGroup.decisionKey;
+        const representativeAbs = resolvedTarget?.representativeAbs || targetGroup.representativeAbs;
+
+        setSelectedMutSurah(targetSurahId);
+        setExpandedSurahs((prev) => ({ ...prev, [targetSurahId]: true }));
+        setExpandedMutItems((prev) => ({ ...prev, [resolvedDecisionKey]: true }));
+
+        if (isMobile) {
+            setActiveMutSlideOver({
+                id: resolvedDecisionKey,
+                title: `${getSurah(targetSurahId)?.name || `Surah ${targetSurahId}`} - Ayah ${targetGroup.ayahIds.join(', ')}`,
+                surahId: targetSurahId,
+                phraseId: targetGroup.phraseId,
+                group: targetGroup,
+                representativeAbs,
+            });
+        } else if (typeof window !== 'undefined') {
+            window.requestAnimationFrame(() => {
+                window.setTimeout(() => {
+                    document.getElementById(getMutashabihatRowId(resolvedDecisionKey))?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                    });
+                }, 0);
+            });
+        }
+
+        handledMutRouteKeyRef.current = routeKey;
+
+        if (targetDecisionKey || Number.isFinite(targetSurahId)) {
+            const next = new URLSearchParams(searchParams.toString());
+            next.delete('mutSurah');
+            next.delete('mutDecision');
+            const nextQuery = next.toString();
+            router.replace(nextQuery ? `/settings?${nextQuery}` : '/settings', { scroll: false });
+        }
+    }, [activeMobilePage, buildSurahMutGroups, isMobile, router, searchParams]);
 
     return (
         <>
@@ -4142,11 +4489,11 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                 id: 'mindmaps-surah',
                                                                 title: 'Surah Mindmaps',
                                                                 type: 'mindmap' as any,
-                                                                nodes: filteredSurahMindmaps
+                                                                nodes: displayedSurahMindmapNodes
                                                             })}>
                                                                 <span>Surah Mindmaps</span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span className="status-badge">{filteredSurahMindmaps.length}</span>
+                                                                    <span className="status-badge">{displayedSurahMindmapNodes.length}</span>
                                                                     <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
                                                                 </div>
                                                             </div>
@@ -4173,7 +4520,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                         // Filter by active part (show all when "All Quran" is selected)
                                                                         if (settings.activePart !== ALL_QURAN_PART && surah.part !== settings.activePart) return false;
                                                                         // Only show learned surahs (have entries in learnedVerses)
-                                                                      
+
                                                                         // Only show non-skipped surahs
                                                                         if (settings.skippedSurahs?.includes(surah.id)) return false;
                                                                         return true;
@@ -4226,7 +4573,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                             </div>
                                         ) : (
                                             <div className="settings-sticky-table-wrap" style={{ margin: '0', padding: '0', width: '100%', maxWidth: '100%', borderRadius: '12px' }}>
-                                                <table className="debug-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%', tableLayout:'fixed'}}>
+                                                <table className="debug-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%', tableLayout: 'fixed' }}>
                                                     <thead>
                                                         <tr>
                                                             <th>Target / Range</th>
@@ -4255,7 +4602,9 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                             const val = e.target.value as any;
                                                                             if (!val) return;
                                                                             await handleGroupMaturityReset('mindmap', val);
-                                                                            await handleGroupMaturityReset('part_mindmap', val);
+                                                                            if (filteredPartMindmaps.length > 0) {
+                                                                                await handleGroupMaturityReset('part_mindmap', val);
+                                                                            }
                                                                         }}
                                                                     >
                                                                         <option value="">Set Group...</option>
@@ -4306,30 +4655,30 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                 const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
                                                                                 const partId = resolveNodePartId(node);
                                                                                 return (
-                                                                                <tr key={node.id} className="node-row">
-                                                                                    <td>Part {partId ?? '-'}</td>
-                                                                                    <td>
-                                                                                        <select
-                                                                                            value=""
-                                                                                            onChange={async (e) => {
-                                                                                                if (!e.target.value) return;
-                                                                                                await handleNodeMaturityReset(node.id, e.target.value as any);
-                                                                                            }}
-                                                                                            className="maturity-select"
-                                                                                        >
-                                                                                            <option value="">Set To...</option>
-                                                                                            <option value="reset">Reset</option>
-                                                                                            <option value="medium">Medium</option>
-                                                                                            <option value="strong">Strong</option>
-                                                                                            <option value="mastered">Mastered</option>
-                                                                                        </select>
-                                                                                    </td>
-                                                                                    <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
-                                                                                    <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
-                                                                                    <td>{getNodeReps(node)}</td>
-                                                                                    <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
-                                                                                </tr>
-                                                                            );
+                                                                                    <tr key={node.id} className="node-row">
+                                                                                        <td>Part {partId ?? '-'}</td>
+                                                                                        <td>
+                                                                                            <select
+                                                                                                value=""
+                                                                                                onChange={async (e) => {
+                                                                                                    if (!e.target.value) return;
+                                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                                }}
+                                                                                                className="maturity-select"
+                                                                                            >
+                                                                                                <option value="">Set To...</option>
+                                                                                                <option value="reset">Reset</option>
+                                                                                                <option value="medium">Medium</option>
+                                                                                                <option value="strong">Strong</option>
+                                                                                                <option value="mastered">Mastered</option>
+                                                                                            </select>
+                                                                                        </td>
+                                                                                        <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
+                                                                                        <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
+                                                                                        <td>{getNodeReps(node)}</td>
+                                                                                        <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
+                                                                                    </tr>
+                                                                                );
                                                                             })
                                                                     ) : (
                                                                         <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No part mindmaps</td></tr>
@@ -4365,38 +4714,39 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                     </td>
                                                                 </tr>
                                                                 {expandedGroups['mindmaps-surah'] && (
-                                                                    filteredSurahMindmaps.length > 0 ? (
-                                                                        filteredSurahMindmaps
+                                                                    displayedSurahMindmapNodes.length > 0 ? (
+                                                                        displayedSurahMindmapNodes
                                                                             .sort((a, b) => (resolveNodeSurahId(a) || 0) - (resolveNodeSurahId(b) || 0))
                                                                             .map(node => {
                                                                                 const due = getNodeDueDate(node);
-                                                                                const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
                                                                                 const surahId = resolveNodeSurahId(node);
+                                                                                const isOverdue = !!getKnowledgeDueKey(due) && getKnowledgeDueKey(due)! <= todayKey;
                                                                                 return (
-                                                                                <tr key={node.id} className="node-row">
-                                                                                    <td>{surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-'}</td>
-                                                                                    <td>
-                                                                                        <select
-                                                                                            value=""
-                                                                                            onChange={async (e) => {
-                                                                                                if (!e.target.value) return;
-                                                                                                await handleNodeMaturityReset(node.id, e.target.value as any);
-                                                                                            }}
-                                                                                            className="maturity-select"
-                                                                                        >
-                                                                                            <option value="">Set To...</option>
-                                                                                            <option value="reset">Reset</option>
-                                                                                            <option value="medium">Medium</option>
-                                                                                            <option value="strong">Strong</option>
-                                                                                            <option value="mastered">Mastered</option>
-                                                                                        </select>
-                                                                                    </td>
-                                                                                    <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
-                                                                                    <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
-                                                                                    <td>{getNodeReps(node)}</td>
-                                                                                    <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
-                                                                                </tr>
-                                                                            );
+                                                                                    <tr key={node.id} className="node-row">
+                                                                                        <td>{surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-'}</td>
+                                                                                        <td>
+                                                                                            <select
+                                                                                                value=""
+                                                                                                onChange={async (e) => {
+                                                                                                    if (!e.target.value) return;
+                                                                                                    if (!surahId) return;
+                                                                                                    await handleGroupMaturityReset('mindmap', e.target.value as any, surahId, getSurah(surahId)?.name);
+                                                                                                }}
+                                                                                                className="maturity-select"
+                                                                                            >
+                                                                                                <option value="">Set To...</option>
+                                                                                                <option value="reset">Reset</option>
+                                                                                                <option value="medium">Medium</option>
+                                                                                                <option value="strong">Strong</option>
+                                                                                                <option value="mastered">Mastered</option>
+                                                                                            </select>
+                                                                                        </td>
+                                                                                        <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
+                                                                                        <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
+                                                                                        <td>{getNodeReps(node)}</td>
+                                                                                        <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
+                                                                                    </tr>
+                                                                                );
                                                                             })
                                                                     ) : (
                                                                         <tr className="node-row"><td colSpan={6} style={{ fontStyle: 'italic', opacity: 0.5 }}>No surah mindmaps</td></tr>
@@ -4443,7 +4793,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                             // Filter by active part (show all when "All Quran" is selected)
                                                                             if (settings.activePart !== ALL_QURAN_PART && surah.part !== settings.activePart) return false;
                                                                             // Only show learned surahs (have entries in learnedVerses)
-                                                                           
+
                                                                             // Only show non-skipped surahs
                                                                             if (settings.skippedSurahs?.includes(surah.id)) return false;
                                                                             return true;
@@ -4511,29 +4861,29 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                                     const due = getNodeDueDate(node);
                                                                                     const isOverdue = (due || '') <= new Date().toISOString().split('T')[0];
                                                                                     return (
-                                                                                    <tr key={node.id} className="node-row">
-                                                                                        <td>Ayat {node.startVerse}-{node.endVerse}</td>
-                                                                                        <td>
-                                                                                            <select
-                                                                                                value=""
-                                                                                                onChange={async (e) => {
-                                                                                                    await handleNodeMaturityReset(node.id, e.target.value as any);
-                                                                                                }}
-                                                                                                className="maturity-select"
-                                                                                            >
-                                                                                                <option value="">Set To...</option>
-                                                                                                <option value="reset">Reset</option>
-                                                                                                <option value="medium">Medium</option>
-                                                                                                <option value="strong">Strong</option>
-                                                                                                <option value="mastered">Mastered</option>
-                                                                                            </select>
-                                                                                        </td>
-                                                                                        <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
-                                                                                        <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
-                                                                                        <td>{getNodeReps(node)}</td>
-                                                                                        <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
-                                                                                    </tr>
-                                                                                );
+                                                                                        <tr key={node.id} className="node-row">
+                                                                                            <td>Ayat {node.startVerse}-{node.endVerse}</td>
+                                                                                            <td>
+                                                                                                <select
+                                                                                                    value=""
+                                                                                                    onChange={async (e) => {
+                                                                                                        await handleNodeMaturityReset(node.id, e.target.value as any);
+                                                                                                    }}
+                                                                                                    className="maturity-select"
+                                                                                                >
+                                                                                                    <option value="">Set To...</option>
+                                                                                                    <option value="reset">Reset</option>
+                                                                                                    <option value="medium">Medium</option>
+                                                                                                    <option value="strong">Strong</option>
+                                                                                                    <option value="mastered">Mastered</option>
+                                                                                                </select>
+                                                                                            </td>
+                                                                                            <td>{formatKnowledgeTrackingInterval(getNodeStability(node))}</td>
+                                                                                            <td>{formatKnowledgeTrackingDifficulty(getNodeDifficulty(node))}</td>
+                                                                                            <td>{getNodeReps(node)}</td>
+                                                                                            <td className={isOverdue ? 'status-overdue' : ''}>{formatKnowledgeTrackingDueDate(due)}</td>
+                                                                                        </tr>
+                                                                                    );
                                                                                 })}
                                                                             </React.Fragment>
                                                                         );
@@ -4705,7 +5055,7 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         </div>
                                     ) : (
                                         <div className="settings-sticky-table-wrap" style={{ margin: '0', padding: '0', width: '100%', maxWidth: '100%', borderRadius: '12px' }}>
-                                            <table className="debug-table mutashabihat-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%' , tableLayout:'fixed'}}>
+                                            <table className="debug-table mutashabihat-table settings-sticky-header-table" style={{ minWidth: '700px', width: '100%', tableLayout: 'fixed' }}>
                                                 <thead>
                                                     <tr>
                                                         <th style={{ width: '50px' }}></th>
@@ -4735,322 +5085,375 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                 {isOpen && (() => {
                                                                     const groups = buildSurahMutGroups(surah.id);
                                                                     return groups.map(group => {
-                                                                            const representativeAbs = group.representativeAbs;
-                                                                            const decisionKey = group.decisionKey;
-                                                                            const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
-                                                                            const isConfirmed = group.resolutionTargets.some(target => !!decisions[target.decisionKey]?.confirmedAt);
-                                                                            const isDetailExpanded = expandedMutItems[decisionKey] || false;
-                                                                            const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
-                                                                            const customId = isCustom ? group.customIds[0] : undefined;
-                                                                            const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
+                                                                        const representativeAbs = group.representativeAbs;
+                                                                        const decisionKey = group.decisionKey;
+                                                                        const existing = decisions[decisionKey] || { status: 'pending', notes: '' };
+                                                                        const isConfirmed = group.resolutionTargets.some(target => !!decisions[target.decisionKey]?.confirmedAt);
+                                                                        const isDetailExpanded = expandedMutItems[decisionKey] || false;
+                                                                        const isCustom = group.phraseIds.length === 1 && group.phraseIds[0].startsWith('custom-');
+                                                                        const customId = isCustom ? group.customIds[0] : undefined;
+                                                                        const toggleExpand = () => setExpandedMutItems(prev => ({ ...prev, [decisionKey]: !isDetailExpanded }));
 
-                                                                            return (
-                                                                                <React.Fragment key={decisionKey}>
-                                                                                    <tr
-                                                                                        className="node-row"
-                                                                                        onClick={toggleExpand}
-                                                                                        style={{ cursor: 'pointer' }}
-                                                                                    >
-                                                                                        <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
-                                                                                            <button
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    toggleExpand();
-                                                                                                }}
-                                                                                                style={{
-                                                                                                    padding: 0,
-                                                                                                    border: 'none',
-                                                                                                    background: 'transparent',
-                                                                                                    color: 'inherit',
-                                                                                                    display: 'inline-flex',
-                                                                                                    alignItems: 'center',
-                                                                                                    cursor: 'pointer'
-                                                                                                }}
-                                                                                            >
-                                                                                                <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                                                                                            </button>
-                                                                                        </td>
-                                                                                        <td>
-                                                                                            <div style={{ fontWeight: 500 }}>
-                                                                                                {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                        return (
+                                                                            <React.Fragment key={decisionKey}>
+                                                                                <tr
+                                                                                    id={getMutashabihatRowId(decisionKey)}
+                                                                                    className="node-row"
+                                                                                    onClick={toggleExpand}
+                                                                                    style={{ cursor: 'pointer' }}
+                                                                                >
+                                                                                    <td style={{ paddingLeft: '1.5rem', width: '50px' }}>
+                                                                                        <button
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                toggleExpand();
+                                                                                            }}
+                                                                                            style={{
+                                                                                                padding: 0,
+                                                                                                border: 'none',
+                                                                                                background: 'transparent',
+                                                                                                color: 'inherit',
+                                                                                                display: 'inline-flex',
+                                                                                                alignItems: 'center',
+                                                                                                cursor: 'pointer'
+                                                                                            }}
+                                                                                        >
+                                                                                            <ChevronDown size={14} style={{ transform: isDetailExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                                                        </button>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <div style={{ fontWeight: 500 }}>
+                                                                                            {group.ayahIds.length > 1 ? `Ayat ${group.ayahIds.sort((a, b) => a - b).join(', ')}` : `Ayah ${group.ayahIds[0]}`}
+                                                                                        </div>
+                                                                                        {isCustom && (
+                                                                                            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                                                                                Custom
                                                                                             </div>
-                                                                                            {isCustom && (
-                                                                                                <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                                                                                    Custom
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </td>
-                                                                                        <td>{group.matchCount} matches</td>
-                                                                                        <td>
-                                                                                            <select
-                                                                                                value={existing.status}
-                                                                                                onClick={(e) => e.stopPropagation()}
-                                                                                                onChange={e => applyDecisionToTargets(group.resolutionTargets, targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
-                                                                                                className="maturity-select"
-                                                                                                style={{
-                                                                                                    borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
-                                                                                                    color: existing.status !== 'pending' ? 'var(--accent)' : 'inherit'
-                                                                                                }}
-                                                                                            >
-                                                                                                {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                                                                            </select>
-                                                                                        </td>
-                                                                                        <td>
-                                                                                            <button
-    className={`bulk-btn std-normal-btn mutashabihat-resolve-btn ${isConfirmed ? 'learned' : ''}`}
-    data-tooltip-disabled="true"
-    onClick={(e) => {
-        e.stopPropagation();
-        applyDecisionToTargets(group.resolutionTargets, targetExisting => {
-            if (isConfirmed) return { ...targetExisting, confirmedAt: undefined, status: 'pending' as const };
-            return { ...targetExisting, confirmedAt: new Date().toISOString() };
-        });
-    }}
-    style={{ minWidth: '100px' }}
->
-    {isConfirmed ? 'Resolved' : 'Not Resolved'}
-</button>
-   
-                                                                                        </td>
-                                                                                        <td>
-                                                                                            <div className="mutashabihat-note-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                                                                                                {isCustom && customId && (
-                                                                                                    <button
-                                                                                                        className="bulk-btn reset-mut"
-                                                                                                        onClick={(e) => {
-                                                                                                            e.stopPropagation();
-                                                                                                            handleDeleteCustomMutashabih(customId);
-                                                                                                        }}
-                                                                                                        title="Delete"
-                                                                                                       style={{
-                                                                                                            padding: '4px 10px',
-                                                                                                            display: 'inline-flex',
-                                                                                                            alignItems: 'center',
-                                                                                                            justifyContent: 'center'
-                                                                                                        }}
-                                                                                                    >
-                                                                                                        <Trash2 size={14} />
-                                                                                                    </button>
-                                                                                                )}
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td>{group.matchCount} matches</td>
+                                                                                    <td>
+                                                                                        <select
+                                                                                            value={existing.status}
+                                                                                            onClick={(e) => e.stopPropagation()}
+                                                                                            onChange={e => applyDecisionToTargets(group.resolutionTargets, targetExisting => ({ ...targetExisting, status: e.target.value as any }))}
+                                                                                            className="maturity-select"
+                                                                                            style={{
+                                                                                                borderColor: existing.status !== 'pending' ? 'var(--accent)' : 'var(--border)',
+                                                                                                color: existing.status !== 'pending' ? 'var(--accent)' : 'inherit'
+                                                                                            }}
+                                                                                        >
+                                                                                            {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                                                        </select>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <button
+                                                                                            className={`bulk-btn std-normal-btn mutashabihat-resolve-btn ${isConfirmed ? 'learned' : ''}`}
+                                                                                            data-tooltip-disabled="true"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                applyDecisionToTargets(group.resolutionTargets, targetExisting => {
+                                                                                                    if (isConfirmed) return { ...targetExisting, confirmedAt: undefined };
+                                                                                                    return { ...targetExisting, confirmedAt: new Date().toISOString() };
+                                                                                                });
+                                                                                            }}
+                                                                                            style={{ minWidth: '100px' }}
+                                                                                        >
+                                                                                            {isConfirmed ? 'Resolved' : 'Not Resolved'}
+                                                                                        </button>
+
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <div className="mutashabihat-note-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                                                                            {isCustom && customId && (
                                                                                                 <button
-                                                                                                    className="bulk-btn std-normal-btn mutashabihat-note-btn"
+                                                                                                    className="bulk-btn reset-mut"
                                                                                                     onClick={(e) => {
                                                                                                         e.stopPropagation();
-                                                                                                        setNoteModal({
-                                                                                                            decisionKey,
-                                                                                                            representativeAbs,
-                                                                                                            resolutionTargets: group.resolutionTargets,
-                                                                                                            title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
-                                                                                                            initialNote: existing.notes || ''
-                                                                                                        });
+                                                                                                        handleDeleteCustomMutashabih(customId);
                                                                                                     }}
-                                                                                                    style={{ minWidth: '110px' }}
+                                                                                                    title="Delete"
+                                                                                                    style={{
+                                                                                                        padding: '4px 10px',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        justifyContent: 'center'
+                                                                                                    }}
                                                                                                 >
-                                                                                                    {existing.notes ? 'Edit Note' : 'Add Note'}
+                                                                                                    <Trash2 size={14} />
                                                                                                 </button>
+                                                                                            )}
+                                                                                            <button
+                                                                                                className="bulk-btn std-normal-btn mutashabihat-note-btn"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    setNoteModal({
+                                                                                                        decisionKey,
+                                                                                                        representativeAbs,
+                                                                                                        resolutionTargets: group.resolutionTargets,
+                                                                                                        title: `${surah.name} - Ayah ${group.ayahIds.join(', ')}`,
+                                                                                                        initialNote: existing.notes || ''
+                                                                                                    });
+                                                                                                }}
+                                                                                                style={{ minWidth: '110px' }}
+                                                                                            >
+                                                                                                {existing.notes ? 'Edit Note' : 'Add Note'}
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                                {isDetailExpanded && (
+                                                                                    <tr>
+                                                                                        <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px', maxWidth: '0', overflow: 'hidden' }}>
+                                                                                            <div className={`mut-context-block mut-detail-panel ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
+                                                                                                <div className="mut-text mut-detail-source">
+                                                                                                    <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem' }}>
+                                                                                                        Surah {surah.name} - {group.ayahIds.join(', ')}
+                                                                                                    </div>
+                                                                                                    <div className="mut-context mut-verse-stack">
+                                                                                                        {group.absRefs.map(absRef => {
+                                                                                                            const displayedAbs = settingsContextVerseCursor[absRef] ?? absRef;
+                                                                                                            const ref = absoluteToSurahAyah(displayedAbs);
+                                                                                                            const baseVerse = getVerseByRef(ref.surahId, ref.ayahId);
+                                                                                                            const mutEntry = group.entries.find(m => (m?.meta?.sourceAbs === absRef) || (m?.matches || []).includes(absRef));
+                                                                                                            if (!mutEntry || !baseVerse) return null;
+
+                                                                                                            return (
+                                                                                                                <div key={absRef} className="mut-verse-card" style={{ marginBottom: group.absRefs.length > 1 ? '0.75rem' : 0 }}>
+                                                                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                                                                                                                        <button
+                                                                                                                            className="bulk-btn std-normal-btn"
+                                                                                                                            onClick={() => openMindmapFromMutContext(ref.surahId)}
+                                                                                                                            title="Mindmap Editor"
+                                                                                                                            aria-label="Mindmap Editor"
+                                                                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                        >
+                                                                                                                            <PenTool size={14} />
+                                                                                                                        </button>
+                                                                                                                        <button
+                                                                                                                            className="bulk-btn std-normal-btn"
+                                                                                                                            onClick={() => openSplitsFromMutContext(ref.surahId)}
+                                                                                                                            title="Splits Configuration"
+                                                                                                                            aria-label="Splits Configuration"
+                                                                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                        >
+                                                                                                                            <SplitSquareHorizontal size={14} />
+                                                                                                                        </button>
+                                                                                                                        <button
+                                                                                                                            className="bulk-btn std-normal-btn"
+                                                                                                                            onClick={() => shiftSettingsContextVerse(absRef, 'after')}
+                                                                                                                            title="Next Verse"
+                                                                                                                            aria-label="Next Verse"
+                                                                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                        >
+                                                                                                                            <ChevronLeft size={14} />
+                                                                                                                        </button>
+                                                                                                                        <button
+                                                                                                                            className="bulk-btn std-normal-btn"
+                                                                                                                            onClick={() => shiftSettingsContextVerse(absRef, 'before')}
+                                                                                                                            title="Previous Verse"
+                                                                                                                            aria-label="Previous Verse"
+                                                                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                        >
+                                                                                                                            <ChevronRight size={14} />
+                                                                                                                        </button>
+                                                                                                                        <button
+                                                                                                                            className="bulk-btn std-normal-btn"
+                                                                                                                            onClick={() => resetSettingsContextVerse(absRef)}
+                                                                                                                            title="Reset To Origin Verse"
+                                                                                                                            aria-label="Reset To Origin Verse"
+                                                                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                        >
+                                                                                                                            <RotateCcw size={14} />
+                                                                                                                        </button>
+                                                                                                                    </div>
+                                                                                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.1rem', margin: 0 }}>
+                                                                                                                        {group.absRefs.length > 1 && (
+                                                                                                                            <span className="verse-badge mut-detail-ayah-badge">{ref.ayahId}</span>
+                                                                                                                        )}
+                                                                                                                        <HighlightedVerse
+                                                                                                                            text={baseVerse.text}
+                                                                                                                            range={mutEntry.meta.sourceAbs === displayedAbs ? mutEntry.meta.sourceRange : mutEntry.meta.matches.find((m: any) => m.absolute === displayedAbs)?.wordRange}
+                                                                                                                        />
+                                                                                                                    </p>
+                                                                                                                </div>
+                                                                                                            );
+                                                                                                        })}
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                <div className="mut-matches mut-compare-list" style={{ marginTop: '1.25rem' }}>
+                                                                                                    {(() => {
+                                                                                                        const matchRangeByAbs = new Map<number, [number, number]>();
+                                                                                                        group.entries.forEach((mutEntry: any) => {
+                                                                                                            (mutEntry?.meta?.matches || []).forEach((m: any) => {
+                                                                                                                if (!matchRangeByAbs.has(m.absolute)) {
+                                                                                                                    matchRangeByAbs.set(m.absolute, m.wordRange);
+                                                                                                                }
+                                                                                                            });
+                                                                                                        });
+                                                                                                        const comparatorResolutionMetaByAbs = new Map<number, ReturnType<typeof getSimilarityEntryResolutionMeta>>();
+                                                                                                        const getComparatorResolutionMeta = (matchAbs: number) => {
+                                                                                                            if (comparatorResolutionMetaByAbs.has(matchAbs)) {
+                                                                                                                return comparatorResolutionMetaByAbs.get(matchAbs)!;
+                                                                                                            }
+
+                                                                                                            const resolutionMeta = group.entries.reduce<ReturnType<typeof getSimilarityEntryResolutionMeta> | null>((resolvedMeta, mutEntry: any) => {
+                                                                                                                if (resolvedMeta?.resolved) return resolvedMeta;
+                                                                                                                const entryMatches = Array.isArray(mutEntry?.matches) ? mutEntry.matches : [];
+                                                                                                                if (!entryMatches.includes(matchAbs)) return resolvedMeta;
+                                                                                                                const localResolutionAbsolute = [
+                                                                                                                    Number(mutEntry?.meta?.sourceAbs),
+                                                                                                                    ...entryMatches,
+                                                                                                                ].find((absRef) => Number.isFinite(absRef) && group.absRefs.includes(absRef));
+                                                                                                                const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                                                                                                                    ? localResolutionAbsolute
+                                                                                                                    : group.absRefs[0];
+                                                                                                                return getSimilarityEntryResolutionMeta(decisions, resolutionAbsolute, mutEntry, { sameSurahOnly: true });
+                                                                                                            }, null) ?? { resolved: false, ignored: false, decision: undefined, absolute: null };
+
+                                                                                                            comparatorResolutionMetaByAbs.set(matchAbs, resolutionMeta);
+                                                                                                            return resolutionMeta;
+                                                                                                        };
+                                                                                                        const matches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || []))).filter((matchAbs: number) => {
+                                                                                                            if (group.absRefs.includes(matchAbs)) return false;
+                                                                                                            const matchRef = absoluteToSurahAyah(matchAbs);
+                                                                                                            return matchRef.surahId !== surah.id;
+                                                                                                        }).sort((a, b) => {
+                                                                                                            const aRef = absoluteToSurahAyah(a);
+                                                                                                            const bRef = absoluteToSurahAyah(b);
+                                                                                                            const aLearned = checkIsSurahLearned(aRef.surahId);
+                                                                                                            const bLearned = checkIsSurahLearned(bRef.surahId);
+
+                                                                                                            if (aLearned !== bLearned) {
+                                                                                                                return aLearned ? -1 : 1;
+                                                                                                            }
+
+                                                                                                            const isComparatorResolvedForDesktop = (matchAbs: number) => {
+                                                                                                                const matchRef = absoluteToSurahAyah(matchAbs);
+                                                                                                                const resolutionMeta = getComparatorResolutionMeta(matchAbs);
+                                                                                                                return resolutionMeta.resolved && (checkIsSurahLearned(matchRef.surahId) || resolutionMeta.ignored);
+                                                                                                            };
+
+                                                                                                            const aResolved = isComparatorResolvedForDesktop(a);
+                                                                                                            const bResolved = isComparatorResolvedForDesktop(b);
+
+                                                                                                            if (aResolved !== bResolved) {
+                                                                                                                return aResolved ? 1 : -1;
+                                                                                                            }
+
+                                                                                                            return a - b;
+                                                                                                        });
+                                                                                                        const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
+                                                                                                        const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
+                                                                                                        const hasMore = matches.length > 4;
+
+                                                                                                        return (
+                                                                                                            <>
+                                                                                                                {visibleMatches.map((matchAbs: number, idx: number) => {
+                                                                                                                    const displayedMatchAbs = settingsContextVerseCursor[matchAbs] ?? matchAbs;
+                                                                                                                    const mref = absoluteToSurahAyah(displayedMatchAbs);
+                                                                                                                    const msurah = getSurah(mref.surahId);
+                                                                                                                    const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
+                                                                                                                    const matchRange = matchRangeByAbs.get(displayedMatchAbs);
+                                                                                                                    const isLearned = checkIsSurahLearned(mref.surahId);
+                                                                                                                    const resolutionMeta = getComparatorResolutionMeta(matchAbs);
+                                                                                                                    const showResolvedState = resolutionMeta.resolved && (isLearned || resolutionMeta.ignored);
+                                                                                                                    const comparatorCardStyle = getSimilarityComparatorCardStyle(isLearned, showResolvedState);
+
+                                                                                                                    return (
+                                                                                                                        <div key={`${decisionKey}-match-${idx}`} className="mut-text mut-compare-card" style={comparatorCardStyle}>
+                                                                                                                            <div className="mut-text-label mut-compare-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+                                                                                                                                <span>Compare: Surah {msurah?.name} - {mref.ayahId}</span>
+                                                                                                                                <SimilarityComparatorStatusBadge isLearned={isLearned} isResolved={showResolvedState} />
+                                                                                                                            </div>
+                                                                                                                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                                                                                                                                <button
+                                                                                                                                    className="bulk-btn std-normal-btn"
+                                                                                                                                    onClick={() => openMindmapFromMutContext(mref.surahId)}
+                                                                                                                                    title="Mindmap Editor"
+                                                                                                                                    aria-label="Mindmap Editor"
+                                                                                                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                                >
+                                                                                                                                    <PenTool size={14} />
+                                                                                                                                </button>
+                                                                                                                                <button
+                                                                                                                                    className="bulk-btn std-normal-btn"
+                                                                                                                                    onClick={() => openSplitsFromMutContext(mref.surahId)}
+                                                                                                                                    title="Splits Configuration"
+                                                                                                                                    aria-label="Splits Configuration"
+                                                                                                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                                >
+                                                                                                                                    <SplitSquareHorizontal size={14} />
+                                                                                                                                </button>
+                                                                                                                                <button
+                                                                                                                                    className="bulk-btn std-normal-btn"
+                                                                                                                                    onClick={() => shiftSettingsContextVerse(matchAbs, 'after')}
+                                                                                                                                    title="Next Verse"
+                                                                                                                                    aria-label="Next Verse"
+                                                                                                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                                >
+                                                                                                                                    <ChevronLeft size={14} />
+                                                                                                                                </button>
+                                                                                                                                <button
+                                                                                                                                    className="bulk-btn std-normal-btn"
+                                                                                                                                    onClick={() => shiftSettingsContextVerse(matchAbs, 'before')}
+                                                                                                                                    title="Previous Verse"
+                                                                                                                                    aria-label="Previous Verse"
+                                                                                                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                                >
+                                                                                                                                    <ChevronRight size={14} />
+                                                                                                                                </button>
+                                                                                                                                <button
+                                                                                                                                    className="bulk-btn std-normal-btn"
+                                                                                                                                    onClick={() => resetSettingsContextVerse(matchAbs)}
+                                                                                                                                    title="Reset To Comparator Verse"
+                                                                                                                                    aria-label="Reset To Comparator Verse"
+                                                                                                                                    style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                                                                                >
+                                                                                                                                    <RotateCcw size={14} />
+                                                                                                                                </button>
+                                                                                                                            </div>
+                                                                                                                            <div className="mut-context mut-verse-card">
+                                                                                                                                {mVerse && (
+                                                                                                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.05rem', margin: 0 }}>
+                                                                                                                                        <HighlightedVerse text={mVerse.text} range={matchRange} />
+                                                                                                                                    </p>
+                                                                                                                                )}
+                                                                                                                            </div>
+                                                                                                                        </div>
+                                                                                                                    );
+                                                                                                                })}
+                                                                                                                {hasMore && (
+                                                                                                                    <button
+                                                                                                                        className="btn-show-more"
+                                                                                                                        onClick={() => setExpandedMutItems(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
+                                                                                                                        style={{
+                                                                                                                            width: '100%',
+                                                                                                                            padding: '8px',
+                                                                                                                            marginTop: '8px',
+                                                                                                                            fontSize: '0.8rem',
+                                                                                                                            color: 'var(--accent)',
+                                                                                                                            background: 'none',
+                                                                                                                            border: '1px dashed var(--accent)',
+                                                                                                                            borderRadius: '8px',
+                                                                                                                            cursor: 'pointer'
+                                                                                                                        }}
+                                                                                                                    >
+                                                                                                                        {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
+                                                                                                                    </button>
+                                                                                                                )}
+                                                                                                            </>
+                                                                                                        );
+                                                                                                    })()}
+                                                                                                </div>
                                                                                             </div>
                                                                                         </td>
                                                                                     </tr>
-                                                                                    {isDetailExpanded && (
-                                                                                        <tr>
-                                                                                            <td colSpan={6} style={{ background: 'var(--verse-bg)', padding: '1.5rem', borderRadius: '0 0 8px 8px', maxWidth:'0', overflow:'hidden' }}>
-                                                                                                <div className={`mut-context-block mut-detail-panel ${isConfirmed ? 'confirmed' : ''}`} style={{ margin: 0, border: 'none', background: 'transparent' }}>
-                                                                                                    <div className="mut-text mut-detail-source">
-                                                                                                        <div className="mut-text-label mut-detail-label" style={{ marginBottom: '0.75rem' }}>
-                                                                                                            Surah {surah.name} - {group.ayahIds.join(', ')}
-                                                                                                        </div>
-                                                                                                        <div className="mut-context mut-verse-stack">
-                                                                                                            {group.absRefs.map(absRef => {
-                                                                                                                const displayedAbs = settingsContextVerseCursor[absRef] ?? absRef;
-                                                                                                                const ref = absoluteToSurahAyah(displayedAbs);
-                                                                                                                const baseVerse = getVerseByRef(ref.surahId, ref.ayahId);
-                                                                                                                const mutEntry = group.entries.find(m => (m?.meta?.sourceAbs === absRef) || (m?.matches || []).includes(absRef));
-                                                                                                                if (!mutEntry || !baseVerse) return null;
-
-                                                                                                                return (
-                                                                                                                    <div key={absRef} className="mut-verse-card" style={{ marginBottom: group.absRefs.length > 1 ? '0.75rem' : 0 }}>
-                                                                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
-                                                                                                                            <button
-                                                                                                                                className="bulk-btn std-normal-btn"
-                                                                                                                                onClick={() => openMindmapFromMutContext(ref.surahId)}
-                                                                                                                                title="Mindmap Editor"
-                                                                                                                                aria-label="Mindmap Editor"
-                                                                                                                                style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                            >
-                                                                                                                                <PenTool size={14} />
-                                                                                                                            </button>
-                                                                                                                            <button
-                                                                                                                                className="bulk-btn std-normal-btn"
-                                                                                                                                onClick={() => openSplitsFromMutContext(ref.surahId)}
-                                                                                                                                title="Splits Configuration"
-                                                                                                                                aria-label="Splits Configuration"
-                                                                                                                                style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                            >
-                                                                                                                                <SplitSquareHorizontal size={14} />
-                                                                                                                            </button>
-                                                                                                                            <button
-                                                                                                                                className="bulk-btn std-normal-btn"
-                                                                                                                                onClick={() => shiftSettingsContextVerse(absRef, 'after')}
-                                                                                                                                title="Next Verse"
-                                                                                                                                aria-label="Next Verse"
-                                                                                                                                style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                            >
-                                                                                                                                <ChevronLeft size={14} />
-                                                                                                                            </button>
-                                                                                                                            <button
-                                                                                                                                className="bulk-btn std-normal-btn"
-                                                                                                                                onClick={() => shiftSettingsContextVerse(absRef, 'before')}
-                                                                                                                                title="Previous Verse"
-                                                                                                                                aria-label="Previous Verse"
-                                                                                                                                style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                            >
-                                                                                                                                <ChevronRight size={14} />
-                                                                                                                            </button>
-                                                                                                                            <button
-                                                                                                                                className="bulk-btn std-normal-btn"
-                                                                                                                                onClick={() => resetSettingsContextVerse(absRef)}
-                                                                                                                                title="Reset To Origin Verse"
-                                                                                                                                aria-label="Reset To Origin Verse"
-                                                                                                                                style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                            >
-                                                                                                                                <RotateCcw size={14} />
-                                                                                                                            </button>
-                                                                                                                        </div>
-                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.1rem', margin: 0 }}>
-                                                                                                                            {group.absRefs.length > 1 && (
-                                                                                                                                <span className="verse-badge mut-detail-ayah-badge">{ref.ayahId}</span>
-                                                                                                                            )}
-                                                                                                                            <HighlightedVerse
-                                                                                                                                text={baseVerse.text}
-                                                                                                                                range={mutEntry.meta.sourceAbs === displayedAbs ? mutEntry.meta.sourceRange : mutEntry.meta.matches.find((m: any) => m.absolute === displayedAbs)?.wordRange}
-                                                                                                                            />
-                                                                                                                        </p>
-                                                                                                                    </div>
-                                                                                                                );
-                                                                                                            })}
-                                                                                                        </div>
-                                                                                                    </div>
-
-                                                                                                    <div className="mut-matches mut-compare-list" style={{ marginTop: '1.25rem' }}>
-                                                                                                        {(() => {
-                                                                                                            const matchRangeByAbs = new Map<number, [number, number]>();
-                                                                                                            group.entries.forEach((mutEntry: any) => {
-                                                                                                                (mutEntry?.meta?.matches || []).forEach((m: any) => {
-                                                                                                                    if (!matchRangeByAbs.has(m.absolute)) {
-                                                                                                                        matchRangeByAbs.set(m.absolute, m.wordRange);
-                                                                                                                    }
-                                                                                                                });
-                                                                                                            });
-                                                                                                            const matches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || []))).filter((matchAbs: number) => {
-                                                                                                                if (group.absRefs.includes(matchAbs)) return false;
-                                                                                                                const matchRef = absoluteToSurahAyah(matchAbs);
-                                                                                                                return matchRef.surahId !== surah.id;
-                                                                                                            });
-                                                                                                            const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
-                                                                                                            const visibleMatches = isExpanded ? matches : matches.slice(0, 4);
-                                                                                                            const hasMore = matches.length > 4;
-
-                                                                                                            return (
-                                                                                                                <>
-                                                                                                                    {visibleMatches.map((matchAbs: number, idx: number) => {
-                                                                                                                        const displayedMatchAbs = settingsContextVerseCursor[matchAbs] ?? matchAbs;
-                                                                                                                        const mref = absoluteToSurahAyah(displayedMatchAbs);
-                                                                                                                        const msurah = getSurah(mref.surahId);
-                                                                                                                        const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
-                                                                                                                        const matchRange = matchRangeByAbs.get(displayedMatchAbs);
-
-                                                                                                                        return (
-                                                                                                                            <div key={`${decisionKey}-match-${idx}`} className="mut-text mut-compare-card">
-                                                                                                                                <div className="mut-text-label mut-compare-label">
-                                                                                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
-                                                                                                                                </div>
-                                                                                                                                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
-                                                                                                                                    <button
-                                                                                                                                        className="bulk-btn std-normal-btn"
-                                                                                                                                        onClick={() => openMindmapFromMutContext(mref.surahId)}
-                                                                                                                                        title="Mindmap Editor"
-                                                                                                                                        aria-label="Mindmap Editor"
-                                                                                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                                    >
-                                                                                                                                        <PenTool size={14} />
-                                                                                                                                    </button>
-                                                                                                                                    <button
-                                                                                                                                        className="bulk-btn std-normal-btn"
-                                                                                                                                        onClick={() => openSplitsFromMutContext(mref.surahId)}
-                                                                                                                                        title="Splits Configuration"
-                                                                                                                                        aria-label="Splits Configuration"
-                                                                                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                                    >
-                                                                                                                                        <SplitSquareHorizontal size={14} />
-                                                                                                                                    </button>
-                                                                                                                                    <button
-                                                                                                                                        className="bulk-btn std-normal-btn"
-                                                                                                                                        onClick={() => shiftSettingsContextVerse(matchAbs, 'after')}
-                                                                                                                                        title="Next Verse"
-                                                                                                                                        aria-label="Next Verse"
-                                                                                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                                    >
-                                                                                                                                        <ChevronLeft size={14} />
-                                                                                                                                    </button>
-                                                                                                                                    <button
-                                                                                                                                        className="bulk-btn std-normal-btn"
-                                                                                                                                        onClick={() => shiftSettingsContextVerse(matchAbs, 'before')}
-                                                                                                                                        title="Previous Verse"
-                                                                                                                                        aria-label="Previous Verse"
-                                                                                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                                    >
-                                                                                                                                        <ChevronRight size={14} />
-                                                                                                                                    </button>
-                                                                                                                                    <button
-                                                                                                                                        className="bulk-btn std-normal-btn"
-                                                                                                                                        onClick={() => resetSettingsContextVerse(matchAbs)}
-                                                                                                                                        title="Reset To Comparator Verse"
-                                                                                                                                        aria-label="Reset To Comparator Verse"
-                                                                                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                                                                                    >
-                                                                                                                                        <RotateCcw size={14} />
-                                                                                                                                    </button>
-                                                                                                                                </div>
-                                                                                                                                <div className="mut-context mut-verse-card">
-                                                                                                                                    {mVerse && (
-                                                                                                                                        <p className="arabic-text mut-core" style={{ fontSize: '1.05rem', margin: 0 }}>
-                                                                            <HighlightedVerse text={mVerse.text} range={matchRange} />
-                                                                                                                                        </p>
-                                                                                                                                    )}
-                                                                                                                                </div>
-                                                                                                                            </div>
-                                                                                                                        );
-                                                                                                                    })}
-                                                                                                                    {hasMore && (
-                                                                                                                        <button
-                                                                                                                            className="btn-show-more"
-                                                                                                                            onClick={() => setExpandedMutItems(prev => ({ ...prev, [`${decisionKey}-full`]: !isExpanded }))}
-                                                                                                                            style={{
-                                                                                                                                width: '100%',
-                                                                                                                                padding: '8px',
-                                                                                                                                marginTop: '8px',
-                                                                                                                                fontSize: '0.8rem',
-                                                                                                                                color: 'var(--accent)',
-                                                                                                                                background: 'none',
-                                                                                                                                border: '1px dashed var(--accent)',
-                                                                                                                                borderRadius: '8px',
-                                                                                                                                cursor: 'pointer'
-                                                                                                                            }}
-                                                                                                                        >
-                                                                                                                            {isExpanded ? 'Show Less' : `Show ${matches.length - 4} More Similar Verses`}
-                                                                                                                        </button>
-                                                                                                                    )}
-                                                                                                                </>
-                                                                                                            );
-                                                                                                        })()}
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </td>
-                                                                                        </tr>
-                                                                                    )}
-                                                                                </React.Fragment>
-                                                                            );
-                                                                        });
+                                                                                )}
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    });
                                                                 })()}
                                                             </React.Fragment>
                                                         );
@@ -5329,17 +5732,17 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                                         <button
-                                        className={`bulk-btn std-normal-btn ${isConfirmed ? 'learned' : ''}`}
-                                        onClick={() => {
-                                            applyDecisionToTargets(group.resolutionTargets, targetExisting => {
-                                                if (isConfirmed) return { ...targetExisting, confirmedAt: undefined, status: 'pending' as const };
-                                                return { ...targetExisting, confirmedAt: new Date().toISOString() };
-                                            });
-                                        }}
-                                        style={{ height: '38px', minWidth: '100px' }}
-                                    >
-                                        {isConfirmed ? 'Resolved' : 'Mark Resolved'}
-                                    </button>
+                                            className={`bulk-btn std-normal-btn ${isConfirmed ? 'learned' : ''}`}
+                                            onClick={() => {
+                                                applyDecisionToTargets(group.resolutionTargets, targetExisting => {
+                                                    if (isConfirmed) return { ...targetExisting, confirmedAt: undefined };
+                                                    return { ...targetExisting, confirmedAt: new Date().toISOString() };
+                                                });
+                                            }}
+                                            style={{ height: '38px', minWidth: '100px' }}
+                                        >
+                                            {isConfirmed ? 'Resolved' : 'Mark Resolved'}
+                                        </button>
                                     </div>
                                 </div>
 
@@ -5415,12 +5818,60 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                     }
                                                 });
                                             });
+                                            const comparatorResolutionMetaByAbs = new Map<number, ReturnType<typeof getSimilarityEntryResolutionMeta>>();
+                                            const getComparatorResolutionMeta = (matchAbs: number) => {
+                                                if (comparatorResolutionMetaByAbs.has(matchAbs)) {
+                                                    return comparatorResolutionMetaByAbs.get(matchAbs)!;
+                                                }
+
+                                                const resolutionMeta = group.entries.reduce<ReturnType<typeof getSimilarityEntryResolutionMeta> | null>((resolvedMeta, mutEntry: any) => {
+                                                    if (resolvedMeta?.resolved) return resolvedMeta;
+                                                    const entryMatches = Array.isArray(mutEntry?.matches) ? mutEntry.matches : [];
+                                                    if (!entryMatches.includes(matchAbs)) return resolvedMeta;
+                                                    const localResolutionAbsolute = [
+                                                        Number(mutEntry?.meta?.sourceAbs),
+                                                        ...entryMatches,
+                                                    ].find((absRef) => Number.isFinite(absRef) && sortedAbsRefs.includes(absRef));
+                                                    const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                                                        ? localResolutionAbsolute
+                                                        : sortedAbsRefs[0];
+                                                    return getSimilarityEntryResolutionMeta(decisions, resolutionAbsolute, mutEntry, { sameSurahOnly: true });
+                                                }, null) ?? { resolved: false, ignored: false, decision: undefined, absolute: null };
+
+                                                comparatorResolutionMetaByAbs.set(matchAbs, resolutionMeta);
+                                                return resolutionMeta;
+                                            };
+
+                                            const isComparatorResolved = (matchAbs: number) => {
+                                                const matchRef = absoluteToSurahAyah(matchAbs);
+                                                const resolutionMeta = getComparatorResolutionMeta(matchAbs);
+                                                return resolutionMeta.resolved && (checkIsSurahLearned(matchRef.surahId) || resolutionMeta.ignored);
+                                            };
 
                                             const mergedMatches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || [])))
                                                 .filter((matchAbs: number) => {
                                                     if (sortedAbsRefs.includes(matchAbs)) return false;
                                                     const matchRef = absoluteToSurahAyah(matchAbs);
                                                     return matchRef.surahId !== activeMutSlideOver.surahId;
+                                                })
+                                                .sort((a, b) => {
+                                                    const aRef = absoluteToSurahAyah(a);
+                                                    const bRef = absoluteToSurahAyah(b);
+                                                    const aLearned = checkIsSurahLearned(aRef.surahId);
+                                                    const bLearned = checkIsSurahLearned(bRef.surahId);
+
+                                                    if (aLearned !== bLearned) {
+                                                        return aLearned ? -1 : 1;
+                                                    }
+
+                                                    const aResolved = isComparatorResolved(a);
+                                                    const bResolved = isComparatorResolved(b);
+
+                                                    if (aResolved !== bResolved) {
+                                                        return aResolved ? 1 : -1;
+                                                    }
+
+                                                    return a - b;
                                                 });
 
                                             const isExpanded = expandedMutItems[`${decisionKey}-full`] || false;
@@ -5441,64 +5892,64 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                                 ? (mutEntry.meta as any).sourceRange
                                                                 : matchRangeByAbs.get(displayedAbs);
                                                             return (
-                                                            <div key={absRef} className="mut-verse-card" style={{ marginBottom: '1rem' }}>
-                                                                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
-                                                                    <button
-                                                                        className="bulk-btn std-normal-btn"
-                                                                        onClick={() => openMindmapFromMutContext(displayedRef.surahId)}
-                                                                        title="Mindmap Editor"
-                                                                        aria-label="Mindmap Editor"
-                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        <PenTool size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        className="bulk-btn std-normal-btn"
-                                                                        onClick={() => openSplitsFromMutContext(displayedRef.surahId)}
-                                                                        title="Splits Configuration"
-                                                                        aria-label="Splits Configuration"
-                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        <SplitSquareHorizontal size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        className="bulk-btn std-normal-btn"
-                                                                        onClick={() => shiftSettingsContextVerse(absRef, 'after')}
-                                                                        title="Next Verse"
-                                                                        aria-label="Next Verse"
-                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        <ChevronLeft size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        className="bulk-btn std-normal-btn"
-                                                                        onClick={() => shiftSettingsContextVerse(absRef, 'before')}
-                                                                        title="Previous Verse"
-                                                                        aria-label="Previous Verse"
-                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        <ChevronRight size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        className="bulk-btn std-normal-btn"
-                                                                        onClick={() => resetSettingsContextVerse(absRef)}
-                                                                        title="Reset To Origin Verse"
-                                                                        aria-label="Reset To Origin Verse"
-                                                                        style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        <RotateCcw size={14} />
-                                                                    </button>
+                                                                <div key={absRef} className="mut-verse-card" style={{ marginBottom: '1rem' }}>
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                                                                        <button
+                                                                            className="bulk-btn std-normal-btn"
+                                                                            onClick={() => openMindmapFromMutContext(displayedRef.surahId)}
+                                                                            title="Mindmap Editor"
+                                                                            aria-label="Mindmap Editor"
+                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                        >
+                                                                            <PenTool size={14} />
+                                                                        </button>
+                                                                        <button
+                                                                            className="bulk-btn std-normal-btn"
+                                                                            onClick={() => openSplitsFromMutContext(displayedRef.surahId)}
+                                                                            title="Splits Configuration"
+                                                                            aria-label="Splits Configuration"
+                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                        >
+                                                                            <SplitSquareHorizontal size={14} />
+                                                                        </button>
+                                                                        <button
+                                                                            className="bulk-btn std-normal-btn"
+                                                                            onClick={() => shiftSettingsContextVerse(absRef, 'after')}
+                                                                            title="Next Verse"
+                                                                            aria-label="Next Verse"
+                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                        >
+                                                                            <ChevronLeft size={14} />
+                                                                        </button>
+                                                                        <button
+                                                                            className="bulk-btn std-normal-btn"
+                                                                            onClick={() => shiftSettingsContextVerse(absRef, 'before')}
+                                                                            title="Previous Verse"
+                                                                            aria-label="Previous Verse"
+                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                        >
+                                                                            <ChevronRight size={14} />
+                                                                        </button>
+                                                                        <button
+                                                                            className="bulk-btn std-normal-btn"
+                                                                            onClick={() => resetSettingsContextVerse(absRef)}
+                                                                            title="Reset To Origin Verse"
+                                                                            aria-label="Reset To Origin Verse"
+                                                                            style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                        >
+                                                                            <RotateCcw size={14} />
+                                                                        </button>
+                                                                    </div>
+                                                                    <p className="arabic-text mut-core" style={{ fontSize: '1.15rem', marginBottom: '0.6rem' }}>
+                                                                        {sourceEntries.length > 1 && (
+                                                                            <span className="verse-badge mut-detail-ayah-badge">{displayedRef.ayahId}</span>
+                                                                        )}
+                                                                        <HighlightedVerse
+                                                                            text={displayedVerse?.text || baseVerse.text}
+                                                                            range={displayedRange}
+                                                                        />
+                                                                    </p>
                                                                 </div>
-                                                                <p className="arabic-text mut-core" style={{ fontSize: '1.15rem', marginBottom: '0.6rem' }}>
-                                                                    {sourceEntries.length > 1 && (
-                                                                        <span className="verse-badge mut-detail-ayah-badge">{displayedRef.ayahId}</span>
-                                                                    )}
-                                                                    <HighlightedVerse
-                                                                        text={displayedVerse?.text || baseVerse.text}
-                                                                        range={displayedRange}
-                                                                    />
-                                                                </p>
-                                                            </div>
                                                             );
                                                         })}
 
@@ -5509,10 +5960,16 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                             const mVerse = getVerseByRef(mref.surahId, mref.ayahId);
                                                             const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
+                                                            const isLearned = checkIsSurahLearned(mref.surahId);
+                                                            const resolutionMeta = getComparatorResolutionMeta(matchAbs);
+                                                            const showResolvedState = resolutionMeta.resolved && (isLearned || resolutionMeta.ignored);
+                                                            const comparatorCardStyle = getSimilarityComparatorCardStyle(isLearned, showResolvedState);
+
                                                             return (
-                                                                <div key={idx} className="mut-match-item mut-compare-card" style={{ marginBottom: '0.85rem' }}>
-                                                                    <div className="mut-match-label mut-compare-label">
-                                                                        Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                                <div key={idx} className="mut-match-item mut-compare-card" style={{ marginBottom: '0.85rem', ...comparatorCardStyle }}>
+                                                                    <div className="mut-match-label mut-compare-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <span>Compare: Surah {msurah?.name} - {mref.ayahId}</span>
+                                                                        <SimilarityComparatorStatusBadge isLearned={isLearned} isResolved={showResolvedState} />
                                                                     </div>
                                                                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.6rem' }}>
                                                                         <button
@@ -6299,11 +6756,11 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                         }
 
                                         // Update local state to reflect changes
-                                            setActiveSlideOverGroup(prev => {
-                                                if (!prev) return null;
-                                                const updatedNodes = getFilteredNodesForSlideOver(prev.type, prev.surahId);
-                                                return { ...prev, nodes: updatedNodes };
-                                            });
+                                        setActiveSlideOverGroup(prev => {
+                                            if (!prev) return null;
+                                            const updatedNodes = getFilteredNodesForSlideOver(prev.type, prev.surahId);
+                                            return { ...prev, nodes: updatedNodes };
+                                        });
                                     }}
                                 >
                                     <option value="">Set Subgroup...</option>
@@ -6342,7 +6799,13 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                         onChange={async (e) => {
                                                             const val = e.target.value as any;
                                                             if (!val) return;
-                                                            await handleNodeMaturityReset(node.id, val);
+                                                            if (activeSlideOverGroup.type === 'mindmap' || isMissingKnowledgeNode(node)) {
+                                                                const nodeSurahId = resolveNodeSurahId(node);
+                                                                if (!nodeSurahId) return;
+                                                                await handleGroupMaturityReset('mindmap', val, nodeSurahId, getSurah(nodeSurahId)?.name);
+                                                            } else {
+                                                                await handleNodeMaturityReset(node.id, val);
+                                                            }
 
                                                             // Update local nodes in slideover
                                                             setActiveSlideOverGroup(prev => {
@@ -6376,7 +6839,10 @@ const handleDecisionUpdate = async (_absoluteAyah: number, update: MutashabihatD
                                                     </div>
                                                     <div className="stat-item">
                                                         <span className="stat-label">Next</span>
-                                                        <span className={`stat-value ${(getNodeDueDate(node) || '') <= new Date().toISOString().split('T')[0] ? 'status-overdue' : ''}`}>
+                                                        <span className={`stat-value ${(() => {
+                                                            const dueKey = getKnowledgeDueKey(getNodeDueDate(node));
+                                                            return dueKey && dueKey <= todayKey ? 'status-overdue' : '';
+                                                        })()}`}>
                                                             {formatKnowledgeTrackingDueDate(getNodeDueDate(node))}
                                                         </span>
                                                     </div>

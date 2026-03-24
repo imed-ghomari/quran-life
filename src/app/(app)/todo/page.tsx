@@ -23,6 +23,7 @@ import {
 } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
@@ -353,17 +354,6 @@ export default function TodoPage() {
     // -- 4. Task Aggregation --
     const activePart = settings.activePart;
 
-    // Filter Surahs based on the user's active part setting
-    const surahTasks = useMemo(() => {
-        const eligible = SURAHS.filter(s =>
-            (activePart === ALL_QURAN_PART || s.part === activePart) &&
-            !settings.skippedSurahs?.includes(s.id)
-        );
-        return eligible
-            .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
-            .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, activePart, settings.skippedSurahs]);
-
     const partTasks = useMemo(() => {
         const metaPartTask = { part: 0, mindmap: partMindmapsMap[0] };
         const parts: QuranPart[] = Array.from(CORE_QURAN_PARTS);
@@ -381,49 +371,117 @@ export default function TodoPage() {
         );
     }, [settings.kanbanColumns?.complete]);
 
+    const checkIsSurahLearned = useCallback((surahId: number) => {
+        return nodes.some((node) => {
+            if (node.type !== 'verse_segment') return false;
+            if (getVerseSegmentSurahId(node) !== surahId) return false;
+            return hasNodeBeenReviewed(node.scheduler);
+        });
+    }, [nodes]);
+
+    const activeReviewQueueSurahIds = useMemo(() => {
+        const surahIds = new Set<number>();
+        nodes.forEach((node) => {
+            const surahId = getVerseSegmentSurahId(node);
+            if (surahId) surahIds.add(surahId);
+        });
+        return surahIds;
+    }, [nodes]);
+
+    // Filter Surahs based on the user's active part setting
+    const surahTasks = useMemo(() => {
+        const eligible = SURAHS.filter(s =>
+            (activePart === ALL_QURAN_PART || s.part === activePart) &&
+            !settings.skippedSurahs?.includes(s.id)
+        );
+        return eligible
+            .map(s => ({
+                surah: s,
+                mindmap: mindmaps[s.id],
+                reviewQueueInfo: activeReviewQueueSurahIds.has(s.id)
+                    ? {
+                        tooltip: 'This surah already has verses in your review queue.',
+                    }
+                    : null,
+            }))
+            .sort((a, b) => a.surah.id - b.surah.id);
+    }, [activePart, activeReviewQueueSurahIds, mindmaps, settings.skippedSurahs]);
+
+    const similarityStateBySurah = useMemo(() => {
+        const bySurah = new Map<number, {
+            hasOutstanding: boolean;
+            hasReviewedComparator: boolean;
+        }>();
+
+        errors
+            .filter((error) => error.type === 'similarity' && error.absoluteAyah)
+            .forEach((error) => {
+                const absolute = error.absoluteAyah!;
+                const { surahId } = absoluteToSurahAyah(absolute);
+                const existing = bySurah.get(surahId) || {
+                    hasOutstanding: false,
+                    hasReviewedComparator: false,
+                };
+                const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
+
+                const hasOutstanding = muts.some((entry: any) =>
+                    !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
+                );
+
+                const hasLearnedUnresolvedComparator = muts.some((entry: any) => {
+                    const comparators = Array.from(new Set(
+                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
+                    )).filter((absRef) => absRef !== absolute);
+
+                    return comparators.some((absRef) => {
+                        const compSurahId = absoluteToSurahAyah(absRef).surahId;
+                        return checkIsSurahLearned(compSurahId)
+                            && !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true });
+                    });
+                });
+
+                bySurah.set(surahId, {
+                    hasOutstanding: existing.hasOutstanding || hasOutstanding,
+                    hasReviewedComparator: existing.hasReviewedComparator || hasLearnedUnresolvedComparator,
+                });
+            });
+
+        return bySurah;
+    }, [checkIsSurahLearned, customMutashabihat, decisionsMap, errors]);
+
     // Gather Similarity Errors (Mutashabihat) that need resolution
     const similarityItems = useMemo(() => {
-        const isPhraseResolved = (absolute: number, entry: any) => {
-            const exact = decisionsMap[`${absolute}-${entry.phraseId}`];
-            if (exact?.status === 'ignored' || !!exact?.confirmedAt) return true;
-
-            const currentRef = absoluteToSurahAyah(absolute);
-            const candidateAbs = Array.from(new Set<number>([
-                absolute,
-                ...(entry.sources || []),
-                ...(entry.matches || []),
-            ])).filter((absRef) => absoluteToSurahAyah(absRef).surahId === currentRef.surahId);
-
-            return candidateAbs.some((absRef) => {
-                const phraseDecision = decisionsMap[`${absRef}-${entry.phraseId}`];
-                return phraseDecision?.status === 'ignored' || !!phraseDecision?.confirmedAt;
-            });
-        };
-
-        const hasComparatorBeenReviewed = (absoluteComparator: number) => {
-            const comparatorRef = absoluteToSurahAyah(absoluteComparator);
-            return nodes.some((node) => {
-                if (node.type !== 'verse_segment') return false;
-                if (getVerseSegmentSurahId(node) !== comparatorRef.surahId) return false;
-                const start = Number(node.startVerse || 0);
-                const end = Number(node.endVerse || 0);
-                if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-                if (comparatorRef.ayahId < start || comparatorRef.ayahId > end) return false;
-                return hasNodeBeenReviewed(node.scheduler);
-            });
-        };
-
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .map(err => {
                 const absolute = err.absoluteAyah!;
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
-                const unresolvedCount = muts.filter((m: any) => !isPhraseResolved(absolute, m)).length;
-                const comparators = Array.from(new Set(
-                    muts.flatMap((m: any) => (Array.isArray(m?.matches) ? m.matches : []))
-                )).filter((absRef: number) => absRef !== absolute);
-                const hasReviewedComparator = comparators.some(hasComparatorBeenReviewed);
-                return { err, muts, unresolvedCount, hasReviewedComparator };
+                const unresolvedCount = muts.filter((entry: any) =>
+                    !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
+                ).length;
+                const actionableComparatorCount = muts.reduce((sum: number, entry: any) => {
+                    if (isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })) {
+                        return sum;
+                    }
+
+                    const unlockedComparators = Array.from(new Set(
+                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
+                    )).filter((absRef) => (
+                        absRef !== absolute
+                        && checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
+                    ));
+
+                    return sum + unlockedComparators.length;
+                }, 0);
+                const surahState = similarityStateBySurah.get(absoluteToSurahAyah(absolute).surahId);
+
+                return {
+                    err,
+                    muts,
+                    unresolvedCount,
+                    actionableComparatorCount,
+                    hasReviewedComparator: surahState?.hasReviewedComparator || false,
+                };
             })
             // Filter out items that are already resolved/ignored
             .filter(entry => {
@@ -436,7 +494,61 @@ export default function TodoPage() {
                 if (entry.unresolvedCount <= 0) return false;
                 return entry.hasReviewedComparator;
             });
-    }, [errors, decisionsMap, customMutashabihat, nodes, completedSimilarityCards]);
+    }, [errors, decisionsMap, customMutashabihat, completedSimilarityCards, similarityStateBySurah, checkIsSurahLearned]);
+
+    useEffect(() => {
+        const currentColumns = settings.kanbanColumns;
+        if (!currentColumns) return;
+
+        const similarityIds = Array.from(new Set([
+            ...(currentColumns.backlog || []),
+            ...(currentColumns['in-progress'] || []),
+            ...(currentColumns.complete || []),
+        ].filter((id) => String(id).startsWith('similarity-'))));
+        if (similarityIds.length === 0) return;
+
+        const toBacklog: string[] = [];
+        const toComplete: string[] = [];
+
+        similarityIds.forEach((id) => {
+            const surahId = Number.parseInt(String(id).replace('similarity-', ''), 10);
+            if (!Number.isFinite(surahId)) return;
+
+            const hasOutstanding = similarityStateBySurah.get(surahId)?.hasOutstanding ?? false;
+            const isInComplete = (currentColumns.complete || []).includes(id);
+
+            if (hasOutstanding && isInComplete) {
+                toBacklog.push(id);
+            } else if (!hasOutstanding && !isInComplete) {
+                toComplete.push(id);
+            }
+        });
+
+        if (toBacklog.length === 0 && toComplete.length === 0) return;
+
+        type KanbanColumnKey = 'backlog' | 'in-progress' | 'complete';
+
+        const relocate = (columns: NonNullable<AppSettings['kanbanColumns']>, itemIds: string[], destination: KanbanColumnKey) => {
+            const movedIds = new Set(itemIds);
+            const next: Record<KanbanColumnKey, string[]> = {
+                backlog: [...(columns.backlog || [])].filter((id) => !movedIds.has(id)),
+                'in-progress': [...(columns['in-progress'] || [])].filter((id) => !movedIds.has(id)),
+                complete: [...(columns.complete || [])].filter((id) => !movedIds.has(id)),
+            };
+            next[destination] = [...itemIds, ...next[destination]];
+            return next;
+        };
+
+        let nextColumns = currentColumns;
+        if (toBacklog.length > 0) {
+            nextColumns = relocate(nextColumns, toBacklog, 'backlog');
+        }
+        if (toComplete.length > 0) {
+            nextColumns = relocate(nextColumns, toComplete, 'complete');
+        }
+
+        void queueSettingsUpdate({ kanbanColumns: nextColumns });
+    }, [queueSettingsUpdate, settings.kanbanColumns, similarityStateBySurah]);
 
     // Group similarity items by Surah for cleaner display in Kanban
     const groupedSimilarity = useMemo(() => {
@@ -450,7 +562,7 @@ export default function TodoPage() {
             .map(([surahId, items]) => ({
                 surah: getSurah(parseInt(surahId)),
                 items,
-                count: items.reduce((sum, item) => sum + (item.unresolvedCount || 0), 0)
+                count: items.reduce((sum, item) => sum + (item.actionableComparatorCount || 0), 0),
             }))
             .filter(g => g.surah);
     }, [similarityItems]);
@@ -1018,7 +1130,7 @@ export default function TodoPage() {
         await saveDecision(key, {
             ...existing,
             status,
-            confirmedAt: confirm ? new Date().toISOString() : undefined
+            confirmedAt: confirm ? new Date().toISOString() : null
         });
     };
 
@@ -1027,6 +1139,7 @@ export default function TodoPage() {
         const normalized = {
             ...existing,
             ...update,
+            confirmedAt: update.confirmedAt ?? null,
             notes: update.notes ?? existing.notes ?? existing.note ?? '',
             phraseId: decisionKey
         };
@@ -1222,6 +1335,7 @@ export default function TodoPage() {
                         onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
                         onSaveAnchors={handleSaveAnchors}
                         hasReviewedChunks={hasReviewedChunks}
+                        isSurahLearned={checkIsSurahLearned}
                     />
                 </div>
             </div>

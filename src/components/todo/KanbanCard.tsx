@@ -3,7 +3,7 @@
 import React, { memo, useCallback, useRef, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanItem } from './types';
-import { Brain, BadgeCheck, PenSquare, Layers, Scissors } from 'lucide-react';
+import { Brain, BadgeCheck, BookOpen, PenSquare, Layers, Scissors } from 'lucide-react';
 import { getSurah } from '@/lib/quranData';
 import CardActionMenu, { CardMenuTrigger } from './CardActionMenu';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
@@ -11,11 +11,13 @@ import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 interface KanbanCardProps {
     item: KanbanItem;
     index: number;
+    columnId: string;
     isMobile: boolean;
     hasMindmap: boolean;
     hasPremade?: boolean;
     hasSplits: boolean;
     appMode: 'owner' | 'user';
+    settingsHref?: string;
     docLink?: string;
     onEditMindmap: (item: KanbanItem) => Promise<void> | void;
     onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
@@ -29,11 +31,13 @@ interface KanbanCardProps {
 const KanbanCard = ({
     item,
     index,
+    columnId,
     isMobile,
     hasMindmap,
     hasPremade,
     hasSplits,
     appMode,
+    settingsHref,
     docLink,
     onEditMindmap,
     onDeleteMindmap,
@@ -48,37 +52,39 @@ const KanbanCard = ({
             <Draggable draggableId={item.id} index={index}>
                 {(provided, snapshot) => {
                     return (
-                    <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className={`
+                        <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`
                             kanban-card todo-kanban-card group relative cursor-pointer !rounded-[14px]
                             ${snapshot.isDragging ? 'z-50 shadow-lg ring-2 ring-[var(--accent)]' : ''}
                             ${item.status === 'complete' ? 'opacity-80' : ''}
                             ${isMobile ? 'min-w-[42vw] snap-center' : ''}
                         `}
-                        style={{
-                            ...provided.draggableProps.style,
-                        }}
-                    >
-                        <KanbanCardBody
-                            item={item}
-                            hasMindmap={hasMindmap}
-                            hasPremade={hasPremade}
-                            hasSplits={hasSplits}
-                            appMode={appMode}
-                            docLink={docLink}
-                            isMobile={isMobile}
-                            onEditMindmap={onEditMindmap}
-                            onDeleteMindmap={onDeleteMindmap}
-                            onExportMindmap={onExportMindmap}
-                            onResetMindmap={onResetMindmap}
-                            onChangeSplits={onChangeSplits}
-                            onViewVerseContext={onViewVerseContext}
-                            onViewSimilarityContext={onViewSimilarityContext}
-                        />
-                    </div>
+                            style={{
+                                ...provided.draggableProps.style,
+                            }}
+                        >
+                            <KanbanCardBody
+                                item={item}
+                                columnId={columnId}
+                                hasMindmap={hasMindmap}
+                                hasPremade={hasPremade}
+                                hasSplits={hasSplits}
+                                appMode={appMode}
+                                settingsHref={settingsHref}
+                                docLink={docLink}
+                                isMobile={isMobile}
+                                onEditMindmap={onEditMindmap}
+                                onDeleteMindmap={onDeleteMindmap}
+                                onExportMindmap={onExportMindmap}
+                                onResetMindmap={onResetMindmap}
+                                onChangeSplits={onChangeSplits}
+                                onViewVerseContext={onViewVerseContext}
+                                onViewSimilarityContext={onViewSimilarityContext}
+                            />
+                        </div>
                     );
                 }}
             </Draggable>
@@ -88,11 +94,13 @@ const KanbanCard = ({
 
 interface KanbanCardBodyProps {
     item: KanbanItem;
+    columnId: string;
     isMobile: boolean;
     hasMindmap: boolean;
     hasPremade?: boolean;
     hasSplits: boolean;
     appMode: 'owner' | 'user';
+    settingsHref?: string;
     docLink?: string;
     onEditMindmap: (item: KanbanItem) => Promise<void> | void;
     onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
@@ -105,11 +113,13 @@ interface KanbanCardBodyProps {
 
 const KanbanCardBody = memo(({
     item,
+    columnId,
     isMobile,
     hasMindmap,
     hasPremade,
     hasSplits,
     appMode,
+    settingsHref,
     docLink,
     onEditMindmap,
     onDeleteMindmap,
@@ -210,11 +220,13 @@ const KanbanCardBody = memo(({
         showDelete,
         showReset,
         cardType,
+        columnId,
         menuOpen,
         setMenuOpen,
         menuButtonRef,
         handleMenuClick,
         isMobile,
+        settingsHref,
         onEditMindmap: handleEditMindmap,
         onDeleteMindmap: handleDeleteClick,
         onExportMindmap: handleExportMindmap,
@@ -239,11 +251,13 @@ interface RenderZoneProps {
     showDelete: boolean;
     showReset: boolean;
     cardType: string;
+    columnId: string;
     menuOpen: boolean;
     setMenuOpen: (open: boolean) => void;
     menuButtonRef: React.RefObject<HTMLButtonElement | null>;
     handleMenuClick: (e: React.MouseEvent) => void;
     isMobile: boolean;
+    settingsHref?: string;
     onEditMindmap: () => Promise<void> | void;
     onDeleteMindmap: () => Promise<void> | void;
     onExportMindmap?: () => Promise<void> | void;
@@ -264,11 +278,13 @@ function renderCardZones({
     showDelete,
     showReset,
     cardType,
+    columnId,
     menuOpen,
     setMenuOpen,
     menuButtonRef,
     handleMenuClick,
     isMobile,
+    settingsHref,
     onEditMindmap,
     onDeleteMindmap,
     onExportMindmap,
@@ -283,6 +299,7 @@ function renderCardZones({
     let zone2 = { english: "", arabic: "" };
     let zone3 = "";
     let zone4Meta = "";
+    let reviewQueueIndicator: { tooltip: string } | null = null;
     const showSplitsAlert = cardType === 'surah' && hasMindmap && !hasSplits;
     const mindmapStatusIcon = (() => {
         if ((cardType !== 'surah' && cardType !== 'part') || !hasMindmap) return null;
@@ -334,7 +351,6 @@ function renderCardZones({
             {mindmapStatusIcon}
         </>
     ) : null;
-
     // Type-specific logic
     switch (item.type) {
         case 'suspended': {
@@ -358,7 +374,7 @@ function renderCardZones({
                 english: sim.surah ? `${sim.surah.id}. ${sim.surah.name}` : "Similarity",
                 arabic: sim.surah?.arabicName || 'التشابه'
             };
-            zone3 = `${sim.count} similarity issues detected.`;
+            zone3 = `${sim.count} unlocked unresolved comparator${sim.count === 1 ? '' : 's'} need distinction.`;
             zone4Meta = "Needs distinction";
             break;
         }
@@ -387,9 +403,22 @@ function renderCardZones({
                 arabic: surahTask.surah.arabicName || 'سورة'
             };
             zone4Meta = `${surahTask.surah.verseCount} Verses`;
+            reviewQueueIndicator = columnId !== 'complete' ? (surahTask.reviewQueueInfo || null) : null;
             break;
         }
     }
+
+    const reviewQueueIcon = reviewQueueIndicator ? (
+        <span
+            className="inline-flex items-center shrink-0 kanban-title-icon text-[var(--accent)] opacity-80"
+            data-tooltip={reviewQueueIndicator.tooltip}
+            data-tooltip-trigger="hover"
+            title={reviewQueueIndicator.tooltip}
+            aria-label={reviewQueueIndicator.tooltip}
+        >
+            <BookOpen size={14} />
+        </span>
+    ) : null;
 
     return (
         <>
@@ -432,6 +461,7 @@ function renderCardZones({
                         onChangeSplits={onChangeSplits}
                         onViewVerseContext={onViewVerseContext}
                         onViewSimilarityContext={onViewSimilarityContext}
+                        settingsHref={settingsHref}
                         docLink={docLink}
                         anchorRef={menuButtonRef}
                         showExport={showExport}
@@ -448,15 +478,15 @@ function renderCardZones({
                         <h4 className="text-[0.82rem] md:text-[0.95rem] font-bold text-[var(--foreground)] leading-tight mb-0.5 break-words">
                             {zone2.english}
                         </h4>
+                        {reviewQueueIcon}
                         {!isMobile && statusIcons}
                     </div>
                     {zone2.arabic && (
                         <div
-                            className={`text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 ${
-                                isMobile
+                            className={`text-xs font-arabic text-[var(--foreground-secondary)] opacity-80 ${isMobile
                                     ? 'w-full text-right whitespace-normal break-words leading-snug'
                                     : 'whitespace-nowrap'
-                            }`}
+                                }`}
                         >
                             {zone2.arabic}
                         </div>
@@ -464,10 +494,11 @@ function renderCardZones({
                 </div>
             </div>
 
-            {isMobile && (statusIcons || zone4Meta) && (
+            {isMobile && (statusIcons || reviewQueueIcon || zone4Meta) && (
                 <div className="mt-2 flex items-center gap-2">
                     <div className="flex items-center gap-2 shrink-0">
                         {statusIcons}
+                        {reviewQueueIcon}
                     </div>
                     {zone4Meta && (
                         <p className="flex-1 min-w-0 text-right text-[0.66rem] leading-snug text-[var(--foreground-secondary)] truncate">

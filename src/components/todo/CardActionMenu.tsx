@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw } from 'lucide-react';
+import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 
@@ -30,6 +30,7 @@ interface CardActionMenuProps {
     onViewVerseContext?: () => Promise<void> | void; // For Suspended
     onViewSimilarityContext?: () => Promise<void> | void; // For Similarity
 
+    settingsHref?: string;
     docLink?: string;
 }
 
@@ -48,6 +49,7 @@ export default function CardActionMenu({
     onChangeSplits,
     onViewVerseContext,
     onViewSimilarityContext,
+    settingsHref,
     docLink,
     showExport,
     showDelete,
@@ -169,6 +171,13 @@ export default function CardActionMenu({
                 onClick: onViewSimilarityContext,
                 disabled: isProcessing
             });
+            items.push({
+                label: 'View in Similarity Settings',
+                icon: <Settings size={20} />,
+                isLink: true,
+                href: settingsHref || '/settings?tab=tracking',
+                disabled: isProcessing
+            });
         }
 
         return items;
@@ -186,7 +195,8 @@ export default function CardActionMenu({
         onResetMindmap,
         onChangeSplits,
         onViewVerseContext,
-        onViewSimilarityContext
+        onViewSimilarityContext,
+        settingsHref
     ]);
 
     const estimatedMenuHeight = useMemo(() => {
@@ -308,12 +318,12 @@ export default function CardActionMenu({
                                 );
                             }
 
-                                return (
-                                    <button key={idx} onClick={() => { void runMenuAction(item.onClick); }} disabled={item.disabled || isActionPending} className={className}>
-                                        <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
-                                        <span>{item.label}</span>
-                                    </button>
-                                );
+                            return (
+                                <button key={idx} onClick={() => { void runMenuAction(item.onClick); }} disabled={item.disabled || isActionPending} className={className}>
+                                    <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </button>
+                            );
                         })}
                     </div>
                 </div>
