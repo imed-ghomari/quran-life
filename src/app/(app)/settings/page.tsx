@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, s
 import { id } from '@instantdb/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Spinner from '@/components/ui/Spinner';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -448,8 +449,8 @@ export default function SettingsPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
-    const { user } = db.useAuth();
-    const { data: subscriptionData } = db.useQuery({
+    const { user, isLoading: authLoading } = db.useAuth();
+    const { data: subscriptionData, isLoading: subscriptionsLoading } = db.useQuery({
         subscriptions: {
             $: {
                 where: { userId: user?.id || '' },
@@ -457,8 +458,8 @@ export default function SettingsPage() {
         },
     });
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
-    const { settings, saveSettings } = useSharedInstantSettings();
-    const { nodes: instantNodes, saveNode: saveInstantNode } = useSharedInstantNodes();
+    const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { nodes: instantNodes, saveNode: saveInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
 
     const checkIsSurahLearned = useCallback((surahId: number) => {
         return instantNodes.some((node) => {
@@ -467,10 +468,10 @@ export default function SettingsPage() {
             return hasNodeBeenReviewed(node.scheduler);
         });
     }, [instantNodes]);
-    const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
-    const { errors: reviewErrors } = useSharedInstantReviewErrors();
-    const { progress: listeningProgress } = useSharedInstantListeningProgress();
-    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision } = useSharedInstantMutashabihat();
+    const { mindmaps: instantMindmaps, saveMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
+    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useSharedInstantListeningProgress();
+    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
     const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
     const [systemIsDark, setSystemIsDark] = useState(false);
     const { confirm, alert } = useConfirmDialog();
@@ -522,7 +523,6 @@ export default function SettingsPage() {
     } | null>(null);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
     const [showDebugNodes, setShowDebugNodes] = useState(() => !isMobileViewport());
-    const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [isMobile, setIsMobile] = useState(isMobileViewport);
     const [knowledgeFilter, setKnowledgeFilter] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'not_due'>('all');
@@ -617,9 +617,16 @@ export default function SettingsPage() {
     const mobileHistoryKey = 'mobileSettingsPage';
     const mobileOverlayHistoryKey = 'mobileSettingsOverlayOpen';
     const wasMobileOverlayOpenRef = useRef(false);
+    const [hasInitializedSettingsLayout, setHasInitializedSettingsLayout] = useState(false);
+    const [hasResolvedInitialAccountDeletionStatus, setHasResolvedInitialAccountDeletionStatus] = useState(false);
+    const [hasResolvedInitialBillingSummary, setHasResolvedInitialBillingSummary] = useState(false);
+    const settingsSharedDataReady = !settingsLoading && !nodesLoading && !mindmapsLoading && !reviewErrorsLoading && !listeningProgressLoading && !mutashabihatLoading;
+    const shouldPrepareKnowledgeTracking = settingsSharedDataReady && (showDebugNodes || activeMobilePage === 'tracking' || activeSlideOverGroup !== null);
 
     const latestPartMindmaps = useMemo(() => {
-        const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        const partMindmapNodes = instantNodes.filter(n => (n as any).type === 'part_mindmap');
         const latestMap: { [key: number]: MemoryNode } = {};
         partMindmapNodes.forEach(node => {
             const part = resolveNodePartId(node);
@@ -632,10 +639,12 @@ export default function SettingsPage() {
             }
         });
         return Object.values(latestMap);
-    }, [memoryNodes]);
+    }, [instantNodes, shouldPrepareKnowledgeTracking]);
 
     const latestSurahMindmaps = useMemo(() => {
-        const surahMindmapNodes = memoryNodes.filter(n => (n as any).type === 'mindmap');
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        const surahMindmapNodes = instantNodes.filter(n => (n as any).type === 'mindmap');
         const latestMap: { [key: number]: MemoryNode } = {};
         surahMindmapNodes.forEach(node => {
             const surahId = resolveNodeSurahId(node);
@@ -648,7 +657,7 @@ export default function SettingsPage() {
             }
         });
         return Object.values(latestMap);
-    }, [memoryNodes]);
+    }, [instantNodes, shouldPrepareKnowledgeTracking]);
 
     const settingsMindmapsBySurah = useMemo(() => {
         const acc: Record<number, any> = {};
@@ -669,14 +678,16 @@ export default function SettingsPage() {
         return acc;
     }, [instantMindmaps]);
 
-    const eligibleKnowledgeSurahs = useMemo(() => (
-        SURAHS
+    const eligibleKnowledgeSurahs = useMemo(() => {
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        return SURAHS
             .filter((surah) =>
                 (settings.activePart === ALL_QURAN_PART || surah.part === settings.activePart)
                 && !settings.skippedSurahs?.includes(surah.id)
             )
-            .sort((a, b) => a.id - b.id)
-    ), [settings.activePart, settings.skippedSurahs]);
+            .sort((a, b) => a.id - b.id);
+    }, [settings.activePart, settings.skippedSurahs, shouldPrepareKnowledgeTracking]);
 
     const latestSurahMindmapBySurah = useMemo(() => {
         const bySurah = new Map<number, MemoryNode>();
@@ -688,7 +699,9 @@ export default function SettingsPage() {
         return bySurah;
     }, [latestSurahMindmaps]);
 
-    const currentVerseGroupKeysBySurah = useMemo(() => {
+    const currentVerseGroupKeysBySurah = useMemo<Record<number, Set<string>>>(() => {
+        if (!shouldPrepareKnowledgeTracking) return {};
+
         const bySurah: Record<number, Set<string>> = {};
         SURAHS.forEach((surah) => {
             const anchors = getEffectiveSurahAnchors(surah.id, settingsMindmapsBySurah[surah.id]);
@@ -697,10 +710,12 @@ export default function SettingsPage() {
             );
         });
         return bySurah;
-    }, [settingsMindmapsBySurah]);
+    }, [settingsMindmapsBySurah, shouldPrepareKnowledgeTracking]);
 
     const latestVerseSegments = useMemo(() => {
-        const verseNodes = memoryNodes.filter(n => n.type === 'verse_segment');
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        const verseNodes = instantNodes.filter(n => n.type === 'verse_segment');
         const latestMap: Record<string, MemoryNode> = {};
         verseNodes.forEach(node => {
             const surahId = resolveNodeSurahId(node);
@@ -717,7 +732,7 @@ export default function SettingsPage() {
             }
         });
         return Object.values(latestMap);
-    }, [currentVerseGroupKeysBySurah, memoryNodes]);
+    }, [currentVerseGroupKeysBySurah, instantNodes, shouldPrepareKnowledgeTracking]);
 
     const latestVerseSegmentsBySurah = useMemo(() => {
         const bySurah = new Map<number, MemoryNode[]>();
@@ -733,6 +748,28 @@ export default function SettingsPage() {
         });
         return bySurah;
     }, [latestVerseSegments]);
+
+    const missingNodeCreationPrereqsBySurah = useMemo(() => {
+        const bySurah = new Map<number, {
+            hasLinkedMindmap: boolean;
+            hasSplits: boolean;
+            canCreateMissingNode: boolean;
+        }>();
+
+        eligibleKnowledgeSurahs.forEach((surah) => {
+            const linkedMindmap = settingsMindmapsBySurah[surah.id];
+            const hasLinkedMindmap = !!linkedMindmap;
+            const hasSplits = hasLinkedMindmap && getEffectiveSurahAnchors(surah.id, linkedMindmap).length > 0;
+
+            bySurah.set(surah.id, {
+                hasLinkedMindmap,
+                hasSplits,
+                canCreateMissingNode: hasLinkedMindmap && hasSplits,
+            });
+        });
+
+        return bySurah;
+    }, [eligibleKnowledgeSurahs, settingsMindmapsBySurah]);
 
     const getKnowledgeDueKey = (due: string | null): string | null => {
         if (!due) return null;
@@ -814,11 +851,6 @@ export default function SettingsPage() {
         });
         setDecisions(decisionsMap);
     }, [instantDecisions]);
-
-    // Sync instant nodes to local state
-    useEffect(() => {
-        setMemoryNodes(instantNodes);
-    }, [instantNodes]);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(isMobileViewport());
@@ -944,6 +976,7 @@ export default function SettingsPage() {
                     advancedOptions: true,
                 });
             }
+            setHasInitializedSettingsLayout(true);
         }
 
         window.addEventListener('resize', handleResize);
@@ -989,9 +1022,13 @@ export default function SettingsPage() {
     const loadAccountDeletionStatus = useCallback(async () => {
         if (!user?.id) {
             setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+            setHasResolvedInitialAccountDeletionStatus(true);
             return;
         }
-        if (!isOnline) return;
+        if (!isOnline) {
+            setHasResolvedInitialAccountDeletionStatus(true);
+            return;
+        }
 
         try {
             const response = await fetch('/api/account/delete-request', {
@@ -1006,6 +1043,8 @@ export default function SettingsPage() {
             setAccountDeletionStatus(normalizeAccountDeletionStatus(payload?.deletion));
         } catch {
             setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+        } finally {
+            setHasResolvedInitialAccountDeletionStatus(true);
         }
     }, [isOnline, user?.id]);
 
@@ -1223,6 +1262,7 @@ export default function SettingsPage() {
     useEffect(() => {
         if (!user?.id) {
             setBillingSummary({ nextRenewalAt: null, canManageSubscription: false });
+            setHasResolvedInitialBillingSummary(true);
             return;
         }
 
@@ -1236,6 +1276,7 @@ export default function SettingsPage() {
                 nextRenewalAt: null,
                 canManageSubscription: canManageFromLocal,
             });
+            setHasResolvedInitialBillingSummary(true);
             return;
         }
 
@@ -1263,12 +1304,14 @@ export default function SettingsPage() {
                             : null,
                     canManageSubscription: Boolean(payload?.billing?.canManageSubscription || canManageFromLocal),
                 });
+                setHasResolvedInitialBillingSummary(true);
             } catch {
                 if (cancelled) return;
                 setBillingSummary({
                     nextRenewalAt: null,
                     canManageSubscription: canManageFromLocal,
                 });
+                setHasResolvedInitialBillingSummary(true);
             }
         };
 
@@ -2704,6 +2747,7 @@ export default function SettingsPage() {
         const newState = getMaturityState(level);
         const nowIso = new Date().toISOString();
         const scopedSurahIds = buildScopedKnowledgeSurahIds(surahId);
+        const shouldMoveKanbanToComplete = level !== 'reset';
 
         const typeLabel = surahId
             ? (
@@ -2723,6 +2767,7 @@ export default function SettingsPage() {
         const nodesToCreate: Array<MemoryNode & { userId: string }> = [];
         const kanbanItemsToComplete = new Set<string>();
         const noSplitSurahIds = new Set<number>();
+        const blockedMissingNodeSurahIds = new Set<number>();
 
         if (targetType === 'mindmap') {
             scopedSurahIds.forEach((currentSurahId) => {
@@ -2735,7 +2780,15 @@ export default function SettingsPage() {
                     return;
                 }
 
-                kanbanItemsToComplete.add(`surah-${currentSurahId}`);
+                const prereqs = missingNodeCreationPrereqsBySurah.get(currentSurahId);
+                if (!prereqs?.canCreateMissingNode) {
+                    blockedMissingNodeSurahIds.add(currentSurahId);
+                    return;
+                }
+
+                if (shouldMoveKanbanToComplete) {
+                    kanbanItemsToComplete.add(`surah-${currentSurahId}`);
+                }
                 nodesToCreate.push({
                     id: getMemoryNodeEntityId({ type: 'mindmap', surahId: currentSurahId }),
                     type: 'mindmap',
@@ -2754,8 +2807,14 @@ export default function SettingsPage() {
                     existingByRange.set(`${Number(node.startVerse)}-${Number(node.endVerse)}`, node);
                 });
 
+                const prereqs = missingNodeCreationPrereqsBySurah.get(currentSurahId);
+                if (existingNodes.length === 0 && !prereqs?.canCreateMissingNode) {
+                    blockedMissingNodeSurahIds.add(currentSurahId);
+                    return;
+                }
+
                 const anchors = getEffectiveSurahAnchors(currentSurahId, settingsMindmapsBySurah[currentSurahId]);
-                if (existingNodes.length === 0) {
+                if (existingNodes.length === 0 && shouldMoveKanbanToComplete) {
                     kanbanItemsToComplete.add(`surah-${currentSurahId}`);
                 }
                 if (anchors.length === 0) {
@@ -2818,6 +2877,15 @@ export default function SettingsPage() {
         }
 
         if (nodesToUpdate.length === 0 && nodesToCreate.length === 0 && kanbanItemsToComplete.size === 0) {
+            if (blockedMissingNodeSurahIds.size > 0) {
+                await alert({
+                    title: 'Mindmap And Splits Required',
+                    message: blockedMissingNodeSurahIds.size === 1 && surahId
+                        ? `${surahName || `Surah ${surahId}`} has no review node yet. Create and save its mindmap with splits first, then you can set maturity from Settings.`
+                        : `${blockedMissingNodeSurahIds.size} surah${blockedMissingNodeSurahIds.size === 1 ? '' : 's'} could not be updated because they have no review node yet and no saved mindmap with splits.`,
+                });
+                return;
+            }
             await alert({
                 title: 'Nothing to Update',
                 message: 'No matching items were found to update.',
@@ -2853,6 +2921,12 @@ export default function SettingsPage() {
         if (noSplitSurahIds.size > 0) {
             warningLines.push(
                 `${noSplitSurahIds.size} surah${noSplitSurahIds.size === 1 ? '' : 's'} do not have verse splits yet, so no verse review nodes can be created for them until splits exist.`
+            );
+        }
+
+        if (blockedMissingNodeSurahIds.size > 0) {
+            warningLines.push(
+                `${blockedMissingNodeSurahIds.size} surah${blockedMissingNodeSurahIds.size === 1 ? '' : 's'} with no review node will be skipped because they do not have a saved mindmap with splits yet.`
             );
         }
 
@@ -3066,7 +3140,7 @@ export default function SettingsPage() {
                         .filter((key): key is string => !!key)
                 );
                 const nowIso = new Date().toISOString();
-                const nodesToCreate: MemoryNode[] = [];
+                const nodesToCreate: Array<MemoryNode & { userId: string }> = [];
 
                 for (const target of targets) {
                     for (const anchor of target.anchors) {
@@ -3079,7 +3153,12 @@ export default function SettingsPage() {
                         existingVerseGroupKeys.add(verseGroupKey);
                         const targetId = anchor?.id || `anchor-${target.surahId}-${startVerse}-${endVerse}`;
                         nodesToCreate.push({
-                            id: stableNodeId('memory_node', 'verse_segment', target.surahId, startVerse, endVerse),
+                            id: getMemoryNodeEntityId({
+                                type: 'verse_segment',
+                                surahId: target.surahId,
+                                startVerse,
+                                endVerse,
+                            }),
                             type: 'verse_segment',
                             surahId: target.surahId,
                             startVerse,
@@ -3087,7 +3166,8 @@ export default function SettingsPage() {
                             targetId,
                             scheduler: createNewFSRSState(),
                             createdAt: nowIso,
-                        } as MemoryNode);
+                            userId: user?.id || '',
+                        });
                     }
                 }
 
@@ -3910,29 +3990,51 @@ export default function SettingsPage() {
         return mergedGroups;
     }, [instantCustomMutashabihat]);
 
-    const mutashabihatBySurah = useMemo(() => {
+    const hasRequestedMutashabihatFocus =
+        searchParams.get('tab') === 'tracking'
+        || Boolean(searchParams.get('mutSurah'))
+        || Boolean(searchParams.get('mutDecision'));
+    const shouldPrepareMutashabihat =
+        settingsSharedDataReady
+        && (
+            sectionsExpanded.mutashabihat
+            || activeMobilePage === 'tracking'
+            || activeMutSlideOver !== null
+            || noteModal !== null
+            || isAddModalOpen
+            || hasRequestedMutashabihatFocus
+        );
+
+    const mutashabihatBySurah = useMemo<Record<number, number>>(() => {
+        if (!shouldPrepareMutashabihat) return {};
+
         const map: Record<number, number> = {};
         getSurahsByPart(settings.activePart).forEach((surah) => {
             map[surah.id] = collectSurahMutSourceGroups(surah.id).length;
         });
         return map;
-    }, [settings.activePart, collectSurahMutSourceGroups]);
+    }, [settings.activePart, collectSurahMutSourceGroups, shouldPrepareMutashabihat]);
 
     const mutashabihatSurahs = useMemo(() => {
+        if (!shouldPrepareMutashabihat) return [];
+
         return getSurahsByPart(settings.activePart)
             .map(s => ({ surah: s, count: mutashabihatBySurah[s.id] || 0 }))
             .filter(entry => entry.count > 0);
-    }, [settings.activePart, mutashabihatBySurah]);
+    }, [settings.activePart, mutashabihatBySurah, shouldPrepareMutashabihat]);
 
     useEffect(() => {
+        if (!shouldPrepareMutashabihat) return;
         if (mutashabihatSurahs.length > 0 && !selectedMutSurah) {
             setSelectedMutSurah(mutashabihatSurahs[0].surah.id);
         } else if (mutashabihatSurahs.every(s => s.surah.id !== selectedMutSurah)) {
             setSelectedMutSurah(mutashabihatSurahs[0]?.surah.id ?? null);
         }
-    }, [mutashabihatSurahs, selectedMutSurah]);
+    }, [mutashabihatSurahs, selectedMutSurah, shouldPrepareMutashabihat]);
 
     const buildSurahMutGroups = useCallback((surahId: number): SimilaritySurahGroup[] => {
+        if (!shouldPrepareMutashabihat) return [];
+
         return collectSurahMutSourceGroups(surahId)
             .map((group): SimilaritySurahGroup => {
                 const resolutionTargets: SimilarityResolutionTarget[] = group.phraseIds.map((phraseId) => {
@@ -3962,7 +4064,7 @@ export default function SettingsPage() {
                 };
             })
             .sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
-    }, [collectSurahMutSourceGroups, decisions]);
+    }, [collectSurahMutSourceGroups, decisions, shouldPrepareMutashabihat]);
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
@@ -4040,6 +4142,22 @@ export default function SettingsPage() {
             router.replace(nextQuery ? `/settings?${nextQuery}` : '/settings', { scroll: false });
         }
     }, [activeMobilePage, buildSurahMutGroups, isMobile, router, searchParams]);
+
+    const settingsPageReady =
+        hasInitializedSettingsLayout
+        && !authLoading
+        && !subscriptionsLoading
+        && settingsSharedDataReady
+        && hasResolvedInitialAccountDeletionStatus
+        && hasResolvedInitialBillingSummary;
+
+    if (!settingsPageReady) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <Spinner size={32} text="Preparing settings..." />
+            </div>
+        );
+    }
 
     return (
         <>
@@ -4814,12 +4932,16 @@ export default function SettingsPage() {
                                                                                 const due = getNodeDueDate(node);
                                                                                 const surahId = resolveNodeSurahId(node);
                                                                                 const isOverdue = !!getKnowledgeDueKey(due) && getKnowledgeDueKey(due)! <= todayKey;
+                                                                                const canCreateMissingNode = surahId ? (missingNodeCreationPrereqsBySurah.get(surahId)?.canCreateMissingNode ?? false) : false;
+                                                                                const disableMaturitySelect = isMissingKnowledgeNode(node) && !canCreateMissingNode;
                                                                                 return (
                                                                                     <tr key={node.id} className="node-row">
                                                                                         <td>{surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-'}</td>
                                                                                         <td>
                                                                                             <select
                                                                                                 value=""
+                                                                                                disabled={disableMaturitySelect}
+                                                                                                title={disableMaturitySelect ? 'Create and save a mindmap with splits first.' : undefined}
                                                                                                 onChange={async (e) => {
                                                                                                     if (!e.target.value) return;
                                                                                                     if (!surahId) return;
@@ -4827,7 +4949,7 @@ export default function SettingsPage() {
                                                                                                 }}
                                                                                                 className="maturity-select"
                                                                                             >
-                                                                                                <option value="">Set To...</option>
+                                                                                                <option value="">{disableMaturitySelect ? 'Mindmap + splits required' : 'Set To...'}</option>
                                                                                                 <option value="reset">Reset</option>
                                                                                                 <option value="medium">Medium</option>
                                                                                                 <option value="strong">Strong</option>
@@ -4918,6 +5040,8 @@ export default function SettingsPage() {
                                                                         const surahNodes = (knowledgeFilter === 'all' ? latestVerseSegments : filteredVerseSegments)
                                                                             .filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
                                                                             .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
+                                                                        const canCreateMissingNode = missingNodeCreationPrereqsBySurah.get(surahId)?.canCreateMissingNode ?? false;
+                                                                        const disableSurahBulkMaturity = surahNodes.length === 0 && !canCreateMissingNode;
 
                                                                         return (
                                                                             <React.Fragment key={surahId}>
@@ -4933,6 +5057,8 @@ export default function SettingsPage() {
                                                                                                 className="maturity-select"
                                                                                                 style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                                                                 value=""
+                                                                                                disabled={disableSurahBulkMaturity}
+                                                                                                title={disableSurahBulkMaturity ? 'Create and save a mindmap with splits first.' : undefined}
                                                                                                 onClick={(e) => e.stopPropagation()}
                                                                                                 onChange={async (e) => {
                                                                                                     const val = e.target.value as any;
@@ -4941,7 +5067,7 @@ export default function SettingsPage() {
                                                                                                     e.target.value = '';
                                                                                                 }}
                                                                                             >
-                                                                                                <option value="">Set Subgroup...</option>
+                                                                                                <option value="">{disableSurahBulkMaturity ? 'Mindmap + splits required' : 'Set Subgroup...'}</option>
                                                                                                 <option value="reset">Reset</option>
                                                                                                 <option value="medium">Medium</option>
                                                                                                 <option value="strong">Strong</option>
@@ -6834,10 +6960,23 @@ export default function SettingsPage() {
                         <div className="slide-over-body">
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                                 {/* Set All dropdown matching desktop */}
+                                {(() => {
+                                    const canCreateMissingNode = activeSlideOverGroup?.surahId
+                                        ? (missingNodeCreationPrereqsBySurah.get(activeSlideOverGroup.surahId)?.canCreateMissingNode ?? false)
+                                        : true;
+                                    const disableSlideOverBulkMaturity = Boolean(
+                                        activeSlideOverGroup?.surahId
+                                        && activeSlideOverGroup.nodes.length === 0
+                                        && !canCreateMissingNode
+                                    );
+
+                                    return (
                                 <select
                                     className="maturity-select"
                                     style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.85rem' }}
                                     value=""
+                                    disabled={disableSlideOverBulkMaturity}
+                                    title={disableSlideOverBulkMaturity ? 'Create and save a mindmap with splits first.' : undefined}
                                     onChange={async (e) => {
                                         const val = e.target.value as any;
                                         if (!val) return;
@@ -6856,12 +6995,14 @@ export default function SettingsPage() {
                                         });
                                     }}
                                 >
-                                    <option value="">Set Subgroup...</option>
+                                    <option value="">{disableSlideOverBulkMaturity ? 'Mindmap + splits required' : 'Set Subgroup...'}</option>
                                     <option value="reset">Reset</option>
                                     <option value="medium">Medium</option>
                                     <option value="strong">Strong</option>
                                     <option value="mastered">Mastered</option>
                                 </select>
+                                    );
+                                })()}
                             </div>
 
                             <div className="mobile-node-list">
@@ -6874,6 +7015,14 @@ export default function SettingsPage() {
                                         })
                                         .map(node => (
                                             <div key={node.id} className="mobile-node-card">
+                                                {(() => {
+                                                    const nodeSurahId = resolveNodeSurahId(node);
+                                                    const canCreateMissingNode = nodeSurahId
+                                                        ? (missingNodeCreationPrereqsBySurah.get(nodeSurahId)?.canCreateMissingNode ?? false)
+                                                        : false;
+                                                    const disableNodeMaturitySelect = isMissingKnowledgeNode(node) && !canCreateMissingNode;
+
+                                                    return (
                                                 <div className="node-card-main">
                                                     <div className="node-target">
                                                         {activeSlideOverGroup.type === 'verse_segment' ? `Ayat ${node.startVerse}-${node.endVerse}` :
@@ -6889,6 +7038,8 @@ export default function SettingsPage() {
                                                     </div>
                                                     <select
                                                         value=""
+                                                        disabled={disableNodeMaturitySelect}
+                                                        title={disableNodeMaturitySelect ? 'Create and save a mindmap with splits first.' : undefined}
                                                         onChange={async (e) => {
                                                             const val = e.target.value as any;
                                                             if (!val) return;
@@ -6910,13 +7061,15 @@ export default function SettingsPage() {
                                                         className="maturity-select"
                                                         style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
                                                     >
-                                                        <option value="">Set to...</option>
+                                                        <option value="">{disableNodeMaturitySelect ? 'Mindmap + splits required' : 'Set to...'}</option>
                                                         <option value="reset">Reset</option>
                                                         <option value="medium">Medium</option>
                                                         <option value="strong">Strong</option>
                                                         <option value="mastered">Mastered</option>
                                                     </select>
                                                 </div>
+                                                    );
+                                                })()}
                                                 <div className="node-card-details">
                                                     <div className="stat-item">
                                                         <span className="stat-label">Interval</span>
