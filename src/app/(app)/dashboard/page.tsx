@@ -55,7 +55,8 @@ import {
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
-import { surahAyahToAbsolute, hasMutashabihForAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
+import { surahAyahToAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
+import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
@@ -314,13 +315,9 @@ export default function TodayPage() {
         const entries = getMutashabihatForAbsolute(absoluteAyah, customMutashabihat);
         if (entries.length === 0) return false;
 
-        return entries.some((entry: any) => {
-            const decisionKey = `${absoluteAyah}-${entry.phraseId}`;
-            const phraseDecision = mutashabihatDecisionsMap.get(decisionKey);
-            if (!phraseDecision) return true;
-            if (phraseDecision.status === 'ignored') return false;
-            return !phraseDecision.confirmedAt;
-        });
+        return entries.some((entry: any) =>
+            !isSimilarityEntryResolved(mutashabihatDecisionsMap, absoluteAyah, entry, { sameSurahOnly: true })
+        );
     }, [mutashabihatDecisionsMap, customMutashabihat]);
 
     const suspendedVerseGroupKeys = useMemo(() => {
@@ -1675,18 +1672,31 @@ export default function TodayPage() {
         const endVerse = node.endVerse || 999;
         const verses = surahVerses.filter(v => v.ayahId >= startVerse && v.ayahId <= endVerse);
         const contextVerses: Verse[] = [];
+        const firstRevealedVerse = verses[0] || null;
+        const firstRevealedAbs = firstRevealedVerse ? surahAyahToAbsolute(firstRevealedVerse.surahId, firstRevealedVerse.ayahId) : null;
         let lookback = 1;
-        while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, startVerse - lookback + 1)))) {
+        while (true) {
             const candidate = verseLookupBySurahAyah.get(`${surahId}:${startVerse - lookback}`);
             if (!candidate) break;
             contextVerses.unshift(candidate);
-            const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
-            if (!hasMutashabihForAbsolute(abs) && contextVerses.length >= 2) break;
+
+            const lastContextVerse = contextVerses[contextVerses.length - 1];
+            const lastContextAbs = lastContextVerse
+                ? surahAyahToAbsolute(lastContextVerse.surahId, lastContextVerse.ayahId)
+                : null;
+            const shouldKeepExpanding = (
+                (firstRevealedAbs !== null && isUnresolvedMutashabihatFailure(firstRevealedAbs))
+                || (lastContextAbs !== null && isUnresolvedMutashabihatFailure(lastContextAbs))
+            );
+
+            if (contextVerses.length >= 5) break;
+            if (contextVerses.length >= 2 && !shouldKeepExpanding) break;
+
             lookback++;
         }
 
         return { type: 'verse', surah, verses, contextVerses } as const;
-    }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah]);
+    }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah, isUnresolvedMutashabihatFailure]);
 
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;

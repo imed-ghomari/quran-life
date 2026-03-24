@@ -30,6 +30,7 @@ interface CardActionMenuProps {
     onViewVerseContext?: () => Promise<void> | void; // For Suspended
     onViewSimilarityContext?: () => Promise<void> | void; // For Similarity
 
+    settingsHref?: string;
     docLink?: string;
 }
 
@@ -48,6 +49,7 @@ export default function CardActionMenu({
     onChangeSplits,
     onViewVerseContext,
     onViewSimilarityContext,
+    settingsHref,
     docLink,
     showExport,
     showDelete,
@@ -170,10 +172,10 @@ export default function CardActionMenu({
                 disabled: isProcessing
             });
             items.push({
-                label: 'Open in Settings',
+                label: 'View in Similarity Settings',
                 icon: <Settings size={20} />,
                 isLink: true,
-                href: '/settings?tab=tracking',
+                href: settingsHref || '/settings?tab=tracking',
                 disabled: isProcessing
             });
         }
@@ -193,7 +195,8 @@ export default function CardActionMenu({
         onResetMindmap,
         onChangeSplits,
         onViewVerseContext,
-        onViewSimilarityContext
+        onViewSimilarityContext,
+        settingsHref
     ]);
 
     const estimatedMenuHeight = useMemo(() => {
@@ -315,12 +318,12 @@ export default function CardActionMenu({
                                 );
                             }
 
-                                return (
-                                    <button key={idx} onClick={() => { void runMenuAction(item.onClick); }} disabled={item.disabled || isActionPending} className={className}>
-                                        <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
-                                        <span>{item.label}</span>
-                                    </button>
-                                );
+                            return (
+                                <button key={idx} onClick={() => { void runMenuAction(item.onClick); }} disabled={item.disabled || isActionPending} className={className}>
+                                    <span className={`w-8 flex items-center justify-center ml-2 opacity-70 ${item.danger ? '' : 'opacity-70'}`}>{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </button>
+                            );
                         })}
                     </div>
                 </div>

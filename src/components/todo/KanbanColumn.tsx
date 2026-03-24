@@ -25,6 +25,7 @@ interface KanbanColumnProps {
     getHasMindmap: (item: KanbanItem) => boolean;
     getHasSplits: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;
+    getSettingsHref?: (item: KanbanItem) => string | undefined;
     getDocLink: (item: KanbanItem) => string | undefined;
     isItemVisible: (item: KanbanItem) => boolean;
     hasActiveVisibilityFilter: boolean;
@@ -57,6 +58,7 @@ const KanbanColumn = ({
     getHasMindmap,
     getHasSplits,
     getHasPremade,
+    getSettingsHref,
     getDocLink,
     isItemVisible,
     hasActiveVisibilityFilter
@@ -125,11 +127,13 @@ const KanbanColumn = ({
                                 key={item.id}
                                 item={item}
                                 index={index}
+                                columnId={id}
                                 isMobile={isMobile}
                                 hasMindmap={getHasMindmap(item)}
                                 hasSplits={getHasSplits(item)}
                                 hasPremade={getHasPremade ? getHasPremade(item) : false}
                                 appMode={appMode}
+                                settingsHref={getSettingsHref ? getSettingsHref(item) : undefined}
                                 docLink={getDocLink(item)}
                                 onEditMindmap={onEditMindmap}
                                 onDeleteMindmap={onDeleteMindmap}
