@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useContext, useRef, useCallback, s
 import { id } from '@instantdb/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Spinner from '@/components/ui/Spinner';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -448,8 +449,8 @@ export default function SettingsPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
-    const { user } = db.useAuth();
-    const { data: subscriptionData } = db.useQuery({
+    const { user, isLoading: authLoading } = db.useAuth();
+    const { data: subscriptionData, isLoading: subscriptionsLoading } = db.useQuery({
         subscriptions: {
             $: {
                 where: { userId: user?.id || '' },
@@ -457,8 +458,8 @@ export default function SettingsPage() {
         },
     });
     const subscriptions = useMemo(() => subscriptionData?.subscriptions ?? [], [subscriptionData?.subscriptions]);
-    const { settings, saveSettings } = useSharedInstantSettings();
-    const { nodes: instantNodes, saveNode: saveInstantNode } = useSharedInstantNodes();
+    const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
+    const { nodes: instantNodes, saveNode: saveInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
 
     const checkIsSurahLearned = useCallback((surahId: number) => {
         return instantNodes.some((node) => {
@@ -467,10 +468,10 @@ export default function SettingsPage() {
             return hasNodeBeenReviewed(node.scheduler);
         });
     }, [instantNodes]);
-    const { mindmaps: instantMindmaps, saveMindMap } = useSharedInstantMindMaps();
-    const { errors: reviewErrors } = useSharedInstantReviewErrors();
-    const { progress: listeningProgress } = useSharedInstantListeningProgress();
-    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision } = useSharedInstantMutashabihat();
+    const { mindmaps: instantMindmaps, saveMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
+    const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
+    const { progress: listeningProgress, isLoading: listeningProgressLoading } = useSharedInstantListeningProgress();
+    const { decisions: instantDecisions, custom: instantCustomMutashabihat, saveDecision: updateInstantDecision, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
     const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
     const [systemIsDark, setSystemIsDark] = useState(false);
     const { confirm, alert } = useConfirmDialog();
@@ -522,7 +523,6 @@ export default function SettingsPage() {
     } | null>(null);
     const [targetSurahId, setTargetSurahId] = useState<number | undefined>();
     const [showDebugNodes, setShowDebugNodes] = useState(() => !isMobileViewport());
-    const [memoryNodes, setMemoryNodes] = useState<MemoryNode[]>([]);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [isMobile, setIsMobile] = useState(isMobileViewport);
     const [knowledgeFilter, setKnowledgeFilter] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'not_due'>('all');
@@ -617,9 +617,16 @@ export default function SettingsPage() {
     const mobileHistoryKey = 'mobileSettingsPage';
     const mobileOverlayHistoryKey = 'mobileSettingsOverlayOpen';
     const wasMobileOverlayOpenRef = useRef(false);
+    const [hasInitializedSettingsLayout, setHasInitializedSettingsLayout] = useState(false);
+    const [hasResolvedInitialAccountDeletionStatus, setHasResolvedInitialAccountDeletionStatus] = useState(false);
+    const [hasResolvedInitialBillingSummary, setHasResolvedInitialBillingSummary] = useState(false);
+    const settingsSharedDataReady = !settingsLoading && !nodesLoading && !mindmapsLoading && !reviewErrorsLoading && !listeningProgressLoading && !mutashabihatLoading;
+    const shouldPrepareKnowledgeTracking = settingsSharedDataReady && (showDebugNodes || activeMobilePage === 'tracking' || activeSlideOverGroup !== null);
 
     const latestPartMindmaps = useMemo(() => {
-        const partMindmapNodes = memoryNodes.filter(n => (n as any).type === 'part_mindmap');
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        const partMindmapNodes = instantNodes.filter(n => (n as any).type === 'part_mindmap');
         const latestMap: { [key: number]: MemoryNode } = {};
         partMindmapNodes.forEach(node => {
             const part = resolveNodePartId(node);
@@ -632,10 +639,12 @@ export default function SettingsPage() {
             }
         });
         return Object.values(latestMap);
-    }, [memoryNodes]);
+    }, [instantNodes, shouldPrepareKnowledgeTracking]);
 
     const latestSurahMindmaps = useMemo(() => {
-        const surahMindmapNodes = memoryNodes.filter(n => (n as any).type === 'mindmap');
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        const surahMindmapNodes = instantNodes.filter(n => (n as any).type === 'mindmap');
         const latestMap: { [key: number]: MemoryNode } = {};
         surahMindmapNodes.forEach(node => {
             const surahId = resolveNodeSurahId(node);
@@ -648,7 +657,7 @@ export default function SettingsPage() {
             }
         });
         return Object.values(latestMap);
-    }, [memoryNodes]);
+    }, [instantNodes, shouldPrepareKnowledgeTracking]);
 
     const settingsMindmapsBySurah = useMemo(() => {
         const acc: Record<number, any> = {};
@@ -669,14 +678,16 @@ export default function SettingsPage() {
         return acc;
     }, [instantMindmaps]);
 
-    const eligibleKnowledgeSurahs = useMemo(() => (
-        SURAHS
+    const eligibleKnowledgeSurahs = useMemo(() => {
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        return SURAHS
             .filter((surah) =>
                 (settings.activePart === ALL_QURAN_PART || surah.part === settings.activePart)
                 && !settings.skippedSurahs?.includes(surah.id)
             )
-            .sort((a, b) => a.id - b.id)
-    ), [settings.activePart, settings.skippedSurahs]);
+            .sort((a, b) => a.id - b.id);
+    }, [settings.activePart, settings.skippedSurahs, shouldPrepareKnowledgeTracking]);
 
     const latestSurahMindmapBySurah = useMemo(() => {
         const bySurah = new Map<number, MemoryNode>();
@@ -688,7 +699,9 @@ export default function SettingsPage() {
         return bySurah;
     }, [latestSurahMindmaps]);
 
-    const currentVerseGroupKeysBySurah = useMemo(() => {
+    const currentVerseGroupKeysBySurah = useMemo<Record<number, Set<string>>>(() => {
+        if (!shouldPrepareKnowledgeTracking) return {};
+
         const bySurah: Record<number, Set<string>> = {};
         SURAHS.forEach((surah) => {
             const anchors = getEffectiveSurahAnchors(surah.id, settingsMindmapsBySurah[surah.id]);
@@ -697,10 +710,12 @@ export default function SettingsPage() {
             );
         });
         return bySurah;
-    }, [settingsMindmapsBySurah]);
+    }, [settingsMindmapsBySurah, shouldPrepareKnowledgeTracking]);
 
     const latestVerseSegments = useMemo(() => {
-        const verseNodes = memoryNodes.filter(n => n.type === 'verse_segment');
+        if (!shouldPrepareKnowledgeTracking) return [];
+
+        const verseNodes = instantNodes.filter(n => n.type === 'verse_segment');
         const latestMap: Record<string, MemoryNode> = {};
         verseNodes.forEach(node => {
             const surahId = resolveNodeSurahId(node);
@@ -717,7 +732,7 @@ export default function SettingsPage() {
             }
         });
         return Object.values(latestMap);
-    }, [currentVerseGroupKeysBySurah, memoryNodes]);
+    }, [currentVerseGroupKeysBySurah, instantNodes, shouldPrepareKnowledgeTracking]);
 
     const latestVerseSegmentsBySurah = useMemo(() => {
         const bySurah = new Map<number, MemoryNode[]>();
@@ -814,11 +829,6 @@ export default function SettingsPage() {
         });
         setDecisions(decisionsMap);
     }, [instantDecisions]);
-
-    // Sync instant nodes to local state
-    useEffect(() => {
-        setMemoryNodes(instantNodes);
-    }, [instantNodes]);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(isMobileViewport());
@@ -944,6 +954,7 @@ export default function SettingsPage() {
                     advancedOptions: true,
                 });
             }
+            setHasInitializedSettingsLayout(true);
         }
 
         window.addEventListener('resize', handleResize);
@@ -989,9 +1000,13 @@ export default function SettingsPage() {
     const loadAccountDeletionStatus = useCallback(async () => {
         if (!user?.id) {
             setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+            setHasResolvedInitialAccountDeletionStatus(true);
             return;
         }
-        if (!isOnline) return;
+        if (!isOnline) {
+            setHasResolvedInitialAccountDeletionStatus(true);
+            return;
+        }
 
         try {
             const response = await fetch('/api/account/delete-request', {
@@ -1006,6 +1021,8 @@ export default function SettingsPage() {
             setAccountDeletionStatus(normalizeAccountDeletionStatus(payload?.deletion));
         } catch {
             setAccountDeletionStatus(DEFAULT_ACCOUNT_DELETION_STATUS);
+        } finally {
+            setHasResolvedInitialAccountDeletionStatus(true);
         }
     }, [isOnline, user?.id]);
 
@@ -1223,6 +1240,7 @@ export default function SettingsPage() {
     useEffect(() => {
         if (!user?.id) {
             setBillingSummary({ nextRenewalAt: null, canManageSubscription: false });
+            setHasResolvedInitialBillingSummary(true);
             return;
         }
 
@@ -1236,6 +1254,7 @@ export default function SettingsPage() {
                 nextRenewalAt: null,
                 canManageSubscription: canManageFromLocal,
             });
+            setHasResolvedInitialBillingSummary(true);
             return;
         }
 
@@ -1263,12 +1282,14 @@ export default function SettingsPage() {
                             : null,
                     canManageSubscription: Boolean(payload?.billing?.canManageSubscription || canManageFromLocal),
                 });
+                setHasResolvedInitialBillingSummary(true);
             } catch {
                 if (cancelled) return;
                 setBillingSummary({
                     nextRenewalAt: null,
                     canManageSubscription: canManageFromLocal,
                 });
+                setHasResolvedInitialBillingSummary(true);
             }
         };
 
@@ -2704,6 +2725,7 @@ export default function SettingsPage() {
         const newState = getMaturityState(level);
         const nowIso = new Date().toISOString();
         const scopedSurahIds = buildScopedKnowledgeSurahIds(surahId);
+        const shouldMoveKanbanToComplete = level !== 'reset';
 
         const typeLabel = surahId
             ? (
@@ -2735,7 +2757,9 @@ export default function SettingsPage() {
                     return;
                 }
 
-                kanbanItemsToComplete.add(`surah-${currentSurahId}`);
+                if (shouldMoveKanbanToComplete) {
+                    kanbanItemsToComplete.add(`surah-${currentSurahId}`);
+                }
                 nodesToCreate.push({
                     id: getMemoryNodeEntityId({ type: 'mindmap', surahId: currentSurahId }),
                     type: 'mindmap',
@@ -2755,7 +2779,7 @@ export default function SettingsPage() {
                 });
 
                 const anchors = getEffectiveSurahAnchors(currentSurahId, settingsMindmapsBySurah[currentSurahId]);
-                if (existingNodes.length === 0) {
+                if (existingNodes.length === 0 && shouldMoveKanbanToComplete) {
                     kanbanItemsToComplete.add(`surah-${currentSurahId}`);
                 }
                 if (anchors.length === 0) {
@@ -3066,7 +3090,7 @@ export default function SettingsPage() {
                         .filter((key): key is string => !!key)
                 );
                 const nowIso = new Date().toISOString();
-                const nodesToCreate: MemoryNode[] = [];
+                const nodesToCreate: Array<MemoryNode & { userId: string }> = [];
 
                 for (const target of targets) {
                     for (const anchor of target.anchors) {
@@ -3079,7 +3103,12 @@ export default function SettingsPage() {
                         existingVerseGroupKeys.add(verseGroupKey);
                         const targetId = anchor?.id || `anchor-${target.surahId}-${startVerse}-${endVerse}`;
                         nodesToCreate.push({
-                            id: stableNodeId('memory_node', 'verse_segment', target.surahId, startVerse, endVerse),
+                            id: getMemoryNodeEntityId({
+                                type: 'verse_segment',
+                                surahId: target.surahId,
+                                startVerse,
+                                endVerse,
+                            }),
                             type: 'verse_segment',
                             surahId: target.surahId,
                             startVerse,
@@ -3087,7 +3116,8 @@ export default function SettingsPage() {
                             targetId,
                             scheduler: createNewFSRSState(),
                             createdAt: nowIso,
-                        } as MemoryNode);
+                            userId: user?.id || '',
+                        });
                     }
                 }
 
@@ -3910,29 +3940,51 @@ export default function SettingsPage() {
         return mergedGroups;
     }, [instantCustomMutashabihat]);
 
-    const mutashabihatBySurah = useMemo(() => {
+    const hasRequestedMutashabihatFocus =
+        searchParams.get('tab') === 'tracking'
+        || Boolean(searchParams.get('mutSurah'))
+        || Boolean(searchParams.get('mutDecision'));
+    const shouldPrepareMutashabihat =
+        settingsSharedDataReady
+        && (
+            sectionsExpanded.mutashabihat
+            || activeMobilePage === 'tracking'
+            || activeMutSlideOver !== null
+            || noteModal !== null
+            || isAddModalOpen
+            || hasRequestedMutashabihatFocus
+        );
+
+    const mutashabihatBySurah = useMemo<Record<number, number>>(() => {
+        if (!shouldPrepareMutashabihat) return {};
+
         const map: Record<number, number> = {};
         getSurahsByPart(settings.activePart).forEach((surah) => {
             map[surah.id] = collectSurahMutSourceGroups(surah.id).length;
         });
         return map;
-    }, [settings.activePart, collectSurahMutSourceGroups]);
+    }, [settings.activePart, collectSurahMutSourceGroups, shouldPrepareMutashabihat]);
 
     const mutashabihatSurahs = useMemo(() => {
+        if (!shouldPrepareMutashabihat) return [];
+
         return getSurahsByPart(settings.activePart)
             .map(s => ({ surah: s, count: mutashabihatBySurah[s.id] || 0 }))
             .filter(entry => entry.count > 0);
-    }, [settings.activePart, mutashabihatBySurah]);
+    }, [settings.activePart, mutashabihatBySurah, shouldPrepareMutashabihat]);
 
     useEffect(() => {
+        if (!shouldPrepareMutashabihat) return;
         if (mutashabihatSurahs.length > 0 && !selectedMutSurah) {
             setSelectedMutSurah(mutashabihatSurahs[0].surah.id);
         } else if (mutashabihatSurahs.every(s => s.surah.id !== selectedMutSurah)) {
             setSelectedMutSurah(mutashabihatSurahs[0]?.surah.id ?? null);
         }
-    }, [mutashabihatSurahs, selectedMutSurah]);
+    }, [mutashabihatSurahs, selectedMutSurah, shouldPrepareMutashabihat]);
 
     const buildSurahMutGroups = useCallback((surahId: number): SimilaritySurahGroup[] => {
+        if (!shouldPrepareMutashabihat) return [];
+
         return collectSurahMutSourceGroups(surahId)
             .map((group): SimilaritySurahGroup => {
                 const resolutionTargets: SimilarityResolutionTarget[] = group.phraseIds.map((phraseId) => {
@@ -3962,7 +4014,7 @@ export default function SettingsPage() {
                 };
             })
             .sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
-    }, [collectSurahMutSourceGroups, decisions]);
+    }, [collectSurahMutSourceGroups, decisions, shouldPrepareMutashabihat]);
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
@@ -4040,6 +4092,22 @@ export default function SettingsPage() {
             router.replace(nextQuery ? `/settings?${nextQuery}` : '/settings', { scroll: false });
         }
     }, [activeMobilePage, buildSurahMutGroups, isMobile, router, searchParams]);
+
+    const settingsPageReady =
+        hasInitializedSettingsLayout
+        && !authLoading
+        && !subscriptionsLoading
+        && settingsSharedDataReady
+        && hasResolvedInitialAccountDeletionStatus
+        && hasResolvedInitialBillingSummary;
+
+    if (!settingsPageReady) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <Spinner size={32} text="Preparing settings..." />
+            </div>
+        );
+    }
 
     return (
         <>
