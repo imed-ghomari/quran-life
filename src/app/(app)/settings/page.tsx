@@ -749,6 +749,28 @@ export default function SettingsPage() {
         return bySurah;
     }, [latestVerseSegments]);
 
+    const missingNodeCreationPrereqsBySurah = useMemo(() => {
+        const bySurah = new Map<number, {
+            hasLinkedMindmap: boolean;
+            hasSplits: boolean;
+            canCreateMissingNode: boolean;
+        }>();
+
+        eligibleKnowledgeSurahs.forEach((surah) => {
+            const linkedMindmap = settingsMindmapsBySurah[surah.id];
+            const hasLinkedMindmap = !!linkedMindmap;
+            const hasSplits = hasLinkedMindmap && getEffectiveSurahAnchors(surah.id, linkedMindmap).length > 0;
+
+            bySurah.set(surah.id, {
+                hasLinkedMindmap,
+                hasSplits,
+                canCreateMissingNode: hasLinkedMindmap && hasSplits,
+            });
+        });
+
+        return bySurah;
+    }, [eligibleKnowledgeSurahs, settingsMindmapsBySurah]);
+
     const getKnowledgeDueKey = (due: string | null): string | null => {
         if (!due) return null;
         const parsed = new Date(due);
@@ -2745,6 +2767,7 @@ export default function SettingsPage() {
         const nodesToCreate: Array<MemoryNode & { userId: string }> = [];
         const kanbanItemsToComplete = new Set<string>();
         const noSplitSurahIds = new Set<number>();
+        const blockedMissingNodeSurahIds = new Set<number>();
 
         if (targetType === 'mindmap') {
             scopedSurahIds.forEach((currentSurahId) => {
@@ -2754,6 +2777,12 @@ export default function SettingsPage() {
                         ...existingNode,
                         scheduler: { ...(existingNode.scheduler as any), ...newState } as any,
                     });
+                    return;
+                }
+
+                const prereqs = missingNodeCreationPrereqsBySurah.get(currentSurahId);
+                if (!prereqs?.canCreateMissingNode) {
+                    blockedMissingNodeSurahIds.add(currentSurahId);
                     return;
                 }
 
@@ -2777,6 +2806,12 @@ export default function SettingsPage() {
                 existingNodes.forEach((node) => {
                     existingByRange.set(`${Number(node.startVerse)}-${Number(node.endVerse)}`, node);
                 });
+
+                const prereqs = missingNodeCreationPrereqsBySurah.get(currentSurahId);
+                if (existingNodes.length === 0 && !prereqs?.canCreateMissingNode) {
+                    blockedMissingNodeSurahIds.add(currentSurahId);
+                    return;
+                }
 
                 const anchors = getEffectiveSurahAnchors(currentSurahId, settingsMindmapsBySurah[currentSurahId]);
                 if (existingNodes.length === 0 && shouldMoveKanbanToComplete) {
@@ -2842,6 +2877,15 @@ export default function SettingsPage() {
         }
 
         if (nodesToUpdate.length === 0 && nodesToCreate.length === 0 && kanbanItemsToComplete.size === 0) {
+            if (blockedMissingNodeSurahIds.size > 0) {
+                await alert({
+                    title: 'Mindmap And Splits Required',
+                    message: blockedMissingNodeSurahIds.size === 1 && surahId
+                        ? `${surahName || `Surah ${surahId}`} has no review node yet. Create and save its mindmap with splits first, then you can set maturity from Settings.`
+                        : `${blockedMissingNodeSurahIds.size} surah${blockedMissingNodeSurahIds.size === 1 ? '' : 's'} could not be updated because they have no review node yet and no saved mindmap with splits.`,
+                });
+                return;
+            }
             await alert({
                 title: 'Nothing to Update',
                 message: 'No matching items were found to update.',
@@ -2877,6 +2921,12 @@ export default function SettingsPage() {
         if (noSplitSurahIds.size > 0) {
             warningLines.push(
                 `${noSplitSurahIds.size} surah${noSplitSurahIds.size === 1 ? '' : 's'} do not have verse splits yet, so no verse review nodes can be created for them until splits exist.`
+            );
+        }
+
+        if (blockedMissingNodeSurahIds.size > 0) {
+            warningLines.push(
+                `${blockedMissingNodeSurahIds.size} surah${blockedMissingNodeSurahIds.size === 1 ? '' : 's'} with no review node will be skipped because they do not have a saved mindmap with splits yet.`
             );
         }
 
@@ -4882,12 +4932,16 @@ export default function SettingsPage() {
                                                                                 const due = getNodeDueDate(node);
                                                                                 const surahId = resolveNodeSurahId(node);
                                                                                 const isOverdue = !!getKnowledgeDueKey(due) && getKnowledgeDueKey(due)! <= todayKey;
+                                                                                const canCreateMissingNode = surahId ? (missingNodeCreationPrereqsBySurah.get(surahId)?.canCreateMissingNode ?? false) : false;
+                                                                                const disableMaturitySelect = isMissingKnowledgeNode(node) && !canCreateMissingNode;
                                                                                 return (
                                                                                     <tr key={node.id} className="node-row">
                                                                                         <td>{surahId ? `${surahId}. ${getSurah(surahId)?.name}` : '-'}</td>
                                                                                         <td>
                                                                                             <select
                                                                                                 value=""
+                                                                                                disabled={disableMaturitySelect}
+                                                                                                title={disableMaturitySelect ? 'Create and save a mindmap with splits first.' : undefined}
                                                                                                 onChange={async (e) => {
                                                                                                     if (!e.target.value) return;
                                                                                                     if (!surahId) return;
@@ -4895,7 +4949,7 @@ export default function SettingsPage() {
                                                                                                 }}
                                                                                                 className="maturity-select"
                                                                                             >
-                                                                                                <option value="">Set To...</option>
+                                                                                                <option value="">{disableMaturitySelect ? 'Mindmap + splits required' : 'Set To...'}</option>
                                                                                                 <option value="reset">Reset</option>
                                                                                                 <option value="medium">Medium</option>
                                                                                                 <option value="strong">Strong</option>
@@ -4986,6 +5040,8 @@ export default function SettingsPage() {
                                                                         const surahNodes = (knowledgeFilter === 'all' ? latestVerseSegments : filteredVerseSegments)
                                                                             .filter(n => n.type === 'verse_segment' && resolveNodeSurahId(n) === surahId)
                                                                             .sort((a, b) => (a.startVerse || 0) - (b.startVerse || 0));
+                                                                        const canCreateMissingNode = missingNodeCreationPrereqsBySurah.get(surahId)?.canCreateMissingNode ?? false;
+                                                                        const disableSurahBulkMaturity = surahNodes.length === 0 && !canCreateMissingNode;
 
                                                                         return (
                                                                             <React.Fragment key={surahId}>
@@ -5001,6 +5057,8 @@ export default function SettingsPage() {
                                                                                                 className="maturity-select"
                                                                                                 style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                                                                                                 value=""
+                                                                                                disabled={disableSurahBulkMaturity}
+                                                                                                title={disableSurahBulkMaturity ? 'Create and save a mindmap with splits first.' : undefined}
                                                                                                 onClick={(e) => e.stopPropagation()}
                                                                                                 onChange={async (e) => {
                                                                                                     const val = e.target.value as any;
@@ -5009,7 +5067,7 @@ export default function SettingsPage() {
                                                                                                     e.target.value = '';
                                                                                                 }}
                                                                                             >
-                                                                                                <option value="">Set Subgroup...</option>
+                                                                                                <option value="">{disableSurahBulkMaturity ? 'Mindmap + splits required' : 'Set Subgroup...'}</option>
                                                                                                 <option value="reset">Reset</option>
                                                                                                 <option value="medium">Medium</option>
                                                                                                 <option value="strong">Strong</option>
@@ -6902,10 +6960,23 @@ export default function SettingsPage() {
                         <div className="slide-over-body">
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                                 {/* Set All dropdown matching desktop */}
+                                {(() => {
+                                    const canCreateMissingNode = activeSlideOverGroup?.surahId
+                                        ? (missingNodeCreationPrereqsBySurah.get(activeSlideOverGroup.surahId)?.canCreateMissingNode ?? false)
+                                        : true;
+                                    const disableSlideOverBulkMaturity = Boolean(
+                                        activeSlideOverGroup?.surahId
+                                        && activeSlideOverGroup.nodes.length === 0
+                                        && !canCreateMissingNode
+                                    );
+
+                                    return (
                                 <select
                                     className="maturity-select"
                                     style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.85rem' }}
                                     value=""
+                                    disabled={disableSlideOverBulkMaturity}
+                                    title={disableSlideOverBulkMaturity ? 'Create and save a mindmap with splits first.' : undefined}
                                     onChange={async (e) => {
                                         const val = e.target.value as any;
                                         if (!val) return;
@@ -6924,12 +6995,14 @@ export default function SettingsPage() {
                                         });
                                     }}
                                 >
-                                    <option value="">Set Subgroup...</option>
+                                    <option value="">{disableSlideOverBulkMaturity ? 'Mindmap + splits required' : 'Set Subgroup...'}</option>
                                     <option value="reset">Reset</option>
                                     <option value="medium">Medium</option>
                                     <option value="strong">Strong</option>
                                     <option value="mastered">Mastered</option>
                                 </select>
+                                    );
+                                })()}
                             </div>
 
                             <div className="mobile-node-list">
@@ -6942,6 +7015,14 @@ export default function SettingsPage() {
                                         })
                                         .map(node => (
                                             <div key={node.id} className="mobile-node-card">
+                                                {(() => {
+                                                    const nodeSurahId = resolveNodeSurahId(node);
+                                                    const canCreateMissingNode = nodeSurahId
+                                                        ? (missingNodeCreationPrereqsBySurah.get(nodeSurahId)?.canCreateMissingNode ?? false)
+                                                        : false;
+                                                    const disableNodeMaturitySelect = isMissingKnowledgeNode(node) && !canCreateMissingNode;
+
+                                                    return (
                                                 <div className="node-card-main">
                                                     <div className="node-target">
                                                         {activeSlideOverGroup.type === 'verse_segment' ? `Ayat ${node.startVerse}-${node.endVerse}` :
@@ -6957,6 +7038,8 @@ export default function SettingsPage() {
                                                     </div>
                                                     <select
                                                         value=""
+                                                        disabled={disableNodeMaturitySelect}
+                                                        title={disableNodeMaturitySelect ? 'Create and save a mindmap with splits first.' : undefined}
                                                         onChange={async (e) => {
                                                             const val = e.target.value as any;
                                                             if (!val) return;
@@ -6978,13 +7061,15 @@ export default function SettingsPage() {
                                                         className="maturity-select"
                                                         style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
                                                     >
-                                                        <option value="">Set to...</option>
+                                                        <option value="">{disableNodeMaturitySelect ? 'Mindmap + splits required' : 'Set to...'}</option>
                                                         <option value="reset">Reset</option>
                                                         <option value="medium">Medium</option>
                                                         <option value="strong">Strong</option>
                                                         <option value="mastered">Mastered</option>
                                                     </select>
                                                 </div>
+                                                    );
+                                                })()}
                                                 <div className="node-card-details">
                                                     <div className="stat-item">
                                                         <span className="stat-label">Interval</span>
