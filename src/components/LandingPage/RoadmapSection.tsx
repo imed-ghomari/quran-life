@@ -29,7 +29,7 @@ const RoadmapSection: React.FC = () => {
     planned: [
       { id: 12, title: 'Completing Pre-made Mindmaps (Parts 1-6)' },
       { id: 22, title: 'FSRS Optimization' },
-      { id: 21, title: 'Defer Similarity by Surah Conditions' },
+      { id: 24, title: 'More Reciters' },
       { id: 16, title: 'Conflict-safe mindmap sync via choice'}
     ],
     inProgress: [
@@ -86,7 +86,7 @@ const RoadmapSection: React.FC = () => {
         <div className="section-header">
           <h2 className="section-title">Product Roadmap</h2>
           <p style={{ color: 'var(--foreground-secondary)' }}>
-            See what we're building to help you master the Quran.
+            See what we&apos;re building to help you master the Quran.
           </p>
         </div>
 
