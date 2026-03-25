@@ -31,6 +31,7 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_mindmap', label: 'Solved by Mindmap' },
     { value: 'solved_note', label: 'Solved by Note' },
 ];
+const TODO_MUT_STATES = MUT_STATES.filter((state) => state.value !== 'ignored');
 
 // Helper to highlight logic
 function HighlightedVerse({ text, range }: { text: string; range?: [number, number] }) {
@@ -1068,11 +1069,7 @@ export default function TodoKanban({
         setVerseContextItem(item);
     }, []);
 
-    const handleCardViewSimilarityContext = useCallback((item: KanbanItem) => {
-        if (item.type !== 'similarity') return;
-        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
-
-        const group = item.data;
+    const buildPrimarySimilarityContext = useCallback((group: any) => {
         const sourceMap: Record<string, {
             phraseId: string;
             phraseIds: string[];
@@ -1115,10 +1112,13 @@ export default function TodoKanban({
                     current.phraseAbsRefs[entry.phraseId].push(abs);
                 }
 
-                if (!current.absRefs.includes(abs)) {
-                    current.absRefs.push(abs);
+                if (sourceRef && sourceRef.surahId === group.surah.id) {
+                    current.absRefs = [sourceAbs];
+                    current.ayahIds = [sourceRef.ayahId];
+                } else if (current.absRefs.length === 0 || abs < current.absRefs[0]) {
+                    current.absRefs = [abs];
                     const ref = absoluteToSurahAyah(abs);
-                    current.ayahIds.push(ref.ayahId);
+                    current.ayahIds = [ref.ayahId];
                 }
             });
         });
@@ -1253,7 +1253,7 @@ export default function TodoKanban({
             acc.push(candidate);
             return acc;
         }, []).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
-        if (groups.length === 0) return;
+        if (groups.length === 0) return null;
 
         const selected = groups[0];
         const resolutionTargets = selected.phraseIds.map((phraseId) => {
@@ -1277,7 +1277,7 @@ export default function TodoKanban({
         );
         const primaryTarget = firstResolvedTarget || resolutionTargets[0];
 
-        setActiveSimilarityContext({
+        return {
             decisionKey: primaryTarget.decisionKey,
             representativeAbs: primaryTarget.representativeAbs,
             group: {
@@ -1290,8 +1290,48 @@ export default function TodoKanban({
                 resolutionTargets,
             },
             surah: group.surah
+        };
+    }, [mutashabihatDecisions]);
+
+    const handleCardViewSimilarityContext = useCallback((item: KanbanItem) => {
+        if (item.type !== 'similarity') return;
+        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
+
+        const context = buildPrimarySimilarityContext(item.data);
+        if (!context) return;
+        setActiveSimilarityContext(context);
+    }, [buildPrimarySimilarityContext, mutashabihatDecisions, onMutashabihatDecisionUpdate]);
+
+    const handleCardIgnoreSimilarity = useCallback((item: KanbanItem) => {
+        if (item.type !== 'similarity') return;
+        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
+
+        const allTargets = new Map<string, { representativeAbs: number; decisionKey: string }>();
+
+        item.data.items.forEach((groupItem: any) => {
+            const context = buildPrimarySimilarityContext({
+                surah: item.data.surah,
+                items: [groupItem],
+            });
+            if (!context) return;
+
+            context.group.resolutionTargets.forEach((target) => {
+                allTargets.set(target.decisionKey, {
+                    representativeAbs: target.representativeAbs,
+                    decisionKey: target.decisionKey,
+                });
+            });
         });
-    }, [mutashabihatDecisions, onMutashabihatDecisionUpdate]);
+
+        allTargets.forEach((target) => {
+            const targetExisting = mutashabihatDecisions.find((decision) => decision.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
+            onMutashabihatDecisionUpdate(
+                target.representativeAbs,
+                { ...targetExisting, status: 'ignored', confirmedAt: undefined },
+                target.decisionKey
+            );
+        });
+    }, [buildPrimarySimilarityContext, mutashabihatDecisions, onMutashabihatDecisionUpdate]);
 
     const openMindmapForSurah = useCallback(async (surahId: number) => {
         await onEditMindmap(surahId, mindmaps[surahId]?.tldrawSnapshot, false);
@@ -1679,6 +1719,7 @@ export default function TodoKanban({
                                 onChangeSplits={handleCardChangeSplits}
                                 onViewVerseContext={handleCardViewVerseContext}
                                 onViewSimilarityContext={handleCardViewSimilarityContext}
+                                onIgnoreSimilarity={handleCardIgnoreSimilarity}
                                 getHasMindmap={getHasMindmap}
                                 getHasSplits={getHasSplits}
                                 getHasPremade={getHasPremadeForItem}
@@ -1868,7 +1909,9 @@ export default function TodoKanban({
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
                 const { decisionKey, group, surah } = activeSimilarityContext;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
-                const existingStatus = existing.status === 'pending' && !!existing.confirmedAt
+                const existingStatus = existing.status === 'ignored'
+                    ? 'pending'
+                    : existing.status === 'pending' && !!existing.confirmedAt
                     ? 'solved_note'
                     : existing.status;
                 const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
@@ -1929,11 +1972,7 @@ export default function TodoKanban({
                 };
 
                 const matches = Array.from(new Set(group.entries.flatMap((entry: any) => entry?.matches || [])))
-                    .filter((matchAbs: number) => {
-                        if (group.absRefs.includes(matchAbs)) return false;
-                        const matchRef = absoluteToSurahAyah(matchAbs);
-                        return matchRef.surahId !== group.surahId;
-                    })
+                    .filter((matchAbs: number) => !group.absRefs.includes(matchAbs))
                     .sort((a, b) => {
                         const aRef = absoluteToSurahAyah(a);
                         const bRef = absoluteToSurahAyah(b);
@@ -1986,7 +2025,7 @@ export default function TodoKanban({
                                     className="maturity-select"
                                     style={{ width: '100%', padding: '8px' }}
                                 >
-                                    {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    {TODO_MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                 </select>
                             </div>
                         </div>

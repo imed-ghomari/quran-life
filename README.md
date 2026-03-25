@@ -50,8 +50,9 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - The app now groups repeated cases so the user sees cleaner, non-duplicate items.
 
 - Grouping rules:
-  - If cases belong to the same surah and point to the same verse area, they are merged.
-  - If two cases in the same verse overlap strongly and point to the same outside comparator set, they are merged.
+  - Each grouped case keeps one originator verse.
+  - Other verses in the same surah are treated as comparators, not extra originators.
+  - If two cases in the same verse overlap strongly and point to the same outside comparator set, they may still be merged into one case.
   - A verse can still appear in more than one case when it truly has different similarity patterns (we do not force unrelated cases into one).
 
 - Important counting behavior:

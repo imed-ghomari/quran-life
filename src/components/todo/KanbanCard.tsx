@@ -26,6 +26,7 @@ interface KanbanCardProps {
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+    onIgnoreSimilarity?: (item: KanbanItem) => Promise<void> | void;
 }
 
 const KanbanCard = ({
@@ -45,7 +46,8 @@ const KanbanCard = ({
     onResetMindmap,
     onChangeSplits,
     onViewVerseContext,
-    onViewSimilarityContext
+    onViewSimilarityContext,
+    onIgnoreSimilarity
 }: KanbanCardProps) => {
     return (
         <>
@@ -83,6 +85,7 @@ const KanbanCard = ({
                                 onChangeSplits={onChangeSplits}
                                 onViewVerseContext={onViewVerseContext}
                                 onViewSimilarityContext={onViewSimilarityContext}
+                                onIgnoreSimilarity={onIgnoreSimilarity}
                             />
                         </div>
                     );
@@ -109,6 +112,7 @@ interface KanbanCardBodyProps {
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+    onIgnoreSimilarity?: (item: KanbanItem) => Promise<void> | void;
 }
 
 const KanbanCardBody = memo(({
@@ -127,7 +131,8 @@ const KanbanCardBody = memo(({
     onResetMindmap,
     onChangeSplits,
     onViewVerseContext,
-    onViewSimilarityContext
+    onViewSimilarityContext,
+    onIgnoreSimilarity
 }: KanbanCardBodyProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -182,6 +187,25 @@ const KanbanCardBody = memo(({
         () => onViewSimilarityContext?.(item),
         [item, onViewSimilarityContext]
     );
+    const handleIgnoreSimilarity = useCallback(
+        async () => {
+            const ok = await confirm({
+                title: 'Ignore Similarity?',
+                message: [
+                    'All comparator verses in this similarity card will be marked as ignored.',
+                    'This will resolve the card and hide it from the Todo page.',
+                    'You can still access it later from the relevant Similarity section in Settings if needed.',
+                ].join('\n\n'),
+                confirmLabel: 'Ignore Similarity',
+                cancelLabel: 'Cancel',
+                isDestructive: true,
+            });
+            if (!ok) return;
+
+            await onIgnoreSimilarity?.(item);
+        },
+        [confirm, item, onIgnoreSimilarity]
+    );
 
     // Responsive Spacing Config - Tighter for Mobile
     // const padding = isMobile ? '!px-3 !pt-2.5 !pb-1.5' : '!p-5';
@@ -220,7 +244,8 @@ const KanbanCardBody = memo(({
         footerPad: 'pt-3',
         docLink,
         onViewVerseContext: handleViewVerseContext,
-        onViewSimilarityContext: handleViewSimilarityContext
+        onViewSimilarityContext: handleViewSimilarityContext,
+        onIgnoreSimilarity: handleIgnoreSimilarity
     });
 });
 
@@ -249,6 +274,7 @@ interface RenderZoneProps {
     onChangeSplits: () => Promise<void> | void;
     onViewVerseContext?: () => Promise<void> | void;
     onViewSimilarityContext?: () => Promise<void> | void;
+    onIgnoreSimilarity?: () => Promise<void> | void;
     footerPad: string;
     docLink?: string;
 }
@@ -277,7 +303,8 @@ function renderCardZones({
     footerPad,
     docLink,
     onViewVerseContext,
-    onViewSimilarityContext
+    onViewSimilarityContext,
+    onIgnoreSimilarity
 }: RenderZoneProps) {
     let zone1 = { label: "TASK", color: "var(--todo-pill-task)" };
     let zone2 = { english: "", arabic: "" };
@@ -445,6 +472,7 @@ function renderCardZones({
                         onChangeSplits={onChangeSplits}
                         onViewVerseContext={onViewVerseContext}
                         onViewSimilarityContext={onViewSimilarityContext}
+                        onIgnoreSimilarity={onIgnoreSimilarity}
                         settingsHref={settingsHref}
                         docLink={docLink}
                         anchorRef={menuButtonRef}

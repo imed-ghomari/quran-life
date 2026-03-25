@@ -3880,9 +3880,12 @@ export default function SettingsPage() {
                     if (!current.phraseAbsRefs[entry.phraseId].includes(abs)) {
                         current.phraseAbsRefs[entry.phraseId].push(abs);
                     }
-                    if (!current.absRefs.includes(abs)) {
-                        current.absRefs.push(abs);
-                        current.ayahIds.push(ref.ayahId);
+                    if (sourceRef && sourceRef.surahId === surahId) {
+                        current.absRefs = [sourceAbs];
+                        current.ayahIds = [sourceRef.ayahId];
+                    } else if (current.absRefs.length === 0 || abs < current.absRefs[0]) {
+                        current.absRefs = [abs];
+                        current.ayahIds = [ref.ayahId];
                     }
 
                     const customId = String((entry as any)?.meta?.customId || '');
@@ -5597,9 +5600,7 @@ export default function SettingsPage() {
                                                                                                             return resolutionMeta;
                                                                                                         };
                                                                                                         const matches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || []))).filter((matchAbs: number) => {
-                                                                                                            if (group.absRefs.includes(matchAbs)) return false;
-                                                                                                            const matchRef = absoluteToSurahAyah(matchAbs);
-                                                                                                            return matchRef.surahId !== surah.id;
+                                                                                                            return !group.absRefs.includes(matchAbs);
                                                                                                         }).sort((a, b) => {
                                                                                                             const aRef = absoluteToSurahAyah(a);
                                                                                                             const bRef = absoluteToSurahAyah(b);
@@ -6130,11 +6131,7 @@ export default function SettingsPage() {
                                             };
 
                                             const mergedMatches = Array.from(new Set(group.entries.flatMap((mutEntry: any) => mutEntry?.matches || [])))
-                                                .filter((matchAbs: number) => {
-                                                    if (sortedAbsRefs.includes(matchAbs)) return false;
-                                                    const matchRef = absoluteToSurahAyah(matchAbs);
-                                                    return matchRef.surahId !== activeMutSlideOver.surahId;
-                                                })
+                                                .filter((matchAbs: number) => !sortedAbsRefs.includes(matchAbs))
                                                 .sort((a, b) => {
                                                     const aRef = absoluteToSurahAyah(a);
                                                     const bRef = absoluteToSurahAyah(b);
