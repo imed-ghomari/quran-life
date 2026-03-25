@@ -24,7 +24,7 @@ import {
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
-import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
+import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes, getVerseGroupKey } from '@/lib/reviewQueue';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
@@ -34,7 +34,7 @@ import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 import { AccessStateContext } from '@/components/Providers';
 import { db } from '@/lib/instant';
-import { resolveEntityId } from '@/lib/instantIds';
+import { isUuid, resolveEntityId, stableEntityId } from '@/lib/instantIds';
 import { transactWithRetry } from '@/lib/instantTransact';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 // Theme hook for responsive design adjustments
@@ -50,6 +50,43 @@ const PREMADE_IMPORT_WRITE_BATCH_SIZE = 12;
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
+
+type PremadeImportData = {
+    type: 'surah' | 'part';
+    id: number;
+    snapshot: any;
+    importedAnchors: any[];
+    importedAt: string;
+};
+
+const normalizeSnapshotForCompare = (snapshot: unknown) =>
+    JSON.stringify(sanitizeMindmapSnapshot(snapshot) ?? null);
+
+const normalizeAnchorRangesForCompare = (anchors: Array<{ startVerse?: unknown; endVerse?: unknown }> | undefined) => (
+    (anchors || [])
+        .map((anchor) => {
+            const startVerse = Number(anchor?.startVerse);
+            const endVerse = Number(anchor?.endVerse);
+            if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return null;
+            return `${startVerse}-${endVerse}`;
+        })
+        .filter((range): range is string => !!range)
+        .sort((a, b) => {
+            const [aStart, aEnd] = a.split('-').map(Number);
+            const [bStart, bEnd] = b.split('-').map(Number);
+            if (aStart !== bStart) return aStart - bStart;
+            return aEnd - bEnd;
+        })
+);
+
+const areOrderedStringListsEqual = (left: string[], right: string[]) => (
+    left.length === right.length && left.every((value, index) => value === right[index])
+);
+
+const formatResetSummary = (items: string[]) => {
+    if (items.length === 0) return 'No review progress will reset.';
+    return items.map((item) => `• ${item}`).join('\n');
+};
 
 const getVerseSegmentSurahId = (node: MemoryNode): number | null => {
     if (node.type !== 'verse_segment') return null;
@@ -105,6 +142,25 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
     return 0;
 };
 
+const memoryNodeLogicalKey = (node: MemoryNode) => {
+    if (node.type === 'mindmap') {
+        return stableEntityId('memory_node', 'mindmap', getMindmapSurahId(node) ?? 'na');
+    }
+    if (node.type === 'part_mindmap') {
+        return stableEntityId('memory_node', 'part_mindmap', getPartMindmapPartId(node) ?? 'na');
+    }
+    if (node.type === 'verse_segment') {
+        return stableEntityId(
+            'memory_node',
+            'verse_segment',
+            getVerseSegmentSurahId(node) ?? 'na',
+            node.startVerse ?? 'na',
+            node.endVerse ?? 'na'
+        );
+    }
+    return stableEntityId('memory_node', 'id', node.id);
+};
+
 /**
  * TodoPage Component
  * 
@@ -140,7 +196,7 @@ export default function TodoPage() {
     const autoImportInFlightRef = useRef(false);
     const [isAutoImportingPremades, setIsAutoImportingPremades] = useState(false);
     const [hasHydratedTodoData, setHasHydratedTodoData] = useState(false);
-    const { alert } = useConfirmDialog();
+    const { alert, confirm } = useConfirmDialog();
 
     const runInBatches = useCallback(async <T,>(items: T[], batchSize: number, worker: (item: T) => Promise<unknown>) => {
         for (let i = 0; i < items.length; i += batchSize) {
@@ -910,13 +966,7 @@ export default function TodoPage() {
     }, [alert]);
 
     const persistPremadeImportBatch = useCallback(async (
-        imports: Array<{
-            type: 'surah' | 'part';
-            id: number;
-            snapshot: any;
-            importedAnchors: any[];
-            importedAt: string;
-        }>
+        imports: PremadeImportData[]
     ) => {
         if (!user?.id || imports.length === 0) return;
 
@@ -1040,25 +1090,189 @@ export default function TodoPage() {
             return node.type === 'part_mindmap' && getPartMindmapPartId(node) === id;
         });
         if (matching.length === 0) return;
+        if (!user?.id) return;
 
         const resetAt = new Date().toISOString();
-        await runInBatches(matching, 8, async (node) => {
-            await saveNode({
-                ...node,
-                scheduler: createNewFSRSState(),
-                createdAt: resetAt
+        for (let i = 0; i < matching.length; i += 8) {
+            const batch = matching.slice(i, i + 8);
+            const writes = batch.map((node) => {
+                const canReuseCandidateId = isUuid(node.id) && nodes.some(existingNode => existingNode.id === node.id);
+                const nodeId = canReuseCandidateId
+                    ? node.id
+                    : resolveEntityId(undefined, 'memory_node', user.id!, memoryNodeLogicalKey(node));
+
+                return db.tx.memoryNodes[nodeId].update({
+                    ...node,
+                    scheduler: createNewFSRSState(),
+                    createdAt: resetAt,
+                    userId: user.id,
+                });
             });
-        });
+
+            await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+        }
 
         appLogger.addLog(`Reset memory nodes for ${type} ${id} mindmap`, 'info');
-    }, [nodes, runInBatches, saveNode]);
+    }, [nodes, user?.id]);
 
-    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => {
-        await handleImportPremade(type, id);
-        if (options?.resetMemoryNodes) {
+    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number) => {
+        if (!user?.id) {
+            await alert({
+                title: 'Sign In Required',
+                message: 'Please sign in before restoring the original mindmap.',
+            });
+            return;
+        }
+
+        const imported = await loadPremadeImportData(type, id);
+
+        const currentSurahMindmap = type === 'surah' ? mindmaps[id] : undefined;
+        const currentPartMindmap = type === 'part' ? partMindmapsMap[id] : undefined;
+        const currentMindmap = currentSurahMindmap || currentPartMindmap;
+        const currentSnapshotKey = normalizeSnapshotForCompare(currentMindmap?.tldrawSnapshot);
+        const importedSnapshotKey = normalizeSnapshotForCompare(imported.snapshot);
+        const mindmapChanged = currentSnapshotKey !== importedSnapshotKey;
+        const hasMindmapReviewNode = nodes.some((node) => (
+            type === 'surah'
+                ? node.type === 'mindmap' && getMindmapSurahId(node) === id
+                : node.type === 'part_mindmap' && getPartMindmapPartId(node) === id
+        ));
+        const shouldResetMindmapReview = mindmapChanged && hasMindmapReviewNode;
+
+        let splitsChanged = false;
+        let nextAnchors: any[] = [];
+        let previousAnchors: Array<{ id: string; startVerse: number; endVerse: number }> = [];
+        let existingVerseNodes: MemoryNode[] = [];
+        let shouldCreateMissingRanges = false;
+        let impactedGroupKeys = new Set<string>();
+        let suspendedCleanup = { errorIds: [] as string[], groupCount: 0 };
+        let hasReviewedImpactedVerseNode = false;
+
+        if (type === 'surah') {
+            previousAnchors = (currentSurahMindmap?.anchors || []).map((anchor: any) => ({
+                id: anchor?.id || `anchor-${id}-${Number(anchor?.startVerse)}-${Number(anchor?.endVerse)}`,
+                startVerse: Number(anchor?.startVerse),
+                endVerse: Number(anchor?.endVerse),
+            }));
+            nextAnchors = imported.importedAnchors.length > 0 ? imported.importedAnchors : (currentSurahMindmap?.anchors || []);
+
+            const currentRanges = normalizeAnchorRangesForCompare(previousAnchors);
+            const nextRanges = normalizeAnchorRangesForCompare(nextAnchors);
+            splitsChanged = !areOrderedStringListsEqual(currentRanges, nextRanges);
+
+            existingVerseNodes = nodes.filter((node) => node.type === 'verse_segment' && getVerseSegmentSurahId(node) === id);
+            const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((itemId) => String(itemId)));
+            shouldCreateMissingRanges = completeIds.has(`surah-${id}`) || existingVerseNodes.length > 0;
+
+            if (splitsChanged) {
+                impactedGroupKeys = getImpactedSplitVerseGroupKeys({
+                    surahId: id,
+                    previousAnchors,
+                    nextAnchors,
+                });
+                suspendedCleanup = getSuspendedReviewErrorCleanupPlan({
+                    errors,
+                    groupKeys: impactedGroupKeys,
+                    acknowledgedAtByGroup: settings?.suspendedVerseGroupsAcknowledged,
+                    kanbanColumns: settings?.kanbanColumns,
+                });
+                hasReviewedImpactedVerseNode = existingVerseNodes.some((node) => {
+                    const groupKey = getVerseGroupKey({
+                        surahId: id,
+                        anchorId: node.targetId,
+                        startVerse: node.startVerse,
+                        endVerse: node.endVerse,
+                    });
+                    return !!groupKey && impactedGroupKeys.has(groupKey) && hasNodeBeenReviewed(node.scheduler);
+                });
+            }
+        }
+
+        const subjectLabel = type === 'surah'
+            ? `${getSurah(id)?.name || `Surah ${id}`} mindmap`
+            : `Part ${id} mindmap`;
+        const changeSummary = type === 'surah' && splitsChanged
+            ? 'This will restore the original shared mindmap and its original verse splits.'
+            : 'This will restore the original shared mindmap.';
+
+        const reviewImpactLines: string[] = [];
+        if (shouldResetMindmapReview) {
+            reviewImpactLines.push('Mindmap review progress will reset because the restored mindmap layout is different.');
+        }
+        if (type === 'surah' && splitsChanged) {
+            if (hasReviewedImpactedVerseNode) {
+                reviewImpactLines.push('Verse-group review progress for the split ranges that changed will reset.');
+            } else if (existingVerseNodes.length > 0 || shouldCreateMissingRanges) {
+                reviewImpactLines.push('Verse-group review nodes will be rebuilt to match the restored splits.');
+            } else {
+                reviewImpactLines.push('There are no active verse-group review nodes to reset right now, but future verse review will use the restored splits.');
+            }
+            reviewImpactLines.push('Verse groups whose split ranges did not change will keep their current progress.');
+        }
+        if (type === 'surah' && suspendedCleanup.groupCount > 0) {
+            reviewImpactLines.push(`Suspended fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} tied to changed split ranges will be cleared.`);
+        }
+        if (reviewImpactLines.length === 0) {
+            reviewImpactLines.push('No review progress will reset.');
+        }
+
+        const ok = await confirm({
+            title: 'Restore Original Mindmap?',
+            message: [
+                `${subjectLabel.charAt(0).toUpperCase()}${subjectLabel.slice(1)} will be replaced with the original shared version.`,
+                changeSummary,
+                'Review impact:',
+                formatResetSummary(reviewImpactLines),
+            ].join('\n\n'),
+            confirmLabel: 'Restore Original',
+            cancelLabel: 'Keep Current',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        await persistPremadeImportBatch([imported]);
+
+        if (shouldResetMindmapReview) {
             await resetMindmapNodes(type, id);
         }
-    }, [handleImportPremade, resetMindmapNodes]);
+
+        if (type === 'surah' && splitsChanged) {
+            if (shouldCreateMissingRanges) {
+                await syncVerseSegmentNodesForSurah({
+                    userId: user!.id,
+                    surahId: id,
+                    anchors: nextAnchors,
+                    existingNodes: existingVerseNodes,
+                    shouldCreateMissingRanges,
+                });
+            }
+
+            if (suspendedCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(suspendedCleanup.errorIds);
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                await queueSettingsUpdate({
+                    kanbanColumns: removeSuspendedKanbanItems(settings.kanbanColumns, impactedGroupKeys),
+                });
+            }
+        }
+
+        appLogger.addLog(`Restored original premade mindmap for ${type} ${id}`, 'success');
+    }, [
+        alert,
+        confirm,
+        errors,
+        loadPremadeImportData,
+        mindmaps,
+        nodes,
+        partMindmapsMap,
+        persistPremadeImportBatch,
+        queueSettingsUpdate,
+        resetMindmapNodes,
+        settings?.kanbanColumns,
+        settings?.suspendedVerseGroupsAcknowledged,
+        user,
+    ]);
 
     useEffect(() => {
         if (isEditor) return;

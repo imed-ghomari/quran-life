@@ -88,6 +88,10 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - Suspended groups are matched against the **current** saved splits/anchors. If splits change and an old suspended range no longer exists, that old suspended card is removed from Todo immediately.
   - If `anchorId/groupKey` changes for what is effectively the same suspended range, the old completed suspended card is considered obsolete and removed from Todo to avoid duplicate-looking cards.
 
+- Review queue sorting:
+  - **Due Date** sorting prioritizes cards that have already been reviewed at least once.
+  - New cards are shown after reviewed cards, with due date still used inside each group.
+
 - Why this design:
   - Users first build basic review familiarity, then similarity warnings appear when they are actionable.
   - This reduces early noise and keeps mutashabihat work focused.

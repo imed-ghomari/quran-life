@@ -5,6 +5,8 @@ import { id } from '@instantdb/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -13,7 +15,7 @@ import {
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
-import { OnlineStatusContext } from '@/components/Providers';
+import { OnlineStatusContext, useDeploymentVersion } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
     ACTIVE_PART_OPTIONS,
@@ -446,9 +448,11 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 }
 
 export default function SettingsPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const router = useRouter();
     const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
+    const deploymentVersion = useDeploymentVersion();
     const { user, isLoading: authLoading } = db.useAuth();
     const { data: subscriptionData, isLoading: subscriptionsLoading } = db.useQuery({
         subscriptions: {
@@ -483,7 +487,7 @@ export default function SettingsPage() {
     ] as const;
     const reviewSortOptions = [
         { id: 'surah_grouped', label: 'Grouped by Surah' },
-        { id: 'due_date', label: 'Due Date (Soonest First)' },
+        { id: 'due_date', label: 'Due Date (Reviewed First)' },
         { id: 'type_grouped', label: 'By Type (Part → Surah → Verse)' }
     ] as const;
     const completeExitOptions = [
@@ -2465,6 +2469,18 @@ export default function SettingsPage() {
                         >
                             Join Discord
                         </a>
+                        {deploymentVersion && (
+                            <span
+                                style={{
+                                    color: 'var(--foreground-secondary)',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 600,
+                                    letterSpacing: '0.04em',
+                                }}
+                            >
+                                {deploymentVersion}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
@@ -4151,12 +4167,14 @@ export default function SettingsPage() {
         && hasResolvedInitialAccountDeletionStatus
         && hasResolvedInitialBillingSummary;
 
+    useEffect(() => {
+        if (!settingsPageReady) return;
+        markCurrentRouteReady();
+    }, [markCurrentRouteReady, settingsPageReady]);
+
     if (!settingsPageReady) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <Spinner size={32} text="Preparing settings..." />
-            </div>
-        );
+        if (isTransitionPendingForCurrentRoute) return null;
+        return <FullScreenLoader text="Preparing settings..." />;
     }
 
     return (
@@ -4196,7 +4214,21 @@ export default function SettingsPage() {
             {isMobile ? renderMobileView() : (
                 <div className="content-wrapper tab-content">
                     <div className="hidden md:flex items-center justify-between mb-6 settings-topbar-row">
-                        <h1 className="text-2xl font-bold m-0">Settings</h1>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.55rem', flexWrap: 'wrap' }}>
+                            <h1 className="text-2xl font-bold m-0">Settings</h1>
+                            {deploymentVersion && (
+                                <span
+                                    style={{
+                                        fontSize: '0.74rem',
+                                        fontWeight: 600,
+                                        color: 'var(--foreground-secondary)',
+                                        letterSpacing: '0.04em',
+                                    }}
+                                >
+                                    {deploymentVersion}
+                                </span>
+                            )}
+                        </div>
                         <div className="settings-support-cta">
                             <span>Need support or more details? Join our Discord server.</span>
                             <a

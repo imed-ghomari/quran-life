@@ -70,7 +70,7 @@ interface TodoKanbanProps {
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => Promise<void> | void;
     onImportPremade: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     onExportPremade?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
-    onResetMindmap?: (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => Promise<void> | void;
+    onResetMindmap?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => Promise<void> | void;
     onDeleteMindmap?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     appMode: 'owner' | 'user';
@@ -1048,12 +1048,12 @@ export default function TodoKanban({
         }
     }, [onExportPremade]);
 
-    const handleCardResetMindmap = useCallback(async (item: KanbanItem, resetMemoryNodes: boolean) => {
+    const handleCardResetMindmap = useCallback(async (item: KanbanItem) => {
         if (!onResetMindmap) return;
         if (item.type === 'surah') {
-            await onResetMindmap('surah', item.data.surah.id, { resetMemoryNodes });
+            await onResetMindmap('surah', item.data.surah.id);
         } else if (item.type === 'part') {
-            await onResetMindmap('part', item.data.part, { resetMemoryNodes });
+            await onResetMindmap('part', item.data.part);
         }
     }, [onResetMindmap]);
 
