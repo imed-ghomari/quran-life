@@ -515,7 +515,8 @@ export default function TodoKanban({
             return `${surah?.name || ''} ${surah?.arabicName || ''} ${item.data.label}`;
         }
         if (item.type === 'similarity') {
-            return `${item.data.surah.name} ${item.data.surah.arabicName || ''} Similarity`;
+            const ayahLabel = Array.isArray(item.data.ayahIds) ? item.data.ayahIds.join(' ') : '';
+            return `${item.data.surah.name} ${item.data.surah.arabicName || ''} Similarity Ayah ${ayahLabel}`;
         }
         return '';
     }, []);
@@ -609,7 +610,7 @@ export default function TodoKanban({
         });
 
         similarityGroups.forEach(group => {
-            const id = `similarity-${group.surah.id}`;
+            const id = group.id || `similarity-${group.surah.id}`;
             itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
@@ -654,6 +655,8 @@ export default function TodoKanban({
                 data: {
                     surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
                     count: 1,
+                    originAbsolute: 1,
+                    ayahIds: [1],
                     isDummy: true,
                     items: [
                         {
@@ -717,7 +720,7 @@ export default function TodoKanban({
                 if (item.type === 'surah') return item.data.surah.id;
                 if (item.type === 'part') return item.data.part;
                 if (item.type === 'suspended') return item.data.surahId;
-                if (item.type === 'similarity') return item.data.surah.id;
+                if (item.type === 'similarity') return Number(item.data.originAbsolute) || item.data.surah.id;
                 return 999;
             };
             return items.sort((a, b) => {
@@ -911,7 +914,7 @@ export default function TodoKanban({
                 if (item.type === 'surah') return item.data.surah.id;
                 if (item.type === 'part') return item.data.part;
                 if (item.type === 'suspended') return item.data.surahId;
-                if (item.type === 'similarity') return item.data.surah.id;
+                if (item.type === 'similarity') return Number(item.data.originAbsolute) || item.data.surah.id;
                 return 999;
             };
             return [...items].sort((a, b) => {
@@ -1306,32 +1309,35 @@ export default function TodoKanban({
         if (item.type !== 'similarity') return;
         if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
 
-        const allTargets = new Map<string, { representativeAbs: number; decisionKey: string }>();
+        const allTargets = new Map<string, { representativeAbs: number; decisionKey: string; existing: any }>();
 
-        item.data.items.forEach((groupItem: any) => {
-            const context = buildPrimarySimilarityContext({
-                surah: item.data.surah,
-                items: [groupItem],
-            });
-            if (!context) return;
-
-            context.group.resolutionTargets.forEach((target) => {
-                allTargets.set(target.decisionKey, {
-                    representativeAbs: target.representativeAbs,
-                    decisionKey: target.decisionKey,
-                });
+        getSimilarityEntryTargets(item.data).forEach(({ absolute, entry }) => {
+            const matchedDecision = getMatchingMutashabihatDecision(
+                mutashabihatDecisions,
+                absolute,
+                entry,
+                undefined,
+                { sameSurahOnly: true }
+            );
+            const representativeAbs = matchedDecision?.absolute ?? absolute;
+            const decisionKey = buildMutashabihatDecisionKey(representativeAbs, entry.phraseId);
+            allTargets.set(decisionKey, {
+                representativeAbs,
+                decisionKey,
+                existing: matchedDecision?.decision
+                    || mutashabihatDecisions.find((decision) => decision.phraseId === decisionKey)
+                    || { status: 'pending', notes: '' },
             });
         });
 
         allTargets.forEach((target) => {
-            const targetExisting = mutashabihatDecisions.find((decision) => decision.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
             onMutashabihatDecisionUpdate(
                 target.representativeAbs,
-                { ...targetExisting, status: 'ignored', confirmedAt: undefined },
+                { ...target.existing, status: 'ignored', confirmedAt: undefined },
                 target.decisionKey
             );
         });
-    }, [buildPrimarySimilarityContext, mutashabihatDecisions, onMutashabihatDecisionUpdate]);
+    }, [getSimilarityEntryTargets, mutashabihatDecisions, onMutashabihatDecisionUpdate]);
 
     const openMindmapForSurah = useCallback(async (surahId: number) => {
         await onEditMindmap(surahId, mindmaps[surahId]?.tldrawSnapshot, false);

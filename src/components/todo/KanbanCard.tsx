@@ -380,13 +380,15 @@ function renderCardZones({
         }
         case 'similarity': {
             const sim = item.data;
+            const ayahIds = Array.isArray(sim.ayahIds) ? sim.ayahIds.filter((ayahId: unknown) => Number.isFinite(Number(ayahId))) : [];
+            const ayahLabel = ayahIds.length > 0 ? `Ayah ${ayahIds.join(', ')}` : 'Similarity';
             zone1 = { label: "SIMILARITY", color: "var(--todo-pill-similarity)" };
             zone2 = {
-                english: sim.surah ? `${sim.surah.id}. ${sim.surah.name}` : "Similarity",
+                english: sim.surah ? `${sim.surah.id}. ${sim.surah.name} ${ayahLabel}` : ayahLabel,
                 arabic: sim.surah?.arabicName || 'التشابه'
             };
             zone3 = `${sim.count} unlocked unresolved comparator${sim.count === 1 ? '' : 's'} need distinction.`;
-            zone4Meta = "Needs distinction";
+            zone4Meta = ayahLabel;
             break;
         }
         case 'part': {
