@@ -1,7 +1,7 @@
 
 "use client";
 
-import { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { SyncProvider } from "@/hooks/useSyncState";
 import OnboardingModal from "./OnboardingModal";
 import { ThemeProvider } from "./ThemeProvider";
@@ -52,11 +52,64 @@ const SW_CACHE_PREFIXES_TO_CLEAR = [
   "start-url",
 ];
 
+type DeploymentRefreshStatus = "reloading" | "offline" | "failed";
+
 type AccessStateCache = {
   identityKey: string;
   cachedAt: number;
   state: Omit<AccessState, "isSubscriptionLoading">;
 };
+
+type DeploymentRefreshContextValue = {
+  isRefreshingDeployment: boolean;
+  refreshToLatestDeployment: () => Promise<DeploymentRefreshStatus>;
+};
+
+const DeploymentRefreshContext = createContext<DeploymentRefreshContextValue>({
+  isRefreshingDeployment: false,
+  refreshToLatestDeployment: async () => "failed",
+});
+
+async function fetchLatestDeploymentVersion() {
+  try {
+    const response = await fetch(DEPLOYMENT_VERSION_ENDPOINT, {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (!response.ok) return "";
+    const data = await response.json();
+    return String(data?.version ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function clearDeploymentCaches() {
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  }
+
+  if ("caches" in window) {
+    const cacheKeys = await caches.keys();
+    const cacheKeysToDelete = cacheKeys.filter((key) =>
+      SW_CACHE_PREFIXES_TO_CLEAR.some((prefix) => key.startsWith(prefix))
+    );
+    // Safety net for migrations between PWA plugins/cache naming schemes.
+    if (cacheKeysToDelete.length !== cacheKeys.length) {
+      cacheKeysToDelete.push(
+        ...cacheKeys.filter((key) => !cacheKeysToDelete.includes(key))
+      );
+    }
+    await Promise.all(cacheKeysToDelete.map((key) => caches.delete(key)));
+  }
+
+  try {
+    window.sessionStorage.removeItem("quran_verses_cache_v2");
+  } catch {
+    // Non-fatal; cache reset still succeeds.
+  }
+}
 
 function readAuthResolvedOnce() {
   if (typeof window === "undefined") return false;
@@ -178,6 +231,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const envVersion = String(clientEnv.NEXT_PUBLIC_DEPLOYMENT_ID || "").trim();
     return envVersion ? envVersion.slice(0, 12) : "";
   });
+  const [isRefreshingDeployment, setIsRefreshingDeployment] = useState(false);
+  const deploymentRefreshInFlightRef = useRef(false);
   const [isAccessLoading, setIsAccessLoading] = useState(() => !cachedAccessState);
   const [hasLoadedAccessState, setHasLoadedAccessState] = useState(() => Boolean(cachedAccessState));
   const accessRequestSeqRef = useRef(0);
@@ -344,20 +399,62 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthLoading]);
 
+  const refreshToLatestDeployment = useCallback(async (): Promise<DeploymentRefreshStatus> => {
+    if (typeof window === "undefined") return "failed";
+    if (!navigator.onLine) return "offline";
+    if (deploymentRefreshInFlightRef.current) return "reloading";
+
+    deploymentRefreshInFlightRef.current = true;
+    setIsRefreshingDeployment(true);
+
+    try {
+      const latestVersion = await fetchLatestDeploymentVersion();
+      if (latestVersion) {
+        setDeploymentVersion(latestVersion);
+      }
+
+      const desiredMigrationKey = `${SW_MIGRATION_KEY}:${latestVersion || deploymentVersion || Date.now()}`;
+      try {
+        window.sessionStorage.setItem(SW_MIGRATION_SESSION_KEY, desiredMigrationKey);
+      } catch {
+        // Best-effort session guard to prevent duplicate refreshes.
+      }
+
+      await clearDeploymentCaches();
+
+      try {
+        window.localStorage.setItem(SW_MIGRATION_STORAGE_KEY, desiredMigrationKey);
+      } catch {
+        // Best-effort cache write.
+      }
+
+      window.location.reload();
+      return "reloading";
+    } catch (error) {
+      console.warn("Forced deployment refresh failed", error);
+      try {
+        window.sessionStorage.removeItem(SW_MIGRATION_SESSION_KEY);
+      } catch {
+        // Best-effort cleanup.
+      }
+      try {
+        window.localStorage.removeItem(SW_MIGRATION_STORAGE_KEY);
+      } catch {
+        // Best-effort cleanup.
+      }
+      deploymentRefreshInFlightRef.current = false;
+      setIsRefreshingDeployment(false);
+      return "failed";
+    }
+  }, [deploymentVersion]);
+
   useEffect(() => {
     let cancelled = false;
 
     const loadDeploymentVersion = async () => {
-      try {
-        const response = await fetch(DEPLOYMENT_VERSION_ENDPOINT, { cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json();
-        const nextVersion = String(data?.version ?? "").trim();
-        if (!cancelled && nextVersion) {
-          setDeploymentVersion(nextVersion);
-        }
-      } catch {
-        // Best-effort debug metadata fetch.
+      const nextVersion = await fetchLatestDeploymentVersion();
+      if (!cancelled && nextVersion) {
+        setDeploymentVersion(nextVersion);
       }
     };
 
@@ -373,16 +470,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       try {
         if (!navigator.onLine) return;
 
-        let deploymentVersion = "";
-        try {
-          const response = await fetch(DEPLOYMENT_VERSION_ENDPOINT, { cache: "no-store" });
-          if (response.ok) {
-            const data = await response.json();
-            deploymentVersion = String(data?.version ?? "");
-          }
-        } catch {
-          deploymentVersion = "";
-        }
+        const deploymentVersion = await fetchLatestDeploymentVersion();
         if (!deploymentVersion) return;
 
         const desiredMigrationKey = `${SW_MIGRATION_KEY}:${deploymentVersion}`;
@@ -394,30 +482,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           // Best-effort session guard to prevent reload loops.
         }
 
-        if ("serviceWorker" in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map((registration) => registration.unregister()));
-        }
-
-        if ("caches" in window) {
-          const cacheKeys = await caches.keys();
-          const cacheKeysToDelete = cacheKeys.filter((key) =>
-            SW_CACHE_PREFIXES_TO_CLEAR.some((prefix) => key.startsWith(prefix))
-          );
-          // Safety net for migrations between PWA plugins/cache naming schemes.
-          if (cacheKeysToDelete.length !== cacheKeys.length) {
-            cacheKeysToDelete.push(
-              ...cacheKeys.filter((key) => !cacheKeysToDelete.includes(key))
-            );
-          }
-          await Promise.all(cacheKeysToDelete.map((key) => caches.delete(key)));
-        }
-
-        try {
-          window.sessionStorage.removeItem("quran_verses_cache_v2");
-        } catch {
-          // Non-fatal; migration still succeeds.
-        }
+        await clearDeploymentCaches();
 
         try {
           window.localStorage.setItem(SW_MIGRATION_STORAGE_KEY, desiredMigrationKey);
@@ -453,16 +518,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
             || (isOnline && (!hasLoadedAccessState || isAccessLoading)),
         }}
       >
-        <DeploymentVersionContext.Provider value={deploymentVersion}>
-          <SyncProvider>
-            <ThemeProvider>
-              <ConfirmDialogProvider>
-                {children}
-                <OnboardingWrapper />
-              </ConfirmDialogProvider>
-            </ThemeProvider>
-          </SyncProvider>
-        </DeploymentVersionContext.Provider>
+        <DeploymentRefreshContext.Provider
+          value={{
+            isRefreshingDeployment,
+            refreshToLatestDeployment,
+          }}
+        >
+          <DeploymentVersionContext.Provider value={deploymentVersion}>
+            <SyncProvider>
+              <ThemeProvider>
+                <ConfirmDialogProvider>
+                  {children}
+                  <OnboardingWrapper />
+                </ConfirmDialogProvider>
+              </ThemeProvider>
+            </SyncProvider>
+          </DeploymentVersionContext.Provider>
+        </DeploymentRefreshContext.Provider>
       </AccessStateContext.Provider>
     </OnlineStatusContext.Provider>
   );
@@ -470,4 +542,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 export function useDeploymentVersion() {
   return useContext(DeploymentVersionContext);
+}
+
+export function useDeploymentRefresh() {
+  return useContext(DeploymentRefreshContext);
 }

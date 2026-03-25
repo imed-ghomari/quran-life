@@ -15,7 +15,7 @@ import {
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
-import { OnlineStatusContext, useDeploymentVersion } from '@/components/Providers';
+import { OnlineStatusContext, useDeploymentRefresh, useDeploymentVersion } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
     ACTIVE_PART_OPTIONS,
@@ -467,6 +467,7 @@ export default function SettingsPage() {
     const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
     const deploymentVersion = useDeploymentVersion();
+    const { isRefreshingDeployment, refreshToLatestDeployment } = useDeploymentRefresh();
     const deploymentVersionLabel = useMemo(
         () => formatDeploymentVersionLabel(deploymentVersion),
         [deploymentVersion]
@@ -2489,17 +2490,31 @@ export default function SettingsPage() {
                             Join Discord
                         </a>
                         {deploymentVersionLabel && (
-                            <span
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    void handleDeploymentRefreshClick();
+                                }}
+                                disabled={isRefreshingDeployment}
                                 style={{
+                                    appearance: 'none',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    padding: 0,
                                     color: 'var(--foreground-secondary)',
                                     fontSize: '0.74rem',
                                     fontWeight: 600,
                                     letterSpacing: '0.04em',
+                                    cursor: isRefreshingDeployment ? 'progress' : 'pointer',
+                                    textDecoration: 'underline',
+                                    textUnderlineOffset: '0.16em',
+                                    opacity: isRefreshingDeployment ? 0.82 : 1,
                                 }}
-                                title={deploymentVersion}
+                                title={isRefreshingDeployment ? 'Refreshing to the latest deployed version' : 'Click to refresh to the latest deployed version'}
+                                aria-label={isRefreshingDeployment ? 'Refreshing to latest deployed version' : 'Refresh app to latest deployed version'}
                             >
-                                {deploymentVersionLabel}
-                            </span>
+                                {isRefreshingDeployment ? 'Updating...' : deploymentVersionLabel}
+                            </button>
                         )}
                     </div>
                 </div>
@@ -3104,6 +3119,17 @@ export default function SettingsPage() {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
         }, 6000);
     };
+
+    const handleDeploymentRefreshClick = useCallback(async () => {
+        const status = await refreshToLatestDeployment();
+        if (status === 'offline') {
+            addToast('error', 'You are offline', 'Reconnect, then tap the build number again to fetch the latest deployment.');
+            return;
+        }
+        if (status === 'failed') {
+            addToast('error', 'Failed to refresh the app', 'Please try tapping the build number again in a moment.');
+        }
+    }, [addToast, refreshToLatestDeployment]);
 
     const handleCompleteExitBehaviorChange = async (nextBehavior: 'mindmap_only' | 'mindmap_and_verses') => {
         const prevBehavior = completeExitBehavior ?? 'mindmap_only';
@@ -4249,17 +4275,31 @@ export default function SettingsPage() {
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.55rem', flexWrap: 'wrap' }}>
                             <h1 className="text-2xl font-bold m-0">Settings</h1>
                             {deploymentVersionLabel && (
-                                <span
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void handleDeploymentRefreshClick();
+                                    }}
+                                    disabled={isRefreshingDeployment}
                                     style={{
+                                        appearance: 'none',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        padding: 0,
                                         fontSize: '0.74rem',
                                         fontWeight: 600,
                                         color: 'var(--foreground-secondary)',
                                         letterSpacing: '0.04em',
+                                        cursor: isRefreshingDeployment ? 'progress' : 'pointer',
+                                        textDecoration: 'underline',
+                                        textUnderlineOffset: '0.16em',
+                                        opacity: isRefreshingDeployment ? 0.82 : 1,
                                     }}
-                                    title={deploymentVersion}
+                                    title={isRefreshingDeployment ? 'Refreshing to the latest deployed version' : 'Click to refresh to the latest deployed version'}
+                                    aria-label={isRefreshingDeployment ? 'Refreshing to latest deployed version' : 'Refresh app to latest deployed version'}
                                 >
-                                    {deploymentVersionLabel}
-                                </span>
+                                    {isRefreshingDeployment ? 'Updating...' : deploymentVersionLabel}
+                                </button>
                             )}
                         </div>
                         <div className="settings-support-cta">
