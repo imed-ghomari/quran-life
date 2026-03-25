@@ -42,14 +42,26 @@ export default function AppShell({ children }: AppShellProps) {
     const isTransitionPendingForCurrentRoute = useMemo(() => hasReachedPendingRoute && !!pendingHref, [hasReachedPendingRoute, pendingHref]);
 
     useEffect(() => {
-        if (!hasReachedPendingRoute) return;
-    }, [hasReachedPendingRoute]);
-
-    useEffect(() => {
         if (!isAppRoute && pendingHref) {
             setPendingHref(null);
         }
     }, [isAppRoute, pendingHref]);
+
+    useEffect(() => {
+        if (!hasReachedPendingRoute || !pendingHref) return;
+
+        const timeoutId = window.setTimeout(() => {
+            setPendingHref((current) => {
+                if (!current) return current;
+                setRevealTick((prev) => prev + 1);
+                return null;
+            });
+        }, 4000);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [hasReachedPendingRoute, pendingHref]);
 
     const handleNavigateStart = useCallback((href: string) => {
         setPendingHref(href);

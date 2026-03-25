@@ -8,6 +8,7 @@ import {
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
+import { useAppShellTransition } from '@/components/AppShell';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
@@ -173,6 +174,7 @@ const memoryNodeLogicalKey = (node: MemoryNode) => {
  * 5. Anchor building logic for defining verse ranges.
  */
 export default function TodoPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     // -- 1. Data Hooks: Syncing with InstantDB --
     const { user } = db.useAuth();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
@@ -1495,10 +1497,16 @@ export default function TodoPage() {
         setHasHydratedTodoData(true);
     }, [todoDataReady]);
 
+    useEffect(() => {
+        if (!todoDataReady) return;
+        markCurrentRouteReady();
+    }, [markCurrentRouteReady, todoDataReady]);
+
     const showTodoLoader = !hasHydratedTodoData;
     const todoLoaderText = 'Preparing Todo...';
 
     if (showTodoLoader) {
+        if (isTransitionPendingForCurrentRoute) return null;
         return <FullScreenLoader text={todoLoaderText} />;
     }
 

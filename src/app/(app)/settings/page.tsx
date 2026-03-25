@@ -117,6 +117,20 @@ const DEFAULT_ACCOUNT_DELETION_STATUS: AccountDeletionStatusState = {
     daysUntilAccessEnds: null,
 };
 
+const formatDeploymentVersionLabel = (version: string) => {
+    const trimmed = version.trim();
+    if (!trimmed) return '';
+    if (trimmed.toLowerCase() === 'dev') return 'Dev Build';
+    if (/^\d{1,8}$/.test(trimmed)) return `Build ${trimmed}`;
+
+    let hash = 0;
+    for (let i = 0; i < trimmed.length; i += 1) {
+        hash = (hash * 31 + trimmed.charCodeAt(i)) % 1000000;
+    }
+
+    return `Build ${hash.toString().padStart(6, '0')}`;
+};
+
 const isMobileViewport = () =>
     typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -453,6 +467,10 @@ export default function SettingsPage() {
     const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
     const deploymentVersion = useDeploymentVersion();
+    const deploymentVersionLabel = useMemo(
+        () => formatDeploymentVersionLabel(deploymentVersion),
+        [deploymentVersion]
+    );
     const { user, isLoading: authLoading } = db.useAuth();
     const { data: subscriptionData, isLoading: subscriptionsLoading } = db.useQuery({
         subscriptions: {
@@ -574,6 +592,7 @@ export default function SettingsPage() {
     } | null>(null);
     const [settingsContextVerseCursor, setSettingsContextVerseCursor] = useState<Record<number, number>>({});
     const handledMutRouteKeyRef = useRef('');
+    const pendingMutashabihatScrollRowRef = useRef<string | null>(null);
     const [settingsMindmapEditor, setSettingsMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [settingsSplitsSurahId, setSettingsSplitsSurahId] = useState<number | null>(null);
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
@@ -2469,7 +2488,7 @@ export default function SettingsPage() {
                         >
                             Join Discord
                         </a>
-                        {deploymentVersion && (
+                        {deploymentVersionLabel && (
                             <span
                                 style={{
                                     color: 'var(--foreground-secondary)',
@@ -2477,8 +2496,9 @@ export default function SettingsPage() {
                                     fontWeight: 600,
                                     letterSpacing: '0.04em',
                                 }}
+                                title={deploymentVersion}
                             >
-                                {deploymentVersion}
+                                {deploymentVersionLabel}
                             </span>
                         )}
                     </div>
@@ -4137,15 +4157,8 @@ export default function SettingsPage() {
                 group: targetGroup,
                 representativeAbs,
             });
-        } else if (typeof window !== 'undefined') {
-            window.requestAnimationFrame(() => {
-                window.setTimeout(() => {
-                    document.getElementById(getMutashabihatRowId(resolvedDecisionKey))?.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center',
-                    });
-                }, 0);
-            });
+        } else {
+            pendingMutashabihatScrollRowRef.current = getMutashabihatRowId(resolvedDecisionKey);
         }
 
         handledMutRouteKeyRef.current = routeKey;
@@ -4158,6 +4171,22 @@ export default function SettingsPage() {
             router.replace(nextQuery ? `/settings?${nextQuery}` : '/settings', { scroll: false });
         }
     }, [activeMobilePage, buildSurahMutGroups, isMobile, router, searchParams]);
+
+    useEffect(() => {
+        if (isMobile || !pendingMutashabihatScrollRowRef.current || typeof window === 'undefined') return;
+
+        const rowId = pendingMutashabihatScrollRowRef.current;
+        const element = document.getElementById(rowId);
+        if (!element) return;
+
+        pendingMutashabihatScrollRowRef.current = null;
+        window.requestAnimationFrame(() => {
+            element.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+        });
+    }, [expandedMutItems, expandedSurahs, isMobile]);
 
     const settingsPageReady =
         hasInitializedSettingsLayout
@@ -4216,7 +4245,7 @@ export default function SettingsPage() {
                     <div className="hidden md:flex items-center justify-between mb-6 settings-topbar-row">
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.55rem', flexWrap: 'wrap' }}>
                             <h1 className="text-2xl font-bold m-0">Settings</h1>
-                            {deploymentVersion && (
+                            {deploymentVersionLabel && (
                                 <span
                                     style={{
                                         fontSize: '0.74rem',
@@ -4224,8 +4253,9 @@ export default function SettingsPage() {
                                         color: 'var(--foreground-secondary)',
                                         letterSpacing: '0.04em',
                                     }}
+                                    title={deploymentVersion}
                                 >
-                                    {deploymentVersion}
+                                    {deploymentVersionLabel}
                                 </span>
                             )}
                         </div>
