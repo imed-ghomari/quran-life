@@ -1259,11 +1259,12 @@ export default function TodoKanban({
         if (groups.length === 0) return null;
 
         const selected = groups[0];
+        const decisions = mutashabihatDecisions || [];
         const resolutionTargets = selected.phraseIds.map((phraseId) => {
             const phraseAbsRefs = selected.phraseAbsRefs[phraseId] || selected.absRefs;
             const targetAbs = phraseAbsRefs.find((abs) => {
                 const key = `${abs}-${phraseId}`;
-                const existing = mutashabihatDecisions.find(d => d.phraseId === key);
+                const existing = decisions.find(d => d.phraseId === key);
                 return isMutashabihatDecisionResolved(existing);
             }) || phraseAbsRefs[0];
             return {
@@ -1275,7 +1276,7 @@ export default function TodoKanban({
 
         const firstResolvedTarget = resolutionTargets.find(target =>
             isMutashabihatDecisionResolved(
-                mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)
+                decisions.find(d => d.phraseId === target.decisionKey)
             )
         );
         const primaryTarget = firstResolvedTarget || resolutionTargets[0];
