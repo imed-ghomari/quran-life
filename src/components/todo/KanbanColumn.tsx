@@ -22,6 +22,7 @@ interface KanbanColumnProps {
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+    onIgnoreSimilarity?: (item: KanbanItem) => Promise<void> | void;
     getHasMindmap: (item: KanbanItem) => boolean;
     getHasSplits: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;
@@ -55,6 +56,7 @@ const KanbanColumn = ({
     onChangeSplits,
     onViewVerseContext,
     onViewSimilarityContext,
+    onIgnoreSimilarity,
     getHasMindmap,
     getHasSplits,
     getHasPremade,
@@ -142,6 +144,7 @@ const KanbanColumn = ({
                                 onChangeSplits={onChangeSplits}
                                 onViewVerseContext={onViewVerseContext}
                                 onViewSimilarityContext={onViewSimilarityContext}
+                                onIgnoreSimilarity={onIgnoreSimilarity}
                             />
                         ))}
                         {provided.placeholder}

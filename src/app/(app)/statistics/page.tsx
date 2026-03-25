@@ -40,6 +40,7 @@ function getMaturity(interval: number): MaturityBucket {
 interface StatSegment {
     label: string;
     count: number;
+    displayValue?: number | string;
     color: string;
     opacity?: number;
     description: string;
@@ -56,6 +57,12 @@ interface SurahRiskRow {
     errorRate: number;
     maturity: MaturityBucket;
     trend: TrendDirection;
+}
+
+interface ProgressBarStats {
+    total: number;
+    segments: StatSegment[];
+    displayTotal?: number | string;
 }
 
 function ChartEmptyState({ message = 'No data available', height = 200 }: { message?: string; height?: number }) {
@@ -503,6 +510,7 @@ export default function StatisticsPage() {
                 completions: 0,
                 completedToday: false,
                 segments: [] as StatSegment[],
+                displayTotal: 0,
             };
         }
 
@@ -518,14 +526,40 @@ export default function StatisticsPage() {
         const totalVerses = surahsInPart.reduce((sum, surah) => sum + surah.verseCount, 0);
         const completedVerses = totalVerses > 0 ? Math.min(progress, totalVerses) : 0;
         const remainingVerses = Math.max(0, totalVerses - completedVerses);
+        let completedSurahs = 0;
+        let traversedVerses = 0;
+
+        for (const surah of surahsInPart) {
+            traversedVerses += surah.verseCount;
+            if (completedVerses >= traversedVerses) {
+                completedSurahs += 1;
+            } else {
+                break;
+            }
+        }
+
+        const remainingSurahs = Math.max(0, surahsInPart.length - completedSurahs);
 
         return {
             total: totalVerses,
+            displayTotal: surahsInPart.length,
             completions: cycles,
             completedToday,
             segments: [
-                { label: 'Remaining', count: remainingVerses, color: 'var(--chart-skipped)', description: 'Verses remaining in current cycle' },
-                { label: 'Completed', count: completedVerses, color: 'var(--chart-mastered)', description: 'Verses completed in current cycle' },
+                {
+                    label: 'Remaining',
+                    count: remainingVerses,
+                    displayValue: remainingSurahs,
+                    color: 'var(--chart-skipped)',
+                    description: 'Surahs remaining in current cycle',
+                },
+                {
+                    label: 'Completed',
+                    count: completedVerses,
+                    displayValue: completedSurahs,
+                    color: 'var(--chart-mastered)',
+                    description: 'Surahs completed in current cycle',
+                },
             ]
         };
     }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId, statisticsReady]);
@@ -1696,7 +1730,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
     );
 }
 
-function HalfDonutChart({ total, segments }: { total: number; segments: StatSegment[] }) {
+function HalfDonutChart({ total, segments, displayTotal }: { total: number; segments: StatSegment[]; displayTotal?: number | string }) {
     const radius = 65;
     const strokeWidth = 12;
     const viewBoxWidth = 160;
@@ -1776,13 +1810,15 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
                 pointerEvents: 'none'
             }}>
                 <span style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total</span>
-                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--foreground)', lineHeight: 1.1 }}>{total.toLocaleString()}</span>
+                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--foreground)', lineHeight: 1.1 }}>
+                    {(displayTotal ?? total).toLocaleString()}
+                </span>
             </div>
         </div>
     );
 }
 
-function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, className }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode; minHeight?: number; className?: string }) {
+function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, className }: { title: string; icon: React.ReactNode; stats: ProgressBarStats; headerSuffix?: React.ReactNode; minHeight?: number; className?: string }) {
     return (
         <div className={`card modern-card${className ? ` ${className}` : ''}`} style={{ width: '100%', background: 'var(--background-secondary)', minHeight }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1794,7 +1830,7 @@ function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, class
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap', flex: 1 }}>
-                <HalfDonutChart total={stats.total} segments={stats.segments} />
+                <HalfDonutChart total={stats.total} segments={stats.segments} displayTotal={stats.displayTotal} />
 
                 <div style={{ flex: '1', minWidth: '200px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1rem', justifyContent: 'flex-start' }}>
@@ -1805,7 +1841,9 @@ function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, class
                                     <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                         {s.label}
                                     </span>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground)' }}>{s.count}</span>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground)' }}>
+                                        {s.displayValue ?? s.count}
+                                    </span>
                                 </div>
                             </div>
                         ))}

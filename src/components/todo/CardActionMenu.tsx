@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw, Settings } from 'lucide-react';
+import { MoreVertical, PenTool, Trash2, SplitSquareHorizontal, FileText, Search, Upload, RotateCcw, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { withDocsSidebarReveal } from '@/lib/docsSidebarReveal';
 
@@ -29,6 +29,7 @@ interface CardActionMenuProps {
     onChangeSplits: () => Promise<void> | void;
     onViewVerseContext?: () => Promise<void> | void; // For Suspended
     onViewSimilarityContext?: () => Promise<void> | void; // For Similarity
+    onIgnoreSimilarity?: () => Promise<void> | void; // For Similarity
 
     settingsHref?: string;
     docLink?: string;
@@ -49,6 +50,7 @@ export default function CardActionMenu({
     onChangeSplits,
     onViewVerseContext,
     onViewSimilarityContext,
+    onIgnoreSimilarity,
     settingsHref,
     docLink,
     showExport,
@@ -172,6 +174,13 @@ export default function CardActionMenu({
                 disabled: isProcessing
             });
             items.push({
+                label: 'Ignore',
+                icon: <X size={20} />,
+                onClick: onIgnoreSimilarity,
+                disabled: isProcessing,
+                danger: true
+            });
+            items.push({
                 label: 'View in Similarity Settings',
                 icon: <Settings size={20} />,
                 isLink: true,
@@ -196,6 +205,7 @@ export default function CardActionMenu({
         onChangeSplits,
         onViewVerseContext,
         onViewSimilarityContext,
+        onIgnoreSimilarity,
         settingsHref
     ]);
 

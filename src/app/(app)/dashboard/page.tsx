@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useContext, startTra
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useAppShellTransition } from '@/components/AppShell';
 import Spinner from '@/components/ui/Spinner';
 import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
@@ -220,6 +221,7 @@ function getLocalDayKeyNow() {
 }
 
 export default function TodayPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
@@ -2033,7 +2035,13 @@ export default function TodayPage() {
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
     const isReviewQueueHydrating = !hasHydratedReviewQueue;
 
+    useEffect(() => {
+        if (!isLoaded) return;
+        markCurrentRouteReady();
+    }, [isLoaded, markCurrentRouteReady]);
+
     if (!isLoaded) {
+        if (isTransitionPendingForCurrentRoute) return null;
         const loadingText = isVersesLoaded ? 'Preparing today...' : 'Loading Quran text...';
         return <FullScreenLoader text={loadingText} />;
     }

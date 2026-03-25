@@ -8,6 +8,7 @@ import {
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
+import { useAppShellTransition } from '@/components/AppShell';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
@@ -173,6 +174,7 @@ const memoryNodeLogicalKey = (node: MemoryNode) => {
  * 5. Anchor building logic for defining verse ranges.
  */
 export default function TodoPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     // -- 1. Data Hooks: Syncing with InstantDB --
     const { user } = db.useAuth();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
@@ -479,63 +481,17 @@ export default function TodoPage() {
             .sort((a, b) => a.surah.id - b.surah.id);
     }, [activePart, activeReviewQueueSurahIds, mindmaps, settings.skippedSurahs]);
 
-    const similarityStateBySurah = useMemo(() => {
-        const bySurah = new Map<number, {
-            hasOutstanding: boolean;
-            hasReviewedComparator: boolean;
-        }>();
-
-        errors
-            .filter((error) => error.type === 'similarity' && error.absoluteAyah)
-            .forEach((error) => {
-                const absolute = error.absoluteAyah!;
-                const { surahId } = absoluteToSurahAyah(absolute);
-                const existing = bySurah.get(surahId) || {
-                    hasOutstanding: false,
-                    hasReviewedComparator: false,
-                };
-                const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
-
-                const hasOutstanding = muts.some((entry: any) =>
-                    !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
-                );
-
-                const hasLearnedUnresolvedComparator = muts.some((entry: any) => {
-                    const comparators = Array.from(new Set(
-                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
-                    )).filter((absRef) => absRef !== absolute);
-
-                    return comparators.some((absRef) => {
-                        const compSurahId = absoluteToSurahAyah(absRef).surahId;
-                        return checkIsSurahLearned(compSurahId)
-                            && !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true });
-                    });
-                });
-
-                bySurah.set(surahId, {
-                    hasOutstanding: existing.hasOutstanding || hasOutstanding,
-                    hasReviewedComparator: existing.hasReviewedComparator || hasLearnedUnresolvedComparator,
-                });
-            });
-
-        return bySurah;
-    }, [checkIsSurahLearned, customMutashabihat, decisionsMap, errors]);
-
-    // Gather Similarity Errors (Mutashabihat) that need resolution
-    const similarityItems = useMemo(() => {
+    const allSimilarityItems = useMemo(() => {
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .map(err => {
                 const absolute = err.absoluteAyah!;
+                const { surahId, ayahId } = absoluteToSurahAyah(absolute);
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
-                const unresolvedCount = muts.filter((entry: any) =>
+                const unresolvedEntries = muts.filter((entry: any) =>
                     !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
-                ).length;
-                const actionableComparatorCount = muts.reduce((sum: number, entry: any) => {
-                    if (isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })) {
-                        return sum;
-                    }
-
+                );
+                const actionableComparatorCount = unresolvedEntries.reduce((sum: number, entry: any) => {
                     const unlockedComparators = Array.from(new Set(
                         (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
                     )).filter((absRef) => (
@@ -545,28 +501,52 @@ export default function TodoPage() {
 
                     return sum + unlockedComparators.length;
                 }, 0);
-                const surahState = similarityStateBySurah.get(absoluteToSurahAyah(absolute).surahId);
+                const hasReviewedComparator = unresolvedEntries.some((entry: any) => {
+                    const comparators = Array.from(new Set(
+                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
+                    )).filter((absRef) => absRef !== absolute);
+
+                    return comparators.some((absRef) =>
+                        checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
+                    );
+                });
 
                 return {
+                    id: `similarity-origin-${absolute}`,
                     err,
                     muts,
-                    unresolvedCount,
+                    unresolvedCount: unresolvedEntries.length,
+                    hasOutstanding: unresolvedEntries.length > 0,
                     actionableComparatorCount,
-                    hasReviewedComparator: surahState?.hasReviewedComparator || false,
+                    hasReviewedComparator,
+                    originAbsolute: absolute,
+                    originAyahId: ayahId,
+                    surah: getSurah(surahId),
                 };
-            })
-            // Filter out items that are already resolved/ignored
+            });
+    }, [checkIsSurahLearned, customMutashabihat, decisionsMap, errors]);
+
+    const similarityStateById = useMemo(() => {
+        const byId = new Map<string, { hasOutstanding: boolean }>();
+        allSimilarityItems.forEach((item) => {
+            byId.set(item.id, { hasOutstanding: item.hasOutstanding });
+        });
+        return byId;
+    }, [allSimilarityItems]);
+
+    // Gather Similarity Errors (Mutashabihat) that need resolution
+    const similarityItems = useMemo(() => {
+        return allSimilarityItems
             .filter(entry => {
                 const absolute = entry.err.absoluteAyah!;
-                const { surahId } = absoluteToSurahAyah(absolute);
-                const isPinnedInComplete = completedSimilarityCards.has(`similarity-${surahId}`);
+                const isPinnedInComplete = completedSimilarityCards.has(entry.id);
                 if (isPinnedInComplete) return true;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
                 if (entry.unresolvedCount <= 0) return false;
-                return entry.hasReviewedComparator;
+                return entry.hasReviewedComparator && !!entry.surah;
             });
-    }, [errors, decisionsMap, customMutashabihat, completedSimilarityCards, similarityStateBySurah, checkIsSurahLearned]);
+    }, [allSimilarityItems, completedSimilarityCards, decisionsMap]);
 
     useEffect(() => {
         const currentColumns = settings.kanbanColumns;
@@ -583,10 +563,7 @@ export default function TodoPage() {
         const toComplete: string[] = [];
 
         similarityIds.forEach((id) => {
-            const surahId = Number.parseInt(String(id).replace('similarity-', ''), 10);
-            if (!Number.isFinite(surahId)) return;
-
-            const hasOutstanding = similarityStateBySurah.get(surahId)?.hasOutstanding ?? false;
+            const hasOutstanding = similarityStateById.get(String(id))?.hasOutstanding ?? false;
             const isInComplete = (currentColumns.complete || []).includes(id);
 
             if (hasOutstanding && isInComplete) {
@@ -620,23 +597,19 @@ export default function TodoPage() {
         }
 
         void queueSettingsUpdate({ kanbanColumns: nextColumns });
-    }, [queueSettingsUpdate, settings.kanbanColumns, similarityStateBySurah]);
+    }, [queueSettingsUpdate, settings.kanbanColumns, similarityStateById]);
 
-    // Group similarity items by Surah for cleaner display in Kanban
-    const groupedSimilarity = useMemo(() => {
-        const groups: Record<number, typeof similarityItems> = {};
-        similarityItems.forEach(item => {
-            const ref = absoluteToSurahAyah(item.err.absoluteAyah!);
-            if (!groups[ref.surahId]) groups[ref.surahId] = [];
-            groups[ref.surahId].push(item);
-        });
-        return Object.entries(groups)
-            .map(([surahId, items]) => ({
-                surah: getSurah(parseInt(surahId)),
-                items,
-                count: items.reduce((sum, item) => sum + (item.actionableComparatorCount || 0), 0),
-            }))
-            .filter(g => g.surah);
+    const similarityCards = useMemo(() => {
+        return similarityItems
+            .filter((item) => !!item.surah)
+            .map((item) => ({
+                id: item.id,
+                surah: item.surah,
+                items: [item],
+                count: item.actionableComparatorCount || 0,
+                originAbsolute: item.originAbsolute,
+                ayahIds: [item.originAyahId],
+            }));
     }, [similarityItems]);
 
     const SUSPEND_ERROR_THRESHOLD = 3;
@@ -1495,10 +1468,16 @@ export default function TodoPage() {
         setHasHydratedTodoData(true);
     }, [todoDataReady]);
 
+    useEffect(() => {
+        if (!todoDataReady) return;
+        markCurrentRouteReady();
+    }, [markCurrentRouteReady, todoDataReady]);
+
     const showTodoLoader = !hasHydratedTodoData;
     const todoLoaderText = 'Preparing Todo...';
 
     if (showTodoLoader) {
+        if (isTransitionPendingForCurrentRoute) return null;
         return <FullScreenLoader text={todoLoaderText} />;
     }
 
@@ -1570,7 +1549,7 @@ export default function TodoPage() {
                 <div className="h-full w-full">
                     <TodoKanban
                         suspendedAnchors={suspendedAnchors}
-                        similarityGroups={groupedSimilarity}
+                        similarityGroups={similarityCards}
                         partTasks={partTasks}
                         surahTasks={surahTasks}
                         skippedSurahIds={settings.skippedSurahs || []}
