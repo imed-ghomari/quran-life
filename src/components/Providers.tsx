@@ -1,7 +1,7 @@
 
 "use client";
 
-import { createContext, useState, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
 import { SyncProvider } from "@/hooks/useSyncState";
 import OnboardingModal from "./OnboardingModal";
 import { ThemeProvider } from "./ThemeProvider";
@@ -28,6 +28,7 @@ export const AccessStateContext = createContext<AccessState>({
   hasPremiumAccess: false,
   isEditor: false,
 });
+const DeploymentVersionContext = createContext("");
 const SW_MIGRATION_KEY = "sw-migration-2026-03-14-v26-deploy-reset";
 const SW_MIGRATION_STORAGE_KEY = "sw:migrationKey";
 const SW_MIGRATION_SESSION_KEY = "sw:migrationSessionKey";
@@ -173,6 +174,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       isEditor: false,
     }
   ));
+  const [deploymentVersion, setDeploymentVersion] = useState(() => {
+    const envVersion = String(clientEnv.NEXT_PUBLIC_DEPLOYMENT_ID || "").trim();
+    return envVersion ? envVersion.slice(0, 12) : "";
+  });
   const [isAccessLoading, setIsAccessLoading] = useState(() => !cachedAccessState);
   const [hasLoadedAccessState, setHasLoadedAccessState] = useState(() => Boolean(cachedAccessState));
   const accessRequestSeqRef = useRef(0);
@@ -340,6 +345,30 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [isAuthLoading]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadDeploymentVersion = async () => {
+      try {
+        const response = await fetch(DEPLOYMENT_VERSION_ENDPOINT, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        const nextVersion = String(data?.version ?? "").trim();
+        if (!cancelled && nextVersion) {
+          setDeploymentVersion(nextVersion);
+        }
+      } catch {
+        // Best-effort debug metadata fetch.
+      }
+    };
+
+    void loadDeploymentVersion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const runServiceWorkerMigration = async () => {
       try {
         if (!navigator.onLine) return;
@@ -424,15 +453,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
             || (isOnline && (!hasLoadedAccessState || isAccessLoading)),
         }}
       >
-        <SyncProvider>
-          <ThemeProvider>
-            <ConfirmDialogProvider>
-              {children}
-              <OnboardingWrapper />
-            </ConfirmDialogProvider>
-          </ThemeProvider>
-        </SyncProvider>
+        <DeploymentVersionContext.Provider value={deploymentVersion}>
+          <SyncProvider>
+            <ThemeProvider>
+              <ConfirmDialogProvider>
+                {children}
+                <OnboardingWrapper />
+              </ConfirmDialogProvider>
+            </ThemeProvider>
+          </SyncProvider>
+        </DeploymentVersionContext.Provider>
       </AccessStateContext.Provider>
     </OnlineStatusContext.Provider>
   );
+}
+
+export function useDeploymentVersion() {
+  return useContext(DeploymentVersionContext);
 }

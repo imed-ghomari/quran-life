@@ -22,7 +22,7 @@ interface KanbanCardProps {
     onEditMindmap: (item: KanbanItem) => Promise<void> | void;
     onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
     onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
-    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem) => Promise<void> | void;
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
@@ -105,7 +105,7 @@ interface KanbanCardBodyProps {
     onEditMindmap: (item: KanbanItem) => Promise<void> | void;
     onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
     onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
-    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem) => Promise<void> | void;
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
@@ -164,31 +164,15 @@ const KanbanCardBody = memo(({
     const handleResetClick = useCallback(async () => {
         setMenuOpen(false);
 
-        const ok = await confirm({
-            title: 'Reset Mindmap',
-            message: 'Reset this mindmap to the original shared version? Your edits will be replaced.',
-            confirmLabel: 'Reset',
-            isDestructive: true,
-        });
-        if (!ok) return;
-
-        const resetMemoryNodes = await confirm({
-            title: 'Reset Memory Nodes?',
-            message: 'Also reset the memory nodes related to this mindmap? This will reset review progress for those nodes.',
-            confirmLabel: 'Reset Mindmap + Memory',
-            cancelLabel: 'Reset Mindmap Only',
-            isDestructive: true,
-        });
-
         setIsDeleting(true);
         try {
-            await onResetMindmap?.(item, resetMemoryNodes);
+            await onResetMindmap?.(item);
         } catch (e) {
             console.error("Reset failed", e);
         } finally {
             setIsDeleting(false);
         }
-    }, [confirm, item, onResetMindmap]);
+    }, [item, onResetMindmap]);
 
     const handleEditMindmap = useCallback(() => onEditMindmap(item), [item, onEditMindmap]);
     const handleExportMindmap = useCallback(() => onExportMindmap?.(item), [item, onExportMindmap]);

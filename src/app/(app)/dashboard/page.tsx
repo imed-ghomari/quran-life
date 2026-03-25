@@ -17,7 +17,8 @@ import {
     QuranPart,
     MemoryNode,
     AppSettings,
-    getNodeDueDate
+    getNodeDueDate,
+    hasNodeBeenReviewed
 } from '@/lib/types';
 import {
     CheckCircle,
@@ -218,34 +219,6 @@ function getLocalDayKeyNow() {
     return `${y}-${m}-${d}`;
 }
 
-function TodayPageLoadingShell({ text }: { text: string }) {
-    return (
-        <div className="content-wrapper tab-content">
-            <div className="today-header">
-                <h1 className="text-2xl font-bold">Today</h1>
-            </div>
-            <div className="today-grid" aria-busy="true">
-                <div className="card today-card today-card--review">
-                    <div
-                        className="today-card-content"
-                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Spinner size={30} text={text} />
-                    </div>
-                </div>
-                <div className="card today-card">
-                    <div
-                        className="today-card-content"
-                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Spinner size={24} text="Warming daily portion..." />
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 export default function TodayPage() {
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
@@ -376,6 +349,10 @@ export default function TodayPage() {
 
         if (reviewSortOrder === 'due_date') {
             return [...filteredDueNodes].sort((a, b) => {
+                const aReviewed = hasNodeBeenReviewed(a.scheduler);
+                const bReviewed = hasNodeBeenReviewed(b.scheduler);
+                if (aReviewed !== bReviewed) return aReviewed ? -1 : 1;
+
                 const aDue = getNodeDueDate(a);
                 const bDue = getNodeDueDate(b);
                 const aTime = aDue ? new Date(aDue).getTime() : 0;
@@ -2058,7 +2035,7 @@ export default function TodayPage() {
 
     if (!isLoaded) {
         const loadingText = isVersesLoaded ? 'Preparing today...' : 'Loading Quran text...';
-        return <TodayPageLoadingShell text={loadingText} />;
+        return <FullScreenLoader text={loadingText} />;
     }
 
     return (

@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Spinner from '@/components/ui/Spinner';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -126,6 +128,7 @@ const resolveSurahIdFromErrorNodeRef = (nodeRef: unknown): number | null => {
 };
 
 export default function StatisticsPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
     const { nodes: memoryNodes, isLoading: nodesLoading } = useSharedInstantNodes();
@@ -139,6 +142,11 @@ export default function StatisticsPage() {
 
     const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading || reviewLogsLoading || reviewErrorsLoading;
     const statisticsReady = !isLoading;
+
+    useEffect(() => {
+        if (!statisticsReady) return;
+        markCurrentRouteReady();
+    }, [markCurrentRouteReady, statisticsReady]);
 
     const activePart = settings?.activePart || ALL_QURAN_PART;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
@@ -491,8 +499,9 @@ export default function StatisticsPage() {
     const dailyPortionStats = useMemo(() => {
         if (!statisticsReady) {
             return {
-                total: activeUnskippedSurahs.length,
+                total: 0,
                 completions: 0,
+                completedToday: false,
                 segments: [] as StatSegment[],
             };
         }
@@ -501,30 +510,22 @@ export default function StatisticsPage() {
             ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
                 ? listeningProgressByPartId.get(LEGACY_ALL_QURAN_PART)
                 : undefined);
-        const progress = partProgress?.lastVerseIndex || 0;
+        const progress = Math.max(0, partProgress?.lastVerseIndex || 0);
         const cycles = partProgress?.cycles || 0;
+        const completedToday = Boolean(partProgress?.updatedAt && new Date(partProgress.updatedAt).toDateString() === new Date().toDateString());
 
         const surahsInPart = activeUnskippedSurahs;
-
-        const learnedVerseCount = progress;
-
-        // Calculate surah counts
-        let completedSurahs = 0;
-        let currentVerseTotal = 0;
-        surahsInPart.forEach(s => {
-            if (currentVerseTotal + s.verseCount <= learnedVerseCount) {
-                completedSurahs++;
-            }
-            currentVerseTotal += s.verseCount;
-        });
-        const remainingSurahs = Math.max(0, surahsInPart.length - completedSurahs);
+        const totalVerses = surahsInPart.reduce((sum, surah) => sum + surah.verseCount, 0);
+        const completedVerses = totalVerses > 0 ? Math.min(progress, totalVerses) : 0;
+        const remainingVerses = Math.max(0, totalVerses - completedVerses);
 
         return {
-            total: surahsInPart.length,
+            total: totalVerses,
             completions: cycles,
+            completedToday,
             segments: [
-                { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', description: 'Surahs remaining in current cycle' },
-                { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
+                { label: 'Remaining', count: remainingVerses, color: 'var(--chart-skipped)', description: 'Verses remaining in current cycle' },
+                { label: 'Completed', count: completedVerses, color: 'var(--chart-mastered)', description: 'Verses completed in current cycle' },
             ]
         };
     }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId, statisticsReady]);
@@ -1023,11 +1024,8 @@ export default function StatisticsPage() {
     }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs, statisticsReady]);
 
     if (!statisticsReady) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <Spinner size={32} text="Preparing statistics..." />
-            </div>
-        );
+        if (isTransitionPendingForCurrentRoute) return null;
+        return <FullScreenLoader text="Preparing statistics..." />;
     }
 
     return (
@@ -1097,9 +1095,12 @@ export default function StatisticsPage() {
                             icon={<Repeat size={20} />}
                             stats={dailyPortionStats}
                             headerSuffix={
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                     <Repeat size={14} />
                                     <span>{dailyPortionStats.completions} cycles</span>
+                                    {dailyPortionStats.completedToday ? (
+                                        <span style={{ color: 'var(--accent)' }}>Completed today</span>
+                                    ) : null}
                                 </div>
                             }
                         />

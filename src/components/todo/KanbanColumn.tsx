@@ -18,7 +18,7 @@ interface KanbanColumnProps {
     onEditMindmap: (item: KanbanItem) => Promise<void> | void;
     onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
     onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
-    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem) => Promise<void> | void;
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
