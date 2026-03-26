@@ -1418,7 +1418,7 @@ export default function SettingsPage() {
         <div style={{ display: 'grid', gap: '0.75rem' }}>
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                 gap: '0.75rem',
                 alignItems: 'stretch',
             }}>
@@ -1459,47 +1459,7 @@ export default function SettingsPage() {
                 >
                     Sign Out
                 </button>
-                <button
-                    className={`btn std-normal-btn account-action-btn ${hasPendingDeletionRequest ? 'btn-secondary' : 'std-normal-danger'}`}
-                    onClick={hasPendingDeletionRequest ? handleCancelDeletionRequest : handleDeleteAccount}
-                    disabled={!isOnline || isDeletingAccount || isCancellingDeletion || isDeleteFeedbackModalOpen}
-                    style={{
-                        width: '100%',
-                        minWidth: 0,
-                        padding: '0.85rem',
-                        borderRadius: '12px',
-                        fontFamily: 'inherit',
-                        fontWeight: 600,
-                        fontSize: '0.9rem',
-                        lineHeight: 1.2,
-                        textAlign: 'center',
-                        cursor: 'pointer'
-                    }}
-                >
-                    {hasPendingDeletionRequest
-                        ? (isCancellingDeletion ? 'Restoring renewal...' : 'Keep Account & Renewal')
-                        : (isDeletingAccount ? 'Stopping renewal...' : 'Delete & Stop Renewal')}
-                </button>
             </div>
-
-            {hasPendingDeletionRequest && (
-                <p style={{
-                    margin: 0,
-                    padding: '0.65rem 0.75rem',
-                    borderRadius: '10px',
-                    border: '1px solid color-mix(in srgb, var(--accent) 28%, var(--border))',
-                    background: 'color-mix(in srgb, var(--accent) 10%, var(--background))',
-                    color: 'var(--foreground-secondary)',
-                    fontSize: '0.82rem',
-                    lineHeight: 1.4
-                }}>
-                    Deletion request is active. Future subscription renewals are canceled.
-                    {accountDeletionDaysLabel
-                        ? ` ${accountDeletionDaysLabel} left until access ends.`
-                        : ''}
-                    {' '}Cancel before <strong>{accountDeletionWindowEnds}</strong> to keep your account.
-                </p>
-            )}
         </div>
     );
 
