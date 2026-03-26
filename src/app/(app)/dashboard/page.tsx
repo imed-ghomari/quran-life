@@ -7,8 +7,10 @@ import { useState, useEffect, useRef, useMemo, useCallback, useContext, startTra
 import { id } from '@instantdb/react';
 import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useAppShellTransition } from '@/components/AppShell';
 import Spinner from '@/components/ui/Spinner';
 import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { getDailyPortion } from '@/lib/dailyPortions';
 import {
     ALL_QURAN_PART,
     LEGACY_ALL_QURAN_PART,
@@ -16,7 +18,8 @@ import {
     QuranPart,
     MemoryNode,
     AppSettings,
-    getNodeDueDate
+    getNodeDueDate,
+    hasNodeBeenReviewed
 } from '@/lib/types';
 import {
     CheckCircle,
@@ -54,7 +57,8 @@ import {
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
-import { surahAyahToAbsolute, hasMutashabihForAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
+import { surahAyahToAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
+import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
@@ -216,35 +220,8 @@ function getLocalDayKeyNow() {
     return `${y}-${m}-${d}`;
 }
 
-function TodayPageLoadingShell({ text }: { text: string }) {
-    return (
-        <div className="content-wrapper tab-content">
-            <div className="today-header">
-                <h1 className="text-2xl font-bold">Today</h1>
-            </div>
-            <div className="today-grid" aria-busy="true">
-                <div className="card today-card today-card--review">
-                    <div
-                        className="today-card-content"
-                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Spinner size={30} text={text} />
-                    </div>
-                </div>
-                <div className="card today-card">
-                    <div
-                        className="today-card-content"
-                        style={{ minHeight: '18rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Spinner size={24} text="Warming daily portion..." />
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 export default function TodayPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
     const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
@@ -313,13 +290,9 @@ export default function TodayPage() {
         const entries = getMutashabihatForAbsolute(absoluteAyah, customMutashabihat);
         if (entries.length === 0) return false;
 
-        return entries.some((entry: any) => {
-            const decisionKey = `${absoluteAyah}-${entry.phraseId}`;
-            const phraseDecision = mutashabihatDecisionsMap.get(decisionKey);
-            if (!phraseDecision) return true;
-            if (phraseDecision.status === 'ignored') return false;
-            return !phraseDecision.confirmedAt;
-        });
+        return entries.some((entry: any) =>
+            !isSimilarityEntryResolved(mutashabihatDecisionsMap, absoluteAyah, entry, { sameSurahOnly: true })
+        );
     }, [mutashabihatDecisionsMap, customMutashabihat]);
 
     const suspendedVerseGroupKeys = useMemo(() => {
@@ -378,6 +351,10 @@ export default function TodayPage() {
 
         if (reviewSortOrder === 'due_date') {
             return [...filteredDueNodes].sort((a, b) => {
+                const aReviewed = hasNodeBeenReviewed(a.scheduler);
+                const bReviewed = hasNodeBeenReviewed(b.scheduler);
+                if (aReviewed !== bReviewed) return aReviewed ? -1 : 1;
+
                 const aDue = getNodeDueDate(a);
                 const bDue = getNodeDueDate(b);
                 const aTime = aDue ? new Date(aDue).getTime() : 0;
@@ -1131,52 +1108,16 @@ export default function TodayPage() {
         const totalVerses = allVersesInPart.length;
         if (totalVerses === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
-        const versesPerDay = Math.ceil(totalVerses / settings.completionDays);
-
         // Use InstantDB listening progress
         const partProgress = resolveActivePartProgress();
         const startIdx = partProgress?.lastVerseIndex || 0;
-        let endIdx = startIdx + versesPerDay;
 
-        // Intelligent Division: Merge short trailing surah segments
-        if (endIdx < totalVerses) {
-            const lastVerseInProposed = allVersesInPart[endIdx - 1];
-            const nextVerse = allVersesInPart[endIdx];
-            if (nextVerse && nextVerse.surahId === lastVerseInProposed.surahId) {
-                // Check how many are left in this surah
-                let i = endIdx;
-                let remainingCount = 0;
-                let remainingLength = 0;
-                while (i < totalVerses && allVersesInPart[i].surahId === lastVerseInProposed.surahId) {
-                    remainingCount++;
-                    remainingLength += (allVersesInPart[i]?.text || '').length;
-                    i++;
-                }
-                // If <= 5 verses or total text is short (< 400 chars)
-                if (remainingCount <= 5 || remainingLength < 400) {
-                    // Ignore surahs with very long verses (e.g. Baqarah 282)
-                    const surahVerses = allVersesInPart.filter(v => v.surahId === lastVerseInProposed.surahId);
-                    const hasVeryLongVerses = surahVerses.some(v => (v?.text || '').length > 600);
-
-                    if (!hasVeryLongVerses) {
-                        endIdx = i;
-                    }
-                }
-            }
-        }
-
-        let portion: Verse[];
-        if (endIdx <= totalVerses) {
-            portion = allVersesInPart.slice(startIdx, endIdx);
-        } else {
-            // Handle wrap-around
-            portion = [...allVersesInPart.slice(startIdx), ...allVersesInPart.slice(0, endIdx - totalVerses)];
-        }
+        const portionResult = getDailyPortion(allVersesInPart, startIdx, settings.completionDays);
 
         return {
-            portion,
+            portion: portionResult.portion,
             startVerseIndex: 0,
-            versesPerDay,
+            versesPerDay: portionResult.portion.length,
             totalVerses,
             lastUpdateAt: partProgress?.updatedAt
         };
@@ -1384,9 +1325,11 @@ export default function TodayPage() {
             node.type === 'mindmap' ? getSurah(resolvedSurahId || 0)?.arabicName :
                 `${getSurah(resolvedSurahId || 0)?.arabicName} (${node.startVerse}-${node.endVerse})`;
 
-        // Postpone by 1 day
+        // Postpone relative to now, not the existing due date.
+        // If a card is already overdue, adding a day to its stale due date can
+        // still leave it due today and require multiple taps to leave the queue.
         const scheduler = node.scheduler as any;
-        const due = new Date(scheduler.due || scheduler.dueDate || new Date());
+        const due = new Date();
         due.setDate(due.getDate() + 1);
 
         const afterNode = {
@@ -1708,18 +1651,31 @@ export default function TodayPage() {
         const endVerse = node.endVerse || 999;
         const verses = surahVerses.filter(v => v.ayahId >= startVerse && v.ayahId <= endVerse);
         const contextVerses: Verse[] = [];
+        const firstRevealedVerse = verses[0] || null;
+        const firstRevealedAbs = firstRevealedVerse ? surahAyahToAbsolute(firstRevealedVerse.surahId, firstRevealedVerse.ayahId) : null;
         let lookback = 1;
-        while (contextVerses.length < 2 || (contextVerses.length < 5 && hasMutashabihForAbsolute(surahAyahToAbsolute(surahId, startVerse - lookback + 1)))) {
+        while (true) {
             const candidate = verseLookupBySurahAyah.get(`${surahId}:${startVerse - lookback}`);
             if (!candidate) break;
             contextVerses.unshift(candidate);
-            const abs = surahAyahToAbsolute(candidate.surahId, candidate.ayahId);
-            if (!hasMutashabihForAbsolute(abs) && contextVerses.length >= 2) break;
+
+            const lastContextVerse = contextVerses[contextVerses.length - 1];
+            const lastContextAbs = lastContextVerse
+                ? surahAyahToAbsolute(lastContextVerse.surahId, lastContextVerse.ayahId)
+                : null;
+            const shouldKeepExpanding = (
+                (firstRevealedAbs !== null && isUnresolvedMutashabihatFailure(firstRevealedAbs))
+                || (lastContextAbs !== null && isUnresolvedMutashabihatFailure(lastContextAbs))
+            );
+
+            if (contextVerses.length >= 5) break;
+            if (contextVerses.length >= 2 && !shouldKeepExpanding) break;
+
             lookback++;
         }
 
         return { type: 'verse', surah, verses, contextVerses } as const;
-    }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah]);
+    }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah, isUnresolvedMutashabihatFailure]);
 
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;
@@ -2079,9 +2035,15 @@ export default function TodayPage() {
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
     const isReviewQueueHydrating = !hasHydratedReviewQueue;
 
+    useEffect(() => {
+        if (!isLoaded) return;
+        markCurrentRouteReady();
+    }, [isLoaded, markCurrentRouteReady]);
+
     if (!isLoaded) {
+        if (isTransitionPendingForCurrentRoute) return null;
         const loadingText = isVersesLoaded ? 'Preparing today...' : 'Loading Quran text...';
-        return <TodayPageLoadingShell text={loadingText} />;
+        return <FullScreenLoader text={loadingText} />;
     }
 
     return (

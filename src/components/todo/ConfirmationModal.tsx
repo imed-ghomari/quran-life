@@ -104,7 +104,7 @@ export default function ConfirmationModal({
 
                 {/* Body */}
                 <div className="confirm-dialog-body px-7 py-7 sm:px-8 sm:py-8">
-                    <p className="confirm-dialog-message text-[var(--foreground-secondary)] text-base sm:text-[1.02rem] leading-relaxed pt-1 pr-1">
+                    <p className="confirm-dialog-message whitespace-pre-line text-[var(--foreground-secondary)] text-base sm:text-[1.02rem] leading-relaxed pt-1 pr-1">
                         {message}
                     </p>
                     {children ? (

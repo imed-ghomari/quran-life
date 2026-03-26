@@ -18,13 +18,15 @@ interface KanbanColumnProps {
     onEditMindmap: (item: KanbanItem) => Promise<void> | void;
     onDeleteMindmap: (item: KanbanItem) => Promise<void> | void;
     onExportMindmap?: (item: KanbanItem) => Promise<void> | void;
-    onResetMindmap?: (item: KanbanItem, resetMemoryNodes: boolean) => Promise<void> | void;
+    onResetMindmap?: (item: KanbanItem) => Promise<void> | void;
     onChangeSplits: (item: KanbanItem) => Promise<void> | void;
     onViewVerseContext?: (item: KanbanItem) => Promise<void> | void;
     onViewSimilarityContext?: (item: KanbanItem) => Promise<void> | void;
+    onIgnoreSimilarity?: (item: KanbanItem) => Promise<void> | void;
     getHasMindmap: (item: KanbanItem) => boolean;
     getHasSplits: (item: KanbanItem) => boolean;
     getHasPremade?: (item: KanbanItem) => boolean;
+    getSettingsHref?: (item: KanbanItem) => string | undefined;
     getDocLink: (item: KanbanItem) => string | undefined;
     isItemVisible: (item: KanbanItem) => boolean;
     hasActiveVisibilityFilter: boolean;
@@ -54,9 +56,11 @@ const KanbanColumn = ({
     onChangeSplits,
     onViewVerseContext,
     onViewSimilarityContext,
+    onIgnoreSimilarity,
     getHasMindmap,
     getHasSplits,
     getHasPremade,
+    getSettingsHref,
     getDocLink,
     isItemVisible,
     hasActiveVisibilityFilter
@@ -125,11 +129,13 @@ const KanbanColumn = ({
                                 key={item.id}
                                 item={item}
                                 index={index}
+                                columnId={id}
                                 isMobile={isMobile}
                                 hasMindmap={getHasMindmap(item)}
                                 hasSplits={getHasSplits(item)}
                                 hasPremade={getHasPremade ? getHasPremade(item) : false}
                                 appMode={appMode}
+                                settingsHref={getSettingsHref ? getSettingsHref(item) : undefined}
                                 docLink={getDocLink(item)}
                                 onEditMindmap={onEditMindmap}
                                 onDeleteMindmap={onDeleteMindmap}
@@ -138,6 +144,7 @@ const KanbanColumn = ({
                                 onChangeSplits={onChangeSplits}
                                 onViewVerseContext={onViewVerseContext}
                                 onViewSimilarityContext={onViewSimilarityContext}
+                                onIgnoreSimilarity={onIgnoreSimilarity}
                             />
                         ))}
                         {provided.placeholder}

@@ -14,8 +14,16 @@ import SplitsModal from './SplitsModal';
 import { PenTool, Download, Search, X, Brain, Check, SplitSquareHorizontal, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { getSurah, SURAHS } from '@/lib/quranData';
 import { absoluteToSurahAyah, surahAyahToAbsolute } from '@/lib/mutashabihat';
+import {
+    buildMutashabihatDecisionKey,
+    getSimilarityEntryResolutionMeta,
+    getMatchingMutashabihatDecision,
+    hasSimilarityEntrySelectedStatus,
+    isMutashabihatDecisionResolved,
+} from '@/lib/mutashabihatResolution';
 import { PartMindMapId, MutashabihatDecision } from '@/lib/types';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { getSimilarityComparatorCardStyle, SimilarityComparatorStatusBadge } from '@/components/SimilarityComparatorStatus';
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'pending', label: 'Pending Review' },
@@ -23,6 +31,7 @@ const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'solved_mindmap', label: 'Solved by Mindmap' },
     { value: 'solved_note', label: 'Solved by Note' },
 ];
+const TODO_MUT_STATES = MUT_STATES.filter((state) => state.value !== 'ignored');
 
 // Helper to highlight logic
 function HighlightedVerse({ text, range }: { text: string; range?: [number, number] }) {
@@ -48,6 +57,7 @@ interface TodoKanbanProps {
     similarityGroups: any[];
     partTasks: any[];
     surahTasks: any[];
+    skippedSurahIds?: number[];
 
     // Data & State
     verses: any[];
@@ -61,7 +71,7 @@ interface TodoKanbanProps {
     onSurahComplete: (surahId: number, mindmap?: any, forceState?: boolean) => Promise<void> | void;
     onImportPremade: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     onExportPremade?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
-    onResetMindmap?: (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => Promise<void> | void;
+    onResetMindmap?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     onEditMindmap: (id: number, snapshot?: any, isPart?: boolean) => Promise<void> | void;
     onDeleteMindmap?: (type: 'surah' | 'part', id: number) => Promise<void> | void;
     appMode: 'owner' | 'user';
@@ -75,6 +85,7 @@ interface TodoKanbanProps {
     onRemoveBreak: (surahId: number, val: number) => void;
     onSaveAnchors: (surahId: number, verseCount: number) => void;
     hasReviewedChunks: (surahId: number) => boolean;
+    isSurahLearned?: (surahId: number) => boolean;
 
     // Persistence
     kanbanState?: Record<string, string[]>;
@@ -130,11 +141,6 @@ const getSuspendedIdentitySignature = (item: {
     return `${surahId}-${startVerse}-${endVerse}`;
 };
 
-const isMutashabihatDecisionResolved = (decision: any) => {
-    if (!decision) return false;
-    return decision.status === 'ignored' || decision.status === 'solved_mindmap' || decision.status === 'solved_note' || !!decision.confirmedAt;
-};
-
 const scheduleAfterNextPaint = (callback: () => void) => {
     if (typeof window === 'undefined') {
         callback();
@@ -151,6 +157,7 @@ export default function TodoKanban({
     similarityGroups,
     partTasks,
     surahTasks,
+    skippedSurahIds = [],
     verses,
     mindmaps,
     isDark,
@@ -172,6 +179,7 @@ export default function TodoKanban({
     onRemoveBreak,
     onSaveAnchors,
     hasReviewedChunks,
+    isSurahLearned,
     kanbanState,
     onKanbanStateChange,
     defaultFilter,
@@ -282,13 +290,13 @@ export default function TodoKanban({
         if (item.type === 'part') {
             const hasMap = !!(item.data.mindmap?.tldrawSnapshot || item.data.mindmap?.imageUrl || item.data.mindmap?.imageUrlDark);
             return [
-              
+
                 hasMap ? 'Part mindmap added to review' : 'You need to create a mindmap to complete this card.',
-              
+
             ].join('\n');
         }
 
-        
+
 
         const mindmap = item.data.mindmap;
         const hasMap = !!(mindmap?.tldrawSnapshot || mindmap?.imageUrl || mindmap?.imageUrlDark);
@@ -311,17 +319,17 @@ export default function TodoKanban({
         }
         if (hasMap && !hasSplits) {
             return [
-                
+
                 'Mindmap added to review.',
                 'Verses not yet added. Create splits.'
-                
+
             ].join('\n');
         }
-       
+
         return [
-           
+
             'Create a mindmap to complete this card.',
-            
+
         ].join('\n');
     }, [hasReviewedChunks]);
 
@@ -490,6 +498,11 @@ export default function TodoKanban({
 
     const normalizedSearchQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
     const hasActiveVisibilityFilter = filter !== 'all' || normalizedSearchQuery.length > 0;
+    const skippedSurahIdSet = useMemo(() => new Set(
+        skippedSurahIds
+            .map((surahId) => Number(surahId))
+            .filter((surahId) => Number.isFinite(surahId) && surahId > 0)
+    ), [skippedSurahIds]);
 
     const getItemSearchText = useCallback((item: KanbanItem) => {
         if (item.type === 'surah') return `${item.data.surah.id} ${item.data.surah.name} ${item.data.surah.arabicName || ''}`;
@@ -502,7 +515,8 @@ export default function TodoKanban({
             return `${surah?.name || ''} ${surah?.arabicName || ''} ${item.data.label}`;
         }
         if (item.type === 'similarity') {
-            return `${item.data.surah.name} ${item.data.surah.arabicName || ''} Similarity`;
+            const ayahLabel = Array.isArray(item.data.ayahIds) ? item.data.ayahIds.join(' ') : '';
+            return `${item.data.surah.name} ${item.data.surah.arabicName || ''} Similarity Ayah ${ayahLabel}`;
         }
         return '';
     }, []);
@@ -521,6 +535,49 @@ export default function TodoKanban({
 
         return true;
     }, [filter, getItemSearchText, normalizedSearchQuery]);
+
+    const getSimilarityEntryTargets = useCallback((group: any) => {
+        const targets: Array<{ absolute: number; entry: any }> = [];
+
+        group?.items?.forEach((simItem: any) => {
+            const absolute = Number(simItem?.err?.absoluteAyah);
+            if (!Number.isFinite(absolute)) return;
+
+            simItem?.muts?.forEach((entry: any) => {
+                if (!entry?.phraseId) return;
+                targets.push({ absolute, entry });
+            });
+        });
+
+        return targets;
+    }, []);
+
+    const isSimilarityCardReadyForCompletion = useCallback((group: any) => {
+        if (!mutashabihatDecisions) return false;
+
+        return getSimilarityEntryTargets(group).every(({ absolute, entry }) =>
+            hasSimilarityEntrySelectedStatus(mutashabihatDecisions, absolute, entry, { sameSurahOnly: true })
+        );
+    }, [getSimilarityEntryTargets, mutashabihatDecisions]);
+
+    const getSimilaritySettingsHref = useCallback((item: KanbanItem) => {
+        if (item.type !== 'similarity') return undefined;
+
+        const firstTarget = getSimilarityEntryTargets(item.data)[0];
+        if (!firstTarget) return '/settings?tab=tracking';
+
+        const matchedDecision = getMatchingMutashabihatDecision(
+            mutashabihatDecisions || [],
+            firstTarget.absolute,
+            firstTarget.entry,
+            undefined,
+            { sameSurahOnly: true }
+        );
+        const representativeAbs = matchedDecision?.absolute ?? firstTarget.absolute;
+        const decisionKey = buildMutashabihatDecisionKey(representativeAbs, firstTarget.entry.phraseId);
+
+        return `/settings?tab=tracking&mutSurah=${item.data?.surah?.id}&mutDecision=${encodeURIComponent(decisionKey)}`;
+    }, [getSimilarityEntryTargets, mutashabihatDecisions]);
 
     // Sync Props to Kanban State
     useEffect(() => {
@@ -553,7 +610,7 @@ export default function TodoKanban({
         });
 
         similarityGroups.forEach(group => {
-            const id = `similarity-${group.surah.id}`;
+            const id = group.id || `similarity-${group.surah.id}`;
             itemMap.set(id, { id, type: 'similarity', data: group, status: 'backlog' });
         });
 
@@ -568,59 +625,6 @@ export default function TodoKanban({
             const id = `surah-${item.surah.id}`;
             itemMap.set(id, { id, type: 'surah', data: item, status: isComplete ? 'complete' : 'backlog' });
         });
-
-        const showReviewDummies = process.env.NEXT_PUBLIC_SHOW_REVIEW_DUMMIES === 'true';
-
-        if (showReviewDummies && suspendedAnchors.length === 0) {
-            const dummyId = 'suspended-dummy-1';
-            itemMap.set(dummyId, {
-                id: dummyId,
-                type: 'suspended',
-                status: 'backlog',
-                data: {
-                    surahId: 1,
-                    anchorId: 'dummy-review-fix',
-                    label: 'Dummy review fix (dev)',
-                    startVerse: 1,
-                    endVerse: 7,
-                    isDummy: true
-                }
-            });
-        }
-
-        if (showReviewDummies && similarityGroups.length === 0) {
-            const dummyId = 'similarity-dummy-1';
-            const dummySurah = getSurah(1);
-            itemMap.set(dummyId, {
-                id: dummyId,
-                type: 'similarity',
-                status: 'backlog',
-                data: {
-                    surah: dummySurah || { id: 1, name: 'Al-Fatihah', arabicName: 'الفاتحة' },
-                    count: 1,
-                    isDummy: true,
-                    items: [
-                        {
-                            err: { absoluteAyah: 1 },
-                            muts: [
-                                {
-                                    phraseId: 'dummy-phrase-1',
-                                    meta: {
-                                        sourceAbs: 1,
-                                        sourceRange: [1, 3],
-                                        matches: [
-                                            { absolute: 1, wordRange: [1, 3] },
-                                            { absolute: 2, wordRange: [1, 2] }
-                                        ]
-                                    },
-                                    matches: [1, 2]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            });
-        }
 
         const newCols: Record<string, KanbanItem[]> = {
             'backlog': [],
@@ -661,7 +665,7 @@ export default function TodoKanban({
                 if (item.type === 'surah') return item.data.surah.id;
                 if (item.type === 'part') return item.data.part;
                 if (item.type === 'suspended') return item.data.surahId;
-                if (item.type === 'similarity') return item.data.surah.id;
+                if (item.type === 'similarity') return Number(item.data.originAbsolute) || item.data.surah.id;
                 return 999;
             };
             return items.sort((a, b) => {
@@ -690,16 +694,27 @@ export default function TodoKanban({
         };
 
         setColumns((prev) => {
-            // Keep completed maintenance cards visible when appropriate after they leave source datasets.
-            // Similarity cards stay pinned in Complete.
-            // Suspended cards stay pinned unless a new active suspended item supersedes them.
-            const retainedCompletedMaintenance = prev.complete.items.filter((item) => (
-                (item.type === 'similarity' || item.type === 'suspended')
+            // Keep similarity cards pinned in whichever column the user placed them,
+            // even when the live dataset temporarily no longer surfaces them.
+            COLUMN_ORDER.forEach((columnId) => {
+                prev[columnId].items
+                    .filter((item) => item.type === 'similarity' && !itemMap.has(item.id))
+                    .forEach((item) => {
+                        if (!newCols[columnId].some((existing) => existing.id === item.id)) {
+                            newCols[columnId].push({ ...item, status: columnId === 'complete' ? 'complete' : 'backlog' });
+                        }
+                    });
+            });
+
+            // Suspended cards only stay pinned in Complete unless a new active suspended item supersedes them.
+            const retainedCompletedSuspended = prev.complete.items.filter((item) => (
+                item.type === 'suspended'
+                && !skippedSurahIdSet.has(Number(item.data?.surahId))
                 && !itemMap.has(item.id)
                 && !isObsoleteRetainedSuspended(item)
             ));
 
-            retainedCompletedMaintenance.forEach((item) => {
+            retainedCompletedSuspended.forEach((item) => {
                 if (!newCols.complete.some((existing) => existing.id === item.id)) {
                     newCols.complete.push({ ...item, status: 'complete' });
                 }
@@ -712,33 +727,45 @@ export default function TodoKanban({
             };
         });
 
-    }, [suspendedAnchors, similarityGroups, partTasks, surahTasks, kanbanState, kanbanSortOrder]);
+    }, [suspendedAnchors, similarityGroups, partTasks, skippedSurahIdSet, surahTasks, kanbanState, kanbanSortOrder]);
 
     const handleCompletionTrigger = useCallback(async (item: KanbanItem, forceState?: boolean) => {
         if (item.type === 'suspended') {
-            if (item.data?.isDummy) return;
             const shouldUnsuspend = forceState !== false;
             await onFixConfirm(item.data.surahId, item.data.anchorId, shouldUnsuspend);
         } else if (item.type === 'similarity') {
-            if (item.data?.isDummy) return;
             const shouldResolve = forceState !== false;
             const group = item.data;
-            group.items.forEach((simItem: any) => {
-                simItem.muts.forEach((entry: any) => {
-                    onSimilarityDecision(
-                        simItem.err.absoluteAyah,
-                        shouldResolve ? 'solved_note' : 'pending',
+            await Promise.all(
+                getSimilarityEntryTargets(group).map(async ({ absolute, entry }) => {
+                    const matchedDecision = getMatchingMutashabihatDecision(
+                        mutashabihatDecisions || [],
+                        absolute,
+                        entry,
+                        undefined,
+                        { sameSurahOnly: true }
+                    );
+                    const representativeAbs = matchedDecision?.absolute ?? absolute;
+                    const selectedStatus = matchedDecision?.decision?.status;
+
+                    if (shouldResolve && (!selectedStatus || selectedStatus === 'pending')) {
+                        return;
+                    }
+
+                    await onSimilarityDecision(
+                        representativeAbs,
+                        (selectedStatus && selectedStatus !== 'pending') ? selectedStatus : 'pending',
                         entry.phraseId,
                         shouldResolve
                     );
-                });
-            });
+                })
+            );
         } else if (item.type === 'part') {
             await onPartComplete(item.data.part, forceState);
         } else if (item.type === 'surah') {
             await onSurahComplete(item.data.surah.id, item.data.mindmap, forceState);
         }
-    }, [onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
+    }, [getSimilarityEntryTargets, mutashabihatDecisions, onFixConfirm, onSimilarityDecision, onPartComplete, onSurahComplete]);
 
     const onDragStart = useCallback(() => {
         // Manually toggle classes to avoid re-render
@@ -751,14 +778,14 @@ export default function TodoKanban({
         // Manually toggle classes back
         if (containerRef.current) {
             containerRef.current.classList.add('snap-x', 'snap-mandatory');
-            
+
             // Snap to the nearest column after drop
             const { destination } = result;
             if (destination && isMobileRef.current) {
-                 const destCol = document.getElementById(destination.droppableId);
-                 if (destCol) {
-                     destCol.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
-                 }
+                const destCol = document.getElementById(destination.droppableId);
+                if (destCol) {
+                    destCol.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+                }
             }
         }
 
@@ -808,6 +835,19 @@ export default function TodoKanban({
             return;
         }
 
+        if (
+            destination.droppableId === 'complete'
+            && movedItem.type === 'similarity'
+            && !isSimilarityCardReadyForCompletion(movedItem.data)
+        ) {
+            addToast(
+                'similarity',
+                'Choose a status first',
+                'Select a similarity status before marking this card as resolved.'
+            );
+            return;
+        }
+
         const sourceItems = [...sourceCol.items];
         sourceItems.splice(actualSourceIndex, 1);
 
@@ -817,7 +857,7 @@ export default function TodoKanban({
                 if (item.type === 'surah') return item.data.surah.id;
                 if (item.type === 'part') return item.data.part;
                 if (item.type === 'suspended') return item.data.surahId;
-                if (item.type === 'similarity') return item.data.surah.id;
+                if (item.type === 'similarity') return Number(item.data.originAbsolute) || item.data.surah.id;
                 return 999;
             };
             return [...items].sort((a, b) => {
@@ -921,7 +961,7 @@ export default function TodoKanban({
         };
 
         scheduleAfterNextPaint(runPostDropSideEffects);
-    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, kanbanSortOrder, onKanbanStateChange, persistKanbanState]);
+    }, [addToast, filteredItem, getMaintenanceCardReviewInfo, getMindmapCompletionInfo, getMindmapRemovalInfo, handleCompletionTrigger, hasActiveVisibilityFilter, hasMindmapForItem, isSimilarityCardReadyForCompletion, kanbanSortOrder, onKanbanStateChange, persistKanbanState]);
 
     // Card Action Handlers
     const handleCardEditMindmap = useCallback(async (item: KanbanItem) => {
@@ -955,12 +995,12 @@ export default function TodoKanban({
         }
     }, [onExportPremade]);
 
-    const handleCardResetMindmap = useCallback(async (item: KanbanItem, resetMemoryNodes: boolean) => {
+    const handleCardResetMindmap = useCallback(async (item: KanbanItem) => {
         if (!onResetMindmap) return;
         if (item.type === 'surah') {
-            await onResetMindmap('surah', item.data.surah.id, { resetMemoryNodes });
+            await onResetMindmap('surah', item.data.surah.id);
         } else if (item.type === 'part') {
-            await onResetMindmap('part', item.data.part, { resetMemoryNodes });
+            await onResetMindmap('part', item.data.part);
         }
     }, [onResetMindmap]);
 
@@ -975,11 +1015,7 @@ export default function TodoKanban({
         setVerseContextItem(item);
     }, []);
 
-    const handleCardViewSimilarityContext = useCallback((item: KanbanItem) => {
-        if (item.type !== 'similarity') return;
-        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
-
-        const group = item.data;
+    const buildPrimarySimilarityContext = useCallback((group: any) => {
         const sourceMap: Record<string, {
             phraseId: string;
             phraseIds: string[];
@@ -1022,10 +1058,13 @@ export default function TodoKanban({
                     current.phraseAbsRefs[entry.phraseId].push(abs);
                 }
 
-                if (!current.absRefs.includes(abs)) {
-                    current.absRefs.push(abs);
+                if (sourceRef && sourceRef.surahId === group.surah.id) {
+                    current.absRefs = [sourceAbs];
+                    current.ayahIds = [sourceRef.ayahId];
+                } else if (current.absRefs.length === 0 || abs < current.absRefs[0]) {
+                    current.absRefs = [abs];
                     const ref = absoluteToSurahAyah(abs);
-                    current.ayahIds.push(ref.ayahId);
+                    current.ayahIds = [ref.ayahId];
                 }
             });
         });
@@ -1160,14 +1199,15 @@ export default function TodoKanban({
             acc.push(candidate);
             return acc;
         }, []).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
-        if (groups.length === 0) return;
+        if (groups.length === 0) return null;
 
         const selected = groups[0];
+        const decisions = mutashabihatDecisions || [];
         const resolutionTargets = selected.phraseIds.map((phraseId) => {
             const phraseAbsRefs = selected.phraseAbsRefs[phraseId] || selected.absRefs;
             const targetAbs = phraseAbsRefs.find((abs) => {
                 const key = `${abs}-${phraseId}`;
-                const existing = mutashabihatDecisions.find(d => d.phraseId === key);
+                const existing = decisions.find(d => d.phraseId === key);
                 return isMutashabihatDecisionResolved(existing);
             }) || phraseAbsRefs[0];
             return {
@@ -1179,12 +1219,12 @@ export default function TodoKanban({
 
         const firstResolvedTarget = resolutionTargets.find(target =>
             isMutashabihatDecisionResolved(
-                mutashabihatDecisions.find(d => d.phraseId === target.decisionKey)
+                decisions.find(d => d.phraseId === target.decisionKey)
             )
         );
         const primaryTarget = firstResolvedTarget || resolutionTargets[0];
 
-        setActiveSimilarityContext({
+        return {
             decisionKey: primaryTarget.decisionKey,
             representativeAbs: primaryTarget.representativeAbs,
             group: {
@@ -1197,8 +1237,51 @@ export default function TodoKanban({
                 resolutionTargets,
             },
             surah: group.surah
+        };
+    }, [mutashabihatDecisions]);
+
+    const handleCardViewSimilarityContext = useCallback((item: KanbanItem) => {
+        if (item.type !== 'similarity') return;
+        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
+
+        const context = buildPrimarySimilarityContext(item.data);
+        if (!context) return;
+        setActiveSimilarityContext(context);
+    }, [buildPrimarySimilarityContext, mutashabihatDecisions, onMutashabihatDecisionUpdate]);
+
+    const handleCardIgnoreSimilarity = useCallback((item: KanbanItem) => {
+        if (item.type !== 'similarity') return;
+        if (!mutashabihatDecisions || !onMutashabihatDecisionUpdate) return;
+
+        const allTargets = new Map<string, { representativeAbs: number; decisionKey: string; existing: any }>();
+
+        getSimilarityEntryTargets(item.data).forEach(({ absolute, entry }) => {
+            const matchedDecision = getMatchingMutashabihatDecision(
+                mutashabihatDecisions,
+                absolute,
+                entry,
+                undefined,
+                { sameSurahOnly: true }
+            );
+            const representativeAbs = matchedDecision?.absolute ?? absolute;
+            const decisionKey = buildMutashabihatDecisionKey(representativeAbs, entry.phraseId);
+            allTargets.set(decisionKey, {
+                representativeAbs,
+                decisionKey,
+                existing: matchedDecision?.decision
+                    || mutashabihatDecisions.find((decision) => decision.phraseId === decisionKey)
+                    || { status: 'pending', notes: '' },
+            });
         });
-    }, [mutashabihatDecisions, onMutashabihatDecisionUpdate]);
+
+        allTargets.forEach((target) => {
+            onMutashabihatDecisionUpdate(
+                target.representativeAbs,
+                { ...target.existing, status: 'ignored', confirmedAt: undefined },
+                target.decisionKey
+            );
+        });
+    }, [getSimilarityEntryTargets, mutashabihatDecisions, onMutashabihatDecisionUpdate]);
 
     const openMindmapForSurah = useCallback(async (surahId: number) => {
         await onEditMindmap(surahId, mindmaps[surahId]?.tldrawSnapshot, false);
@@ -1420,6 +1503,7 @@ export default function TodoKanban({
                                     onRemoveBreak={(val) => onRemoveBreak(id, val)}
                                     onSave={() => onSaveAnchors(id, data.surah.verseCount)}
                                     hasReviewedHistory={hasReviewedChunks(id)}
+                                    hasSuspendedCards={suspendedAnchors.some((item) => item.surahId === id)}
                                 />
                             ) : (
                                 <div className="h-[500px]">
@@ -1434,6 +1518,7 @@ export default function TodoKanban({
                                         onRemoveBreak={(val) => onRemoveBreak(id, val)}
                                         onSave={() => onSaveAnchors(id, data.surah.verseCount)}
                                         hasReviewedHistory={hasReviewedChunks(id)}
+                                        hasSuspendedCards={suspendedAnchors.some((item) => item.surahId === id)}
                                     />
                                 </div>
                             )}
@@ -1494,21 +1579,21 @@ export default function TodoKanban({
                 {/* Right Side: Search + Filters */}
                 <div className={`${isMobile ? 'flex flex-col gap-2 w-full' : 'flex items-center gap-3'}`}>
                     {/* Search Bar - Styled like DocsSearch */}
-                    <div 
+                    <div
                         className={`docs-search-trigger ${isMobile ? '!w-full !h-9 !justify-start !px-2' : ''} todo-search-bar !border-transparent`}
                         onClick={() => searchInputRef.current?.focus()}
                         style={!isMobile ? { cursor: 'text' } : undefined}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
                             <Search className="docs-search-icon" size={14} />
-                            <input 
+                            <input
                                 ref={searchInputRef}
                                 type="text"
                                 placeholder="Search..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full !bg-transparent !border-none !outline-none !ring-0 !focus:ring-0 !focus:outline-none placeholder:text-[var(--foreground-secondary)] text-[var(--foreground)] !p-0 !m-0 !shadow-none !rounded-none"
-                                style={{ 
+                                style={{
                                     padding: 0,
                                     fontSize: '0.75rem',
                                     height: 'auto',
@@ -1545,22 +1630,22 @@ export default function TodoKanban({
                     </div>
                 </div>
             </div>
-            
-            <DragDropContext 
-                onDragEnd={onDragEnd} 
+
+            <DragDropContext
+                onDragEnd={onDragEnd}
                 onDragStart={onDragStart}
                 sensors={[useMouseSensor, useKeyboardSensor, useCustomTouchSensor]}
                 enableDefaultSensors={false}
             >
-                <div 
+                <div
                     ref={containerRef}
                     style={{ position: 'relative' }}
                     className={`
                         flex-1 min-h-0 px-3 pb-2 md:px-0
                         ${isMobile
-                    ? `flex flex-col gap-4 !mt-2 overflow-hidden` 
-                    : 'grid grid-cols-3 gap-6 !mt-4 !grid-rows-[minmax(0,1fr)]'
-                }
+                            ? `flex flex-col gap-4 !mt-2 overflow-hidden`
+                            : 'grid grid-cols-3 gap-6 !mt-4 !grid-rows-[minmax(0,1fr)]'
+                        }
                     `}
                 >
                     {COLUMN_ORDER.map((columnId) => {
@@ -1568,29 +1653,31 @@ export default function TodoKanban({
                         if (!col) return null;
 
                         return (
-                        <KanbanColumn
-                            key={col.id}
-                            id={col.id}
-                            title={col.title}
-                            items={col.items}
-                            isMobile={isMobile}
-                            isTablet={isTablet}
-                            appMode={appMode}
-                            onCardClick={handleCardClick}
-                            onEditMindmap={handleCardEditMindmap}
-                            onDeleteMindmap={handleCardDeleteMindmap}
-                            onExportMindmap={handleCardExportMindmap}
-                            onResetMindmap={handleCardResetMindmap}
-                            onChangeSplits={handleCardChangeSplits}
-                            onViewVerseContext={handleCardViewVerseContext}
-                            onViewSimilarityContext={handleCardViewSimilarityContext}
-                            getHasMindmap={getHasMindmap}
-                            getHasSplits={getHasSplits}
-                            getHasPremade={getHasPremadeForItem}
-                            getDocLink={getDocLink}
-                            isItemVisible={filteredItem}
-                            hasActiveVisibilityFilter={hasActiveVisibilityFilter}
-                        />
+                            <KanbanColumn
+                                key={col.id}
+                                id={col.id}
+                                title={col.title}
+                                items={col.items}
+                                isMobile={isMobile}
+                                isTablet={isTablet}
+                                appMode={appMode}
+                                onCardClick={handleCardClick}
+                                onEditMindmap={handleCardEditMindmap}
+                                onDeleteMindmap={handleCardDeleteMindmap}
+                                onExportMindmap={handleCardExportMindmap}
+                                onResetMindmap={handleCardResetMindmap}
+                                onChangeSplits={handleCardChangeSplits}
+                                onViewVerseContext={handleCardViewVerseContext}
+                                onViewSimilarityContext={handleCardViewSimilarityContext}
+                                onIgnoreSimilarity={handleCardIgnoreSimilarity}
+                                getHasMindmap={getHasMindmap}
+                                getHasSplits={getHasSplits}
+                                getHasPremade={getHasPremadeForItem}
+                                getSettingsHref={getSimilaritySettingsHref}
+                                getDocLink={getDocLink}
+                                isItemVisible={filteredItem}
+                                hasActiveVisibilityFilter={hasActiveVisibilityFilter}
+                            />
                         );
                     })}
                 </div>
@@ -1621,6 +1708,7 @@ export default function TodoKanban({
                     onRemoveBreak={(val) => onRemoveBreak(splitsData.surahId, val)}
                     onSave={() => onSaveAnchors(splitsData.surahId, splitsData.verseCount)}
                     hasReviewedHistory={hasReviewedChunks(splitsData.surahId)}
+                    hasSuspendedCards={suspendedAnchors.some((item) => item.surahId === splitsData.surahId)}
                 />
             )}
 
@@ -1771,7 +1859,9 @@ export default function TodoKanban({
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
                 const { decisionKey, group, surah } = activeSimilarityContext;
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
-                const existingStatus = existing.status === 'pending' && !!existing.confirmedAt
+                const existingStatus = existing.status === 'ignored'
+                    ? 'pending'
+                    : existing.status === 'pending' && !!existing.confirmedAt
                     ? 'solved_note'
                     : existing.status;
                 const existingNotes = (existing as any).notes ?? (existing as any).note ?? '';
@@ -1795,19 +1885,82 @@ export default function TodoKanban({
                     });
                 });
 
+                const comparatorResolutionMetaByAbs = new Map<number, ReturnType<typeof getSimilarityEntryResolutionMeta>>();
+                const getComparatorResolutionMeta = (matchAbs: number) => {
+                    if (comparatorResolutionMetaByAbs.has(matchAbs)) {
+                        return comparatorResolutionMetaByAbs.get(matchAbs)!;
+                    }
+
+                    const resolutionMeta = group.entries.reduce<ReturnType<typeof getSimilarityEntryResolutionMeta> | null>((resolvedMeta, entry: any) => {
+                        if (resolvedMeta?.resolved) return resolvedMeta;
+                        const entryMatches = Array.isArray(entry?.matches) ? entry.matches : [];
+                        if (!entryMatches.includes(matchAbs)) return resolvedMeta;
+                        const localResolutionAbsolute = [
+                            Number(entry?.meta?.sourceAbs),
+                            ...entryMatches,
+                        ].find((absRef) => Number.isFinite(absRef) && group.absRefs.includes(absRef));
+                        const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                            ? localResolutionAbsolute
+                            : group.absRefs[0];
+                        return getSimilarityEntryResolutionMeta(
+                            mutashabihatDecisions,
+                            resolutionAbsolute,
+                            entry,
+                            { sameSurahOnly: true }
+                        );
+                    }, null) ?? { resolved: false, ignored: false, decision: undefined, absolute: null };
+
+                    comparatorResolutionMetaByAbs.set(matchAbs, resolutionMeta);
+                    return resolutionMeta;
+                };
+
+                const isComparatorResolved = (matchAbs: number) => {
+                    const matchRef = absoluteToSurahAyah(matchAbs);
+                    const isLearned = isSurahLearned ? isSurahLearned(matchRef.surahId) : false;
+                    const resolutionMeta = getComparatorResolutionMeta(matchAbs);
+                    return resolutionMeta.resolved && (isLearned || resolutionMeta.ignored);
+                };
+
                 const matches = Array.from(new Set(group.entries.flatMap((entry: any) => entry?.matches || [])))
-                    .filter((matchAbs: number) => {
-                        if (group.absRefs.includes(matchAbs)) return false;
-                        const matchRef = absoluteToSurahAyah(matchAbs);
-                        return matchRef.surahId !== group.surahId;
+                    .filter((matchAbs: number) => !group.absRefs.includes(matchAbs))
+                    .sort((a, b) => {
+                        const aRef = absoluteToSurahAyah(a);
+                        const bRef = absoluteToSurahAyah(b);
+                        const aLearned = isSurahLearned ? isSurahLearned(aRef.surahId) : false;
+                        const bLearned = isSurahLearned ? isSurahLearned(bRef.surahId) : false;
+
+                        if (aLearned !== bLearned) {
+                            return aLearned ? -1 : 1;
+                        }
+
+                        const aResolved = isComparatorResolved(a);
+                        const bResolved = isComparatorResolved(b);
+
+                        if (aResolved !== bResolved) {
+                            return aResolved ? 1 : -1;
+                        }
+
+                        return a - b;
                     });
                 const isExpanded = expandedSimilarityMatches[`${decisionKey}-full`] || false;
                 const displayedMatches = isExpanded ? matches : matches.slice(0, 4);
                 const hasMore = matches.length > 4;
                 const applyDecisionToGroup = (updater: (targetExisting: any) => any) => {
                     group.resolutionTargets.forEach((target) => {
+                        const targetRef = absoluteToSurahAyah(target.representativeAbs);
+                        const isLearned = isSurahLearned ? isSurahLearned(targetRef.surahId) : false;
                         const targetExisting = mutashabihatDecisions.find(d => d.phraseId === target.decisionKey) || { status: 'pending', notes: '' };
-                        onMutashabihatDecisionUpdate(target.representativeAbs, updater(targetExisting), target.decisionKey);
+                        const updated = updater(targetExisting);
+
+                        const isTryingToConfirm = !!updated.confirmedAt && !targetExisting.confirmedAt;
+                        const isAllowedToConfirm = isLearned || updated.status === 'ignored';
+
+                        if (isTryingToConfirm && !isAllowedToConfirm) {
+                            const { confirmedAt, ...rest } = updated;
+                            onMutashabihatDecisionUpdate(target.representativeAbs, rest, target.decisionKey);
+                        } else {
+                            onMutashabihatDecisionUpdate(target.representativeAbs, updated, target.decisionKey);
+                        }
                     });
                 };
 
@@ -1822,7 +1975,7 @@ export default function TodoKanban({
                                     className="maturity-select"
                                     style={{ width: '100%', padding: '8px' }}
                                 >
-                                    {MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    {TODO_MUT_STATES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -1944,10 +2097,20 @@ export default function TodoKanban({
                                                         const mVerse = verseLookupBySurahAyah.get(`${mref.surahId}:${mref.ayahId}`);
                                                         const matchRange = matchRangeByAbs.get(displayedMatchAbs);
 
+                                                        const isLearned = isSurahLearned ? isSurahLearned(mref.surahId) : false;
+                                                        const resolutionMeta = getComparatorResolutionMeta(matchAbs);
+                                                        const showResolvedState = resolutionMeta.resolved && (isLearned || resolutionMeta.ignored);
+                                                        const comparatorCardStyle = getSimilarityComparatorCardStyle(isLearned, showResolvedState);
+
                                                         return (
-                                                            <div key={idx} className="mut-match-item mut-compare-card todo-context-row" style={{ marginBottom: '0.85rem' }}>
-                                                                <div className="mut-match-label mut-compare-label">
-                                                                    Compare: Surah {msurah?.name} - {mref.ayahId}
+                                                            <div
+                                                                key={idx}
+                                                                className="mut-match-item mut-compare-card todo-context-row"
+                                                                style={{ marginBottom: '0.85rem', ...comparatorCardStyle }}
+                                                            >
+                                                                <div className="mut-match-label mut-compare-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span>Compare: Surah {msurah?.name} - {mref.ayahId}</span>
+                                                                    <SimilarityComparatorStatusBadge isLearned={isLearned} isResolved={showResolvedState} />
                                                                 </div>
                                                                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', direction: 'ltr', gap: '0.4rem', marginBottom: '0.75rem' }}>
                                                                     <button

@@ -50,8 +50,9 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
 - The app now groups repeated cases so the user sees cleaner, non-duplicate items.
 
 - Grouping rules:
-  - If cases belong to the same surah and point to the same verse area, they are merged.
-  - If two cases in the same verse overlap strongly and point to the same outside comparator set, they are merged.
+  - Each grouped case keeps one originator verse.
+  - Other verses in the same surah are treated as comparators, not extra originators.
+  - If two cases in the same verse overlap strongly and point to the same outside comparator set, they may still be merged into one case.
   - A verse can still appear in more than one case when it truly has different similarity patterns (we do not force unrelated cases into one).
 
 - Important counting behavior:
@@ -87,6 +88,10 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - If a suspended group is acknowledged (moved to Complete) and then the same group fails again (3+ errors), it is automatically treated as active work again and re-enters **Backlog**.
   - Suspended groups are matched against the **current** saved splits/anchors. If splits change and an old suspended range no longer exists, that old suspended card is removed from Todo immediately.
   - If `anchorId/groupKey` changes for what is effectively the same suspended range, the old completed suspended card is considered obsolete and removed from Todo to avoid duplicate-looking cards.
+
+- Review queue sorting:
+  - **Due Date** sorting prioritizes cards that have already been reviewed at least once.
+  - New cards are shown after reviewed cards, with due date still used inside each group.
 
 - Why this design:
   - Users first build basic review familiarity, then similarity warnings appear when they are actionable.

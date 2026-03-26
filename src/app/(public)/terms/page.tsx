@@ -67,6 +67,7 @@ export default function TermsPage() {
               <li>Billing is handled by our payment processor. We do not store your full payment details.</li>
               <li>If a free trial is offered, your subscription will automatically convert to a paid plan when the trial ends unless you cancel beforehand.</li>
               <li>You can cancel your subscription at any time to stop future renewals.</li>
+              <li>After cancellation, your subscription remains active until the end of the current billing period, and your user data will be deleted within one month after the subscription ends.</li>
               <li>Refund requests must be submitted within 14 days of your initial purchase or most recent renewal.</li>
               <li>We do not offer prorated refunds for partial billing periods.</li>
             </ul>
@@ -146,7 +147,7 @@ export default function TermsPage() {
             <ul>
               <li>If you request account deletion, your subscription renewal is canceled and your account remains recoverable until the end of your current billing period.</li>
               <li>Before that billing-period end date, you can sign back in and cancel the deletion request from Settings.</li>
-              <li>After that period ends, we may permanently delete retained account data.</li>
+              <li>After that period ends, we will delete retained account data within one month.</li>
             </ul>
           </section>
 

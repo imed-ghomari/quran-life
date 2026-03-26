@@ -11,6 +11,9 @@ import Spinner from '@/components/ui/Spinner';
 import { getSurah } from '@/lib/quranData';
 import 'tldraw/tldraw.css';
 
+const templateSnapshotCache = new Map<string, any | null>();
+const templateSnapshotPromiseCache = new Map<string, Promise<any | null>>();
+
 const applyMindmapStrokeSizes = (strokeSizes: any) => {
     if (!strokeSizes) return;
     // Keep renderer stroke widths aligned with MindmapEditor custom tuning.
@@ -101,6 +104,50 @@ const hasRenderableShapes = (value: any | null): boolean => {
     return Object.keys(value.store).some((key) => key.startsWith('shape:'));
 };
 
+const loadTemplateSnapshot = async (templateUrl: string) => {
+    if (templateSnapshotCache.has(templateUrl)) {
+        return templateSnapshotCache.get(templateUrl) ?? null;
+    }
+
+    const cachedPromise = templateSnapshotPromiseCache.get(templateUrl);
+    if (cachedPromise) {
+        return cachedPromise;
+    }
+
+    const request = fetch(templateUrl)
+        .then(async (res) => {
+            if (!res.ok) {
+                if (res.status === 404) {
+                    templateSnapshotCache.set(templateUrl, null);
+                    return null;
+                }
+                throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
+            }
+
+            const text = await res.text();
+            if (!text) {
+                templateSnapshotCache.set(templateUrl, null);
+                return null;
+            }
+
+            try {
+                const parsed = JSON.parse(text);
+                templateSnapshotCache.set(templateUrl, parsed);
+                return parsed;
+            } catch (parseError) {
+                console.warn('Could not parse mindmap template JSON:', parseError);
+                templateSnapshotCache.set(templateUrl, null);
+                return null;
+            }
+        })
+        .finally(() => {
+            templateSnapshotPromiseCache.delete(templateUrl);
+        });
+
+    templateSnapshotPromiseCache.set(templateUrl, request);
+    return request;
+};
+
 export default function MindmapViewer({
     snapshot,
     templateUrl,
@@ -168,37 +215,43 @@ export default function MindmapViewer({
     }, [editor, isDark]);
 
     useEffect(() => {
-        if (templateUrl) {
-            setIsLoading(true);
-            fetch(templateUrl)
-                .then(res => {
-                    if (!res.ok) {
-                        // If 404, just return null so we stop loading
-                        if (res.status === 404) {
-                            return null;
-                        }
-                        throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
-                    }
-                    return res.text();
-                })
-                .then(text => {
-                    if (!text) {
-                        setIsLoading(false);
-                        return;
-                    }
-                    try {
-                        const parsed = JSON.parse(text);
-                        setFetchedSnapshot(parsed);
-                    } catch (parseError) {
-                        console.warn('Could not parse mindmap template JSON:', parseError);
-                    }
-                    setIsLoading(false);
-                })
-                .catch(err => {
-                    console.warn('Could not load mindmap template:', err.message);
-                    setIsLoading(false);
-                });
+        let isCancelled = false;
+
+        if (!templateUrl) {
+            setFetchedSnapshot(null);
+            setIsLoading(false);
+            return () => {
+                isCancelled = true;
+            };
         }
+
+        const cachedSnapshot = templateSnapshotCache.get(templateUrl);
+        if (cachedSnapshot !== undefined) {
+            setFetchedSnapshot(cachedSnapshot);
+            setIsLoading(false);
+            return () => {
+                isCancelled = true;
+            };
+        }
+
+        setFetchedSnapshot(null);
+        setIsLoading(true);
+        void loadTemplateSnapshot(templateUrl)
+            .then((snapshot) => {
+                if (isCancelled) return;
+                setFetchedSnapshot(snapshot);
+                setIsLoading(false);
+            })
+            .catch((err) => {
+                if (isCancelled) return;
+                console.warn('Could not load mindmap template:', err.message);
+                setFetchedSnapshot(null);
+                setIsLoading(false);
+            });
+
+        return () => {
+            isCancelled = true;
+        };
     }, [templateUrl]);
 
     useEffect(() => {

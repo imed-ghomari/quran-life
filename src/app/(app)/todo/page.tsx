@@ -8,6 +8,7 @@ import {
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
+import { useAppShellTransition } from '@/components/AppShell';
 import { SURAHS, getSurah, getQuranVerses } from '@/lib/quranData';
 import {
     ALL_QURAN_PART,
@@ -23,12 +24,20 @@ import {
 } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
+import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes, getVerseGroupKey } from '@/lib/reviewQueue';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
+import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { appLogger } from '@/lib/logger';
 import { AccessStateContext } from '@/components/Providers';
+import { db } from '@/lib/instant';
+import { isUuid, resolveEntityId, stableEntityId } from '@/lib/instantIds';
+import { transactWithRetry } from '@/lib/instantTransact';
+import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
@@ -38,9 +47,47 @@ import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
 const TodoKanban = dynamic(() => import('@/components/todo/TodoKanban'), { ssr: false });
+const PREMADE_IMPORT_WRITE_BATCH_SIZE = 12;
 
 const stableNodeId = (...parts: Array<string | number>) =>
     parts.map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_')).join('__');
+
+type PremadeImportData = {
+    type: 'surah' | 'part';
+    id: number;
+    snapshot: any;
+    importedAnchors: any[];
+    importedAt: string;
+};
+
+const normalizeSnapshotForCompare = (snapshot: unknown) =>
+    JSON.stringify(sanitizeMindmapSnapshot(snapshot) ?? null);
+
+const normalizeAnchorRangesForCompare = (anchors: Array<{ startVerse?: unknown; endVerse?: unknown }> | undefined) => (
+    (anchors || [])
+        .map((anchor) => {
+            const startVerse = Number(anchor?.startVerse);
+            const endVerse = Number(anchor?.endVerse);
+            if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return null;
+            return `${startVerse}-${endVerse}`;
+        })
+        .filter((range): range is string => !!range)
+        .sort((a, b) => {
+            const [aStart, aEnd] = a.split('-').map(Number);
+            const [bStart, bEnd] = b.split('-').map(Number);
+            if (aStart !== bStart) return aStart - bStart;
+            return aEnd - bEnd;
+        })
+);
+
+const areOrderedStringListsEqual = (left: string[], right: string[]) => (
+    left.length === right.length && left.every((value, index) => value === right[index])
+);
+
+const formatResetSummary = (items: string[]) => {
+    if (items.length === 0) return 'No review progress will reset.';
+    return items.map((item) => `• ${item}`).join('\n');
+};
 
 const getVerseSegmentSurahId = (node: MemoryNode): number | null => {
     if (node.type !== 'verse_segment') return null;
@@ -96,6 +143,25 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
     return 0;
 };
 
+const memoryNodeLogicalKey = (node: MemoryNode) => {
+    if (node.type === 'mindmap') {
+        return stableEntityId('memory_node', 'mindmap', getMindmapSurahId(node) ?? 'na');
+    }
+    if (node.type === 'part_mindmap') {
+        return stableEntityId('memory_node', 'part_mindmap', getPartMindmapPartId(node) ?? 'na');
+    }
+    if (node.type === 'verse_segment') {
+        return stableEntityId(
+            'memory_node',
+            'verse_segment',
+            getVerseSegmentSurahId(node) ?? 'na',
+            node.startVerse ?? 'na',
+            node.endVerse ?? 'na'
+        );
+    }
+    return stableEntityId('memory_node', 'id', node.id);
+};
+
 /**
  * TodoPage Component
  * 
@@ -108,7 +174,9 @@ const getMindmapFreshnessScore = (mindmap: any): number => {
  * 5. Anchor building logic for defining verse ranges.
  */
 export default function TodoPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     // -- 1. Data Hooks: Syncing with InstantDB --
+    const { user } = db.useAuth();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
     const queueSettingsUpdate = useCallback((update: Partial<AppSettings>) => {
@@ -130,7 +198,7 @@ export default function TodoPage() {
     const autoImportInFlightRef = useRef(false);
     const [isAutoImportingPremades, setIsAutoImportingPremades] = useState(false);
     const [hasHydratedTodoData, setHasHydratedTodoData] = useState(false);
-    const { alert } = useConfirmDialog();
+    const { alert, confirm } = useConfirmDialog();
 
     const runInBatches = useCallback(async <T,>(items: T[], batchSize: number, worker: (item: T) => Promise<unknown>) => {
         for (let i = 0; i < items.length; i += batchSize) {
@@ -349,17 +417,6 @@ export default function TodoPage() {
     // -- 4. Task Aggregation --
     const activePart = settings.activePart;
 
-    // Filter Surahs based on the user's active part setting
-    const surahTasks = useMemo(() => {
-        const eligible = SURAHS.filter(s =>
-            (activePart === ALL_QURAN_PART || s.part === activePart) &&
-            !settings.skippedSurahs?.includes(s.id)
-        );
-        return eligible
-            .map(s => ({ surah: s, mindmap: mindmaps[s.id] }))
-            .sort((a, b) => a.surah.id - b.surah.id);
-    }, [mindmaps, activePart, settings.skippedSurahs]);
-
     const partTasks = useMemo(() => {
         const metaPartTask = { part: 0, mindmap: partMindmapsMap[0] };
         const parts: QuranPart[] = Array.from(CORE_QURAN_PARTS);
@@ -377,83 +434,192 @@ export default function TodoPage() {
         );
     }, [settings.kanbanColumns?.complete]);
 
-    // Gather Similarity Errors (Mutashabihat) that need resolution
-    const similarityItems = useMemo(() => {
-        const isPhraseResolved = (absolute: number, entry: any) => {
-            const exact = decisionsMap[`${absolute}-${entry.phraseId}`];
-            if (exact?.status === 'ignored' || !!exact?.confirmedAt) return true;
+    const checkIsSurahLearned = useCallback((surahId: number) => {
+        return nodes.some((node) => {
+            if (node.type !== 'verse_segment') return false;
+            if (getVerseSegmentSurahId(node) !== surahId) return false;
+            return hasNodeBeenReviewed(node.scheduler);
+        });
+    }, [nodes]);
 
-            const currentRef = absoluteToSurahAyah(absolute);
-            const candidateAbs = Array.from(new Set<number>([
-                absolute,
-                ...(entry.sources || []),
-                ...(entry.matches || []),
-            ])).filter((absRef) => absoluteToSurahAyah(absRef).surahId === currentRef.surahId);
+    const suspendedVerseGroupKeys = useMemo(() => (
+        deriveSuspendedVerseGroupKeys(errors, 3, settings?.suspendedVerseGroupsAcknowledged)
+    ), [errors, settings?.suspendedVerseGroupsAcknowledged]);
 
-            return candidateAbs.some((absRef) => {
-                const phraseDecision = decisionsMap[`${absRef}-${entry.phraseId}`];
-                return phraseDecision?.status === 'ignored' || !!phraseDecision?.confirmedAt;
-            });
-        };
+    const activeReviewQueueSurahIds = useMemo(() => {
+        const surahIds = new Set<number>();
+        const activeReviewQueueNodes = filterReviewQueueNodes(
+            nodes,
+            settings,
+            Object.values(mindmaps),
+            suspendedVerseGroupKeys
+        );
 
-        const hasComparatorBeenReviewed = (absoluteComparator: number) => {
-            const comparatorRef = absoluteToSurahAyah(absoluteComparator);
-            return nodes.some((node) => {
-                if (node.type !== 'verse_segment') return false;
-                if (getVerseSegmentSurahId(node) !== comparatorRef.surahId) return false;
-                const start = Number(node.startVerse || 0);
-                const end = Number(node.endVerse || 0);
-                if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-                if (comparatorRef.ayahId < start || comparatorRef.ayahId > end) return false;
-                return hasNodeBeenReviewed(node.scheduler);
-            });
-        };
+        activeReviewQueueNodes.forEach((node) => {
+            const surahId = getVerseSegmentSurahId(node);
+            if (surahId) surahIds.add(surahId);
+        });
+        return surahIds;
+    }, [mindmaps, nodes, settings, suspendedVerseGroupKeys]);
 
+    // Filter Surahs based on the user's active part setting
+    const surahTasks = useMemo(() => {
+        const eligible = SURAHS.filter(s =>
+            (activePart === ALL_QURAN_PART || s.part === activePart) &&
+            !settings.skippedSurahs?.includes(s.id)
+        );
+        return eligible
+            .map(s => ({
+                surah: s,
+                mindmap: mindmaps[s.id],
+                reviewQueueInfo: activeReviewQueueSurahIds.has(s.id)
+                    ? {
+                        tooltip: 'This surah already has verses in your review queue.',
+                    }
+                    : null,
+            }))
+            .sort((a, b) => a.surah.id - b.surah.id);
+    }, [activePart, activeReviewQueueSurahIds, mindmaps, settings.skippedSurahs]);
+
+    const allSimilarityItems = useMemo(() => {
         return errors
             .filter(e => e.type === 'similarity' && e.absoluteAyah)
             .map(err => {
                 const absolute = err.absoluteAyah!;
+                const { surahId, ayahId } = absoluteToSurahAyah(absolute);
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
-                const unresolvedCount = muts.filter((m: any) => !isPhraseResolved(absolute, m)).length;
-                const comparators = Array.from(new Set(
-                    muts.flatMap((m: any) => (Array.isArray(m?.matches) ? m.matches : []))
-                )).filter((absRef: number) => absRef !== absolute);
-                const hasReviewedComparator = comparators.some(hasComparatorBeenReviewed);
-                return { err, muts, unresolvedCount, hasReviewedComparator };
-            })
-            // Filter out items that are already resolved/ignored
+                const unresolvedEntries = muts.filter((entry: any) =>
+                    !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
+                );
+                const actionableComparatorCount = unresolvedEntries.reduce((sum: number, entry: any) => {
+                    const unlockedComparators = Array.from(new Set(
+                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
+                    )).filter((absRef) => (
+                        absRef !== absolute
+                        && checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
+                    ));
+
+                    return sum + unlockedComparators.length;
+                }, 0);
+                const hasReviewedComparator = unresolvedEntries.some((entry: any) => {
+                    const comparators = Array.from(new Set(
+                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
+                    )).filter((absRef) => absRef !== absolute);
+
+                    return comparators.some((absRef) =>
+                        checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
+                    );
+                });
+
+                return {
+                    id: `similarity-origin-${absolute}`,
+                    err,
+                    muts,
+                    unresolvedCount: unresolvedEntries.length,
+                    hasOutstanding: unresolvedEntries.length > 0,
+                    actionableComparatorCount,
+                    hasReviewedComparator,
+                    originAbsolute: absolute,
+                    originAyahId: ayahId,
+                    surah: getSurah(surahId),
+                };
+            });
+    }, [checkIsSurahLearned, customMutashabihat, decisionsMap, errors]);
+
+    const similarityStateById = useMemo(() => {
+        const byId = new Map<string, { hasOutstanding: boolean }>();
+        allSimilarityItems.forEach((item) => {
+            byId.set(item.id, { hasOutstanding: item.hasOutstanding });
+        });
+        return byId;
+    }, [allSimilarityItems]);
+
+    // Gather Similarity Errors (Mutashabihat) that need resolution
+    const similarityItems = useMemo(() => {
+        return allSimilarityItems
             .filter(entry => {
                 const absolute = entry.err.absoluteAyah!;
-                const { surahId } = absoluteToSurahAyah(absolute);
-                const isPinnedInComplete = completedSimilarityCards.has(`similarity-${surahId}`);
+                const isPinnedInComplete = completedSimilarityCards.has(entry.id);
                 if (isPinnedInComplete) return true;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
                 if (entry.unresolvedCount <= 0) return false;
-                return entry.hasReviewedComparator;
+                return entry.hasReviewedComparator && !!entry.surah;
             });
-    }, [errors, decisionsMap, customMutashabihat, nodes, completedSimilarityCards]);
+    }, [allSimilarityItems, completedSimilarityCards, decisionsMap]);
 
-    // Group similarity items by Surah for cleaner display in Kanban
-    const groupedSimilarity = useMemo(() => {
-        const groups: Record<number, typeof similarityItems> = {};
-        similarityItems.forEach(item => {
-            const ref = absoluteToSurahAyah(item.err.absoluteAyah!);
-            if (!groups[ref.surahId]) groups[ref.surahId] = [];
-            groups[ref.surahId].push(item);
+    useEffect(() => {
+        const currentColumns = settings.kanbanColumns;
+        if (!currentColumns) return;
+
+        const similarityIds = Array.from(new Set([
+            ...(currentColumns.backlog || []),
+            ...(currentColumns['in-progress'] || []),
+            ...(currentColumns.complete || []),
+        ].filter((id) => String(id).startsWith('similarity-'))));
+        if (similarityIds.length === 0) return;
+
+        const toBacklog: string[] = [];
+        const toComplete: string[] = [];
+
+        similarityIds.forEach((id) => {
+            const hasOutstanding = similarityStateById.get(String(id))?.hasOutstanding ?? false;
+            const isInComplete = (currentColumns.complete || []).includes(id);
+
+            if (hasOutstanding && isInComplete) {
+                toBacklog.push(id);
+            } else if (!hasOutstanding && !isInComplete) {
+                toComplete.push(id);
+            }
         });
-        return Object.entries(groups)
-            .map(([surahId, items]) => ({
-                surah: getSurah(parseInt(surahId)),
-                items,
-                count: items.reduce((sum, item) => sum + (item.unresolvedCount || 0), 0)
-            }))
-            .filter(g => g.surah);
+
+        if (toBacklog.length === 0 && toComplete.length === 0) return;
+
+        type KanbanColumnKey = 'backlog' | 'in-progress' | 'complete';
+
+        const relocate = (columns: NonNullable<AppSettings['kanbanColumns']>, itemIds: string[], destination: KanbanColumnKey) => {
+            const movedIds = new Set(itemIds);
+            const next: Record<KanbanColumnKey, string[]> = {
+                backlog: [...(columns.backlog || [])].filter((id) => !movedIds.has(id)),
+                'in-progress': [...(columns['in-progress'] || [])].filter((id) => !movedIds.has(id)),
+                complete: [...(columns.complete || [])].filter((id) => !movedIds.has(id)),
+            };
+            next[destination] = [...itemIds, ...next[destination]];
+            return next;
+        };
+
+        let nextColumns = currentColumns;
+        if (toBacklog.length > 0) {
+            nextColumns = relocate(nextColumns, toBacklog, 'backlog');
+        }
+        if (toComplete.length > 0) {
+            nextColumns = relocate(nextColumns, toComplete, 'complete');
+        }
+
+        void queueSettingsUpdate({ kanbanColumns: nextColumns });
+    }, [queueSettingsUpdate, settings.kanbanColumns, similarityStateById]);
+
+    const similarityCards = useMemo(() => {
+        return similarityItems
+            .filter((item) => !!item.surah)
+            .map((item) => ({
+                id: item.id,
+                surah: item.surah,
+                items: [item],
+                count: item.actionableComparatorCount || 0,
+                originAbsolute: item.originAbsolute,
+                ayahIds: [item.originAyahId],
+            }));
     }, [similarityItems]);
 
     const SUSPEND_ERROR_THRESHOLD = 3;
 
     const suspendedAnchors = useMemo(() => {
+        const skippedSurahIds = new Set<number>(
+            (settings?.skippedSurahs || [])
+                .map((surahId) => Number(surahId))
+                .filter((surahId) => Number.isFinite(surahId) && surahId > 0)
+        );
         const toSurahId = (value: unknown): number | null => {
             const parsed = Number(value);
             return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -525,6 +691,7 @@ export default function TodoPage() {
             if (sorted.length < SUSPEND_ERROR_THRESHOLD) return;
 
             const latest = sorted[0];
+            if (skippedSurahIds.has(Number(latest.surahId))) return;
             const ackIso = acknowledgedAtByGroup[groupKey];
             const ackMs = ackIso ? Date.parse(ackIso) : Number.NaN;
             if (Number.isFinite(ackMs) && ackMs >= (latest.timestampMs || 0)) {
@@ -572,7 +739,7 @@ export default function TodoPage() {
             if (a.startVerse !== b.startVerse) return a.startVerse - b.startVerse;
             return a.endVerse - b.endVerse;
         });
-    }, [errors, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD, mindmaps]);
+    }, [errors, settings?.skippedSurahs, settings?.suspendedVerseGroupsAcknowledged, SUSPEND_ERROR_THRESHOLD, mindmaps]);
 
 
 
@@ -608,6 +775,7 @@ export default function TodoPage() {
     };
 
     const handleSaveAnchors = async (surahId: number, verseCount: number) => {
+        if (!user?.id) return;
         const builder = getBuilderState(surahId);
         const boundaries = [1, ...builder.breaks.map(b => b + 1), verseCount + 1];
         const anchors = boundaries.slice(0, -1).map((start, idx) => {
@@ -616,10 +784,11 @@ export default function TodoPage() {
             return { start, end, label };
         });
 
-        const existing = mindmaps[surahId] || { surahId, anchors: [], imageUrl: null, isComplete: false };
-        const previousAnchorRanges = new Set(
-            (existing.anchors || []).map((a: any) => `${Number(a.startVerse)}-${Number(a.endVerse)}`)
-        );
+        const previousAnchors = (mindmaps[surahId]?.anchors || []).map((anchor: any) => ({
+            id: anchor?.id || `anchor-${surahId}-${Number(anchor?.startVerse)}-${Number(anchor?.endVerse)}`,
+            startVerse: Number(anchor?.startVerse),
+            endVerse: Number(anchor?.endVerse),
+        }));
         const newAnchors = anchors.map(a => ({
             id: `anchor-${surahId}-${a.start}-${a.end}`,
             surahId,
@@ -632,68 +801,38 @@ export default function TodoPage() {
         // Keep existing verse-segment nodes in sync with updated splits.
         // We create new range nodes only when this surah currently participates in verse review
         // (either still in Complete or already has verse-segment nodes).
-        const rangeKey = (start: number, end: number) => `${start}-${end}`;
-        const nextRanges = new Set(newAnchors.map(a => rangeKey(Number(a.startVerse), Number(a.endVerse))));
         const existingVerseNodes = nodes.filter(n => n.type === 'verse_segment' && getVerseSegmentSurahId(n) === surahId);
 
         const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((id) => String(id)));
         const isInCompleteColumn = completeIds.has(`surah-${surahId}`);
         const shouldCreateMissingRanges = isInCompleteColumn || existingVerseNodes.length > 0;
-        const nextRangeKeys = Array.from(nextRanges).sort();
-        const prevRangeKeys = Array.from(previousAnchorRanges).sort();
-        const splitsChanged =
-            nextRangeKeys.length !== prevRangeKeys.length ||
-            nextRangeKeys.some((key, idx) => key !== prevRangeKeys[idx]);
 
-        const staleNodes = existingVerseNodes.filter(n => !nextRanges.has(rangeKey(Number(n.startVerse), Number(n.endVerse))));
-        if (staleNodes.length > 0) {
-            await runInBatches(staleNodes, 8, async (node) => {
-                await deleteNode(node.id);
-            });
+        await syncVerseSegmentNodesForSurah({
+            userId: user.id,
+            surahId,
+            anchors: newAnchors,
+            existingNodes: existingVerseNodes,
+            shouldCreateMissingRanges,
+        });
+
+        const impactedGroupKeys = getImpactedSplitVerseGroupKeys({
+            surahId,
+            previousAnchors,
+            nextAnchors: newAnchors,
+        });
+        const suspendedCleanup = getSuspendedReviewErrorCleanupPlan({
+            errors,
+            groupKeys: impactedGroupKeys,
+            acknowledgedAtByGroup: settings?.suspendedVerseGroupsAcknowledged,
+            kanbanColumns: settings?.kanbanColumns,
+        });
+        if (suspendedCleanup.errorIds.length > 0) {
+            await deleteReviewErrorsByIds(suspendedCleanup.errorIds);
         }
-
-        if (shouldCreateMissingRanges) {
-            const existingByRange = new Map<string, MemoryNode>(
-                existingVerseNodes.map(n => [rangeKey(Number(n.startVerse), Number(n.endVerse)), n] as const)
-            );
-            const shouldResetAllForComplete = isInCompleteColumn && splitsChanged;
-            const nowIso = new Date().toISOString();
-
-            const upserts = newAnchors.map(anchor => {
-                const key = rangeKey(Number(anchor.startVerse), Number(anchor.endVerse));
-                const existingNode = existingByRange.get(key);
-
-                if (existingNode) {
-                    return {
-                        ...existingNode,
-                        id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
-                        type: 'verse_segment',
-                        surahId,
-                        startVerse: anchor.startVerse,
-                        endVerse: anchor.endVerse,
-                        targetId: anchor.id,
-                        scheduler: shouldResetAllForComplete ? createNewFSRSState() : existingNode.scheduler,
-                        createdAt: shouldResetAllForComplete ? nowIso : existingNode.createdAt,
-                    } as MemoryNode;
-                }
-
-                return {
-                    id: stableNodeId('memory_node', 'verse_segment', surahId, anchor.startVerse, anchor.endVerse),
-                    type: 'verse_segment',
-                    surahId,
-                    startVerse: anchor.startVerse,
-                    endVerse: anchor.endVerse,
-                    targetId: anchor.id,
-                    scheduler: createNewFSRSState(),
-                    createdAt: nowIso
-                } as MemoryNode;
+        if (suspendedCleanup.groupCount > 0) {
+            await queueSettingsUpdate({
+                kanbanColumns: removeSuspendedKanbanItems(settings.kanbanColumns, impactedGroupKeys),
             });
-
-            if (upserts.length > 0) {
-                await runInBatches(upserts, 8, async (node) => {
-                    await saveNode(node);
-                });
-            }
         }
     };
 
@@ -734,7 +873,7 @@ export default function TodoPage() {
         }
     };
 
-    const handleImportPremade = useCallback(async (type: 'surah' | 'part', id: number, options?: { silent?: boolean }) => {
+    const loadPremadeImportData = useCallback(async (type: 'surah' | 'part', id: number, options?: { silent?: boolean }) => {
         const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
         if (!response.ok) {
             if (response.status === 404) {
@@ -754,7 +893,7 @@ export default function TodoPage() {
             }
             throw new Error(`Failed to import premade ${type} ${id}: ${response.statusText}`);
         }
-        const data = await response.json();
+        const snapshot = await response.json();
 
         // Try to fetch premade anchors for surahs
         let importedAnchors: any[] = [];
@@ -790,39 +929,73 @@ export default function TodoPage() {
             }
         }
 
-        try {
-            if (type === 'surah') {
-                const existing = mindmaps[id] || { surahId: id, anchors: [], imageUrl: null, isComplete: false };
-                const updated = {
-                    anchors: importedAnchors.length > 0 ? importedAnchors : (existing.anchors || []),
-                    tldrawSnapshot: data,
-                    // Importing a premade map should not change kanban completion state.
+        return {
+            type,
+            id,
+            snapshot,
+            importedAnchors,
+            importedAt: new Date().toISOString(),
+        };
+    }, [alert]);
+
+    const persistPremadeImportBatch = useCallback(async (
+        imports: PremadeImportData[]
+    ) => {
+        if (!user?.id || imports.length === 0) return;
+
+        const writes = imports.map((item) => {
+            if (item.type === 'surah') {
+                const existing = mindmaps[item.id] || { surahId: item.id, anchors: [], imageUrl: null, isComplete: false };
+                const mapId = resolveEntityId((existing as any)?.id, 'mindmap', user.id, item.id);
+                return db.tx.mindMaps[mapId].update({
+                    anchors: item.importedAnchors.length > 0 ? item.importedAnchors : (existing.anchors || []),
+                    tldrawSnapshot: sanitizeMindmapSnapshot(item.snapshot),
                     isComplete: !!existing.isComplete,
                     source: 'premade' as const,
-                    premadeId: `surah-${id}`,
-                    premadeImportedAt: new Date().toISOString(),
-                    premadeEdited: false
-                };
-                await saveMindMap(id, updated, { mergeExisting: false });
-            } else {
-                const pId = id as QuranPart;
-                const existing = partMindmapsMap[pId] || { partId: pId, description: '', imageUrl: null, isComplete: false };
-                const updated = {
-                    tldrawSnapshot: data,
-                    // Importing a premade map should not change kanban completion state.
-                    isComplete: !!existing.isComplete,
-                    source: 'premade' as const,
-                    premadeId: `part-${id}`,
-                    premadeImportedAt: new Date().toISOString(),
-                    premadeEdited: false
-                };
-                await savePartMindMap(pId, updated, { mergeExisting: false });
+                    premadeId: `surah-${item.id}`,
+                    premadeImportedAt: item.importedAt,
+                    premadeEdited: false,
+                    surahId: item.id,
+                    userId: user.id,
+                    updatedAt: item.importedAt,
+                });
             }
+
+            const partId = item.id as QuranPart;
+            const existing = partMindmapsMap[partId] || { partId, description: '', imageUrl: null, isComplete: false };
+            const mapId = resolveEntityId((existing as any)?.id, 'part_mindmap', user.id, partId);
+            return db.tx.partMindMaps[mapId].update({
+                tldrawSnapshot: sanitizeMindmapSnapshot(item.snapshot),
+                isComplete: !!existing.isComplete,
+                source: 'premade' as const,
+                premadeId: `part-${item.id}`,
+                premadeImportedAt: item.importedAt,
+                premadeEdited: false,
+                partId,
+                userId: user.id,
+                updatedAt: item.importedAt,
+            });
+        });
+
+        try {
+            await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+        } catch (error) {
+            for (const write of writes) {
+                await transactWithRetry(write);
+            }
+        }
+    }, [mindmaps, partMindmapsMap, user?.id]);
+
+    const handleImportPremade = useCallback(async (type: 'surah' | 'part', id: number, options?: { silent?: boolean }) => {
+        const imported = await loadPremadeImportData(type, id, options);
+
+        try {
+            await persistPremadeImportBatch([imported]);
             appLogger.addLog(`Imported premade mindmap for ${type} ${id}`, 'success');
             if (!options?.silent) {
                 await alert({
                     title: 'Import Complete',
-                    message: `Premade mindmap for ${type} ${id} successfully imported!${importedAnchors.length > 0 ? ` (Imported ${importedAnchors.length} verse chunks)` : ''}`,
+                    message: `Premade mindmap for ${type} ${id} successfully imported!${imported.importedAnchors.length > 0 ? ` (Imported ${imported.importedAnchors.length} verse chunks)` : ''}`,
                 });
             }
         } catch (error) {
@@ -835,7 +1008,7 @@ export default function TodoPage() {
             }
             throw error;
         }
-    }, [mindmaps, partMindmapsMap, saveMindMap, savePartMindMap, alert]);
+    }, [alert, loadPremadeImportData, persistPremadeImportBatch]);
 
     const handleExportPremade = useCallback(async (type: 'surah' | 'part', id: number) => {
         const mindmap = type === 'surah' ? mindmaps[id] : partMindmapsMap[id];
@@ -890,25 +1063,189 @@ export default function TodoPage() {
             return node.type === 'part_mindmap' && getPartMindmapPartId(node) === id;
         });
         if (matching.length === 0) return;
+        if (!user?.id) return;
 
         const resetAt = new Date().toISOString();
-        await runInBatches(matching, 8, async (node) => {
-            await saveNode({
-                ...node,
-                scheduler: createNewFSRSState(),
-                createdAt: resetAt
+        for (let i = 0; i < matching.length; i += 8) {
+            const batch = matching.slice(i, i + 8);
+            const writes = batch.map((node) => {
+                const canReuseCandidateId = isUuid(node.id) && nodes.some(existingNode => existingNode.id === node.id);
+                const nodeId = canReuseCandidateId
+                    ? node.id
+                    : resolveEntityId(undefined, 'memory_node', user.id!, memoryNodeLogicalKey(node));
+
+                return db.tx.memoryNodes[nodeId].update({
+                    ...node,
+                    scheduler: createNewFSRSState(),
+                    createdAt: resetAt,
+                    userId: user.id,
+                });
             });
-        });
+
+            await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+        }
 
         appLogger.addLog(`Reset memory nodes for ${type} ${id} mindmap`, 'info');
-    }, [nodes, runInBatches, saveNode]);
+    }, [nodes, user?.id]);
 
-    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number, options?: { resetMemoryNodes?: boolean }) => {
-        await handleImportPremade(type, id);
-        if (options?.resetMemoryNodes) {
+    const handleResetMindmap = useCallback(async (type: 'surah' | 'part', id: number) => {
+        if (!user?.id) {
+            await alert({
+                title: 'Sign In Required',
+                message: 'Please sign in before restoring the original mindmap.',
+            });
+            return;
+        }
+
+        const imported = await loadPremadeImportData(type, id);
+
+        const currentSurahMindmap = type === 'surah' ? mindmaps[id] : undefined;
+        const currentPartMindmap = type === 'part' ? partMindmapsMap[id] : undefined;
+        const currentMindmap = currentSurahMindmap || currentPartMindmap;
+        const currentSnapshotKey = normalizeSnapshotForCompare(currentMindmap?.tldrawSnapshot);
+        const importedSnapshotKey = normalizeSnapshotForCompare(imported.snapshot);
+        const mindmapChanged = currentSnapshotKey !== importedSnapshotKey;
+        const hasMindmapReviewNode = nodes.some((node) => (
+            type === 'surah'
+                ? node.type === 'mindmap' && getMindmapSurahId(node) === id
+                : node.type === 'part_mindmap' && getPartMindmapPartId(node) === id
+        ));
+        const shouldResetMindmapReview = mindmapChanged && hasMindmapReviewNode;
+
+        let splitsChanged = false;
+        let nextAnchors: any[] = [];
+        let previousAnchors: Array<{ id: string; startVerse: number; endVerse: number }> = [];
+        let existingVerseNodes: MemoryNode[] = [];
+        let shouldCreateMissingRanges = false;
+        let impactedGroupKeys = new Set<string>();
+        let suspendedCleanup = { errorIds: [] as string[], groupCount: 0 };
+        let hasReviewedImpactedVerseNode = false;
+
+        if (type === 'surah') {
+            previousAnchors = (currentSurahMindmap?.anchors || []).map((anchor: any) => ({
+                id: anchor?.id || `anchor-${id}-${Number(anchor?.startVerse)}-${Number(anchor?.endVerse)}`,
+                startVerse: Number(anchor?.startVerse),
+                endVerse: Number(anchor?.endVerse),
+            }));
+            nextAnchors = imported.importedAnchors.length > 0 ? imported.importedAnchors : (currentSurahMindmap?.anchors || []);
+
+            const currentRanges = normalizeAnchorRangesForCompare(previousAnchors);
+            const nextRanges = normalizeAnchorRangesForCompare(nextAnchors);
+            splitsChanged = !areOrderedStringListsEqual(currentRanges, nextRanges);
+
+            existingVerseNodes = nodes.filter((node) => node.type === 'verse_segment' && getVerseSegmentSurahId(node) === id);
+            const completeIds = new Set<string>((settings.kanbanColumns?.complete || []).map((itemId) => String(itemId)));
+            shouldCreateMissingRanges = completeIds.has(`surah-${id}`) || existingVerseNodes.length > 0;
+
+            if (splitsChanged) {
+                impactedGroupKeys = getImpactedSplitVerseGroupKeys({
+                    surahId: id,
+                    previousAnchors,
+                    nextAnchors,
+                });
+                suspendedCleanup = getSuspendedReviewErrorCleanupPlan({
+                    errors,
+                    groupKeys: impactedGroupKeys,
+                    acknowledgedAtByGroup: settings?.suspendedVerseGroupsAcknowledged,
+                    kanbanColumns: settings?.kanbanColumns,
+                });
+                hasReviewedImpactedVerseNode = existingVerseNodes.some((node) => {
+                    const groupKey = getVerseGroupKey({
+                        surahId: id,
+                        anchorId: node.targetId,
+                        startVerse: node.startVerse,
+                        endVerse: node.endVerse,
+                    });
+                    return !!groupKey && impactedGroupKeys.has(groupKey) && hasNodeBeenReviewed(node.scheduler);
+                });
+            }
+        }
+
+        const subjectLabel = type === 'surah'
+            ? `${getSurah(id)?.name || `Surah ${id}`} mindmap`
+            : `Part ${id} mindmap`;
+        const changeSummary = type === 'surah' && splitsChanged
+            ? 'This will restore the original shared mindmap and its original verse splits.'
+            : 'This will restore the original shared mindmap.';
+
+        const reviewImpactLines: string[] = [];
+        if (shouldResetMindmapReview) {
+            reviewImpactLines.push('Mindmap review progress will reset because the restored mindmap layout is different.');
+        }
+        if (type === 'surah' && splitsChanged) {
+            if (hasReviewedImpactedVerseNode) {
+                reviewImpactLines.push('Verse-group review progress for the split ranges that changed will reset.');
+            } else if (existingVerseNodes.length > 0 || shouldCreateMissingRanges) {
+                reviewImpactLines.push('Verse-group review nodes will be rebuilt to match the restored splits.');
+            } else {
+                reviewImpactLines.push('There are no active verse-group review nodes to reset right now, but future verse review will use the restored splits.');
+            }
+            reviewImpactLines.push('Verse groups whose split ranges did not change will keep their current progress.');
+        }
+        if (type === 'surah' && suspendedCleanup.groupCount > 0) {
+            reviewImpactLines.push(`Suspended fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} tied to changed split ranges will be cleared.`);
+        }
+        if (reviewImpactLines.length === 0) {
+            reviewImpactLines.push('No review progress will reset.');
+        }
+
+        const ok = await confirm({
+            title: 'Restore Original Mindmap?',
+            message: [
+                `${subjectLabel.charAt(0).toUpperCase()}${subjectLabel.slice(1)} will be replaced with the original shared version.`,
+                changeSummary,
+                'Review impact:',
+                formatResetSummary(reviewImpactLines),
+            ].join('\n\n'),
+            confirmLabel: 'Restore Original',
+            cancelLabel: 'Keep Current',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        await persistPremadeImportBatch([imported]);
+
+        if (shouldResetMindmapReview) {
             await resetMindmapNodes(type, id);
         }
-    }, [handleImportPremade, resetMindmapNodes]);
+
+        if (type === 'surah' && splitsChanged) {
+            if (shouldCreateMissingRanges) {
+                await syncVerseSegmentNodesForSurah({
+                    userId: user!.id,
+                    surahId: id,
+                    anchors: nextAnchors,
+                    existingNodes: existingVerseNodes,
+                    shouldCreateMissingRanges,
+                });
+            }
+
+            if (suspendedCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(suspendedCleanup.errorIds);
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                await queueSettingsUpdate({
+                    kanbanColumns: removeSuspendedKanbanItems(settings.kanbanColumns, impactedGroupKeys),
+                });
+            }
+        }
+
+        appLogger.addLog(`Restored original premade mindmap for ${type} ${id}`, 'success');
+    }, [
+        alert,
+        confirm,
+        errors,
+        loadPremadeImportData,
+        mindmaps,
+        nodes,
+        partMindmapsMap,
+        persistPremadeImportBatch,
+        queueSettingsUpdate,
+        resetMindmapNodes,
+        settings?.kanbanColumns,
+        settings?.suspendedVerseGroupsAcknowledged,
+        user,
+    ]);
 
     useEffect(() => {
         if (isEditor) return;
@@ -928,6 +1265,7 @@ export default function TodoPage() {
         if (isEditor) return;
         if (mindmapsLoading) return;
         if (!premadeIndex) return;
+        if (!user?.id) return;
 
         const hasAnyPremade = premadeIndex.surah.length > 0 || premadeIndex.part.length > 0;
         if (!hasAnyPremade) return;
@@ -937,15 +1275,24 @@ export default function TodoPage() {
         setIsAutoImportingPremades(true);
         void (async () => {
             let importedAny = false;
+            const pendingImports: Array<{
+                key: string;
+                type: 'surah' | 'part';
+                id: number;
+                snapshot: any;
+                importedAnchors: any[];
+                importedAt: string;
+            }> = [];
 
             for (const id of premadeIndex.surah) {
                 const key = `surah-${id}`;
                 if (autoImportedRef.current.has(key)) continue;
                 if (mindmaps[id]) continue; // preserve user-created mindmap
                 try {
-                    await handleImportPremade('surah', id, { silent: true });
-                    autoImportedRef.current.add(key);
-                    importedAny = true;
+                    pendingImports.push({
+                        key,
+                        ...(await loadPremadeImportData('surah', id, { silent: true })),
+                    });
                 } catch (error) {
                     console.warn(`Auto-import failed for surah ${id}`, error);
                 }
@@ -956,22 +1303,33 @@ export default function TodoPage() {
                 if (autoImportedRef.current.has(key)) continue;
                 if (partMindmapsMap[id]) continue; // preserve user-created mindmap
                 try {
-                    await handleImportPremade('part', id, { silent: true });
-                    autoImportedRef.current.add(key);
-                    importedAny = true;
+                    pendingImports.push({
+                        key,
+                        ...(await loadPremadeImportData('part', id, { silent: true })),
+                    });
                 } catch (error) {
                     console.warn(`Auto-import failed for part ${id}`, error);
                 }
             }
 
+            for (let i = 0; i < pendingImports.length; i += PREMADE_IMPORT_WRITE_BATCH_SIZE) {
+                const batch = pendingImports.slice(i, i + PREMADE_IMPORT_WRITE_BATCH_SIZE);
+                if (batch.length === 0) continue;
+                await persistPremadeImportBatch(batch);
+                batch.forEach((item) => {
+                    autoImportedRef.current.add(item.key);
+                });
+                importedAny = true;
+            }
+
             if (importedAny) {
-                appLogger.addLog('Auto-imported premade mindmaps (per missing item)', 'info');
+                appLogger.addLog(`Auto-imported ${pendingImports.length} premade mindmaps in batched writes`, 'info');
             }
         })().finally(() => {
             autoImportInFlightRef.current = false;
             setIsAutoImportingPremades(false);
         });
-    }, [isEditor, premadeIndex, mindmaps, partMindmapsMap, mindmapsLoading, handleImportPremade]);
+    }, [isEditor, loadPremadeImportData, mindmaps, mindmapsLoading, partMindmapsMap, persistPremadeImportBatch, premadeIndex, user?.id]);
 
     const hasPremadeMindmap = useCallback((type: 'surah' | 'part', id: number) => {
         if (!premadeIndex) return false;
@@ -1036,7 +1394,7 @@ export default function TodoPage() {
         await saveDecision(key, {
             ...existing,
             status,
-            confirmedAt: confirm ? new Date().toISOString() : undefined
+            confirmedAt: confirm ? new Date().toISOString() : null
         });
     };
 
@@ -1045,6 +1403,7 @@ export default function TodoPage() {
         const normalized = {
             ...existing,
             ...update,
+            confirmedAt: update.confirmedAt ?? null,
             notes: update.notes ?? existing.notes ?? existing.note ?? '',
             phraseId: decisionKey
         };
@@ -1109,10 +1468,16 @@ export default function TodoPage() {
         setHasHydratedTodoData(true);
     }, [todoDataReady]);
 
+    useEffect(() => {
+        if (!todoDataReady) return;
+        markCurrentRouteReady();
+    }, [markCurrentRouteReady, todoDataReady]);
+
     const showTodoLoader = !hasHydratedTodoData;
     const todoLoaderText = 'Preparing Todo...';
 
     if (showTodoLoader) {
+        if (isTransitionPendingForCurrentRoute) return null;
         return <FullScreenLoader text={todoLoaderText} />;
     }
 
@@ -1184,9 +1549,10 @@ export default function TodoPage() {
                 <div className="h-full w-full">
                     <TodoKanban
                         suspendedAnchors={suspendedAnchors}
-                        similarityGroups={groupedSimilarity}
+                        similarityGroups={similarityCards}
                         partTasks={partTasks}
                         surahTasks={surahTasks}
+                        skippedSurahIds={settings.skippedSurahs || []}
                         verses={verses}
                         mindmaps={mindmaps}
                         isDark={isDark}
@@ -1239,6 +1605,7 @@ export default function TodoPage() {
                         onRemoveBreak={(sid, val) => handleRemoveBreakValue(sid, val)}
                         onSaveAnchors={handleSaveAnchors}
                         hasReviewedChunks={hasReviewedChunks}
+                        isSurahLearned={checkIsSurahLearned}
                     />
                 </div>
             </div>

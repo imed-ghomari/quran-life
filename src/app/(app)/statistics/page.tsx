@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Spinner from '@/components/ui/Spinner';
+import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -38,6 +40,7 @@ function getMaturity(interval: number): MaturityBucket {
 interface StatSegment {
     label: string;
     count: number;
+    displayValue?: number | string;
     color: string;
     opacity?: number;
     description: string;
@@ -54,6 +57,12 @@ interface SurahRiskRow {
     errorRate: number;
     maturity: MaturityBucket;
     trend: TrendDirection;
+}
+
+interface ProgressBarStats {
+    total: number;
+    segments: StatSegment[];
+    displayTotal?: number | string;
 }
 
 function ChartEmptyState({ message = 'No data available', height = 200 }: { message?: string; height?: number }) {
@@ -126,6 +135,7 @@ const resolveSurahIdFromErrorNodeRef = (nodeRef: unknown): number | null => {
 };
 
 export default function StatisticsPage() {
+    const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
     const { nodes: memoryNodes, isLoading: nodesLoading } = useSharedInstantNodes();
@@ -138,6 +148,12 @@ export default function StatisticsPage() {
     const [surahRiskRange, setSurahRiskRange] = useState<SurahRiskRange>('30d');
 
     const isLoading = settingsLoading || mindmapsLoading || nodesLoading || progressLoading || mutashabihatLoading || reviewLogsLoading || reviewErrorsLoading;
+    const statisticsReady = !isLoading;
+
+    useEffect(() => {
+        if (!statisticsReady) return;
+        markCurrentRouteReady();
+    }, [markCurrentRouteReady, statisticsReady]);
 
     const activePart = settings?.activePart || ALL_QURAN_PART;
     const skippedSurahs = useMemo(() => new Set(settings?.skippedSurahs || []), [settings?.skippedSurahs]);
@@ -154,101 +170,122 @@ export default function StatisticsPage() {
         [activePartSurahs, skippedSurahs],
     );
 
-    const mindmapBySurahId = useMemo(() => {
-        const map = new Map<number, any>();
+    const {
+        mindmapBySurahId,
+        partMindMapByPartId,
+        nodeById,
+        partMindmapNodeByPartId,
+        mindmapNodeBySurahId,
+        verseSegmentNodesBySurahId,
+        verseAndMindmapStabilityBySurahId,
+        mutashabihatDecisionsByAbsolute,
+        listeningProgressByPartId,
+    } = useMemo(() => {
+        const mindmapBySurahId = new Map<number, any>();
+        const partMindMapByPartId = new Map<number, any>();
+        const nodeById = new Map<string, MemoryNode>();
+        const partMindmapNodeByPartId = new Map<number, MemoryNode>();
+        const mindmapNodeBySurahId = new Map<number, MemoryNode>();
+        const verseSegmentNodesBySurahId = new Map<number, MemoryNode[]>();
+        const verseAndMindmapStabilityBySurahId = new Map<number, { totalStability: number; count: number }>();
+        const mutashabihatDecisionsByAbsolute = new Map<number, any[]>();
+        const listeningProgressByPartId = new Map<number, any>();
+
+        if (!statisticsReady) {
+            return {
+                mindmapBySurahId,
+                partMindMapByPartId,
+                nodeById,
+                partMindmapNodeByPartId,
+                mindmapNodeBySurahId,
+                verseSegmentNodesBySurahId,
+                verseAndMindmapStabilityBySurahId,
+                mutashabihatDecisionsByAbsolute,
+                listeningProgressByPartId,
+            };
+        }
+
         for (const mindmap of mindmaps) {
             const surahId = Number((mindmap as any)?.surahId);
-            if (!Number.isFinite(surahId) || map.has(surahId)) continue;
-            map.set(surahId, mindmap);
+            if (!Number.isFinite(surahId) || mindmapBySurahId.has(surahId)) continue;
+            mindmapBySurahId.set(surahId, mindmap);
         }
-        return map;
-    }, [mindmaps]);
 
-    const partMindMapByPartId = useMemo(() => {
-        const map = new Map<number, any>();
         for (const partMindMap of partMindMaps) {
             const partId = Number((partMindMap as any)?.partId);
-            if (!Number.isFinite(partId) || map.has(partId)) continue;
-            map.set(partId, partMindMap);
+            if (!Number.isFinite(partId) || partMindMapByPartId.has(partId)) continue;
+            partMindMapByPartId.set(partId, partMindMap);
         }
-        return map;
-    }, [partMindMaps]);
 
-    const nodeById = useMemo(() => new Map(memoryNodes.map((node) => [node.id, node])), [memoryNodes]);
-    const partMindmapNodeByPartId = useMemo(() => {
-        const map = new Map<number, MemoryNode>();
         for (const node of memoryNodes) {
-            if (node.type !== 'part_mindmap') continue;
-            const partId = resolveNodePartId(node);
-            if (partId === null || map.has(partId)) continue;
-            map.set(partId, node);
-        }
-        return map;
-    }, [memoryNodes]);
-    const mindmapNodeBySurahId = useMemo(() => {
-        const map = new Map<number, MemoryNode>();
-        for (const node of memoryNodes) {
-            if (node.type !== 'mindmap') continue;
-            const surahId = resolveNodeSurahId(node);
-            if (!surahId || map.has(surahId)) continue;
-            map.set(surahId, node);
-        }
-        return map;
-    }, [memoryNodes]);
-    const verseSegmentNodesBySurahId = useMemo(() => {
-        const map = new Map<number, MemoryNode[]>();
-        for (const node of memoryNodes) {
-            if (node.type !== 'verse_segment') continue;
+            nodeById.set(node.id, node);
+
+            if (node.type === 'part_mindmap') {
+                const partId = resolveNodePartId(node);
+                if (partId !== null && !partMindmapNodeByPartId.has(partId)) {
+                    partMindmapNodeByPartId.set(partId, node);
+                }
+                continue;
+            }
+
             const surahId = resolveNodeSurahId(node);
             if (!surahId) continue;
-            const bucket = map.get(surahId);
-            if (bucket) bucket.push(node);
-            else map.set(surahId, [node]);
-        }
-        return map;
-    }, [memoryNodes]);
-    const verseAndMindmapStabilityBySurahId = useMemo(() => {
-        const map = new Map<number, { totalStability: number; count: number }>();
-        for (const node of memoryNodes) {
-            if (node.type !== 'verse_segment' && node.type !== 'mindmap') continue;
-            const surahId = resolveNodeSurahId(node);
-            if (!surahId) continue;
-            const current = map.get(surahId) || { totalStability: 0, count: 0 };
-            map.set(surahId, {
-                totalStability: current.totalStability + getNodeStability(node),
-                count: current.count + 1,
-            });
-        }
-        return map;
-    }, [memoryNodes]);
 
-    const mutashabihatDecisionsByAbsolute = useMemo(() => {
-        const map = new Map<number, any[]>();
+            if (node.type === 'mindmap' && !mindmapNodeBySurahId.has(surahId)) {
+                mindmapNodeBySurahId.set(surahId, node);
+            }
+
+            if (node.type === 'verse_segment') {
+                const bucket = verseSegmentNodesBySurahId.get(surahId);
+                if (bucket) bucket.push(node);
+                else verseSegmentNodesBySurahId.set(surahId, [node]);
+            }
+
+            if (node.type === 'verse_segment' || node.type === 'mindmap') {
+                const current = verseAndMindmapStabilityBySurahId.get(surahId) || { totalStability: 0, count: 0 };
+                verseAndMindmapStabilityBySurahId.set(surahId, {
+                    totalStability: current.totalStability + getNodeStability(node),
+                    count: current.count + 1,
+                });
+            }
+        }
+
         for (const decision of mutashabihatDecisions) {
             const phraseId = String((decision as any)?.phraseId || '');
             if (!phraseId) continue;
             const absToken = phraseId.split('-')[0];
             const absolute = Number.parseInt(absToken, 10);
             if (!Number.isFinite(absolute)) continue;
-            const bucket = map.get(absolute);
+            const bucket = mutashabihatDecisionsByAbsolute.get(absolute);
             if (bucket) bucket.push(decision);
-            else map.set(absolute, [decision]);
+            else mutashabihatDecisionsByAbsolute.set(absolute, [decision]);
         }
-        return map;
-    }, [mutashabihatDecisions]);
 
-    const listeningProgressByPartId = useMemo(() => {
-        const map = new Map<number, any>();
         for (const progress of listeningProgress) {
             const partId = Number((progress as any)?.partId);
-            if (!Number.isFinite(partId) || map.has(partId)) continue;
-            map.set(partId, progress);
+            if (!Number.isFinite(partId) || listeningProgressByPartId.has(partId)) continue;
+            listeningProgressByPartId.set(partId, progress);
         }
-        return map;
-    }, [listeningProgress]);
+
+        return {
+            mindmapBySurahId,
+            partMindMapByPartId,
+            nodeById,
+            partMindmapNodeByPartId,
+            mindmapNodeBySurahId,
+            verseSegmentNodesBySurahId,
+            verseAndMindmapStabilityBySurahId,
+            mutashabihatDecisionsByAbsolute,
+            listeningProgressByPartId,
+        };
+    }, [statisticsReady, listeningProgress, memoryNodes, mindmaps, mutashabihatDecisions, partMindMaps]);
 
     // 1. Part Mindmaps Data (Always Global)
     const partMindmapStats = useMemo(() => {
+        if (!statisticsReady) {
+            return { total: CORE_QURAN_PARTS.length, segments: [] as StatSegment[] };
+        }
+
         let notCreated = 0;
         let notLearned = 0;
         let learnedNew = 0;
@@ -285,10 +322,14 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [partMindMapByPartId, partMindmapNodeByPartId]);
+    }, [partMindMapByPartId, partMindmapNodeByPartId, statisticsReady]);
 
     // 2. Surah Mindmaps Data
     const surahMindmapStats = useMemo(() => {
+        if (!statisticsReady) {
+            return { total: activePartSurahs.length, segments: [] as StatSegment[] };
+        }
+
         let skipped = 0;
         let notCreated = 0;
         let notLearned = 0;
@@ -333,10 +374,18 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePartSurahs, skippedSurahs, mindmapBySurahId, mindmapNodeBySurahId]);
+    }, [activePartSurahs, skippedSurahs, mindmapBySurahId, mindmapNodeBySurahId, statisticsReady]);
 
     // 3. Verse Chunks Data
     const verseChunkStats = useMemo(() => {
+        if (!statisticsReady) {
+            const totalSegments = activePartSurahs.reduce((acc, s) => {
+                if (verseChunkMode === 'surahs') return acc + 1;
+                return acc + Math.ceil(s.verseCount / 5);
+            }, 0);
+            return { total: totalSegments, segments: [] as StatSegment[] };
+        }
+
         let skipped = 0;
         let notLearned = 0;
         let learnedNew = 0;
@@ -451,44 +500,76 @@ export default function StatisticsPage() {
                 { label: 'Mastered (90d+)', count: learnedMastered, color: 'var(--chart-mastered)', description: 'Long-term mastery (90+ days)' },
             ].filter(s => s.count > 0)
         };
-    }, [activePartSurahs, settings?.learnedVerses, skippedSurahs, verseChunkMode, verseSegmentNodesBySurahId]);
+    }, [activePartSurahs, settings?.learnedVerses, skippedSurahs, statisticsReady, verseChunkMode, verseSegmentNodesBySurahId]);
 
     // 4. Daily Portion Data
     const dailyPortionStats = useMemo(() => {
+        if (!statisticsReady) {
+            return {
+                total: 0,
+                completions: 0,
+                completedToday: false,
+                segments: [] as StatSegment[],
+                displayTotal: 0,
+            };
+        }
+
         const partProgress = listeningProgressByPartId.get(Number(activePart))
             ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
                 ? listeningProgressByPartId.get(LEGACY_ALL_QURAN_PART)
                 : undefined);
-        const progress = partProgress?.lastVerseIndex || 0;
+        const progress = Math.max(0, partProgress?.lastVerseIndex || 0);
         const cycles = partProgress?.cycles || 0;
+        const completedToday = Boolean(partProgress?.updatedAt && new Date(partProgress.updatedAt).toDateString() === new Date().toDateString());
 
         const surahsInPart = activeUnskippedSurahs;
-
-        const learnedVerseCount = progress;
-
-        // Calculate surah counts
+        const totalVerses = surahsInPart.reduce((sum, surah) => sum + surah.verseCount, 0);
+        const completedVerses = totalVerses > 0 ? Math.min(progress, totalVerses) : 0;
+        const remainingVerses = Math.max(0, totalVerses - completedVerses);
         let completedSurahs = 0;
-        let currentVerseTotal = 0;
-        surahsInPart.forEach(s => {
-            if (currentVerseTotal + s.verseCount <= learnedVerseCount) {
-                completedSurahs++;
+        let traversedVerses = 0;
+
+        for (const surah of surahsInPart) {
+            traversedVerses += surah.verseCount;
+            if (completedVerses >= traversedVerses) {
+                completedSurahs += 1;
+            } else {
+                break;
             }
-            currentVerseTotal += s.verseCount;
-        });
+        }
+
         const remainingSurahs = Math.max(0, surahsInPart.length - completedSurahs);
 
         return {
-            total: surahsInPart.length,
+            total: totalVerses,
+            displayTotal: surahsInPart.length,
             completions: cycles,
+            completedToday,
             segments: [
-                { label: 'Remaining', count: remainingSurahs, color: 'var(--chart-skipped)', description: 'Surahs remaining in current cycle' },
-                { label: 'Completed', count: completedSurahs, color: 'var(--chart-mastered)', description: 'Surahs completed in current cycle' },
+                {
+                    label: 'Remaining',
+                    count: remainingVerses,
+                    displayValue: remainingSurahs,
+                    color: 'var(--chart-skipped)',
+                    description: 'Surahs remaining in current cycle',
+                },
+                {
+                    label: 'Completed',
+                    count: completedVerses,
+                    displayValue: completedSurahs,
+                    color: 'var(--chart-mastered)',
+                    description: 'Surahs completed in current cycle',
+                },
             ]
         };
-    }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId]);
+    }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId, statisticsReady]);
 
     // 5. Mutashabihat Coverage Data
     const mutashabihatStats = useMemo(() => {
+        if (!statisticsReady) {
+            return { total: 0, segments: [] as StatSegment[] };
+        }
+
         const allRefs = getAllMutashabihatRefs();
         const targetRefs = allRefs.filter(abs => {
             const { surahId } = absoluteToSurahAyah(abs);
@@ -531,12 +612,26 @@ export default function StatisticsPage() {
                 { label: 'Solved (MM)', count: solvedMindmap, color: 'var(--chart-mastered)', description: 'Addressed within a mindmap' },
             ].filter(s => s.count > 0)
         };
-    }, [activePart, activePartSurahIds, mutashabihatDecisionsByAbsolute]);
+    }, [activePart, activePartSurahIds, mutashabihatDecisionsByAbsolute, statisticsReady]);
 
     // 6. Future Due Data
     const [timeRange, setTimeRange] = useState<'1m' | '3m' | '1y' | 'all'>('1m');
 
     const futureDueStats = useMemo(() => {
+        if (!statisticsReady) {
+            return {
+                data: [] as Array<{ day: number; count: number; cumulative: number }>,
+                total: 0,
+                average: '0.0',
+                dueTomorrow: 0,
+                overdueCount: 0,
+                dailyLoad: '0.0',
+                reviewsToday: 0,
+                minDay: -15,
+                maxDay: 30,
+            };
+        }
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -712,9 +807,16 @@ export default function StatisticsPage() {
             minDay,
             maxDay
         };
-    }, [activePart, activePartSurahIds, memoryNodes, mindmapBySurahId, nodeById, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, skippedSurahs, timeRange]);
+    }, [activePart, activePartSurahIds, memoryNodes, mindmapBySurahId, nodeById, reviewLogs, settings?.kanbanColumns, settings?.completeExitBehavior, skippedSurahs, statisticsReady, timeRange]);
 
     const surahRiskStats = useMemo(() => {
+        if (!statisticsReady) {
+            return {
+                rows: [] as SurahRiskRow[],
+                hasData: false,
+            };
+        }
+
         const nowMs = Date.now();
         const dayMs = 1000 * 60 * 60 * 24;
         const rangeDays = surahRiskRange === '7d' ? 7 : surahRiskRange === '30d' ? 30 : surahRiskRange === '90d' ? 90 : null;
@@ -865,9 +967,17 @@ export default function StatisticsPage() {
             rows,
             hasData: totalAttempts > 0 || totalMistakes > 0,
         };
-    }, [activeUnskippedSurahs, nodeById, reviewErrors, reviewLogs, surahRiskRange, verseAndMindmapStabilityBySurahId]);
+    }, [activeUnskippedSurahs, nodeById, reviewErrors, reviewLogs, statisticsReady, surahRiskRange, verseAndMindmapStabilityBySurahId]);
 
     const reviewHeatmapStats = useMemo(() => {
+        if (!statisticsReady) {
+            return {
+                weeks: [] as Array<Array<{ key: string; dateLabel: string; count: number; inRange: boolean; dow: number; isToday: boolean }>>,
+                maxCount: 0,
+                averagePerDay: '0.0',
+            };
+        }
+
         const rangeDays = 180;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -945,24 +1055,11 @@ export default function StatisticsPage() {
             maxCount,
             averagePerDay: averagePerDay.toFixed(1),
         };
-    }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs]);
+    }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs, statisticsReady]);
 
-    const hasRenderableData =
-        Boolean(settings) ||
-        mindmaps.length > 0 ||
-        partMindMaps.length > 0 ||
-        memoryNodes.length > 0 ||
-        listeningProgress.length > 0 ||
-        mutashabihatDecisions.length > 0 ||
-        reviewLogs.length > 0 ||
-        reviewErrors.length > 0;
-
-    if (isLoading && !hasRenderableData) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <Spinner size={32} text="Loading statistics..." />
-            </div>
-        );
+    if (!statisticsReady) {
+        if (isTransitionPendingForCurrentRoute) return null;
+        return <FullScreenLoader text="Preparing statistics..." />;
     }
 
     return (
@@ -1032,9 +1129,12 @@ export default function StatisticsPage() {
                             icon={<Repeat size={20} />}
                             stats={dailyPortionStats}
                             headerSuffix={
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', color: 'var(--foreground-secondary)', fontSize: '0.8rem', fontWeight: 600, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                     <Repeat size={14} />
                                     <span>{dailyPortionStats.completions} cycles</span>
+                                    {dailyPortionStats.completedToday ? (
+                                        <span style={{ color: 'var(--accent)' }}>Completed today</span>
+                                    ) : null}
                                 </div>
                             }
                         />
@@ -1630,7 +1730,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
     );
 }
 
-function HalfDonutChart({ total, segments }: { total: number; segments: StatSegment[] }) {
+function HalfDonutChart({ total, segments, displayTotal }: { total: number; segments: StatSegment[]; displayTotal?: number | string }) {
     const radius = 65;
     const strokeWidth = 12;
     const viewBoxWidth = 160;
@@ -1710,13 +1810,15 @@ function HalfDonutChart({ total, segments }: { total: number; segments: StatSegm
                 pointerEvents: 'none'
             }}>
                 <span style={{ fontSize: '0.65rem', color: 'var(--foreground-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total</span>
-                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--foreground)', lineHeight: 1.1 }}>{total.toLocaleString()}</span>
+                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--foreground)', lineHeight: 1.1 }}>
+                    {(displayTotal ?? total).toLocaleString()}
+                </span>
             </div>
         </div>
     );
 }
 
-function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, className }: { title: string; icon: React.ReactNode; stats: { total: number; segments: StatSegment[] }; headerSuffix?: React.ReactNode; minHeight?: number; className?: string }) {
+function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, className }: { title: string; icon: React.ReactNode; stats: ProgressBarStats; headerSuffix?: React.ReactNode; minHeight?: number; className?: string }) {
     return (
         <div className={`card modern-card${className ? ` ${className}` : ''}`} style={{ width: '100%', background: 'var(--background-secondary)', minHeight }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1728,7 +1830,7 @@ function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, class
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap', flex: 1 }}>
-                <HalfDonutChart total={stats.total} segments={stats.segments} />
+                <HalfDonutChart total={stats.total} segments={stats.segments} displayTotal={stats.displayTotal} />
 
                 <div style={{ flex: '1', minWidth: '200px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1rem', justifyContent: 'flex-start' }}>
@@ -1739,7 +1841,9 @@ function ProgressBarSection({ title, icon, stats, headerSuffix, minHeight, class
                                     <span style={{ fontSize: '0.7rem', color: 'var(--foreground-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                         {s.label}
                                     </span>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground)' }}>{s.count}</span>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--foreground)' }}>
+                                        {s.displayValue ?? s.count}
+                                    </span>
                                 </div>
                             </div>
                         ))}
