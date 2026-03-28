@@ -84,6 +84,16 @@ async function fetchLatestDeploymentVersion() {
   }
 }
 
+function resolveDeploymentVersion(currentVersion: string, fetchedVersion: string) {
+  const current = currentVersion.trim();
+  const fetched = fetchedVersion.trim();
+  if (!fetched) return current;
+  if (fetched.toLowerCase() === "dev" && current && current.toLowerCase() !== "dev") {
+    return current;
+  }
+  return fetched;
+}
+
 async function clearDeploymentCaches() {
   if ("serviceWorker" in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
@@ -409,11 +419,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     try {
       const latestVersion = await fetchLatestDeploymentVersion();
-      if (latestVersion) {
-        setDeploymentVersion(latestVersion);
+      const resolvedVersion = resolveDeploymentVersion(deploymentVersion, latestVersion);
+      if (resolvedVersion) {
+        setDeploymentVersion(resolvedVersion);
       }
 
-      const desiredMigrationKey = `${SW_MIGRATION_KEY}:${latestVersion || deploymentVersion || Date.now()}`;
+      const desiredMigrationKey = `${SW_MIGRATION_KEY}:${resolvedVersion || deploymentVersion || Date.now()}`;
       try {
         window.sessionStorage.setItem(SW_MIGRATION_SESSION_KEY, desiredMigrationKey);
       } catch {
@@ -454,7 +465,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const loadDeploymentVersion = async () => {
       const nextVersion = await fetchLatestDeploymentVersion();
       if (!cancelled && nextVersion) {
-        setDeploymentVersion(nextVersion);
+        setDeploymentVersion((currentVersion) => resolveDeploymentVersion(currentVersion, nextVersion));
       }
     };
 
