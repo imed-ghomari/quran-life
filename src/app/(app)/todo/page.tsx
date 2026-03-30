@@ -24,7 +24,7 @@ import {
 } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
 import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
+import { getSimilarityEntryResolutionMeta, isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes, getVerseGroupKey } from '@/lib/reviewQueue';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
@@ -491,16 +491,39 @@ export default function TodoPage() {
                 const unresolvedEntries = muts.filter((entry: any) =>
                     !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
                 );
-                const actionableComparatorCount = unresolvedEntries.reduce((sum: number, entry: any) => {
-                    const unlockedComparators = Array.from(new Set(
+                const actionableComparatorAbsolutes = new Set<number>();
+                unresolvedEntries.forEach((entry: any) => {
+                    const rawComparators = Array.from(new Set(
                         (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
-                    )).filter((absRef) => (
-                        absRef !== absolute
-                        && checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
                     ));
 
-                    return sum + unlockedComparators.length;
-                }, 0);
+                    rawComparators.forEach((absRef) => {
+                        if (absRef === absolute) return;
+
+                        const matchRef = absoluteToSurahAyah(absRef);
+                        const isUnlocked = checkIsSurahLearned(matchRef.surahId);
+                        if (!isUnlocked) return;
+
+                        const localResolutionAbsolute = [
+                            Number(entry?.meta?.sourceAbs),
+                            ...rawComparators,
+                        ].find((candidateAbs) => Number.isFinite(candidateAbs) && absoluteToSurahAyah(candidateAbs).surahId === absoluteToSurahAyah(absolute).surahId);
+                        const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                            ? localResolutionAbsolute
+                            : absolute;
+                        const resolutionMeta = getSimilarityEntryResolutionMeta(
+                            decisionsMap,
+                            resolutionAbsolute,
+                            entry,
+                            { sameSurahOnly: true }
+                        );
+                        const isResolved = resolutionMeta.resolved && (resolutionMeta.ignored || isUnlocked);
+                        if (isResolved) return;
+
+                        actionableComparatorAbsolutes.add(absRef);
+                    });
+                });
+                const actionableComparatorCount = actionableComparatorAbsolutes.size;
                 const hasReviewedComparator = unresolvedEntries.some((entry: any) => {
                     const comparators = Array.from(new Set(
                         (Array.isArray(entry?.matches) ? entry.matches as number[] : [])

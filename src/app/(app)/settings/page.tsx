@@ -594,6 +594,7 @@ export default function SettingsPage() {
     const [settingsContextVerseCursor, setSettingsContextVerseCursor] = useState<Record<number, number>>({});
     const handledMutRouteKeyRef = useRef('');
     const pendingMutashabihatScrollRowRef = useRef<string | null>(null);
+    const settingsScrollContainerRef = useRef<HTMLDivElement | null>(null);
     const [settingsMindmapEditor, setSettingsMindmapEditor] = useState<{ surahId: number; snapshot?: any } | null>(null);
     const [settingsSplitsSurahId, setSettingsSplitsSurahId] = useState<number | null>(null);
     const [settingsAnchorBuilders, setSettingsAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
@@ -4165,16 +4166,51 @@ export default function SettingsPage() {
         if (isMobile || !pendingMutashabihatScrollRowRef.current || typeof window === 'undefined') return;
 
         const rowId = pendingMutashabihatScrollRowRef.current;
-        const element = document.getElementById(rowId);
-        if (!element) return;
+        let attempts = 0;
+        let cancelled = false;
 
-        pendingMutashabihatScrollRowRef.current = null;
-        window.requestAnimationFrame(() => {
-            element.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-            });
-        });
+        const scrollWhenReady = () => {
+            if (cancelled) return;
+
+            const element = document.getElementById(rowId);
+            if (element) {
+                pendingMutashabihatScrollRowRef.current = null;
+                const scrollContainer = settingsScrollContainerRef.current;
+
+                if (scrollContainer) {
+                    const elementRect = element.getBoundingClientRect();
+                    const containerRect = scrollContainer.getBoundingClientRect();
+                    const targetTop =
+                        scrollContainer.scrollTop
+                        + (elementRect.top - containerRect.top)
+                        - (scrollContainer.clientHeight / 2)
+                        + (elementRect.height / 2);
+
+                    scrollContainer.scrollTo({
+                        top: Math.max(0, targetTop),
+                        behavior: 'smooth',
+                    });
+                }
+
+                element.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'nearest',
+                });
+                return;
+            }
+
+            attempts += 1;
+            if (attempts >= 40) return;
+
+            window.setTimeout(scrollWhenReady, 120);
+        };
+
+        window.setTimeout(scrollWhenReady, 0);
+
+        return () => {
+            cancelled = true;
+        };
     }, [expandedMutItems, expandedSurahs, isMobile]);
 
     const settingsPageReady =
@@ -4275,7 +4311,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div ref={settingsScrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
                         <div className="settings-grid">
 
                             <div className="card modern-card" style={{
