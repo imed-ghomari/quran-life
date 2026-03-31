@@ -37,6 +37,9 @@ export const metadata: Metadata = {
     metadataBase: new URL(getSiteUrl()),
     title: 'Quran Life',
     description: 'Complete your learned Quran portions in manageable daily readings',
+    verification: {
+        google: process.env.GOOGLE_SITE_VERIFICATION ?? process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    },
     openGraph: {
         type: 'website',
         title: 'Quran Life',

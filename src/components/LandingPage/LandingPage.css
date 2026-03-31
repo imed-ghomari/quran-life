@@ -226,7 +226,7 @@
 
 /* Hero Section */
 .hero {
-  padding: 10rem 0 6rem;
+  padding: 9rem 0 3.25rem;
   overflow: hidden;
   position: relative;
 }
@@ -247,7 +247,7 @@
   justify-content: flex-end;
   align-self: start;
   position: relative;
-  min-height: 430px;
+  min-height: 360px;
   overflow: visible;
 }
 
@@ -362,6 +362,7 @@
     transform: none;
     margin: 0 auto;
   }
+
 }
 
 /* Buttons */
