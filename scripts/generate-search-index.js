@@ -49,6 +49,10 @@ function generateIndex() {
         const relPath = path.relative(contentDir, filePath);
         // Normalize path separators for Windows compatibility if needed, though we are on macos
         const normalizedRelPath = relPath.split(path.sep).join('/');
+
+        if (normalizedRelPath.startsWith('blog/')) {
+            return;
+        }
         
         let href = '/docs/' + normalizedRelPath.replace(/\.mdx$/, '');
         // Handle index files

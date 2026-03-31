@@ -35,7 +35,7 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
                 return { 
                     type: 'surah' as const, 
                     id: surahId, 
-                    templateUrl: `/assets/premade-mindmaps/surah-${surahId}.tldraw`
+                    templateUrl: `/api/premade-mindmaps/surah-${surahId}.tldraw`
                 };
             }
         } else if (slug.startsWith('mindmaps/part-')) {
@@ -44,7 +44,7 @@ export default function MindmapDocHeader({ slug }: MindmapDocHeaderProps) {
                 return { 
                     type: 'part' as const, 
                     id: partId, 
-                    templateUrl: `/assets/premade-mindmaps/part-${partId}.tldraw`
+                    templateUrl: `/api/premade-mindmaps/part-${partId}.tldraw`
                 };
             }
         }
