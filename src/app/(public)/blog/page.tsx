@@ -5,6 +5,12 @@ import styles from '@/components/blog/blog.module.css';
 import { getAllBlogPosts } from '@/lib/blog';
 import { getSiteUrl } from '@/lib/siteUrl';
 
+type PageProps = {
+  searchParams: Promise<{
+    category?: string | string[];
+  }>;
+};
+
 const title = 'Quran Life Blog | Quran Memorization, Hifdh Strategy, and Product Updates';
 const description =
   'Practical articles on Quran memorization, visual mindmaps, spaced repetition, and how to build a stronger hifdh routine with Quran Life.';
@@ -45,10 +51,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function BlogIndexPage() {
+export default async function BlogIndexPage({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams;
   const posts = getAllBlogPosts();
   const categories = Array.from(new Set(posts.flatMap((post) => post.categories)));
   const siteUrl = getSiteUrl();
+  const initialSelectedCategories = Array.isArray(resolvedSearchParams.category)
+    ? resolvedSearchParams.category
+    : resolvedSearchParams.category
+      ? [resolvedSearchParams.category]
+      : [];
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -86,7 +98,11 @@ export default function BlogIndexPage() {
 
       <div className={styles.container}>
         <section className={styles.blogHomeLayout}>
-          <BlogIndexClient posts={posts} categories={categories} />
+          <BlogIndexClient
+            posts={posts}
+            categories={categories}
+            initialSelectedCategories={initialSelectedCategories}
+          />
         </section>
       </div>
     </BlogShell>
