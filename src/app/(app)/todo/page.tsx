@@ -897,7 +897,9 @@ export default function TodoPage() {
     };
 
     const loadPremadeImportData = useCallback(async (type: 'surah' | 'part', id: number, options?: { silent?: boolean }) => {
-        const response = await fetch(`/assets/premade-mindmaps/${type}-${id}.tldraw`);
+        const response = await fetch(`/api/premade-mindmaps/${type}-${id}.tldraw`, {
+            cache: 'no-store',
+        });
         if (!response.ok) {
             if (response.status === 404) {
                 if (!options?.silent) {
@@ -922,7 +924,9 @@ export default function TodoPage() {
         let importedAnchors: any[] = [];
         if (type === 'surah') {
             try {
-                const anchorResponse = await fetch(`/assets/premade-mindmaps/surah-${id}.chunks.txt`);
+                const anchorResponse = await fetch(`/api/premade-mindmaps/surah-${id}.chunks.txt`, {
+                    cache: 'no-store',
+                });
                 if (anchorResponse.ok) {
                     const text = await anchorResponse.text();
                     importedAnchors = text.split('\n')
@@ -1272,7 +1276,7 @@ export default function TodoPage() {
 
     useEffect(() => {
         if (isEditor) return;
-        fetch('/assets/premade-mindmaps/index.json', { cache: 'no-store' })
+        fetch('/api/premade-mindmaps/index.json', { cache: 'no-store' })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data && Array.isArray(data.surah) && Array.isArray(data.part)) {

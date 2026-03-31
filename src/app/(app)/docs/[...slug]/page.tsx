@@ -50,37 +50,3 @@ export default async function Page({ params }: PageProps) {
         </div>
     );
 }
-
-export async function generateStaticParams() {
-    const contentDir = path.join(process.cwd(), 'content');
-    const files = getAllFiles(contentDir);
-    
-    return files
-        .filter(file => file !== 'index.mdx') // Skip root index.mdx as it's handled by app/(app)/docs/page.tsx
-        .map(file => {
-            const slug = file.replace(/\.mdx$/, '').split(path.sep);
-            // Handle directory index files (e.g., "mindmaps/index.mdx" -> ["mindmaps"])
-            if (slug[slug.length - 1] === 'index') {
-                slug.pop();
-            }
-            return { slug };
-        })
-        .filter(item => item.slug.length > 0);
-}
-
-function getAllFiles(dirPath: string, arrayOfFiles: string[] = []) {
-    const files = fs.readdirSync(dirPath);
-
-    files.forEach(function(file) {
-        if (fs.statSync(dirPath + "/" + file).isDirectory()) {
-            arrayOfFiles = getAllFiles(dirPath + "/" + file, arrayOfFiles);
-        } else {
-            if (file.endsWith('.mdx')) {
-                const relativePath = path.relative(path.join(process.cwd(), 'content'), path.join(dirPath, file));
-                arrayOfFiles.push(relativePath);
-            }
-        }
-    });
-
-    return arrayOfFiles;
-}
