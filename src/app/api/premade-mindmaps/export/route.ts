@@ -21,7 +21,7 @@ type PremadeIndex = {
     updatedAt?: string;
 };
 
-const premadeDir = path.join(process.cwd(), 'public', 'assets', 'premade-mindmaps');
+const premadeDir = path.join(process.cwd(), 'private-assets', 'premade-mindmaps');
 const indexPath = path.join(premadeDir, 'index.json');
 const isReadOnlyFsRuntime = process.env.NETLIFY === 'true' || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
