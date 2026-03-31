@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { X } from 'lucide-react';
 import type { BlogPostSummary } from '@/lib/blog';
 import styles from './blog.module.css';
@@ -10,6 +9,7 @@ import styles from './blog.module.css';
 type BlogIndexClientProps = {
   posts: BlogPostSummary[];
   categories: string[];
+  initialSelectedCategories: string[];
 };
 
 function formatDate(date: string): string {
@@ -20,27 +20,14 @@ function formatDate(date: string): string {
   }).format(new Date(date));
 }
 
-export default function BlogIndexClient({ posts, categories }: BlogIndexClientProps) {
-  const searchParams = useSearchParams();
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-
-  useEffect(() => {
-    const nextCategories = searchParams
-      .getAll('category')
-      .map((value) => value.trim())
-      .filter((value) => categories.includes(value));
-
-    setSelectedCategories((current) => {
-      if (
-        current.length === nextCategories.length
-        && current.every((value, index) => value === nextCategories[index])
-      ) {
-        return current;
-      }
-
-      return nextCategories;
-    });
-  }, [categories, searchParams]);
+export default function BlogIndexClient({
+  posts,
+  categories,
+  initialSelectedCategories,
+}: BlogIndexClientProps) {
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    initialSelectedCategories.filter((value) => categories.includes(value)),
+  );
 
   const filteredPosts = useMemo(() => {
     if (selectedCategories.length === 0) return posts;
