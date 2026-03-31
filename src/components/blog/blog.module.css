@@ -35,6 +35,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.7rem;
+  min-width: 0;
   text-decoration: none;
   color: var(--foreground);
   font-weight: 700;
@@ -50,6 +51,7 @@
 .brandText {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   line-height: 1.05;
 }
 
@@ -208,13 +210,13 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.52rem 0.78rem;
+  padding: 0.46rem 0.72rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   background: color-mix(in srgb, var(--background-secondary) 72%, transparent);
   color: var(--foreground-secondary);
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   cursor: pointer;
   transition:
     color 180ms ease,
@@ -288,14 +290,15 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  padding: 0.45rem 0.75rem;
+  padding: 0.36rem 0.62rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: color-mix(in srgb, var(--accent) 74%, var(--foreground));
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-decoration: none;
 }
 
 .cardTitle {
@@ -357,10 +360,45 @@
 
 .emptyState {
   grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
   padding: 2rem 1.4rem;
   border-radius: 24px;
   border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
   background: color-mix(in srgb, var(--background) 96%, transparent);
+}
+
+.emptyStateVisual {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2rem;
+}
+
+.emptyStateDot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.emptyStateLine,
+.emptyStateLineShort {
+  display: block;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-secondary) 90%, transparent);
+}
+
+.emptyStateLine {
+  width: 3rem;
+}
+
+.emptyStateLineShort {
+  width: 1.4rem;
 }
 
 .emptyStateTitle {
@@ -370,9 +408,28 @@
 }
 
 .emptyStateDescription {
-  margin: 0.65rem 0 0;
+  margin: 0;
   color: var(--foreground-secondary);
   line-height: 1.7;
+}
+
+.emptyStateTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.emptyStateTag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  background: color-mix(in srgb, var(--background-secondary) 72%, transparent);
+  color: var(--foreground-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .postCard {
@@ -463,6 +520,53 @@
   border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
 }
 
+.articleShareRow {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 0.95rem;
+}
+
+.articleShareLabel {
+  color: var(--foreground-secondary);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.articleShareLinks {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.articleShareLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0.22rem 0.58rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--background-secondary) 74%, transparent);
+  color: var(--foreground-secondary);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.articleShareLink:hover {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  transform: translateY(-1px);
+}
+
 .authorName {
   margin: 0;
   font-weight: 700;
@@ -487,6 +591,12 @@
 
 .articleRelatedSection .sectionTitleRow {
   margin-bottom: 1.2rem;
+}
+
+.articleRelatedSection .sectionDescription {
+  max-width: 32rem;
+  font-size: 0.98rem;
+  line-height: 1.62;
 }
 
 .articleRelatedSection .postsGrid {
@@ -679,48 +789,362 @@
 }
 
 @media (max-width: 768px) {
+  .container {
+    width: min(1120px, calc(100% - 2rem));
+  }
+
+  .siteHeader {
+    padding-top: 0.5rem;
+  }
+
   .siteHeaderInner,
   .siteFooterInner {
     flex-direction: column;
     align-items: flex-start;
   }
 
+  .siteHeaderInner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    min-height: auto;
+    padding: 0.8rem;
+  }
+
+  .brand {
+    gap: 0.6rem;
+  }
+
+  .brandMark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .brandText {
+    line-height: 1;
+  }
+
+  .brandText span:first-child {
+    font-size: 0.98rem;
+  }
+
+  .brandLabel {
+    font-size: 0.68rem;
+  }
+
   .siteNav {
-    width: 100%;
-    justify-content: flex-start;
+    width: auto;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
   }
 
   .themeToggleLabel {
     display: none;
   }
 
-  .heroContent,
-  .articleBody,
-  .postCard .cardBody {
-    padding-left: 1.2rem;
-    padding-right: 1.2rem;
+  .siteNavLink,
+  .themeToggle,
+  .siteCta {
+    min-height: 40px;
+    padding: 0.62rem 0.85rem;
+    border-radius: 10px;
+  }
+
+  .siteCta {
+    min-width: fit-content;
+    margin-left: 0;
+    font-size: 0.92rem;
   }
 
   .main {
-    padding-top: 1.2rem;
+    padding-top: 1.15rem;
+  }
+
+  .blogSidebar,
+  .postsGrid,
+  .articleIntro,
+  .articleBodyWrap,
+  .articleRelatedSection,
+  .articleCtaSection {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
   }
 
   .heroPanel,
   .postCard,
   .ctaPanel {
-    border-radius: 24px;
+    border-radius: 20px;
   }
 
   .articleTitle {
     max-width: none;
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+
+  .sidebarTitle {
+    font-size: clamp(2.6rem, 12vw, 4rem);
+    line-height: 0.9;
+    letter-spacing: -0.065em;
+  }
+
+  .sidebarDescription {
+    max-width: 20rem;
+    margin-top: 1rem;
+    font-size: 0.98rem;
+    line-height: 1.55;
+  }
+
+  .postCard .cardBody,
+  .articleBody {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .sidebarBlock {
+    margin-top: 1.9rem;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .sidebarLabelRow {
+    justify-content: flex-start;
+    align-items: baseline;
+  }
+
+  .sidebarTopics {
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    margin-top: 0.9rem;
+    margin-right: calc(-1 * 0.15rem);
+    padding-right: 0.15rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebarTopics::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebarFilter {
+    flex: 0 0 auto;
+    padding: 0.32rem 0.2rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground-secondary) 90%, transparent);
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .sidebarFilter:hover,
+  .sidebarFilter[data-active='true'] {
+    color: var(--foreground);
+    border-color: var(--foreground);
+    background: transparent;
+    transform: none;
+  }
+
+  .postsGrid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .postCard {
+    padding: 1rem 0.95rem;
+  }
+
+  .postCardTitle {
+    font-size: 1.18rem;
+    line-height: 1.14;
+  }
+
+  .cardDescription {
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+
+  .metaRow {
+    gap: 0.5rem 0.8rem;
+    font-size: 0.84rem;
+  }
+
+  .category {
+    padding: 0.32rem 0.56rem;
+    font-size: 0.68rem;
   }
 
   .articleMetaBar {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.35rem;
+    margin-top: 1rem;
+  }
+
+  .articleShareRow {
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .articleShareLink {
+    min-height: 28px;
+    padding: 0.2rem 0.52rem;
+    font-size: 0.74rem;
+  }
+
+  .articleBodyWrap,
+  .articleRelatedSection,
+  .articleCtaSection {
+    margin-top: 2rem;
   }
 
   .articleRelatedSection .postsGrid {
     grid-template-columns: 1fr;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .articleRelatedSection .sectionTitleRow {
+    margin-bottom: 0.95rem;
+  }
+
+  .articleRelatedSection .sectionDescription {
+    max-width: 24rem;
+    font-size: 0.93rem;
+    line-height: 1.55;
+  }
+
+  .emptyState {
+    padding: 1.35rem 1.05rem;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .container {
+    width: min(1120px, calc(100% - 2.4rem));
+  }
+
+  .siteHeaderInner {
+    padding: 0.7rem;
+    border-radius: 16px;
+  }
+
+  .brandText span:first-child {
+    font-size: 0.92rem;
+  }
+
+  .brandLabel {
+    font-size: 0.64rem;
+  }
+
+  .siteNav {
+    gap: 0.35rem;
+  }
+
+  .siteNavLink,
+  .themeToggle {
+    min-height: 38px;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
+
+  .siteCta {
+    min-height: 38px;
+    width: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .blogSidebar,
+  .postsGrid,
+  .articleIntro,
+  .articleBodyWrap,
+  .articleRelatedSection,
+  .articleCtaSection {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .blogSidebar {
+    padding-bottom: 1rem;
+  }
+
+  .sidebarLabel {
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--foreground-secondary);
+  }
+
+  .sidebarTopics {
+    gap: 0.8rem;
+  }
+
+  .sidebarFilter {
+    min-height: 32px;
+    padding-left: 0;
+    padding-right: 0;
+    font-size: 0.92rem;
+  }
+
+  .postCardTitle {
+    font-size: 1.08rem;
+  }
+
+  .cardBody {
+    gap: 0.8rem;
+  }
+
+  .cardDescription {
+    font-size: 0.92rem;
+  }
+
+  .articleIntro {
+    max-width: 100%;
+  }
+
+  .articleTitle {
+    margin-top: 0.65rem;
+  }
+
+  .emptyState {
+    padding: 1.2rem 1rem;
+  }
+
+  .emptyStateTitle {
+    font-size: 1.08rem;
+  }
+
+  .emptyStateTag {
+    font-size: 0.76rem;
+  }
+
+  .articleRelatedSection .sectionDescription {
+    max-width: 19rem;
+    font-size: 0.91rem;
+  }
+
+  .articleRelatedSection .postsGrid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .articleBody {
+    font-size: 0.97rem;
+    line-height: 1.72;
+  }
+
+  .articleBody :global(h2) {
+    font-size: 1.55rem;
+    margin-top: 2.2rem;
+  }
+
+  .articleBody :global(h3) {
+    font-size: 1.2rem;
   }
 }

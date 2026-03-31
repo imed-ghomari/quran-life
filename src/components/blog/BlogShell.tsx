@@ -13,7 +13,7 @@ export default function BlogShell({ activePath, children }: BlogShellProps) {
     <div className={styles.shell}>
       <header className={styles.siteHeader}>
         <div className={`${styles.container} ${styles.siteHeaderInner}`}>
-          <Link href="/" className={styles.brand}>
+          <Link href="/blog" className={styles.brand}>
             <Image
               src="/logo.png"
               alt="Quran Life"

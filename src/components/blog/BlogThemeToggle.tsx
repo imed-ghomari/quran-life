@@ -20,6 +20,7 @@ export default function BlogThemeToggle() {
 
   return (
     <button
+      suppressHydrationWarning
       type="button"
       onClick={cycleTheme}
       className={styles.themeToggle}

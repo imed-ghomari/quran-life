@@ -14,6 +14,38 @@ type PageProps = {
   }>;
 };
 
+function getArticleCta(categories: string[]) {
+  if (categories.includes('Product Journey')) {
+    return {
+      title: 'See what Quran Life is building',
+      description: 'Follow the product as it grows into a more complete hifdh system.',
+      primaryLabel: 'Start with Quran Life',
+    };
+  }
+
+  if (categories.includes('Feature Deep Dive') && categories.includes('Philosophy')) {
+    return {
+      title: 'Try the method inside the app',
+      description: 'Use the ideas and the workflow together instead of keeping them separate.',
+      primaryLabel: 'Try Quran Life',
+    };
+  }
+
+  if (categories.includes('Feature Deep Dive')) {
+    return {
+      title: 'Try this workflow in Quran Life',
+      description: 'Use the feature inside a full memorization system, not as an isolated trick.',
+      primaryLabel: 'Open Quran Life',
+    };
+  }
+
+  return {
+    title: 'Bring this method into your hifdh',
+    description: 'Use visual maps, review timing, and mutashabihat support in one place.',
+    primaryLabel: 'Try Quran Life',
+  };
+}
+
 function formatDate(date: string): string {
   return new Intl.DateTimeFormat('en', {
     month: 'long',
@@ -82,6 +114,26 @@ export default async function BlogPostPage({ params }: PageProps) {
 
   const relatedPosts = getRelatedBlogPosts(slug);
   const siteUrl = getSiteUrl();
+  const postUrl = `${siteUrl}/blog/${post.slug}`;
+  const cta = getArticleCta(post.categories);
+  const shareLinks = [
+    {
+      label: 'X',
+      href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl)}&text=${encodeURIComponent(post.title)}`,
+    },
+    {
+      label: 'LinkedIn',
+      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(postUrl)}`,
+    },
+    {
+      label: 'Threads',
+      href: `https://www.threads.net/intent/post?text=${encodeURIComponent(`${post.title} ${postUrl}`)}`,
+    },
+    {
+      label: 'Facebook',
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`,
+    },
+  ];
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
@@ -137,6 +189,23 @@ export default async function BlogPostPage({ params }: PageProps) {
             <p className={styles.authorName}>By {post.author}</p>
             <p className={styles.articleDate}>{formatDate(post.publishedAt)}</p>
           </div>
+
+          <div className={styles.articleShareRow}>
+            <span className={styles.articleShareLabel}>Share this article</span>
+            <div className={styles.articleShareLinks}>
+              {shareLinks.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.articleShareLink}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          </div>
         </section>
 
         <article className={styles.articleBodyWrap}>
@@ -147,13 +216,11 @@ export default async function BlogPostPage({ params }: PageProps) {
 
         <section className={styles.articleCtaSection}>
           <div className={styles.ctaPanel}>
-            <h2 className={styles.ctaTitle}>Want a calmer hifdh workflow?</h2>
-            <p className={styles.ctaDescription}>
-              Visual maps, smarter review timing, and clearer mutashabihat support in one place.
-            </p>
+            <h2 className={styles.ctaTitle}>{cta.title}</h2>
+            <p className={styles.ctaDescription}>{cta.description}</p>
             <div className={styles.ctaActions}>
               <Link href="/auth?plan=monthly" className={styles.siteCta}>
-                Try Quran Life
+                {cta.primaryLabel}
               </Link>
               <Link href="/blog" className={styles.ctaButtonSecondary}>
                 Back to the blog
@@ -167,10 +234,6 @@ export default async function BlogPostPage({ params }: PageProps) {
             <div className={styles.sectionTitleRow}>
               <div>
                 <h2 className={styles.sectionTitle}>Related articles</h2>
-                <p className={styles.sectionDescription}>
-                  Keep reading from the same topic area if you want to strengthen the same part of
-                  your memorization workflow.
-                </p>
               </div>
             </div>
 
