@@ -11,7 +11,8 @@ Your blog lives in `content/blog`.
    - `description`: used for Google and social previews
    - `publishedAt`: use `YYYY-MM-DD`
    - `updatedAt`: optional but recommended when you revise a post
-   - `tags`: short keyword phrases
+   - `isPublished`: set `true` only when the post should appear on the site
+   - `categories`: one or more categories, for example `Philosophy` or `Feature Deep Dive`
    - `excerpt`: the short summary shown on `/blog`
    - `featured`: optional for future use; it is not used by the current blog layout
 4. Write the article below the `---` frontmatter block in normal markdown or MDX.
@@ -25,7 +26,8 @@ Your blog lives in `content/blog`.
 ## Tips
 
 - Keep titles specific and searchable.
+- Leave `isPublished: false` while drafting, then switch it to `true` when you are ready to publish.
+- One article can belong to multiple categories.
 - Write the `excerpt` like a clean 1-2 sentence preview for the card.
-- Add 3 to 5 tags only.
 - Use one main topic per article so Google understands the page clearly.
 - Update `updatedAt` whenever you significantly improve an article.

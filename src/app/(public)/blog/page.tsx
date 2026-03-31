@@ -47,7 +47,7 @@ export const metadata: Metadata = {
 
 export default function BlogIndexPage() {
   const posts = getAllBlogPosts();
-  const categories = Array.from(new Set(posts.map((post) => post.category)));
+  const categories = Array.from(new Set(posts.flatMap((post) => post.categories)));
   const siteUrl = getSiteUrl();
 
   const jsonLd = {
@@ -69,7 +69,7 @@ export default function BlogIndexPage() {
       datePublished: post.publishedAt,
       dateModified: post.updatedAt ?? post.publishedAt,
       url: `${siteUrl}/blog/${post.slug}`,
-      keywords: post.tags.join(', '),
+      articleSection: post.categories[0],
       author: {
         '@type': 'Organization',
         name: post.author,

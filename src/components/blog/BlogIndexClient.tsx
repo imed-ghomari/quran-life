@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { X } from 'lucide-react';
 import type { BlogPostSummary } from '@/lib/blog';
 import styles from './blog.module.css';
@@ -20,12 +21,33 @@ function formatDate(date: string): string {
 }
 
 export default function BlogIndexClient({ posts, categories }: BlogIndexClientProps) {
+  const searchParams = useSearchParams();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    const nextCategories = searchParams
+      .getAll('category')
+      .map((value) => value.trim())
+      .filter((value) => categories.includes(value));
+
+    setSelectedCategories((current) => {
+      if (
+        current.length === nextCategories.length
+        && current.every((value, index) => value === nextCategories[index])
+      ) {
+        return current;
+      }
+
+      return nextCategories;
+    });
+  }, [categories, searchParams]);
 
   const filteredPosts = useMemo(() => {
     if (selectedCategories.length === 0) return posts;
 
-    return posts.filter((post) => selectedCategories.includes(post.category));
+    return posts.filter((post) =>
+      selectedCategories.some((category) => post.categories.includes(category)),
+    );
   }, [posts, selectedCategories]);
 
   const toggleCategory = (category: string) => {
@@ -83,7 +105,13 @@ export default function BlogIndexClient({ posts, categories }: BlogIndexClientPr
         {filteredPosts.map((post) => (
           <Link key={post.slug} href={`/blog/${post.slug}`} className={styles.postCard}>
             <div className={styles.cardBody}>
-              <span className={styles.category}>{post.category}</span>
+              <div className={styles.categoryRow}>
+                {post.categories.map((category) => (
+                  <span key={category} className={styles.category}>
+                    {category}
+                  </span>
+                ))}
+              </div>
               <h2 className={styles.postCardTitle}>{post.title}</h2>
               <p className={styles.cardDescription}>{post.excerpt}</p>
               <div className={styles.metaRow}>

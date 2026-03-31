@@ -8,9 +8,9 @@ export type BlogFrontmatter = {
   description: string;
   publishedAt: string;
   updatedAt?: string;
+  isPublished: boolean;
   author: string;
-  category: string;
-  tags: string[];
+  categories: string[];
   excerpt: string;
   featured: boolean;
 };
@@ -26,7 +26,7 @@ export type BlogPost = BlogPostSummary & {
 
 const BLOG_CONTENT_DIR = path.join(process.cwd(), 'content', 'blog');
 const DEFAULT_AUTHOR = 'Quran Life';
-const DEFAULT_CATEGORY = 'Quran Memorization';
+const DEFAULT_CATEGORIES = ['Philosophy'];
 const WORDS_PER_MINUTE = 200;
 
 type ParsedFrontmatterValue = string | boolean | string[];
@@ -166,20 +166,27 @@ function normalizeFrontmatter(
     typeof rawFrontmatter.publishedAt === 'string' ? rawFrontmatter.publishedAt.trim() : '';
   const updatedAt =
     typeof rawFrontmatter.updatedAt === 'string' ? rawFrontmatter.updatedAt.trim() : undefined;
+  const isPublished = rawFrontmatter.isPublished === true;
   const author =
     typeof rawFrontmatter.author === 'string' && rawFrontmatter.author.trim()
       ? rawFrontmatter.author.trim()
       : DEFAULT_AUTHOR;
-  const category =
+  const categories = normalizeStringArray(rawFrontmatter.categories);
+  const legacyCategory =
     typeof rawFrontmatter.category === 'string' && rawFrontmatter.category.trim()
       ? rawFrontmatter.category.trim()
-      : DEFAULT_CATEGORY;
-  const tags = normalizeStringArray(rawFrontmatter.tags);
+      : '';
   const excerpt =
     typeof rawFrontmatter.excerpt === 'string' && rawFrontmatter.excerpt.trim()
       ? rawFrontmatter.excerpt.trim()
       : getFallbackExcerpt(content);
   const featured = rawFrontmatter.featured === true;
+  const normalizedCategories =
+    categories.length > 0
+      ? categories
+      : legacyCategory
+        ? [legacyCategory]
+        : DEFAULT_CATEGORIES;
 
   if (!title) {
     throw new Error(`Blog post "${slug}" is missing a title in frontmatter.`);
@@ -202,9 +209,9 @@ function normalizeFrontmatter(
     description,
     publishedAt,
     updatedAt,
+    isPublished,
     author,
-    category,
-    tags,
+    categories: normalizedCategories,
     excerpt,
     featured,
   };
@@ -233,6 +240,7 @@ export function getAllBlogPosts(): BlogPostSummary[] {
         readingTimeMinutes: getReadingTimeMinutes(content),
       };
     })
+    .filter((post) => post.isPublished)
     .sort((first, second) => {
       return Date.parse(second.publishedAt) - Date.parse(first.publishedAt);
     });
@@ -245,6 +253,10 @@ export function getBlogPostBySlug(slug: string): BlogPost | null {
   const source = fs.readFileSync(filePath, 'utf8');
   const { data, content } = parseFrontmatter(source);
   const frontmatter = normalizeFrontmatter(slug, data, content);
+
+  if (!frontmatter.isPublished) {
+    return null;
+  }
 
   return {
     slug,
@@ -262,11 +274,15 @@ export function getRelatedBlogPosts(slug: string, limit = 3): BlogPostSummary[] 
   return posts
     .filter((post) => post.slug !== slug)
     .sort((first, second) => {
-      const firstSharedTags = first.tags.filter((tag) => currentPost.tags.includes(tag)).length;
-      const secondSharedTags = second.tags.filter((tag) => currentPost.tags.includes(tag)).length;
+      const firstSharedCategories = first.categories.filter((category) =>
+        currentPost.categories.includes(category),
+      ).length;
+      const secondSharedCategories = second.categories.filter((category) =>
+        currentPost.categories.includes(category),
+      ).length;
 
-      if (firstSharedTags !== secondSharedTags) {
-        return secondSharedTags - firstSharedTags;
+      if (firstSharedCategories !== secondSharedCategories) {
+        return secondSharedCategories - firstSharedCategories;
       }
 
       return Date.parse(second.publishedAt) - Date.parse(first.publishedAt);

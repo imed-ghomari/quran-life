@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: {
       canonical: `/blog/${post.slug}`,
     },
-    keywords: post.tags,
+    keywords: post.categories,
     openGraph: {
       type: 'article',
       url: `/blog/${post.slug}`,
@@ -53,7 +53,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       publishedTime: post.publishedAt,
       modifiedTime: post.updatedAt ?? post.publishedAt,
       authors: [post.author],
-      tags: post.tags,
+      tags: post.categories,
       images: [
         {
           url: '/og-image.jpg',
@@ -103,8 +103,8 @@ export default async function BlogPostPage({ params }: PageProps) {
     },
     mainEntityOfPage: `${siteUrl}/blog/${post.slug}`,
     url: `${siteUrl}/blog/${post.slug}`,
-    keywords: post.tags.join(', '),
-    articleSection: post.category,
+    keywords: post.categories.join(', '),
+    articleSection: post.categories[0],
     image: `${siteUrl}/og-image.jpg`,
   };
 
@@ -120,7 +120,17 @@ export default async function BlogPostPage({ params }: PageProps) {
           <Link href="/blog" className={styles.backLink}>
             ← All posts
           </Link>
-          <p className={styles.articleKicker}>{post.category}</p>
+          <div className={styles.articleCategoryLinks}>
+            {post.categories.map((category) => (
+              <Link
+                key={category}
+                href={`/blog?category=${encodeURIComponent(category)}`}
+                className={styles.category}
+              >
+                {category}
+              </Link>
+            ))}
+          </div>
           <h1 className={styles.articleTitle}>{post.title}</h1>
 
           <div className={styles.articleMetaBar}>
@@ -137,14 +147,13 @@ export default async function BlogPostPage({ params }: PageProps) {
 
         <section className={styles.articleCtaSection}>
           <div className={styles.ctaPanel}>
-            <h2 className={styles.ctaTitle}>Want a more guided hifdh workflow?</h2>
+            <h2 className={styles.ctaTitle}>Want a calmer hifdh workflow?</h2>
             <p className={styles.ctaDescription}>
-              Quran Life brings visual mindmaps, smart review timing, and mutashabihat support
-              into one calmer memorization system.
+              Visual maps, smarter review timing, and clearer mutashabihat support in one place.
             </p>
             <div className={styles.ctaActions}>
               <Link href="/auth?plan=monthly" className={styles.siteCta}>
-                Start with Quran Life
+                Try Quran Life
               </Link>
               <Link href="/blog" className={styles.ctaButtonSecondary}>
                 Back to the blog
@@ -154,7 +163,7 @@ export default async function BlogPostPage({ params }: PageProps) {
         </section>
 
         {relatedPosts.length > 0 ? (
-          <section className={styles.section}>
+          <section className={styles.articleRelatedSection}>
             <div className={styles.sectionTitleRow}>
               <div>
                 <h2 className={styles.sectionTitle}>Related articles</h2>
@@ -173,7 +182,13 @@ export default async function BlogPostPage({ params }: PageProps) {
                   className={styles.postCard}
                 >
                   <div className={styles.cardBody}>
-                    <span className={styles.category}>{relatedPost.category}</span>
+                    <div className={styles.categoryRow}>
+                      {relatedPost.categories.map((category) => (
+                        <span key={category} className={styles.category}>
+                          {category}
+                        </span>
+                      ))}
+                    </div>
                     <h3 className={styles.postCardTitle}>{relatedPost.title}</h3>
                     <p className={styles.cardDescription}>{relatedPost.excerpt}</p>
                     <div className={styles.metaRow}>
