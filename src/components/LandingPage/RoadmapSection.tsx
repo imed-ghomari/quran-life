@@ -33,7 +33,7 @@ const RoadmapSection: React.FC = () => {
       { id: 16, title: 'Conflict-safe mindmap sync via choice'}
     ],
     inProgress: [
-      { id: 23, title: 'App Launch' }
+      { id: 23, title: 'Launch + Minimum User Traction' }
     ],
     launched: [
       { id: 7, title: 'Part 7 Pre-made Mindmaps (Surah 67-114)' },

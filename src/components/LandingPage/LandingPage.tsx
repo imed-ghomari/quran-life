@@ -255,6 +255,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <a href="#roadmap" className="nav-link">
               Roadmap
             </a>
+            <span className="nav-divider" aria-hidden="true" />
             <Link href="/blog" className="nav-link">
               Blog
             </Link>

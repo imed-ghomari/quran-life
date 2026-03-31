@@ -152,6 +152,13 @@
   gap: 0.85rem;
 }
 
+.nav-divider {
+  width: 1px;
+  height: 1.35rem;
+  background: color-mix(in srgb, var(--border) 82%, transparent);
+  opacity: 0.9;
+}
+
 .nav-theme-btn {
   padding: 0 !important;
   border-radius: 12px !important;
