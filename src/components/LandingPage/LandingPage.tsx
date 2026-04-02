@@ -480,12 +480,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="footer-links">
-            <Link className="footer-link" href="/blog">Blog</Link>
-            <span aria-hidden="true">•</span>
+            <Link className="footer-link footer-link-blog" href="/blog">Blog</Link>
+            <span className="footer-separator footer-separator-blog" aria-hidden="true">•</span>
             <a className="footer-link" href="/terms">Terms of Service</a>
-            <span aria-hidden="true">•</span>
+            <span className="footer-separator" aria-hidden="true">•</span>
             <a className="footer-link" href="/privacy">Privacy Policy</a>
-            <span aria-hidden="true">•</span>
+            <span className="footer-separator" aria-hidden="true">•</span>
             <a
               className="footer-link discord-link"
               href="https://discord.gg/6wy3YRG2qB"

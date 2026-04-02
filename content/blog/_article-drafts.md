@@ -25,7 +25,7 @@ Use this for one concrete behavior in the app:
 - suspend behavior
 - statistics panels
 
-### 3. Product Journey
+### 3. Product
 
 Use this for build-in-public writing:
 
@@ -213,7 +213,7 @@ That keeps the map alive and useful. You are not decorating it for completeness.
 
 ## Plan For Quran Life
 
-- Category: `Product Journey`
+- Category: `Product`
 - Suggested title: `The plan for Quran Life: goals, user milestones, and what comes next`
 - Suggested tags: `product journey`, `roadmap`
 - Draft:
@@ -224,7 +224,7 @@ It is also healthy to be concrete about growth. How many committed users would p
 
 ## Why I Built Quran Life
 
-- Category: `Product Journey`
+- Category: `Product`
 - Suggested title: `Why I built Quran Life`
 - Suggested tags: `product journey`, `founder story`
 - Draft:
@@ -235,7 +235,7 @@ Quran Life came from the belief that memorization should be treated as a system,
 
 ## First Launch
 
-- Category: `Product Journey`
+- Category: `Product`
 - Suggested title: `Launching Quran Life for the first time`
 - Suggested tags: `release notes`, `product journey`
 - Draft:

@@ -1169,6 +1169,15 @@
   font-size: 0.9rem;
 }
 
+.footer-separator {
+  display: inline;
+}
+
+.footer-link-blog,
+.footer-separator-blog {
+  display: none;
+}
+
 .footer-link {
   color: var(--foreground-secondary);
   text-decoration: none;
@@ -1227,6 +1236,11 @@
 }
 
 @media (max-width: 768px) {
+  .footer-link-blog,
+  .footer-separator-blog {
+    display: inline;
+  }
+
   .landing-wrapper {
     --landing-nav-height: 64px;
   }
