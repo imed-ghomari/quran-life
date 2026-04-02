@@ -152,6 +152,13 @@
   gap: 0.85rem;
 }
 
+.nav-divider {
+  width: 1px;
+  height: 1.35rem;
+  background: color-mix(in srgb, var(--border) 82%, transparent);
+  opacity: 0.9;
+}
+
 .nav-theme-btn {
   padding: 0 !important;
   border-radius: 12px !important;
@@ -226,7 +233,7 @@
 
 /* Hero Section */
 .hero {
-  padding: 10rem 0 6rem;
+  padding: 9rem 0 3.25rem;
   overflow: hidden;
   position: relative;
 }
@@ -247,7 +254,7 @@
   justify-content: flex-end;
   align-self: start;
   position: relative;
-  min-height: 430px;
+  min-height: 360px;
   overflow: visible;
 }
 
@@ -362,6 +369,7 @@
     transform: none;
     margin: 0 auto;
   }
+
 }
 
 /* Buttons */
@@ -1161,6 +1169,15 @@
   font-size: 0.9rem;
 }
 
+.footer-separator {
+  display: inline;
+}
+
+.footer-link-blog,
+.footer-separator-blog {
+  display: none;
+}
+
 .footer-link {
   color: var(--foreground-secondary);
   text-decoration: none;
@@ -1219,6 +1236,11 @@
 }
 
 @media (max-width: 768px) {
+  .footer-link-blog,
+  .footer-separator-blog {
+    display: inline;
+  }
+
   .landing-wrapper {
     --landing-nav-height: 64px;
   }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useTheme } from '../ThemeProvider';
 import {
   Repeat,
@@ -254,6 +255,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <a href="#roadmap" className="nav-link">
               Roadmap
             </a>
+            <span className="nav-divider" aria-hidden="true" />
+            <Link href="/blog" className="nav-link">
+              Blog
+            </Link>
             <button
               className="btn btn-secondary nav-theme-btn"
               onClick={cycleTheme}
@@ -475,10 +480,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="footer-links">
+            <Link className="footer-link footer-link-blog" href="/blog">Blog</Link>
+            <span className="footer-separator footer-separator-blog" aria-hidden="true">•</span>
             <a className="footer-link" href="/terms">Terms of Service</a>
-            <span aria-hidden="true">•</span>
+            <span className="footer-separator" aria-hidden="true">•</span>
             <a className="footer-link" href="/privacy">Privacy Policy</a>
-            <span aria-hidden="true">•</span>
+            <span className="footer-separator" aria-hidden="true">•</span>
             <a
               className="footer-link discord-link"
               href="https://discord.gg/6wy3YRG2qB"
