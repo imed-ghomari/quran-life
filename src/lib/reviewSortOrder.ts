@@ -13,8 +13,8 @@ const REVIEW_SORT_ORDER_ALIASES: Record<string, ReviewSortOrder> = {
 };
 
 export const normalizeReviewSortOrder = (value: unknown): ReviewSortOrder => {
-    if (typeof value !== 'string') return 'surah_grouped';
+    if (typeof value !== 'string') return 'due_date';
     const trimmed = value.trim();
     if (REVIEW_SORT_ORDER_SET.has(trimmed)) return trimmed as ReviewSortOrder;
-    return REVIEW_SORT_ORDER_ALIASES[trimmed] ?? 'surah_grouped';
+    return REVIEW_SORT_ORDER_ALIASES[trimmed] ?? 'due_date';
 };

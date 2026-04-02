@@ -2124,7 +2124,7 @@ export default function SettingsPage() {
 
         if (activeMobilePage === 'advanced') {
             const currentTodoFilter = todoDefaultFilter ?? 'all';
-            const currentReviewSort = reviewSortOrder ?? 'surah_grouped';
+            const currentReviewSort = reviewSortOrder ?? 'due_date';
             const currentExitBehavior = completeExitBehavior ?? 'mindmap_only';
 
             return (
@@ -5855,7 +5855,7 @@ export default function SettingsPage() {
                                                 <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--foreground)' }}>Review Sorting</h4>
                                                 <div className="adv-chip-row">
                                                     {reviewSortOptions.map((option) => {
-                                                        const isActive = (reviewSortOrder ?? 'surah_grouped') === option.id;
+                                                        const isActive = (reviewSortOrder ?? 'due_date') === option.id;
                                                         return (
                                                             <button
                                                                 key={option.id}
