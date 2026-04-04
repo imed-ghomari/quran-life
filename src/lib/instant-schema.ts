@@ -161,11 +161,26 @@ export const schema = i.schema({
     subscriptions: i.entity({
       userId: i.string().indexed(),
       status: i.string().optional(),
-      paddleSubscriptionId: i.string().optional(),
+      paddleSubscriptionId: i.string().indexed().optional(),
       paddleCustomerId: i.string().optional(),
       priceId: i.string().optional(),
       updatedAt: i.string().optional(),
       customData: i.json().optional(),
+      subscriptionKind: i.string().optional(),
+      billingInterval: i.string().optional(),
+      seatCount: i.number().optional(),
+      classCode: i.string().indexed().optional(),
+      items: i.json().optional(),
+    }),
+    // Teacher-managed premium seats linked to student accounts.
+    teacherSeatAssignments: i.entity({
+      teacherUserId: i.string().indexed(),
+      studentUserId: i.string().indexed(),
+      subscriptionId: i.string().optional(),
+      status: i.string().optional(),
+      claimedAt: i.string().optional(),
+      graceEndsAt: i.string().optional(),
+      updatedAt: i.string().optional(),
     }),
     // Raw webhook events for reconciliation.
     paddleWebhookEvents: i.entity({

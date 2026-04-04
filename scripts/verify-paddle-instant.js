@@ -17,6 +17,26 @@ const YEARLY_PRICE_ID =
     : process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID_SANDBOX)
   || process.env.NEXT_PUBLIC_PADDLE_PRICE_YEARLY_ID
   || 'pri_01kgvkaxewf2awdc5xr906jxsc';
+const TEACHER_BASE_MONTHLY_PRICE_ID =
+  (isProduction
+    ? process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_BASE_MONTHLY_ID_PRODUCTION
+    : process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_BASE_MONTHLY_ID_SANDBOX)
+  || process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_BASE_MONTHLY_ID;
+const TEACHER_BASE_YEARLY_PRICE_ID =
+  (isProduction
+    ? process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_BASE_YEARLY_ID_PRODUCTION
+    : process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_BASE_YEARLY_ID_SANDBOX)
+  || process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_BASE_YEARLY_ID;
+const TEACHER_SEAT_MONTHLY_PRICE_ID =
+  (isProduction
+    ? process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_SEAT_MONTHLY_ID_PRODUCTION
+    : process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_SEAT_MONTHLY_ID_SANDBOX)
+  || process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_SEAT_MONTHLY_ID;
+const TEACHER_SEAT_YEARLY_PRICE_ID =
+  (isProduction
+    ? process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_SEAT_YEARLY_ID_PRODUCTION
+    : process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_SEAT_YEARLY_ID_SANDBOX)
+  || process.env.NEXT_PUBLIC_PADDLE_PRICE_TEACHER_SEAT_YEARLY_ID;
 
 const REQUIRED_SUBSCRIPTION_EVENTS = new Set([
   'subscription.created',
@@ -86,30 +106,37 @@ async function verifyCatalog(paddle) {
 
   const monthly = prices.find((p) => p.id === MONTHLY_PRICE_ID);
   const yearly = prices.find((p) => p.id === YEARLY_PRICE_ID);
+  const teacherBaseMonthly = prices.find((p) => p.id === TEACHER_BASE_MONTHLY_PRICE_ID);
+  const teacherBaseYearly = prices.find((p) => p.id === TEACHER_BASE_YEARLY_PRICE_ID);
+  const teacherSeatMonthly = prices.find((p) => p.id === TEACHER_SEAT_MONTHLY_PRICE_ID);
+  const teacherSeatYearly = prices.find((p) => p.id === TEACHER_SEAT_YEARLY_PRICE_ID);
 
-  if (!monthly) {
-    pushCheck('FAIL', 'Monthly checkout price ID not found in Paddle', `Missing: ${MONTHLY_PRICE_ID}`);
-  } else if (monthly.status !== 'active') {
-    pushCheck('FAIL', 'Monthly checkout price is not active', `${monthly.id} status=${monthly.status}`);
-  } else {
+  const checkPrice = (price, priceId, label) => {
+    if (!priceId) {
+      pushCheck('FAIL', `${label} price ID missing from environment`, 'Set the corresponding NEXT_PUBLIC_PADDLE_PRICE_* env var.');
+      return;
+    }
+    if (!price) {
+      pushCheck('FAIL', `${label} price ID not found in Paddle`, `Missing: ${priceId}`);
+      return;
+    }
+    if (price.status !== 'active') {
+      pushCheck('FAIL', `${label} price is not active`, `${price.id} status=${price.status}`);
+      return;
+    }
     pushCheck(
       'PASS',
-      'Monthly checkout price exists and is active',
-      `${monthly.id} ${monthly.billingCycle?.frequency || '?'} ${monthly.billingCycle?.interval || '?'}`
+      `${label} price exists and is active`,
+      `${price.id} ${price.billingCycle?.frequency || '?'} ${price.billingCycle?.interval || '?'}`
     );
-  }
+  };
 
-  if (!yearly) {
-    pushCheck('FAIL', 'Yearly checkout price ID not found in Paddle', `Missing: ${YEARLY_PRICE_ID}`);
-  } else if (yearly.status !== 'active') {
-    pushCheck('FAIL', 'Yearly checkout price is not active', `${yearly.id} status=${yearly.status}`);
-  } else {
-    pushCheck(
-      'PASS',
-      'Yearly checkout price exists and is active',
-      `${yearly.id} ${yearly.billingCycle?.frequency || '?'} ${yearly.billingCycle?.interval || '?'}`
-    );
-  }
+  checkPrice(monthly, MONTHLY_PRICE_ID, 'Student monthly checkout');
+  checkPrice(yearly, YEARLY_PRICE_ID, 'Student yearly checkout');
+  checkPrice(teacherBaseMonthly, TEACHER_BASE_MONTHLY_PRICE_ID, 'Teacher base monthly checkout');
+  checkPrice(teacherBaseYearly, TEACHER_BASE_YEARLY_PRICE_ID, 'Teacher base yearly checkout');
+  checkPrice(teacherSeatMonthly, TEACHER_SEAT_MONTHLY_PRICE_ID, 'Teacher seat monthly checkout');
+  checkPrice(teacherSeatYearly, TEACHER_SEAT_YEARLY_PRICE_ID, 'Teacher seat yearly checkout');
 
   if (monthly && yearly && monthly.productId === yearly.productId) {
     pushCheck('PASS', 'Monthly and yearly prices belong to the same Paddle product', monthly.productId);
@@ -118,6 +145,26 @@ async function verifyCatalog(paddle) {
       'FAIL',
       'Monthly and yearly prices are attached to different products',
       `monthly=${monthly.productId} yearly=${yearly.productId}`
+    );
+  }
+
+  if (teacherBaseMonthly && teacherBaseYearly && teacherBaseMonthly.productId === teacherBaseYearly.productId) {
+    pushCheck('PASS', 'Teacher base monthly and yearly prices belong to the same Paddle product', teacherBaseMonthly.productId);
+  } else if (teacherBaseMonthly && teacherBaseYearly) {
+    pushCheck(
+      'FAIL',
+      'Teacher base monthly and yearly prices are attached to different products',
+      `monthly=${teacherBaseMonthly.productId} yearly=${teacherBaseYearly.productId}`
+    );
+  }
+
+  if (teacherSeatMonthly && teacherSeatYearly && teacherSeatMonthly.productId === teacherSeatYearly.productId) {
+    pushCheck('PASS', 'Teacher seat monthly and yearly prices belong to the same Paddle product', teacherSeatMonthly.productId);
+  } else if (teacherSeatMonthly && teacherSeatYearly) {
+    pushCheck(
+      'FAIL',
+      'Teacher seat monthly and yearly prices are attached to different products',
+      `monthly=${teacherSeatMonthly.productId} yearly=${teacherSeatYearly.productId}`
     );
   }
 }

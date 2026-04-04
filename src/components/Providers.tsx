@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { ConfirmDialogProvider } from "./ConfirmDialogProvider";
 import { db } from "@/lib/instant";
 import { clientEnv } from "@/lib/env/client";
+import { AccessSource, SubscriptionKind } from "@/lib/teacherPlan";
 
 export const OnlineStatusContext = createContext(true);
 type AccessState = {
@@ -19,6 +20,9 @@ type AccessState = {
   isPaymentBypass: boolean;
   hasPremiumAccess: boolean;
   isEditor: boolean;
+  accessSource: AccessSource;
+  sponsorshipEndsAt: string | null;
+  subscriptionKind: SubscriptionKind | null;
 };
 export const AccessStateContext = createContext<AccessState>({
   isSubscriptionLoading: false,
@@ -27,6 +31,9 @@ export const AccessStateContext = createContext<AccessState>({
   isPaymentBypass: false,
   hasPremiumAccess: false,
   isEditor: false,
+  accessSource: "none",
+  sponsorshipEndsAt: null,
+  subscriptionKind: null,
 });
 const DeploymentVersionContext = createContext("");
 const SW_MIGRATION_KEY = "sw-migration-2026-03-14-v26-deploy-reset";
@@ -34,7 +41,7 @@ const SW_MIGRATION_STORAGE_KEY = "sw:migrationKey";
 const SW_MIGRATION_SESSION_KEY = "sw:migrationSessionKey";
 const DEPLOYMENT_VERSION_ENDPOINT = "/api/version";
 const AUTH_RESOLVED_ONCE_KEY = "auth:resolvedOnce";
-const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v1";
+const ACCESS_STATE_CACHE_KEY = "auth:accessStateCache:v2";
 const ACCESS_STATE_CACHE_TTL_MS = 15 * 60 * 1000;
 const ACCESS_STATE_REFRESH_INTERVAL_MS = 60 * 1000;
 const SW_CACHE_PREFIXES_TO_CLEAR = [
@@ -235,6 +242,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       isPaymentBypass: false,
       hasPremiumAccess: false,
       isEditor: false,
+      accessSource: "none",
+      sponsorshipEndsAt: null,
+      subscriptionKind: null,
     }
   ));
   const [deploymentVersion, setDeploymentVersion] = useState(() => {
@@ -363,6 +373,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
           isPaymentBypass: Boolean(data?.isPaymentBypass),
           hasPremiumAccess: Boolean(data?.hasPremiumAccess),
           isEditor: Boolean(data?.isEditor),
+          accessSource: (data?.accessSource ?? "none") as AccessSource,
+          sponsorshipEndsAt:
+            typeof data?.sponsorshipEndsAt === "string" && data.sponsorshipEndsAt
+              ? data.sponsorshipEndsAt
+              : null,
+          subscriptionKind:
+            data?.subscriptionKind === "teacher" || data?.subscriptionKind === "student"
+              ? data.subscriptionKind
+              : null,
         });
         if (typeof window !== "undefined") {
           const serializedState = JSON.stringify({
@@ -374,6 +393,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
               isPaymentBypass: Boolean(data?.isPaymentBypass),
               hasPremiumAccess: Boolean(data?.hasPremiumAccess),
               isEditor: Boolean(data?.isEditor),
+              accessSource: (data?.accessSource ?? "none") as AccessSource,
+              sponsorshipEndsAt:
+                typeof data?.sponsorshipEndsAt === "string" && data.sponsorshipEndsAt
+                  ? data.sponsorshipEndsAt
+                  : null,
+              subscriptionKind:
+                data?.subscriptionKind === "teacher" || data?.subscriptionKind === "student"
+                  ? data.subscriptionKind
+                  : null,
             },
           } satisfies AccessStateCache);
           try {

@@ -118,6 +118,14 @@ export default {
       delete: "false",
     },
   },
+  teacherSeatAssignments: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
   paddleWebhookEvents: {
     allow: {
       view: "false",

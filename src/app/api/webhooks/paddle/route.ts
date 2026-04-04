@@ -5,11 +5,19 @@ import { paddle } from '@/lib/paddle/server';
 import { db as instantAdmin } from '@/lib/instant-admin';
 import { serverEnv } from '@/lib/env/server';
 import { invalidateServerAccessStateCacheForUser } from '@/lib/server/access';
+import {
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  createSubscriptionEntityId,
+  createTeacherSeatAssignmentId,
+  getTeacherSeatAssignmentsForTeacher,
+  isSubscriptionActiveStatus,
+  normalizeSubscriptionRecord,
+} from '@/lib/server/subscriptions';
+import { summarizePaddleSubscriptionItems } from '@/lib/paddle/prices';
+import { TEACHER_GRACE_PERIOD_MS } from '@/lib/teacherPlan';
 
 const PADDLE_WEBHOOK_SECRET = serverEnv.PADDLE_WEBHOOK_SECRET;
 const INSTANT_ADMIN_TOKEN = serverEnv.INSTANT_ADMIN_TOKEN;
-
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 
 function deterministicUuid(input: string) {
   const hash = createHash('sha256').update(input).digest('hex');
@@ -70,6 +78,7 @@ async function upsertSubscription({
   customerId,
   priceId,
   customData,
+  items,
 }: {
   userId: string;
   subscriptionId: string;
@@ -77,20 +86,91 @@ async function upsertSubscription({
   customerId?: string | null;
   priceId?: string | null;
   customData?: Record<string, unknown> | null;
+  items: ReturnType<typeof summarizePaddleSubscriptionItems>;
 }) {
+  const normalized = normalizeSubscriptionRecord({
+    id: createSubscriptionEntityId(subscriptionId),
+    userId,
+    status,
+    paddleSubscriptionId: subscriptionId,
+    paddleCustomerId: customerId ?? '',
+    priceId: priceId ?? items[0]?.priceId ?? '',
+    updatedAt: new Date().toISOString(),
+    customData: customData ?? {},
+    items,
+  });
+
   await instantAdmin.transact(
-    instantAdmin.tx.subscriptions[deterministicUuid(`sub:${subscriptionId}`)].update({
+    instantAdmin.tx.subscriptions[createSubscriptionEntityId(subscriptionId)].update({
       userId,
       status,
       paddleSubscriptionId: subscriptionId,
       paddleCustomerId: customerId ?? '',
-      priceId: priceId ?? '',
-      updatedAt: new Date().toISOString(),
+      priceId: normalized.priceId ?? '',
+      updatedAt: normalized.updatedAt,
       customData: customData ?? {},
+      subscriptionKind: normalized.subscriptionKind,
+      billingInterval: normalized.billingInterval,
+      seatCount: normalized.seatCount,
+      classCode: normalized.classCode ?? '',
+      items: normalized.items,
     }),
   );
+
+  return normalized;
 }
 
+async function transitionTeacherAssignmentsToGrace(teacherUserId: string) {
+  const assignments = await getTeacherSeatAssignmentsForTeacher(teacherUserId);
+  const activeAssignments = assignments.filter((assignment) => assignment.status === 'active');
+  if (!activeAssignments.length) return;
+
+  const graceEndsAt = new Date(Date.now() + TEACHER_GRACE_PERIOD_MS).toISOString();
+  const updatedAt = new Date().toISOString();
+  const writes = activeAssignments.map((assignment) => {
+    const teacherSeatAssignmentId = createTeacherSeatAssignmentId(teacherUserId, assignment.studentUserId ?? '');
+    invalidateServerAccessStateCacheForUser(assignment.studentUserId ?? '');
+    return instantAdmin.tx.teacherSeatAssignments[teacherSeatAssignmentId].update({
+      teacherUserId,
+      studentUserId: assignment.studentUserId ?? '',
+      subscriptionId: assignment.subscriptionId ?? '',
+      status: 'grace',
+      claimedAt: assignment.claimedAt ?? '',
+      graceEndsAt,
+      updatedAt,
+    });
+  });
+
+  await instantAdmin.transact(writes.length === 1 ? writes[0] : writes);
+}
+
+async function reconcileTeacherSeatAssignments(teacherUserId: string, seatCount: number) {
+  const assignments = await getTeacherSeatAssignmentsForTeacher(teacherUserId);
+  const activeAssignments = assignments
+    .filter((assignment) => assignment.status === 'active')
+    .sort((a, b) => Date.parse(a.claimedAt ?? '') - Date.parse(b.claimedAt ?? ''));
+
+  if (activeAssignments.length <= seatCount) return;
+
+  const overflowAssignments = activeAssignments.slice(seatCount);
+  const graceEndsAt = new Date(Date.now() + TEACHER_GRACE_PERIOD_MS).toISOString();
+  const updatedAt = new Date().toISOString();
+  const writes = overflowAssignments.map((assignment) => {
+    const teacherSeatAssignmentId = createTeacherSeatAssignmentId(teacherUserId, assignment.studentUserId ?? '');
+    invalidateServerAccessStateCacheForUser(assignment.studentUserId ?? '');
+    return instantAdmin.tx.teacherSeatAssignments[teacherSeatAssignmentId].update({
+      teacherUserId,
+      studentUserId: assignment.studentUserId ?? '',
+      subscriptionId: assignment.subscriptionId ?? '',
+      status: 'grace',
+      claimedAt: assignment.claimedAt ?? '',
+      graceEndsAt,
+      updatedAt,
+    });
+  });
+
+  await instantAdmin.transact(writes.length === 1 ? writes[0] : writes);
+}
 
 export const POST = async (request: Request) => {
   if (!PADDLE_WEBHOOK_SECRET) {
@@ -147,17 +227,27 @@ export const POST = async (request: Request) => {
           return NextResponse.json({ ok: true, ignored: 'missing userId' });
         }
 
-        const priceId = subscription.items?.[0]?.price?.id ?? null;
+        const items = summarizePaddleSubscriptionItems(subscription.items);
+        const priceId = items[0]?.priceId ?? null;
 
-        await upsertSubscription({
+        const normalizedSubscription = await upsertSubscription({
           userId,
           subscriptionId: subscription.id,
           status: subscription.status,
           customerId: subscription.customerId,
           priceId,
           customData: subscription.customData ?? null,
+          items,
         });
         invalidateServerAccessStateCacheForUser(userId);
+
+        if (normalizedSubscription.subscriptionKind === 'teacher') {
+          if (isSubscriptionActiveStatus(normalizedSubscription.status)) {
+            await reconcileTeacherSeatAssignments(userId, normalizedSubscription.seatCount ?? 0);
+          } else {
+            await transitionTeacherAssignmentsToGrace(userId);
+          }
+        }
 
         await recordEvent({
           eventId: eventData.eventId,
@@ -173,6 +263,7 @@ export const POST = async (request: Request) => {
           ok: true,
           status: subscription.status,
           access: ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status),
+          subscriptionKind: normalizedSubscription.subscriptionKind,
         });
       }
       default: {

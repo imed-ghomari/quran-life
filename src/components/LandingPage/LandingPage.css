@@ -978,7 +978,9 @@
 }
 
 .pricing-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 480px));
+  gap: 1.25rem;
   justify-content: center;
   padding: 0 1rem;
 }
@@ -996,8 +998,12 @@
   position: relative;
   width: 100%;
   max-width: 480px;
-  /* Wider for single view */
   text-align: center;
+}
+
+.price-card.student-plan {
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
 }
 
 .price-card p {
@@ -1069,6 +1075,62 @@
   margin-top: 1rem;
   font-size: 0.85rem;
   color: var(--foreground-secondary);
+}
+
+.teacher-seat-picker {
+  margin-top: 1.1rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--background));
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  text-align: left;
+}
+
+.teacher-seat-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.teacher-seat-picker-controls {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.teacher-seat-stepper {
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: 14px;
+  height: 48px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.teacher-seat-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: 14px;
+  height: 48px;
+  padding: 0 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.teacher-seat-summary {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 /* Footer */
@@ -1439,6 +1501,10 @@
     padding: 1.75rem 1.25rem;
   }
 
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
   .price {
     font-size: 2.25rem;
   }
@@ -1455,6 +1521,11 @@
   .btn-lg {
     font-size: 1rem;
     padding: 0.875rem 1.5rem;
+  }
+
+  .teacher-seat-picker-controls {
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    gap: 0.6rem;
   }
 
   .partner-shoutout {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getVerifiedInstantUser } from '@/lib/server/auth';
+import { getServerAccessState } from '@/lib/server/access';
 import { getLatestSubscriptionForUser } from '@/lib/server/subscriptions';
 import { paddle } from '@/lib/paddle/server';
 
@@ -7,6 +8,17 @@ export async function GET() {
   const user = await getVerifiedInstantUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const accessState = await getServerAccessState();
+  if (accessState.accessSource === 'teacher_sponsored' || accessState.accessSource === 'teacher_grace') {
+    return NextResponse.json({
+      ok: true,
+      billing: {
+        nextRenewalAt: null,
+        canManageSubscription: false,
+      },
+    });
   }
 
   const latestSubscription = await getLatestSubscriptionForUser(user.id);
