@@ -67,7 +67,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isOnline = useContext(OnlineStatusContext);
-  const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
+  const { hasActiveSubscription, hasPremiumAccess, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [isHydrated, setIsHydrated] = useState(() => hasClientHydratedOnce);
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
@@ -78,7 +78,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
-  const hasAccess = hasActiveSubscription || isPaymentBypass || hasRecentCheckout;
+  const hasAccess = hasPremiumAccess || hasRecentCheckout;
 
   useEffect(() => {
     setIsHydrated(true);
@@ -162,7 +162,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
-    if (!hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout) return;
+    if (!hasPremiumAccess && !hasCheckedCheckout) return;
     if (!isOnline || (hasOfflineAccess && hasForcedOfflineOpen)) return;
 
     if (typeof window !== 'undefined') {
@@ -202,6 +202,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     isAuthLoading,
     isSubscriptionLoading,
     hasActiveSubscription,
+    hasPremiumAccess,
     isPaymentBypass,
     hasCheckedCheckout,
     isOnline,
@@ -222,7 +223,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   const needsCheckoutDecision =
-    !hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout;
+    !hasPremiumAccess && !hasCheckedCheckout;
   const shouldBlockOnCheckoutDecision = !shouldTreatAsOffline && needsCheckoutDecision && !user && !hasResolvedAuthOnce;
   const shouldBlockOnSubscriptionLoad = !shouldTreatAsOffline && isSubscriptionLoading;
   const isRedirecting =

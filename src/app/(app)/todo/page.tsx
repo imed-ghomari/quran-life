@@ -415,16 +415,13 @@ export default function TodoPage() {
     }, [decisions]);
 
     // -- 4. Task Aggregation --
-    const activePart = settings.activePart;
-
     const partTasks = useMemo(() => {
         const metaPartTask = { part: 0, mindmap: partMindmapsMap[0] };
         const parts: QuranPart[] = Array.from(CORE_QURAN_PARTS);
         const regularPartTasks = parts
-            .filter(p => activePart === ALL_QURAN_PART || p === activePart)
             .map(p => ({ part: p, mindmap: partMindmapsMap[p] }));
         return [metaPartTask, ...regularPartTasks];
-    }, [partMindmapsMap, activePart]);
+    }, [partMindmapsMap]);
 
     const completedSimilarityCards = useMemo(() => {
         return new Set(
@@ -462,10 +459,8 @@ export default function TodoPage() {
         return surahIds;
     }, [mindmaps, nodes, settings, suspendedVerseGroupKeys]);
 
-    // Filter Surahs based on the user's active part setting
     const surahTasks = useMemo(() => {
         const eligible = SURAHS.filter(s =>
-            (activePart === ALL_QURAN_PART || s.part === activePart) &&
             !settings.skippedSurahs?.includes(s.id)
         );
         return eligible
@@ -479,7 +474,7 @@ export default function TodoPage() {
                     : null,
             }))
             .sort((a, b) => a.surah.id - b.surah.id);
-    }, [activePart, activeReviewQueueSurahIds, mindmaps, settings.skippedSurahs]);
+    }, [activeReviewQueueSurahIds, mindmaps, settings.skippedSurahs]);
 
     const allSimilarityItems = useMemo(() => {
         return errors

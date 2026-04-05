@@ -8,7 +8,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
-import { Mail, ArrowRight, Lock, Hash } from 'lucide-react';
+import { Mail, ArrowRight, Lock, Hash, Ticket, Users } from 'lucide-react';
 
 // Import Suspense for handling asynchronous components
 import { Suspense } from 'react';
@@ -18,8 +18,9 @@ import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
-import { paddlePriceIds } from '@/lib/paddle/prices';
+import { buildCheckoutItems } from '@/lib/paddle/prices';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
+import { clampTeacherSeatCount, formatCurrency, generateClassCode, getStudentPlanPrice, getTeacherSeatPrice, getTeacherTotalPrice, normalizeClassCode } from '@/lib/teacherPlan';
 
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -37,7 +38,7 @@ function AuthContent() {
     };
     const { user, isLoading: isAuthLoading, error: authStateError } = authState;
     const isOnline = useContext(OnlineStatusContext);
-    const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
+    const { accessSource, hasPremiumAccess, isSubscriptionLoading } = useContext(AccessStateContext);
     const userEmail = user?.email ?? 'your account';
     const searchParams = useSearchParams();
     const paddle = usePaddle();
@@ -59,7 +60,22 @@ function AuthContent() {
         const rawPlan = searchParams?.get('plan');
         return rawPlan === 'monthly' || rawPlan === 'yearly' ? rawPlan : null;
     }, [searchParams]);
+    const roleFromQuery = useMemo(() => {
+        const rawRole = searchParams?.get('role');
+        return rawRole === 'teacher' ? 'teacher' : 'student';
+    }, [searchParams]);
+    const studentsFromQuery = useMemo(() => {
+        return clampTeacherSeatCount(searchParams?.get('students') ?? 1);
+    }, [searchParams]);
+    const classCodeFromQuery = useMemo(() => normalizeClassCode(searchParams?.get('classCode')), [searchParams]);
+    const shouldReplaceGraceSponsorship = useMemo(() => searchParams?.get('replaceSponsorship') === '1', [searchParams]);
     const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
+    const [role, setRole] = useState<'student' | 'teacher'>(() => roleFromQuery);
+    const [teacherSeatCount, setTeacherSeatCount] = useState(() => studentsFromQuery);
+    const [classCodeInput, setClassCodeInput] = useState(() => classCodeFromQuery);
+    const [generatedTeacherClassCode, setGeneratedTeacherClassCode] = useState('');
+    const [classCodeError, setClassCodeError] = useState<string | null>(null);
+    const [isRedeemingClassCode, setIsRedeemingClassCode] = useState(false);
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [canOpenOfflineApp, setCanOpenOfflineApp] = useState(false);
@@ -67,13 +83,28 @@ function AuthContent() {
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
-
-    const priceId = plan === 'monthly' ? paddlePriceIds.monthly : paddlePriceIds.yearly;
+    const isTeacherFlow = role === 'teacher';
+    const shouldAllowGraceCheckout = accessSource === 'teacher_grace' && shouldReplaceGraceSponsorship;
+    const teacherTotal = getTeacherTotalPrice(plan, teacherSeatCount);
+    const teacherSeatPrice = getTeacherSeatPrice(plan);
 
     useEffect(() => {
         if (!planFromQuery) return;
         setPlan(planFromQuery);
     }, [planFromQuery]);
+
+    useEffect(() => {
+        setRole(roleFromQuery);
+    }, [roleFromQuery]);
+
+    useEffect(() => {
+        setTeacherSeatCount(studentsFromQuery);
+    }, [studentsFromQuery]);
+
+    useEffect(() => {
+        if (!classCodeFromQuery) return;
+        setClassCodeInput(classCodeFromQuery);
+    }, [classCodeFromQuery]);
 
     useEffect(() => {
         if (!forceCheckoutBlur) return;
@@ -82,7 +113,7 @@ function AuthContent() {
     }, [forceCheckoutBlur, user?.email]);
 
     const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
-    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription || isPaymentBypass;
+    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || (hasPremiumAccess && !shouldAllowGraceCheckout);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -109,9 +140,9 @@ function AuthContent() {
     useEffect(() => {
         if (!user) return;
         if (isSubscriptionLoading) return;
-        if (!hasActiveSubscription && !isPaymentBypass) return;
+        if (!hasPremiumAccess || shouldAllowGraceCheckout) return;
         window.location.replace('/dashboard');
-    }, [user, isSubscriptionLoading, hasActiveSubscription, isPaymentBypass]);
+    }, [user, isSubscriptionLoading, hasPremiumAccess, shouldAllowGraceCheckout]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -150,10 +181,35 @@ function AuthContent() {
         if (!paddle) return;
         setIsOpening(true);
 
+        const checkoutItems = buildCheckoutItems(
+            role,
+            plan,
+            teacherSeatCount,
+        );
+        const teacherClassCode = isTeacherFlow
+            ? (generatedTeacherClassCode || generateClassCode())
+            : '';
+        if (isTeacherFlow && !generatedTeacherClassCode) {
+            setGeneratedTeacherClassCode(teacherClassCode);
+        }
+        const checkoutCustomData = isTeacherFlow
+            ? {
+                userId: user.id,
+                subscriptionKind: 'teacher',
+                billingInterval: plan,
+                seatCount: teacherSeatCount,
+                classCode: teacherClassCode,
+            }
+            : {
+                userId: user.id,
+                subscriptionKind: 'student',
+                billingInterval: plan,
+            };
+
         paddle.Checkout.open({
-            items: [{ priceId, quantity: 1 }],
+            items: checkoutItems,
             customer: user.email ? { email: user.email } : undefined,
-            customData: { userId: user.id },
+            customData: checkoutCustomData,
         });
 
         setIsOpening(false);
@@ -163,10 +219,81 @@ function AuthContent() {
     const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
         setPlan(nextPlan);
         if (!paddle || !isCheckoutOpen) return;
-        const nextPriceId = nextPlan === 'monthly' ? paddlePriceIds.monthly : paddlePriceIds.yearly;
+        const teacherClassCode = generatedTeacherClassCode || (isTeacherFlow ? generateClassCode() : '');
+        if (isTeacherFlow && !generatedTeacherClassCode) {
+            setGeneratedTeacherClassCode(teacherClassCode);
+        }
         paddle.Checkout.updateCheckout({
-            items: [{ priceId: nextPriceId, quantity: 1 }],
+            items: buildCheckoutItems(role, nextPlan, teacherSeatCount),
+            customData: isTeacherFlow
+                ? {
+                    userId: user?.id ?? '',
+                    subscriptionKind: 'teacher',
+                    billingInterval: nextPlan,
+                    seatCount: teacherSeatCount,
+                    classCode: teacherClassCode,
+                }
+                : {
+                    userId: user?.id ?? '',
+                    subscriptionKind: 'student',
+                    billingInterval: nextPlan,
+                },
         });
+    };
+
+    const handleTeacherSeatCountChange = (nextCount: number) => {
+        const normalized = clampTeacherSeatCount(nextCount);
+        setTeacherSeatCount(normalized);
+        if (!paddle || !isCheckoutOpen || role !== 'teacher') return;
+        const teacherClassCode = generatedTeacherClassCode || generateClassCode();
+        if (!generatedTeacherClassCode) {
+            setGeneratedTeacherClassCode(teacherClassCode);
+        }
+        paddle.Checkout.updateCheckout({
+            items: buildCheckoutItems('teacher', plan, normalized),
+            customData: {
+                userId: user?.id ?? '',
+                subscriptionKind: 'teacher',
+                billingInterval: plan,
+                seatCount: normalized,
+                classCode: teacherClassCode,
+            },
+        });
+    };
+
+    const handleRedeemClassCode = async () => {
+        if (!user) {
+            setClassCodeError('Please sign in before redeeming a class code.');
+            return;
+        }
+
+        const normalizedClassCode = normalizeClassCode(classCodeInput);
+        if (!normalizedClassCode) {
+            setClassCodeError('Enter a valid class code.');
+            return;
+        }
+
+        setIsRedeemingClassCode(true);
+        setClassCodeError(null);
+
+        try {
+            const response = await fetch('/api/teacher/redeem-class-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ classCode: normalizedClassCode }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not redeem that class code.');
+            }
+
+            window.location.replace('/dashboard');
+        } catch (error) {
+            setClassCodeError(error instanceof Error ? error.message : 'Could not redeem that class code.');
+        } finally {
+            setIsRedeemingClassCode(false);
+        }
     };
 
     // Handle the magic link authentication process
@@ -233,7 +360,7 @@ function AuthContent() {
         return <FullScreenLoader text="Checking subscription..." />;
     }
 
-    if (user && (hasActiveSubscription || isPaymentBypass)) {
+    if (user && hasPremiumAccess && !shouldAllowGraceCheckout) {
         return <FullScreenLoader text="Redirecting to dashboard..." />;
     }
 
@@ -557,94 +684,222 @@ function AuthContent() {
                 ) : (
                     <div>
                         <h1 className="checkout-title" style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                            Activate your subscription
+                            {isTeacherFlow ? 'Activate your teacher plan' : 'Unlock premium access'}
                         </h1>
-                            
 
-                            <div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-                                Choose your billing plan:
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
+                            {isTeacherFlow
+                                ? 'Choose how often you want to be billed and how many students you want to cover.'
+                                : shouldAllowGraceCheckout
+                                    ? 'Your teacher-sponsored access is ending soon. Start your own plan to keep access without interruption.'
+                                    : 'Have a teacher class code? Redeem it below to skip checkout. Otherwise, continue with your own plan.'}
+                        </p>
+
+                        {!isTeacherFlow && (
+                            <div style={{
+                                marginBottom: '1.25rem',
+                                padding: '1rem',
+                                borderRadius: '18px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                display: 'grid',
+                                gap: '0.85rem',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <Ticket size={18} style={{ color: 'var(--accent)' }} />
+                                    <span style={{ fontWeight: 700 }}>Redeem teacher class code</span>
+                                </div>
+                                <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr auto' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="QL-ABCD-EFGH"
+                                        value={classCodeInput}
+                                        onChange={(event) => {
+                                            setClassCodeInput(event.target.value.toUpperCase());
+                                            if (classCodeError) setClassCodeError(null);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.85rem 1rem',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--background)',
+                                            fontSize: '1rem',
+                                            color: 'var(--foreground)',
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        disabled={isRedeemingClassCode}
+                                        onClick={() => {
+                                            void handleRedeemClassCode();
+                                        }}
+                                        style={{ justifyContent: 'center', minWidth: '150px' }}
+                                    >
+                                        {isRedeemingClassCode ? 'Redeeming...' : 'Redeem code'}
+                                    </button>
+                                </div>
+                                {classCodeError && (
+                                    <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0 }}>{classCodeError}</p>
+                                )}
+                                <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.82rem', margin: 0 }}>
+                                    Once redeemed, your teacher covers the checkout and you go straight to the app.
+                                </p>
                             </div>
-                            <div className="checkout-plan-grid" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.25rem' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePlanChange('monthly')}
-                                    disabled={isCheckoutLocked}
-                                    className="card"
-                                    style={{
-                                        border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        background: 'var(--background)',
-                                        color: 'var(--foreground)',
-                                        width: '100%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: '1rem',
-                                        padding: '1.5rem',
-                                        borderRadius: '20px',
-                                        boxShadow: plan === 'monthly'
-                                            ? '0 12px 30px rgba(91, 143, 185, 0.2)'
-                                            : '0 10px 24px rgba(0, 0, 0, 0.06)',
-                                        textAlign: 'left',
-                                        position: 'relative',
-                                        cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                        <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly plan</span>
-                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Pay as you go</span>
-                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
-                                    </div>
-                                    <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>$10</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePlanChange('yearly')}
-                                    disabled={isCheckoutLocked}
-                                    className="card"
-                                    style={{
-                                        border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        background: 'var(--background)',
-                                        color: 'var(--foreground)',
-                                        width: '100%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: '1rem',
-                                        padding: '1.5rem',
-                                        borderRadius: '20px',
-                                        boxShadow: plan === 'yearly'
-                                            ? '0 12px 30px rgba(91, 143, 185, 0.2)'
-                                            : '0 10px 24px rgba(0, 0, 0, 0.06)',
-                                        textAlign: 'left',
-                                        position: 'relative',
-                                        cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    <span style={{
-                                        position: 'absolute',
-                                        top: '-10px',
-                                        right: '16px',
-                                        padding: '0.25rem 0.6rem',
-                                        borderRadius: '999px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: 700,
-                                        color: 'white',
-                                        background: 'var(--accent)',
-                                        boxShadow: '0 6px 16px rgba(91, 143, 185, 0.35)'
-                                    }}>
-                                        Save 20%
+                        )}
+
+                        <div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+                            Choose your billing plan:
+                        </div>
+                        <div className="checkout-plan-grid" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.25rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => handlePlanChange('monthly')}
+                                disabled={isCheckoutLocked}
+                                className="card"
+                                style={{
+                                    border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                    background: 'var(--background)',
+                                    color: 'var(--foreground)',
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '1rem',
+                                    padding: '1.5rem',
+                                    borderRadius: '20px',
+                                    boxShadow: plan === 'monthly'
+                                        ? '0 12px 30px rgba(91, 143, 185, 0.2)'
+                                        : '0 10px 24px rgba(0, 0, 0, 0.06)',
+                                    textAlign: 'left',
+                                    position: 'relative',
+                                    cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                    <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly plan</span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                        {isTeacherFlow ? 'Flexible seat management' : 'Pay as you go'}
                                     </span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                            <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly plan</span>
-                                        </div>
-                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best value</span>
-                                        <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
+                                </div>
+                                <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
+                                    {formatCurrency(isTeacherFlow ? teacherTotal : getStudentPlanPrice('monthly'))}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handlePlanChange('yearly')}
+                                disabled={isCheckoutLocked}
+                                className="card"
+                                style={{
+                                    border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                    background: 'var(--background)',
+                                    color: 'var(--foreground)',
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '1rem',
+                                    padding: '1.5rem',
+                                    borderRadius: '20px',
+                                    boxShadow: plan === 'yearly'
+                                        ? '0 12px 30px rgba(91, 143, 185, 0.2)'
+                                        : '0 10px 24px rgba(0, 0, 0, 0.06)',
+                                    textAlign: 'left',
+                                    position: 'relative',
+                                    cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                <span style={{
+                                    position: 'absolute',
+                                    top: '-10px',
+                                    right: '16px',
+                                    padding: '0.25rem 0.6rem',
+                                    borderRadius: '999px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    background: 'var(--accent)',
+                                    boxShadow: '0 6px 16px rgba(91, 143, 185, 0.35)'
+                                }}>
+                                    Save 20%
+                                </span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly plan</span>
                                     </div>
-                                    <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>$96</span>
-                                </button>
-                               
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                                        {isTeacherFlow ? 'Best value for full classes' : 'Best value'}
+                                    </span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
+                                </div>
+                                <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
+                                    {formatCurrency(isTeacherFlow ? getTeacherTotalPrice('yearly', teacherSeatCount) : getStudentPlanPrice('yearly'))}
+                                </span>
+                            </button>
+                        </div>
+
+                        {isTeacherFlow && (
+                            <div style={{
+                                marginBottom: '1.25rem',
+                                padding: '1rem',
+                                borderRadius: '18px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                display: 'grid',
+                                gap: '0.85rem',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <Users size={18} style={{ color: 'var(--accent)' }} />
+                                    <span style={{ fontWeight: 700 }}>Students covered</span>
+                                </div>
+                                <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'auto 1fr auto' }}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => handleTeacherSeatCountChange(teacherSeatCount - 1)}
+                                        disabled={isCheckoutLocked || teacherSeatCount <= 1}
+                                        style={{ minWidth: '48px', justifyContent: 'center' }}
+                                    >
+                                        -
+                                    </button>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={500}
+                                        value={teacherSeatCount}
+                                        onChange={(event) => handleTeacherSeatCountChange(Number(event.target.value))}
+                                        disabled={isCheckoutLocked}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.85rem 1rem',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--background)',
+                                            fontSize: '1rem',
+                                            color: 'var(--foreground)',
+                                            textAlign: 'center',
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => handleTeacherSeatCountChange(teacherSeatCount + 1)}
+                                        disabled={isCheckoutLocked}
+                                        style={{ minWidth: '48px', justifyContent: 'center' }}
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                                    Teacher base + {teacherSeatCount} student {teacherSeatCount === 1 ? 'seat' : 'seats'}.
+                                    <br />
+                                    {formatCurrency(getTeacherSeatPrice(plan))} per student seat on the {plan} cycle.
+                                </div>
                             </div>
+                        )}
 
                         <button
                             className="btn btn-primary"
@@ -652,7 +907,13 @@ function AuthContent() {
                             disabled={!paddle || isOpening || isCheckoutLocked}
                             style={{ width: '100%' }}
                         >
-                            {isOpening ? 'Opening checkout...' : 'Proceed'}
+                            {isOpening
+                                ? 'Opening checkout...'
+                                : isTeacherFlow
+                                    ? `Start teacher plan for ${formatCurrency(teacherTotal)}`
+                                    : shouldAllowGraceCheckout
+                                        ? 'Start your own plan'
+                                        : 'Proceed'}
                         </button>
                         <button
                             type="button"
