@@ -2140,7 +2140,7 @@ export default function SettingsPage() {
                             <Book size={18} /> Active Part
                         </h2>
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                            Choose the part you are focusing on for your daily portion and todo flow.
+                            Choose the part you are focusing on for your daily portion and overall progression. Todo always shows all cards.
                         </p>
                         <div className="part-selector" style={{
                             display: 'grid',
@@ -5240,7 +5240,7 @@ export default function SettingsPage() {
                                 {sectionsExpanded.activePart && (
                                     <>
                                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                            Choose the part you are focusing on for your daily portion and todo flow.
+                                            Choose the part you are focusing on for your daily portion and overall progression. Todo always shows all cards.
                                         </p>
                                         <div className="part-selector" style={{
                                             display: 'grid',

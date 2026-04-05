@@ -488,7 +488,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 },
                 {
                   question: "I already memorized some Surahs. Is this app only for new learners?",
-                  answer: "It is not only for new learners. You can set your Active Part (Juz) to focus on your current target, and you can skip Surahs you already know well so your Todo and Daily Portion stay focused. If needed, you can unskip them later and bring them back into your workflow."
+                  answer: "It is not only for new learners. You can set your Active Part (Juz) to focus your Daily Portion on your current target, and you can skip Surahs you already know well so Todo stays useful without hiding other cards. If needed, you can unskip them later and bring them back into your workflow."
                 },
                 {
                   question: "I already finished the Quran. Can Quran Life still make my Hifdh stronger?",
@@ -500,7 +500,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 },
                 {
                   question: "Do I have to start from Surah Al-Baqarah, or can I focus only on the Juz I am working on?",
-                  answer: "You can focus only on your current Juz. Quran Life lets you set an Active Part (Juz), and your Daily Portion and Todo are filtered to that focus so you can study in a structured way without restarting everything."
+                  answer: "You can focus only on your current Juz. Quran Life lets you set an Active Part (Juz) so your Daily Portion follows that focus, while Todo stays global so you can still see every card and manage work across parts."
                 }
               ].map((faq, index) => (
                 <FaqItem key={index} question={faq.question} answer={faq.answer} />
