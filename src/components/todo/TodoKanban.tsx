@@ -1371,7 +1371,9 @@ export default function TodoKanban({
                 actionableComparatorCount,
                 resolutionTargets,
             };
-        });
+        }).filter((selectedGroup) => selectedGroup.actionableComparatorCount > 0);
+
+        if (hydratedGroups.length === 0) return null;
 
         const preferredGroupIndex = hydratedGroups.reduce((bestIndex, candidate, index, collection) => {
             if (candidate.actionableComparatorCount > collection[bestIndex].actionableComparatorCount) {

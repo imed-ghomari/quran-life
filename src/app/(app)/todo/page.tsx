@@ -518,14 +518,15 @@ export default function TodoPage() {
                 const chunkRelevantEntries = muts.filter((entry: any) =>
                     doesSimilarityEntryOverlapChunk(entry, absolute, failedChunkWordRange)
                 );
-                const unresolvedEntries = chunkRelevantEntries.filter((entry: any) =>
-                    !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
-                );
                 const actionableComparatorAbsolutes = new Set<number>();
-                unresolvedEntries.forEach((entry: any) => {
+                const reviewedComparatorAbsolutes = new Set<number>();
+                const actionableEntryKeys = new Set<string>();
+
+                chunkRelevantEntries.forEach((entry: any, entryIndex: number) => {
                     const rawComparators = Array.from(new Set(
                         (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
                     ));
+                    let hasActionableComparator = false;
 
                     rawComparators.forEach((absRef) => {
                         if (absRef === absolute) return;
@@ -533,6 +534,7 @@ export default function TodoPage() {
                         const matchRef = absoluteToSurahAyah(absRef);
                         const isUnlocked = checkIsSurahLearned(matchRef.surahId);
                         if (!isUnlocked) return;
+                        reviewedComparatorAbsolutes.add(absRef);
 
                         const localResolutionAbsolute = [
                             Number(entry?.meta?.sourceAbs),
@@ -551,25 +553,23 @@ export default function TodoPage() {
                         if (isResolved) return;
 
                         actionableComparatorAbsolutes.add(absRef);
+                        hasActionableComparator = true;
                     });
+
+                    if (hasActionableComparator) {
+                        actionableEntryKeys.add(`${entry.phraseId}-${Number(entry?.meta?.sourceAbs) || absolute}-${entryIndex}`);
+                    }
                 });
                 const actionableComparatorCount = actionableComparatorAbsolutes.size;
-                const hasReviewedComparator = unresolvedEntries.some((entry: any) => {
-                    const comparators = Array.from(new Set(
-                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
-                    )).filter((absRef) => absRef !== absolute);
-
-                    return comparators.some((absRef) =>
-                        checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
-                    );
-                });
+                const unresolvedCount = actionableEntryKeys.size;
+                const hasReviewedComparator = reviewedComparatorAbsolutes.size > 0;
 
                 return {
                     id: `similarity-origin-${absolute}`,
                     err,
                     muts: chunkRelevantEntries,
-                    unresolvedCount: unresolvedEntries.length,
-                    hasOutstanding: unresolvedEntries.length > 0,
+                    unresolvedCount,
+                    hasOutstanding: actionableComparatorCount > 0,
                     actionableComparatorCount,
                     hasReviewedComparator,
                     originAbsolute: absolute,
@@ -596,7 +596,7 @@ export default function TodoPage() {
                 if (isPinnedInComplete) return true;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
-                if (entry.unresolvedCount <= 0) return false;
+                if (entry.actionableComparatorCount <= 0) return false;
                 return entry.hasReviewedComparator && !!entry.surah;
             });
     }, [allSimilarityItems, completedSimilarityCards, decisionsMap]);
