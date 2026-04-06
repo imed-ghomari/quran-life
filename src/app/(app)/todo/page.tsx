@@ -540,7 +540,7 @@ export default function TodoPage() {
                             Number(entry?.meta?.sourceAbs),
                             ...rawComparators,
                         ].find((candidateAbs) => Number.isFinite(candidateAbs) && absoluteToSurahAyah(candidateAbs).surahId === absoluteToSurahAyah(absolute).surahId);
-                        const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                        const resolutionAbsolute = typeof localResolutionAbsolute === 'number'
                             ? localResolutionAbsolute
                             : absolute;
                         const resolutionMeta = getSimilarityEntryResolutionMeta(
