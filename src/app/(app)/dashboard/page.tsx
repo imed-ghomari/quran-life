@@ -1183,7 +1183,6 @@ export default function TodayPage() {
             const errorId = isUuid(errorToSave.id) ? errorToSave.id : id();
             writes.push(db.tx.reviewErrors[errorId].update({
                 ...errorToSave,
-                id: errorId,
                 userId: user.id,
             }));
         }
