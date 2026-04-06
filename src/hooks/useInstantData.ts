@@ -3,7 +3,7 @@ import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { isUuid, resolveEntityId, stableEntityId } from '@/lib/instantIds';
 import { transactWithRetry } from '@/lib/instantTransact';
-import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart } from '@/lib/types';
+import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart, ReviewError } from '@/lib/types';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 import { normalizeReviewSortOrder } from '@/lib/reviewSortOrder';
 
@@ -737,9 +737,9 @@ export function useInstantReviewErrors() {
         reviewErrors: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const errors = useMemo(() => (data?.reviewErrors || []) as unknown as any[], [data?.reviewErrors]);
+    const errors = useMemo(() => (data?.reviewErrors || []) as unknown as ReviewError[], [data?.reviewErrors]);
 
-    const saveError = useCallback((errorItem: any) => {
+    const saveError = useCallback((errorItem: ReviewError) => {
         if (!user) return Promise.resolve();
         const errorId = isUuid(errorItem.id) ? errorItem.id : id();
         return transactWithRetry(db.tx.reviewErrors[errorId].update({

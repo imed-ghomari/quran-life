@@ -7,15 +7,12 @@ import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-reac
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
-    useSharedInstantMutashabihat,
     useSharedInstantNodes,
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
-import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
-import { SURAHS } from '@/lib/quranData';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/reviewQueue';
-import { ALL_QURAN_PART, CORE_QURAN_PARTS, hasNodeBeenReviewed, LEGACY_ALL_QURAN_PART, MemoryNode } from '@/lib/types';
+import { ALL_QURAN_PART, LEGACY_ALL_QURAN_PART } from '@/lib/types';
 
 const getLocalDayKey = (date: Date) => {
     const y = date.getFullYear();
@@ -35,29 +32,12 @@ type NavigationContentProps = {
     onNavigateStart: (href: string) => void;
 };
 
-const getVerseSegmentSurahId = (node: MemoryNode): number | null => {
-    if (node.type !== 'verse_segment') return null;
-
-    const direct = Number((node as any).surahId);
-    if (Number.isFinite(direct) && direct > 0) return direct;
-
-    const target = String((node as any).targetId || '');
-    const fromAnchor = target.match(/^anchor-(\d+)-\d+-\d+$/);
-    if (fromAnchor) {
-        const parsed = Number(fromAnchor[1]);
-        if (Number.isFinite(parsed) && parsed > 0) return parsed;
-    }
-
-    return null;
-};
-
 function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentProps) {
     const pathname = usePathname();
     const router = useRouter();
     const { settings, isLoading: settingsLoading } = useSharedInstantSettings();
-    const { nodes, dueNodes, isLoading: nodesLoading } = useSharedInstantNodes();
-    const { mindmaps, partMindMaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
-    const { decisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
+    const { dueNodes, isLoading: nodesLoading } = useSharedInstantNodes();
+    const { mindmaps, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
     const { errors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
     const { progress: listeningProgress, isLoading: listeningProgressLoading } = useSharedInstantListeningProgress();
     const [hasHydratedNavMetrics, setHasHydratedNavMetrics] = useState(false);
@@ -71,184 +51,11 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
     const navMetrics = useMemo(() => {
         if (!settings || !hasHydratedNavMetrics) {
             return {
-                pendingCount: 0,
                 todayTasks: 0,
                 isDailyPortionComplete: false,
                 hideBadges: true,
             };
         }
-
-        const activePart = settings.activePart;
-        const skippedSurahs = new Set(settings.skippedSurahs || []);
-        const activePartSize = activePart as number;
-        const surahsInPart = SURAHS.filter(s => (activePartSize === ALL_QURAN_PART || s.part === activePartSize) && !skippedSurahs.has(s.id));
-        const kanbanState = settings.kanbanColumns || {};
-
-        const itemColumn = new Map<string, string>();
-        Object.entries(kanbanState).forEach(([colId, itemIds]) => {
-            (itemIds as string[]).forEach((itemId) => {
-                itemColumn.set(itemId, colId);
-            });
-        });
-
-        const mindmapBySurah = new Map<number, any>();
-        (mindmaps as any[]).forEach((mindmap) => {
-            const surahId = Number(mindmap?.surahId);
-            if (Number.isFinite(surahId) && !mindmapBySurah.has(surahId)) {
-                mindmapBySurah.set(surahId, mindmap);
-            }
-        });
-
-        const partMindmapByPart = new Map<number, any>();
-        (partMindMaps as any[]).forEach((mindmap) => {
-            const partId = Number(mindmap?.partId);
-            if (Number.isFinite(partId) && !partMindmapByPart.has(partId)) {
-                partMindmapByPart.set(partId, mindmap);
-            }
-        });
-
-        const surahItems = surahsInPart.map(s => {
-            const id = `surah-${s.id}`;
-            const mm = mindmapBySurah.get(s.id);
-            const isComplete = mm?.isComplete && (!!mm?.imageUrl || !!mm?.tldrawSnapshot || !!mm?.imageUrlDark);
-            return { id, column: itemColumn.get(id) ?? (isComplete ? 'complete' : 'backlog'), isComplete };
-        });
-
-        const partsToConsider = activePart === ALL_QURAN_PART ? Array.from(CORE_QURAN_PARTS) : [activePart as number];
-        const partItems = [0, ...partsToConsider].map((partId) => {
-            const id = `part-${partId}`;
-            const partMindmap = partMindmapByPart.get(partId);
-            const isComplete = partMindmap?.isComplete && (!!partMindmap?.imageUrl || !!partMindmap?.tldrawSnapshot || !!partMindmap?.imageUrlDark);
-            return { id, column: itemColumn.get(id) ?? (isComplete ? 'complete' : 'backlog'), isComplete };
-        });
-
-        const decisionsMap = new Map<string, any>();
-        decisions.forEach((decision) => decisionsMap.set(decision.phraseId || decision.id, decision));
-
-        const isPhraseResolved = (absolute: number, entry: any) => {
-            const exact = decisionsMap.get(`${absolute}-${entry.phraseId}`);
-            if (exact?.status === 'ignored' || !!exact?.confirmedAt) return true;
-
-            const currentRef = absoluteToSurahAyah(absolute);
-            const candidateAbs = Array.from(new Set<number>([
-                absolute,
-                ...(entry.sources || []),
-                ...(entry.matches || []),
-            ])).filter((absRef) => absoluteToSurahAyah(absRef).surahId === currentRef.surahId);
-
-            return candidateAbs.some((absRef) => {
-                const phraseDecision = decisionsMap.get(`${absRef}-${entry.phraseId}`);
-                return phraseDecision?.status === 'ignored' || !!phraseDecision?.confirmedAt;
-            });
-        };
-
-        const hasComparatorBeenReviewed = (absoluteComparator: number) => {
-            const comparatorRef = absoluteToSurahAyah(absoluteComparator);
-            return nodes.some((node) => {
-                if (node.type !== 'verse_segment') return false;
-                if (getVerseSegmentSurahId(node) !== comparatorRef.surahId) return false;
-                const start = Number(node.startVerse || 0);
-                const end = Number(node.endVerse || 0);
-                if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-                if (comparatorRef.ayahId < start || comparatorRef.ayahId > end) return false;
-                return hasNodeBeenReviewed(node.scheduler);
-            });
-        };
-
-        const similaritySurahIds = new Set<number>();
-        errors.forEach((error) => {
-            if (error.type !== 'similarity' || !error.absoluteAyah) return;
-            const absolute = error.absoluteAyah;
-            const verseDecision = decisionsMap.get(absolute.toString());
-            if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return;
-
-            const muts = getMutashabihatForAbsolute(absolute, customMutashabihat);
-            const unresolvedPhrases = muts.filter((entry: any) => !isPhraseResolved(absolute, entry));
-            if (unresolvedPhrases.length === 0) return;
-            const comparators = Array.from(new Set(
-                muts.flatMap((entry: any) => (Array.isArray(entry?.matches) ? entry.matches : []))
-            )).filter((absRef: number) => absRef !== absolute);
-            const hasReviewedComparator = comparators.some(hasComparatorBeenReviewed);
-            if (!hasReviewedComparator) return;
-
-            similaritySurahIds.add(absoluteToSurahAyah(absolute).surahId);
-        });
-
-        const similarityItems = Array.from(similaritySurahIds).map((surahId) => {
-            const id = `similarity-${surahId}`;
-            return { id, column: itemColumn.get(id) ?? 'backlog' };
-        });
-
-        const SUSPEND_ERROR_THRESHOLD = 3;
-        const acknowledgedAtByGroup = settings.suspendedVerseGroupsAcknowledged || {};
-        const anchorsBySurahRange = new Map<number, Map<string, any>>();
-
-        const getCurrentAnchorForRange = (surahId: number, startVerse: number, endVerse: number) => {
-            const rangeKey = `${startVerse}-${endVerse}`;
-            const existing = anchorsBySurahRange.get(surahId);
-            if (existing) return existing.get(rangeKey);
-
-            const currentMindmap = mindmapBySurah.get(surahId);
-            const surahAnchors = Array.isArray(currentMindmap?.anchors) ? currentMindmap.anchors : [];
-            const byRange = new Map<string, any>();
-            surahAnchors.forEach((anchor: any) => {
-                const anchorStart = Number(anchor?.startVerse);
-                const anchorEnd = Number(anchor?.endVerse);
-                if (!Number.isFinite(anchorStart) || !Number.isFinite(anchorEnd)) return;
-                byRange.set(`${anchorStart}-${anchorEnd}`, anchor);
-            });
-            anchorsBySurahRange.set(surahId, byRange);
-            return byRange.get(rangeKey);
-        };
-
-        const suspendedErrorsByGroup = new Map<string, { timestampMs: number }[]>();
-        errors.forEach((error) => {
-            if (error.nodeType !== 'verse_segment' || !error.surahId) return;
-
-            const surahId = Number(error.surahId);
-            if (!Number.isFinite(surahId) || surahId <= 0) return;
-
-            const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
-            const focusAyah =
-                absoluteRef && absoluteRef.surahId === surahId
-                    ? absoluteRef.ayahId
-                    : (error.startVerse ?? 1);
-            const startVerse = error.startVerse ?? focusAyah;
-            const endVerse = error.endVerse ?? startVerse;
-            const currentAnchor = getCurrentAnchorForRange(surahId, startVerse, endVerse);
-            if (!currentAnchor) return;
-
-            const fallbackAnchorId = `range-${startVerse}-${endVerse}`;
-            const anchorId = currentAnchor.id || error.anchorId || fallbackAnchorId;
-            const groupKey = `${surahId}-${anchorId}`;
-            const timestampMs = Date.parse(error.timestamp || '');
-
-            const group = suspendedErrorsByGroup.get(groupKey) || [];
-            group.push({ timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0 });
-            suspendedErrorsByGroup.set(groupKey, group);
-        });
-
-        const suspendedItems = Array.from(suspendedErrorsByGroup.entries())
-            .filter(([groupKey, groupErrors]) => {
-                if (groupErrors.length < SUSPEND_ERROR_THRESHOLD) return false;
-                const latestTimestampMs = Math.max(...groupErrors.map((entry) => entry.timestampMs));
-                const ackMs = Date.parse(acknowledgedAtByGroup[groupKey] || '');
-                return !Number.isFinite(ackMs) || ackMs < latestTimestampMs;
-            })
-            .map(([groupKey]) => {
-                const id = `suspended-${groupKey}`;
-                const column = itemColumn.get(id);
-                return {
-                    id,
-                    // Active suspended cards should count as pending even if stale kanban state still says complete.
-                    column: column === 'complete' ? 'backlog' : (column ?? 'backlog'),
-                };
-            });
-
-        const pendingColumns = new Set(['backlog', 'in-progress']);
-        const pendingCount = [...surahItems, ...partItems, ...similarityItems, ...suspendedItems]
-            .filter(item => pendingColumns.has(item.column))
-            .length;
 
         const activeProgress = listeningProgress.find(progress => progress.partId === settings.activePart)
             ?? (settings.activePart === ALL_QURAN_PART && (settings.partSystemVersion ?? 1) < 2
@@ -265,16 +72,15 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
         );
 
         return {
-            pendingCount,
             todayTasks: filterReviewQueueNodes(dueNodes, settings, mindmaps, suspendedVerseGroupKeys).length,
             isDailyPortionComplete,
             hideBadges: false,
         };
-    }, [settings, nodes, dueNodes, mindmaps, partMindMaps, decisions, errors, customMutashabihat, listeningProgress, hasHydratedNavMetrics]);
+    }, [settings, dueNodes, mindmaps, errors, listeningProgress, hasHydratedNavMetrics]);
 
     const navItems = [
         { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.hideBadges ? undefined : navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', badge: navMetrics.hideBadges ? undefined : navMetrics.pendingCount, showStatusDot: false },
+        { href: '/todo', icon: ListTodo, label: 'Todo', showStatusDot: false },
         { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
         { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },
