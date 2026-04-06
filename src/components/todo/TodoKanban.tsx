@@ -456,7 +456,7 @@ export default function TodoKanban({
         const total = surahMeta?.verseCount || 1;
         const rawEntries = Array.isArray(issue.recentErrorContexts) ? issue.recentErrorContexts : [];
         const normalizedEntries = rawEntries
-            .map((entry) => {
+            .map((entry: SuspendedRecentErrorContext) => {
                 const ayahId = Math.min(Math.max(1, Number(entry?.ayahId) || 1), total);
                 const chunkIndex = Number(entry?.chunkIndex);
                 const chunkCount = Number(entry?.chunkCount);
