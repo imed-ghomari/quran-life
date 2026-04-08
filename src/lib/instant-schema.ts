@@ -124,6 +124,8 @@ export const schema = i.schema({
       anchorLabel: i.string().optional(),
       anchorId: i.string().optional(),
       absoluteAyah: i.number().optional(),
+      failedChunkIndex: i.number().optional(),
+      failedChunkCount: i.number().optional(),
       userId: i.string().indexed(),
     }),
     // FSRS scheduler logs for each review event.

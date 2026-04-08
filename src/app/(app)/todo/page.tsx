@@ -20,13 +20,15 @@ import {
     MutashabihatDecision,
     hasNodeBeenReviewed,
     QuranPart,
-    MemoryNode
+    MemoryNode,
+    ReviewError,
 } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
-import { getMutashabihatForAbsolute, absoluteToSurahAyah } from '@/lib/mutashabihat';
+import { getMutashabihatForAbsolute, absoluteToSurahAyah, doesSimilarityEntryOverlapChunk } from '@/lib/mutashabihat';
 import { getSimilarityEntryResolutionMeta, isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes, getVerseGroupKey } from '@/lib/reviewQueue';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { getReviewChunkWordRange } from '@/lib/reviewVerseChunks';
 import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
 import { X } from 'lucide-react';
@@ -87,6 +89,27 @@ const areOrderedStringListsEqual = (left: string[], right: string[]) => (
 const formatResetSummary = (items: string[]) => {
     if (items.length === 0) return 'No review progress will reset.';
     return items.map((item) => `• ${item}`).join('\n');
+};
+
+type SuspendedVerseRecentErrorContext = {
+    ayahId: number;
+    chunkIndex: number | null;
+    chunkCount: number | null;
+    timestamp: string;
+    timestampMs: number;
+};
+
+type SuspendedVerseGroupIssue = {
+    surahId: number;
+    anchorId: string;
+    groupKey: string;
+    label: string;
+    startVerse: number;
+    endVerse: number;
+    focusAyah: number;
+    timestamp: string;
+    mistakeCount: number;
+    recentErrorContexts: SuspendedVerseRecentErrorContext[];
 };
 
 const getVerseSegmentSurahId = (node: MemoryNode): number | null => {
@@ -252,6 +275,13 @@ export default function TodoPage() {
     // -- 3. Local UI State --
     const [anchorBuilders, setAnchorBuilders] = useState<Record<number, AnchorBuilderState>>({});
     const [verses, setVerses] = useState<{ surahId: number; ayahId: number; text: string }[]>([]);
+    const verseLookupBySurahAyah = useMemo(() => {
+        const map = new Map<string, { surahId: number; ayahId: number; text: string }>();
+        verses.forEach((verse) => {
+            map.set(`${verse.surahId}:${verse.ayahId}`, verse);
+        });
+        return map;
+    }, [verses]);
 
     // Check if the user has already reviewed chunks for this Surah (used to lock anchor editing)
     const hasReviewedChunks = useCallback((surahId: number) => {
@@ -483,14 +513,20 @@ export default function TodoPage() {
                 const absolute = err.absoluteAyah!;
                 const { surahId, ayahId } = absoluteToSurahAyah(absolute);
                 const muts = getMutashabihatForAbsolute(err.absoluteAyah!, customMutashabihat);
-                const unresolvedEntries = muts.filter((entry: any) =>
-                    !isSimilarityEntryResolved(decisionsMap, absolute, entry, { sameSurahOnly: true })
+                const verseText = verseLookupBySurahAyah.get(`${surahId}:${ayahId}`)?.text || '';
+                const failedChunkWordRange = getReviewChunkWordRange(verseText, err.failedChunkIndex);
+                const chunkRelevantEntries = muts.filter((entry: any) =>
+                    doesSimilarityEntryOverlapChunk(entry, absolute, failedChunkWordRange)
                 );
                 const actionableComparatorAbsolutes = new Set<number>();
-                unresolvedEntries.forEach((entry: any) => {
+                const reviewedComparatorAbsolutes = new Set<number>();
+                const actionableEntryKeys = new Set<string>();
+
+                chunkRelevantEntries.forEach((entry: any, entryIndex: number) => {
                     const rawComparators = Array.from(new Set(
                         (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
                     ));
+                    let hasActionableComparator = false;
 
                     rawComparators.forEach((absRef) => {
                         if (absRef === absolute) return;
@@ -498,12 +534,13 @@ export default function TodoPage() {
                         const matchRef = absoluteToSurahAyah(absRef);
                         const isUnlocked = checkIsSurahLearned(matchRef.surahId);
                         if (!isUnlocked) return;
+                        reviewedComparatorAbsolutes.add(absRef);
 
                         const localResolutionAbsolute = [
                             Number(entry?.meta?.sourceAbs),
                             ...rawComparators,
                         ].find((candidateAbs) => Number.isFinite(candidateAbs) && absoluteToSurahAyah(candidateAbs).surahId === absoluteToSurahAyah(absolute).surahId);
-                        const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                        const resolutionAbsolute = typeof localResolutionAbsolute === 'number'
                             ? localResolutionAbsolute
                             : absolute;
                         const resolutionMeta = getSimilarityEntryResolutionMeta(
@@ -516,25 +553,23 @@ export default function TodoPage() {
                         if (isResolved) return;
 
                         actionableComparatorAbsolutes.add(absRef);
+                        hasActionableComparator = true;
                     });
+
+                    if (hasActionableComparator) {
+                        actionableEntryKeys.add(`${entry.phraseId}-${Number(entry?.meta?.sourceAbs) || absolute}-${entryIndex}`);
+                    }
                 });
                 const actionableComparatorCount = actionableComparatorAbsolutes.size;
-                const hasReviewedComparator = unresolvedEntries.some((entry: any) => {
-                    const comparators = Array.from(new Set(
-                        (Array.isArray(entry?.matches) ? entry.matches as number[] : [])
-                    )).filter((absRef) => absRef !== absolute);
-
-                    return comparators.some((absRef) =>
-                        checkIsSurahLearned(absoluteToSurahAyah(absRef).surahId)
-                    );
-                });
+                const unresolvedCount = actionableEntryKeys.size;
+                const hasReviewedComparator = reviewedComparatorAbsolutes.size > 0;
 
                 return {
                     id: `similarity-origin-${absolute}`,
                     err,
-                    muts,
-                    unresolvedCount: unresolvedEntries.length,
-                    hasOutstanding: unresolvedEntries.length > 0,
+                    muts: chunkRelevantEntries,
+                    unresolvedCount,
+                    hasOutstanding: actionableComparatorCount > 0,
                     actionableComparatorCount,
                     hasReviewedComparator,
                     originAbsolute: absolute,
@@ -542,7 +577,7 @@ export default function TodoPage() {
                     surah: getSurah(surahId),
                 };
             });
-    }, [checkIsSurahLearned, customMutashabihat, decisionsMap, errors]);
+    }, [checkIsSurahLearned, customMutashabihat, decisionsMap, errors, verseLookupBySurahAyah]);
 
     const similarityStateById = useMemo(() => {
         const byId = new Map<string, { hasOutstanding: boolean }>();
@@ -561,7 +596,7 @@ export default function TodoPage() {
                 if (isPinnedInComplete) return true;
                 const verseDecision = decisionsMap[absolute.toString()];
                 if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
-                if (entry.unresolvedCount <= 0) return false;
+                if (entry.actionableComparatorCount <= 0) return false;
                 return entry.hasReviewedComparator && !!entry.surah;
             });
     }, [allSimilarityItems, completedSimilarityCards, decisionsMap]);
@@ -643,7 +678,19 @@ export default function TodoPage() {
             return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
         };
 
-        const byGroup = new Map<string, any[]>();
+        const byGroup = new Map<string, Array<{
+            surahId: number;
+            anchorId: string;
+            groupKey: string;
+            label: string;
+            startVerse: number;
+            endVerse: number;
+            focusAyah: number;
+            timestamp: string;
+            timestampMs: number;
+            chunkIndex: number | null;
+            chunkCount: number | null;
+        }>>();
         const anchorsBySurahRange = new Map<number, Map<string, any>>();
 
         const getCurrentAnchorForRange = (surahId: number, startVerse: number, endVerse: number) => {
@@ -664,8 +711,8 @@ export default function TodoPage() {
         };
 
         errors
-            .filter(e => e.nodeType === 'verse_segment' && e.surahId)
-            .forEach(error => {
+            .filter((e): e is ReviewError => e.nodeType === 'verse_segment' && !!e.surahId)
+            .forEach((error) => {
                 const errorSurahId = toSurahId(error.surahId);
                 if (!errorSurahId) return;
                 const absoluteRef = error.absoluteAyah ? absoluteToSurahAyah(error.absoluteAyah) : null;
@@ -696,12 +743,14 @@ export default function TodoPage() {
                     endVerse,
                     focusAyah,
                     timestamp,
-                    timestampMs: Number.isFinite(ts) ? ts : 0
+                    timestampMs: Number.isFinite(ts) ? ts : 0,
+                    chunkIndex: Number.isFinite(Number(error.failedChunkIndex)) ? Number(error.failedChunkIndex) : null,
+                    chunkCount: Number.isFinite(Number(error.failedChunkCount)) ? Number(error.failedChunkCount) : null,
                 });
                 byGroup.set(groupKey, current);
             });
 
-        const suspended: any[] = [];
+        const suspended: SuspendedVerseGroupIssue[] = [];
         const acknowledgedAtByGroup = settings?.suspendedVerseGroupsAcknowledged || {};
 
         byGroup.forEach((groupErrors, groupKey) => {
@@ -716,27 +765,13 @@ export default function TodoPage() {
                 return;
             }
             const recentThree = sorted.slice(0, SUSPEND_ERROR_THRESHOLD);
-            const countsByAyah = new Map<number, { ayahId: number; count: number; latestTimestampMs: number }>();
-
-            recentThree.forEach(entry => {
-                const ayahId = Number(entry.focusAyah) || Number(entry.startVerse) || 1;
-                const existing = countsByAyah.get(ayahId);
-                if (existing) {
-                    existing.count += 1;
-                    if (entry.timestampMs > existing.latestTimestampMs) {
-                        existing.latestTimestampMs = entry.timestampMs;
-                    }
-                } else {
-                    countsByAyah.set(ayahId, {
-                        ayahId,
-                        count: 1,
-                        latestTimestampMs: entry.timestampMs
-                    });
-                }
-            });
-
-            const recentVerseWindow = Array.from(countsByAyah.values())
-                .sort((a, b) => b.latestTimestampMs - a.latestTimestampMs);
+            const recentErrorContexts: SuspendedVerseRecentErrorContext[] = recentThree.map((entry) => ({
+                ayahId: Number(entry.focusAyah) || Number(entry.startVerse) || 1,
+                chunkIndex: entry.chunkIndex,
+                chunkCount: entry.chunkCount,
+                timestamp: entry.timestamp,
+                timestampMs: entry.timestampMs,
+            }));
 
             suspended.push({
                 surahId: latest.surahId,
@@ -748,7 +783,7 @@ export default function TodoPage() {
                 focusAyah: latest.focusAyah,
                 timestamp: latest.timestamp,
                 mistakeCount: sorted.length,
-                recentVerseWindow
+                recentErrorContexts,
             });
         });
 

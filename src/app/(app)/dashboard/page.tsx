@@ -19,7 +19,8 @@ import {
     MemoryNode,
     AppSettings,
     getNodeDueDate,
-    hasNodeBeenReviewed
+    hasNodeBeenReviewed,
+    surahHasReviewedVerseGroup
 } from '@/lib/types';
 import {
     CheckCircle,
@@ -57,7 +58,7 @@ import {
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
-import { surahAyahToAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
+import { surahAyahToAbsolute, getMutashabihatForAbsolute, doesSimilarityEntryOverlapChunk } from '@/lib/mutashabihat';
 import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
@@ -65,6 +66,10 @@ import { deriveSuspendedVerseGroupKeys, filterReviewQueueNodes } from '@/lib/rev
 import { clientEnv } from '@/lib/env/client';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
+import { resolveVerseReviewFailureContext, splitVerseIntoReviewChunks } from '@/lib/reviewVerseChunks';
+import { db } from '@/lib/instant';
+import { transactWithRetry } from '@/lib/instantTransact';
+import { isUuid } from '@/lib/instantIds';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -88,6 +93,9 @@ const FSRS_OPTIMIZATION_ENABLED = clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLE
 const FSRS_OPTIMIZATION_LOG_DELTA = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA);
 const FSRS_OPTIMIZATION_DELAY_MS = Math.max(0, clientEnv.NEXT_PUBLIC_FSRS_OPTIMIZATION_DELAY_MS);
 const AUTO_NODE_CREATE_BATCH_SIZE = 20;
+const MAX_REVIEW_LOGS = 3000;
+
+type ReviewFreshnessCategory = 'new' | 'old';
 
 const toPositiveInt = (value: unknown): number | null => {
     const parsed = Number(value);
@@ -118,68 +126,6 @@ const resolveNodePartId = (node: Partial<MemoryNode>): number | null => {
     if (!partMatch) return null;
     return toNonNegativeInt(partMatch[1]);
 };
-
-
-const CONTEXTUAL_BREAK_SUFFIXES = ['ۘ', 'ۙ', 'ۚ', 'ۖ', 'ۗ', 'ۛ', 'ۜ', '۝'] as const;
-const CONTEXTUAL_BREAK_TOKENS = new Set<string>([
-    ...CONTEXTUAL_BREAK_SUFFIXES,
-    'ج',
-    'قلى',
-    'صلى',
-    'م',
-    'لا',
-]);
-const MAX_REVEAL_WORDS = 10;
-
-function splitLongSegment(tokens: string[], maxWords: number): string[][] {
-    if (tokens.length <= maxWords) return [tokens];
-
-    const midpoint = Math.ceil(tokens.length / 2);
-    return [
-        ...splitLongSegment(tokens.slice(0, midpoint), maxWords),
-        ...splitLongSegment(tokens.slice(midpoint), maxWords),
-    ];
-}
-
-function splitIntoChunks(text: string | undefined | null): string[] {
-    const normalized = typeof text === 'string' ? text.trim() : '';
-    if (!normalized) return [];
-
-    const rawTokens = normalized.split(/\s+/).filter(Boolean);
-    const tokens: string[] = [];
-
-    for (const rawToken of rawTokens) {
-        if (tokens.length > 0 && CONTEXTUAL_BREAK_TOKENS.has(rawToken)) {
-            tokens[tokens.length - 1] = `${tokens[tokens.length - 1]}${rawToken}`;
-            continue;
-        }
-
-        tokens.push(rawToken);
-    }
-
-    if (tokens.length === 0) return [];
-
-    const primarySegments: string[][] = [];
-    let currentSegment: string[] = [];
-
-    for (const token of tokens) {
-        currentSegment.push(token);
-
-        if (CONTEXTUAL_BREAK_SUFFIXES.some(mark => token.endsWith(mark))) {
-            primarySegments.push(currentSegment);
-            currentSegment = [];
-        }
-    }
-
-    if (currentSegment.length > 0) {
-        primarySegments.push(currentSegment);
-    }
-
-    return primarySegments
-        .flatMap(segment => splitLongSegment(segment, MAX_REVEAL_WORDS))
-        .map(segment => segment.join(' '))
-        .filter(Boolean);
-}
 
 type DailyPortionSurahGroup = {
     surahId: number;
@@ -221,6 +167,7 @@ function getLocalDayKeyNow() {
 }
 
 export default function TodayPage() {
+    const { user } = db.useAuth();
     const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
@@ -293,6 +240,22 @@ export default function TodayPage() {
         return entries.some((entry: any) =>
             !isSimilarityEntryResolved(mutashabihatDecisionsMap, absoluteAyah, entry, { sameSurahOnly: true })
         );
+    }, [mutashabihatDecisionsMap, customMutashabihat]);
+
+    const isChunkRelevantUnresolvedMutashabihatFailure = useCallback((
+        absoluteAyah: number,
+        chunkWordRange: [number, number] | null | undefined
+    ) => {
+        const verseDecision = mutashabihatDecisionsMap.get(absoluteAyah.toString());
+        if (verseDecision?.status === 'ignored' || !!verseDecision?.confirmedAt) return false;
+
+        const entries = getMutashabihatForAbsolute(absoluteAyah, customMutashabihat);
+        if (entries.length === 0) return false;
+
+        return entries.some((entry: any) => (
+            doesSimilarityEntryOverlapChunk(entry, absoluteAyah, chunkWordRange)
+            && !isSimilarityEntryResolved(mutashabihatDecisionsMap, absoluteAyah, entry, { sameSurahOnly: true })
+        ));
     }, [mutashabihatDecisionsMap, customMutashabihat]);
 
     const suspendedVerseGroupKeys = useMemo(() => {
@@ -1098,7 +1061,10 @@ export default function TodayPage() {
             return settings.skippedSurahs?.includes(surahId) || false;
         };
 
-        const surahsInPart = getSurahsByPart(settings.activePart).filter(s => !isSurahSkipped(s.id, settings));
+        const surahsInPart = getSurahsByPart(settings.activePart).filter((surah) => (
+            !isSurahSkipped(surah.id, settings)
+            && !surahHasReviewedVerseGroup(nodes, surah.id)
+        ));
         if (surahsInPart.length === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
 
         // Flatten verses - optimized filter
@@ -1121,7 +1087,7 @@ export default function TodayPage() {
             totalVerses,
             lastUpdateAt: partProgress?.updatedAt
         };
-    }, [allVerses, settings, resolveActivePartProgress]);
+    }, [allVerses, nodes, settings, resolveActivePartProgress]);
 
     useEffect(() => {
         if (!portionData.lastUpdateAt) return;
@@ -1165,6 +1131,64 @@ export default function TodayPage() {
         setCurrentVerseInReview(0);
         setShowGrading(false);
     }, [orderedDueNodes]);
+
+    const persistReviewGrade = useCallback(async (afterNode: MemoryNode, logToSave: Record<string, any>, errorToSave?: Record<string, any>) => {
+        if (!user?.id || !isUuid(afterNode.id)) {
+            if (errorToSave) {
+                await Promise.all([
+                    updateInstantNode(afterNode),
+                    saveInstantReviewLog(logToSave),
+                    saveInstantReviewError(errorToSave),
+                ]);
+                return;
+            }
+
+            await Promise.all([
+                updateInstantNode(afterNode),
+                saveInstantReviewLog(logToSave),
+            ]);
+            return;
+        }
+
+        const logId = id();
+        const writes: any[] = [
+            db.tx.memoryNodes[afterNode.id].update({
+                ...afterNode,
+                userId: user.id,
+            }),
+            db.tx.fsrsReviewLogs[logId].update({
+                ...logToSave,
+                userId: user.id,
+            }),
+        ];
+
+        const overflow = reviewLogs.length + 1 - MAX_REVIEW_LOGS;
+        if (overflow > 0) {
+            const staleLogIds = reviewLogs
+                .map((entry) => ({
+                    id: String(entry?.id || ''),
+                    reviewedAtMs: Date.parse(String((entry as any)?.review_time || (entry as any)?.timestamp || '')),
+                }))
+                .filter((entry) => isUuid(entry.id))
+                .sort((a, b) => (Number.isFinite(a.reviewedAtMs) ? a.reviewedAtMs : 0) - (Number.isFinite(b.reviewedAtMs) ? b.reviewedAtMs : 0))
+                .slice(0, overflow)
+                .map((entry) => entry.id);
+
+            staleLogIds.forEach((staleLogId) => {
+                writes.push(db.tx.fsrsReviewLogs[staleLogId].delete());
+            });
+        }
+
+        if (errorToSave) {
+            const errorId = isUuid(errorToSave.id) ? errorToSave.id : id();
+            writes.push(db.tx.reviewErrors[errorId].update({
+                ...errorToSave,
+                userId: user.id,
+            }));
+        }
+
+        await transactWithRetry(writes.length === 1 ? writes[0] : writes);
+    }, [user?.id, reviewLogs, updateInstantNode, saveInstantReviewLog, saveInstantReviewError]);
 
 
     // Grade review
@@ -1214,22 +1238,23 @@ export default function TodayPage() {
         delete logToSave.timestamp;
 
         if (!remembered) {
-            const failedAyahId =
-                node.type === 'verse_segment' && node.startVerse !== undefined
-                    ? (() => {
-                        const segmentStart = node.startVerse;
-                        const segmentEnd = node.endVerse ?? segmentStart;
-                        const currentAyah = Math.min(segmentEnd, segmentStart + currentVerseInReview);
-                        const isAtBeginningOfUnrevealedVerse = revealedChunks === 0;
-                        const isFirstVerseInCurrentReview = currentAyah === segmentStart;
-
-                        // Only use previous-verse attribution after the first verse in this review range.
-                        if (isAtBeginningOfUnrevealedVerse && !isFirstVerseInCurrentReview) {
-                            return currentAyah - 1;
-                        }
-                        return currentAyah;
-                    })()
-                    : node.startVerse;
+            const failureContextVerses =
+                node.type === 'verse_segment' && resolvedSurahId
+                    ? allVerses.filter((verse) => {
+                        if (verse.surahId !== resolvedSurahId) return false;
+                        const startVerse = node.startVerse ?? 1;
+                        const endVerse = node.endVerse ?? startVerse;
+                        return verse.ayahId >= startVerse && verse.ayahId <= endVerse;
+                    })
+                    : [];
+            const failureContext = node.type === 'verse_segment'
+                ? resolveVerseReviewFailureContext({
+                    verses: failureContextVerses,
+                    currentVerseInReview,
+                    revealedChunks,
+                })
+                : null;
+            const failedAyahId = failureContext?.ayahId ?? node.startVerse;
 
             const errorToSave: any = {
                 id: errorId!,
@@ -1255,18 +1280,20 @@ export default function TodayPage() {
             const abs = failedAyahId && resolvedSurahId ? surahAyahToAbsolute(resolvedSurahId, failedAyahId) : undefined;
             if (abs !== undefined) {
                 errorToSave.absoluteAyah = abs;
-                if (isUnresolvedMutashabihatFailure(abs)) {
+                if (isChunkRelevantUnresolvedMutashabihatFailure(abs, failureContext?.chunkWordRange)) {
                     errorToSave.type = 'similarity';
                 }
+            }
+            if (failureContext?.chunkIndex !== null && failureContext?.chunkIndex !== undefined) {
+                errorToSave.failedChunkIndex = failureContext.chunkIndex;
+            }
+            if (failureContext?.chunkCount) {
+                errorToSave.failedChunkCount = failureContext.chunkCount;
             }
 
             errorPayload = errorToSave;
             try {
-                await Promise.all([
-                    updateInstantNode(afterNode),
-                    saveInstantReviewLog(logToSave),
-                    saveInstantReviewError(errorToSave),
-                ]);
+                await persistReviewGrade(afterNode, logToSave, errorToSave);
             } catch (err) {
                 console.error('Failed to persist forgot grading action', err);
                 addToast('error', 'Failed to save grade', 'Please try again.');
@@ -1277,10 +1304,7 @@ export default function TodayPage() {
             }
         } else {
             try {
-                await Promise.all([
-                    updateInstantNode(afterNode),
-                    saveInstantReviewLog(logToSave),
-                ]);
+                await persistReviewGrade(afterNode, logToSave);
             } catch (err) {
                 console.error('Failed to persist remembered grading action', err);
                 addToast('error', 'Failed to save grade', 'Please try again.');
@@ -1311,7 +1335,7 @@ export default function TodayPage() {
 
         addToast(toastType, toastMessage, info);
         queueReviewAdvance(node.id, currentReviewIndex);
-    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, updateInstantNode, saveInstantReviewLog, saveInstantReviewError, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, isUnresolvedMutashabihatFailure, findAnchorForRange, pushUndoEntry, queueReviewAdvance]);
+    }, [orderedDueNodes, currentReviewIndex, addToast, customWeights, currentVerseInReview, revealedChunks, isPersistingReviewAction, isApplyingHistoryAction, findAnchorForRange, pushUndoEntry, queueReviewAdvance, persistReviewGrade, allVerses, isChunkRelevantUnresolvedMutashabihatFailure]);
 
     const handlePostpone = useCallback(async () => {
         if (reviewActionLockRef.current || historyActionLockRef.current || isPersistingReviewAction || isApplyingHistoryAction) return;
@@ -1677,6 +1701,32 @@ export default function TodayPage() {
         return { type: 'verse', surah, verses, contextVerses } as const;
     }, [orderedDueNodes, currentReviewIndex, partMindMaps, mindmaps, versesBySurah, verseLookupBySurahAyah, isUnresolvedMutashabihatFailure]);
 
+    const reviewQueueFreshness = useMemo(() => {
+        const totals = { new: 0, old: 0 };
+        const remaining = { new: 0, old: 0 };
+
+        orderedDueNodes.forEach((node, index) => {
+            const category: ReviewFreshnessCategory = hasNodeBeenReviewed(node.scheduler) ? 'old' : 'new';
+            totals[category] += 1;
+            if (index >= currentReviewIndex) {
+                remaining[category] += 1;
+            }
+        });
+
+        const currentNode = orderedDueNodes[currentReviewIndex];
+        const currentCategory = currentNode
+            ? (hasNodeBeenReviewed(currentNode.scheduler) ? 'old' : 'new')
+            : null;
+
+        return {
+            newTotal: totals.new,
+            newRemaining: remaining.new,
+            oldTotal: totals.old,
+            oldRemaining: remaining.old,
+            currentCategory,
+        };
+    }, [orderedDueNodes, currentReviewIndex]);
+
     const normalizedActiveVerses = useMemo(() => {
         const raw = activeContent?.verses;
         if (!raw || !Array.isArray(raw)) return [];
@@ -1688,14 +1738,14 @@ export default function TodayPage() {
         const safeVerseIndex = Math.max(0, Math.min(currentVerseInReview, normalizedActiveVerses.length - 1));
         const v = normalizedActiveVerses[safeVerseIndex];
         if (!v?.text) return [];
-        return splitIntoChunks(v.text);
+        return splitVerseIntoReviewChunks(v.text);
     };
 
     const verseChunks = getCurrentVerseChunks();
     const totalChunks = verseChunks.length;
     const totalVerses = normalizedActiveVerses.length;
 
-    const verseChunkMap = normalizedActiveVerses.map(v => splitIntoChunks(v?.text ?? ''));
+    const verseChunkMap = normalizedActiveVerses.map((v) => splitVerseIntoReviewChunks(v?.text ?? ''));
     const hasCurrentVerseNextChunk = revealedChunks < totalChunks;
     const nextRevealVerseIndex =
         totalVerses > 0
@@ -2034,6 +2084,40 @@ export default function TodayPage() {
     const dailyReadingStyle = settings?.dailyReadingStyle ?? 'line_by_line';
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
     const isReviewQueueHydrating = !hasHydratedReviewQueue;
+    const showReviewFreshnessPill = !isReviewQueueHydrating && orderedDueNodes.length > 0;
+    const newReviewTooltip = `New review items remaining: ${reviewQueueFreshness.newRemaining} of ${reviewQueueFreshness.newTotal}`;
+    const oldReviewTooltip = `Old review items remaining: ${reviewQueueFreshness.oldRemaining} of ${reviewQueueFreshness.oldTotal}`;
+    const reviewFreshnessPill = showReviewFreshnessPill ? (
+        <span
+            className="review-header-pill"
+            role="status"
+            aria-label={`New reviews left: ${reviewQueueFreshness.newRemaining}. Old reviews left: ${reviewQueueFreshness.oldRemaining}.`}
+        >
+            <span
+                className={`review-header-pill__segment review-header-pill__segment--new${reviewQueueFreshness.currentCategory === 'new' ? ' is-current' : ''}`}
+                data-tooltip={newReviewTooltip}
+                data-tooltip-trigger="hover"
+                title={newReviewTooltip}
+                aria-label={newReviewTooltip}
+                tabIndex={0}
+            >
+                <span className="review-header-pill__label">New</span>
+                <span className="review-header-pill__count">{reviewQueueFreshness.newRemaining}</span>
+            </span>
+            <span className="review-header-pill__divider" aria-hidden="true" />
+            <span
+                className={`review-header-pill__segment review-header-pill__segment--old${reviewQueueFreshness.currentCategory === 'old' ? ' is-current' : ''}`}
+                data-tooltip={oldReviewTooltip}
+                data-tooltip-trigger="hover"
+                title={oldReviewTooltip}
+                aria-label={oldReviewTooltip}
+                tabIndex={0}
+            >
+                <span className="review-header-pill__label">Old</span>
+                <span className="review-header-pill__count">{reviewQueueFreshness.oldRemaining}</span>
+            </span>
+        </span>
+    ) : null;
 
     useEffect(() => {
         if (!isLoaded) return;
@@ -2124,10 +2208,13 @@ export default function TodayPage() {
                             </div>
                             <div className="today-column-meta">
                                 {viewState.reviewExpanded && orderedDueNodes.length > 0 && activeContent && (
-                                    <span className="review-header-context">
-                                        {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
-                                            activeContent.type === 'mindmap' ? `${formatSurahContextLabel(activeContent.surah)} Mindmap` :
-                                                `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
+                                    <span className="review-header-context-wrap">
+                                        <span className="review-header-context">
+                                            {activeContent.type === 'part_mindmap' ? `Part ${activeContent.partId} Mindmap` :
+                                                activeContent.type === 'mindmap' ? `${formatSurahContextLabel(activeContent.surah)} Mindmap` :
+                                                    `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
+                                        </span>
+                                        {reviewFreshnessPill}
                                     </span>
                                 )}
                                 <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
@@ -2160,6 +2247,7 @@ export default function TodayPage() {
                                                         activeContent.type === 'mindmap' ? `${formatSurahContextLabel(activeContent.surah)} Mindmap` :
                                                             `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
                                                 </span>
+                                                {reviewFreshnessPill}
                                             </div>
                                         )}
 

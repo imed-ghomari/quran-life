@@ -129,6 +129,25 @@ export interface AppSettings {
     lastSyncedAt?: string;
 }
 
+export interface ReviewError {
+    id?: string;
+    type?: string;
+    timestamp?: string;
+    nodeId?: string;
+    nodeType?: string;
+    surahId?: number;
+    partId?: number;
+    startVerse?: number;
+    endVerse?: number;
+    grade?: number;
+    anchorLabel?: string;
+    anchorId?: string;
+    absoluteAyah?: number;
+    failedChunkIndex?: number;
+    failedChunkCount?: number;
+    userId?: string;
+}
+
 // Anchor (maps meaning to verse ranges)
 export interface Anchor {
     id: string;
@@ -266,6 +285,14 @@ export function hasNodeBeenReviewed(scheduler: any): boolean {
     if ('reps' in scheduler) return scheduler.reps > 0;
     if ('repetition' in scheduler) return scheduler.repetition > 0;
     return false;
+}
+
+export function surahHasReviewedVerseGroup(nodes: MemoryNode[], surahId: number): boolean {
+    return nodes.some((node) => (
+        node.type === 'verse_segment'
+        && Number(node.surahId) === surahId
+        && hasNodeBeenReviewed(node.scheduler)
+    ));
 }
 
 // VerseSegment ID helper

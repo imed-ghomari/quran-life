@@ -23,7 +23,29 @@ import {
 } from '@/lib/mutashabihatResolution';
 import { PartMindMapId, MutashabihatDecision } from '@/lib/types';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
+import { splitVerseIntoReviewChunks } from '@/lib/reviewVerseChunks';
 import { getSimilarityComparatorCardStyle, SimilarityComparatorStatusBadge } from '@/components/SimilarityComparatorStatus';
+
+type SuspendedRecentErrorContext = {
+    ayahId: number;
+    chunkIndex: number | null;
+    chunkCount: number | null;
+    timestamp?: string;
+    timestampMs?: number;
+};
+
+type SuspendedAnchorIssue = {
+    surahId: number;
+    anchorId: string;
+    groupKey?: string;
+    label?: string;
+    startVerse?: number;
+    endVerse?: number;
+    focusAyah?: number;
+    timestamp?: string;
+    mistakeCount?: number;
+    recentErrorContexts?: SuspendedRecentErrorContext[];
+};
 
 const MUT_STATES: { value: MutashabihatDecision['status']; label: string }[] = [
     { value: 'pending', label: 'Pending Review' },
@@ -53,7 +75,7 @@ function HighlightedVerse({ text, range }: { text: string; range?: [number, numb
 }
 
 interface TodoKanbanProps {
-    suspendedAnchors: any[];
+    suspendedAnchors: SuspendedAnchorIssue[];
     similarityGroups: any[];
     partTasks: any[];
     surahTasks: any[];
@@ -387,21 +409,23 @@ export default function TodoKanban({
 
     // Similarity Context Modal State
     const [activeSimilarityContext, setActiveSimilarityContext] = useState<{
-        decisionKey: string;
-        representativeAbs: number;
-        group: {
+        activeGroupIndex: number;
+        groups: Array<{
+            decisionKey: string;
+            representativeAbs: number;
             phraseId: string;
             phraseIds: string[];
             absRefs: number[];
             entries: any[];
             ayahIds: number[];
             surahId: number;
+            actionableComparatorCount: number;
             resolutionTargets: Array<{
                 phraseId: string;
                 decisionKey: string;
                 representativeAbs: number;
             }>;
-        };
+        }>;
         surah: { id: number; name: string; arabicName?: string };
     } | null>(null);
     const [expandedSimilarityMatches, setExpandedSimilarityMatches] = useState<Record<string, boolean>>({});
@@ -421,6 +445,86 @@ export default function TodoKanban({
         });
         return map;
     }, [verses]);
+    const verseContextModalData = useMemo(() => {
+        if (!verseContextItem || verseContextItem.type !== 'suspended') return null;
+
+        const issue = verseContextItem.data;
+        const surahId = Number(issue?.surahId) || 0;
+        if (!surahId) return null;
+
+        const surahMeta = SURAHS.find((surah) => surah.id === surahId);
+        const total = surahMeta?.verseCount || 1;
+        const rawEntries = Array.isArray(issue.recentErrorContexts) ? issue.recentErrorContexts : [];
+        const normalizedEntries = rawEntries
+            .map((entry: SuspendedRecentErrorContext) => {
+                const ayahId = Math.min(Math.max(1, Number(entry?.ayahId) || 1), total);
+                const chunkIndex = Number(entry?.chunkIndex);
+                const chunkCount = Number(entry?.chunkCount);
+                return {
+                    ayahId,
+                    chunkIndex: Number.isFinite(chunkIndex) && chunkIndex >= 0 ? chunkIndex : null,
+                    chunkCount: Number.isFinite(chunkCount) && chunkCount > 0 ? chunkCount : null,
+                    timestamp: typeof entry?.timestamp === 'string' ? entry.timestamp : '',
+                    timestampMs: Number.isFinite(Number(entry?.timestampMs)) ? Number(entry?.timestampMs) : 0,
+                };
+            })
+            .slice(0, 3);
+
+        const mergedContextRanges = (() => {
+            const sourceEntries: Array<{ ayahId: number }> = normalizedEntries.length > 0
+                ? normalizedEntries
+                : [{ ayahId: Math.min(Math.max(1, Number(issue?.focusAyah || issue?.startVerse || 1)), total) }];
+            const rawRanges = sourceEntries
+                .map((entry: { ayahId: number }) => ({
+                    start: Math.max(1, entry.ayahId - 1),
+                    end: Math.min(total, entry.ayahId + 1),
+                }))
+                .sort((a, b) => a.start - b.start);
+
+            const merged: Array<{ start: number; end: number }> = [];
+            rawRanges.forEach((range) => {
+                const last = merged[merged.length - 1];
+                if (!last || range.start > last.end) {
+                    merged.push({ ...range });
+                    return;
+                }
+                last.end = Math.max(last.end, range.end);
+            });
+            return merged;
+        })();
+
+        const verseChunksByAyah = new Map<number, string[]>();
+        mergedContextRanges.forEach((range) => {
+            for (let ayahId = range.start; ayahId <= range.end; ayahId += 1) {
+                const verseText = verseLookupBySurahAyah.get(`${surahId}:${ayahId}`)?.text || '';
+                verseChunksByAyah.set(ayahId, splitVerseIntoReviewChunks(verseText));
+            }
+        });
+
+        const chunkHitCountsByAyah = new Map<number, Map<number, number>>();
+        const fallbackCountsByAyah = new Map<number, number>();
+
+        normalizedEntries.forEach((entry: (typeof normalizedEntries)[number]) => {
+            const verseChunks = verseChunksByAyah.get(entry.ayahId) || [];
+            if (entry.chunkIndex === null || verseChunks.length === 0 || entry.chunkIndex >= verseChunks.length) {
+                fallbackCountsByAyah.set(entry.ayahId, (fallbackCountsByAyah.get(entry.ayahId) || 0) + 1);
+                return;
+            }
+
+            const byChunk = chunkHitCountsByAyah.get(entry.ayahId) || new Map<number, number>();
+            byChunk.set(entry.chunkIndex, (byChunk.get(entry.chunkIndex) || 0) + 1);
+            chunkHitCountsByAyah.set(entry.ayahId, byChunk);
+        });
+
+        return {
+            issue,
+            surahId,
+            chunkHitCountsByAyah,
+            fallbackCountsByAyah,
+            mergedContextRanges,
+            verseChunksByAyah,
+        };
+    }, [verseContextItem, verseLookupBySurahAyah]);
     // Removed custom scroll refs as per request
 
     useEffect(() => {
@@ -1201,44 +1305,89 @@ export default function TodoKanban({
         }, []).sort((a, b) => Math.min(...a.ayahIds) - Math.min(...b.ayahIds));
         if (groups.length === 0) return null;
 
-        const selected = groups[0];
         const decisions = mutashabihatDecisions || [];
-        const resolutionTargets = selected.phraseIds.map((phraseId) => {
-            const phraseAbsRefs = selected.phraseAbsRefs[phraseId] || selected.absRefs;
-            const targetAbs = phraseAbsRefs.find((abs) => {
-                const key = `${abs}-${phraseId}`;
-                const existing = decisions.find(d => d.phraseId === key);
-                return isMutashabihatDecisionResolved(existing);
-            }) || phraseAbsRefs[0];
-            return {
-                phraseId,
-                representativeAbs: targetAbs,
-                decisionKey: `${targetAbs}-${phraseId}`,
-            };
-        });
+        const getResolutionTargetsForGroup = (selectedGroup: typeof groups[number]) => {
+            return selectedGroup.phraseIds.map((phraseId) => {
+                const phraseAbsRefs = selectedGroup.phraseAbsRefs[phraseId] || selectedGroup.absRefs;
+                const targetAbs = phraseAbsRefs.find((abs) => {
+                    const key = `${abs}-${phraseId}`;
+                    const existing = decisions.find(d => d.phraseId === key);
+                    return isMutashabihatDecisionResolved(existing);
+                }) || phraseAbsRefs[0];
+                return {
+                    phraseId,
+                    representativeAbs: targetAbs,
+                    decisionKey: `${targetAbs}-${phraseId}`,
+                };
+            });
+        };
 
-        const firstResolvedTarget = resolutionTargets.find(target =>
-            isMutashabihatDecisionResolved(
-                decisions.find(d => d.phraseId === target.decisionKey)
-            )
-        );
-        const primaryTarget = firstResolvedTarget || resolutionTargets[0];
+        const getComparatorResolutionMetaForGroup = (selectedGroup: typeof groups[number], matchAbs: number) => {
+            return selectedGroup.entries.reduce<ReturnType<typeof getSimilarityEntryResolutionMeta> | null>((resolvedMeta, entry: any) => {
+                if (resolvedMeta?.resolved) return resolvedMeta;
+                const entryMatches = Array.isArray(entry?.matches) ? entry.matches : [];
+                if (!entryMatches.includes(matchAbs)) return resolvedMeta;
+                const localResolutionAbsolute = [
+                    Number(entry?.meta?.sourceAbs),
+                    ...entryMatches,
+                ].find((absRef) => Number.isFinite(absRef) && selectedGroup.absRefs.includes(absRef));
+                const resolutionAbsolute = Number.isFinite(localResolutionAbsolute)
+                    ? localResolutionAbsolute
+                    : selectedGroup.absRefs[0];
+                return getSimilarityEntryResolutionMeta(
+                    decisions,
+                    resolutionAbsolute,
+                    entry,
+                    { sameSurahOnly: true }
+                );
+            }, null) ?? { resolved: false, ignored: false, decision: undefined, absolute: null };
+        };
+
+        const hydratedGroups = groups.map((selectedGroup) => {
+            const resolutionTargets = getResolutionTargetsForGroup(selectedGroup);
+            const firstResolvedTarget = resolutionTargets.find(target =>
+                isMutashabihatDecisionResolved(
+                    decisions.find(d => d.phraseId === target.decisionKey)
+                )
+            );
+            const primaryTarget = firstResolvedTarget || resolutionTargets[0];
+            const actionableComparatorCount = Array.from(getGroupExternalMatches(selectedGroup)).filter((matchAbs) => {
+                const matchRef = absoluteToSurahAyah(matchAbs);
+                const isLearned = isSurahLearned ? isSurahLearned(matchRef.surahId) : false;
+                if (!isLearned) return false;
+                const resolutionMeta = getComparatorResolutionMetaForGroup(selectedGroup, matchAbs);
+                return !(resolutionMeta.resolved && (isLearned || resolutionMeta.ignored));
+            }).length;
+
+            return {
+                decisionKey: primaryTarget.decisionKey,
+                representativeAbs: primaryTarget.representativeAbs,
+                phraseId: selectedGroup.phraseId,
+                phraseIds: selectedGroup.phraseIds,
+                absRefs: selectedGroup.absRefs,
+                entries: selectedGroup.entries,
+                ayahIds: selectedGroup.ayahIds,
+                surahId: group.surah.id,
+                actionableComparatorCount,
+                resolutionTargets,
+            };
+        }).filter((selectedGroup) => selectedGroup.actionableComparatorCount > 0);
+
+        if (hydratedGroups.length === 0) return null;
+
+        const preferredGroupIndex = hydratedGroups.reduce((bestIndex, candidate, index, collection) => {
+            if (candidate.actionableComparatorCount > collection[bestIndex].actionableComparatorCount) {
+                return index;
+            }
+            return bestIndex;
+        }, 0);
 
         return {
-            decisionKey: primaryTarget.decisionKey,
-            representativeAbs: primaryTarget.representativeAbs,
-            group: {
-                phraseId: selected.phraseId,
-                phraseIds: selected.phraseIds,
-                absRefs: selected.absRefs,
-                entries: selected.entries,
-                ayahIds: selected.ayahIds,
-                surahId: group.surah.id,
-                resolutionTargets,
-            },
+            activeGroupIndex: preferredGroupIndex,
+            groups: hydratedGroups,
             surah: group.surah
         };
-    }, [mutashabihatDecisions]);
+    }, [isSurahLearned, mutashabihatDecisions]);
 
     const handleCardViewSimilarityContext = useCallback((item: KanbanItem) => {
         if (item.type !== 'similarity') return;
@@ -1713,59 +1862,62 @@ export default function TodoKanban({
             )}
 
             {/* Suspended Verse Context Modal */}
-            {verseContextItem && (() => {
-                const issue = verseContextItem.data;
-                const surahId = issue.surahId;
+            {verseContextModalData && (() => {
+                const { issue, surahId, mergedContextRanges, chunkHitCountsByAyah, fallbackCountsByAyah, verseChunksByAyah } = verseContextModalData;
                 const surah = getSurah(surahId);
-                const surahMeta = SURAHS.find(s => s.id === surahId);
-                const total = surahMeta?.verseCount || 1;
-                const mistakeEntries = (Array.isArray(issue.recentVerseWindow) ? issue.recentVerseWindow : [])
-                    .map((entry: any) => {
-                        const ayahId = Math.min(Math.max(1, Number(entry?.ayahId) || 1), total);
-                        const count = Math.max(1, Number(entry?.count) || 1);
-                        return { ayahId, count };
-                    })
-                    .slice(0, 3);
-                const mistakeAyahIds = new Set<number>(mistakeEntries.map((entry: any) => entry.ayahId));
-                const mistakeCountByAyah = new Map<number, number>(mistakeEntries.map((entry: any) => [entry.ayahId, entry.count]));
-                const getVerseText = (ayahId: number) => verseLookupBySurahAyah.get(`${surahId}:${ayahId}`)?.text || '';
-                const mergedContextRanges = (() => {
-                    const rawRanges = mistakeEntries
-                        .map((entry: any) => ({
-                            start: Math.max(1, entry.ayahId - 1),
-                            end: Math.min(total, entry.ayahId + 1),
-                        }))
-                        .sort((a: any, b: any) => a.start - b.start);
-
-                    const merged: Array<{ start: number; end: number }> = [];
-                    rawRanges.forEach((range: any) => {
-                        const last = merged[merged.length - 1];
-                        if (!last || range.start > last.end) {
-                            merged.push({ ...range });
-                            return;
-                        }
-                        last.end = Math.max(last.end, range.end);
-                    });
-                    return merged;
-                })();
 
                 const renderVerse = (ayahId: number) => {
-                    const highlight = mistakeAyahIds.has(ayahId);
-                    const count = mistakeCountByAyah.get(ayahId) || 1;
+                    const rawVerseText = verseLookupBySurahAyah.get(`${surahId}:${ayahId}`)?.text || '';
+                    const verseChunks = verseChunksByAyah.get(ayahId) || splitVerseIntoReviewChunks(rawVerseText);
+                    const chunkHitMap = chunkHitCountsByAyah.get(ayahId) || new Map<number, number>();
+                    const chunkHitEntries = Array.from(chunkHitMap.entries()).sort((a, b) => a[0] - b[0]);
+                    const fallbackCount = fallbackCountsByAyah.get(ayahId) || 0;
+                    const exactChunkErrorCount = chunkHitEntries.reduce((sum, [, count]) => sum + count, 0);
+                    const shouldHighlightWholeVerse = fallbackCount > 0 || (chunkHitEntries.length > 0 && verseChunks.length === 0);
+
                     return (
-                        <div key={`${ayahId}-${count}`} className="verse-context-verse todo-context-row bg-[var(--background-secondary)] p-5 rounded-lg">
+                        <div key={`${ayahId}-${fallbackCount}-${exactChunkErrorCount}`} className="verse-context-verse todo-context-row bg-[var(--background-secondary)] p-5 rounded-lg">
                             <div className="verse-context-label text-xs text-[var(--foreground-secondary)] mb-2">
                                 {surah ? `${surah.id}. ${surah.name}` : `Surah ${surahId}`} • Ayah {ayahId}
                             </div>
                             <p
                                 className="verse-context-ayah text-right font-arabic text-xl leading-loose"
-                                style={highlight ? { background: 'rgba(255, 99, 99, 0.18)' } : undefined}
+                                style={shouldHighlightWholeVerse ? { background: 'rgba(255, 99, 99, 0.18)' } : undefined}
                             >
-                                {getVerseText(ayahId)}
+                                {verseChunks.length > 0 ? verseChunks.map((chunk, chunkIdx) => {
+                                    const count = chunkHitMap.get(chunkIdx) || 0;
+                                    const isHighlighted = count > 0;
+                                    return (
+                                        <span
+                                            key={`${ayahId}-chunk-${chunkIdx}`}
+                                            style={isHighlighted ? {
+                                                background: 'rgba(255, 99, 99, 0.18)',
+                                                borderRadius: '0.4rem',
+                                                paddingInline: '0.15rem',
+                                            } : undefined}
+                                        >
+                                            {chunk}
+                                            {chunkIdx < verseChunks.length - 1 ? ' ' : ''}
+                                        </span>
+                                    );
+                                }) : rawVerseText}
                             </p>
-                            {highlight && count > 1 && (
-                                <div className="mt-3 inline-flex items-center rounded-full border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-1 text-xs font-semibold text-[var(--danger)]">
-                                    {count} errors on this verse
+                            {(chunkHitEntries.length > 0 || fallbackCount > 0) && (
+                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                                    {chunkHitEntries.map(([chunkIndex, count]) => (
+                                        <div
+                                            key={`${ayahId}-badge-${chunkIndex}`}
+                                            className="inline-flex items-center rounded-full border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-1 text-xs font-semibold text-[var(--danger)]"
+                                        >
+                                            Part {chunkIndex + 1}
+                                            {count > 1 ? ` • ${count} errors` : ''}
+                                        </div>
+                                    ))}
+                                    {fallbackCount > 0 && (
+                                        <div className="inline-flex items-center rounded-full border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-1 text-xs font-semibold text-[var(--danger)]">
+                                            {fallbackCount} verse-level fallback {fallbackCount === 1 ? 'error' : 'errors'}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1776,9 +1928,9 @@ export default function TodoKanban({
                     ? 'verse-context-stack todo-context-scroll pr-1 space-y-4'
                     : 'verse-context-stack todo-context-scroll max-h-[52vh] overflow-y-auto pr-1 space-y-4';
 
-                const content = mistakeEntries.length > 0 ? (
+                const content = (
                     <div className={contextStackClassName}>
-                        {mergedContextRanges.map((range: any, rangeIdx: number) => {
+                        {mergedContextRanges.map((range, rangeIdx) => {
                             const versesInRange = Array.from(
                                 { length: Math.max(0, range.end - range.start + 1) },
                                 (_, idx) => range.start + idx
@@ -1799,24 +1951,12 @@ export default function TodoKanban({
                             );
                         })}
                     </div>
-                ) : (() => {
-                    const targetAyah = issue.focusAyah || issue.startVerse || 1;
-                    const target = Math.min(Math.max(1, targetAyah), total);
-                    const prev = target > 1 ? target - 1 : null;
-                    const next = target < total ? target + 1 : null;
-                    return (
-                        <div className={contextStackClassName}>
-                            {prev && renderVerse(prev)}
-                            {renderVerse(target)}
-                            {next && renderVerse(next)}
-                        </div>
-                    );
-                })();
+                );
 
                 if (isMobile || isTablet) {
                     return (
                         <div className="slide-over-overlay" onClick={closeMobileContextOverlays}>
-                            <div className="slide-over-content verse-context-modal" onClick={e => e.stopPropagation()}>
+                            <div className="slide-over-content verse-context-modal" onClick={(e) => e.stopPropagation()}>
                                 <div className="slide-over-header verse-context-header">
                                     <h3 className="verse-context-title" style={{ margin: 0, fontSize: '1rem' }}>Suspension Context (Last 3 Errors)</h3>
                                     <button className="close-btn verse-context-close" onClick={closeMobileContextOverlays}>
@@ -1857,7 +1997,29 @@ export default function TodoKanban({
 
             {/* Similarity Context Modal */}
             {activeSimilarityContext && mutashabihatDecisions && onMutashabihatDecisionUpdate && (() => {
-                const { decisionKey, group, surah } = activeSimilarityContext;
+                const { groups, activeGroupIndex, surah } = activeSimilarityContext;
+                const group = groups[activeGroupIndex] || groups[0];
+                if (!group) return null;
+                const decisions = mutashabihatDecisions || [];
+
+                const decisionKey = group.decisionKey;
+                const totalSimilarityGroups = groups.length;
+                const canGoToPreviousGroup = activeGroupIndex > 0;
+                const canGoToNextGroup = activeGroupIndex < totalSimilarityGroups - 1;
+                const shiftSimilarityGroup = (direction: 'previous' | 'next') => {
+                    setExpandedSimilarityMatches({});
+                    setContextVerseCursor({});
+                    setActiveSimilarityContext((prev) => {
+                        if (!prev) return prev;
+                        const delta = direction === 'previous' ? -1 : 1;
+                        const nextIndex = Math.max(0, Math.min(prev.activeGroupIndex + delta, prev.groups.length - 1));
+                        if (nextIndex === prev.activeGroupIndex) return prev;
+                        return {
+                            ...prev,
+                            activeGroupIndex: nextIndex,
+                        };
+                    });
+                };
                 const existing = mutashabihatDecisions.find(d => d.phraseId === decisionKey) || { status: 'pending', notes: '' };
                 const existingStatus = existing.status === 'ignored'
                     ? 'pending'
@@ -1903,7 +2065,7 @@ export default function TodoKanban({
                             ? localResolutionAbsolute
                             : group.absRefs[0];
                         return getSimilarityEntryResolutionMeta(
-                            mutashabihatDecisions,
+                            decisions,
                             resolutionAbsolute,
                             entry,
                             { sameSurahOnly: true }
@@ -2214,17 +2376,36 @@ export default function TodoKanban({
                         <div className="slide-over-overlay" onClick={closeMobileContextOverlays}>
                             <div className="slide-over-content similarity-context-modal" onClick={e => e.stopPropagation()}>
                                 <div className="slide-over-header similarity-context-header">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
                                         <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                                             <Brain size={18} />
                                         </div>
-                                        <h3 className="similarity-context-title" style={{ margin: 0, fontSize: '1rem' }}>
-                                            {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
-                                        </h3>
+                                        <div style={{ minWidth: 0 }}>
+                                            <h3 className="similarity-context-title" style={{ margin: 0, fontSize: '1rem' }}>
+                                                {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
+                                            </h3>
+                                            {totalSimilarityGroups > 1 && (
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginTop: '0.2rem' }}>
+                                                    Context {activeGroupIndex + 1} of {totalSimilarityGroups}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <button className="close-btn similarity-context-close" onClick={closeMobileContextOverlays}>
-                                        <X size={20} />
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                        {totalSimilarityGroups > 1 && (
+                                            <>
+                                                <button className="bulk-btn std-normal-btn" onClick={() => shiftSimilarityGroup('previous')} disabled={!canGoToPreviousGroup} aria-label="Previous similarity context" title="Previous similarity context" style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <ChevronRight size={14} />
+                                                </button>
+                                                <button className="bulk-btn std-normal-btn" onClick={() => shiftSimilarityGroup('next')} disabled={!canGoToNextGroup} aria-label="Next similarity context" title="Next similarity context" style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <ChevronLeft size={14} />
+                                                </button>
+                                            </>
+                                        )}
+                                        <button className="close-btn similarity-context-close" onClick={closeMobileContextOverlays}>
+                                            <X size={20} />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="slide-over-body similarity-context-content todo-context-scroll">
                                     {similarityContent}
@@ -2239,17 +2420,36 @@ export default function TodoKanban({
                         <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setActiveSimilarityContext(null)} />
                         <div className="relative w-full max-w-3xl max-h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
                             <div className="similarity-context-header flex items-center justify-between px-10 py-6 border-b border-[var(--border)]">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
                                     <div style={{ background: 'var(--accent)', color: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                                         <Brain size={18} />
                                     </div>
-                                    <h3 className="similarity-context-title" style={{ margin: 0, fontSize: '1rem' }}>
-                                        {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
-                                    </h3>
+                                    <div style={{ minWidth: 0 }}>
+                                        <h3 className="similarity-context-title" style={{ margin: 0, fontSize: '1rem' }}>
+                                            {surah?.name} - Ayah {group.ayahIds.sort((a, b) => a - b).join(', ')}
+                                        </h3>
+                                        {totalSimilarityGroups > 1 && (
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--foreground-secondary)', marginTop: '0.2rem' }}>
+                                                Context {activeGroupIndex + 1} of {totalSimilarityGroups}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <button className="close-btn similarity-context-close" onClick={() => setActiveSimilarityContext(null)}>
-                                    <X size={20} />
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                    {totalSimilarityGroups > 1 && (
+                                        <>
+                                            <button className="bulk-btn std-normal-btn" onClick={() => shiftSimilarityGroup('previous')} disabled={!canGoToPreviousGroup} aria-label="Previous similarity context" title="Previous similarity context" style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <ChevronRight size={14} />
+                                            </button>
+                                            <button className="bulk-btn std-normal-btn" onClick={() => shiftSimilarityGroup('next')} disabled={!canGoToNextGroup} aria-label="Next similarity context" title="Next similarity context" style={{ minWidth: 34, width: 34, height: 34, borderRadius: 10, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <ChevronLeft size={14} />
+                                            </button>
+                                        </>
+                                    )}
+                                    <button className="close-btn similarity-context-close" onClick={() => setActiveSimilarityContext(null)}>
+                                        <X size={20} />
+                                    </button>
+                                </div>
                             </div>
                             <div className="similarity-context-content todo-context-scroll px-10 py-8 overflow-y-auto max-h-[calc(85vh-80px)]">
                                 {similarityContent}
