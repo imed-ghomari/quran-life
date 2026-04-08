@@ -1335,7 +1335,7 @@ export default function TodoKanban({
                     ? localResolutionAbsolute
                     : selectedGroup.absRefs[0];
                 return getSimilarityEntryResolutionMeta(
-                    mutashabihatDecisions,
+                    decisions,
                     resolutionAbsolute,
                     entry,
                     { sameSurahOnly: true }
@@ -2000,6 +2000,7 @@ export default function TodoKanban({
                 const { groups, activeGroupIndex, surah } = activeSimilarityContext;
                 const group = groups[activeGroupIndex] || groups[0];
                 if (!group) return null;
+                const decisions = mutashabihatDecisions || [];
 
                 const decisionKey = group.decisionKey;
                 const totalSimilarityGroups = groups.length;
@@ -2064,7 +2065,7 @@ export default function TodoKanban({
                             ? localResolutionAbsolute
                             : group.absRefs[0];
                         return getSimilarityEntryResolutionMeta(
-                            mutashabihatDecisions,
+                            decisions,
                             resolutionAbsolute,
                             entry,
                             { sameSurahOnly: true }
