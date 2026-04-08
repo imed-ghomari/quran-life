@@ -471,11 +471,11 @@ export default function TodoKanban({
             .slice(0, 3);
 
         const mergedContextRanges = (() => {
-            const sourceEntries = normalizedEntries.length > 0
+            const sourceEntries: Array<{ ayahId: number }> = normalizedEntries.length > 0
                 ? normalizedEntries
                 : [{ ayahId: Math.min(Math.max(1, Number(issue?.focusAyah || issue?.startVerse || 1)), total) }];
             const rawRanges = sourceEntries
-                .map((entry) => ({
+                .map((entry: { ayahId: number }) => ({
                     start: Math.max(1, entry.ayahId - 1),
                     end: Math.min(total, entry.ayahId + 1),
                 }))
