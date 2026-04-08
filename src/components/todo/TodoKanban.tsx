@@ -504,7 +504,7 @@ export default function TodoKanban({
         const chunkHitCountsByAyah = new Map<number, Map<number, number>>();
         const fallbackCountsByAyah = new Map<number, number>();
 
-        normalizedEntries.forEach((entry) => {
+        normalizedEntries.forEach((entry: (typeof normalizedEntries)[number]) => {
             const verseChunks = verseChunksByAyah.get(entry.ayahId) || [];
             if (entry.chunkIndex === null || verseChunks.length === 0 || entry.chunkIndex >= verseChunks.length) {
                 fallbackCountsByAyah.set(entry.ayahId, (fallbackCountsByAyah.get(entry.ayahId) || 0) + 1);
