@@ -256,6 +256,7 @@ export function useInstantSettings(externalData?: any) {
 
     const data = externalData || internalData;
     const error = externalData ? undefined : internalError;
+    const isLoading = externalData ? isAuthLoading : (isAuthLoading || isDataLoading);
 
     const settingsEntry = useMemo(() => {
         const entries = (data?.settings || []) as any[];
@@ -414,10 +415,10 @@ export function useInstantSettings(externalData?: any) {
     const results = useMemo(() => ({
         settings: { ...currentSettings, id: settingsEntry?.id },
         saveSettings,
-        isLoading: isAuthLoading || isDataLoading,
+        isLoading,
         error,
         user
-    }), [currentSettings, settingsEntry?.id, saveSettings, isAuthLoading, isDataLoading, error, user]);
+    }), [currentSettings, settingsEntry?.id, saveSettings, isLoading, error, user]);
 
     return results;
 }
@@ -429,7 +430,7 @@ export function useInstantNodes(externalData?: any) {
     const { user } = db.useAuth();
     const [dueNowMs, setDueNowMs] = useState(() => Date.now());
 
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             memoryNodes: {
                 $: {
@@ -440,6 +441,8 @@ export function useInstantNodes(externalData?: any) {
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const nodes = useMemo(() => {
         const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
@@ -614,7 +617,7 @@ export function useInstantNodes(externalData?: any) {
 // ==========================================
 export function useInstantMindMaps(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             mindMaps: {
                 $: {
@@ -630,6 +633,8 @@ export function useInstantMindMaps(externalData?: any) {
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const mindmaps = useMemo(() => (data?.mindMaps || []) as unknown as MindMap[], [data?.mindMaps]);
     const partMindMaps = useMemo(() => (data?.partMindMaps || []) as unknown as any[], [data?.partMindMaps]);
@@ -752,7 +757,7 @@ export function useMindMapSnapshot(options: { surahId?: number; partId?: number 
 // ==========================================
 export function useInstantListeningStats(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             listeningStats: {
                 $: { where: { userId: user?.id || '' } }
@@ -761,6 +766,8 @@ export function useInstantListeningStats(externalData?: any) {
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const stats = useMemo(() => (data?.listeningStats || []) as unknown as any[], [data?.listeningStats]);
 
@@ -791,7 +798,7 @@ export function useInstantListeningStats(externalData?: any) {
 // ==========================================
 export function useInstantListeningProgress(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             listeningProgress: {
                 $: { where: { userId: user?.id || '' } }
@@ -800,6 +807,8 @@ export function useInstantListeningProgress(externalData?: any) {
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const progress = useMemo(
         () => (data?.listeningProgress || []) as unknown as ListeningProgressEntry[],
@@ -839,7 +848,7 @@ export function useInstantListeningProgress(externalData?: any) {
 // ==========================================
 export function useInstantMutashabihat(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             mutashabihatDecisions: { $: { where: { userId: user?.id || '' } } },
             customMutashabihat: { $: { where: { userId: user?.id || '' } } }
@@ -847,6 +856,8 @@ export function useInstantMutashabihat(externalData?: any) {
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const decisions = useMemo(() => (data?.mutashabihatDecisions || []) as unknown as any[], [data?.mutashabihatDecisions]);
     const custom = useMemo(() => (data?.customMutashabihat || []) as unknown as any[], [data?.customMutashabihat]);
@@ -895,13 +906,15 @@ export function useInstantMutashabihat(externalData?: any) {
 // ==========================================
 export function useInstantReviewLogs(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
         }
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
 
@@ -941,13 +954,15 @@ export function useInstantReviewLogs(externalData?: any) {
 // ==========================================
 export function useInstantReviewErrors(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data: internalData } = db.useQuery(
+    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
         externalData ? null : {
             reviewErrors: { $: { where: { userId: user?.id || '' } } }
         }
     );
 
     const data = externalData || internalData;
+    const isLoading = externalData ? false : internalIsLoading;
+    const error = externalData ? undefined : internalError;
 
     const errors = useMemo(() => (data?.reviewErrors || []) as unknown as ReviewError[], [data?.reviewErrors]);
 
