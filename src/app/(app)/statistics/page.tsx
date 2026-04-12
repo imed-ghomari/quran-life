@@ -1564,16 +1564,31 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
         const formatSingleDayLabel = (day: number) => {
             if (day === 0) return 'Today';
             if (day === 1) return '1d';
-            if (day < 0) return `-${Math.abs(day)}d`;
+            if (day < 0) return `${Math.abs(day)}d ago`;
             return `${day}d`;
         };
 
         const formatRangeLabel = (startDay: number, endDay: number) => {
             if (startDay === endDay) return formatSingleDayLabel(startDay);
-            if (startDay <= 0 && endDay >= 0) {
-                return `${formatSingleDayLabel(startDay)}-Today`;
+
+            // Overdue range (both negative)
+            if (startDay < 0 && endDay < 0) {
+                return `${Math.abs(startDay)}d to ${Math.abs(endDay)}d ago`;
             }
-            return `${formatSingleDayLabel(startDay)}-${formatSingleDayLabel(endDay)}`;
+
+            // Range including Today
+            if (startDay < 0 && endDay >= 0) {
+                const endStr = endDay === 0 ? 'Today' : formatSingleDayLabel(endDay);
+                return `${Math.abs(startDay)}d ago to ${endStr}`;
+            }
+
+            // Future range starting from Today
+            if (startDay === 0 && endDay > 0) {
+                return `Today to ${formatSingleDayLabel(endDay)}`;
+            }
+
+            // Future range (both positive)
+            return `${formatSingleDayLabel(startDay)} to ${formatSingleDayLabel(endDay)}`;
         };
 
         return Array.from(buckets.values())

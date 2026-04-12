@@ -129,21 +129,6 @@ export default function DailyCompletionSlider({
                 ))}
             </div>
 
-            <div style={{
-                background: 'var(--background)',
-                padding: '0.85rem 1rem',
-                borderRadius: '16px',
-                textAlign: 'center',
-                border: '1px solid var(--border)',
-                width: '100%',
-                color: 'var(--foreground-secondary)',
-                fontSize: '0.85rem',
-                lineHeight: 1.5,
-            }}>
-                {stats.cycleDays > 0
-                    ? `The current eligible portion of this part will take about ${stats.cycleDays} day${stats.cycleDays === 1 ? '' : 's'} at ${clampedMinutes} minute${clampedMinutes === 1 ? '' : 's'} per day.`
-                    : 'No eligible surahs are currently available for daily portion in this part.'}
-            </div>
 
             <style jsx>{`
                 .custom-range-slider::-webkit-slider-thumb {
