@@ -146,6 +146,7 @@ export function MobileAnchorBuilder({
                             }}
                         >
                             <MindmapViewer
+                                surahId={surahId}
                                 snapshot={snapshot}
                                 imageUrl={mindmapImageUrl || undefined}
                                 imageUrlDark={mindmapImageUrlDark || undefined}
@@ -287,6 +288,7 @@ export function MobileAnchorBuilder({
                         }}
                     >
                         <MindmapViewer
+                            surahId={surahId}
                             snapshot={snapshot}
                             imageUrl={mindmapImageUrl || undefined}
                             imageUrlDark={mindmapImageUrlDark || undefined}

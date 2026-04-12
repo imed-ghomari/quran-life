@@ -108,23 +108,13 @@ export default function AppShell({ children }: AppShellProps) {
                                 justifyContent: 'center',
                                 padding: '1rem',
                                 background: 'color-mix(in srgb, var(--background) 72%, transparent)',
-                                backdropFilter: 'blur(6px)',
+                                backdropFilter: 'blur(4px)',
                                 zIndex: 1,
                                 pointerEvents: 'auto',
                                 cursor: 'progress',
                             }}
                         >
-                            <div
-                                style={{
-                                    padding: '0.9rem 1rem',
-                                    borderRadius: '16px',
-                                    border: '1px solid var(--border)',
-                                    background: 'color-mix(in srgb, var(--background-secondary) 92%, transparent)',
-                                    boxShadow: '0 18px 40px rgba(0, 0, 0, 0.16)',
-                                }}
-                            >
-                                <Spinner size={22} text="Loading..." />
-                            </div>
+                            <Spinner size={24} text="Loading..." />
                         </div>
                     ) : null}
                 </div>

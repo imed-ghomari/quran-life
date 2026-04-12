@@ -1537,7 +1537,7 @@ export default function TodoPage() {
     const todoLoaderText = 'Preparing Todo...';
 
     if (showTodoLoader) {
-        return <PageSkeleton type="todo" />;
+        return <PageSkeleton />;
     }
 
     return (
@@ -1545,6 +1545,7 @@ export default function TodoPage() {
             {/* Surah Mindmap Editor */}
             {activeMindmapEditor && (
                 <MindmapEditor
+                    surahId={activeMindmapEditor.surahId}
                     initialSnapshot={activeMindmapEditor.snapshot}
                     onSave={handleEditorSave}
                     onClose={() => setActiveMindmapEditor(null)}
@@ -1555,6 +1556,7 @@ export default function TodoPage() {
             {/* Part Mindmap Editor */}
             {activePartEditor && (
                 <MindmapEditor
+                    partId={activePartEditor.partId}
                     initialSnapshot={activePartEditor.snapshot}
                     onSave={handlePartEditorSave}
                     onClose={() => setActivePartEditor(null)}
@@ -1591,6 +1593,7 @@ export default function TodoPage() {
                     </div>
                     <div style={{ flex: 1, position: 'relative' }}>
                         <MindmapViewer
+                            surahId={activeMindmapPreview.surahId}
                             snapshot={activeMindmapPreview.snapshot}
                             imageUrl={activeMindmapPreview.imageUrl}
                             imageUrlDark={activeMindmapPreview.imageUrlDark}

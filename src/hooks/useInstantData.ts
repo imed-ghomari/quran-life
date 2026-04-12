@@ -167,19 +167,95 @@ const getNodeFreshnessScore = (node: MemoryNode) => {
 };
 
 // ==========================================
+// Combined Data Hook
+// ==========================================
+export type CombinedDataRequirements = {
+    settings?: boolean;
+    nodes?: boolean;
+    mindMaps?: boolean;
+    mutashabihat?: boolean;
+    reviewErrors?: boolean;
+    listeningProgress?: boolean;
+    listeningStats?: boolean;
+    reviewLogs?: boolean;
+};
+
+export function useCombinedInstantData(requirements?: CombinedDataRequirements) {
+    const { user, isLoading: isAuthLoading } = db.useAuth();
+    const userId = user?.id || '';
+
+    const query = useMemo(() => {
+        const q: any = {};
+        if (requirements?.settings !== false) {
+            q.settings = { $: { where: { userId } } };
+        }
+        if (requirements?.nodes) {
+            q.memoryNodes = { $: { where: { userId } } };
+        }
+        if (requirements?.mindMaps) {
+            q.mindMaps = {
+                $: {
+                    where: { userId },
+                    // Explicitly select fields to avoid over-fetching tldrawSnapshot
+                    fields: ['surahId', 'imageUrl', 'imageUrlDark', 'anchors', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
+                },
+            };
+            q.partMindMaps = {
+                $: {
+                    where: { userId },
+                    // Explicitly select fields to avoid over-fetching tldrawSnapshot
+                    fields: ['partId', 'imageUrl', 'imageUrlDark', 'description', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
+                },
+            };
+        }
+        if (requirements?.mutashabihat) {
+            q.mutashabihatDecisions = { $: { where: { userId } } };
+            q.customMutashabihat = { $: { where: { userId } } };
+        }
+        if (requirements?.reviewErrors) {
+            q.reviewErrors = { $: { where: { userId } } };
+        }
+        if (requirements?.listeningProgress) {
+            q.listeningProgress = { $: { where: { userId } } };
+        }
+        if (requirements?.listeningStats) {
+            q.listeningStats = { $: { where: { userId } } };
+        }
+        if (requirements?.reviewLogs) {
+            q.fsrsReviewLogs = { $: { where: { userId } } };
+        }
+        return Object.keys(q).length > 0 ? q : null;
+    }, [userId, requirements]);
+
+    const { isLoading: isDataLoading, error, data } = db.useQuery(query);
+
+    return useMemo(() => ({
+        user,
+        isLoading: isAuthLoading || isDataLoading,
+        error,
+        data,
+    }), [user, isAuthLoading, isDataLoading, error, data]);
+}
+
+// ==========================================
 // Settings Hook
 // ==========================================
-export function useInstantSettings() {
+export function useInstantSettings(externalData?: any) {
     const { user, isLoading: isAuthLoading } = db.useAuth();
 
     // Query for the user's settings
-    const { data, isLoading: isDataLoading, error } = db.useQuery({
-        settings: {
-            $: {
-                where: { userId: user?.id || '' },
+    const { data: internalData, isLoading: isDataLoading, error: internalError } = db.useQuery(
+        externalData ? null : {
+            settings: {
+                $: {
+                    where: { userId: user?.id || '' },
+                },
             },
-        },
-    });
+        }
+    );
+
+    const data = externalData || internalData;
+    const error = externalData ? undefined : internalError;
 
     const settingsEntry = useMemo(() => {
         const entries = (data?.settings || []) as any[];
@@ -349,17 +425,21 @@ export function useInstantSettings() {
 // ==========================================
 // Memory Nodes Hook
 // ==========================================
-export function useInstantNodes() {
+export function useInstantNodes(externalData?: any) {
     const { user } = db.useAuth();
     const [dueNowMs, setDueNowMs] = useState(() => Date.now());
 
-    const { isLoading, error, data } = db.useQuery({
-        memoryNodes: {
-            $: {
-                where: { userId: user?.id || '' }
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            memoryNodes: {
+                $: {
+                    where: { userId: user?.id || '' }
+                }
             }
         }
-    });
+    );
+
+    const data = externalData || internalData;
 
     const nodes = useMemo(() => {
         const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
@@ -532,20 +612,24 @@ export function useInstantNodes() {
 // ==========================================
 // MindMaps Hook
 // ==========================================
-export function useInstantMindMaps() {
+export function useInstantMindMaps(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({
-        mindMaps: {
-            $: {
-                where: { userId: user?.id || '' }
-            }
-        },
-        partMindMaps: {
-            $: {
-                where: { userId: user?.id || '' }
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            mindMaps: {
+                $: {
+                    where: { userId: user?.id || '' }
+                }
+            },
+            partMindMaps: {
+                $: {
+                    where: { userId: user?.id || '' }
+                }
             }
         }
-    });
+    );
+
+    const data = externalData || internalData;
 
     const mindmaps = useMemo(() => (data?.mindMaps || []) as unknown as MindMap[], [data?.mindMaps]);
     const partMindMaps = useMemo(() => (data?.partMindMaps || []) as unknown as any[], [data?.partMindMaps]);
@@ -622,15 +706,61 @@ export function useInstantMindMaps() {
 }
 
 // ==========================================
+// MindMap Snapshot Hook (On-demand fetching of large snapshots)
+// ==========================================
+export function useMindMapSnapshot(options: { surahId?: number; partId?: number }) {
+    const { user } = db.useAuth();
+    const userId = user?.id || '';
+    const { surahId, partId } = options;
+
+    const query = useMemo(() => {
+        if (surahId !== undefined) {
+            return {
+                mindMaps: {
+                    $: { where: { userId, surahId } }
+                }
+            } as any;
+        }
+        if (partId !== undefined) {
+            return {
+                partMindMaps: {
+                    $: { where: { userId, partId } }
+                }
+            } as any;
+        }
+        return null;
+    }, [userId, surahId, partId]);
+
+    const { isLoading, error, data } = db.useQuery(query);
+
+    const snapshot = useMemo(() => {
+        const d = data as any;
+        if (surahId !== undefined) {
+            return d?.mindMaps?.[0]?.tldrawSnapshot;
+        }
+        if (partId !== undefined) {
+            return d?.partMindMaps?.[0]?.tldrawSnapshot;
+        }
+        return undefined;
+    }, [data, surahId, partId]);
+
+    return { snapshot, isLoading, error };
+}
+
+// ==========================================
 // Listening Stats Hook
 // ==========================================
-export function useInstantListeningStats() {
+export function useInstantListeningStats(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({
-        listeningStats: {
-            $: { where: { userId: user?.id || '' } }
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            listeningStats: {
+                $: { where: { userId: user?.id || '' } }
+            }
         }
-    });
+    );
+
+    const data = externalData || internalData;
 
     const stats = useMemo(() => (data?.listeningStats || []) as unknown as any[], [data?.listeningStats]);
 
@@ -659,13 +789,17 @@ export function useInstantListeningStats() {
 // ==========================================
 // Listening Progress Hook (Per Part)
 // ==========================================
-export function useInstantListeningProgress() {
+export function useInstantListeningProgress(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({
-        listeningProgress: {
-            $: { where: { userId: user?.id || '' } }
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            listeningProgress: {
+                $: { where: { userId: user?.id || '' } }
+            }
         }
-    });
+    );
+
+    const data = externalData || internalData;
 
     const progress = useMemo(
         () => (data?.listeningProgress || []) as unknown as ListeningProgressEntry[],
@@ -703,12 +837,16 @@ export function useInstantListeningProgress() {
 // ==========================================
 // Mutashabihat Hook (Decisions & Custom)
 // ==========================================
-export function useInstantMutashabihat() {
+export function useInstantMutashabihat(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({
-        mutashabihatDecisions: { $: { where: { userId: user?.id || '' } } },
-        customMutashabihat: { $: { where: { userId: user?.id || '' } } }
-    });
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            mutashabihatDecisions: { $: { where: { userId: user?.id || '' } } },
+            customMutashabihat: { $: { where: { userId: user?.id || '' } } }
+        }
+    );
+
+    const data = externalData || internalData;
 
     const decisions = useMemo(() => (data?.mutashabihatDecisions || []) as unknown as any[], [data?.mutashabihatDecisions]);
     const custom = useMemo(() => (data?.customMutashabihat || []) as unknown as any[], [data?.customMutashabihat]);
@@ -755,11 +893,15 @@ export function useInstantMutashabihat() {
 // ==========================================
 // Review Logs Hook
 // ==========================================
-export function useInstantReviewLogs() {
+export function useInstantReviewLogs(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({
-        fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
-    });
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
+        }
+    );
+
+    const data = externalData || internalData;
 
     const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
 
@@ -797,11 +939,15 @@ export function useInstantReviewLogs() {
 // ==========================================
 // Review Errors Hook
 // ==========================================
-export function useInstantReviewErrors() {
+export function useInstantReviewErrors(externalData?: any) {
     const { user } = db.useAuth();
-    const { isLoading, error, data } = db.useQuery({
-        reviewErrors: { $: { where: { userId: user?.id || '' } } }
-    });
+    const { isLoading, error, data: internalData } = db.useQuery(
+        externalData ? null : {
+            reviewErrors: { $: { where: { userId: user?.id || '' } } }
+        }
+    );
+
+    const data = externalData || internalData;
 
     const errors = useMemo(() => (data?.reviewErrors || []) as unknown as ReviewError[], [data?.reviewErrors]);
 

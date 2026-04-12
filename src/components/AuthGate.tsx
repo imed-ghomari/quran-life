@@ -215,7 +215,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   ]);
 
   if (!isHydrated) {
-    return <PageSkeleton type="auth" />;
+    return <PageSkeleton />;
   }
 
   if (isPublic) {
@@ -233,18 +233,18 @@ export default function AuthGate({ children }: AuthGateProps) {
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
 
   if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
-    return <PageSkeleton type="auth" />;
+    return <PageSkeleton />;
   }
 
   if (shouldTreatAsOffline) {
     if (!user && !hasOfflineAccess) {
-      return <PageSkeleton type="auth" />;
+      return <PageSkeleton />;
     }
     return <>{children}</>;
   }
 
   if (!user) {
-    return <PageSkeleton type="auth" />;
+    return <PageSkeleton />;
   }
 
   return <>{children}</>;
