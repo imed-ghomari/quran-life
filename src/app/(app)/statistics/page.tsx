@@ -1554,18 +1554,18 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
         const width = Math.max(320, chartWidth || 0);
         const isSmallScreen = width <= 480;
         const isTablet = width > 480 && width <= 900;
-        const maxBars = isSmallScreen ? 12 : isTablet ? 18 : 32;
+        const maxBars = isSmallScreen ? 10 : isTablet ? 16 : 32;
         const spanDays = Math.max(1, maxDay - minDay + 1);
 
+        // Find the best bucket size to keep the number of bars reasonable
+        const niceBucketSizes = [1, 2, 7, 14, 30, 60, 90];
         let bucketSize = 1;
-        if (spanDays > 180) { // 1y or All
-            bucketSize = 30;
-        } else if (spanDays > 60) { // 3m
-            bucketSize = 7;
-        }
-
-        if (bucketSize === 1 && spanDays > maxBars) {
-            bucketSize = Math.ceil(spanDays / maxBars);
+        for (const size of niceBucketSizes) {
+            if (spanDays / size <= maxBars) {
+                bucketSize = size;
+                break;
+            }
+            bucketSize = size; // Fallback to largest if none fit
         }
 
         const buckets = new Map<number, FutureDueBucket>();
@@ -1647,9 +1647,14 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
                         const plotWidth = vWidth - padding.left - padding.right;
                         const plotHeight = chartHeight - padding.top - padding.bottom;
                         const span = Math.max(1, bucketedData.length);
-                        const groupWidth = plotWidth * 0.72;
+                        
+                        // Limit bar spacing so few bars don't look lost
+                        const maxStep = 60;
+                        const minStep = 18;
+                        const step = Math.max(minStep, Math.min(maxStep, plotWidth / span));
+                        const groupWidth = step * span;
                         const groupStart = padding.left + (plotWidth - groupWidth) / 2;
-                        const step = groupWidth / span;
+                        
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
                         const isSmallScreen = chartWidth <= 480;
