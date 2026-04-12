@@ -71,6 +71,7 @@ import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder
 import { buildMutashabihatDecisionKey, getSimilarityEntryResolutionMeta } from '@/lib/mutashabihatResolution';
 import { getSimilarityComparatorCardStyle, SimilarityComparatorStatusBadge } from '@/components/SimilarityComparatorStatus';
 import { BillingCycle, TeacherSeatAssignmentStatus, clampTeacherSeatCount, formatCurrency, getTeacherTotalPrice } from '@/lib/teacherPlan';
+import { DEFAULT_DAILY_TARGET_MINUTES } from '@/lib/dailyPortionUtils';
 
 const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
 const MutashabihNoteModal = dynamic(() => import('@/components/MutashabihNoteModal'), { ssr: false });
@@ -626,8 +627,8 @@ export default function SettingsPage() {
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
     const [dailyReadingStyle, setDailyReadingStyle] = useState<'line_by_line' | 'paragraph'>(settings.dailyReadingStyle ?? 'line_by_line');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
-    const [completionDaysDraft, setCompletionDaysDraft] = useState<number>(settings.completionDays || 30);
-    const completionDaysSaveTimerRef = useRef<number | null>(null);
+    const [dailyTargetMinutesDraft, setDailyTargetMinutesDraft] = useState<number>(settings.dailyTargetMinutes || DEFAULT_DAILY_TARGET_MINUTES);
+    const dailyTargetMinutesSaveTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1331,13 +1332,13 @@ export default function SettingsPage() {
     }, [settings.todayDefaultMode]);
 
     useEffect(() => {
-        setCompletionDaysDraft(settings.completionDays || 30);
-    }, [settings.completionDays]);
+        setDailyTargetMinutesDraft(settings.dailyTargetMinutes || DEFAULT_DAILY_TARGET_MINUTES);
+    }, [settings.dailyTargetMinutes]);
 
     useEffect(() => () => {
-        if (completionDaysSaveTimerRef.current !== null) {
-            window.clearTimeout(completionDaysSaveTimerRef.current);
-            completionDaysSaveTimerRef.current = null;
+        if (dailyTargetMinutesSaveTimerRef.current !== null) {
+            window.clearTimeout(dailyTargetMinutesSaveTimerRef.current);
+            dailyTargetMinutesSaveTimerRef.current = null;
         }
     }, []);
 
@@ -2114,7 +2115,7 @@ export default function SettingsPage() {
                     <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem' }}>
                             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Clock size={18} /> Completion Schedule
+                                <Clock size={18} /> Daily Portion Time
                             </h2>
                             <button
                                 className="bulk-btn reset-mut"
@@ -2126,12 +2127,15 @@ export default function SettingsPage() {
                             </button>
                         </div>
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                            Set how many days you want to complete one full cycle of your active part.
+                            Set how many minutes you want to spend on your daily portion. Cycle days update automatically from the currently eligible surahs in this part.
                         </p>
                         <DailyCompletionSlider
-                            days={completionDaysDraft}
-                            onChange={handleCompletionDays}
+                            minutes={dailyTargetMinutesDraft}
+                            onChange={handleDailyTargetMinutes}
                             activePart={settings.activePart}
+                            skippedSurahs={settings.skippedSurahs}
+                            nodes={instantNodes}
+                            mode={dailyPortionMode}
                         />
                     </div>
 
@@ -3456,17 +3460,17 @@ export default function SettingsPage() {
         void ensureVersesLoaded();
     }, [expandedSurahs, expandedGroups, ensureVersesLoaded]);
 
-    const handleCompletionDays = (days: number) => {
-        const clamped = Math.max(7, Math.min(120, days));
-        setCompletionDaysDraft(clamped);
-        if (completionDaysSaveTimerRef.current !== null) {
-            window.clearTimeout(completionDaysSaveTimerRef.current);
+    const handleDailyTargetMinutes = (minutes: number) => {
+        const clamped = Math.max(5, Math.min(180, minutes));
+        setDailyTargetMinutesDraft(clamped);
+        if (dailyTargetMinutesSaveTimerRef.current !== null) {
+            window.clearTimeout(dailyTargetMinutesSaveTimerRef.current);
         }
-        completionDaysSaveTimerRef.current = window.setTimeout(() => {
-            void saveSettings({ completionDays: clamped }).catch((error) => {
-                console.error('Failed to save completion schedule', error);
+        dailyTargetMinutesSaveTimerRef.current = window.setTimeout(() => {
+            void saveSettings({ dailyTargetMinutes: clamped }).catch((error) => {
+                console.error('Failed to save daily target minutes', error);
             });
-            completionDaysSaveTimerRef.current = null;
+            dailyTargetMinutesSaveTimerRef.current = null;
         }, SETTINGS_WRITE_DEBOUNCE_MS);
     };
 
@@ -5181,7 +5185,7 @@ export default function SettingsPage() {
                                         <div className="header-icon-badge">
                                             <Clock size={18} />
                                         </div>
-                                        <span>Completion Schedule</span>
+                                        <span>Daily Portion Time</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         {sectionsExpanded.schedule && (
@@ -5200,12 +5204,15 @@ export default function SettingsPage() {
                                 {sectionsExpanded.schedule && (
                                     <>
                                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                            Set how many days you want to complete one full cycle of your active part.
+                                            Set how many minutes you want to spend on your daily portion. Cycle days update automatically from the currently eligible surahs in this part.
                                         </p>
                                         <DailyCompletionSlider
-                                            days={completionDaysDraft}
-                                            onChange={handleCompletionDays}
+                                            minutes={dailyTargetMinutesDraft}
+                                            onChange={handleDailyTargetMinutes}
                                             activePart={settings.activePart}
+                                            skippedSurahs={settings.skippedSurahs}
+                                            nodes={instantNodes}
+                                            mode={dailyPortionMode}
                                         />
                                     </>
                                 )}

@@ -3,9 +3,24 @@ import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { isUuid, resolveEntityId, stableEntityId } from '@/lib/instantIds';
 import { transactWithRetry } from '@/lib/instantTransact';
-import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart, ReviewError } from '@/lib/types';
+import { getSurahsByPart } from '@/lib/quranData';
+import {
+    ALL_QURAN_PART,
+    AppSettings,
+    LEGACY_ALL_QURAN_PART,
+    ListeningProgressEntry,
+    MemoryNode,
+    MindMap,
+    QuranPart,
+    ReviewError,
+} from '@/lib/types';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 import { normalizeReviewSortOrder } from '@/lib/reviewSortOrder';
+import {
+    clampDailyTargetMinutes,
+    DEFAULT_DAILY_TARGET_MINUTES,
+    estimateSurahDurationMinutes,
+} from '@/lib/dailyPortionUtils';
 
 const LOCKED_SKIPPED_SURAH_ID = 1;
 const MAX_FSRS_REVIEW_LOGS = 3000;
@@ -23,9 +38,35 @@ const normalizeSkippedSurahs = (value: unknown): number[] => {
     return Array.from(normalized).sort((a, b) => a - b);
 };
 
+const hasPositiveNumber = (value: unknown): value is number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0;
+};
+
+const deriveLegacyDailyTargetMinutes = (settingsLike: Partial<AppSettings>): number => {
+    const completionDays = hasPositiveNumber(settingsLike.completionDays)
+        ? Number(settingsLike.completionDays)
+        : 30;
+    const activePart = isValidQuranPart(settingsLike.activePart) ? settingsLike.activePart : ALL_QURAN_PART;
+    const mode = settingsLike.dailyPortionMode === 'reading' ? 'reading' : 'audio';
+    const skippedSurahs = new Set(normalizeSkippedSurahs(settingsLike.skippedSurahs));
+    const includedSurahs = getSurahsByPart(activePart).filter((surah) => !skippedSurahs.has(surah.id));
+
+    const totalMinutes = includedSurahs.reduce((total, surah) => (
+        total + estimateSurahDurationMinutes(surah.id, mode)
+    ), 0);
+
+    if (!hasPositiveNumber(totalMinutes)) {
+        return DEFAULT_DAILY_TARGET_MINUTES;
+    }
+
+    return clampDailyTargetMinutes(Math.ceil(totalMinutes / completionDays));
+};
+
 // Static defaults to ensure reference stability
 const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     completionDays: 30,
+    dailyTargetMinutes: DEFAULT_DAILY_TARGET_MINUTES,
     activePart: ALL_QURAN_PART,
     partSystemVersion: 2,
     learnedVerses: {},
@@ -161,12 +202,16 @@ export function useInstantSettings() {
         const merged = { ...base, ...settingsEntry } as AppSettings;
         const rawVersion = Number((settingsEntry as any).partSystemVersion ?? 1);
         const normalizedActivePart = isValidQuranPart(merged.activePart) ? merged.activePart : ALL_QURAN_PART;
+        const normalizedDailyTargetMinutes = hasPositiveNumber((settingsEntry as any).dailyTargetMinutes)
+            ? clampDailyTargetMinutes(Number((settingsEntry as any).dailyTargetMinutes))
+            : deriveLegacyDailyTargetMinutes(merged);
         return {
             ...merged,
             partSystemVersion: rawVersion,
             activePart: rawVersion < 2 && normalizedActivePart === LEGACY_ALL_QURAN_PART
                 ? ALL_QURAN_PART
                 : normalizedActivePart,
+            dailyTargetMinutes: normalizedDailyTargetMinutes,
             skippedSurahs: normalizeSkippedSurahs((merged as any).skippedSurahs),
             reviewSortOrder: normalizeReviewSortOrder((merged as any).reviewSortOrder),
         };
@@ -229,6 +274,17 @@ export function useInstantSettings() {
         }));
     }, [settingsEntry, user]);
 
+    useEffect(() => {
+        if (!user || !settingsEntry) return;
+        if (hasPositiveNumber((settingsEntry as any).dailyTargetMinutes)) return;
+
+        const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
+        void transactWithRetry(db.tx.settings[settingsId].update({
+            dailyTargetMinutes: deriveLegacyDailyTargetMinutes(settingsEntry as AppSettings),
+            lastSyncedAt: new Date().toISOString(),
+        }));
+    }, [settingsEntry, user]);
+
     const saveSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
 
@@ -238,6 +294,9 @@ export function useInstantSettings() {
         }
         if (Object.prototype.hasOwnProperty.call(newSettings, 'reviewSortOrder')) {
             normalizedSettings.reviewSortOrder = normalizeReviewSortOrder(newSettings.reviewSortOrder);
+        }
+        if (Object.prototype.hasOwnProperty.call(newSettings, 'dailyTargetMinutes')) {
+            normalizedSettings.dailyTargetMinutes = clampDailyTargetMinutes(Number(newSettings.dailyTargetMinutes));
         }
 
         const syncedAt = new Date().toISOString();
@@ -608,18 +667,25 @@ export function useInstantListeningProgress() {
         }
     });
 
-    const progress = useMemo(() => (data?.listeningProgress || []) as unknown as any[], [data?.listeningProgress]);
+    const progress = useMemo(
+        () => (data?.listeningProgress || []) as unknown as ListeningProgressEntry[],
+        [data?.listeningProgress],
+    );
 
-    const saveProgress = useCallback((partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
+    const saveProgress = useCallback((entry: ListeningProgressEntry) => {
         if (!user) return Promise.resolve();
-        const existing = progress.find(p => p.partId === partId);
-        const progressId = resolveEntityId(existing?.id, 'listening_progress', user.id, partId);
+        const existing = progress.find(p => p.partId === entry.partId);
+        const progressId = resolveEntityId(existing?.id, 'listening_progress', user.id, entry.partId);
+        const normalizedLastVerseIndex = Number.isFinite(Number(entry.lastVerseIndex))
+            ? Math.max(0, Math.trunc(Number(entry.lastVerseIndex)))
+            : (existing?.lastVerseIndex ?? 0);
 
         return transactWithRetry(db.tx.listeningProgress[progressId].update({
-            partId,
-            lastVerseIndex,
-            cycles: cycles !== undefined ? cycles : (existing?.cycles || 0),
-            updatedAt: updatedAt || new Date().toISOString(),
+            partId: entry.partId,
+            lastVerseIndex: normalizedLastVerseIndex,
+            nextStartVerseKey: entry.nextStartVerseKey,
+            cycles: entry.cycles !== undefined ? entry.cycles : (existing?.cycles || 0),
+            updatedAt: entry.updatedAt || new Date().toISOString(),
             userId: user.id
         }));
     }, [user, progress]);

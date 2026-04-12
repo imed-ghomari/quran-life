@@ -6,6 +6,7 @@ export const schema = i.schema({
     // User-level app preferences and progress.
     settings: i.entity({
       completionDays: i.number(),
+      dailyTargetMinutes: i.number().optional(),
       activePart: i.number(),
       partSystemVersion: i.number().optional(),
       learnedVerses: i.json().optional(),
@@ -76,6 +77,7 @@ export const schema = i.schema({
     listeningProgress: i.entity({
       partId: i.number(),
       lastVerseIndex: i.number().optional(),
+      nextStartVerseKey: i.string().optional(),
       cycles: i.number().optional(),
       updatedAt: i.string().optional(),
       userId: i.string().indexed(),
