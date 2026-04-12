@@ -172,9 +172,9 @@ export function resolveVerseReviewFailureContext({
 
     const chunkIndex = targetVerseIndex !== safeCurrentVerseIndex
         ? chunks.length - 1
-        : revealedChunks < chunks.length
-            ? Math.max(0, revealedChunks)
-            : chunks.length - 1;
+        : revealedChunks > 0
+            ? Math.min(chunks.length - 1, Math.max(0, revealedChunks - 1))
+            : 0;
 
     return {
         ayahId: Number(targetVerse?.ayahId) || null,

@@ -23,6 +23,7 @@ import {
     LEGACY_ALL_QURAN_PART,
     getNodeStability,
     getNodeDueDate,
+    hasNodeBeenReviewed,
     MemoryNode
 } from '@/lib/types';
 
@@ -63,6 +64,21 @@ interface ProgressBarStats {
     total: number;
     segments: StatSegment[];
     displayTotal?: number | string;
+}
+
+interface FutureDuePoint {
+    day: number;
+    count: number;
+    cumulative: number;
+}
+
+interface FutureDueBucket {
+    startDay: number;
+    endDay: number;
+    label: string;
+    count: number;
+    cumulative: number;
+    containsToday: boolean;
 }
 
 function ChartEmptyState({ message = 'No data available', height = 200 }: { message?: string; height?: number }) {
@@ -686,6 +702,7 @@ export default function StatisticsPage() {
         nodes.forEach(node => {
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return;
+            if (!hasNodeBeenReviewed(node.scheduler)) return;
             const dueDate = new Date(dueStr);
             if (isNaN(dueDate.getTime())) return;
             dueDate.setHours(0, 0, 0, 0);
@@ -720,7 +737,7 @@ export default function StatisticsPage() {
             maxDay = Math.max(...finiteDays, 30);
         }
 
-        const data: { day: number; count: number; cumulative: number }[] = [];
+        const data: FutureDuePoint[] = [];
         let cumulative = 0;
 
         // Calculate cumulative starting from the earliest day in dayCounts if backlog is shown
@@ -1479,7 +1496,7 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
     );
 }
 
-function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minDay: number; maxDay: number; dailyLoad: string }) {
+function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePoint[]; minDay: number; maxDay: number; dailyLoad: string }) {
     const DESKTOP_MAX_X_AXIS_LEGENDS = 6;
     const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1488,8 +1505,77 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
     const chartHeight = 210;
     const padding = { top: 8, right: 28, bottom: 38, left: 36 };
 
-    const nonZeroData = data.filter(d => d.count > 0);
-    const maxCount = Math.max(...nonZeroData.map(d => d.count), 1);
+    const bucketedData = useMemo<FutureDueBucket[]>(() => {
+        const nonZeroData = data.filter(d => d.count > 0);
+        if (nonZeroData.length === 0) return [];
+
+        const width = Math.max(320, chartWidth || 0);
+        const isSmallScreen = width <= 480;
+        const isTablet = width > 480 && width <= 900;
+        const maxBars = isSmallScreen ? 12 : isTablet ? 18 : 24;
+        const spanDays = Math.max(1, maxDay - minDay + 1);
+
+        let bucketSize = 1;
+        if (spanDays > 120) {
+            bucketSize = 30;
+        } else if (spanDays > 45) {
+            bucketSize = 7;
+        }
+
+        if (bucketSize === 1) {
+            const visibleDays = Math.max(1, nonZeroData[nonZeroData.length - 1].day - nonZeroData[0].day + 1);
+            if (visibleDays > maxBars) {
+                bucketSize = Math.ceil(visibleDays / maxBars);
+            }
+        }
+
+        const buckets = new Map<number, FutureDueBucket>();
+
+        nonZeroData.forEach(point => {
+            const bucketStart = Math.floor(point.day / bucketSize) * bucketSize;
+            const bucketEnd = bucketStart + bucketSize - 1;
+            const existing = buckets.get(bucketStart);
+            if (existing) {
+                existing.count += point.count;
+                existing.cumulative = point.cumulative;
+                existing.containsToday = existing.containsToday || (point.day >= bucketStart && point.day <= bucketEnd && bucketStart <= 0 && bucketEnd >= 0);
+                return;
+            }
+
+            buckets.set(bucketStart, {
+                startDay: bucketStart,
+                endDay: bucketEnd,
+                label: '',
+                count: point.count,
+                cumulative: point.cumulative,
+                containsToday: bucketStart <= 0 && bucketEnd >= 0,
+            });
+        });
+
+        const formatSingleDayLabel = (day: number) => {
+            if (day === 0) return 'Today';
+            if (day === 1) return '1d';
+            if (day < 0) return `-${Math.abs(day)}d`;
+            return `${day}d`;
+        };
+
+        const formatRangeLabel = (startDay: number, endDay: number) => {
+            if (startDay === endDay) return formatSingleDayLabel(startDay);
+            if (startDay <= 0 && endDay >= 0) {
+                return `${formatSingleDayLabel(startDay)}-Today`;
+            }
+            return `${formatSingleDayLabel(startDay)}-${formatSingleDayLabel(endDay)}`;
+        };
+
+        return Array.from(buckets.values())
+            .sort((a, b) => a.startDay - b.startDay)
+            .map(bucket => ({
+                ...bucket,
+                label: formatRangeLabel(bucket.startDay, bucket.endDay),
+            }));
+    }, [chartWidth, data, maxDay, minDay]);
+
+    const maxCount = Math.max(...bucketedData.map(d => d.count), 1);
     const isSmallRange = maxCount <= 8;
     const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
     const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
@@ -1513,7 +1599,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
     }, []);
 
     if (data.length === 0) return <ChartEmptyState />;
-    if (nonZeroData.length === 0) {
+    if (bucketedData.length === 0) {
         return <ChartEmptyState />;
     }
 
@@ -1536,7 +1622,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const vWidth = chartWidth;
                         const plotWidth = vWidth - padding.left - padding.right;
                         const plotHeight = chartHeight - padding.top - padding.bottom;
-                        const span = Math.max(1, nonZeroData.length);
+                        const span = Math.max(1, bucketedData.length);
                         const groupWidth = plotWidth * 0.72;
                         const groupStart = padding.left + (plotWidth - groupWidth) / 2;
                         const step = groupWidth / span;
@@ -1549,27 +1635,21 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const rotateLabels = step < (isSmallScreen ? 46 : 40);
                         const dailyLoadValue = Number(dailyLoad);
                         const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
-                        const formatDayLabel = (day: number) => {
-                            if (day === 0) return 'Today';
-                            if (day === 1) return '1d';
-                            if (day < 0) return `-${Math.abs(day)}d`;
-                            return `${day}d`;
-                        };
-                        const baseLabelStep = Math.max(1, Math.ceil(nonZeroData.length / maxXAxisLegends));
-                        const longestLabelLength = Math.max(...nonZeroData.map(d => formatDayLabel(d.day).length), 1);
+                        const baseLabelStep = Math.max(1, Math.ceil(bucketedData.length / maxXAxisLegends));
+                        const longestLabelLength = Math.max(...bucketedData.map(d => d.label.length), 1);
                         const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
                         const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
                         const labelStep = Math.max(baseLabelStep, minStepForWidth);
                         const minLabelGapPx = estimatedLabelWidth;
 
-                        const candidateLabelIndices = nonZeroData
+                        const candidateLabelIndices = bucketedData
                             .map((d, i) => {
-                                const shouldShow = i === 0 || i === nonZeroData.length - 1 || d.day === 0 || i % labelStep === 0;
+                                const shouldShow = i === 0 || i === bucketedData.length - 1 || d.containsToday || i % labelStep === 0;
                                 return shouldShow ? i : -1;
                             })
                             .filter((i): i is number => i >= 0);
 
-                        const todayIndex = nonZeroData.findIndex(d => d.day === 0);
+                        const todayIndex = bucketedData.findIndex(d => d.containsToday);
                         const visibleLabelIndices = new Set<number>();
                         const canPlaceLabel = (index: number) => {
                             const x = getX(index);
@@ -1591,7 +1671,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                             visibleLabelIndices.add(index);
                         };
 
-                        const priorityIndices = [todayIndex, 0, nonZeroData.length - 1].filter(
+                        const priorityIndices = [todayIndex, 0, bucketedData.length - 1].filter(
                             (idx, pos, arr): idx is number => idx >= 0 && arr.indexOf(idx) === pos
                         );
 
@@ -1657,18 +1737,17 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                         </>
                                     )}
                                     {/* Bars */}
-                                    {nonZeroData.map((d, i) => {
+                                    {bucketedData.map((d, i) => {
                                         const barWidth = Math.max(14, Math.min(40, step * 0.96));
                                         const x = getX(i);
                                         const height = Math.max(0, chartHeight - padding.bottom - getYCount(d.count));
                                         const bgY = padding.top + 6;
                                         const bgHeight = plotHeight - 6;
                                         const isPeak = d.count === maxCount;
-                                        const hasXAxisLabel = visibleLabelIndices.has(i);
                                         const reviewLabel = `${d.count} review${d.count === 1 ? '' : 's'}`;
-                                        const tooltip = hasXAxisLabel
+                                        const tooltip = d.startDay === d.endDay
                                             ? reviewLabel
-                                            : `${reviewLabel} (${formatDayLabel(d.day)})`;
+                                            : `${reviewLabel} (${d.label})`;
                                         return (
                                             <g key={i}>
                                                 <path
@@ -1679,7 +1758,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                 <path
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
                                                     fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
-                                                    opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
+                                                    opacity={d.endDay < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
                                                     data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
@@ -1704,7 +1783,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                 })}
 
                                 {/* X-axis labels */}
-                                {nonZeroData.map((d, i) => {
+                                {bucketedData.map((d, i) => {
                                     if (!visibleLabelIndices.has(i)) return null;
                                     const x = getX(i);
                                     const y = chartHeight - padding.bottom + 18;
@@ -1716,8 +1795,9 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                             textAnchor="middle"
                                             fontSize={xAxisFontSize}
                                             fill="var(--foreground-secondary)"
+                                            transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
                                         >
-                                            {formatDayLabel(d.day)}
+                                            {d.label}
                                         </text>
                                     );
                                 })}

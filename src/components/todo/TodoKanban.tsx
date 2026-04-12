@@ -1904,13 +1904,12 @@ export default function TodoKanban({
                             </p>
                             {(chunkHitEntries.length > 0 || fallbackCount > 0) && (
                                 <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                                    {chunkHitEntries.map(([chunkIndex, count]) => (
+                                    {chunkHitEntries.filter(([, count]) => count > 1).map(([chunkIndex, count]) => (
                                         <div
                                             key={`${ayahId}-badge-${chunkIndex}`}
                                             className="inline-flex items-center rounded-full border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-1 text-xs font-semibold text-[var(--danger)]"
                                         >
-                                            Part {chunkIndex + 1}
-                                            {count > 1 ? ` • ${count} errors` : ''}
+                                            {count} errors
                                         </div>
                                     ))}
                                     {fallbackCount > 0 && (
