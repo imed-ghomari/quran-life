@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
 import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
+import { useMindMapSnapshot } from '@/hooks/useInstantData';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
     clipboardHasBlockedMedia,
@@ -189,6 +190,8 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 interface MindmapEditorProps {
     initialSnapshot?: any;
+    surahId?: number;
+    partId?: number;
     onSave?: (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose?: boolean) => Promise<void>;
     onClose: () => void;
     title?: string;
@@ -256,7 +259,24 @@ function usePenModeUnstick(editor: Editor | null) {
     }, [editor]);
 }
 
-function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink, contextLabel }: MindmapEditorProps) {
+function MindmapEditorContent({
+    initialSnapshot,
+    surahId,
+    partId,
+    onSave,
+    onClose,
+    title,
+    docLink,
+    contextLabel
+}: MindmapEditorProps) {
+    const { snapshot: fetchedDbSnapshot, isLoading: isLoadingDb } = useMindMapSnapshot({
+        surahId: initialSnapshot ? undefined : surahId,
+        partId: initialSnapshot ? undefined : partId
+    });
+
+    const activeInitialSnapshot = initialSnapshot || fetchedDbSnapshot;
+    const isActuallyLoading = !activeInitialSnapshot && isLoadingDb;
+
     const router = useRouter();
     const [editor, setEditor] = useState<any>(null);
     const [isExitActionPending, setIsExitActionPending] = useState(false);
@@ -406,7 +426,7 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
         }
 
         const localDraftSnapshot = loadLocalDraftSnapshot();
-        const snapshotToLoad = localDraftSnapshot || initialSnapshot;
+        const snapshotToLoad = localDraftSnapshot || activeInitialSnapshot;
 
         if (snapshotToLoad) {
             try {
@@ -436,7 +456,33 @@ function MindmapEditorContent({ initialSnapshot, onSave, onClose, title, docLink
             // Default to lasso tool on new drawings too
             editorInstance.setCurrentTool('lasso-select');
         }
-    }, [initialSnapshot, loadLocalDraftSnapshot]);
+    }, [activeInitialSnapshot, loadLocalDraftSnapshot]);
+
+    // Update snapshot if it arrives late
+    useEffect(() => {
+        const editorInst = editorRef.current;
+        if (editorInst && activeInitialSnapshot && !editorInst.getCurrentPageRenderingShapesSorted().length) {
+            try {
+                const sanitized = sanitizeMindmapSnapshot(activeInitialSnapshot) || activeInitialSnapshot;
+                if (typeof editorInst.loadSnapshot === 'function') {
+                    editorInst.loadSnapshot(sanitized);
+                } else {
+                    editorInst.store.loadSnapshot(sanitized);
+                }
+                setTimeout(() => editorInst.zoomToFit(), 100);
+            } catch (e) {
+                console.warn('Failed to load late snapshot', e);
+            }
+        }
+    }, [activeInitialSnapshot]);
+
+    if (isActuallyLoading) {
+        return (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spinner size={32} text="Loading Mindmap..." />
+            </div>
+        );
+    }
 
     useMindmapBackGestureGuard(true);
 

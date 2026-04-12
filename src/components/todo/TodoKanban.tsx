@@ -1629,6 +1629,8 @@ export default function TodoKanban({
                     {hasContent && (
                         <div className="border border-[var(--border)] rounded overflow-hidden h-[200px] relative">
                             <MindmapViewer
+                                surahId={isSurah ? id : undefined}
+                                partId={!isSurah ? id as any : undefined}
                                 snapshot={mindmap?.tldrawSnapshot}
                                 imageUrl={mindmap?.imageUrl}
                                 imageUrlDark={mindmap?.imageUrlDark}

@@ -182,6 +182,7 @@ export default function SplitsModal({
                 {(mindmapImageUrl || snapshot) && (
                     <div className="border border-[var(--border)] rounded-lg overflow-hidden h-[280px] bg-[var(--background-secondary)]">
                         <MindmapViewer
+                            surahId={surahId}
                             snapshot={snapshot}
                             imageUrl={mindmapImageUrl}
                             imageUrlDark={mindmapImageUrlDark}

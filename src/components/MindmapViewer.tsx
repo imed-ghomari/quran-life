@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { Maximize2, X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 import { getSurah } from '@/lib/quranData';
+import { useMindMapSnapshot } from '@/hooks/useInstantData';
 import 'tldraw/tldraw.css';
 
 const templateSnapshotCache = new Map<string, any | null>();
@@ -35,6 +36,8 @@ const Tldraw = dynamic(
 
 interface MindmapViewerProps {
     snapshot?: any;
+    surahId?: number;
+    partId?: number;
     templateUrl?: string | null;
     imageUrl?: string | null;
     imageUrlDark?: string | null;
@@ -150,6 +153,8 @@ const loadTemplateSnapshot = async (templateUrl: string) => {
 
 export default function MindmapViewer({
     snapshot,
+    surahId,
+    partId,
     templateUrl,
     imageUrl,
     imageUrlDark,
@@ -165,16 +170,25 @@ export default function MindmapViewer({
 }: MindmapViewerProps) {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [fetchedSnapshot, setFetchedSnapshot] = useState<any>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
     const [imageFailed, setImageFailed] = useState(false);
     const [editor, setEditor] = useState<any>(null);
     const [inlineEditor, setInlineEditor] = useState<any>(null);
     const [showInlineBackToContent, setShowInlineBackToContent] = useState(false);
+
+    // Fetch snapshot on-demand if not provided as prop
+    const { snapshot: fetchedDbSnapshot, isLoading: isLoadingDb } = useMindMapSnapshot({
+        surahId: snapshot ? undefined : surahId,
+        partId: snapshot ? undefined : partId
+    });
+
     const activeSnapshot = useMemo(() => {
         const templateSnapshot = normalizeSnapshot(fetchedSnapshot);
         if (officialOnly) return templateSnapshot;
-        return templateSnapshot || normalizeSnapshot(snapshot);
-    }, [fetchedSnapshot, snapshot, officialOnly]);
+        return templateSnapshot || normalizeSnapshot(snapshot) || normalizeSnapshot(fetchedDbSnapshot);
+    }, [fetchedSnapshot, snapshot, fetchedDbSnapshot, officialOnly]);
+
+    const isLoading = isLoadingTemplate || isLoadingDb;
     const hasSnapshot = !!activeSnapshot;
     const hasRenderableSnapshot = useMemo(() => hasRenderableShapes(activeSnapshot), [activeSnapshot]);
     const shouldFillParent = height === '100%';
@@ -219,7 +233,7 @@ export default function MindmapViewer({
 
         if (!templateUrl) {
             setFetchedSnapshot(null);
-            setIsLoading(false);
+            setIsLoadingTemplate(false);
             return () => {
                 isCancelled = true;
             };
@@ -228,25 +242,25 @@ export default function MindmapViewer({
         const cachedSnapshot = templateSnapshotCache.get(templateUrl);
         if (cachedSnapshot !== undefined) {
             setFetchedSnapshot(cachedSnapshot);
-            setIsLoading(false);
+            setIsLoadingTemplate(false);
             return () => {
                 isCancelled = true;
             };
         }
 
         setFetchedSnapshot(null);
-        setIsLoading(true);
+        setIsLoadingTemplate(true);
         void loadTemplateSnapshot(templateUrl)
             .then((snapshot) => {
                 if (isCancelled) return;
                 setFetchedSnapshot(snapshot);
-                setIsLoading(false);
+                setIsLoadingTemplate(false);
             })
             .catch((err) => {
                 if (isCancelled) return;
                 console.warn('Could not load mindmap template:', err.message);
                 setFetchedSnapshot(null);
-                setIsLoading(false);
+                setIsLoadingTemplate(false);
             });
 
         return () => {
@@ -392,6 +406,17 @@ export default function MindmapViewer({
 
     // Inline view
     const renderInline = () => {
+        if (isLoading && !hasSnapshot) {
+            return (
+                <div 
+                    className={`w-full flex flex-col items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] ${className || ''}`} 
+                    style={{ ...viewerSizeStyle, ...style }}
+                >
+                    <Spinner size={32} text="Loading Mindmap..." />
+                </div>
+            );
+        }
+
         if (hasImage) {
             return (
                 <div 

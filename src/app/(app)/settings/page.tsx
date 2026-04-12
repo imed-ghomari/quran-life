@@ -4943,13 +4943,14 @@ export default function SettingsPage() {
     }, [markCurrentRouteReady, settingsPageReady]);
 
     if (!settingsPageReady) {
-        return <PageSkeleton type="settings" />;
+        return <PageSkeleton />;
     }
 
     return (
         <>
             {settingsMindmapEditor && (
                 <MindmapEditor
+                    surahId={settingsMindmapEditor.surahId}
                     initialSnapshot={settingsMindmapEditor.snapshot}
                     onSave={handleSettingsEditorSave}
                     onClose={() => setSettingsMindmapEditor(null)}

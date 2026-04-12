@@ -10,11 +10,12 @@ import {
     useSharedInstantMutashabihat,
     useSharedInstantNodes,
     useSharedInstantReviewErrors,
+    useSharedInstantReviewLogs,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
 import { SURAHS } from '@/lib/quranData';
 import {
-    useInstantReviewLogs,
+    useInstantOptimization,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import {
@@ -161,7 +162,7 @@ export default function StatisticsPage() {
     const { nodes: memoryNodes, isLoading: nodesLoading } = useSharedInstantNodes();
     const { progress: listeningProgress, isLoading: progressLoading } = useSharedInstantListeningProgress();
     const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
-    const { logs: reviewLogs, isLoading: reviewLogsLoading } = useInstantReviewLogs();
+    const { logs: reviewLogs, isLoading: reviewLogsLoading } = useSharedInstantReviewLogs();
     const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
 
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
@@ -1106,7 +1107,7 @@ export default function StatisticsPage() {
     }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs, statisticsReady]);
 
     if (!statisticsReady) {
-        return <PageSkeleton type="statistics" />;
+        return <PageSkeleton />;
     }
 
     return (

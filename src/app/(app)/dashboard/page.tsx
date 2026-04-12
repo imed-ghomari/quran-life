@@ -44,17 +44,17 @@ import dynamic from 'next/dynamic';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import {
     useSharedInstantListeningProgress,
+    useSharedInstantListeningStats,
     useSharedInstantMindMaps,
     useSharedInstantMutashabihat,
     useSharedInstantNodes,
     useSharedInstantReviewErrors,
+    useSharedInstantReviewLogs,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import {
-    useInstantReviewLogs,
     useInstantOptimization,
-    useInstantListeningStats,
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
@@ -171,11 +171,11 @@ export default function TodayPage() {
     const { isTransitionPendingForCurrentRoute, markCurrentRouteReady } = useAppShellTransition();
     const { settings, saveSettings, isLoading: settingsLoading } = useSharedInstantSettings();
     const { nodes, dueNodes, saveNode: updateInstantNode, isLoading: nodesLoading } = useSharedInstantNodes();
-    const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useInstantReviewLogs();
+    const { logs: reviewLogs, saveLog: saveInstantReviewLog } = useSharedInstantReviewLogs();
     const { errors: reviewErrors, saveError: saveInstantReviewError, deleteError: removeInstantReviewError, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
     const { mindmaps, partMindMaps, saveMindMap, savePartMindMap, isLoading: mindmapsLoading } = useSharedInstantMindMaps();
     const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
-    const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
+    const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useSharedInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useSharedInstantListeningProgress();
     const { averageSecondsPerWordBySurah } = useDailyPortionTiming();
     const isOnline = useContext(OnlineStatusContext);
@@ -2231,13 +2231,14 @@ export default function TodayPage() {
     }, [isLoaded, markCurrentRouteReady]);
 
     if (!isLoaded) {
-        return <PageSkeleton type="dashboard" />;
+        return <PageSkeleton />;
     }
 
     return (
         <div className="content-wrapper tab-content">
             {activeMindmapEditor && (
                 <MindmapEditor
+                    surahId={activeMindmapEditor.surahId}
                     title={`Edit ${getSurah(activeMindmapEditor.surahId)?.name} Mindmap`}
                     initialSnapshot={activeMindmapEditor.snapshot}
                     onSave={handleMindmapEditorSave}
@@ -2246,6 +2247,7 @@ export default function TodayPage() {
             )}
             {activePartEditor && (
                 <MindmapEditor
+                    partId={activePartEditor.partId}
                     title={`Edit Part ${activePartEditor.partId} Mindmap`}
                     initialSnapshot={activePartEditor.snapshot}
                     onSave={handlePartMindmapEditorSave}
@@ -2452,6 +2454,8 @@ export default function TodayPage() {
                                                                 return (
                                                                     <MindmapViewer
                                                                         className="review-mindmap-viewer"
+                                                                        surahId={activeContent.type === 'mindmap' ? activeContent.surah?.id : undefined}
+                                                                        partId={activeContent.type === 'part_mindmap' ? activeContent.partId : undefined}
                                                                         snapshot={activeContent.mindmap?.tldrawSnapshot}
                                                                         imageUrl={activeContent.mindmap?.imageUrl}
                                                                         imageUrlDark={activeContent.mindmap?.imageUrlDark}

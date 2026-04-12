@@ -331,7 +331,7 @@ function AuthContent() {
 
     // Render a loading spinner while initial authentication status is being verified
     if (isAuthLoading) {
-        return <PageSkeleton type="auth" />;
+        return <PageSkeleton />;
     }
 
     // Render an error message if there's an issue with the authentication state
@@ -357,11 +357,11 @@ function AuthContent() {
     }
 
     if (user && shouldBlockOnSubscriptionLoad) {
-        return <PageSkeleton type="auth" />;
+        return <PageSkeleton />;
     }
 
     if (user && hasPremiumAccess && !shouldAllowGraceCheckout) {
-        return <PageSkeleton type="auth" />;
+        return <PageSkeleton />;
     }
 
     if (!isOnline) {
@@ -1025,7 +1025,7 @@ export default function AuthPage() {
     return (
         <Suspense fallback={
             // Fallback UI while AuthContent is loading (e.g., during initial Google OAuth script load)
-            <PageSkeleton type="auth" />
+            <PageSkeleton />
         }>
             <AuthContent />
         </Suspense>
