@@ -231,6 +231,20 @@ const MINDMAP_DRAFT_STORAGE_PREFIX = 'mindmap-editor-draft:v1:';
 const SAVE_DRAIN_TIMEOUT_MS = 15000;
 const SAVE_DRAIN_POLL_MS = 50;
 
+const normalizeSnapshot = (value: unknown): any | null => {
+    if (!value) return null;
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
+            return null;
+        }
+    }
+    if (typeof value === 'object') return value;
+    return null;
+};
+
 /**
  * Prevents tldraw from getting stuck in pen mode when using pen/tablet devices.
  * If a non-pen pointer event arrives while pen mode is active, force pen mode off.
@@ -274,7 +288,10 @@ function MindmapEditorContent({
         partId: initialSnapshot ? undefined : partId
     });
 
-    const activeInitialSnapshot = initialSnapshot || fetchedDbSnapshot;
+    const activeInitialSnapshot = useMemo(
+        () => normalizeSnapshot(initialSnapshot) || normalizeSnapshot(fetchedDbSnapshot),
+        [initialSnapshot, fetchedDbSnapshot]
+    );
     const isActuallyLoading = !activeInitialSnapshot && isLoadingDb;
 
     const router = useRouter();
@@ -362,7 +379,7 @@ function MindmapEditorContent({
             if (!raw) return null;
             const parsed = JSON.parse(raw);
             if (!parsed || typeof parsed !== 'object' || !parsed.snapshot) return null;
-            return parsed.snapshot;
+            return normalizeSnapshot(parsed.snapshot);
         } catch (error) {
             console.warn('Failed to load local mindmap draft', error);
             return null;

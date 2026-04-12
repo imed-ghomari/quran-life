@@ -199,6 +199,8 @@ export default function MindmapViewer({
     ), [height, shouldFillParent]);
     const displayUrl = officialOnly ? null : (isDark ? (imageUrlDark || imageUrl) : (imageUrl || imageUrlDark));
     const hasImage = !!displayUrl && !hasSnapshot && !imageFailed;
+    const canLoadOnDemandSnapshot = surahId !== undefined || partId !== undefined;
+    const hasAnyRenderableSource = !!templateUrl || !!displayUrl || !!snapshot || !!fetchedDbSnapshot || canLoadOnDemandSnapshot;
     const currentContextLabel = useMemo(
         () => contextLabel || extractContextFromTemplateUrl(templateUrl) || extractContextFromTitle(title),
         [contextLabel, templateUrl, title]
@@ -393,8 +395,7 @@ export default function MindmapViewer({
     // For now, let's keep the hybrid approach: Image -> Click -> Fullscreen Tldraw
     // OR just use Tldraw inline if no image.
 
-    // If no snapshot and no template, return nothing or placeholder
-    if (!snapshot && !templateUrl && !displayUrl) return null;
+    if (!hasAnyRenderableSource) return null;
 
     if (isLoading) {
         return (
