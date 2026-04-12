@@ -43,11 +43,14 @@ import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 // Theme hook for responsive design adjustments
 import { useTheme } from '@/components/ThemeProvider';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
-const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), {
+    ssr: false,
+    loading: () => <PageSkeleton type="mindmap" />
+});
 const TodoKanban = dynamic(() => import('@/components/todo/TodoKanban'), { ssr: false });
 const PREMADE_IMPORT_WRITE_BATCH_SIZE = 12;
 
@@ -1534,8 +1537,7 @@ export default function TodoPage() {
     const todoLoaderText = 'Preparing Todo...';
 
     if (showTodoLoader) {
-        if (isTransitionPendingForCurrentRoute) return null;
-        return <FullScreenLoader text={todoLoaderText} />;
+        return <PageSkeleton type="todo" />;
     }
 
     return (

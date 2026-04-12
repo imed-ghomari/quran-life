@@ -14,7 +14,7 @@ import { Mail, ArrowRight, Lock, Hash, Ticket, Users } from 'lucide-react';
 import { Suspense } from 'react';
 
 // Import custom Spinner component and Google OAuth components
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import Spinner from '@/components/ui/Spinner';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
@@ -331,7 +331,7 @@ function AuthContent() {
 
     // Render a loading spinner while initial authentication status is being verified
     if (isAuthLoading) {
-        return <FullScreenLoader text="Verifying authentication..." />;
+        return <PageSkeleton type="auth" />;
     }
 
     // Render an error message if there's an issue with the authentication state
@@ -357,11 +357,11 @@ function AuthContent() {
     }
 
     if (user && shouldBlockOnSubscriptionLoad) {
-        return <FullScreenLoader text="Checking subscription..." />;
+        return <PageSkeleton type="auth" />;
     }
 
     if (user && hasPremiumAccess && !shouldAllowGraceCheckout) {
-        return <FullScreenLoader text="Redirecting to dashboard..." />;
+        return <PageSkeleton type="auth" />;
     }
 
     if (!isOnline) {
@@ -1025,7 +1025,7 @@ export default function AuthPage() {
     return (
         <Suspense fallback={
             // Fallback UI while AuthContent is loading (e.g., during initial Google OAuth script load)
-            <FullScreenLoader text="Loading..." />
+            <PageSkeleton type="auth" />
         }>
             <AuthContent />
         </Suspense>
