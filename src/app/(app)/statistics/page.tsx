@@ -1532,88 +1532,15 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
 }
 
 function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePoint[]; minDay: number; maxDay: number; dailyLoad: string }) {
-    const DESKTOP_MAX_X_AXIS_LEGENDS = 6;
+    const DESKTOP_MAX_X_AXIS_LEGENDS = 7;
     const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [chartWidth, setChartWidth] = useState(0);
     const gradientSeed = useId();
     const chartHeight = 210;
-    const padding = { top: 12, right: 28, bottom: 38, left: 36 };
+    const padding = { top: 12, right: 34, bottom: 38, left: 36 };
 
-    const bucketedData = useMemo<FutureDueBucket[]>(() => {
-        const nonZeroData = data.filter(d => d.count > 0);
-        if (nonZeroData.length === 0) return [];
-
-        const width = Math.max(320, chartWidth || 0);
-        const isSmallScreen = width <= 480;
-        const isTablet = width > 480 && width <= 900;
-        const maxBars = isSmallScreen ? 12 : isTablet ? 18 : 24;
-        const spanDays = Math.max(1, maxDay - minDay + 1);
-
-        let bucketSize = 1;
-        if (spanDays > 120) {
-            bucketSize = 30;
-        } else if (spanDays > 45) {
-            bucketSize = 7;
-        }
-
-        if (bucketSize === 1) {
-            const visibleDays = Math.max(1, nonZeroData[nonZeroData.length - 1].day - nonZeroData[0].day + 1);
-            if (visibleDays > maxBars) {
-                bucketSize = Math.ceil(visibleDays / maxBars);
-            }
-        }
-
-        const buckets = new Map<number, FutureDueBucket>();
-
-        nonZeroData.forEach(point => {
-            const bucketStart = Math.floor(point.day / bucketSize) * bucketSize;
-            const bucketEnd = bucketStart + bucketSize - 1;
-            const existing = buckets.get(bucketStart);
-            if (existing) {
-                existing.count += point.count;
-                existing.cumulative = point.cumulative;
-                existing.containsToday = existing.containsToday || (point.day >= bucketStart && point.day <= bucketEnd && bucketStart <= 0 && bucketEnd >= 0);
-                return;
-            }
-
-            buckets.set(bucketStart, {
-                startDay: bucketStart,
-                endDay: bucketEnd,
-                label: '',
-                count: point.count,
-                cumulative: point.cumulative,
-                containsToday: bucketStart <= 0 && bucketEnd >= 0,
-            });
-        });
-
-        const formatSingleDayLabel = (day: number) => {
-            if (day === 0) return 'Today';
-            if (day === 1) return '1d';
-            if (day < 0) return `${Math.abs(day)}d ago`;
-            return `${day}d`;
-        };
-
-        const formatRangeLabel = (startDay: number, endDay: number) => {
-            if (startDay === endDay) return formatSingleDayLabel(startDay);
-            if (startDay < 0 && endDay < 0) return `${Math.abs(startDay)}d to ${Math.abs(endDay)}d ago`;
-            if (startDay < 0 && endDay >= 0) {
-                const endStr = endDay === 0 ? 'Today' : formatSingleDayLabel(endDay);
-                return `${Math.abs(startDay)}d ago to ${endStr}`;
-            }
-            if (startDay === 0 && endDay > 0) return `Today to ${formatSingleDayLabel(endDay)}`;
-            return `${formatSingleDayLabel(startDay)} to ${formatSingleDayLabel(endDay)}`;
-        };
-
-        return Array.from(buckets.values())
-            .sort((a, b) => a.startDay - b.startDay)
-            .map(bucket => ({
-                ...bucket,
-                label: formatRangeLabel(bucket.startDay, bucket.endDay),
-            }));
-    }, [chartWidth, data, maxDay, minDay]);
-
-    const maxCount = Math.max(...bucketedData.map(d => d.count), 1);
+    const maxCount = Math.max(...data.map(d => d.count), 1);
     const isSmallRange = maxCount <= 8;
     const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
     const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
@@ -1637,7 +1564,7 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
         return () => ro.disconnect();
     }, []);
 
-    if (data.length === 0 || bucketedData.length === 0) return <ChartEmptyState />;
+    if (data.length === 0) return <ChartEmptyState />;
 
     return (
         <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
@@ -1654,7 +1581,7 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                             <rect x={padding.left} y={padding.top} width={chartWidth - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
                         </clipPath>
                         <linearGradient id={ids.gradient} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="var(--accent)" stopOpacity="0.3" />
+                            <stop offset="5%" stopColor="var(--accent)" stopOpacity="0.25" />
                             <stop offset="95%" stopColor="var(--accent)" stopOpacity="0.0" />
                         </linearGradient>
                     </defs>
@@ -1662,34 +1589,30 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                         const vWidth = chartWidth;
                         const plotWidth = vWidth - padding.left - padding.right;
                         const plotHeight = chartHeight - padding.top - padding.bottom;
-                        const span = Math.max(1, bucketedData.length);
-                        const groupWidth = plotWidth * 0.88;
-                        const groupStart = padding.left + (plotWidth - groupWidth) / 2;
-                        const step = groupWidth / (span > 1 ? span - 1 : 1);
-                        const getX = (index: number) => span === 1 ? padding.left + plotWidth / 2 : groupStart + index * step;
+                        const span = Math.max(1, maxDay - minDay + 1);
+                        const getX = (day: number) => padding.left + ((day - minDay) / (span - 1 || 1)) * plotWidth;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
 
                         const isSmallScreen = chartWidth <= 480;
                         const isTablet = chartWidth > 480 && chartWidth <= 900;
                         const maxXAxisLegends = isSmallScreen ? 4 : isTablet ? 5 : DESKTOP_MAX_X_AXIS_LEGENDS;
                         const xAxisFontSize = isSmallScreen ? 9 : 10;
-                        const rotateLabels = step < (isSmallScreen ? 46 : 40);
                         const dailyLoadValue = Number(dailyLoad);
                         const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
 
-                        const points = bucketedData.map((d, i) => ({ x: getX(i), y: getYCount(d.count) }));
+                        const points = data.map(d => ({ x: getX(d.day), y: getYCount(d.count), day: d.day, count: d.count }));
 
-                        const isTooMuchData = bucketedData.length > 8;
+                        const isTooMuchData = data.length > 15;
                         let linePath = "";
                         if (points.length > 1) {
                             if (isTooMuchData) {
-                                // Smooth line
+                                // Smooth line using Catmull-Rom or similar approximation
                                 linePath = `M ${points[0].x} ${points[0].y}`;
                                 for (let i = 0; i < points.length - 1; i++) {
                                     const curr = points[i];
                                     const next = points[i + 1];
-                                    const cp1x = curr.x + (next.x - curr.x) / 2;
-                                    const cp2x = curr.x + (next.x - curr.x) / 2;
+                                    const cp1x = curr.x + (next.x - curr.x) / 2.5;
+                                    const cp2x = next.x - (next.x - curr.x) / 2.5;
                                     linePath += ` C ${cp1x} ${curr.y}, ${cp2x} ${next.y}, ${next.x} ${next.y}`;
                                 }
                             } else {
@@ -1699,41 +1622,40 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                         }
 
                         const areaPath = points.length > 1
-                            ? `${linePath} L ${points[points.length - 1].x} ${chartHeight - padding.bottom} L ${points[0].x} ${chartHeight - padding.bottom} Z`
+                            ? `${linePath} L ${getX(maxDay)} ${chartHeight - padding.bottom} L ${getX(minDay)} ${chartHeight - padding.bottom} Z`
                             : "";
 
-                        // Reuse label logic
-                        const baseLabelStep = Math.max(1, Math.ceil(bucketedData.length / maxXAxisLegends));
-                        const longestLabelLength = Math.max(...bucketedData.map(d => d.label.length), 1);
-                        const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
-                        const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
-                        const labelStep = Math.max(baseLabelStep, minStepForWidth);
-                        const minLabelGapPx = estimatedLabelWidth;
+                        // X-axis labeling logic (meaningful day markers)
+                        const formatDayLabel = (day: number) => {
+                            if (day === 0) return 'Today';
+                            if (day > 0) return `+${day}d`;
+                            return `${Math.abs(day)}d ago`;
+                        };
 
-                        const todayIndex = bucketedData.findIndex(d => d.containsToday);
-                        const visibleLabelIndices = new Set<number>();
-                        const canPlaceLabel = (index: number) => {
-                            const x = getX(index);
-                            for (const existingIndex of visibleLabelIndices) {
-                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) return false;
-                            }
-                            return true;
-                        };
-                        const forcePlaceLabel = (index: number) => {
-                            const x = getX(index);
-                            Array.from(visibleLabelIndices).forEach(existingIndex => {
-                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) visibleLabelIndices.delete(existingIndex);
+                        const labelIndices = new Set<number>();
+                        const todayIndex = data.findIndex(d => d.day === 0);
+                        const startIdx = 0;
+                        const endIdx = data.length - 1;
+
+                        if (todayIndex !== -1) labelIndices.add(todayIndex);
+                        labelIndices.add(startIdx);
+                        labelIndices.add(endIdx);
+
+                        // Fill in more labels if space allows
+                        const labelStep = Math.max(1, Math.ceil(data.length / maxXAxisLegends));
+                        for (let i = 0; i < data.length; i += labelStep) {
+                            labelIndices.add(i);
+                        }
+
+                        const visibleLabels = Array.from(labelIndices)
+                            .sort((a, b) => a - b)
+                            .filter((idx, i, arr) => {
+                                // Avoid overlapping labels
+                                if (i === 0) return true;
+                                const prevIdx = arr[i - 1];
+                                const dist = getX(data[idx].day) - getX(data[prevIdx].day);
+                                return dist > 45; // Minimum 45px gap
                             });
-                            visibleLabelIndices.add(index);
-                        };
-                        const priorityIndices = [todayIndex, 0, bucketedData.length - 1].filter((idx, pos, arr): idx is number => idx >= 0 && arr.indexOf(idx) === pos);
-                        priorityIndices.forEach(index => {
-                            if (index === todayIndex) { forcePlaceLabel(index); return; }
-                            if (canPlaceLabel(index)) visibleLabelIndices.add(index);
-                        });
-                        bucketedData.forEach((_, i) => {
-                            if (i % labelStep === 0 && !visibleLabelIndices.has(i) && canPlaceLabel(i)) visibleLabelIndices.add(i);
-                        });
 
                         return (
                             <>
@@ -1741,16 +1663,30 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
 
                                 <g clipPath={`url(#${ids.clip})`}>
                                     {showDailyLoadLine && (
-                                        <line
-                                            x1={padding.left}
-                                            y1={getYCount(dailyLoadValue)}
-                                            x2={vWidth - padding.right}
-                                            y2={getYCount(dailyLoadValue)}
-                                            stroke="var(--chart-strong)"
-                                            strokeWidth="1.2"
-                                            strokeDasharray="4 3"
-                                            opacity="0.9"
-                                        />
+                                        <g>
+                                            <line
+                                                x1={padding.left}
+                                                y1={getYCount(dailyLoadValue)}
+                                                x2={vWidth - padding.right}
+                                                y2={getYCount(dailyLoadValue)}
+                                                stroke="var(--chart-strong)"
+                                                strokeWidth="1.5"
+                                                strokeDasharray="5 4"
+                                                opacity="0.8"
+                                            />
+                                            {/* Label for daily load on the right side of the line */}
+                                            <text
+                                                x={vWidth - padding.right - 4}
+                                                y={getYCount(dailyLoadValue) - 6}
+                                                textAnchor="end"
+                                                fontSize="8"
+                                                fontWeight="700"
+                                                fill="var(--chart-strong)"
+                                                opacity="0.9"
+                                            >
+                                                Avg Load: {dailyLoad}
+                                            </text>
+                                        </g>
                                     )}
 
                                     {points.length > 1 && (
@@ -1760,32 +1696,33 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                         </>
                                     )}
 
-                                    {bucketedData.map((d, i) => {
-                                        const x = getX(i);
-                                        const y = getYCount(d.count);
-                                        const reviewLabel = `${d.count} review${d.count === 1 ? '' : 's'}`;
-                                        const tooltip = d.startDay === d.endDay ? reviewLabel : `${reviewLabel} (${d.label})`;
+                                    {/* Only render points if there aren't too many, otherwise it's cluttered. details on hover. */}
+                                    {points.map((p, i) => {
+                                        const showCircle = points.length < 40 || i === 0 || i === points.length - 1 || p.day === 0;
+                                        const tooltip = `${p.count} review${p.count === 1 ? '' : 's'} (${formatDayLabel(p.day)})`;
                                         return (
                                             <g key={i}>
                                                 {/* Transparent larger circle for easier hovering */}
                                                 <circle
-                                                    cx={x}
-                                                    cy={y}
-                                                    r={10}
+                                                    cx={p.x}
+                                                    cy={p.y}
+                                                    r={points.length > 60 ? 4 : 10}
                                                     fill="transparent"
                                                     data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
                                                 />
-                                                <circle
-                                                    cx={x}
-                                                    cy={y}
-                                                    r={4}
-                                                    fill="var(--background)"
-                                                    stroke="var(--accent)"
-                                                    strokeWidth="2"
-                                                    pointerEvents="none"
-                                                />
+                                                {showCircle && (
+                                                    <circle
+                                                        cx={p.x}
+                                                        cy={p.y}
+                                                        r={3.5}
+                                                        fill="var(--background)"
+                                                        stroke="var(--accent)"
+                                                        strokeWidth="2"
+                                                        pointerEvents="none"
+                                                    />
+                                                )}
                                             </g>
                                         );
                                     })}
@@ -1798,21 +1735,21 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                     <text key={i} x={padding.left - 8} y={getYCount(val) + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{val}</text>
                                 ))}
 
-                                {bucketedData.map((d, i) => {
-                                    if (!visibleLabelIndices.has(i)) return null;
-                                    const x = getX(i);
+                                {visibleLabels.map((idx) => {
+                                    const d = data[idx];
+                                    const x = getX(d.day);
                                     const y = chartHeight - padding.bottom + 18;
                                     return (
                                         <text
-                                            key={`label-${i}`}
+                                            key={`label-${idx}`}
                                             x={x}
                                             y={y}
                                             textAnchor="middle"
                                             fontSize={xAxisFontSize}
                                             fill="var(--foreground-secondary)"
-                                            transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
+                                            fontWeight={d.day === 0 ? "700" : "normal"}
                                         >
-                                            {d.label}
+                                            {formatDayLabel(d.day)}
                                         </text>
                                     );
                                 })}
