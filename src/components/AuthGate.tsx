@@ -3,7 +3,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
@@ -215,7 +215,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   ]);
 
   if (!isHydrated) {
-    return <FullScreenLoader text="Verifying access..." />;
+    return <PageSkeleton type="auth" />;
   }
 
   if (isPublic) {
@@ -233,18 +233,18 @@ export default function AuthGate({ children }: AuthGateProps) {
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
 
   if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
-    return <FullScreenLoader text="Verifying access..." />;
+    return <PageSkeleton type="auth" />;
   }
 
   if (shouldTreatAsOffline) {
     if (!user && !hasOfflineAccess) {
-      return <FullScreenLoader text="Offline access unavailable. Connect once to sign in." />;
+      return <PageSkeleton type="auth" />;
     }
     return <>{children}</>;
   }
 
   if (!user) {
-    return <FullScreenLoader text="Redirecting to sign in..." />;
+    return <PageSkeleton type="auth" />;
   }
 
   return <>{children}</>;

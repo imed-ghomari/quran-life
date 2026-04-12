@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Spinner from '@/components/ui/Spinner';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
@@ -1106,8 +1106,7 @@ export default function StatisticsPage() {
     }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs, statisticsReady]);
 
     if (!statisticsReady) {
-        if (isTransitionPendingForCurrentRoute) return null;
-        return <FullScreenLoader text="Preparing statistics..." />;
+        return <PageSkeleton type="statistics" />;
     }
 
     return (

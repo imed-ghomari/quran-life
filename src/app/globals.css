@@ -4674,3 +4674,45 @@ body[data-mindmap-open="true"] .bottom-nav {
   opacity: 1;
   visibility: visible;
 }
+
+/* Skeleton Loader with Shimmer Effect */
+.app-skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-radius: 8px;
+}
+
+.app-skeleton::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--foreground) 5%, transparent) 20%,
+    color-mix(in srgb, var(--foreground) 10%, transparent) 60%,
+    transparent 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.app-skeleton.circle {
+  border-radius: 9999px;
+}
+
+.app-skeleton.text {
+  height: 1em;
+  margin-bottom: 0.5em;
+  border-radius: 4px;
+}

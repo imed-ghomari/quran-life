@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useContext, startTransition } from 'react';
 import { id } from '@instantdb/react';
 import Image from 'next/image';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useAppShellTransition } from '@/components/AppShell';
 import Spinner from '@/components/ui/Spinner';
 import { getQuranVerses, getSurah } from '@/lib/quranData';
@@ -82,14 +82,7 @@ import {
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), {
     ssr: false,
-    loading: () => (
-        <div
-            className="review-mindmap-viewer"
-            style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-            <Spinner text="Loading mindmap viewer..." />
-        </div>
-    )
+    loading: () => <PageSkeleton type="mindmap" />
 });
 const AudioPlayer = dynamic(() => import('@/components/AudioPlayer'), { ssr: false });
 
@@ -2238,9 +2231,7 @@ export default function TodayPage() {
     }, [isLoaded, markCurrentRouteReady]);
 
     if (!isLoaded) {
-        if (isTransitionPendingForCurrentRoute) return null;
-        const loadingText = isVersesLoaded ? 'Preparing today...' : 'Loading Quran text...';
-        return <FullScreenLoader text={loadingText} />;
+        return <PageSkeleton type="dashboard" />;
     }
 
     return (

@@ -5,7 +5,7 @@ import { id } from '@instantdb/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
@@ -4943,8 +4943,7 @@ export default function SettingsPage() {
     }, [markCurrentRouteReady, settingsPageReady]);
 
     if (!settingsPageReady) {
-        if (isTransitionPendingForCurrentRoute) return null;
-        return <FullScreenLoader text="Preparing settings..." />;
+        return <PageSkeleton type="settings" />;
     }
 
     return (
