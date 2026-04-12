@@ -26,6 +26,10 @@ import {
     hasNodeBeenReviewed,
     MemoryNode
 } from '@/lib/types';
+import {
+    getEligibleDailyPortionSurahs,
+    getProgressStartIndexFromEligibleSurahs,
+} from '@/lib/dailyPortionUtils';
 
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays } from 'lucide-react';
 
@@ -184,6 +188,10 @@ export default function StatisticsPage() {
     const activeUnskippedSurahs = useMemo(
         () => activePartSurahs.filter((surah) => !skippedSurahs.has(surah.id)),
         [activePartSurahs, skippedSurahs],
+    );
+    const eligibleDailyPortionSurahs = useMemo(
+        () => getEligibleDailyPortionSurahs(activePart, skippedSurahs, memoryNodes),
+        [activePart, memoryNodes, skippedSurahs],
     );
 
     const {
@@ -534,11 +542,11 @@ export default function StatisticsPage() {
             ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
                 ? listeningProgressByPartId.get(LEGACY_ALL_QURAN_PART)
                 : undefined);
-        const progress = Math.max(0, partProgress?.lastVerseIndex || 0);
+        const progress = getProgressStartIndexFromEligibleSurahs(eligibleDailyPortionSurahs, partProgress);
         const cycles = partProgress?.cycles || 0;
         const completedToday = Boolean(partProgress?.updatedAt && new Date(partProgress.updatedAt).toDateString() === new Date().toDateString());
 
-        const surahsInPart = activeUnskippedSurahs;
+        const surahsInPart = eligibleDailyPortionSurahs;
         const totalVerses = surahsInPart.reduce((sum, surah) => sum + surah.verseCount, 0);
         const completedVerses = totalVerses > 0 ? Math.min(progress, totalVerses) : 0;
         const remainingVerses = Math.max(0, totalVerses - completedVerses);
@@ -578,7 +586,7 @@ export default function StatisticsPage() {
                 },
             ]
         };
-    }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId, statisticsReady]);
+    }, [activePart, eligibleDailyPortionSurahs, listeningProgressByPartId, settings?.partSystemVersion, statisticsReady]);
 
     // 5. Mutashabihat Coverage Data
     const mutashabihatStats = useMemo(() => {

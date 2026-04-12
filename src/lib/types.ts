@@ -107,6 +107,7 @@ export interface AudioSettings {
 export interface AppSettings {
     id?: string;
     completionDays: number;
+    dailyTargetMinutes?: number;
     activePart: QuranPart;
     partSystemVersion?: number;
     learnedVerses: { [surahId: string]: number[] };
@@ -198,6 +199,16 @@ export interface ListeningStats {
     totalMinutes: number;
     rotationCount: number;
     lastListened: string;   // ISO date
+}
+
+export interface ListeningProgressEntry {
+    id?: string;
+    partId: number;
+    lastVerseIndex?: number;
+    nextStartVerseKey?: string;
+    cycles?: number;
+    updatedAt?: string;
+    userId?: string;
 }
 
 // LearningScope (control layer)

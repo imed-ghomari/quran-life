@@ -9,7 +9,7 @@ import Image from 'next/image';
 import FullScreenLoader from '@/components/ui/FullScreenLoader';
 import { useAppShellTransition } from '@/components/AppShell';
 import Spinner from '@/components/ui/Spinner';
-import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
+import { getQuranVerses, getSurah } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import {
     ALL_QURAN_PART,
@@ -17,10 +17,9 @@ import {
     Verse,
     QuranPart,
     MemoryNode,
-    AppSettings,
+    ListeningProgressEntry,
     getNodeDueDate,
     hasNodeBeenReviewed,
-    surahHasReviewedVerseGroup
 } from '@/lib/types';
 import {
     CheckCircle,
@@ -70,6 +69,13 @@ import { resolveVerseReviewFailureContext, splitVerseIntoReviewChunks } from '@/
 import { db } from '@/lib/instant';
 import { transactWithRetry } from '@/lib/instantTransact';
 import { isUuid } from '@/lib/instantIds';
+import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
+import {
+    DEFAULT_DAILY_TARGET_MINUTES,
+    estimateVerseDurationMinutes,
+    getEligibleDailyPortionSurahs,
+    getProgressStartIndexFromEligibleSurahs,
+} from '@/lib/dailyPortionUtils';
 
 // Dynamic import of MindmapEditor to keep bundle size small and avoid SSR issues
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
@@ -177,6 +183,7 @@ export default function TodayPage() {
     const { decisions: mutashabihatDecisions, custom: customMutashabihat } = useSharedInstantMutashabihat();
     const { stats: listeningStats, saveStats: saveListeningStats, deleteStats: deleteListeningStats } = useInstantListeningStats();
     const { progress: listeningProgress, saveProgress: saveListeningProgress, deleteProgress: deleteListeningProgress } = useSharedInstantListeningProgress();
+    const { averageSecondsPerWordBySurah } = useDailyPortionTiming();
     const isOnline = useContext(OnlineStatusContext);
 
     const [allVerses, setAllVerses] = useState<Verse[]>([]);
@@ -770,8 +777,8 @@ export default function TodayPage() {
         kind: 'daily_complete';
         id: string;
         partId: number;
-        beforeProgress: { lastVerseIndex: number; cycles: number } | null;
-        afterProgress: { lastVerseIndex: number; cycles: number };
+        beforeProgress: Pick<ListeningProgressEntry, 'lastVerseIndex' | 'nextStartVerseKey' | 'cycles'> | null;
+        afterProgress: Pick<ListeningProgressEntry, 'lastVerseIndex' | 'nextStartVerseKey' | 'cycles'>;
         beforeUpdatedAt?: string;
         afterUpdatedAt: string;
         beforeStats: Record<number, any | null>;
@@ -1055,39 +1062,96 @@ export default function TodayPage() {
 
     // Calculate today's portion (preserve per-part listening progress)
     const portionData = useMemo(() => {
-        if (allVerses.length === 0 || !settings) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
+        if (allVerses.length === 0 || !settings) {
+            return {
+                portion: [],
+                startVerseIndex: 0,
+                versesPerDay: 0,
+                totalVerses: 0,
+                startVerseKey: undefined,
+                nextStartVerseIndex: 0,
+                nextStartVerseKey: undefined,
+                derivedCompletionDays: 0,
+                snappedMinutes: 0,
+            };
+        }
 
-        const isSurahSkipped = (surahId: number, settings: AppSettings) => {
-            return settings.skippedSurahs?.includes(surahId) || false;
-        };
-
-        const surahsInPart = getSurahsByPart(settings.activePart).filter((surah) => (
-            !isSurahSkipped(surah.id, settings)
-            && !surahHasReviewedVerseGroup(nodes, surah.id)
-        ));
-        if (surahsInPart.length === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
+        const eligibleSurahs = getEligibleDailyPortionSurahs(
+            settings.activePart,
+            settings.skippedSurahs,
+            nodes,
+        );
+        if (eligibleSurahs.length === 0) {
+            return {
+                portion: [],
+                startVerseIndex: 0,
+                versesPerDay: 0,
+                totalVerses: 0,
+                startVerseKey: undefined,
+                nextStartVerseIndex: 0,
+                nextStartVerseKey: undefined,
+                derivedCompletionDays: 0,
+                snappedMinutes: 0,
+            };
+        }
 
         // Flatten verses - optimized filter
-        const activeSurahIds = new Set(surahsInPart.map(s => s.id));
+        const activeSurahIds = new Set(eligibleSurahs.map(s => s.id));
         const allVersesInPart = allVerses.filter(v => activeSurahIds.has(v.surahId));
 
         const totalVerses = allVersesInPart.length;
-        if (totalVerses === 0) return { portion: [], startVerseIndex: 0, versesPerDay: 0, totalVerses: 0 };
+        if (totalVerses === 0) {
+            return {
+                portion: [],
+                startVerseIndex: 0,
+                versesPerDay: 0,
+                totalVerses: 0,
+                startVerseKey: undefined,
+                nextStartVerseIndex: 0,
+                nextStartVerseKey: undefined,
+                derivedCompletionDays: 0,
+                snappedMinutes: 0,
+            };
+        }
 
         // Use InstantDB listening progress
         const partProgress = resolveActivePartProgress();
-        const startIdx = partProgress?.lastVerseIndex || 0;
-
-        const portionResult = getDailyPortion(allVersesInPart, startIdx, settings.completionDays);
+        const startIdx = getProgressStartIndexFromEligibleSurahs(eligibleSurahs, partProgress);
+        const portionResult = getDailyPortion(allVersesInPart, {
+            dailyTargetMinutes: settings.dailyTargetMinutes || DEFAULT_DAILY_TARGET_MINUTES,
+            mode: settings.dailyPortionMode ?? 'audio',
+            nextStartVerseKey: partProgress?.nextStartVerseKey,
+            legacyStartIndex: startIdx,
+            averageSecondsPerWordBySurah,
+        });
 
         return {
             portion: portionResult.portion,
             startVerseIndex: 0,
             versesPerDay: portionResult.portion.length,
             totalVerses,
+            startVerseKey: portionResult.startVerseKey,
+            nextStartVerseIndex: portionResult.nextStartVerseIndex,
+            nextStartVerseKey: portionResult.nextStartVerseKey,
+            derivedCompletionDays: portionResult.derivedCompletionDays,
+            snappedMinutes: portionResult.snappedMinutes,
             lastUpdateAt: partProgress?.updatedAt
         };
-    }, [allVerses, nodes, settings, resolveActivePartProgress]);
+    }, [allVerses, averageSecondsPerWordBySurah, nodes, settings, resolveActivePartProgress]);
+
+    useEffect(() => {
+        if (!settings) return;
+        const partProgress = resolveActivePartProgress();
+        if (!partProgress || partProgress.nextStartVerseKey || !portionData.startVerseKey) return;
+
+        void saveListeningProgress({
+            partId: settings.activePart,
+            lastVerseIndex: partProgress.lastVerseIndex,
+            nextStartVerseKey: portionData.startVerseKey,
+            cycles: partProgress.cycles || 0,
+            updatedAt: partProgress.updatedAt,
+        });
+    }, [portionData.startVerseKey, resolveActivePartProgress, saveListeningProgress, settings]);
 
     useEffect(() => {
         if (!portionData.lastUpdateAt) return;
@@ -1418,7 +1482,13 @@ export default function TodayPage() {
             } else {
                 const writes: Promise<any>[] = [];
                 if (last.beforeProgress) {
-                    writes.push(saveListeningProgress(last.partId, last.beforeProgress.lastVerseIndex, last.beforeProgress.cycles, last.beforeUpdatedAt));
+                    writes.push(saveListeningProgress({
+                        partId: last.partId,
+                        lastVerseIndex: last.beforeProgress.lastVerseIndex,
+                        nextStartVerseKey: last.beforeProgress.nextStartVerseKey,
+                        cycles: last.beforeProgress.cycles,
+                        updatedAt: last.beforeUpdatedAt,
+                    }));
                 } else {
                     writes.push(deleteListeningProgress(last.partId));
                 }
@@ -1474,7 +1544,13 @@ export default function TodayPage() {
                 setShowGrading(false);
             } else {
                 const writes: Promise<any>[] = [
-                    saveListeningProgress(last.partId, last.afterProgress.lastVerseIndex, last.afterProgress.cycles, last.afterUpdatedAt)
+                    saveListeningProgress({
+                        partId: last.partId,
+                        lastVerseIndex: last.afterProgress.lastVerseIndex,
+                        nextStartVerseKey: last.afterProgress.nextStartVerseKey,
+                        cycles: last.afterProgress.cycles,
+                        updatedAt: last.afterUpdatedAt,
+                    })
                 ];
                 Object.entries(last.afterStats).forEach(([surahIdStr, stats]) => {
                     const surahId = Number(surahIdStr);
@@ -1510,29 +1586,38 @@ export default function TodayPage() {
 
         // Use InstantDB listening progress
         const partProgress = resolveActivePartProgress();
-        const current = partProgress?.lastVerseIndex || 0;
         const totalInPart = portionData.totalVerses;
         if (totalInPart <= 0) return;
         setIsPersistingDailyComplete(true);
 
-        let next = current + portionData.versesPerDay;
-        let cycles = partProgress?.cycles || 0;
-
-        // If we reach or exceed the end of the part, increment cycles and wrap around
-        if (next >= totalInPart) {
-            next = next % totalInPart;
-            cycles += 1;
-        }
+        const cycleCompleted = portionData.nextStartVerseIndex === 0 && portionData.portion.length > 0;
+        const cycles = (partProgress?.cycles || 0) + (cycleCompleted ? 1 : 0);
 
         const beforeProgress = partProgress
-            ? { lastVerseIndex: partProgress.lastVerseIndex, cycles: partProgress.cycles || 0 }
+            ? {
+                lastVerseIndex: partProgress.lastVerseIndex,
+                nextStartVerseKey: partProgress.nextStartVerseKey,
+                cycles: partProgress.cycles || 0,
+            }
             : null;
         const beforeUpdatedAt = partProgress?.updatedAt;
-        const afterProgress = { lastVerseIndex: next, cycles };
+        const afterProgress = {
+            lastVerseIndex: portionData.nextStartVerseIndex,
+            nextStartVerseKey: portionData.nextStartVerseKey,
+            cycles,
+        };
         const afterUpdatedAt = new Date().toISOString();
 
         // Update stats for each surah in the portion
-        const surahsInPortion = new Set(todaysPortion.map(v => v.surahId));
+        const minutesBySurah = todaysPortion.reduce<Record<number, number>>((acc, verse) => {
+            acc[verse.surahId] = (acc[verse.surahId] || 0) + estimateVerseDurationMinutes(
+                verse,
+                settings.dailyPortionMode ?? 'audio',
+                averageSecondsPerWordBySurah,
+            );
+            return acc;
+        }, {});
+        const surahsInPortion = new Set(Object.keys(minutesBySurah).map(Number));
         const beforeStats: Record<number, any | null> = {};
         const afterStats: Record<number, any> = {};
         const nowIso = afterUpdatedAt;
@@ -1549,7 +1634,7 @@ export default function TodayPage() {
 
             const nextStats = {
                 ...(existing || {}),
-                totalMinutes: (existing?.totalMinutes || 0) + 5, // Assume 5 mins per portion per surah for now
+                totalMinutes: (existing?.totalMinutes || 0) + Math.ceil(minutesBySurah[surahId] || 0),
                 lastListened: nowIso
             };
 
@@ -1564,7 +1649,13 @@ export default function TodayPage() {
 
         try {
             await Promise.all([
-                saveListeningProgress(settings.activePart, next, cycles, afterUpdatedAt),
+                saveListeningProgress({
+                    partId: settings.activePart,
+                    lastVerseIndex: afterProgress.lastVerseIndex,
+                    nextStartVerseKey: afterProgress.nextStartVerseKey,
+                    cycles: afterProgress.cycles,
+                    updatedAt: afterUpdatedAt,
+                }),
                 ...statsWrites
             ]);
         } catch (err) {
