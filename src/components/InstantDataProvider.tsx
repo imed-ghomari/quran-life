@@ -45,17 +45,21 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
         const isTodo = pathname === '/todo';
         const isStats = pathname === '/statistics';
         const isSettings = pathname === '/settings';
+        const needsNavMetrics = isDashboard || isTodo || isStats || isSettings || isDocs;
+        const needsMindmaps = needsNavMetrics || isStats;
+        const needsMutashabihat = isDashboard || isTodo || isStats || isSettings;
+        const needsReviewLogs = isDashboard || isStats;
+        const needsListeningStats = isDashboard;
 
         return {
             settings: true, // Needed everywhere
-            nodes: isDashboard || isTodo || isStats,
-            mindMaps: isDashboard || isTodo || isDocs || isSettings,
-            mutashabihat: isDashboard || isTodo,
-            reviewErrors: isDashboard || isTodo,
-            listeningProgress: isDashboard || isTodo || isStats,
-            // These are new candidates for sharing if we want to optimize further
-            listeningStats: isDashboard || isStats,
-            reviewLogs: isDashboard || isStats,
+            nodes: needsNavMetrics,
+            mindMaps: needsMindmaps,
+            mutashabihat: needsMutashabihat,
+            reviewErrors: needsNavMetrics || isStats || isSettings,
+            listeningProgress: needsNavMetrics,
+            listeningStats: needsListeningStats,
+            reviewLogs: needsReviewLogs,
         };
     }, [pathname]);
 
