@@ -31,7 +31,7 @@ import {
     getProgressStartIndexFromEligibleSurahs,
 } from '@/lib/dailyPortionUtils';
 
-import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays } from 'lucide-react';
+import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays, BarChart2, Activity } from 'lucide-react';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
@@ -1479,6 +1479,8 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
     timeRange: '1m' | '3m' | '1y' | 'all';
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
+    const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1488,7 +1490,27 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
                     </div>
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Review Plan</h2>
                 </div>
-                <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <div className="future-due-actions" style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <div className="segmented-compact">
+                        <button
+                            type="button"
+                            onClick={() => setChartType('bar')}
+                            className={`adv-seg-btn ${chartType === 'bar' ? 'adv-seg-active' : ''}`}
+                            title="Bar Chart"
+                            style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <BarChart2 size={15} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setChartType('line')}
+                            className={`adv-seg-btn ${chartType === 'line' ? 'adv-seg-active' : ''}`}
+                            title="Line Chart"
+                            style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <Activity size={15} />
+                        </button>
+                    </div>
                     <div className="segmented-compact">
                         <button type="button" onClick={() => setTimeRange('1m')} className={`adv-seg-btn ${timeRange === '1m' ? 'adv-seg-active' : ''}`}>1m</button>
                         <button type="button" onClick={() => setTimeRange('3m')} className={`adv-seg-btn ${timeRange === '3m' ? 'adv-seg-active' : ''}`}>3m</button>
@@ -1499,8 +1521,306 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
+                {chartType === 'bar' ? (
+                    <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
+                ) : (
+                    <FutureDueLineChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
+                )}
             </div>
+        </div>
+    );
+}
+
+function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePoint[]; minDay: number; maxDay: number; dailyLoad: string }) {
+    const DESKTOP_MAX_X_AXIS_LEGENDS = 6;
+    const MAX_Y_AXIS_LEGENDS = 6;
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [chartWidth, setChartWidth] = useState(0);
+    const gradientSeed = useId();
+    const chartHeight = 210;
+    const padding = { top: 12, right: 28, bottom: 38, left: 36 };
+
+    const bucketedData = useMemo<FutureDueBucket[]>(() => {
+        const nonZeroData = data.filter(d => d.count > 0);
+        if (nonZeroData.length === 0) return [];
+
+        const width = Math.max(320, chartWidth || 0);
+        const isSmallScreen = width <= 480;
+        const isTablet = width > 480 && width <= 900;
+        const maxBars = isSmallScreen ? 12 : isTablet ? 18 : 24;
+        const spanDays = Math.max(1, maxDay - minDay + 1);
+
+        let bucketSize = 1;
+        if (spanDays > 120) {
+            bucketSize = 30;
+        } else if (spanDays > 45) {
+            bucketSize = 7;
+        }
+
+        if (bucketSize === 1) {
+            const visibleDays = Math.max(1, nonZeroData[nonZeroData.length - 1].day - nonZeroData[0].day + 1);
+            if (visibleDays > maxBars) {
+                bucketSize = Math.ceil(visibleDays / maxBars);
+            }
+        }
+
+        const buckets = new Map<number, FutureDueBucket>();
+
+        nonZeroData.forEach(point => {
+            const bucketStart = Math.floor(point.day / bucketSize) * bucketSize;
+            const bucketEnd = bucketStart + bucketSize - 1;
+            const existing = buckets.get(bucketStart);
+            if (existing) {
+                existing.count += point.count;
+                existing.cumulative = point.cumulative;
+                existing.containsToday = existing.containsToday || (point.day >= bucketStart && point.day <= bucketEnd && bucketStart <= 0 && bucketEnd >= 0);
+                return;
+            }
+
+            buckets.set(bucketStart, {
+                startDay: bucketStart,
+                endDay: bucketEnd,
+                label: '',
+                count: point.count,
+                cumulative: point.cumulative,
+                containsToday: bucketStart <= 0 && bucketEnd >= 0,
+            });
+        });
+
+        const formatSingleDayLabel = (day: number) => {
+            if (day === 0) return 'Today';
+            if (day === 1) return '1d';
+            if (day < 0) return `${Math.abs(day)}d ago`;
+            return `${day}d`;
+        };
+
+        const formatRangeLabel = (startDay: number, endDay: number) => {
+            if (startDay === endDay) return formatSingleDayLabel(startDay);
+            if (startDay < 0 && endDay < 0) return `${Math.abs(startDay)}d to ${Math.abs(endDay)}d ago`;
+            if (startDay < 0 && endDay >= 0) {
+                const endStr = endDay === 0 ? 'Today' : formatSingleDayLabel(endDay);
+                return `${Math.abs(startDay)}d ago to ${endStr}`;
+            }
+            if (startDay === 0 && endDay > 0) return `Today to ${formatSingleDayLabel(endDay)}`;
+            return `${formatSingleDayLabel(startDay)} to ${formatSingleDayLabel(endDay)}`;
+        };
+
+        return Array.from(buckets.values())
+            .sort((a, b) => a.startDay - b.startDay)
+            .map(bucket => ({
+                ...bucket,
+                label: formatRangeLabel(bucket.startDay, bucket.endDay),
+            }));
+    }, [chartWidth, data, maxDay, minDay]);
+
+    const maxCount = Math.max(...bucketedData.map(d => d.count), 1);
+    const isSmallRange = maxCount <= 8;
+    const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
+    const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
+    const maxNice = Math.max(1, tickStep * tickCount);
+    const allYTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
+    const yLegendStep = Math.max(1, Math.ceil((allYTicks.length - 1) / Math.max(1, MAX_Y_AXIS_LEGENDS - 1)));
+    const yTicks = allYTicks.filter((_, i) => i % yLegendStep === 0 || i === allYTicks.length - 1);
+
+    const ids = {
+        clip: `reviews-line-clip-${gradientSeed}`,
+        gradient: `reviews-line-grad-${gradientSeed}`,
+    };
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const el = containerRef.current;
+        const update = () => setChartWidth(Math.max(0, Math.floor(el.clientWidth)));
+        update();
+        const ro = new ResizeObserver(() => update());
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    if (data.length === 0 || bucketedData.length === 0) return <ChartEmptyState />;
+
+    return (
+        <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
+            {chartWidth > 0 && (
+                <svg
+                    width={chartWidth}
+                    height={chartHeight}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{ overflow: 'visible', display: 'block', width: '100%', height: chartHeight }}
+                >
+                    <defs>
+                        <clipPath id={ids.clip}>
+                            <rect x={padding.left} y={padding.top} width={chartWidth - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
+                        </clipPath>
+                        <linearGradient id={ids.gradient} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="var(--accent)" stopOpacity="0.3" />
+                            <stop offset="95%" stopColor="var(--accent)" stopOpacity="0.0" />
+                        </linearGradient>
+                    </defs>
+                    {(() => {
+                        const vWidth = chartWidth;
+                        const plotWidth = vWidth - padding.left - padding.right;
+                        const plotHeight = chartHeight - padding.top - padding.bottom;
+                        const span = Math.max(1, bucketedData.length);
+                        const groupWidth = plotWidth * 0.88;
+                        const groupStart = padding.left + (plotWidth - groupWidth) / 2;
+                        const step = groupWidth / (span > 1 ? span - 1 : 1);
+                        const getX = (index: number) => span === 1 ? padding.left + plotWidth / 2 : groupStart + index * step;
+                        const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
+
+                        const isSmallScreen = chartWidth <= 480;
+                        const isTablet = chartWidth > 480 && chartWidth <= 900;
+                        const maxXAxisLegends = isSmallScreen ? 4 : isTablet ? 5 : DESKTOP_MAX_X_AXIS_LEGENDS;
+                        const xAxisFontSize = isSmallScreen ? 9 : 10;
+                        const rotateLabels = step < (isSmallScreen ? 46 : 40);
+                        const dailyLoadValue = Number(dailyLoad);
+                        const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
+
+                        const points = bucketedData.map((d, i) => ({ x: getX(i), y: getYCount(d.count) }));
+
+                        const isTooMuchData = bucketedData.length > 8;
+                        let linePath = "";
+                        if (points.length > 1) {
+                            if (isTooMuchData) {
+                                // Smooth line
+                                linePath = `M ${points[0].x} ${points[0].y}`;
+                                for (let i = 0; i < points.length - 1; i++) {
+                                    const curr = points[i];
+                                    const next = points[i + 1];
+                                    const cp1x = curr.x + (next.x - curr.x) / 2;
+                                    const cp2x = curr.x + (next.x - curr.x) / 2;
+                                    linePath += ` C ${cp1x} ${curr.y}, ${cp2x} ${next.y}, ${next.x} ${next.y}`;
+                                }
+                            } else {
+                                // Straight lines
+                                linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                            }
+                        }
+
+                        const areaPath = points.length > 1
+                            ? `${linePath} L ${points[points.length - 1].x} ${chartHeight - padding.bottom} L ${points[0].x} ${chartHeight - padding.bottom} Z`
+                            : "";
+
+                        // Reuse label logic
+                        const baseLabelStep = Math.max(1, Math.ceil(bucketedData.length / maxXAxisLegends));
+                        const longestLabelLength = Math.max(...bucketedData.map(d => d.label.length), 1);
+                        const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
+                        const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
+                        const labelStep = Math.max(baseLabelStep, minStepForWidth);
+                        const minLabelGapPx = estimatedLabelWidth;
+
+                        const todayIndex = bucketedData.findIndex(d => d.containsToday);
+                        const visibleLabelIndices = new Set<number>();
+                        const canPlaceLabel = (index: number) => {
+                            const x = getX(index);
+                            for (const existingIndex of visibleLabelIndices) {
+                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) return false;
+                            }
+                            return true;
+                        };
+                        const forcePlaceLabel = (index: number) => {
+                            const x = getX(index);
+                            Array.from(visibleLabelIndices).forEach(existingIndex => {
+                                if (Math.abs(x - getX(existingIndex)) < minLabelGapPx) visibleLabelIndices.delete(existingIndex);
+                            });
+                            visibleLabelIndices.add(index);
+                        };
+                        const priorityIndices = [todayIndex, 0, bucketedData.length - 1].filter((idx, pos, arr): idx is number => idx >= 0 && arr.indexOf(idx) === pos);
+                        priorityIndices.forEach(index => {
+                            if (index === todayIndex) { forcePlaceLabel(index); return; }
+                            if (canPlaceLabel(index)) visibleLabelIndices.add(index);
+                        });
+                        bucketedData.forEach((_, i) => {
+                            if (i % labelStep === 0 && !visibleLabelIndices.has(i) && canPlaceLabel(i)) visibleLabelIndices.add(i);
+                        });
+
+                        return (
+                            <>
+                                <rect x={padding.left} y={padding.top} width={plotWidth} height={plotHeight} rx={16} ry={16} fill="var(--reviews-chart-panel)" stroke="none" />
+
+                                <g clipPath={`url(#${ids.clip})`}>
+                                    {showDailyLoadLine && (
+                                        <line
+                                            x1={padding.left}
+                                            y1={getYCount(dailyLoadValue)}
+                                            x2={vWidth - padding.right}
+                                            y2={getYCount(dailyLoadValue)}
+                                            stroke="var(--chart-strong)"
+                                            strokeWidth="1.2"
+                                            strokeDasharray="4 3"
+                                            opacity="0.9"
+                                        />
+                                    )}
+
+                                    {points.length > 1 && (
+                                        <>
+                                            <path d={areaPath} fill={`url(#${ids.gradient})`} opacity="0.6" />
+                                            <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        </>
+                                    )}
+
+                                    {bucketedData.map((d, i) => {
+                                        const x = getX(i);
+                                        const y = getYCount(d.count);
+                                        const reviewLabel = `${d.count} review${d.count === 1 ? '' : 's'}`;
+                                        const tooltip = d.startDay === d.endDay ? reviewLabel : `${reviewLabel} (${d.label})`;
+                                        return (
+                                            <g key={i}>
+                                                {/* Transparent larger circle for easier hovering */}
+                                                <circle
+                                                    cx={x}
+                                                    cy={y}
+                                                    r={10}
+                                                    fill="transparent"
+                                                    data-tooltip={tooltip}
+                                                    data-tooltip-trigger="tap"
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                                <circle
+                                                    cx={x}
+                                                    cy={y}
+                                                    r={4}
+                                                    fill="var(--background)"
+                                                    stroke="var(--accent)"
+                                                    strokeWidth="2"
+                                                    pointerEvents="none"
+                                                />
+                                            </g>
+                                        );
+                                    })}
+                                </g>
+
+                                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={vWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.5" />
+                                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.35" />
+
+                                {yTicks.map((val, i) => (
+                                    <text key={i} x={padding.left - 8} y={getYCount(val) + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{val}</text>
+                                ))}
+
+                                {bucketedData.map((d, i) => {
+                                    if (!visibleLabelIndices.has(i)) return null;
+                                    const x = getX(i);
+                                    const y = chartHeight - padding.bottom + 18;
+                                    return (
+                                        <text
+                                            key={`label-${i}`}
+                                            x={x}
+                                            y={y}
+                                            textAnchor="middle"
+                                            fontSize={xAxisFontSize}
+                                            fill="var(--foreground-secondary)"
+                                            transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
+                                        >
+                                            {d.label}
+                                        </text>
+                                    );
+                                })}
+                            </>
+                        );
+                    })()}
+                </svg>
+            )}
         </div>
     );
 }
