@@ -666,7 +666,7 @@ export default function StatisticsPage() {
             return anchors.some((a: any) => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
         };
 
-        const nodes = memoryNodes.filter(node => {
+        const reviewPlanNodes = memoryNodes.filter(node => {
             if (node.type !== 'verse_segment' && node.type !== 'mindmap' && node.type !== 'part_mindmap') return false;
 
             if (node.type === 'part_mindmap') {
@@ -693,6 +693,8 @@ export default function StatisticsPage() {
             return hasAnchorForNode(node);
         });
 
+        const nodes = reviewPlanNodes.filter(node => hasNodeBeenReviewed(node.scheduler));
+
         const allDayCounts: Record<number, number> = {};
         let totalReviews = 0;
         let totalFutureReviews = 0;
@@ -702,7 +704,6 @@ export default function StatisticsPage() {
         nodes.forEach(node => {
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return;
-            if (!hasNodeBeenReviewed(node.scheduler)) return;
             const dueDate = new Date(dueStr);
             if (isNaN(dueDate.getTime())) return;
             dueDate.setHours(0, 0, 0, 0);
