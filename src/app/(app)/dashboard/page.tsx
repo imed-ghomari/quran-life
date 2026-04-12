@@ -20,6 +20,7 @@ import {
     ListeningProgressEntry,
     getNodeDueDate,
     hasNodeBeenReviewed,
+    ACTIVE_PART_OPTIONS,
 } from '@/lib/types';
 import {
     CheckCircle,
@@ -1061,6 +1062,32 @@ export default function TodayPage() {
 
 
     // Calculate today's portion (preserve per-part listening progress)
+    const eligibleSurahs = useMemo(() => {
+        if (!settings || !nodes) return [];
+        return getEligibleDailyPortionSurahs(
+            settings.activePart,
+            settings.skippedSurahs,
+            nodes,
+        );
+    }, [settings, nodes]);
+
+    const otherPartsWithContent = useMemo(() => {
+        if (!settings || !nodes) return [];
+        return ACTIVE_PART_OPTIONS.filter(opt => {
+            if (opt.id === settings.activePart) return false;
+            const eligible = getEligibleDailyPortionSurahs(opt.id, settings.skippedSurahs, nodes);
+            return eligible.length > 0;
+        });
+    }, [settings, nodes]);
+
+    const handleSwitchPart = useCallback((partId: QuranPart) => {
+        if (!settings) return;
+        void saveSettings({ activePart: partId }).then(() => {
+            setListeningComplete(false);
+            addToast('success', `Switched to ${ACTIVE_PART_OPTIONS.find(o => o.id === partId)?.name}`, 'Daily portion updated.');
+        });
+    }, [settings, saveSettings, addToast]);
+
     const portionData = useMemo(() => {
         if (allVerses.length === 0 || !settings) {
             return {
@@ -1076,11 +1103,6 @@ export default function TodayPage() {
             };
         }
 
-        const eligibleSurahs = getEligibleDailyPortionSurahs(
-            settings.activePart,
-            settings.skippedSurahs,
-            nodes,
-        );
         if (eligibleSurahs.length === 0) {
             return {
                 portion: [],
@@ -1137,7 +1159,7 @@ export default function TodayPage() {
             snappedMinutes: portionResult.snappedMinutes,
             lastUpdateAt: partProgress?.updatedAt
         };
-    }, [allVerses, averageSecondsPerWordBySurah, nodes, settings, resolveActivePartProgress]);
+    }, [allVerses, averageSecondsPerWordBySurah, nodes, settings, resolveActivePartProgress, eligibleSurahs]);
 
     useEffect(() => {
         if (!settings) return;
@@ -2611,8 +2633,55 @@ export default function TodayPage() {
 
                     {viewState.dailyExpanded && (
                         <div className="daily-section-content">
-                            {listeningComplete ? (
-                                <div className="empty-state"><CheckCircle size={40} className="empty-icon" /><p>Daily portion complete!</p></div>
+                            {listeningComplete || eligibleSurahs.length === 0 ? (
+                                <div className="empty-state">
+                                    {listeningComplete ? (
+                                        <>
+                                            <CheckCircle size={40} className="empty-icon" />
+                                            <p>Daily portion complete!</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BookOpen size={40} className="empty-icon" style={{ opacity: 0.5 }} />
+                                            <p>No more surahs left in this part.</p>
+                                        </>
+                                    )}
+
+                                    {otherPartsWithContent.length > 0 ? (
+                                        <div className="switch-part-section" style={{ marginTop: '1.5rem', width: '100%', maxWidth: '280px' }}>
+                                            <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontWeight: 500 }}>
+                                                {listeningComplete ? "Want to work on another part?" : "Switch to another part to continue:"}
+                                            </p>
+                                            <div className="select-wrapper" style={{ position: 'relative' }}>
+                                                <select
+                                                    className="std-select"
+                                                    onChange={(e) => handleSwitchPart(Number(e.target.value) as QuranPart)}
+                                                    value={settings?.activePart}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.75rem 1rem',
+                                                        borderRadius: '12px',
+                                                        background: 'var(--background-secondary)',
+                                                        border: '1px solid var(--border)',
+                                                        color: 'var(--foreground)',
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 600,
+                                                        appearance: 'none',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <option value={settings?.activePart} disabled>Select a part...</option>
+                                                    {otherPartsWithContent.map(opt => (
+                                                        <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                                    ))}
+                                                </select>
+                                                <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--foreground-secondary)' }}>
+                                                    <ChevronDown size={16} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
                             ) : (
                                 <>
                                     <div className={`today-card-content ${readOnlyMode ? 'today-card-content--read' : 'today-card-content--audio'}`}>
