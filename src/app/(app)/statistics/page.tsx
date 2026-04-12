@@ -31,7 +31,7 @@ import {
     getProgressStartIndexFromEligibleSurahs,
 } from '@/lib/dailyPortionUtils';
 
-import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays, BarChart2, Activity } from 'lucide-react';
+import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays } from 'lucide-react';
 
 type MaturityBucket = 'new' | 'medium' | 'strong' | 'mastered';
 
@@ -717,7 +717,7 @@ export default function StatisticsPage() {
             dueDate.setHours(0, 0, 0, 0);
 
             const diffTime = dueDate.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
             if (!Number.isFinite(diffDays)) return;
 
             if (diffDays < 0) {
@@ -1479,8 +1479,6 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
     timeRange: '1m' | '3m' | '1y' | 'all';
     setTimeRange: (v: '1m' | '3m' | '1y' | 'all') => void;
 }) {
-    const [chartType, setChartType] = useState<'bar' | 'line'>('line');
-
     return (
         <div className="card modern-card" style={{ width: '100%', background: 'var(--background-secondary)' }}>
             <div className="future-due-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1492,26 +1490,6 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
                 </div>
                 <div className="future-due-actions" style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
                     <div className="segmented-compact">
-                        <button
-                            type="button"
-                            onClick={() => setChartType('bar')}
-                            className={`adv-seg-btn ${chartType === 'bar' ? 'adv-seg-active' : ''}`}
-                            title="Bar Chart"
-                            style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                            <BarChart2 size={15} />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setChartType('line')}
-                            className={`adv-seg-btn ${chartType === 'line' ? 'adv-seg-active' : ''}`}
-                            title="Line Chart"
-                            style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                            <Activity size={15} />
-                        </button>
-                    </div>
-                    <div className="segmented-compact">
                         <button type="button" onClick={() => setTimeRange('1m')} className={`adv-seg-btn ${timeRange === '1m' ? 'adv-seg-active' : ''}`}>1m</button>
                         <button type="button" onClick={() => setTimeRange('3m')} className={`adv-seg-btn ${timeRange === '3m' ? 'adv-seg-active' : ''}`}>3m</button>
                         <button type="button" onClick={() => setTimeRange('1y')} className={`adv-seg-btn ${timeRange === '1y' ? 'adv-seg-active' : ''}`}>1y</button>
@@ -1521,247 +1499,8 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {chartType === 'bar' ? (
-                    <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
-                ) : (
-                    <FutureDueLineChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
-                )}
+                <FutureDueChart data={stats.data} minDay={stats.minDay} maxDay={stats.maxDay} dailyLoad={stats.dailyLoad} />
             </div>
-        </div>
-    );
-}
-
-function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePoint[]; minDay: number; maxDay: number; dailyLoad: string }) {
-    const DESKTOP_MAX_X_AXIS_LEGENDS = 7;
-    const MAX_Y_AXIS_LEGENDS = 6;
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const [chartWidth, setChartWidth] = useState(0);
-    const gradientSeed = useId();
-    const chartHeight = 210;
-    const padding = { top: 12, right: 34, bottom: 38, left: 36 };
-
-    const maxCount = Math.max(...data.map(d => d.count), 1);
-    const isSmallRange = maxCount <= 8;
-    const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
-    const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
-    const maxNice = Math.max(1, tickStep * tickCount);
-    const allYTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickStep);
-    const yLegendStep = Math.max(1, Math.ceil((allYTicks.length - 1) / Math.max(1, MAX_Y_AXIS_LEGENDS - 1)));
-    const yTicks = allYTicks.filter((_, i) => i % yLegendStep === 0 || i === allYTicks.length - 1);
-
-    const ids = {
-        clip: `reviews-line-clip-${gradientSeed}`,
-        gradient: `reviews-line-grad-${gradientSeed}`,
-    };
-
-    useEffect(() => {
-        if (!containerRef.current) return;
-        const el = containerRef.current;
-        const update = () => setChartWidth(Math.max(0, Math.floor(el.clientWidth)));
-        update();
-        const ro = new ResizeObserver(() => update());
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
-
-    if (data.length === 0) return <ChartEmptyState />;
-
-    return (
-        <div ref={containerRef} className="reviews-chart" style={{ width: '100%', height: chartHeight, position: 'relative' }}>
-            {chartWidth > 0 && (
-                <svg
-                    width={chartWidth}
-                    height={chartHeight}
-                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                    preserveAspectRatio="xMidYMid meet"
-                    style={{ overflow: 'visible', display: 'block', width: '100%', height: chartHeight }}
-                >
-                    <defs>
-                        <clipPath id={ids.clip}>
-                            <rect x={padding.left} y={padding.top} width={chartWidth - padding.left - padding.right} height={chartHeight - padding.top - padding.bottom} rx="16" ry="16" />
-                        </clipPath>
-                        <linearGradient id={ids.gradient} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="var(--accent)" stopOpacity="0.25" />
-                            <stop offset="95%" stopColor="var(--accent)" stopOpacity="0.0" />
-                        </linearGradient>
-                    </defs>
-                    {(() => {
-                        const vWidth = chartWidth;
-                        const plotWidth = vWidth - padding.left - padding.right;
-                        const plotHeight = chartHeight - padding.top - padding.bottom;
-                        const span = Math.max(1, maxDay - minDay + 1);
-                        const getX = (day: number) => padding.left + ((day - minDay) / (span - 1 || 1)) * plotWidth;
-                        const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
-
-                        const isSmallScreen = chartWidth <= 480;
-                        const isTablet = chartWidth > 480 && chartWidth <= 900;
-                        const maxXAxisLegends = isSmallScreen ? 4 : isTablet ? 5 : DESKTOP_MAX_X_AXIS_LEGENDS;
-                        const xAxisFontSize = isSmallScreen ? 9 : 10;
-                        const dailyLoadValue = Number(dailyLoad);
-                        const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 0.5;
-
-                        const points = data.map(d => ({ x: getX(d.day), y: getYCount(d.count), day: d.day, count: d.count }));
-
-                        const isTooMuchData = data.length > 20;
-                        let linePath = "";
-                        if (points.length > 1) {
-                            if (isTooMuchData) {
-                                // Smooth line
-                                linePath = `M ${points[0].x} ${points[0].y}`;
-                                for (let i = 0; i < points.length - 1; i++) {
-                                    const curr = points[i];
-                                    const next = points[i + 1];
-                                    const cp1x = curr.x + (next.x - curr.x) / 2.5;
-                                    const cp2x = next.x - (next.x - curr.x) / 2.5;
-                                    linePath += ` C ${cp1x} ${curr.y}, ${cp2x} ${next.y}, ${next.x} ${next.y}`;
-                                }
-                            } else {
-                                // Straight lines
-                                linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                            }
-                        }
-
-                        const areaPath = points.length > 1
-                            ? `${linePath} L ${getX(maxDay)} ${chartHeight - padding.bottom} L ${getX(minDay)} ${chartHeight - padding.bottom} Z`
-                            : "";
-
-                        // Today vertical reference line
-                        const todayX = getX(0);
-                        const showTodayLine = todayX >= padding.left && todayX <= vWidth - padding.right;
-
-                        // X-axis labeling logic
-                        const formatDayLabel = (day: number) => {
-                            if (day === 0) return 'Today';
-                            if (day > 0) return `+${day}d`;
-                            return `${Math.abs(day)}d ago`;
-                        };
-
-                        const labelIndices = new Set<number>();
-                        const todayIndex = data.findIndex(d => d.day === 0);
-                        const startIdx = 0;
-                        const endIdx = data.length - 1;
-
-                        if (todayIndex !== -1) labelIndices.add(todayIndex);
-                        labelIndices.add(startIdx);
-                        labelIndices.add(endIdx);
-
-                        const labelStep = Math.max(1, Math.ceil(data.length / maxXAxisLegends));
-                        for (let i = 0; i < data.length; i += labelStep) {
-                            labelIndices.add(i);
-                        }
-
-                        const visibleLabels = Array.from(labelIndices)
-                            .sort((a, b) => a - b)
-                            .filter((idx, i, arr) => {
-                                if (i === 0) return true;
-                                const prevIdx = arr[i - 1];
-                                const dist = getX(data[idx].day) - getX(data[prevIdx].day);
-                                return dist > (isSmallScreen ? 40 : 50);
-                            });
-
-                        return (
-                            <>
-                                <rect x={padding.left} y={padding.top} width={plotWidth} height={plotHeight} rx={16} ry={16} fill="var(--reviews-chart-panel)" stroke="none" />
-
-                                <g clipPath={`url(#${ids.clip})`}>
-                                    {showTodayLine && (
-                                        <line x1={todayX} y1={padding.top} x2={todayX} y2={chartHeight - padding.bottom} stroke="var(--foreground)" strokeWidth="1" strokeDasharray="3 3" opacity="0.1" />
-                                    )}
-
-                                    {showDailyLoadLine && (
-                                        <g>
-                                            <line
-                                                x1={padding.left}
-                                                y1={getYCount(dailyLoadValue)}
-                                                x2={vWidth - padding.right}
-                                                y2={getYCount(dailyLoadValue)}
-                                                stroke="var(--chart-strong)"
-                                                strokeWidth="1.5"
-                                                strokeDasharray="5 4"
-                                                opacity="0.8"
-                                            />
-                                            <text
-                                                x={vWidth - padding.right - 6}
-                                                y={Math.max(padding.top + 10, getYCount(dailyLoadValue) - 6)}
-                                                textAnchor="end"
-                                                fontSize="8"
-                                                fontWeight="700"
-                                                fill="var(--chart-strong)"
-                                                opacity="0.9"
-                                            >
-                                                Avg Load: {dailyLoad}
-                                            </text>
-                                        </g>
-                                    )}
-
-                                    {points.length > 1 && (
-                                        <>
-                                            <path d={areaPath} fill={`url(#${ids.gradient})`} opacity="0.6" />
-                                            <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                        </>
-                                    )}
-
-                                    {points.map((p, i) => {
-                                        const isToday = p.day === 0;
-                                        const showCircle = points.length < 40 || i === 0 || i === points.length - 1 || isToday;
-                                        const tooltip = `${p.count} review${p.count === 1 ? '' : 's'} (${formatDayLabel(p.day)})`;
-                                        return (
-                                            <g key={i}>
-                                                <circle
-                                                    cx={p.x}
-                                                    cy={p.y}
-                                                    r={points.length > 60 ? 4 : 10}
-                                                    fill="transparent"
-                                                    data-tooltip={tooltip}
-                                                    data-tooltip-trigger="tap"
-                                                    style={{ cursor: 'pointer' }}
-                                                />
-                                                {showCircle && (
-                                                    <circle
-                                                        cx={p.x}
-                                                        cy={p.y}
-                                                        r={isToday ? 4.5 : 3.5}
-                                                        fill={isToday ? "var(--accent)" : "var(--background)"}
-                                                        stroke="var(--accent)"
-                                                        strokeWidth={isToday ? 0 : 2}
-                                                        pointerEvents="none"
-                                                    />
-                                                )}
-                                            </g>
-                                        );
-                                    })}
-                                </g>
-
-                                <line x1={padding.left} y1={chartHeight - padding.bottom} x2={vWidth - padding.right} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.5" />
-                                <line x1={padding.left} y1={padding.top} x2={padding.left} y2={chartHeight - padding.bottom} stroke="var(--border)" opacity="0.35" />
-
-                                {yTicks.map((val, i) => (
-                                    <text key={i} x={padding.left - 8} y={getYCount(val) + 4} textAnchor="end" fontSize="9" fill="var(--foreground-secondary)">{val}</text>
-                                ))}
-
-                                {visibleLabels.map((idx) => {
-                                    const d = data[idx];
-                                    const x = getX(d.day);
-                                    const y = chartHeight - padding.bottom + 18;
-                                    return (
-                                        <text
-                                            key={`label-${idx}`}
-                                            x={x}
-                                            y={y}
-                                            textAnchor="middle"
-                                            fontSize={xAxisFontSize}
-                                            fill={d.day === 0 ? "var(--foreground)" : "var(--foreground-secondary)"}
-                                            fontWeight={d.day === 0 ? "700" : "normal"}
-                                        >
-                                            {formatDayLabel(d.day)}
-                                        </text>
-                                    );
-                                })}
-                            </>
-                        );
-                    })()}
-                </svg>
-            )}
         </div>
     );
 }
@@ -1782,7 +1521,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
         const width = Math.max(320, chartWidth || 0);
         const isSmallScreen = width <= 480;
         const isTablet = width > 480 && width <= 900;
-        const maxBars = isSmallScreen ? 16 : isTablet ? 24 : 32;
+        const maxBars = isSmallScreen ? 12 : isTablet ? 18 : 32;
         const spanDays = Math.max(1, maxDay - minDay + 1);
 
         let bucketSize = 1;
@@ -1792,11 +1531,8 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
             bucketSize = 7;
         }
 
-        if (bucketSize === 1) {
-            const visibleDays = Math.max(1, nonZeroData[nonZeroData.length - 1].day - nonZeroData[0].day + 1);
-            if (visibleDays > maxBars) {
-                bucketSize = Math.ceil(visibleDays / maxBars);
-            }
+        if (bucketSize === 1 && spanDays > maxBars) {
+            bucketSize = Math.ceil(spanDays / maxBars);
         }
 
         const buckets = new Map<number, FutureDueBucket>();
@@ -1830,10 +1566,6 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
 
         const formatRangeLabel = (startDay: number, endDay: number) => {
             if (startDay === endDay) return formatSingleDayLabel(startDay);
-            // Even for ranges, use specific day markers for clarity if it's small buckets
-            if (endDay - startDay < 7) {
-                return formatSingleDayLabel(startDay);
-            }
             return `${formatSingleDayLabel(startDay)} to ${formatSingleDayLabel(endDay)}`;
         };
 
@@ -2003,18 +1735,10 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
                                                 strokeWidth="1.5"
                                                 strokeDasharray="5 4"
                                                 opacity="0.8"
+                                                data-tooltip={`Avg Load: ${dailyLoad}`}
+                                                data-tooltip-trigger="tap"
+                                                style={{ cursor: 'help' }}
                                             />
-                                            <text
-                                                x={vWidth - padding.right - 4}
-                                                y={getYCount(dailyLoadValue) - 6}
-                                                textAnchor="end"
-                                                fontSize="8"
-                                                fontWeight="700"
-                                                fill="var(--chart-strong)"
-                                                opacity="0.9"
-                                            >
-                                                Avg Load: {dailyLoad}
-                                            </text>
                                         </g>
                                     )}
                                     {/* Bars */}
