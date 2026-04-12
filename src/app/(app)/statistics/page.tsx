@@ -1598,15 +1598,15 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                         const maxXAxisLegends = isSmallScreen ? 4 : isTablet ? 5 : DESKTOP_MAX_X_AXIS_LEGENDS;
                         const xAxisFontSize = isSmallScreen ? 9 : 10;
                         const dailyLoadValue = Number(dailyLoad);
-                        const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
+                        const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 0.5;
 
                         const points = data.map(d => ({ x: getX(d.day), y: getYCount(d.count), day: d.day, count: d.count }));
 
-                        const isTooMuchData = data.length > 15;
+                        const isTooMuchData = data.length > 20;
                         let linePath = "";
                         if (points.length > 1) {
                             if (isTooMuchData) {
-                                // Smooth line using Catmull-Rom or similar approximation
+                                // Smooth line
                                 linePath = `M ${points[0].x} ${points[0].y}`;
                                 for (let i = 0; i < points.length - 1; i++) {
                                     const curr = points[i];
@@ -1625,7 +1625,11 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                             ? `${linePath} L ${getX(maxDay)} ${chartHeight - padding.bottom} L ${getX(minDay)} ${chartHeight - padding.bottom} Z`
                             : "";
 
-                        // X-axis labeling logic (meaningful day markers)
+                        // Today vertical reference line
+                        const todayX = getX(0);
+                        const showTodayLine = todayX >= padding.left && todayX <= vWidth - padding.right;
+
+                        // X-axis labeling logic
                         const formatDayLabel = (day: number) => {
                             if (day === 0) return 'Today';
                             if (day > 0) return `+${day}d`;
@@ -1641,7 +1645,6 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                         labelIndices.add(startIdx);
                         labelIndices.add(endIdx);
 
-                        // Fill in more labels if space allows
                         const labelStep = Math.max(1, Math.ceil(data.length / maxXAxisLegends));
                         for (let i = 0; i < data.length; i += labelStep) {
                             labelIndices.add(i);
@@ -1650,11 +1653,10 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                         const visibleLabels = Array.from(labelIndices)
                             .sort((a, b) => a - b)
                             .filter((idx, i, arr) => {
-                                // Avoid overlapping labels
                                 if (i === 0) return true;
                                 const prevIdx = arr[i - 1];
                                 const dist = getX(data[idx].day) - getX(data[prevIdx].day);
-                                return dist > 45; // Minimum 45px gap
+                                return dist > (isSmallScreen ? 40 : 50);
                             });
 
                         return (
@@ -1662,6 +1664,10 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                 <rect x={padding.left} y={padding.top} width={plotWidth} height={plotHeight} rx={16} ry={16} fill="var(--reviews-chart-panel)" stroke="none" />
 
                                 <g clipPath={`url(#${ids.clip})`}>
+                                    {showTodayLine && (
+                                        <line x1={todayX} y1={padding.top} x2={todayX} y2={chartHeight - padding.bottom} stroke="var(--foreground)" strokeWidth="1" strokeDasharray="3 3" opacity="0.1" />
+                                    )}
+
                                     {showDailyLoadLine && (
                                         <g>
                                             <line
@@ -1674,10 +1680,9 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                                 strokeDasharray="5 4"
                                                 opacity="0.8"
                                             />
-                                            {/* Label for daily load on the right side of the line */}
                                             <text
-                                                x={vWidth - padding.right - 4}
-                                                y={getYCount(dailyLoadValue) - 6}
+                                                x={vWidth - padding.right - 6}
+                                                y={Math.max(padding.top + 10, getYCount(dailyLoadValue) - 6)}
                                                 textAnchor="end"
                                                 fontSize="8"
                                                 fontWeight="700"
@@ -1696,13 +1701,12 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                         </>
                                     )}
 
-                                    {/* Only render points if there aren't too many, otherwise it's cluttered. details on hover. */}
                                     {points.map((p, i) => {
-                                        const showCircle = points.length < 40 || i === 0 || i === points.length - 1 || p.day === 0;
+                                        const isToday = p.day === 0;
+                                        const showCircle = points.length < 40 || i === 0 || i === points.length - 1 || isToday;
                                         const tooltip = `${p.count} review${p.count === 1 ? '' : 's'} (${formatDayLabel(p.day)})`;
                                         return (
                                             <g key={i}>
-                                                {/* Transparent larger circle for easier hovering */}
                                                 <circle
                                                     cx={p.x}
                                                     cy={p.y}
@@ -1716,10 +1720,10 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                                     <circle
                                                         cx={p.x}
                                                         cy={p.y}
-                                                        r={3.5}
-                                                        fill="var(--background)"
+                                                        r={isToday ? 4.5 : 3.5}
+                                                        fill={isToday ? "var(--accent)" : "var(--background)"}
                                                         stroke="var(--accent)"
-                                                        strokeWidth="2"
+                                                        strokeWidth={isToday ? 0 : 2}
                                                         pointerEvents="none"
                                                     />
                                                 )}
@@ -1746,7 +1750,7 @@ function FutureDueLineChart({ data, minDay, maxDay, dailyLoad }: { data: FutureD
                                             y={y}
                                             textAnchor="middle"
                                             fontSize={xAxisFontSize}
-                                            fill="var(--foreground-secondary)"
+                                            fill={d.day === 0 ? "var(--foreground)" : "var(--foreground-secondary)"}
                                             fontWeight={d.day === 0 ? "700" : "normal"}
                                         >
                                             {formatDayLabel(d.day)}
@@ -1778,13 +1782,13 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
         const width = Math.max(320, chartWidth || 0);
         const isSmallScreen = width <= 480;
         const isTablet = width > 480 && width <= 900;
-        const maxBars = isSmallScreen ? 12 : isTablet ? 18 : 24;
+        const maxBars = isSmallScreen ? 16 : isTablet ? 24 : 32;
         const spanDays = Math.max(1, maxDay - minDay + 1);
 
         let bucketSize = 1;
-        if (spanDays > 120) {
+        if (spanDays > 180) { // 1y or All
             bucketSize = 30;
-        } else if (spanDays > 45) {
+        } else if (spanDays > 60) { // 3m
             bucketSize = 7;
         }
 
@@ -1820,31 +1824,16 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
 
         const formatSingleDayLabel = (day: number) => {
             if (day === 0) return 'Today';
-            if (day === 1) return '1d';
-            if (day < 0) return `${Math.abs(day)}d ago`;
-            return `${day}d`;
+            if (day > 0) return `+${day}d`;
+            return `${Math.abs(day)}d ago`;
         };
 
         const formatRangeLabel = (startDay: number, endDay: number) => {
             if (startDay === endDay) return formatSingleDayLabel(startDay);
-
-            // Overdue range (both negative)
-            if (startDay < 0 && endDay < 0) {
-                return `${Math.abs(startDay)}d to ${Math.abs(endDay)}d ago`;
+            // Even for ranges, use specific day markers for clarity if it's small buckets
+            if (endDay - startDay < 7) {
+                return formatSingleDayLabel(startDay);
             }
-
-            // Range including Today
-            if (startDay < 0 && endDay >= 0) {
-                const endStr = endDay === 0 ? 'Today' : formatSingleDayLabel(endDay);
-                return `${Math.abs(startDay)}d ago to ${endStr}`;
-            }
-
-            // Future range starting from Today
-            if (startDay === 0 && endDay > 0) {
-                return `Today to ${formatSingleDayLabel(endDay)}`;
-            }
-
-            // Future range (both positive)
             return `${formatSingleDayLabel(startDay)} to ${formatSingleDayLabel(endDay)}`;
         };
 
@@ -2004,18 +1993,29 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
 
                                 <g clipPath={`url(#${ids.clip})`}>
                                     {showDailyLoadLine && (
-                                        <>
+                                        <g>
                                             <line
                                                 x1={padding.left}
                                                 y1={getYCount(dailyLoadValue)}
                                                 x2={vWidth - padding.right}
                                                 y2={getYCount(dailyLoadValue)}
                                                 stroke="var(--chart-strong)"
-                                                strokeWidth="1.2"
-                                                strokeDasharray="4 3"
-                                                opacity="0.9"
+                                                strokeWidth="1.5"
+                                                strokeDasharray="5 4"
+                                                opacity="0.8"
                                             />
-                                        </>
+                                            <text
+                                                x={vWidth - padding.right - 4}
+                                                y={getYCount(dailyLoadValue) - 6}
+                                                textAnchor="end"
+                                                fontSize="8"
+                                                fontWeight="700"
+                                                fill="var(--chart-strong)"
+                                                opacity="0.9"
+                                            >
+                                                Avg Load: {dailyLoad}
+                                            </text>
+                                        </g>
                                     )}
                                     {/* Bars */}
                                     {bucketedData.map((d, i) => {
@@ -2077,6 +2077,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePo
                                             fontSize={xAxisFontSize}
                                             fill="var(--foreground-secondary)"
                                             transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
+                                            fontWeight={d.containsToday ? "700" : "normal"}
                                         >
                                             {d.label}
                                         </text>
