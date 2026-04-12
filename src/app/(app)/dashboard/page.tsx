@@ -2198,13 +2198,13 @@ export default function TodayPage() {
     const dailyPortionSurahGroups = useMemo(() => groupVersesBySurah(todaysPortion), [todaysPortion]);
     const isReviewQueueHydrating = !hasHydratedReviewQueue;
     const showReviewFreshnessPill = !isReviewQueueHydrating && orderedDueNodes.length > 0;
-    const newReviewTooltip = `New review items remaining: ${reviewQueueFreshness.newRemaining} of ${reviewQueueFreshness.newTotal}`;
-    const oldReviewTooltip = `Old review items remaining: ${reviewQueueFreshness.oldRemaining} of ${reviewQueueFreshness.oldTotal}`;
+    const newReviewTooltip = `New review items: ${reviewQueueFreshness.newTotal} (${reviewQueueFreshness.newRemaining} remaining in session)`;
+    const oldReviewTooltip = `Old review items: ${reviewQueueFreshness.oldTotal} (${reviewQueueFreshness.oldRemaining} remaining in session)`;
     const reviewFreshnessPill = showReviewFreshnessPill ? (
         <span
             className="review-header-pill"
             role="status"
-            aria-label={`New reviews left: ${reviewQueueFreshness.newRemaining}. Old reviews left: ${reviewQueueFreshness.oldRemaining}.`}
+            aria-label={`New reviews: ${reviewQueueFreshness.newTotal}. Old reviews: ${reviewQueueFreshness.oldTotal}.`}
         >
             <span
                 className={`review-header-pill__segment review-header-pill__segment--new${reviewQueueFreshness.currentCategory === 'new' ? ' is-current' : ''}`}
@@ -2215,7 +2215,7 @@ export default function TodayPage() {
                 tabIndex={0}
             >
                 <span className="review-header-pill__label">New</span>
-                <span className="review-header-pill__count">{reviewQueueFreshness.newRemaining}</span>
+                <span className="review-header-pill__count">{reviewQueueFreshness.newTotal}</span>
             </span>
             <span className="review-header-pill__divider" aria-hidden="true" />
             <span
@@ -2227,7 +2227,7 @@ export default function TodayPage() {
                 tabIndex={0}
             >
                 <span className="review-header-pill__label">Old</span>
-                <span className="review-header-pill__count">{reviewQueueFreshness.oldRemaining}</span>
+                <span className="review-header-pill__count">{reviewQueueFreshness.oldTotal}</span>
             </span>
         </span>
     ) : null;
