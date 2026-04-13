@@ -178,6 +178,7 @@ export type CombinedDataRequirements = {
     settings?: boolean;
     nodes?: boolean;
     mindMaps?: boolean;
+    mindMapSnapshots?: boolean;
     mutashabihat?: boolean;
     reviewErrors?: boolean;
     listeningProgress?: boolean;
@@ -198,18 +199,23 @@ export function useCombinedInstantData(requirements?: CombinedDataRequirements) 
             q.memoryNodes = { $: { where: { userId } } };
         }
         if (requirements?.mindMaps) {
+            const shouldFetchMindMapSnapshots = requirements?.mindMapSnapshots === true;
             q.mindMaps = {
                 $: {
                     where: { userId },
-                    // Explicitly select fields to avoid over-fetching tldrawSnapshot
-                    fields: ['surahId', 'imageUrl', 'imageUrlDark', 'anchors', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
+                    ...(shouldFetchMindMapSnapshots ? {} : {
+                        // Keep docs/statistics lean where the full snapshot is not needed.
+                        fields: ['id', 'surahId', 'imageUrl', 'imageUrlDark', 'anchors', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
+                    }),
                 },
             };
             q.partMindMaps = {
                 $: {
                     where: { userId },
-                    // Explicitly select fields to avoid over-fetching tldrawSnapshot
-                    fields: ['partId', 'imageUrl', 'imageUrlDark', 'description', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
+                    ...(shouldFetchMindMapSnapshots ? {} : {
+                        // Keep docs/statistics lean where the full snapshot is not needed.
+                        fields: ['id', 'partId', 'imageUrl', 'imageUrlDark', 'description', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
+                    }),
                 },
             };
         }

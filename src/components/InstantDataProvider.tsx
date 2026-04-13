@@ -47,6 +47,7 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
         const isSettings = pathname === '/settings';
         const needsNavMetrics = isDashboard || isTodo || isStats || isSettings || isDocs;
         const needsMindmaps = needsNavMetrics || isStats;
+        const needsMindmapSnapshots = isDashboard || isTodo || isSettings;
         const needsMutashabihat = isDashboard || isTodo || isStats || isSettings;
         const needsReviewLogs = isDashboard || isStats;
         const needsListeningStats = isDashboard;
@@ -55,6 +56,7 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
             settings: true, // Needed everywhere
             nodes: needsNavMetrics,
             mindMaps: needsMindmaps,
+            mindMapSnapshots: needsMindmapSnapshots,
             mutashabihat: needsMutashabihat,
             reviewErrors: needsNavMetrics || isStats || isSettings,
             listeningProgress: needsNavMetrics,
