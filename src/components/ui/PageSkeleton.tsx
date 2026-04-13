@@ -1,5 +1,6 @@
 import React from 'react';
 import ProgressLoader from './ProgressLoader';
+import Spinner from './Spinner';
 
 interface PageSkeletonProps {
     type?: 'mindmap' | 'generic';
@@ -21,17 +22,10 @@ export default function PageSkeleton({ type = 'generic', text }: PageSkeletonPro
         );
     }
 
-    // For everything else, a centered linear progress bar with full-page container
+    // For everything else, use the same spinner treatment as route transitions.
     return (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--background)] z-[100] px-6">
-            <div className="w-full max-w-sm space-y-6">
-                <div className="progress-bar-linear">
-                    <div className="progress-bar-linear-inner" />
-                </div>
-                <p className="text-xs font-bold text-[var(--foreground-secondary)] text-center tracking-[0.2em] uppercase opacity-80">
-                    {loadingText}
-                </p>
-            </div>
+            <Spinner size={24} text={loadingText} />
         </div>
     );
 }
