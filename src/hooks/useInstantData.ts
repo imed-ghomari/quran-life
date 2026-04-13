@@ -135,11 +135,6 @@ const isInstantAlreadyExistingCreateError = (error: unknown) => {
     return message.includes('Creating entities that already exist');
 };
 
-const hasPrefetchedCollection = (externalData: unknown, key: string) =>
-    !!externalData
-    && typeof externalData === 'object'
-    && Object.prototype.hasOwnProperty.call(externalData, key);
-
 const memoryNodeLogicalKey = (node: MemoryNode) => {
     if (node.type === 'mindmap') {
         const surahId = node.surahId ?? parseMindmapSurahFromTarget(node.targetId);
@@ -172,103 +167,18 @@ const getNodeFreshnessScore = (node: MemoryNode) => {
 };
 
 // ==========================================
-// Combined Data Hook
-// ==========================================
-export type CombinedDataRequirements = {
-    settings?: boolean;
-    nodes?: boolean;
-    mindMaps?: boolean;
-    mindMapSnapshots?: boolean;
-    mutashabihat?: boolean;
-    reviewErrors?: boolean;
-    listeningProgress?: boolean;
-    listeningStats?: boolean;
-    reviewLogs?: boolean;
-};
-
-export function useCombinedInstantData(requirements?: CombinedDataRequirements) {
-    const { user, isLoading: isAuthLoading } = db.useAuth();
-    const userId = user?.id || '';
-
-    const query = useMemo(() => {
-        const q: any = {};
-        if (requirements?.settings !== false) {
-            q.settings = { $: { where: { userId } } };
-        }
-        if (requirements?.nodes) {
-            q.memoryNodes = { $: { where: { userId } } };
-        }
-        if (requirements?.mindMaps) {
-            const shouldFetchMindMapSnapshots = requirements?.mindMapSnapshots === true;
-            q.mindMaps = {
-                $: {
-                    where: { userId },
-                    ...(shouldFetchMindMapSnapshots ? {} : {
-                        // Keep docs/statistics lean where the full snapshot is not needed.
-                        fields: ['id', 'surahId', 'imageUrl', 'imageUrlDark', 'anchors', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
-                    }),
-                },
-            };
-            q.partMindMaps = {
-                $: {
-                    where: { userId },
-                    ...(shouldFetchMindMapSnapshots ? {} : {
-                        // Keep docs/statistics lean where the full snapshot is not needed.
-                        fields: ['id', 'partId', 'imageUrl', 'imageUrlDark', 'description', 'isComplete', 'updatedAt', 'storagePath', '_isRemote', 'source', 'premadeId', 'premadeImportedAt', 'premadeEdited', 'userId']
-                    }),
-                },
-            };
-        }
-        if (requirements?.mutashabihat) {
-            q.mutashabihatDecisions = { $: { where: { userId } } };
-            q.customMutashabihat = { $: { where: { userId } } };
-        }
-        if (requirements?.reviewErrors) {
-            q.reviewErrors = { $: { where: { userId } } };
-        }
-        if (requirements?.listeningProgress) {
-            q.listeningProgress = { $: { where: { userId } } };
-        }
-        if (requirements?.listeningStats) {
-            q.listeningStats = { $: { where: { userId } } };
-        }
-        if (requirements?.reviewLogs) {
-            q.fsrsReviewLogs = { $: { where: { userId } } };
-        }
-        return Object.keys(q).length > 0 ? q : null;
-    }, [userId, requirements]);
-
-    const { isLoading: isDataLoading, error, data } = db.useQuery(query);
-
-    return useMemo(() => ({
-        user,
-        isLoading: isAuthLoading || isDataLoading,
-        error,
-        data,
-    }), [user, isAuthLoading, isDataLoading, error, data]);
-}
-
-// ==========================================
 // Settings Hook
 // ==========================================
-export function useInstantSettings(externalData?: any) {
+export function useInstantSettings() {
     const { user, isLoading: isAuthLoading } = db.useAuth();
-    const hasExternalSettings = hasPrefetchedCollection(externalData, 'settings');
-
-    // Query for the user's settings
-    const { data: internalData, isLoading: isDataLoading, error: internalError } = db.useQuery(
-        hasExternalSettings ? null : {
-            settings: {
-                $: {
-                    where: { userId: user?.id || '' },
-                },
+    const { data, isLoading: isDataLoading, error } = db.useQuery({
+        settings: {
+            $: {
+                where: { userId: user?.id || '' },
             },
-        }
-    );
-
-    const data = hasExternalSettings ? externalData : internalData;
-    const error = hasExternalSettings ? undefined : internalError;
-    const isLoading = hasExternalSettings ? isAuthLoading : (isAuthLoading || isDataLoading);
+        },
+    });
+    const isLoading = isAuthLoading || isDataLoading;
 
     const settingsEntry = useMemo(() => {
         const entries = (data?.settings || []) as any[];
@@ -438,24 +348,16 @@ export function useInstantSettings(externalData?: any) {
 // ==========================================
 // Memory Nodes Hook
 // ==========================================
-export function useInstantNodes(externalData?: any) {
+export function useInstantNodes() {
     const { user } = db.useAuth();
     const [dueNowMs, setDueNowMs] = useState(() => Date.now());
-    const hasExternalNodes = hasPrefetchedCollection(externalData, 'memoryNodes');
-
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalNodes ? null : {
-            memoryNodes: {
-                $: {
-                    where: { userId: user?.id || '' }
-                }
+    const { isLoading, error, data } = db.useQuery({
+        memoryNodes: {
+            $: {
+                where: { userId: user?.id || '' }
             }
         }
-    );
-
-    const data = hasExternalNodes ? externalData : internalData;
-    const isLoading = hasExternalNodes ? false : internalIsLoading;
-    const error = hasExternalNodes ? undefined : internalError;
+    });
 
     const nodes = useMemo(() => {
         const raw = (data?.memoryNodes || []) as unknown as MemoryNode[];
@@ -628,28 +530,20 @@ export function useInstantNodes(externalData?: any) {
 // ==========================================
 // MindMaps Hook
 // ==========================================
-export function useInstantMindMaps(externalData?: any) {
+export function useInstantMindMaps() {
     const { user } = db.useAuth();
-    const hasExternalMindMaps = hasPrefetchedCollection(externalData, 'mindMaps')
-        && hasPrefetchedCollection(externalData, 'partMindMaps');
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalMindMaps ? null : {
-            mindMaps: {
-                $: {
-                    where: { userId: user?.id || '' }
-                }
-            },
-            partMindMaps: {
-                $: {
-                    where: { userId: user?.id || '' }
-                }
+    const { isLoading, error, data } = db.useQuery({
+        mindMaps: {
+            $: {
+                where: { userId: user?.id || '' }
+            }
+        },
+        partMindMaps: {
+            $: {
+                where: { userId: user?.id || '' }
             }
         }
-    );
-
-    const data = hasExternalMindMaps ? externalData : internalData;
-    const isLoading = hasExternalMindMaps ? false : internalIsLoading;
-    const error = hasExternalMindMaps ? undefined : internalError;
+    });
 
     const mindmaps = useMemo(() => (data?.mindMaps || []) as unknown as MindMap[], [data?.mindMaps]);
     const partMindMaps = useMemo(() => (data?.partMindMaps || []) as unknown as any[], [data?.partMindMaps]);
@@ -776,20 +670,13 @@ export function useMindMapSnapshot(options: { surahId?: number; partId?: number 
 // ==========================================
 // Listening Stats Hook
 // ==========================================
-export function useInstantListeningStats(externalData?: any) {
+export function useInstantListeningStats() {
     const { user } = db.useAuth();
-    const hasExternalListeningStats = hasPrefetchedCollection(externalData, 'listeningStats');
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalListeningStats ? null : {
-            listeningStats: {
-                $: { where: { userId: user?.id || '' } }
-            }
+    const { isLoading, error, data } = db.useQuery({
+        listeningStats: {
+            $: { where: { userId: user?.id || '' } }
         }
-    );
-
-    const data = hasExternalListeningStats ? externalData : internalData;
-    const isLoading = hasExternalListeningStats ? false : internalIsLoading;
-    const error = hasExternalListeningStats ? undefined : internalError;
+    });
 
     const stats = useMemo(() => (data?.listeningStats || []) as unknown as any[], [data?.listeningStats]);
 
@@ -818,20 +705,13 @@ export function useInstantListeningStats(externalData?: any) {
 // ==========================================
 // Listening Progress Hook (Per Part)
 // ==========================================
-export function useInstantListeningProgress(externalData?: any) {
+export function useInstantListeningProgress() {
     const { user } = db.useAuth();
-    const hasExternalListeningProgress = hasPrefetchedCollection(externalData, 'listeningProgress');
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalListeningProgress ? null : {
-            listeningProgress: {
-                $: { where: { userId: user?.id || '' } }
-            }
+    const { isLoading, error, data } = db.useQuery({
+        listeningProgress: {
+            $: { where: { userId: user?.id || '' } }
         }
-    );
-
-    const data = hasExternalListeningProgress ? externalData : internalData;
-    const isLoading = hasExternalListeningProgress ? false : internalIsLoading;
-    const error = hasExternalListeningProgress ? undefined : internalError;
+    });
 
     const progress = useMemo(
         () => (data?.listeningProgress || []) as unknown as ListeningProgressEntry[],
@@ -869,20 +749,12 @@ export function useInstantListeningProgress(externalData?: any) {
 // ==========================================
 // Mutashabihat Hook (Decisions & Custom)
 // ==========================================
-export function useInstantMutashabihat(externalData?: any) {
+export function useInstantMutashabihat() {
     const { user } = db.useAuth();
-    const hasExternalMutashabihat = hasPrefetchedCollection(externalData, 'mutashabihatDecisions')
-        && hasPrefetchedCollection(externalData, 'customMutashabihat');
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalMutashabihat ? null : {
-            mutashabihatDecisions: { $: { where: { userId: user?.id || '' } } },
-            customMutashabihat: { $: { where: { userId: user?.id || '' } } }
-        }
-    );
-
-    const data = hasExternalMutashabihat ? externalData : internalData;
-    const isLoading = hasExternalMutashabihat ? false : internalIsLoading;
-    const error = hasExternalMutashabihat ? undefined : internalError;
+    const { isLoading, error, data } = db.useQuery({
+        mutashabihatDecisions: { $: { where: { userId: user?.id || '' } } },
+        customMutashabihat: { $: { where: { userId: user?.id || '' } } }
+    });
 
     const decisions = useMemo(() => (data?.mutashabihatDecisions || []) as unknown as any[], [data?.mutashabihatDecisions]);
     const custom = useMemo(() => (data?.customMutashabihat || []) as unknown as any[], [data?.customMutashabihat]);
@@ -929,18 +801,11 @@ export function useInstantMutashabihat(externalData?: any) {
 // ==========================================
 // Review Logs Hook
 // ==========================================
-export function useInstantReviewLogs(externalData?: any) {
+export function useInstantReviewLogs() {
     const { user } = db.useAuth();
-    const hasExternalReviewLogs = hasPrefetchedCollection(externalData, 'fsrsReviewLogs');
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalReviewLogs ? null : {
-            fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
-        }
-    );
-
-    const data = hasExternalReviewLogs ? externalData : internalData;
-    const isLoading = hasExternalReviewLogs ? false : internalIsLoading;
-    const error = hasExternalReviewLogs ? undefined : internalError;
+    const { isLoading, error, data } = db.useQuery({
+        fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
+    });
 
     const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
 
@@ -978,18 +843,11 @@ export function useInstantReviewLogs(externalData?: any) {
 // ==========================================
 // Review Errors Hook
 // ==========================================
-export function useInstantReviewErrors(externalData?: any) {
+export function useInstantReviewErrors() {
     const { user } = db.useAuth();
-    const hasExternalReviewErrors = hasPrefetchedCollection(externalData, 'reviewErrors');
-    const { isLoading: internalIsLoading, error: internalError, data: internalData } = db.useQuery(
-        hasExternalReviewErrors ? null : {
-            reviewErrors: { $: { where: { userId: user?.id || '' } } }
-        }
-    );
-
-    const data = hasExternalReviewErrors ? externalData : internalData;
-    const isLoading = hasExternalReviewErrors ? false : internalIsLoading;
-    const error = hasExternalReviewErrors ? undefined : internalError;
+    const { isLoading, error, data } = db.useQuery({
+        reviewErrors: { $: { where: { userId: user?.id || '' } } }
+    });
 
     const errors = useMemo(() => (data?.reviewErrors || []) as unknown as ReviewError[], [data?.reviewErrors]);
 

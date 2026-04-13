@@ -9,7 +9,7 @@ import Image from 'next/image';
 import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useAppShellTransition } from '@/components/AppShell';
 import Spinner from '@/components/ui/Spinner';
-import { getQuranVerses, getSurah } from '@/lib/quranData';
+import { getQuranVerses, getSurah, getSurahsByPart } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import {
     ALL_QURAN_PART,
@@ -1063,6 +1063,20 @@ export default function TodayPage() {
             nodes,
         );
     }, [settings, nodes]);
+
+    const shouldOfferPartSwitch = useMemo(() => {
+        if (!settings) return false;
+        if (listeningComplete) return false;
+
+        const unskippedSurahsInPart = getSurahsByPart(settings.activePart).filter((surah) => (
+            !settings.skippedSurahs?.includes(surah.id)
+        ));
+
+        if (unskippedSurahsInPart.length === 0) return false;
+        if (eligibleSurahs.length > 0) return false;
+
+        return unskippedSurahsInPart.every((surah) => surahHasReviewedVerseGroup(nodes, surah.id));
+    }, [eligibleSurahs.length, listeningComplete, nodes, settings]);
 
     const otherPartsWithContent = useMemo(() => {
         if (!settings || !nodes) return [];
@@ -2642,10 +2656,10 @@ export default function TodayPage() {
                                         </>
                                     )}
 
-                                    {otherPartsWithContent.length > 0 ? (
+                                    {shouldOfferPartSwitch && otherPartsWithContent.length > 0 ? (
                                         <div className="switch-part-section" style={{ marginTop: '1.5rem', width: '100%', maxWidth: '280px' }}>
                                             <p style={{ fontSize: '0.85rem', color: 'var(--foreground-secondary)', marginBottom: '0.75rem', fontWeight: 500 }}>
-                                                {listeningComplete ? "Want to work on another part?" : "Switch to another part to continue:"}
+                                                Switch to another part to continue:
                                             </p>
                                             <div className="select-wrapper" style={{ position: 'relative' }}>
                                                 <select
