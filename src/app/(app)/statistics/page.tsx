@@ -703,22 +703,13 @@ export default function StatisticsPage() {
         });
 
         const nodes = reviewPlanNodes.filter(node => {
-            const hasBeenReviewed = hasNodeBeenReviewed(node.scheduler);
-            if (!hasBeenReviewed) return false;
+            if (!hasNodeBeenReviewed(node.scheduler)) return false;
 
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return false;
 
             const dueDate = new Date(dueStr);
-            if (isNaN(dueDate.getTime())) return false;
-            
-            const now = new Date();
-            // Critical Fix: If the due date is in the past (before 'now'), it is truly pending/overdue.
-            // If the user completed all reviews, any node that has been reviewed but still shows
-            // a due date in the past means it hasn't been "moved" forward by the scheduler yet.
-            // However, to align with the user's "I finished my queue" state, we only show 
-            // what is actually due at this exact moment.
-            return dueDate > now || (node.scheduler as any)?.isDue; // Simplified check
+            return !isNaN(dueDate.getTime());
         });
 
         const allDayCounts: Record<number, number> = {};

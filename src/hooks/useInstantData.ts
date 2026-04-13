@@ -807,7 +807,31 @@ export function useInstantReviewLogs() {
         fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
+    const logs = useMemo(() => (
+        ((data?.fsrsReviewLogs || []) as unknown as any[]).map((entry) => {
+            const reviewTime = typeof entry?.review_time === 'string' && entry.review_time.trim()
+                ? entry.review_time
+                : (typeof entry?.timestamp === 'string' ? entry.timestamp : undefined);
+            const elapsedDays = Number(entry?.elapsed_days);
+            const scheduledDays = Number(entry?.scheduled_days);
+            const difficulty = Number(entry?.difficulty);
+            const stability = Number(entry?.stability);
+            const rating = typeof entry?.rating === 'string'
+                ? entry.rating
+                : (Number.isFinite(Number(entry?.rating)) ? Number(entry.rating) : entry?.rating);
+
+            return {
+                ...entry,
+                nodeId: String(entry?.nodeId || '').trim(),
+                review_time: reviewTime,
+                elapsed_days: Number.isFinite(elapsedDays) ? elapsedDays : entry?.elapsed_days,
+                scheduled_days: Number.isFinite(scheduledDays) ? scheduledDays : entry?.scheduled_days,
+                difficulty: Number.isFinite(difficulty) ? difficulty : entry?.difficulty,
+                stability: Number.isFinite(stability) ? stability : entry?.stability,
+                rating,
+            };
+        })
+    ), [data?.fsrsReviewLogs]);
 
     const saveLog = useCallback(async (log: any) => {
         if (!user) return Promise.resolve();

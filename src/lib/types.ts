@@ -271,31 +271,74 @@ export function getAudioPath(surahId: number, ayahId: number): string {
 }
 
 // MemoryNode Utility Helpers
+const readFiniteSchedulerNumber = (...values: unknown[]): number => {
+    for (const value of values) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+};
+
+const readSchedulerString = (...values: unknown[]): string | null => {
+    for (const value of values) {
+        if (typeof value !== 'string') continue;
+        const normalized = value.trim();
+        if (normalized) return normalized;
+    }
+    return null;
+};
+
 export function getNodeStability(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    return (node.scheduler as any).stability || 0;
+    const scheduler = node.scheduler as any;
+    return readFiniteSchedulerNumber(
+        scheduler.stability,
+        scheduler.scheduled_days,
+        scheduler.scheduledDays,
+    );
 }
 
 export function getNodeDifficulty(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    return (node.scheduler as any).difficulty || 0;
+    const scheduler = node.scheduler as any;
+    return readFiniteSchedulerNumber(
+        scheduler.difficulty,
+        scheduler.difficultyScore,
+    );
 }
 
 export function getNodeReps(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    return (node.scheduler as any).reps || (node.scheduler as any).repetition || 0;
+    const scheduler = node.scheduler as any;
+    return readFiniteSchedulerNumber(
+        scheduler.reps,
+        scheduler.repetition,
+        scheduler.reviewCount,
+        scheduler.review_count,
+    );
 }
 
 export function getNodeDueDate(node: MemoryNode): string | null {
     if (!node.scheduler) return null;
-    return (node.scheduler as any).due || (node.scheduler as any).dueDate || null;
+    const scheduler = node.scheduler as any;
+    return readSchedulerString(
+        scheduler.due,
+        scheduler.dueDate,
+        scheduler.nextDueAt,
+    );
 }
 
 export function hasNodeBeenReviewed(scheduler: any): boolean {
     if (!scheduler) return false;
-    if ('reps' in scheduler) return scheduler.reps > 0;
-    if ('repetition' in scheduler) return scheduler.repetition > 0;
-    return false;
+    if (readFiniteSchedulerNumber(
+        scheduler.reps,
+        scheduler.repetition,
+        scheduler.reviewCount,
+        scheduler.review_count,
+    ) > 0) {
+        return true;
+    }
+    return !!readSchedulerString(scheduler.last_review, scheduler.lastReview);
 }
 
 export function surahHasReviewedVerseGroup(nodes: MemoryNode[], surahId: number): boolean {
