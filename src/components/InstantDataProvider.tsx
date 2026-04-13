@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import {
-    useCombinedInstantData,
     useInstantListeningProgress,
     useInstantListeningStats,
     useInstantMindMaps,
@@ -23,7 +22,6 @@ type SharedInstantDataContextValue = {
     listeningProgressQuery: ReturnType<typeof useInstantListeningProgress>;
     listeningStatsQuery: ReturnType<typeof useInstantListeningStats>;
     reviewLogsQuery: ReturnType<typeof useInstantReviewLogs>;
-    combinedData: ReturnType<typeof useCombinedInstantData>;
 };
 
 const SharedInstantDataContext = createContext<SharedInstantDataContextValue | null>(null);
@@ -36,46 +34,14 @@ const isSharedInstantDataRoute = (pathname: string | null) =>
     || pathname?.startsWith('/docs');
 
 function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
-    const pathname = usePathname();
-    
-    // Determine which entities are needed based on the route
-    const requirements = useMemo(() => {
-        const isDocs = pathname?.startsWith('/docs');
-        const isDashboard = pathname === '/dashboard';
-        const isTodo = pathname === '/todo';
-        const isStats = pathname === '/statistics';
-        const isSettings = pathname === '/settings';
-        const needsNavMetrics = isDashboard || isTodo || isStats || isSettings || isDocs;
-        const needsMindmaps = needsNavMetrics || isStats;
-        const needsMindmapSnapshots = isDashboard || isTodo || isSettings;
-        const needsMutashabihat = isDashboard || isTodo || isStats || isSettings;
-        const needsReviewLogs = isDashboard || isStats;
-        const needsListeningStats = isDashboard;
-
-        return {
-            settings: true, // Needed everywhere
-            nodes: needsNavMetrics,
-            mindMaps: needsMindmaps,
-            mindMapSnapshots: needsMindmapSnapshots,
-            mutashabihat: needsMutashabihat,
-            reviewErrors: needsNavMetrics || isStats || isSettings,
-            listeningProgress: needsNavMetrics,
-            listeningStats: needsListeningStats,
-            reviewLogs: needsReviewLogs,
-        };
-    }, [pathname]);
-
-    const combinedData = useCombinedInstantData(requirements);
-    const { data } = combinedData;
-
-    const settingsQuery = useInstantSettings(data);
-    const nodesQuery = useInstantNodes(data);
-    const mindMapsQuery = useInstantMindMaps(data);
-    const mutashabihatQuery = useInstantMutashabihat(data);
-    const reviewErrorsQuery = useInstantReviewErrors(data);
-    const listeningProgressQuery = useInstantListeningProgress(data);
-    const listeningStatsQuery = useInstantListeningStats(data);
-    const reviewLogsQuery = useInstantReviewLogs(data);
+    const settingsQuery = useInstantSettings();
+    const nodesQuery = useInstantNodes();
+    const mindMapsQuery = useInstantMindMaps();
+    const mutashabihatQuery = useInstantMutashabihat();
+    const reviewErrorsQuery = useInstantReviewErrors();
+    const listeningProgressQuery = useInstantListeningProgress();
+    const listeningStatsQuery = useInstantListeningStats();
+    const reviewLogsQuery = useInstantReviewLogs();
 
     const value = useMemo<SharedInstantDataContextValue>(() => ({
         settingsQuery,
@@ -86,7 +52,6 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
         listeningProgressQuery,
         listeningStatsQuery,
         reviewLogsQuery,
-        combinedData,
     }), [
         settingsQuery,
         nodesQuery,
@@ -96,7 +61,6 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
         listeningProgressQuery,
         listeningStatsQuery,
         reviewLogsQuery,
-        combinedData,
     ]);
 
     return (
@@ -154,8 +118,4 @@ export function useSharedInstantListeningStats() {
 
 export function useSharedInstantReviewLogs() {
     return useSharedInstantDataContext().reviewLogsQuery;
-}
-
-export function useSharedCombinedData() {
-    return useSharedInstantDataContext().combinedData;
 }

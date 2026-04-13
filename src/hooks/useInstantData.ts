@@ -729,11 +729,13 @@ export function useInstantMindMaps(externalData?: any) {
 // MindMap Snapshot Hook (On-demand fetching of large snapshots)
 // ==========================================
 export function useMindMapSnapshot(options: { surahId?: number; partId?: number }) {
-    const { user } = db.useAuth();
+    const { user, isLoading: isAuthLoading } = db.useAuth();
     const userId = user?.id || '';
     const { surahId, partId } = options;
+    const shouldQuery = !isAuthLoading && !!userId && (surahId !== undefined || partId !== undefined);
 
     const query = useMemo(() => {
+        if (!shouldQuery) return null;
         if (surahId !== undefined) {
             return {
                 mindMaps: {
@@ -749,9 +751,9 @@ export function useMindMapSnapshot(options: { surahId?: number; partId?: number 
             } as any;
         }
         return null;
-    }, [userId, surahId, partId]);
+    }, [shouldQuery, userId, surahId, partId]);
 
-    const { isLoading, error, data } = db.useQuery(query);
+    const { isLoading: isQueryLoading, error, data } = db.useQuery(query);
 
     const snapshot = useMemo(() => {
         const d = data as any;
@@ -764,7 +766,11 @@ export function useMindMapSnapshot(options: { surahId?: number; partId?: number 
         return undefined;
     }, [data, surahId, partId]);
 
-    return { snapshot, isLoading, error };
+    return {
+        snapshot,
+        isLoading: shouldQuery ? isQueryLoading : isAuthLoading,
+        error,
+    };
 }
 
 // ==========================================
