@@ -3133,6 +3133,33 @@ export default function SettingsPage() {
         });
     }, [getCurrentVerseGroupKeyForError, getCurrentVerseGroupKeyForNode, reviewErrors, settings?.kanbanColumns, settings?.suspendedVerseGroupsAcknowledged]);
 
+    const getAllReviewErrorCleanupForNodes = useCallback((nodes: MemoryNode[]) => {
+        const targetGroupKeys = new Set(
+            nodes
+                .map((node) => getCurrentVerseGroupKeyForNode(node))
+                .filter((groupKey): groupKey is string => !!groupKey)
+        );
+        if (targetGroupKeys.size === 0) {
+            return { errorIds: [] as string[], groupCount: 0 };
+        }
+
+        const errorIds = Array.from(new Set(
+            reviewErrors
+                .filter((error) => {
+                    if (String(error?.nodeType || '') !== 'verse_segment') return false;
+                    const groupKey = getCurrentVerseGroupKeyForError(error);
+                    return !!groupKey && targetGroupKeys.has(groupKey);
+                })
+                .map((error) => String(error?.id || '').trim())
+                .filter((errorId) => errorId.length > 0)
+        ));
+
+        return {
+            errorIds,
+            groupCount: targetGroupKeys.size,
+        };
+    }, [getCurrentVerseGroupKeyForError, getCurrentVerseGroupKeyForNode, reviewErrors]);
+
     const removeSuspendedCardsFromKanban = useCallback(async (groupKeys: Iterable<string>) => {
         await saveSettings({
             kanbanColumns: removeSuspendedKanbanItems(settings?.kanbanColumns, groupKeys),
@@ -3186,14 +3213,28 @@ export default function SettingsPage() {
         const node = instantNodes.find(n => n.id === nodeId);
         if (!node) return;
 
+        const resetErrorCleanup = level === 'reset'
+            ? getAllReviewErrorCleanupForNodes([node])
+            : { errorIds: [] as string[], groupCount: 0 };
         const suspendedCleanup = level === 'reset'
             ? getSuspendedCleanupForNodes([node])
             : { errorIds: [] as string[], groupCount: 0 };
 
-        if (suspendedCleanup.groupCount > 0) {
+        if (resetErrorCleanup.errorIds.length > 0 || suspendedCleanup.groupCount > 0) {
+            const warningLines = [];
+            if (resetErrorCleanup.errorIds.length > 0) {
+                warningLines.push(
+                    `This reset will also clear ${resetErrorCleanup.errorIds.length} saved review error${resetErrorCleanup.errorIds.length === 1 ? '' : 's'} linked to this verse group.`
+                );
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                warningLines.push(
+                    `This reset will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to this verse group.`
+                );
+            }
             const ok = await confirm({
                 title: 'Reset Verse Group',
-                message: `This reset will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to this verse group.`,
+                message: warningLines.join(' '),
                 confirmLabel: 'Reset',
                 isDestructive: true,
             });
@@ -3206,8 +3247,8 @@ export default function SettingsPage() {
                 ...node,
                 scheduler: { ...(node.scheduler as any), ...newState } as any
             });
-            if (suspendedCleanup.errorIds.length > 0) {
-                await deleteReviewErrorsByIds(suspendedCleanup.errorIds, MATURITY_TRANSACTION_BATCH_SIZE);
+            if (resetErrorCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(resetErrorCleanup.errorIds, MATURITY_TRANSACTION_BATCH_SIZE);
             }
             if (suspendedCleanup.groupCount > 0) {
                 const groupKey = getCurrentVerseGroupKeyForNode(node);
@@ -3375,6 +3416,9 @@ export default function SettingsPage() {
             return;
         }
 
+        const resetErrorCleanup = level === 'reset' && targetType === 'verse_segment'
+            ? getAllReviewErrorCleanupForNodes(nodesToUpdate)
+            : { errorIds: [] as string[], groupCount: 0 };
         const suspendedCleanup = level === 'reset'
             ? getSuspendedCleanupForNodes(nodesToUpdate)
             : { errorIds: [] as string[], groupCount: 0 };
@@ -3412,6 +3456,12 @@ export default function SettingsPage() {
             );
         }
 
+        if (resetErrorCleanup.errorIds.length > 0) {
+            warningLines.push(
+                `This will also clear ${resetErrorCleanup.errorIds.length} saved review error${resetErrorCleanup.errorIds.length === 1 ? '' : 's'} linked to the verse group${resetErrorCleanup.groupCount === 1 ? '' : 's'} being reset.`
+            );
+        }
+
         if (suspendedCleanup.groupCount > 0) {
             warningLines.push(
                 `This will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to the verse group${suspendedCleanup.groupCount === 1 ? '' : 's'} being reset.`
@@ -3432,7 +3482,7 @@ export default function SettingsPage() {
         const totalOperations =
             nodesToUpdate.length
             + nodesToCreate.length
-            + suspendedCleanup.errorIds.length
+            + resetErrorCleanup.errorIds.length
             + (kanbanItemsToComplete.size > 0 ? 1 : 0);
 
         beginBulkOperation(`Updating ${typeLabel}`, totalOperations);
@@ -3457,9 +3507,9 @@ export default function SettingsPage() {
                 );
             }
 
-            if (suspendedCleanup.errorIds.length > 0) {
+            if (resetErrorCleanup.errorIds.length > 0) {
                 await deleteReviewErrorsByIds(
-                    suspendedCleanup.errorIds,
+                    resetErrorCleanup.errorIds,
                     MATURITY_TRANSACTION_BATCH_SIZE,
                     (completed) => {
                         updateBulkOperationProgress(
