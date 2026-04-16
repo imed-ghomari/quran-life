@@ -2,7 +2,7 @@
 // Core Types for Phased Qur'an Learning System
 // ========================================
 
-import { FSRSState } from './fsrs';
+import { createNewFSRSState, FSRSState } from './fsrs';
 
 // Qur'anic part classifications used by the app
 export type QuranPart = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; // 8 = All Quran
@@ -330,13 +330,18 @@ export function getNodeDueDate(node: MemoryNode): string | null {
 
 export function hasNodeBeenReviewed(scheduler: any): boolean {
     if (!scheduler) return false;
-    if (readFiniteSchedulerNumber(
+    const reps = readFiniteSchedulerNumber(
         scheduler.reps,
         scheduler.repetition,
         scheduler.reviewCount,
         scheduler.review_count,
-    ) > 0) {
+    );
+    if (reps > 0) {
         return true;
+    }
+    const state = readSchedulerString(scheduler.state)?.toLowerCase();
+    if (reps <= 0 && state === 'new') {
+        return false;
     }
     return !!readSchedulerString(scheduler.last_review, scheduler.lastReview);
 }
@@ -365,17 +370,7 @@ export function getMaturityState(level: 'reset' | 'medium' | 'strong' | 'mastere
     const now = new Date().toISOString();
     switch (level) {
         case 'reset':
-             return {
-                due: now,
-                stability: 0,
-                difficulty: 0,
-                elapsed_days: 0,
-                scheduled_days: 0,
-                reps: 0,
-                lapses: 0,
-                state: 'New',
-                last_review: now
-            };
+             return createNewFSRSState();
         case 'medium':
             return {
                 due: new Date(Date.now() + 14 * 86400000).toISOString(),
