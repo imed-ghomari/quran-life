@@ -904,6 +904,31 @@ export default function StatisticsPage() {
             return toPositiveInt(log?.surahId);
         };
 
+        const resolveCurrentVerseNodeForError = (error: any): MemoryNode | null => {
+            const nodeId = String(error?.nodeId || '');
+            const directNode = nodeId ? nodeById.get(nodeId) : undefined;
+            if (directNode?.type === 'verse_segment') {
+                return directNode;
+            }
+
+            const surahId = resolveErrorSurahId(error);
+            if (!surahId) return null;
+
+            const candidates = verseSegmentNodesBySurahId.get(surahId) || [];
+            const startVerse = toPositiveInt(error?.startVerse);
+            const endVerse = toPositiveInt(error?.endVerse);
+            const anchorId = String(error?.anchorId || '').trim();
+
+            return candidates.find((node) => {
+                const sameRange = startVerse !== null
+                    && endVerse !== null
+                    && Number(node.startVerse) === startVerse
+                    && Number(node.endVerse) === endVerse;
+                if (sameRange) return true;
+                return !!anchorId && String(node.targetId || '').trim() === anchorId;
+            }) || null;
+        };
+
         const inWindow = (ms: number, startMs: number, endMs: number) => ms >= startMs && ms < endMs;
         const makeCounter = () => new Map<number, number>();
         const inc = (map: Map<number, number>, surahId: number, amount = 1) => {
@@ -920,6 +945,8 @@ export default function StatisticsPage() {
         reviewErrors.forEach(error => {
             const timestampMs = toMs(error?.timestamp);
             if (timestampMs === null) return;
+            const currentNode = resolveCurrentVerseNodeForError(error);
+            if (currentNode && !hasNodeBeenReviewed(currentNode.scheduler)) return;
             const surahId = resolveErrorSurahId(error);
             if (!surahId || !targetSurahIds.has(surahId)) return;
 
