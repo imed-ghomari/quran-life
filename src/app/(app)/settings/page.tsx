@@ -2346,7 +2346,27 @@ export default function SettingsPage() {
                                         <MapIcon size={20} />
                                         <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                     </div>
-                                    <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <select
+                                            className="maturity-select"
+                                            style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                            value=""
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={async (e) => {
+                                                const val = e.target.value as MaturityLevel | '';
+                                                if (!val) return;
+                                                await handleAllMindmapsMobileMaturityReset(val);
+                                                e.target.value = '';
+                                            }}
+                                        >
+                                            <option value="">Set Group...</option>
+                                            <option value="reset">Reset</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="strong">Strong</option>
+                                            <option value="mastered">Mastered</option>
+                                        </select>
+                                        <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
                                 </div>
                                 {expandedGroups['mindmaps'] && (
                                     <div className="mobile-subgroup-list">
@@ -2385,7 +2405,27 @@ export default function SettingsPage() {
                                         <Book size={20} />
                                         <span style={{ fontWeight: 600 }}>Verses</span>
                                     </div>
-                                    <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <select
+                                            className="maturity-select"
+                                            style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                            value=""
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={async (e) => {
+                                                const val = e.target.value as MaturityLevel | '';
+                                                if (!val) return;
+                                                await handleGroupMaturityReset('verse', val);
+                                                e.target.value = '';
+                                            }}
+                                        >
+                                            <option value="">Set Group...</option>
+                                            <option value="reset">Reset</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="strong">Strong</option>
+                                            <option value="mastered">Mastered</option>
+                                        </select>
+                                        <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
                                 </div>
                                 {expandedGroups['verses'] && (
                                     <div className="mobile-subgroup-list">
@@ -3000,17 +3040,7 @@ export default function SettingsPage() {
         const now = new Date().toISOString();
         switch (level) {
             case 'reset':
-                return {
-                    due: now,
-                    stability: 0,
-                    difficulty: 0,
-                    elapsed_days: 0,
-                    scheduled_days: 0,
-                    reps: 0,
-                    lapses: 0,
-                    state: 'New',
-                    last_review: now
-                };
+                return createNewFSRSState();
             case 'medium':
                 return {
                     due: new Date(Date.now() + 14 * 86400000).toISOString(),
@@ -3081,6 +3111,13 @@ export default function SettingsPage() {
             endVerse,
         });
     }, [settingsMindmapsBySurah]);
+
+    const handleAllMindmapsMobileMaturityReset = async (level: MaturityLevel) => {
+        await handleGroupMaturityReset('mindmap', level);
+        if (filteredPartMindmaps.length > 0) {
+            await handleGroupMaturityReset('part_mindmap', level);
+        }
+    };
 
     const getSuspendedCleanupForNodes = useCallback((nodes: MemoryNode[]) => {
         const groupKeys = nodes
@@ -5500,7 +5537,27 @@ export default function SettingsPage() {
                                                             <MapIcon size={20} />
                                                             <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                                         </div>
-                                                        <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <select
+                                                                className="maturity-select"
+                                                                style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                                                value=""
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onChange={async (e) => {
+                                                                    const val = e.target.value as MaturityLevel | '';
+                                                                    if (!val) return;
+                                                                    await handleAllMindmapsMobileMaturityReset(val);
+                                                                    e.target.value = '';
+                                                                }}
+                                                            >
+                                                                <option value="">Set Group...</option>
+                                                                <option value="reset">Reset</option>
+                                                                <option value="medium">Medium</option>
+                                                                <option value="strong">Strong</option>
+                                                                <option value="mastered">Mastered</option>
+                                                            </select>
+                                                            <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        </div>
                                                     </div>
                                                     {expandedGroups['mindmaps'] && (
                                                         <div className="mobile-subgroup-list">
@@ -5539,7 +5596,27 @@ export default function SettingsPage() {
                                                             <Book size={20} />
                                                             <span style={{ fontWeight: 600 }}>Verses</span>
                                                         </div>
-                                                        <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <select
+                                                                className="maturity-select"
+                                                                style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                                                value=""
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onChange={async (e) => {
+                                                                    const val = e.target.value as MaturityLevel | '';
+                                                                    if (!val) return;
+                                                                    await handleGroupMaturityReset('verse', val);
+                                                                    e.target.value = '';
+                                                                }}
+                                                            >
+                                                                <option value="">Set Group...</option>
+                                                                <option value="reset">Reset</option>
+                                                                <option value="medium">Medium</option>
+                                                                <option value="strong">Strong</option>
+                                                                <option value="mastered">Mastered</option>
+                                                            </select>
+                                                            <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        </div>
                                                     </div>
                                                     {expandedGroups['verses'] && (
                                                         <div className="mobile-subgroup-list">
