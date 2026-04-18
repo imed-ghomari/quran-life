@@ -1,10 +1,18 @@
 import 'server-only';
 
-import { db as instantAdmin } from '@/lib/instant-admin';
 import { getVerifiedInstantUser } from '@/lib/server/auth';
 import { isServerEditorUser, isServerPaymentBypassUser } from '@/lib/privilegedEmails.server';
+import {
+  AccessSource,
+  SubscriptionKind,
+} from '@/lib/teacherPlan';
+import {
+  getLatestSubscriptionForUser,
+  isSubscriptionActiveStatus,
+  normalizeSubscriptionRecord,
+  resolveSponsoredAccessForStudent,
+} from '@/lib/server/subscriptions';
 
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
 const ACCESS_STATE_CACHE_TTL_MS = 30_000;
 
 type CachedAccessState = {
@@ -12,6 +20,10 @@ type CachedAccessState = {
   hasActiveSubscription: boolean;
   isPaymentBypass: boolean;
   isEditor: boolean;
+  hasPremiumAccess: boolean;
+  accessSource: AccessSource;
+  sponsorshipEndsAt: string | null;
+  subscriptionKind: SubscriptionKind | null;
 };
 
 const accessStateCache = new Map<string, CachedAccessState>();
@@ -35,8 +47,11 @@ export async function getServerAccessState() {
       isPaymentBypass: false,
       hasPremiumAccess: false,
       isEditor: false,
+      accessSource: 'none' as const,
+      sponsorshipEndsAt: null,
+      subscriptionKind: null,
       user: null,
-    } as const;
+    };
   }
 
   const isEditor = await isServerEditorUser(user);
@@ -48,30 +63,38 @@ export async function getServerAccessState() {
       isAuthenticated: true,
       hasActiveSubscription: cached.hasActiveSubscription,
       isPaymentBypass: cached.isPaymentBypass,
-      hasPremiumAccess: cached.hasActiveSubscription || cached.isPaymentBypass,
+      hasPremiumAccess: cached.hasPremiumAccess,
       isEditor: cached.isEditor,
+      accessSource: cached.accessSource,
+      sponsorshipEndsAt: cached.sponsorshipEndsAt,
+      subscriptionKind: cached.subscriptionKind,
       user,
-    } as const;
+    };
   }
 
-  let hasActiveSubscription = false;
+  const latestSubscription = await getLatestSubscriptionForUser(user.id);
+  const normalizedLatestSubscription = latestSubscription ? normalizeSubscriptionRecord(latestSubscription) : null;
+  const hasActiveSubscription = isSubscriptionActiveStatus(normalizedLatestSubscription?.status);
 
-  try {
-    const result = await instantAdmin.query({
-      subscriptions: {
-        $: {
-          where: { userId: user.id },
-        },
-      },
-    });
+  let accessSource: AccessSource = 'none';
+  let sponsorshipEndsAt: string | null = null;
+  let hasPremiumAccess = false;
+  let subscriptionKind: SubscriptionKind | null = normalizedLatestSubscription?.subscriptionKind ?? null;
 
-    const subscriptions = result?.subscriptions ?? [];
-    hasActiveSubscription = subscriptions.some((subscription) => {
-      const status = subscription?.status ?? '';
-      return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
-    });
-  } catch {
-    hasActiveSubscription = false;
+  if (isPaymentBypass) {
+    accessSource = 'bypass';
+    hasPremiumAccess = true;
+  } else if (hasActiveSubscription) {
+    accessSource = 'self_paid';
+    hasPremiumAccess = true;
+  } else {
+    const sponsoredAccess = await resolveSponsoredAccessForStudent(user.id);
+    if (sponsoredAccess) {
+      accessSource = sponsoredAccess.accessSource;
+      sponsorshipEndsAt = sponsoredAccess.graceEndsAt;
+      hasPremiumAccess = true;
+      subscriptionKind = sponsoredAccess.teacherSubscription?.subscriptionKind ?? null;
+    }
   }
 
   accessStateCache.set(cacheKey, {
@@ -79,14 +102,21 @@ export async function getServerAccessState() {
     hasActiveSubscription,
     isPaymentBypass,
     isEditor,
+    hasPremiumAccess,
+    accessSource,
+    sponsorshipEndsAt,
+    subscriptionKind,
   });
 
   return {
     isAuthenticated: true,
     hasActiveSubscription,
     isPaymentBypass,
-    hasPremiumAccess: hasActiveSubscription || isPaymentBypass,
+    hasPremiumAccess,
     isEditor,
+    accessSource,
+    sponsorshipEndsAt,
+    subscriptionKind,
     user,
-  } as const;
+  };
 }

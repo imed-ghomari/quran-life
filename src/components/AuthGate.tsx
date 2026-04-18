@@ -3,7 +3,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
@@ -67,7 +67,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isOnline = useContext(OnlineStatusContext);
-  const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
+  const { hasActiveSubscription, hasPremiumAccess, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [isHydrated, setIsHydrated] = useState(() => hasClientHydratedOnce);
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
@@ -78,7 +78,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
   const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
-  const hasAccess = hasActiveSubscription || isPaymentBypass || hasRecentCheckout;
+  const hasAccess = hasPremiumAccess || hasRecentCheckout;
 
   useEffect(() => {
     setIsHydrated(true);
@@ -162,7 +162,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
-    if (!hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout) return;
+    if (!hasPremiumAccess && !hasCheckedCheckout) return;
     if (!isOnline || (hasOfflineAccess && hasForcedOfflineOpen)) return;
 
     if (typeof window !== 'undefined') {
@@ -202,6 +202,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     isAuthLoading,
     isSubscriptionLoading,
     hasActiveSubscription,
+    hasPremiumAccess,
     isPaymentBypass,
     hasCheckedCheckout,
     isOnline,
@@ -214,7 +215,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   ]);
 
   if (!isHydrated) {
-    return <FullScreenLoader text="Verifying access..." />;
+    return <PageSkeleton />;
   }
 
   if (isPublic) {
@@ -222,7 +223,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   const needsCheckoutDecision =
-    !hasActiveSubscription && !isPaymentBypass && !hasCheckedCheckout;
+    !hasPremiumAccess && !hasCheckedCheckout;
   const shouldBlockOnCheckoutDecision = !shouldTreatAsOffline && needsCheckoutDecision && !user && !hasResolvedAuthOnce;
   const shouldBlockOnSubscriptionLoad = !shouldTreatAsOffline && isSubscriptionLoading;
   const isRedirecting =
@@ -232,18 +233,18 @@ export default function AuthGate({ children }: AuthGateProps) {
     && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
 
   if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
-    return <FullScreenLoader text="Verifying access..." />;
+    return <PageSkeleton />;
   }
 
   if (shouldTreatAsOffline) {
     if (!user && !hasOfflineAccess) {
-      return <FullScreenLoader text="Offline access unavailable. Connect once to sign in." />;
+      return <PageSkeleton />;
     }
     return <>{children}</>;
   }
 
   if (!user) {
-    return <FullScreenLoader text="Redirecting to sign in..." />;
+    return <PageSkeleton />;
   }
 
   return <>{children}</>;

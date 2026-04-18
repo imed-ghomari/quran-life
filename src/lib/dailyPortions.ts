@@ -1,14 +1,29 @@
 import { Verse } from './types';
 import rubMetadataRaw from './metadata/quran-metadata-rub.json';
 import rukuMetadataRaw from './metadata/quran-metadata-ruku.json';
+import {
+    clampDailyTargetMinutes,
+    DailyPortionTimingMode,
+    estimateVerseDurationMinutes,
+    getVerseKey,
+    getVerseWordCount,
+    parseVerseKey,
+} from './dailyPortionUtils';
 
 type RubData = Record<string, { last_verse_key: string }>;
 type RukuData = Record<string, { last_verse_key: string }>;
 
+interface DailyPortionOptions {
+    dailyTargetMinutes: number;
+    mode: DailyPortionTimingMode;
+    nextStartVerseKey?: string;
+    legacyStartIndex?: number;
+    averageSecondsPerWordBySurah?: Record<number, number> | null;
+}
+
 const rubMetadata = rubMetadataRaw as RubData;
 const rukuMetadata = rukuMetadataRaw as RukuData;
 
-// Pre-compute sets of end keys
 const rubEndKeys = new Set<string>();
 for (const key in rubMetadata) {
     if (rubMetadata[key]?.last_verse_key) rubEndKeys.add(rubMetadata[key].last_verse_key);
@@ -19,66 +34,106 @@ for (const key in rukuMetadata) {
     if (rukuMetadata[key]?.last_verse_key) rukuEndKeys.add(rukuMetadata[key].last_verse_key);
 }
 
-function getWordCount(verse: Verse): number {
-    return (verse.text || '').split(/\s+/).filter(Boolean).length;
-}
-
 export interface PortionResult {
     portion: Verse[];
     startVerseIndex: number;
     nextStartVerseIndex: number;
+    startVerseKey?: string;
+    nextStartVerseKey?: string;
+    targetMinutes: number;
+    snappedMinutes: number;
     targetWords: number;
     snappedWords: number;
+    totalEstimatedMinutes: number;
+    derivedCompletionDays: number;
+    completedCycle: boolean;
+}
+
+function resolveStartIndex(allVersesInPart: Verse[], options: DailyPortionOptions): number {
+    const parsedAnchor = parseVerseKey(options.nextStartVerseKey);
+    if (parsedAnchor) {
+        const exactIndex = allVersesInPart.findIndex((verse) => (
+            verse.surahId === parsedAnchor.surahId && verse.ayahId === parsedAnchor.ayahId
+        ));
+        if (exactIndex >= 0) return exactIndex;
+
+        const nextEligibleIndex = allVersesInPart.findIndex((verse) => (
+            verse.surahId > parsedAnchor.surahId
+            || (verse.surahId === parsedAnchor.surahId && verse.ayahId >= parsedAnchor.ayahId)
+        ));
+        return nextEligibleIndex >= 0 ? nextEligibleIndex : 0;
+    }
+
+    const legacyIndex = Number(options.legacyStartIndex);
+    if (!Number.isFinite(legacyIndex) || legacyIndex <= 0) return 0;
+    return Math.min(Math.max(Math.trunc(legacyIndex), 0), Math.max(allVersesInPart.length - 1, 0));
 }
 
 /**
- * Calculates a daily portion starting from `startIndex`.
- * Uses absolute word counts mapped to verses to snap to boundaries.
+ * Calculates a daily portion from a stable verse anchor and a fixed daily minutes target.
+ * The cycle duration is derived from eligible content; the user's daily time target stays constant.
  */
 export function getDailyPortion(
     allVersesInPart: Verse[],
-    startIndex: number,
-    completionDays: number
+    options: DailyPortionOptions,
 ): PortionResult {
-    if (startIndex >= allVersesInPart.length) {
-        return { portion: [], startVerseIndex: startIndex, nextStartVerseIndex: startIndex, targetWords: 0, snappedWords: 0 };
+    const targetMinutes = clampDailyTargetMinutes(options.dailyTargetMinutes);
+
+    if (allVersesInPart.length === 0) {
+        return {
+            portion: [],
+            startVerseIndex: 0,
+            nextStartVerseIndex: 0,
+            targetMinutes,
+            snappedMinutes: 0,
+            targetWords: 0,
+            snappedWords: 0,
+            totalEstimatedMinutes: 0,
+            derivedCompletionDays: 0,
+            completedCycle: false,
+        };
     }
 
+    const startIndex = resolveStartIndex(allVersesInPart, options);
     const wordCounts: number[] = new Array(allVersesInPart.length);
+    const minuteEstimates: number[] = new Array(allVersesInPart.length);
     let totalWords = 0;
-    let wordsRead = 0;
+    let totalEstimatedMinutes = 0;
 
     for (let i = 0; i < allVersesInPart.length; i++) {
-        const count = getWordCount(allVersesInPart[i]);
-        wordCounts[i] = count;
-        totalWords += count;
-        if (i < startIndex) {
-            wordsRead += count;
-        }
+        const verse = allVersesInPart[i];
+        const wordCount = getVerseWordCount(verse);
+        const minuteEstimate = estimateVerseDurationMinutes(
+            verse,
+            options.mode,
+            options.averageSecondsPerWordBySurah,
+        );
+        wordCounts[i] = wordCount;
+        minuteEstimates[i] = minuteEstimate;
+        totalWords += wordCount;
+        totalEstimatedMinutes += minuteEstimate;
     }
 
-    const remainingWords = totalWords - wordsRead;
-    const baseTargetPerDay = totalWords / completionDays;
-    
-    // Estimate days spent to dynamically adjust the remaining days
-    const daysSpentApprox = Math.round(wordsRead / (baseTargetPerDay || 1));
-    let remainingDays = completionDays - daysSpentApprox;
-    if (remainingDays < 1) remainingDays = 1;
+    const derivedCompletionDays = totalEstimatedMinutes > 0
+        ? Math.max(1, Math.ceil(totalEstimatedMinutes / targetMinutes))
+        : 0;
 
-    // TARGET CALCULATION
-    const targetWordsPerDay = Math.ceil(remainingWords / remainingDays);
+    let remainingWords = 0;
+    let remainingMinutes = 0;
+    for (let i = startIndex; i < allVersesInPart.length; i++) {
+        remainingWords += wordCounts[i] || 0;
+        remainingMinutes += minuteEstimates[i] || 0;
+    }
 
-    // Accumulate words to find the base target index
     let accumulatedWords = 0;
-    
-    // Bounds check (+/- 15% window)
-    const snapMin = targetWordsPerDay * 0.85;
-    const snapMax = targetWordsPerDay * 1.15;
+    let accumulatedMinutes = 0;
+    const snapMin = targetMinutes * 0.85;
+    const snapMax = targetMinutes * 1.15;
 
-    // Build list of candidate ends within the window
     const candidates: Array<{
         index: number;
         words: number;
+        minutes: number;
         isSurahEnd: boolean;
         isRubEnd: boolean;
         isRukuEnd: boolean;
@@ -86,21 +141,21 @@ export function getDailyPortion(
     }> = [];
 
     let fallbackAyahIndex = startIndex;
-    let fallbackDiff = Infinity;
+    let fallbackDiff = Number.POSITIVE_INFINITY;
 
     for (let i = startIndex; i < allVersesInPart.length; i++) {
         const verse = allVersesInPart[i];
-        accumulatedWords += (wordCounts[i] || 0);
+        accumulatedWords += wordCounts[i] || 0;
+        accumulatedMinutes += minuteEstimates[i] || 0;
 
-        // Keep track of the ayah closest to the target in case we have to fallback entirely
-        const diff = Math.abs(accumulatedWords - targetWordsPerDay);
+        const diff = Math.abs(accumulatedMinutes - targetMinutes);
         if (diff < fallbackDiff) {
             fallbackDiff = diff;
             fallbackAyahIndex = i;
         }
 
-        if (accumulatedWords >= snapMin && accumulatedWords <= snapMax) {
-            const verseKey = `${verse.surahId}:${verse.ayahId}`;
+        if (accumulatedMinutes >= snapMin && accumulatedMinutes <= snapMax) {
+            const verseKey = getVerseKey(verse);
             const nextVerse = allVersesInPart[i + 1];
             const isSurahEnd = nextVerse ? nextVerse.surahId !== verse.surahId : true;
             const isRubEnd = rubEndKeys.has(verseKey);
@@ -110,65 +165,67 @@ export function getDailyPortion(
             candidates.push({
                 index: i,
                 words: accumulatedWords,
+                minutes: accumulatedMinutes,
                 isSurahEnd,
                 isRubEnd,
                 isRukuEnd,
-                isLastVerse
+                isLastVerse,
             });
         }
 
-        // Optimization: stop iterating once we pass the window
-        if (accumulatedWords > snapMax) {
+        if (accumulatedMinutes > snapMax) {
             break;
         }
     }
 
-    // Find the best candidate based on hierarchy
-    let bestIndex = -1;
-    let snappedWords = 0;
-
-    // Priority 1: Surah End (or Last Verse in Part)
-    let bestCandidate = candidates.find(c => c.isSurahEnd || c.isLastVerse);
-
-    // Priority 2: Rub End
-    if (!bestCandidate) bestCandidate = candidates.find(c => c.isRubEnd);
-
-    // Priority 3: Ruku End
-    if (!bestCandidate) bestCandidate = candidates.find(c => c.isRukuEnd);
-
-    // Priority 4: Ayah End closest to target within window
+    let bestCandidate = candidates.find((candidate) => candidate.isSurahEnd || candidate.isLastVerse);
+    if (!bestCandidate) bestCandidate = candidates.find((candidate) => candidate.isRubEnd);
+    if (!bestCandidate) bestCandidate = candidates.find((candidate) => candidate.isRukuEnd);
     if (!bestCandidate && candidates.length > 0) {
-        bestCandidate = candidates.reduce((prev, curr) => {
-            return Math.abs(curr.words - targetWordsPerDay) < Math.abs(prev.words - targetWordsPerDay) ? curr : prev;
-        });
+        bestCandidate = candidates.reduce((best, current) => (
+            Math.abs(current.minutes - targetMinutes) < Math.abs(best.minutes - targetMinutes) ? current : best
+        ));
     }
+
+    let bestIndex = fallbackAyahIndex;
+    let snappedWords = 0;
+    let snappedMinutes = 0;
 
     if (bestCandidate) {
         bestIndex = bestCandidate.index;
         snappedWords = bestCandidate.words;
+        snappedMinutes = bestCandidate.minutes;
     } else {
-        // Fallback: snapped exactly outside the window, use closest overall Ayah limit
-        bestIndex = fallbackAyahIndex;
-        let tempWords = 0;
         for (let i = startIndex; i <= bestIndex; i++) {
-            tempWords += wordCounts[i] || 0;
+            snappedWords += wordCounts[i] || 0;
+            snappedMinutes += minuteEstimates[i] || 0;
         }
-        snappedWords = tempWords;
     }
 
-    // Edge case: if remaining days is 1 or remaining words is very small (< 115%), take all
-    if (remainingDays === 1 || remainingWords <= targetWordsPerDay * 1.15) {
+    if (remainingMinutes <= snapMax || bestIndex >= allVersesInPart.length - 1) {
         bestIndex = allVersesInPart.length - 1;
         snappedWords = remainingWords;
+        snappedMinutes = remainingMinutes;
     }
 
+    const completedCycle = bestIndex >= allVersesInPart.length - 1;
+    const nextStartVerseIndex = completedCycle ? 0 : bestIndex + 1;
     const portion = allVersesInPart.slice(startIndex, bestIndex + 1);
 
     return {
         portion,
         startVerseIndex: startIndex,
-        nextStartVerseIndex: bestIndex + 1,
-        targetWords: targetWordsPerDay,
-        snappedWords
+        nextStartVerseIndex,
+        startVerseKey: portion[0] ? getVerseKey(portion[0]) : undefined,
+        nextStartVerseKey: completedCycle
+            ? getVerseKey(allVersesInPart[0])
+            : getVerseKey(allVersesInPart[nextStartVerseIndex]),
+        targetMinutes,
+        snappedMinutes,
+        targetWords: Math.max(1, Math.ceil((totalWords / Math.max(totalEstimatedMinutes, targetMinutes)) * targetMinutes)),
+        snappedWords,
+        totalEstimatedMinutes,
+        derivedCompletionDays,
+        completedCycle,
     };
 }

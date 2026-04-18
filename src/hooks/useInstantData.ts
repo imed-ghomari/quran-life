@@ -3,9 +3,24 @@ import { id } from '@instantdb/react';
 import { db } from '@/lib/instant';
 import { isUuid, resolveEntityId, stableEntityId } from '@/lib/instantIds';
 import { transactWithRetry } from '@/lib/instantTransact';
-import { ALL_QURAN_PART, AppSettings, LEGACY_ALL_QURAN_PART, MemoryNode, MindMap, QuranPart } from '@/lib/types';
+import { getSurahsByPart } from '@/lib/quranData';
+import {
+    ALL_QURAN_PART,
+    AppSettings,
+    LEGACY_ALL_QURAN_PART,
+    ListeningProgressEntry,
+    MemoryNode,
+    MindMap,
+    QuranPart,
+    ReviewError,
+} from '@/lib/types';
 import { sanitizeMindmapSnapshot } from '@/lib/mindmapSnapshot';
 import { normalizeReviewSortOrder } from '@/lib/reviewSortOrder';
+import {
+    clampDailyTargetMinutes,
+    DEFAULT_DAILY_TARGET_MINUTES,
+    estimateSurahDurationMinutes,
+} from '@/lib/dailyPortionUtils';
 
 const LOCKED_SKIPPED_SURAH_ID = 1;
 const MAX_FSRS_REVIEW_LOGS = 3000;
@@ -23,9 +38,35 @@ const normalizeSkippedSurahs = (value: unknown): number[] => {
     return Array.from(normalized).sort((a, b) => a - b);
 };
 
+const hasPositiveNumber = (value: unknown): value is number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0;
+};
+
+const deriveLegacyDailyTargetMinutes = (settingsLike: Partial<AppSettings>): number => {
+    const completionDays = hasPositiveNumber(settingsLike.completionDays)
+        ? Number(settingsLike.completionDays)
+        : 30;
+    const activePart = isValidQuranPart(settingsLike.activePart) ? settingsLike.activePart : ALL_QURAN_PART;
+    const mode = settingsLike.dailyPortionMode === 'reading' ? 'reading' : 'audio';
+    const skippedSurahs = new Set(normalizeSkippedSurahs(settingsLike.skippedSurahs));
+    const includedSurahs = getSurahsByPart(activePart).filter((surah) => !skippedSurahs.has(surah.id));
+
+    const totalMinutes = includedSurahs.reduce((total, surah) => (
+        total + estimateSurahDurationMinutes(surah.id, mode)
+    ), 0);
+
+    if (!hasPositiveNumber(totalMinutes)) {
+        return DEFAULT_DAILY_TARGET_MINUTES;
+    }
+
+    return clampDailyTargetMinutes(Math.ceil(totalMinutes / completionDays));
+};
+
 // Static defaults to ensure reference stability
 const DEFAULT_SETTINGS_BASE: Omit<AppSettings, 'userId' | 'lastSyncedAt'> = {
     completionDays: 30,
+    dailyTargetMinutes: DEFAULT_DAILY_TARGET_MINUTES,
     activePart: ALL_QURAN_PART,
     partSystemVersion: 2,
     learnedVerses: {},
@@ -130,8 +171,6 @@ const getNodeFreshnessScore = (node: MemoryNode) => {
 // ==========================================
 export function useInstantSettings() {
     const { user, isLoading: isAuthLoading } = db.useAuth();
-
-    // Query for the user's settings
     const { data, isLoading: isDataLoading, error } = db.useQuery({
         settings: {
             $: {
@@ -139,6 +178,7 @@ export function useInstantSettings() {
             },
         },
     });
+    const isLoading = isAuthLoading || isDataLoading;
 
     const settingsEntry = useMemo(() => {
         const entries = (data?.settings || []) as any[];
@@ -161,12 +201,16 @@ export function useInstantSettings() {
         const merged = { ...base, ...settingsEntry } as AppSettings;
         const rawVersion = Number((settingsEntry as any).partSystemVersion ?? 1);
         const normalizedActivePart = isValidQuranPart(merged.activePart) ? merged.activePart : ALL_QURAN_PART;
+        const normalizedDailyTargetMinutes = hasPositiveNumber((settingsEntry as any).dailyTargetMinutes)
+            ? clampDailyTargetMinutes(Number((settingsEntry as any).dailyTargetMinutes))
+            : deriveLegacyDailyTargetMinutes(merged);
         return {
             ...merged,
             partSystemVersion: rawVersion,
             activePart: rawVersion < 2 && normalizedActivePart === LEGACY_ALL_QURAN_PART
                 ? ALL_QURAN_PART
                 : normalizedActivePart,
+            dailyTargetMinutes: normalizedDailyTargetMinutes,
             skippedSurahs: normalizeSkippedSurahs((merged as any).skippedSurahs),
             reviewSortOrder: normalizeReviewSortOrder((merged as any).reviewSortOrder),
         };
@@ -229,6 +273,17 @@ export function useInstantSettings() {
         }));
     }, [settingsEntry, user]);
 
+    useEffect(() => {
+        if (!user || !settingsEntry) return;
+        if (hasPositiveNumber((settingsEntry as any).dailyTargetMinutes)) return;
+
+        const settingsId = resolveEntityId(settingsEntry.id, 'settings', user.id);
+        void transactWithRetry(db.tx.settings[settingsId].update({
+            dailyTargetMinutes: deriveLegacyDailyTargetMinutes(settingsEntry as AppSettings),
+            lastSyncedAt: new Date().toISOString(),
+        }));
+    }, [settingsEntry, user]);
+
     const saveSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
         if (!user) return;
 
@@ -238,6 +293,9 @@ export function useInstantSettings() {
         }
         if (Object.prototype.hasOwnProperty.call(newSettings, 'reviewSortOrder')) {
             normalizedSettings.reviewSortOrder = normalizeReviewSortOrder(newSettings.reviewSortOrder);
+        }
+        if (Object.prototype.hasOwnProperty.call(newSettings, 'dailyTargetMinutes')) {
+            normalizedSettings.dailyTargetMinutes = clampDailyTargetMinutes(Number(newSettings.dailyTargetMinutes));
         }
 
         const syncedAt = new Date().toISOString();
@@ -279,10 +337,10 @@ export function useInstantSettings() {
     const results = useMemo(() => ({
         settings: { ...currentSettings, id: settingsEntry?.id },
         saveSettings,
-        isLoading: isAuthLoading || isDataLoading,
+        isLoading,
         error,
         user
-    }), [currentSettings, settingsEntry?.id, saveSettings, isAuthLoading, isDataLoading, error, user]);
+    }), [currentSettings, settingsEntry?.id, saveSettings, isLoading, error, user]);
 
     return results;
 }
@@ -293,7 +351,6 @@ export function useInstantSettings() {
 export function useInstantNodes() {
     const { user } = db.useAuth();
     const [dueNowMs, setDueNowMs] = useState(() => Date.now());
-
     const { isLoading, error, data } = db.useQuery({
         memoryNodes: {
             $: {
@@ -563,6 +620,54 @@ export function useInstantMindMaps() {
 }
 
 // ==========================================
+// MindMap Snapshot Hook (On-demand fetching of large snapshots)
+// ==========================================
+export function useMindMapSnapshot(options: { surahId?: number; partId?: number }) {
+    const { user, isLoading: isAuthLoading } = db.useAuth();
+    const userId = user?.id || '';
+    const { surahId, partId } = options;
+    const shouldQuery = !isAuthLoading && !!userId && (surahId !== undefined || partId !== undefined);
+
+    const query = useMemo(() => {
+        if (!shouldQuery) return null;
+        if (surahId !== undefined) {
+            return {
+                mindMaps: {
+                    $: { where: { userId, surahId } }
+                }
+            } as any;
+        }
+        if (partId !== undefined) {
+            return {
+                partMindMaps: {
+                    $: { where: { userId, partId } }
+                }
+            } as any;
+        }
+        return null;
+    }, [shouldQuery, userId, surahId, partId]);
+
+    const { isLoading: isQueryLoading, error, data } = db.useQuery(query);
+
+    const snapshot = useMemo(() => {
+        const d = data as any;
+        if (surahId !== undefined) {
+            return d?.mindMaps?.[0]?.tldrawSnapshot;
+        }
+        if (partId !== undefined) {
+            return d?.partMindMaps?.[0]?.tldrawSnapshot;
+        }
+        return undefined;
+    }, [data, surahId, partId]);
+
+    return {
+        snapshot,
+        isLoading: shouldQuery ? isQueryLoading : isAuthLoading,
+        error,
+    };
+}
+
+// ==========================================
 // Listening Stats Hook
 // ==========================================
 export function useInstantListeningStats() {
@@ -608,18 +713,25 @@ export function useInstantListeningProgress() {
         }
     });
 
-    const progress = useMemo(() => (data?.listeningProgress || []) as unknown as any[], [data?.listeningProgress]);
+    const progress = useMemo(
+        () => (data?.listeningProgress || []) as unknown as ListeningProgressEntry[],
+        [data?.listeningProgress],
+    );
 
-    const saveProgress = useCallback((partId: number, lastVerseIndex: number, cycles?: number, updatedAt?: string) => {
+    const saveProgress = useCallback((entry: ListeningProgressEntry) => {
         if (!user) return Promise.resolve();
-        const existing = progress.find(p => p.partId === partId);
-        const progressId = resolveEntityId(existing?.id, 'listening_progress', user.id, partId);
+        const existing = progress.find(p => p.partId === entry.partId);
+        const progressId = resolveEntityId(existing?.id, 'listening_progress', user.id, entry.partId);
+        const normalizedLastVerseIndex = Number.isFinite(Number(entry.lastVerseIndex))
+            ? Math.max(0, Math.trunc(Number(entry.lastVerseIndex)))
+            : (existing?.lastVerseIndex ?? 0);
 
         return transactWithRetry(db.tx.listeningProgress[progressId].update({
-            partId,
-            lastVerseIndex,
-            cycles: cycles !== undefined ? cycles : (existing?.cycles || 0),
-            updatedAt: updatedAt || new Date().toISOString(),
+            partId: entry.partId,
+            lastVerseIndex: normalizedLastVerseIndex,
+            nextStartVerseKey: entry.nextStartVerseKey,
+            cycles: entry.cycles !== undefined ? entry.cycles : (existing?.cycles || 0),
+            updatedAt: entry.updatedAt || new Date().toISOString(),
             userId: user.id
         }));
     }, [user, progress]);
@@ -695,7 +807,31 @@ export function useInstantReviewLogs() {
         fsrsReviewLogs: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const logs = useMemo(() => (data?.fsrsReviewLogs || []) as unknown as any[], [data?.fsrsReviewLogs]);
+    const logs = useMemo(() => (
+        ((data?.fsrsReviewLogs || []) as unknown as any[]).map((entry) => {
+            const reviewTime = typeof entry?.review_time === 'string' && entry.review_time.trim()
+                ? entry.review_time
+                : (typeof entry?.timestamp === 'string' ? entry.timestamp : undefined);
+            const elapsedDays = Number(entry?.elapsed_days);
+            const scheduledDays = Number(entry?.scheduled_days);
+            const difficulty = Number(entry?.difficulty);
+            const stability = Number(entry?.stability);
+            const rating = typeof entry?.rating === 'string'
+                ? entry.rating
+                : (Number.isFinite(Number(entry?.rating)) ? Number(entry.rating) : entry?.rating);
+
+            return {
+                ...entry,
+                nodeId: String(entry?.nodeId || '').trim(),
+                review_time: reviewTime,
+                elapsed_days: Number.isFinite(elapsedDays) ? elapsedDays : entry?.elapsed_days,
+                scheduled_days: Number.isFinite(scheduledDays) ? scheduledDays : entry?.scheduled_days,
+                difficulty: Number.isFinite(difficulty) ? difficulty : entry?.difficulty,
+                stability: Number.isFinite(stability) ? stability : entry?.stability,
+                rating,
+            };
+        })
+    ), [data?.fsrsReviewLogs]);
 
     const saveLog = useCallback(async (log: any) => {
         if (!user) return Promise.resolve();
@@ -737,9 +873,9 @@ export function useInstantReviewErrors() {
         reviewErrors: { $: { where: { userId: user?.id || '' } } }
     });
 
-    const errors = useMemo(() => (data?.reviewErrors || []) as unknown as any[], [data?.reviewErrors]);
+    const errors = useMemo(() => (data?.reviewErrors || []) as unknown as ReviewError[], [data?.reviewErrors]);
 
-    const saveError = useCallback((errorItem: any) => {
+    const saveError = useCallback((errorItem: ReviewError) => {
         if (!user) return Promise.resolve();
         const errorId = isUuid(errorItem.id) ? errorItem.id : id();
         return transactWithRetry(db.tx.reviewErrors[errorId].update({

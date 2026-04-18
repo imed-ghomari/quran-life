@@ -6,6 +6,7 @@ export const schema = i.schema({
     // User-level app preferences and progress.
     settings: i.entity({
       completionDays: i.number(),
+      dailyTargetMinutes: i.number().optional(),
       activePart: i.number(),
       partSystemVersion: i.number().optional(),
       learnedVerses: i.json().optional(),
@@ -76,6 +77,7 @@ export const schema = i.schema({
     listeningProgress: i.entity({
       partId: i.number(),
       lastVerseIndex: i.number().optional(),
+      nextStartVerseKey: i.string().optional(),
       cycles: i.number().optional(),
       updatedAt: i.string().optional(),
       userId: i.string().indexed(),
@@ -124,6 +126,8 @@ export const schema = i.schema({
       anchorLabel: i.string().optional(),
       anchorId: i.string().optional(),
       absoluteAyah: i.number().optional(),
+      failedChunkIndex: i.number().optional(),
+      failedChunkCount: i.number().optional(),
       userId: i.string().indexed(),
     }),
     // FSRS scheduler logs for each review event.
@@ -161,11 +165,26 @@ export const schema = i.schema({
     subscriptions: i.entity({
       userId: i.string().indexed(),
       status: i.string().optional(),
-      paddleSubscriptionId: i.string().optional(),
+      paddleSubscriptionId: i.string().indexed().optional(),
       paddleCustomerId: i.string().optional(),
       priceId: i.string().optional(),
       updatedAt: i.string().optional(),
       customData: i.json().optional(),
+      subscriptionKind: i.string().optional(),
+      billingInterval: i.string().optional(),
+      seatCount: i.number().optional(),
+      classCode: i.string().indexed().optional(),
+      items: i.json().optional(),
+    }),
+    // Teacher-managed premium seats linked to student accounts.
+    teacherSeatAssignments: i.entity({
+      teacherUserId: i.string().indexed(),
+      studentUserId: i.string().indexed(),
+      subscriptionId: i.string().optional(),
+      status: i.string().optional(),
+      claimedAt: i.string().optional(),
+      graceEndsAt: i.string().optional(),
+      updatedAt: i.string().optional(),
     }),
     // Raw webhook events for reconciliation.
     paddleWebhookEvents: i.entity({

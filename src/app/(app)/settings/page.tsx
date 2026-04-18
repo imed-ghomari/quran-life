@@ -5,7 +5,7 @@ import { id } from '@instantdb/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Spinner from '@/components/ui/Spinner';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
@@ -15,7 +15,7 @@ import {
     useSharedInstantReviewErrors,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
-import { OnlineStatusContext, useDeploymentRefresh, useDeploymentVersion } from '@/components/Providers';
+import { AccessStateContext, OnlineStatusContext, useDeploymentRefresh, useDeploymentVersion } from '@/components/Providers';
 import { getSurahsByPart, getSurah, getQuranVerses, SURAHS } from '@/lib/quranData';
 import {
     ACTIVE_PART_OPTIONS,
@@ -63,7 +63,6 @@ import { AnchorBuilderState } from '@/components/todo/AnchorBuilders';
 import { useConfirmDialog } from '@/components/ConfirmDialogProvider';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import { getAllMutashabihatRefs, absoluteToSurahAyah, getMutashabihatForAbsolute, surahAyahToAbsolute } from '@/lib/mutashabihat';
-import { paddlePriceIds } from '@/lib/paddle/prices';
 import { getEffectiveSurahAnchors } from '@/lib/surahSplits';
 import { deleteReviewErrorsByIds, getImpactedSplitVerseGroupKeys, getSuspendedReviewErrorCleanupPlan, removeSuspendedKanbanItems } from '@/lib/suspendedVerseCleanup';
 import { syncVerseSegmentNodesForSurah } from '@/lib/verseSegmentSync';
@@ -71,6 +70,8 @@ import { getVerseGroupKey } from '@/lib/reviewQueue';
 import { normalizeReviewSortOrder, ReviewSortOrder } from '@/lib/reviewSortOrder';
 import { buildMutashabihatDecisionKey, getSimilarityEntryResolutionMeta } from '@/lib/mutashabihatResolution';
 import { getSimilarityComparatorCardStyle, SimilarityComparatorStatusBadge } from '@/components/SimilarityComparatorStatus';
+import { BillingCycle, TeacherSeatAssignmentStatus, clampTeacherSeatCount, formatCurrency, getTeacherTotalPrice } from '@/lib/teacherPlan';
+import { DEFAULT_DAILY_TARGET_MINUTES } from '@/lib/dailyPortionUtils';
 
 const AddCustomMutashabihModal = dynamic(() => import('@/components/AddCustomMutashabihModal'), { ssr: false });
 const MutashabihNoteModal = dynamic(() => import('@/components/MutashabihNoteModal'), { ssr: false });
@@ -99,6 +100,41 @@ type MaturityLevel = 'reset' | 'medium' | 'strong' | 'mastered';
 type BillingSummaryState = {
     nextRenewalAt: string | null;
     canManageSubscription: boolean;
+};
+
+type TeacherSeatAssignmentSummary = {
+    studentUserId: string;
+    studentEmail: string | null;
+    status: TeacherSeatAssignmentStatus;
+    claimedAt: string | null;
+    graceEndsAt: string | null;
+};
+
+type TeacherPlanSummaryState = {
+    classCode: string | null;
+    inviteLink: string | null;
+    seatCount: number;
+    activeSeatCount: number;
+    graceSeatCount: number;
+    billingInterval: BillingCycle | null;
+    status: string | null;
+    assignments: TeacherSeatAssignmentSummary[];
+};
+
+type SponsorshipSummaryState = {
+    accessSource: 'teacher_sponsored' | 'teacher_grace';
+    teacherUserId: string;
+    teacherEmail: string | null;
+    graceEndsAt: string | null;
+};
+
+type TeacherSeatPreviewState = {
+    targetSeatCount: number;
+    charge: string | null;
+    credit: string | null;
+    currencyCode: string | null;
+    result: string | null;
+    unchanged: boolean;
 };
 
 type AccountDeletionStatusState = {
@@ -396,6 +432,29 @@ const formatDaysLabel = (days: number | null): string | null => {
     return `${days} day${days === 1 ? '' : 's'}`;
 };
 
+const formatPaddleMoney = (amount: string | number | null | undefined, currencyCode: string | null | undefined): string | null => {
+    if (amount === null || amount === undefined || amount === '') return null;
+    const rawAmount = String(amount).trim();
+    if (!rawAmount) return null;
+    const parsed = Number(rawAmount);
+    if (!Number.isFinite(parsed)) return null;
+    const normalized = rawAmount.includes('.') ? parsed : parsed / 100;
+    const normalizedCurrency = String(currencyCode ?? '').trim().toUpperCase();
+
+    if (normalizedCurrency) {
+        try {
+            return new Intl.NumberFormat(undefined, {
+                style: 'currency',
+                currency: normalizedCurrency,
+            }).format(normalized);
+        } catch {
+            return `${normalizedCurrency} ${normalized.toFixed(2)}`;
+        }
+    }
+
+    return normalized.toFixed(2);
+};
+
 const normalizeAccountDeletionStatus = (payload: unknown): AccountDeletionStatusState => {
     const raw = payload as Record<string, unknown> | null | undefined;
     const daysRaw = Number(raw?.daysUntilAccessEnds);
@@ -466,6 +525,11 @@ export default function SettingsPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const isOnline = useContext(OnlineStatusContext);
+    const {
+        accessSource,
+        sponsorshipEndsAt,
+        subscriptionKind: accessSubscriptionKind,
+    } = useContext(AccessStateContext);
     const deploymentVersion = useDeploymentVersion();
     const { isRefreshingDeployment, refreshToLatestDeployment } = useDeploymentRefresh();
     const deploymentVersionLabel = useMemo(
@@ -563,8 +627,8 @@ export default function SettingsPage() {
     const [dailyPortionMode, setDailyPortionMode] = useState<'audio' | 'reading'>(settings.dailyPortionMode ?? 'audio');
     const [dailyReadingStyle, setDailyReadingStyle] = useState<'line_by_line' | 'paragraph'>(settings.dailyReadingStyle ?? 'line_by_line');
     const [todayDefaultMode, setTodayDefaultMode] = useState<'daily' | 'review'>(settings.todayDefaultMode ?? 'daily');
-    const [completionDaysDraft, setCompletionDaysDraft] = useState<number>(settings.completionDays || 30);
-    const completionDaysSaveTimerRef = useRef<number | null>(null);
+    const [dailyTargetMinutesDraft, setDailyTargetMinutesDraft] = useState<number>(settings.dailyTargetMinutes || DEFAULT_DAILY_TARGET_MINUTES);
+    const dailyTargetMinutesSaveTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -606,6 +670,15 @@ export default function SettingsPage() {
         nextRenewalAt: null,
         canManageSubscription: false,
     });
+    const [teacherPlanSummary, setTeacherPlanSummary] = useState<TeacherPlanSummaryState | null>(null);
+    const [sponsorshipSummary, setSponsorshipSummary] = useState<SponsorshipSummaryState | null>(null);
+    const [isTeacherPlanLoading, setIsTeacherPlanLoading] = useState(false);
+    const [teacherSeatDraft, setTeacherSeatDraft] = useState(1);
+    const [teacherSeatPreview, setTeacherSeatPreview] = useState<TeacherSeatPreviewState | null>(null);
+    const [isPreviewingTeacherSeats, setIsPreviewingTeacherSeats] = useState(false);
+    const [isUpdatingTeacherSeats, setIsUpdatingTeacherSeats] = useState(false);
+    const [isRegeneratingClassCode, setIsRegeneratingClassCode] = useState(false);
+    const [revokingStudentUserId, setRevokingStudentUserId] = useState<string | null>(null);
     const verseByRefKey = useMemo(() => {
         const map = new Map<string, { surahId: number; ayahId: number; text: string }>();
         for (const verse of verses) {
@@ -1259,13 +1332,13 @@ export default function SettingsPage() {
     }, [settings.todayDefaultMode]);
 
     useEffect(() => {
-        setCompletionDaysDraft(settings.completionDays || 30);
-    }, [settings.completionDays]);
+        setDailyTargetMinutesDraft(settings.dailyTargetMinutes || DEFAULT_DAILY_TARGET_MINUTES);
+    }, [settings.dailyTargetMinutes]);
 
     useEffect(() => () => {
-        if (completionDaysSaveTimerRef.current !== null) {
-            window.clearTimeout(completionDaysSaveTimerRef.current);
-            completionDaysSaveTimerRef.current = null;
+        if (dailyTargetMinutesSaveTimerRef.current !== null) {
+            window.clearTimeout(dailyTargetMinutesSaveTimerRef.current);
+            dailyTargetMinutesSaveTimerRef.current = null;
         }
     }, []);
 
@@ -1291,10 +1364,11 @@ export default function SettingsPage() {
             return;
         }
 
-        const canManageFromLocal = Boolean(
+        const hasLocalBillingLink = Boolean(
             String(latestSubscription?.paddleCustomerId ?? '').trim()
             && String(latestSubscription?.paddleSubscriptionId ?? '').trim(),
         );
+        const canManageFromLocal = hasLocalBillingLink && accessSource !== 'teacher_sponsored' && accessSource !== 'teacher_grace';
 
         if (!isOnline) {
             setBillingSummary({
@@ -1327,7 +1401,7 @@ export default function SettingsPage() {
                         typeof payload?.billing?.nextRenewalAt === 'string' && payload.billing.nextRenewalAt
                             ? payload.billing.nextRenewalAt
                             : null,
-                    canManageSubscription: Boolean(payload?.billing?.canManageSubscription || canManageFromLocal),
+                    canManageSubscription: Boolean((payload?.billing?.canManageSubscription || canManageFromLocal) && accessSource !== 'teacher_sponsored' && accessSource !== 'teacher_grace'),
                 });
                 setHasResolvedInitialBillingSummary(true);
             } catch {
@@ -1350,30 +1424,57 @@ export default function SettingsPage() {
         latestSubscription?.id,
         latestSubscription?.paddleCustomerId,
         latestSubscription?.paddleSubscriptionId,
+        accessSource,
         user?.id,
     ]);
 
     const billingStatus = latestSubscription?.status ?? 'none';
     const isActiveBilling = ACTIVE_SUBSCRIPTION_STATUSES.has(billingStatus);
+    const isTeacherBillingAccount = latestSubscription?.subscriptionKind === 'teacher' || accessSubscriptionKind === 'teacher';
+    const isSponsoredAccount = accessSource === 'teacher_sponsored' || accessSource === 'teacher_grace';
+    const localBillingInterval = latestSubscription?.billingInterval === 'yearly' ? 'yearly' : 'monthly';
+    const billingIntervalLabel = localBillingInterval === 'yearly' ? 'Yearly' : 'Monthly';
     const hasPendingDeletionRequest = accountDeletionStatus.pending && accountDeletionStatus.canCancel;
     const accountDeletionDaysLeft = accountDeletionStatus.daysUntilAccessEnds ?? getDaysUntilIso(accountDeletionStatus.expiresAt);
     const accountDeletionDaysLabel = formatDaysLabel(accountDeletionDaysLeft);
     const accountDeletionWindowEnds = accountDeletionStatus.expiresAt
         ? formatBillingDate(accountDeletionStatus.expiresAt)
         : 'the end of your current billing period';
-    const billingPlan =
-        latestSubscription?.priceId === paddlePriceIds.monthly
-            ? 'Monthly'
-            : latestSubscription?.priceId === paddlePriceIds.yearly
-                ? 'Yearly'
+    const billingPlan = isSponsoredAccount
+        ? 'Teacher Sponsored'
+        : isTeacherBillingAccount
+            ? `Teacher • ${billingIntervalLabel}`
+            : latestSubscription?.subscriptionKind === 'student'
+                ? `Student • ${billingIntervalLabel}`
                 : latestSubscription?.priceId
-                    ? 'Custom'
+                    ? `Student • ${billingIntervalLabel}`
                     : 'N/A';
     const billingNextRenewal = billingStatus === 'none'
         ? 'N/A'
         : billingSummary.nextRenewalAt
             ? formatBillingDate(billingSummary.nextRenewalAt)
             : (isActiveBilling ? 'Unavailable' : 'N/A');
+    const accessLabel = accessSource === 'teacher_sponsored'
+        ? 'Teacher-sponsored'
+        : accessSource === 'teacher_grace'
+            ? 'Teacher grace'
+            : accessSource === 'self_paid'
+                ? 'Self-paid'
+                : accessSource === 'bypass'
+                    ? 'Bypass'
+                    : 'Standard';
+    const billingStatusLabel = isSponsoredAccount
+        ? accessSource === 'teacher_grace'
+            ? 'Grace period'
+            : 'Teacher sponsored'
+        : billingStatus === 'none'
+            ? 'No subscription'
+            : billingStatus;
+    const billingStatusColor = accessSource === 'teacher_grace'
+        ? '#d97706'
+        : isSponsoredAccount || isActiveBilling
+            ? '#16a34a'
+            : 'var(--foreground)';
     const preDeleteDaysLeft = getDaysUntilIso(billingSummary.nextRenewalAt);
     const preDeleteDaysLabel = formatDaysLabel(preDeleteDaysLeft);
     const preDeleteEndDateLabel = billingSummary.nextRenewalAt ? formatBillingDate(billingSummary.nextRenewalAt) : null;
@@ -1399,8 +1500,8 @@ export default function SettingsPage() {
             <div style={{ display: 'grid', gap: '0.4rem', fontSize: '0.85rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
                     <span style={{ color: 'var(--foreground-secondary)' }}>Status</span>
-                    <span style={{ fontWeight: 600, color: isActiveBilling ? '#16a34a' : 'var(--foreground)' }}>
-                        {billingStatus === 'none' ? 'No subscription' : billingStatus}
+                    <span style={{ fontWeight: 600, color: billingStatusColor }}>
+                        {billingStatusLabel}
                     </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
@@ -1408,10 +1509,335 @@ export default function SettingsPage() {
                     <span style={{ fontWeight: 600 }}>{billingPlan}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <span style={{ color: 'var(--foreground-secondary)' }}>Access</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{accessLabel}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
                     <span style={{ color: 'var(--foreground-secondary)' }}>Renews On</span>
                     <span style={{ fontWeight: 600, textAlign: 'right' }}>{billingNextRenewal}</span>
                 </div>
             </div>
+            {(teacherPlanSummary || sponsorshipSummary || (isTeacherPlanLoading && (isTeacherBillingAccount || isSponsoredAccount))) && (
+                <div
+                    style={{
+                        marginTop: '0.9rem',
+                        display: 'grid',
+                        gap: '0.75rem',
+                    }}
+                >
+                    {teacherPlanSummary && (
+                        <div
+                            style={{
+                                padding: '0.85rem',
+                                borderRadius: '12px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                display: 'grid',
+                                gap: '0.75rem',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Teacher Plan</div>
+                                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                                        Share one class code with your students. Seats can be adjusted at any time.
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--foreground-secondary)' }}>
+                                    {teacherPlanSummary.billingInterval === 'yearly' ? 'Yearly billing' : 'Monthly billing'}
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '0.45rem', fontSize: '0.83rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ color: 'var(--foreground-secondary)' }}>Class Code</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                        <span style={{ fontWeight: 700 }}>{teacherPlanSummary.classCode || 'Unavailable'}</span>
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary std-normal-btn"
+                                            onClick={() => void handleCopyTeacherValue(teacherPlanSummary.classCode, 'Class code')}
+                                            disabled={!teacherPlanSummary.classCode}
+                                            style={{ padding: '0.45rem 0.65rem', borderRadius: '10px', fontSize: '0.8rem' }}
+                                        >
+                                            Copy Code
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ color: 'var(--foreground-secondary)' }}>Invite Link</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                        <span style={{ fontWeight: 600, maxWidth: '100%', wordBreak: 'break-all', textAlign: 'right' }}>
+                                            {teacherPlanSummary.inviteLink || 'Unavailable'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary std-normal-btn"
+                                            onClick={() => void handleCopyTeacherValue(teacherPlanSummary.inviteLink, 'Invite link')}
+                                            disabled={!teacherPlanSummary.inviteLink}
+                                            style={{ padding: '0.45rem 0.65rem', borderRadius: '10px', fontSize: '0.8rem' }}
+                                        >
+                                            Copy Link
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                    <span style={{ color: 'var(--foreground-secondary)' }}>Capacity</span>
+                                    <span style={{ fontWeight: 600 }}>
+                                        {teacherPlanSummary.activeSeatCount} / {teacherPlanSummary.seatCount} active
+                                        {teacherPlanSummary.graceSeatCount > 0 ? ` • ${teacherPlanSummary.graceSeatCount} in grace` : ''}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div
+                                style={{
+                                    padding: '0.8rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background)',
+                                    display: 'grid',
+                                    gap: '0.65rem',
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>Student Seats</div>
+                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                                            Review Paddle proration before applying a seat change.
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--foreground-secondary)' }}>
+                                        Current: {teacherPlanSummary.seatCount}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.55rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary std-normal-btn"
+                                        onClick={() => {
+                                            setTeacherSeatDraft((current) => clampTeacherSeatCount(current - 1));
+                                            setTeacherSeatPreview(null);
+                                        }}
+                                        disabled={!isOnline || isPreviewingTeacherSeats || isUpdatingTeacherSeats || teacherSeatDraft <= 1}
+                                        style={{ minWidth: '44px', padding: '0.6rem 0.8rem', borderRadius: '10px' }}
+                                    >
+                                        -
+                                    </button>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        value={teacherSeatDraft}
+                                        onChange={(event) => {
+                                            setTeacherSeatDraft(clampTeacherSeatCount(event.target.value));
+                                            setTeacherSeatPreview(null);
+                                        }}
+                                        disabled={!isOnline || isPreviewingTeacherSeats || isUpdatingTeacherSeats}
+                                        style={{
+                                            width: '90px',
+                                            padding: '0.65rem 0.75rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--background-secondary)',
+                                            color: 'var(--foreground)',
+                                            fontWeight: 600,
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary std-normal-btn"
+                                        onClick={() => {
+                                            setTeacherSeatDraft((current) => clampTeacherSeatCount(current + 1));
+                                            setTeacherSeatPreview(null);
+                                        }}
+                                        disabled={!isOnline || isPreviewingTeacherSeats || isUpdatingTeacherSeats}
+                                        style={{ minWidth: '44px', padding: '0.6rem 0.8rem', borderRadius: '10px' }}
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary std-normal-btn"
+                                        onClick={() => void handlePreviewTeacherSeatUpdate()}
+                                        disabled={!isOnline || isPreviewingTeacherSeats || isUpdatingTeacherSeats}
+                                        style={{ padding: '0.65rem 0.8rem', borderRadius: '10px', fontSize: '0.8rem' }}
+                                    >
+                                        {isPreviewingTeacherSeats ? 'Reviewing...' : 'Review Billing Change'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => void handleApplyTeacherSeatUpdate()}
+                                        disabled={
+                                            !isOnline
+                                            || isUpdatingTeacherSeats
+                                            || isPreviewingTeacherSeats
+                                            || teacherSeatDraft === teacherPlanSummary.seatCount
+                                            || teacherSeatPreview?.targetSeatCount !== teacherSeatDraft
+                                        }
+                                        style={{ padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.8rem' }}
+                                    >
+                                        {isUpdatingTeacherSeats ? 'Applying...' : 'Apply Seat Update'}
+                                    </button>
+                                </div>
+
+                                <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.78rem' }}>
+                                    Teacher total: {formatCurrency(getTeacherTotalPrice(teacherPlanSummary.billingInterval === 'yearly' ? 'yearly' : 'monthly', teacherSeatDraft))}
+                                    {teacherPlanSummary.billingInterval === 'yearly' ? '/year' : '/month'}
+                                </div>
+
+                                {teacherSeatPreview?.targetSeatCount === teacherSeatDraft && (
+                                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.78rem' }}>
+                                        {teacherSeatPreview.unchanged
+                                            ? 'No billing change. Your seat count already matches this value.'
+                                            : teacherSeatPreview.charge
+                                                ? `Estimated charge: ${formatPaddleMoney(teacherSeatPreview.charge, teacherSeatPreview.currencyCode) || teacherSeatPreview.charge}.`
+                                                : teacherSeatPreview.credit
+                                                    ? `Estimated credit: ${formatPaddleMoney(teacherSeatPreview.credit, teacherSeatPreview.currencyCode) || teacherSeatPreview.credit}.`
+                                                    : teacherSeatPreview.result
+                                                        ? `Paddle preview: ${teacherSeatPreview.result}.`
+                                                        : 'Paddle preview loaded.'}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '0.55rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>Linked Students</div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary std-normal-btn"
+                                        onClick={() => void handleRegenerateTeacherClassCode()}
+                                        disabled={!isOnline || isRegeneratingClassCode}
+                                        style={{ padding: '0.55rem 0.7rem', borderRadius: '10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                                    >
+                                        <RotateCcw size={14} />
+                                        {isRegeneratingClassCode ? 'Regenerating...' : 'Regenerate Code'}
+                                    </button>
+                                </div>
+
+                                {teacherPlanSummary.assignments.length === 0 ? (
+                                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>
+                                        No students linked yet. Share your class code to let students join without paying checkout.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'grid', gap: '0.55rem' }}>
+                                        {teacherPlanSummary.assignments.map((assignment) => (
+                                            <div
+                                                key={assignment.studentUserId}
+                                                style={{
+                                                    display: 'grid',
+                                                    gap: '0.45rem',
+                                                    padding: '0.7rem',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid var(--border)',
+                                                    background: 'var(--background)',
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                    <div>
+                                                        <div style={{ fontWeight: 600, fontSize: '0.83rem' }}>
+                                                            {assignment.studentEmail || `Student ${assignment.studentUserId.slice(0, 8)}`}
+                                                        </div>
+                                                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                                            Joined {formatBillingDate(assignment.claimedAt)}
+                                                            {assignment.status === 'grace' && assignment.graceEndsAt
+                                                                ? ` • Grace until ${formatBillingDate(assignment.graceEndsAt)}`
+                                                                : ''}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                        <span style={{
+                                                            padding: '0.28rem 0.55rem',
+                                                            borderRadius: '999px',
+                                                            background: assignment.status === 'grace' ? 'rgba(217, 119, 6, 0.12)' : 'rgba(22, 163, 74, 0.12)',
+                                                            color: assignment.status === 'grace' ? '#d97706' : '#16a34a',
+                                                            fontSize: '0.74rem',
+                                                            fontWeight: 700,
+                                                        }}>
+                                                            {assignment.status === 'grace' ? 'Grace' : 'Active'}
+                                                        </span>
+                                                        {assignment.status === 'active' && (
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-secondary std-normal-btn"
+                                                                onClick={() => void handleRevokeTeacherStudent(assignment.studentUserId, assignment.studentEmail)}
+                                                                disabled={!isOnline || revokingStudentUserId === assignment.studentUserId}
+                                                                style={{ padding: '0.45rem 0.65rem', borderRadius: '10px', fontSize: '0.76rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                                {revokingStudentUserId === assignment.studentUserId ? 'Removing...' : 'Remove'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {sponsorshipSummary && (
+                        <div
+                            style={{
+                                padding: '0.85rem',
+                                borderRadius: '12px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--background-secondary)',
+                                display: 'grid',
+                                gap: '0.6rem',
+                            }}
+                        >
+                            <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Teacher Sponsorship</div>
+                            <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.82rem' }}>
+                                {sponsorshipSummary.teacherEmail
+                                    ? `Your premium access is covered by ${sponsorshipSummary.teacherEmail}.`
+                                    : 'Your premium access is covered by a teacher plan.'}
+                            </div>
+                            <div style={{ display: 'grid', gap: '0.35rem', fontSize: '0.82rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                    <span style={{ color: 'var(--foreground-secondary)' }}>Status</span>
+                                    <span style={{ fontWeight: 600 }}>
+                                        {sponsorshipSummary.accessSource === 'teacher_grace' ? 'Grace period' : 'Active sponsorship'}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                    <span style={{ color: 'var(--foreground-secondary)' }}>Personal Billing</span>
+                                    <span style={{ fontWeight: 600 }}>Managed by teacher</span>
+                                </div>
+                                {((sponsorshipSummary.graceEndsAt || sponsorshipEndsAt) && (sponsorshipSummary.accessSource === 'teacher_grace' || accessSource === 'teacher_grace')) && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                        <span style={{ color: 'var(--foreground-secondary)' }}>Grace Ends</span>
+                                        <span style={{ fontWeight: 600, textAlign: 'right' }}>
+                                            {formatBillingDate(sponsorshipSummary.graceEndsAt || sponsorshipEndsAt)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            {(sponsorshipSummary.accessSource === 'teacher_grace' || accessSource === 'teacher_grace') && (
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={() => router.push('/auth?plan=monthly&replaceSponsorship=1')}
+                                    style={{ padding: '0.75rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem' }}
+                                >
+                                    Start Your Own Subscription
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {!teacherPlanSummary && !sponsorshipSummary && isTeacherPlanLoading && (
+                        <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>
+                            Loading teacher plan details...
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 
@@ -1419,29 +1845,33 @@ export default function SettingsPage() {
         <div style={{ display: 'grid', gap: '0.75rem' }}>
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gridTemplateColumns: billingSummary.canManageSubscription && !isSponsoredAccount
+                    ? 'repeat(2, minmax(0, 1fr))'
+                    : 'minmax(0, 1fr)',
                 gap: '0.75rem',
                 alignItems: 'stretch',
             }}>
-                <button
-                    className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
-                    onClick={handleOpenCustomerPortal}
-                    disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
-                    style={{
-                        width: '100%',
-                        minWidth: 0,
-                        padding: '0.85rem 0.65rem',
-                        borderRadius: '12px',
-                        fontFamily: 'inherit',
-                        fontWeight: 600,
-                        fontSize: '0.86rem',
-                        lineHeight: 1.2,
-                        textAlign: 'center',
-                        cursor: 'pointer'
-                    }}
-                >
-                    {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
-                </button>
+                {billingSummary.canManageSubscription && !isSponsoredAccount && (
+                    <button
+                        className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
+                        onClick={handleOpenCustomerPortal}
+                        disabled={!isOnline || !billingSummary.canManageSubscription || isOpeningPortal}
+                        style={{
+                            width: '100%',
+                            minWidth: 0,
+                            padding: '0.85rem 0.65rem',
+                            borderRadius: '12px',
+                            fontFamily: 'inherit',
+                            fontWeight: 600,
+                            fontSize: '0.86rem',
+                            lineHeight: 1.2,
+                            textAlign: 'center',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
+                    </button>
+                )}
                 <button
                     className="btn btn-secondary std-normal-btn account-action-btn"
                     onClick={handleSignOut}
@@ -1685,7 +2115,7 @@ export default function SettingsPage() {
                     <div className="card modern-card" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--background-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem' }}>
                             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Clock size={18} /> Completion Schedule
+                                <Clock size={18} /> Daily Portion Time
                             </h2>
                             <button
                                 className="bulk-btn reset-mut"
@@ -1697,12 +2127,15 @@ export default function SettingsPage() {
                             </button>
                         </div>
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                            Set how many days you want to complete one full cycle of your active part.
+                            Set how many minutes you want to spend on your daily portion. Cycle days update automatically from the currently eligible surahs in this part.
                         </p>
                         <DailyCompletionSlider
-                            days={completionDaysDraft}
-                            onChange={handleCompletionDays}
+                            minutes={dailyTargetMinutesDraft}
+                            onChange={handleDailyTargetMinutes}
                             activePart={settings.activePart}
+                            skippedSurahs={settings.skippedSurahs}
+                            nodes={instantNodes}
+                            mode={dailyPortionMode}
                         />
                     </div>
 
@@ -1711,7 +2144,7 @@ export default function SettingsPage() {
                             <Book size={18} /> Active Part
                         </h2>
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                            Choose the part you are focusing on for your daily portion and todo flow.
+                            Choose the part you are focusing on for your daily portion and overall progression. Todo always shows all cards.
                         </p>
                         <div className="part-selector" style={{
                             display: 'grid',
@@ -1913,7 +2346,27 @@ export default function SettingsPage() {
                                         <MapIcon size={20} />
                                         <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                     </div>
-                                    <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <select
+                                            className="maturity-select"
+                                            style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                            value=""
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={async (e) => {
+                                                const val = e.target.value as MaturityLevel | '';
+                                                if (!val) return;
+                                                await handleAllMindmapsMobileMaturityReset(val);
+                                                e.target.value = '';
+                                            }}
+                                        >
+                                            <option value="">Set Group...</option>
+                                            <option value="reset">Reset</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="strong">Strong</option>
+                                            <option value="mastered">Mastered</option>
+                                        </select>
+                                        <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
                                 </div>
                                 {expandedGroups['mindmaps'] && (
                                     <div className="mobile-subgroup-list">
@@ -1952,7 +2405,27 @@ export default function SettingsPage() {
                                         <Book size={20} />
                                         <span style={{ fontWeight: 600 }}>Verses</span>
                                     </div>
-                                    <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <select
+                                            className="maturity-select"
+                                            style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                            value=""
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={async (e) => {
+                                                const val = e.target.value as MaturityLevel | '';
+                                                if (!val) return;
+                                                await handleGroupMaturityReset('verse', val);
+                                                e.target.value = '';
+                                            }}
+                                        >
+                                            <option value="">Set Group...</option>
+                                            <option value="reset">Reset</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="strong">Strong</option>
+                                            <option value="mastered">Mastered</option>
+                                        </select>
+                                        <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                    </div>
                                 </div>
                                 {expandedGroups['verses'] && (
                                     <div className="mobile-subgroup-list">
@@ -2567,17 +3040,7 @@ export default function SettingsPage() {
         const now = new Date().toISOString();
         switch (level) {
             case 'reset':
-                return {
-                    due: now,
-                    stability: 0,
-                    difficulty: 0,
-                    elapsed_days: 0,
-                    scheduled_days: 0,
-                    reps: 0,
-                    lapses: 0,
-                    state: 'New',
-                    last_review: now
-                };
+                return createNewFSRSState();
             case 'medium':
                 return {
                     due: new Date(Date.now() + 14 * 86400000).toISOString(),
@@ -2649,6 +3112,13 @@ export default function SettingsPage() {
         });
     }, [settingsMindmapsBySurah]);
 
+    const handleAllMindmapsMobileMaturityReset = async (level: MaturityLevel) => {
+        await handleGroupMaturityReset('mindmap', level);
+        if (filteredPartMindmaps.length > 0) {
+            await handleGroupMaturityReset('part_mindmap', level);
+        }
+    };
+
     const getSuspendedCleanupForNodes = useCallback((nodes: MemoryNode[]) => {
         const groupKeys = nodes
             .map((node) => getCurrentVerseGroupKeyForNode(node))
@@ -2662,6 +3132,33 @@ export default function SettingsPage() {
             resolveGroupKeyFromError: getCurrentVerseGroupKeyForError,
         });
     }, [getCurrentVerseGroupKeyForError, getCurrentVerseGroupKeyForNode, reviewErrors, settings?.kanbanColumns, settings?.suspendedVerseGroupsAcknowledged]);
+
+    const getAllReviewErrorCleanupForNodes = useCallback((nodes: MemoryNode[]) => {
+        const targetGroupKeys = new Set(
+            nodes
+                .map((node) => getCurrentVerseGroupKeyForNode(node))
+                .filter((groupKey): groupKey is string => !!groupKey)
+        );
+        if (targetGroupKeys.size === 0) {
+            return { errorIds: [] as string[], groupCount: 0 };
+        }
+
+        const errorIds = Array.from(new Set(
+            reviewErrors
+                .filter((error) => {
+                    if (String(error?.nodeType || '') !== 'verse_segment') return false;
+                    const groupKey = getCurrentVerseGroupKeyForError(error);
+                    return !!groupKey && targetGroupKeys.has(groupKey);
+                })
+                .map((error) => String(error?.id || '').trim())
+                .filter((errorId) => errorId.length > 0)
+        ));
+
+        return {
+            errorIds,
+            groupCount: targetGroupKeys.size,
+        };
+    }, [getCurrentVerseGroupKeyForError, getCurrentVerseGroupKeyForNode, reviewErrors]);
 
     const removeSuspendedCardsFromKanban = useCallback(async (groupKeys: Iterable<string>) => {
         await saveSettings({
@@ -2716,14 +3213,28 @@ export default function SettingsPage() {
         const node = instantNodes.find(n => n.id === nodeId);
         if (!node) return;
 
+        const resetErrorCleanup = level === 'reset'
+            ? getAllReviewErrorCleanupForNodes([node])
+            : { errorIds: [] as string[], groupCount: 0 };
         const suspendedCleanup = level === 'reset'
             ? getSuspendedCleanupForNodes([node])
             : { errorIds: [] as string[], groupCount: 0 };
 
-        if (suspendedCleanup.groupCount > 0) {
+        if (resetErrorCleanup.errorIds.length > 0 || suspendedCleanup.groupCount > 0) {
+            const warningLines = [];
+            if (resetErrorCleanup.errorIds.length > 0) {
+                warningLines.push(
+                    `This reset will also clear ${resetErrorCleanup.errorIds.length} saved review error${resetErrorCleanup.errorIds.length === 1 ? '' : 's'} linked to this verse group.`
+                );
+            }
+            if (suspendedCleanup.groupCount > 0) {
+                warningLines.push(
+                    `This reset will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to this verse group.`
+                );
+            }
             const ok = await confirm({
                 title: 'Reset Verse Group',
-                message: `This reset will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to this verse group.`,
+                message: warningLines.join(' '),
                 confirmLabel: 'Reset',
                 isDestructive: true,
             });
@@ -2736,8 +3247,8 @@ export default function SettingsPage() {
                 ...node,
                 scheduler: { ...(node.scheduler as any), ...newState } as any
             });
-            if (suspendedCleanup.errorIds.length > 0) {
-                await deleteReviewErrorsByIds(suspendedCleanup.errorIds, MATURITY_TRANSACTION_BATCH_SIZE);
+            if (resetErrorCleanup.errorIds.length > 0) {
+                await deleteReviewErrorsByIds(resetErrorCleanup.errorIds, MATURITY_TRANSACTION_BATCH_SIZE);
             }
             if (suspendedCleanup.groupCount > 0) {
                 const groupKey = getCurrentVerseGroupKeyForNode(node);
@@ -2905,6 +3416,9 @@ export default function SettingsPage() {
             return;
         }
 
+        const resetErrorCleanup = level === 'reset' && targetType === 'verse_segment'
+            ? getAllReviewErrorCleanupForNodes(nodesToUpdate)
+            : { errorIds: [] as string[], groupCount: 0 };
         const suspendedCleanup = level === 'reset'
             ? getSuspendedCleanupForNodes(nodesToUpdate)
             : { errorIds: [] as string[], groupCount: 0 };
@@ -2942,6 +3456,12 @@ export default function SettingsPage() {
             );
         }
 
+        if (resetErrorCleanup.errorIds.length > 0) {
+            warningLines.push(
+                `This will also clear ${resetErrorCleanup.errorIds.length} saved review error${resetErrorCleanup.errorIds.length === 1 ? '' : 's'} linked to the verse group${resetErrorCleanup.groupCount === 1 ? '' : 's'} being reset.`
+            );
+        }
+
         if (suspendedCleanup.groupCount > 0) {
             warningLines.push(
                 `This will also clear ${suspendedCleanup.groupCount} suspended review fix card${suspendedCleanup.groupCount === 1 ? '' : 's'} linked to the verse group${suspendedCleanup.groupCount === 1 ? '' : 's'} being reset.`
@@ -2962,7 +3482,7 @@ export default function SettingsPage() {
         const totalOperations =
             nodesToUpdate.length
             + nodesToCreate.length
-            + suspendedCleanup.errorIds.length
+            + resetErrorCleanup.errorIds.length
             + (kanbanItemsToComplete.size > 0 ? 1 : 0);
 
         beginBulkOperation(`Updating ${typeLabel}`, totalOperations);
@@ -2987,9 +3507,9 @@ export default function SettingsPage() {
                 );
             }
 
-            if (suspendedCleanup.errorIds.length > 0) {
+            if (resetErrorCleanup.errorIds.length > 0) {
                 await deleteReviewErrorsByIds(
-                    suspendedCleanup.errorIds,
+                    resetErrorCleanup.errorIds,
                     MATURITY_TRANSACTION_BATCH_SIZE,
                     (completed) => {
                         updateBulkOperationProgress(
@@ -3027,17 +3547,17 @@ export default function SettingsPage() {
         void ensureVersesLoaded();
     }, [expandedSurahs, expandedGroups, ensureVersesLoaded]);
 
-    const handleCompletionDays = (days: number) => {
-        const clamped = Math.max(7, Math.min(120, days));
-        setCompletionDaysDraft(clamped);
-        if (completionDaysSaveTimerRef.current !== null) {
-            window.clearTimeout(completionDaysSaveTimerRef.current);
+    const handleDailyTargetMinutes = (minutes: number) => {
+        const clamped = Math.max(5, Math.min(180, minutes));
+        setDailyTargetMinutesDraft(clamped);
+        if (dailyTargetMinutesSaveTimerRef.current !== null) {
+            window.clearTimeout(dailyTargetMinutesSaveTimerRef.current);
         }
-        completionDaysSaveTimerRef.current = window.setTimeout(() => {
-            void saveSettings({ completionDays: clamped }).catch((error) => {
-                console.error('Failed to save completion schedule', error);
+        dailyTargetMinutesSaveTimerRef.current = window.setTimeout(() => {
+            void saveSettings({ dailyTargetMinutes: clamped }).catch((error) => {
+                console.error('Failed to save daily target minutes', error);
             });
-            completionDaysSaveTimerRef.current = null;
+            dailyTargetMinutesSaveTimerRef.current = null;
         }, SETTINGS_WRITE_DEBOUNCE_MS);
     };
 
@@ -3080,6 +3600,289 @@ export default function SettingsPage() {
             setToasts((prev) => prev.filter((t) => t.id !== toastId));
         }, 6000);
     };
+
+    const loadTeacherPlanData = useCallback(async () => {
+        if (!user?.id) {
+            setTeacherPlanSummary(null);
+            setSponsorshipSummary(null);
+            setTeacherSeatPreview(null);
+            setTeacherSeatDraft(1);
+            return;
+        }
+
+        if (!isOnline) {
+            return;
+        }
+
+        setIsTeacherPlanLoading(true);
+        try {
+            const response = await fetch('/api/teacher/seats', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not load teacher plan details.');
+            }
+
+            const rawTeacherPlan = payload?.teacherPlan as Record<string, unknown> | null | undefined;
+            const rawSponsorship = payload?.sponsorship as Record<string, unknown> | null | undefined;
+            const nextTeacherPlan: TeacherPlanSummaryState | null = rawTeacherPlan
+                ? {
+                    classCode: typeof rawTeacherPlan.classCode === 'string' && rawTeacherPlan.classCode ? rawTeacherPlan.classCode : null,
+                    inviteLink: typeof rawTeacherPlan.inviteLink === 'string' && rawTeacherPlan.inviteLink ? rawTeacherPlan.inviteLink : null,
+                    seatCount: clampTeacherSeatCount(rawTeacherPlan.seatCount),
+                    activeSeatCount: Math.max(0, Number(rawTeacherPlan.activeSeatCount ?? 0) || 0),
+                    graceSeatCount: Math.max(0, Number(rawTeacherPlan.graceSeatCount ?? 0) || 0),
+                    billingInterval: rawTeacherPlan.billingInterval === 'yearly' ? 'yearly' : rawTeacherPlan.billingInterval === 'monthly' ? 'monthly' : null,
+                    status: typeof rawTeacherPlan.status === 'string' && rawTeacherPlan.status ? rawTeacherPlan.status : null,
+                    assignments: Array.isArray(rawTeacherPlan.assignments)
+                        ? rawTeacherPlan.assignments.map((assignment) => ({
+                            studentUserId: String((assignment as Record<string, unknown>)?.studentUserId ?? ''),
+                            studentEmail: typeof (assignment as Record<string, unknown>)?.studentEmail === 'string' && (assignment as Record<string, unknown>).studentEmail
+                                ? String((assignment as Record<string, unknown>).studentEmail)
+                                : null,
+                            status: (assignment as Record<string, unknown>)?.status === 'grace'
+                                ? 'grace'
+                                : (assignment as Record<string, unknown>)?.status === 'revoked'
+                                    ? 'revoked'
+                                    : 'active',
+                            claimedAt: typeof (assignment as Record<string, unknown>)?.claimedAt === 'string' && (assignment as Record<string, unknown>).claimedAt
+                                ? String((assignment as Record<string, unknown>).claimedAt)
+                                : null,
+                            graceEndsAt: typeof (assignment as Record<string, unknown>)?.graceEndsAt === 'string' && (assignment as Record<string, unknown>).graceEndsAt
+                                ? String((assignment as Record<string, unknown>).graceEndsAt)
+                                : null,
+                        }))
+                        : [],
+                }
+                : null;
+
+            const nextSponsorship: SponsorshipSummaryState | null =
+                rawSponsorship?.accessSource === 'teacher_sponsored' || rawSponsorship?.accessSource === 'teacher_grace'
+                    ? {
+                        accessSource: rawSponsorship.accessSource,
+                        teacherUserId: String(rawSponsorship.teacherUserId ?? ''),
+                        teacherEmail: typeof rawSponsorship.teacherEmail === 'string' && rawSponsorship.teacherEmail ? rawSponsorship.teacherEmail : null,
+                        graceEndsAt: typeof rawSponsorship.graceEndsAt === 'string' && rawSponsorship.graceEndsAt ? rawSponsorship.graceEndsAt : null,
+                    }
+                    : null;
+
+            setTeacherPlanSummary(nextTeacherPlan);
+            setSponsorshipSummary(nextSponsorship);
+            setTeacherSeatPreview(null);
+            setTeacherSeatDraft(nextTeacherPlan ? clampTeacherSeatCount(nextTeacherPlan.seatCount) : 1);
+        } catch (error) {
+            console.error('Failed to load teacher plan details', error);
+            setTeacherPlanSummary(null);
+            setSponsorshipSummary(null);
+            setTeacherSeatPreview(null);
+            setTeacherSeatDraft(1);
+        } finally {
+            setIsTeacherPlanLoading(false);
+        }
+    }, [isOnline, user?.id]);
+
+    const handleCopyTeacherValue = useCallback(async (value: string | null, label: string) => {
+        if (!value) {
+            addToast('error', `${label} unavailable`);
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(value);
+            addToast('success', `${label} copied`, value);
+        } catch {
+            addToast('error', `Could not copy ${label.toLowerCase()}`);
+        }
+    }, [addToast]);
+
+    const handlePreviewTeacherSeatUpdate = useCallback(async () => {
+        if (!teacherPlanSummary) return;
+
+        setIsPreviewingTeacherSeats(true);
+        try {
+            const response = await fetch('/api/teacher/seats/update', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    targetSeatCount: teacherSeatDraft,
+                    previewOnly: true,
+                }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not preview this seat change.');
+            }
+
+            setTeacherSeatPreview({
+                targetSeatCount: clampTeacherSeatCount(teacherSeatDraft),
+                charge: payload?.preview?.charge ? String(payload.preview.charge) : null,
+                credit: payload?.preview?.credit ? String(payload.preview.credit) : null,
+                currencyCode: payload?.preview?.currencyCode ? String(payload.preview.currencyCode) : null,
+                result: payload?.preview?.result ? String(payload.preview.result) : null,
+                unchanged: Boolean(payload?.unchanged),
+            });
+        } catch (error) {
+            addToast(
+                'error',
+                'Could not preview seat update',
+                error instanceof Error ? error.message : 'Please try again.',
+            );
+        } finally {
+            setIsPreviewingTeacherSeats(false);
+        }
+    }, [addToast, teacherPlanSummary, teacherSeatDraft]);
+
+    const handleApplyTeacherSeatUpdate = useCallback(async () => {
+        if (!teacherPlanSummary) return;
+        if (teacherSeatDraft === teacherPlanSummary.seatCount) {
+            addToast('success', 'Seat count already matches your current plan.');
+            return;
+        }
+
+        const previewCharge = teacherSeatPreview?.targetSeatCount === teacherSeatDraft
+            ? formatPaddleMoney(teacherSeatPreview.charge, teacherSeatPreview.currencyCode)
+            : null;
+        const previewCredit = teacherSeatPreview?.targetSeatCount === teacherSeatDraft
+            ? formatPaddleMoney(teacherSeatPreview.credit, teacherSeatPreview.currencyCode)
+            : null;
+        const previewNote = previewCharge
+            ? `Estimated immediate charge: ${previewCharge}.`
+            : previewCredit
+                ? `Estimated next credit: ${previewCredit}.`
+                : 'Paddle will calculate the billing change when applied.';
+        const ok = await confirm({
+            title: 'Apply Seat Update',
+            message: `Change your teacher plan from ${teacherPlanSummary.seatCount} to ${teacherSeatDraft} student seat${teacherSeatDraft === 1 ? '' : 's'}? ${previewNote}`,
+            confirmLabel: 'Apply Update',
+            isDestructive: teacherSeatDraft < teacherPlanSummary.seatCount,
+        });
+        if (!ok) return;
+
+        setIsUpdatingTeacherSeats(true);
+        try {
+            const response = await fetch('/api/teacher/seats/update', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    targetSeatCount: teacherSeatDraft,
+                    previewOnly: false,
+                }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not apply the seat update.');
+            }
+
+            const nextSeatCount = clampTeacherSeatCount(payload?.seatCount ?? teacherSeatDraft);
+            setTeacherSeatPreview({
+                targetSeatCount: nextSeatCount,
+                charge: payload?.preview?.charge ? String(payload.preview.charge) : null,
+                credit: payload?.preview?.credit ? String(payload.preview.credit) : null,
+                currencyCode: payload?.preview?.currencyCode ? String(payload.preview.currencyCode) : null,
+                result: payload?.preview?.result ? String(payload.preview.result) : null,
+                unchanged: Boolean(payload?.unchanged),
+            });
+            addToast('success', 'Teacher seat count updated');
+            await loadTeacherPlanData();
+        } catch (error) {
+            addToast(
+                'error',
+                'Could not update seat count',
+                error instanceof Error ? error.message : 'Please try again.',
+            );
+        } finally {
+            setIsUpdatingTeacherSeats(false);
+        }
+    }, [addToast, confirm, loadTeacherPlanData, teacherPlanSummary, teacherSeatDraft, teacherSeatPreview]);
+
+    const handleRegenerateTeacherClassCode = useCallback(async () => {
+        if (!teacherPlanSummary) return;
+
+        const ok = await confirm({
+            title: 'Regenerate Class Code',
+            message: 'This will stop future redemptions from using the current class code. Existing linked students will stay connected. Continue?',
+            confirmLabel: 'Regenerate Code',
+            isDestructive: false,
+        });
+        if (!ok) return;
+
+        setIsRegeneratingClassCode(true);
+        try {
+            const response = await fetch('/api/teacher/class-code/regenerate', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not regenerate the class code.');
+            }
+
+            addToast('success', 'Class code regenerated', payload?.classCode ? String(payload.classCode) : undefined);
+            await loadTeacherPlanData();
+        } catch (error) {
+            addToast(
+                'error',
+                'Could not regenerate class code',
+                error instanceof Error ? error.message : 'Please try again.',
+            );
+        } finally {
+            setIsRegeneratingClassCode(false);
+        }
+    }, [addToast, confirm, loadTeacherPlanData, teacherPlanSummary]);
+
+    const handleRevokeTeacherStudent = useCallback(async (studentUserId: string, studentEmail: string | null) => {
+        const ok = await confirm({
+            title: 'Remove Student',
+            message: `Remove ${studentEmail || 'this student'} from your teacher plan? They will keep premium access for a short grace period before needing their own subscription.`,
+            confirmLabel: 'Remove Student',
+            isDestructive: true,
+        });
+        if (!ok) return;
+
+        setRevokingStudentUserId(studentUserId);
+        try {
+            const response = await fetch('/api/teacher/seats/revoke', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ studentUserId }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not remove that student.');
+            }
+
+            addToast(
+                'success',
+                'Student moved to grace',
+                payload?.graceEndsAt ? `Access ends ${formatBillingDate(String(payload.graceEndsAt))}.` : undefined,
+            );
+            await loadTeacherPlanData();
+        } catch (error) {
+            addToast(
+                'error',
+                'Could not remove student',
+                error instanceof Error ? error.message : 'Please try again.',
+            );
+        } finally {
+            setRevokingStudentUserId(null);
+        }
+    }, [addToast, confirm, loadTeacherPlanData]);
+
+    useEffect(() => {
+        void loadTeacherPlanData();
+    }, [loadTeacherPlanData, latestSubscription?.id, accessSource]);
 
     const handleDeploymentRefreshClick = useCallback(async () => {
         const status = await refreshToLatestDeployment();
@@ -4227,14 +5030,14 @@ export default function SettingsPage() {
     }, [markCurrentRouteReady, settingsPageReady]);
 
     if (!settingsPageReady) {
-        if (isTransitionPendingForCurrentRoute) return null;
-        return <FullScreenLoader text="Preparing settings..." />;
+        return <PageSkeleton />;
     }
 
     return (
         <>
             {settingsMindmapEditor && (
                 <MindmapEditor
+                    surahId={settingsMindmapEditor.surahId}
                     initialSnapshot={settingsMindmapEditor.snapshot}
                     onSave={handleSettingsEditorSave}
                     onClose={() => setSettingsMindmapEditor(null)}
@@ -4469,7 +5272,7 @@ export default function SettingsPage() {
                                         <div className="header-icon-badge">
                                             <Clock size={18} />
                                         </div>
-                                        <span>Completion Schedule</span>
+                                        <span>Daily Portion Time</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         {sectionsExpanded.schedule && (
@@ -4488,12 +5291,15 @@ export default function SettingsPage() {
                                 {sectionsExpanded.schedule && (
                                     <>
                                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                            Set how many days you want to complete one full cycle of your active part.
+                                            Set how many minutes you want to spend on your daily portion. Cycle days update automatically from the currently eligible surahs in this part.
                                         </p>
                                         <DailyCompletionSlider
-                                            days={completionDaysDraft}
-                                            onChange={handleCompletionDays}
+                                            minutes={dailyTargetMinutesDraft}
+                                            onChange={handleDailyTargetMinutes}
                                             activePart={settings.activePart}
+                                            skippedSurahs={settings.skippedSurahs}
+                                            nodes={instantNodes}
+                                            mode={dailyPortionMode}
                                         />
                                     </>
                                 )}
@@ -4528,7 +5334,7 @@ export default function SettingsPage() {
                                 {sectionsExpanded.activePart && (
                                     <>
                                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                                            Choose the part you are focusing on for your daily portion and todo flow.
+                                            Choose the part you are focusing on for your daily portion and overall progression. Todo always shows all cards.
                                         </p>
                                         <div className="part-selector" style={{
                                             display: 'grid',
@@ -4781,7 +5587,27 @@ export default function SettingsPage() {
                                                             <MapIcon size={20} />
                                                             <span style={{ fontWeight: 600 }}>Mindmaps</span>
                                                         </div>
-                                                        <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <select
+                                                                className="maturity-select"
+                                                                style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                                                value=""
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onChange={async (e) => {
+                                                                    const val = e.target.value as MaturityLevel | '';
+                                                                    if (!val) return;
+                                                                    await handleAllMindmapsMobileMaturityReset(val);
+                                                                    e.target.value = '';
+                                                                }}
+                                                            >
+                                                                <option value="">Set Group...</option>
+                                                                <option value="reset">Reset</option>
+                                                                <option value="medium">Medium</option>
+                                                                <option value="strong">Strong</option>
+                                                                <option value="mastered">Mastered</option>
+                                                            </select>
+                                                            <ChevronDown size={20} style={{ transform: expandedGroups['mindmaps'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        </div>
                                                     </div>
                                                     {expandedGroups['mindmaps'] && (
                                                         <div className="mobile-subgroup-list">
@@ -4820,7 +5646,27 @@ export default function SettingsPage() {
                                                             <Book size={20} />
                                                             <span style={{ fontWeight: 600 }}>Verses</span>
                                                         </div>
-                                                        <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <select
+                                                                className="maturity-select"
+                                                                style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                                                                value=""
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onChange={async (e) => {
+                                                                    const val = e.target.value as MaturityLevel | '';
+                                                                    if (!val) return;
+                                                                    await handleGroupMaturityReset('verse', val);
+                                                                    e.target.value = '';
+                                                                }}
+                                                            >
+                                                                <option value="">Set Group...</option>
+                                                                <option value="reset">Reset</option>
+                                                                <option value="medium">Medium</option>
+                                                                <option value="strong">Strong</option>
+                                                                <option value="mastered">Mastered</option>
+                                                            </select>
+                                                            <ChevronDown size={20} style={{ transform: expandedGroups['verses'] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                                        </div>
                                                     </div>
                                                     {expandedGroups['verses'] && (
                                                         <div className="mobile-subgroup-list">

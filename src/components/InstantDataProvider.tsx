@@ -4,10 +4,12 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import {
     useInstantListeningProgress,
+    useInstantListeningStats,
     useInstantMindMaps,
     useInstantMutashabihat,
     useInstantNodes,
     useInstantReviewErrors,
+    useInstantReviewLogs,
     useInstantSettings,
 } from '@/hooks/useInstantData';
 
@@ -18,6 +20,8 @@ type SharedInstantDataContextValue = {
     mutashabihatQuery: ReturnType<typeof useInstantMutashabihat>;
     reviewErrorsQuery: ReturnType<typeof useInstantReviewErrors>;
     listeningProgressQuery: ReturnType<typeof useInstantListeningProgress>;
+    listeningStatsQuery: ReturnType<typeof useInstantListeningStats>;
+    reviewLogsQuery: ReturnType<typeof useInstantReviewLogs>;
 };
 
 const SharedInstantDataContext = createContext<SharedInstantDataContextValue | null>(null);
@@ -36,6 +40,8 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
     const mutashabihatQuery = useInstantMutashabihat();
     const reviewErrorsQuery = useInstantReviewErrors();
     const listeningProgressQuery = useInstantListeningProgress();
+    const listeningStatsQuery = useInstantListeningStats();
+    const reviewLogsQuery = useInstantReviewLogs();
 
     const value = useMemo<SharedInstantDataContextValue>(() => ({
         settingsQuery,
@@ -44,6 +50,8 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
         mutashabihatQuery,
         reviewErrorsQuery,
         listeningProgressQuery,
+        listeningStatsQuery,
+        reviewLogsQuery,
     }), [
         settingsQuery,
         nodesQuery,
@@ -51,6 +59,8 @@ function SharedInstantDataScope({ children }: { children: React.ReactNode }) {
         mutashabihatQuery,
         reviewErrorsQuery,
         listeningProgressQuery,
+        listeningStatsQuery,
+        reviewLogsQuery,
     ]);
 
     return (
@@ -100,4 +110,12 @@ export function useSharedInstantReviewErrors() {
 
 export function useSharedInstantListeningProgress() {
     return useSharedInstantDataContext().listeningProgressQuery;
+}
+
+export function useSharedInstantListeningStats() {
+    return useSharedInstantDataContext().listeningStatsQuery;
+}
+
+export function useSharedInstantReviewLogs() {
+    return useSharedInstantDataContext().reviewLogsQuery;
 }

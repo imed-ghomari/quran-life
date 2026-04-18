@@ -22,6 +22,7 @@ import { transactWithRetry } from '@/lib/instantTransact';
 import { SURAHS } from '@/lib/quranData';
 import { ALL_QURAN_PART, PART_NAMES, QuranPart, getMaturityState } from '@/lib/types';
 import { createNewFSRSState } from '@/lib/fsrs';
+import { DEFAULT_DAILY_TARGET_MINUTES } from '@/lib/dailyPortionUtils';
 
 interface OnboardingModalProps {
     onComplete: () => void;
@@ -58,7 +59,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
     const { settings, user } = useInstantSettings();
     const { nodes } = useInstantNodes();
     const [selectedPart, setSelectedPart] = useState<QuranPart>(ALL_QURAN_PART);
-    const [days, setDays] = useState(30);
+    const [dailyTargetMinutes, setDailyTargetMinutes] = useState(DEFAULT_DAILY_TARGET_MINUTES);
     const [localSkipped, setLocalSkipped] = useState<number[]>(() => normalizeSkippedSurahs([]));
     const [dailyPortionModeChoice, setDailyPortionModeChoice] = useState<'audio' | 'reading'>('audio');
     const initializationKey = useRef<string | null>(null);
@@ -68,7 +69,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         const key = `${user.id}-${settings.id ?? 'new'}`;
         if (initializationKey.current === key) return;
         setSelectedPart(settings.activePart || ALL_QURAN_PART);
-        setDays(settings.completionDays || 30);
+        setDailyTargetMinutes(settings.dailyTargetMinutes || DEFAULT_DAILY_TARGET_MINUTES);
         setLocalSkipped(normalizeSkippedSurahs(settings.skippedSurahs || []));
         setDailyPortionModeChoice(settings.dailyPortionMode ?? 'audio');
         initializationKey.current = key;
@@ -84,7 +85,8 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
         const transactions = [
             db.tx.settings[settingsId].update({
                 activePart: selectedPart,
-                completionDays: days,
+                completionDays: settings.completionDays || 30,
+                dailyTargetMinutes,
                 isOnboardingComplete: true,
                 skippedSurahs: normalizedSkippedSurahs,
                 dailyPortionMode: dailyPortionModeChoice,
@@ -278,13 +280,16 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
                                 <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Set Your Goal</h2>
                             </div>
                             <p style={{ color: 'var(--foreground-secondary)', marginBottom: '2rem', lineHeight: 1.6 }}>
-                                How many days do you want to complete a full review cycle of your selected part?
+                                How many minutes do you want to spend on your daily portion?
                             </p>
                             <div style={{ width: '100%', marginTop: '1rem' }}>
                                 <DailyCompletionSlider
-                                    days={days}
-                                    onChange={setDays}
+                                    minutes={dailyTargetMinutes}
+                                    onChange={setDailyTargetMinutes}
                                     activePart={selectedPart}
+                                    skippedSurahs={localSkipped}
+                                    nodes={nodes}
+                                    mode={dailyPortionModeChoice}
                                 />
                             </div>
                         </div>

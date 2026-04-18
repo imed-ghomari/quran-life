@@ -4,6 +4,7 @@ import phrasesRaw from '../../Mutashabihat ul Quran/phrases.json';
 import phraseVersesRaw from '../../Mutashabihat ul Quran/phrase_verses.json';
 import { SURAHS } from './quranData';
 import { CustomMutashabih } from './types';
+import { doWordRangesOverlap, ReviewChunkWordRange } from './reviewVerseChunks';
 
 /**
  * Metadata for a specific phrase match in a verse
@@ -31,6 +32,13 @@ export interface SimilarityEntry {
     meta: FlatEntry | { isCustom: true; customId: string };
     isCustom?: boolean;
 }
+
+const isValidWordRange = (range: unknown): range is ReviewChunkWordRange => (
+    Array.isArray(range)
+    && range.length === 2
+    && Number.isFinite(Number(range[0]))
+    && Number.isFinite(Number(range[1]))
+);
 
 const phrases = phrasesRaw as unknown as Record<string, {
     source: { key: string; from: number; to: number };
@@ -128,6 +136,41 @@ export function hasMutashabihForAbsolute(absoluteAyah: number): boolean {
     return ayahSet.has(absoluteAyah);
 }
 
+export function isCustomSimilarityEntry(entry: SimilarityEntry): boolean {
+    return !!entry.isCustom || !!(entry.meta as any)?.isCustom;
+}
+
+export function getSimilarityEntryWordRangeForAbsolute(
+    entry: SimilarityEntry,
+    absoluteAyah: number
+): ReviewChunkWordRange | null {
+    if (isCustomSimilarityEntry(entry)) return null;
+
+    const meta = entry.meta as FlatEntry;
+    if (Number(meta?.sourceAbs) === absoluteAyah && isValidWordRange(meta?.sourceRange)) {
+        return meta.sourceRange;
+    }
+
+    const match = Array.isArray(meta?.matches)
+        ? meta.matches.find((candidate) => Number(candidate?.absolute) === absoluteAyah)
+        : null;
+    return match && isValidWordRange(match.wordRange) ? match.wordRange : null;
+}
+
+export function doesSimilarityEntryOverlapChunk(
+    entry: SimilarityEntry,
+    absoluteAyah: number,
+    chunkWordRange: ReviewChunkWordRange | null | undefined
+): boolean {
+    if (isCustomSimilarityEntry(entry)) return true;
+    if (!chunkWordRange) return true;
+
+    const entryRange = getSimilarityEntryWordRangeForAbsolute(entry, absoluteAyah);
+    if (!entryRange) return true;
+
+    return doWordRangesOverlap(entryRange, chunkWordRange);
+}
+
 export function getMutashabihatForAbsolute(absoluteAyah: number, customMutashabihat: CustomMutashabih[] = []): SimilarityEntry[] {
     const indices = ayahToEntryMap[absoluteAyah] || [];
     const official = indices.map(idx => {
@@ -187,4 +230,3 @@ export function getAllMutashabihatRefs(customMutashabihat: CustomMutashabih[] = 
     });
     return Array.from(new Set([...officialRefs, ...customRefs])).sort((a, b) => a - b);
 }
-

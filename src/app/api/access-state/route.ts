@@ -10,5 +10,8 @@ export async function GET() {
     isPaymentBypass: access.isPaymentBypass,
     hasPremiumAccess: access.hasPremiumAccess,
     isEditor: access.isEditor,
+    accessSource: access.accessSource,
+    sponsorshipEndsAt: access.sponsorshipEndsAt,
+    subscriptionKind: access.subscriptionKind,
   });
 }

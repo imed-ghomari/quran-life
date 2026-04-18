@@ -2,7 +2,7 @@
 // Core Types for Phased Qur'an Learning System
 // ========================================
 
-import { FSRSState } from './fsrs';
+import { createNewFSRSState, FSRSState } from './fsrs';
 
 // Qur'anic part classifications used by the app
 export type QuranPart = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; // 8 = All Quran
@@ -107,6 +107,7 @@ export interface AudioSettings {
 export interface AppSettings {
     id?: string;
     completionDays: number;
+    dailyTargetMinutes?: number;
     activePart: QuranPart;
     partSystemVersion?: number;
     learnedVerses: { [surahId: string]: number[] };
@@ -127,6 +128,25 @@ export interface AppSettings {
     audioSettings?: AudioSettings;
     userId?: string;
     lastSyncedAt?: string;
+}
+
+export interface ReviewError {
+    id?: string;
+    type?: string;
+    timestamp?: string;
+    nodeId?: string;
+    nodeType?: string;
+    surahId?: number;
+    partId?: number;
+    startVerse?: number;
+    endVerse?: number;
+    grade?: number;
+    anchorLabel?: string;
+    anchorId?: string;
+    absoluteAyah?: number;
+    failedChunkIndex?: number;
+    failedChunkCount?: number;
+    userId?: string;
 }
 
 // Anchor (maps meaning to verse ranges)
@@ -179,6 +199,16 @@ export interface ListeningStats {
     totalMinutes: number;
     rotationCount: number;
     lastListened: string;   // ISO date
+}
+
+export interface ListeningProgressEntry {
+    id?: string;
+    partId: number;
+    lastVerseIndex?: number;
+    nextStartVerseKey?: string;
+    cycles?: number;
+    updatedAt?: string;
+    userId?: string;
 }
 
 // LearningScope (control layer)
@@ -241,31 +271,87 @@ export function getAudioPath(surahId: number, ayahId: number): string {
 }
 
 // MemoryNode Utility Helpers
+const readFiniteSchedulerNumber = (...values: unknown[]): number => {
+    for (const value of values) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+};
+
+const readSchedulerString = (...values: unknown[]): string | null => {
+    for (const value of values) {
+        if (typeof value !== 'string') continue;
+        const normalized = value.trim();
+        if (normalized) return normalized;
+    }
+    return null;
+};
+
 export function getNodeStability(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    return (node.scheduler as any).stability || 0;
+    const scheduler = node.scheduler as any;
+    return readFiniteSchedulerNumber(
+        scheduler.stability,
+        scheduler.scheduled_days,
+        scheduler.scheduledDays,
+    );
 }
 
 export function getNodeDifficulty(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    return (node.scheduler as any).difficulty || 0;
+    const scheduler = node.scheduler as any;
+    return readFiniteSchedulerNumber(
+        scheduler.difficulty,
+        scheduler.difficultyScore,
+    );
 }
 
 export function getNodeReps(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    return (node.scheduler as any).reps || (node.scheduler as any).repetition || 0;
+    const scheduler = node.scheduler as any;
+    return readFiniteSchedulerNumber(
+        scheduler.reps,
+        scheduler.repetition,
+        scheduler.reviewCount,
+        scheduler.review_count,
+    );
 }
 
 export function getNodeDueDate(node: MemoryNode): string | null {
     if (!node.scheduler) return null;
-    return (node.scheduler as any).due || (node.scheduler as any).dueDate || null;
+    const scheduler = node.scheduler as any;
+    return readSchedulerString(
+        scheduler.due,
+        scheduler.dueDate,
+        scheduler.nextDueAt,
+    );
 }
 
 export function hasNodeBeenReviewed(scheduler: any): boolean {
     if (!scheduler) return false;
-    if ('reps' in scheduler) return scheduler.reps > 0;
-    if ('repetition' in scheduler) return scheduler.repetition > 0;
-    return false;
+    const reps = readFiniteSchedulerNumber(
+        scheduler.reps,
+        scheduler.repetition,
+        scheduler.reviewCount,
+        scheduler.review_count,
+    );
+    if (reps > 0) {
+        return true;
+    }
+    const state = readSchedulerString(scheduler.state)?.toLowerCase();
+    if (reps <= 0 && state === 'new') {
+        return false;
+    }
+    return !!readSchedulerString(scheduler.last_review, scheduler.lastReview);
+}
+
+export function surahHasReviewedVerseGroup(nodes: MemoryNode[], surahId: number): boolean {
+    return nodes.some((node) => (
+        node.type === 'verse_segment'
+        && Number(node.surahId) === surahId
+        && hasNodeBeenReviewed(node.scheduler)
+    ));
 }
 
 // VerseSegment ID helper
@@ -284,17 +370,7 @@ export function getMaturityState(level: 'reset' | 'medium' | 'strong' | 'mastere
     const now = new Date().toISOString();
     switch (level) {
         case 'reset':
-             return {
-                due: now,
-                stability: 0,
-                difficulty: 0,
-                elapsed_days: 0,
-                scheduled_days: 0,
-                reps: 0,
-                lapses: 0,
-                state: 'New',
-                last_review: now
-            };
+             return createNewFSRSState();
         case 'medium':
             return {
                 due: new Date(Date.now() + 14 * 86400000).toISOString(),

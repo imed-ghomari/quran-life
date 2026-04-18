@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Spinner from '@/components/ui/Spinner';
-import FullScreenLoader from '@/components/ui/FullScreenLoader';
+import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useAppShellTransition } from '@/components/AppShell';
 import {
     useSharedInstantListeningProgress,
@@ -10,11 +10,12 @@ import {
     useSharedInstantMutashabihat,
     useSharedInstantNodes,
     useSharedInstantReviewErrors,
+    useSharedInstantReviewLogs,
     useSharedInstantSettings,
 } from '@/components/InstantDataProvider';
 import { SURAHS } from '@/lib/quranData';
 import {
-    useInstantReviewLogs,
+    useInstantOptimization,
 } from '@/hooks/useInstantData';
 import { getAllMutashabihatRefs, absoluteToSurahAyah } from '@/lib/mutashabihat';
 import {
@@ -23,8 +24,13 @@ import {
     LEGACY_ALL_QURAN_PART,
     getNodeStability,
     getNodeDueDate,
+    hasNodeBeenReviewed,
     MemoryNode
 } from '@/lib/types';
+import {
+    getEligibleDailyPortionSurahs,
+    getProgressStartIndexFromEligibleSurahs,
+} from '@/lib/dailyPortionUtils';
 
 import { Map as MapIcon, MapPinned, Repeat, RotateCcw, CalendarClock, BookCopy, AlertTriangle, CalendarDays } from 'lucide-react';
 
@@ -63,6 +69,21 @@ interface ProgressBarStats {
     total: number;
     segments: StatSegment[];
     displayTotal?: number | string;
+}
+
+interface FutureDuePoint {
+    day: number;
+    count: number;
+    cumulative: number;
+}
+
+interface FutureDueBucket {
+    startDay: number;
+    endDay: number;
+    label: string;
+    count: number;
+    cumulative: number;
+    containsToday: boolean;
 }
 
 function ChartEmptyState({ message = 'No data available', height = 200 }: { message?: string; height?: number }) {
@@ -141,7 +162,7 @@ export default function StatisticsPage() {
     const { nodes: memoryNodes, isLoading: nodesLoading } = useSharedInstantNodes();
     const { progress: listeningProgress, isLoading: progressLoading } = useSharedInstantListeningProgress();
     const { decisions: mutashabihatDecisions, isLoading: mutashabihatLoading } = useSharedInstantMutashabihat();
-    const { logs: reviewLogs, isLoading: reviewLogsLoading } = useInstantReviewLogs();
+    const { logs: reviewLogs, isLoading: reviewLogsLoading } = useSharedInstantReviewLogs();
     const { errors: reviewErrors, isLoading: reviewErrorsLoading } = useSharedInstantReviewErrors();
 
     const [verseChunkMode, setVerseChunkMode] = useState<'chunks' | 'surahs'>('chunks');
@@ -168,6 +189,10 @@ export default function StatisticsPage() {
     const activeUnskippedSurahs = useMemo(
         () => activePartSurahs.filter((surah) => !skippedSurahs.has(surah.id)),
         [activePartSurahs, skippedSurahs],
+    );
+    const eligibleDailyPortionSurahs = useMemo(
+        () => getEligibleDailyPortionSurahs(activePart, skippedSurahs, memoryNodes),
+        [activePart, memoryNodes, skippedSurahs],
     );
 
     const {
@@ -518,11 +543,11 @@ export default function StatisticsPage() {
             ?? (activePart === ALL_QURAN_PART && (settings?.partSystemVersion ?? 1) < 2
                 ? listeningProgressByPartId.get(LEGACY_ALL_QURAN_PART)
                 : undefined);
-        const progress = Math.max(0, partProgress?.lastVerseIndex || 0);
+        const progress = getProgressStartIndexFromEligibleSurahs(eligibleDailyPortionSurahs, partProgress);
         const cycles = partProgress?.cycles || 0;
         const completedToday = Boolean(partProgress?.updatedAt && new Date(partProgress.updatedAt).toDateString() === new Date().toDateString());
 
-        const surahsInPart = activeUnskippedSurahs;
+        const surahsInPart = eligibleDailyPortionSurahs;
         const totalVerses = surahsInPart.reduce((sum, surah) => sum + surah.verseCount, 0);
         const completedVerses = totalVerses > 0 ? Math.min(progress, totalVerses) : 0;
         const remainingVerses = Math.max(0, totalVerses - completedVerses);
@@ -562,7 +587,7 @@ export default function StatisticsPage() {
                 },
             ]
         };
-    }, [activePart, settings?.partSystemVersion, activeUnskippedSurahs, listeningProgressByPartId, statisticsReady]);
+    }, [activePart, eligibleDailyPortionSurahs, listeningProgressByPartId, settings?.partSystemVersion, statisticsReady]);
 
     // 5. Mutashabihat Coverage Data
     const mutashabihatStats = useMemo(() => {
@@ -650,7 +675,7 @@ export default function StatisticsPage() {
             return anchors.some((a: any) => Number(a.startVerse) === Number(node.startVerse) && Number(a.endVerse) === Number(node.endVerse));
         };
 
-        const nodes = memoryNodes.filter(node => {
+        const reviewPlanNodes = memoryNodes.filter(node => {
             if (node.type !== 'verse_segment' && node.type !== 'mindmap' && node.type !== 'part_mindmap') return false;
 
             if (node.type === 'part_mindmap') {
@@ -677,31 +702,46 @@ export default function StatisticsPage() {
             return hasAnchorForNode(node);
         });
 
+        const nodes = reviewPlanNodes.filter(node => {
+            if (!hasNodeBeenReviewed(node.scheduler)) return false;
+
+            const dueStr = getNodeDueDate(node);
+            if (!dueStr) return false;
+
+            const dueDate = new Date(dueStr);
+            return !isNaN(dueDate.getTime());
+        });
+
         const allDayCounts: Record<number, number> = {};
         let totalReviews = 0;
         let totalFutureReviews = 0;
         let backlogCount = 0;
         let dueTomorrow = 0;
 
+        const now = new Date();
+
         nodes.forEach(node => {
             const dueStr = getNodeDueDate(node);
             if (!dueStr) return;
             const dueDate = new Date(dueStr);
             if (isNaN(dueDate.getTime())) return;
-            dueDate.setHours(0, 0, 0, 0);
 
-            const diffTime = dueDate.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (!Number.isFinite(diffDays)) return;
+            // Use the same calendar-based grouping but relative to 'now'
+            const calendarDueDate = new Date(dueDate);
+            calendarDueDate.setHours(0, 0, 0, 0);
+            const calendarToday = new Date();
+            calendarToday.setHours(0, 0, 0, 0);
+            
+            const dayKey = Math.round((calendarDueDate.getTime() - calendarToday.getTime()) / (1000 * 60 * 60 * 24));
 
-            if (diffDays < 0) {
+            if (dueDate < now) {
                 backlogCount++;
             } else {
                 totalFutureReviews++;
-                if (diffDays === 1) dueTomorrow++;
+                if (dayKey === 1) dueTomorrow++;
             }
 
-            allDayCounts[diffDays] = (allDayCounts[diffDays] || 0) + 1;
+            allDayCounts[dayKey] = (allDayCounts[dayKey] || 0) + 1;
         });
 
         const dayCounts = allDayCounts;
@@ -720,7 +760,7 @@ export default function StatisticsPage() {
             maxDay = Math.max(...finiteDays, 30);
         }
 
-        const data: { day: number; count: number; cumulative: number }[] = [];
+        const data: FutureDuePoint[] = [];
         let cumulative = 0;
 
         // Calculate cumulative starting from the earliest day in dayCounts if backlog is shown
@@ -864,6 +904,31 @@ export default function StatisticsPage() {
             return toPositiveInt(log?.surahId);
         };
 
+        const resolveCurrentVerseNodeForError = (error: any): MemoryNode | null => {
+            const nodeId = String(error?.nodeId || '');
+            const directNode = nodeId ? nodeById.get(nodeId) : undefined;
+            if (directNode?.type === 'verse_segment') {
+                return directNode;
+            }
+
+            const surahId = resolveErrorSurahId(error);
+            if (!surahId) return null;
+
+            const candidates = verseSegmentNodesBySurahId.get(surahId) || [];
+            const startVerse = toPositiveInt(error?.startVerse);
+            const endVerse = toPositiveInt(error?.endVerse);
+            const anchorId = String(error?.anchorId || '').trim();
+
+            return candidates.find((node) => {
+                const sameRange = startVerse !== null
+                    && endVerse !== null
+                    && Number(node.startVerse) === startVerse
+                    && Number(node.endVerse) === endVerse;
+                if (sameRange) return true;
+                return !!anchorId && String(node.targetId || '').trim() === anchorId;
+            }) || null;
+        };
+
         const inWindow = (ms: number, startMs: number, endMs: number) => ms >= startMs && ms < endMs;
         const makeCounter = () => new Map<number, number>();
         const inc = (map: Map<number, number>, surahId: number, amount = 1) => {
@@ -880,6 +945,8 @@ export default function StatisticsPage() {
         reviewErrors.forEach(error => {
             const timestampMs = toMs(error?.timestamp);
             if (timestampMs === null) return;
+            const currentNode = resolveCurrentVerseNodeForError(error);
+            if (currentNode && !hasNodeBeenReviewed(currentNode.scheduler)) return;
             const surahId = resolveErrorSurahId(error);
             if (!surahId || !targetSurahIds.has(surahId)) return;
 
@@ -1058,8 +1125,7 @@ export default function StatisticsPage() {
     }, [activePart, activePartSurahIds, nodeById, reviewLogs, skippedSurahs, statisticsReady]);
 
     if (!statisticsReady) {
-        if (isTransitionPendingForCurrentRoute) return null;
-        return <FullScreenLoader text="Preparing statistics..." />;
+        return <PageSkeleton />;
     }
 
     return (
@@ -1462,7 +1528,7 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
                     </div>
                     <h2 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>Review Plan</h2>
                 </div>
-                <div className="future-due-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <div className="future-due-actions" style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
                     <div className="segmented-compact">
                         <button type="button" onClick={() => setTimeRange('1m')} className={`adv-seg-btn ${timeRange === '1m' ? 'adv-seg-active' : ''}`}>1m</button>
                         <button type="button" onClick={() => setTimeRange('3m')} className={`adv-seg-btn ${timeRange === '3m' ? 'adv-seg-active' : ''}`}>3m</button>
@@ -1479,7 +1545,18 @@ function FutureDueSection({ stats, timeRange, setTimeRange }: {
     );
 }
 
-function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minDay: number; maxDay: number; dailyLoad: string }) {
+const formatSingleDayLabel = (day: number) => {
+    if (day === 0) return 'Today';
+    if (day > 0) return `+${day}d`;
+    return `${Math.abs(day)}d ago`;
+};
+
+const formatRangeLabel = (startDay: number, endDay: number) => {
+    if (startDay === endDay) return formatSingleDayLabel(startDay);
+    return `${formatSingleDayLabel(startDay)} to ${formatSingleDayLabel(endDay)}`;
+};
+
+function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: FutureDuePoint[]; minDay: number; maxDay: number; dailyLoad: string }) {
     const DESKTOP_MAX_X_AXIS_LEGENDS = 6;
     const MAX_Y_AXIS_LEGENDS = 6;
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1488,8 +1565,59 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
     const chartHeight = 210;
     const padding = { top: 8, right: 28, bottom: 38, left: 36 };
 
-    const nonZeroData = data.filter(d => d.count > 0);
-    const maxCount = Math.max(...nonZeroData.map(d => d.count), 1);
+    const bucketedData = useMemo<FutureDueBucket[]>(() => {
+        const nonZeroData = data.filter(d => d.count > 0);
+        if (nonZeroData.length === 0) return [];
+
+        const width = Math.max(320, chartWidth || 0);
+        const isSmallScreen = width <= 480;
+        const isTablet = width > 480 && width <= 900;
+        const maxBars = isSmallScreen ? 10 : isTablet ? 16 : 32;
+        const spanDays = Math.max(1, maxDay - minDay + 1);
+
+        // Find the best bucket size to keep the number of bars reasonable
+        const niceBucketSizes = [1, 2, 7, 14, 30, 60, 90];
+        let bucketSize = 1;
+        for (const size of niceBucketSizes) {
+            if (spanDays / size <= maxBars) {
+                bucketSize = size;
+                break;
+            }
+            bucketSize = size; // Fallback to largest if none fit
+        }
+
+        const buckets = new Map<number, FutureDueBucket>();
+
+        nonZeroData.forEach(point => {
+            const bucketStart = Math.floor(point.day / bucketSize) * bucketSize;
+            const bucketEnd = bucketStart + bucketSize - 1;
+            const existing = buckets.get(bucketStart);
+            if (existing) {
+                existing.count += point.count;
+                existing.cumulative = point.cumulative;
+                existing.containsToday = existing.containsToday || (point.day >= bucketStart && point.day <= bucketEnd && bucketStart <= 0 && bucketEnd >= 0);
+                return;
+            }
+
+            buckets.set(bucketStart, {
+                startDay: bucketStart,
+                endDay: bucketEnd,
+                label: '',
+                count: point.count,
+                cumulative: point.cumulative,
+                containsToday: bucketStart <= 0 && bucketEnd >= 0,
+            });
+        });
+
+        return Array.from(buckets.values())
+            .sort((a, b) => a.startDay - b.startDay)
+            .map(bucket => ({
+                ...bucket,
+                label: formatRangeLabel(bucket.startDay, bucket.endDay),
+            }));
+    }, [chartWidth, data, maxDay, minDay]);
+
+    const maxCount = Math.max(...bucketedData.map(d => d.count), 1);
     const isSmallRange = maxCount <= 8;
     const tickCount = isSmallRange ? Math.max(2, maxCount) : 4;
     const tickStep = isSmallRange ? 1 : Math.max(2, Math.ceil(maxCount / tickCount / 2) * 2);
@@ -1513,7 +1641,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
     }, []);
 
     if (data.length === 0) return <ChartEmptyState />;
-    if (nonZeroData.length === 0) {
+    if (bucketedData.length === 0) {
         return <ChartEmptyState />;
     }
 
@@ -1536,10 +1664,15 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const vWidth = chartWidth;
                         const plotWidth = vWidth - padding.left - padding.right;
                         const plotHeight = chartHeight - padding.top - padding.bottom;
-                        const span = Math.max(1, nonZeroData.length);
-                        const groupWidth = plotWidth * 0.72;
+                        const span = Math.max(1, bucketedData.length);
+                        
+                        // Limit bar spacing so few bars don't look lost
+                        const maxStep = 60;
+                        const minStep = 18;
+                        const step = Math.max(minStep, Math.min(maxStep, plotWidth / span));
+                        const groupWidth = step * span;
                         const groupStart = padding.left + (plotWidth - groupWidth) / 2;
-                        const step = groupWidth / span;
+                        
                         const getX = (index: number) => groupStart + (index + 0.5) * step;
                         const getYCount = (count: number) => chartHeight - padding.bottom - (count / maxNice) * plotHeight;
                         const isSmallScreen = chartWidth <= 480;
@@ -1549,27 +1682,21 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                         const rotateLabels = step < (isSmallScreen ? 46 : 40);
                         const dailyLoadValue = Number(dailyLoad);
                         const showDailyLoadLine = Number.isFinite(dailyLoadValue) && dailyLoadValue >= 1;
-                        const formatDayLabel = (day: number) => {
-                            if (day === 0) return 'Today';
-                            if (day === 1) return '1d';
-                            if (day < 0) return `-${Math.abs(day)}d`;
-                            return `${day}d`;
-                        };
-                        const baseLabelStep = Math.max(1, Math.ceil(nonZeroData.length / maxXAxisLegends));
-                        const longestLabelLength = Math.max(...nonZeroData.map(d => formatDayLabel(d.day).length), 1);
+                        const baseLabelStep = Math.max(1, Math.ceil(bucketedData.length / maxXAxisLegends));
+                        const longestLabelLength = Math.max(...bucketedData.map(d => d.label.length), 1);
                         const estimatedLabelWidth = longestLabelLength * xAxisFontSize * 0.56 + 8;
                         const minStepForWidth = Math.max(1, Math.ceil(estimatedLabelWidth / Math.max(step, 1)));
                         const labelStep = Math.max(baseLabelStep, minStepForWidth);
                         const minLabelGapPx = estimatedLabelWidth;
 
-                        const candidateLabelIndices = nonZeroData
+                        const candidateLabelIndices = bucketedData
                             .map((d, i) => {
-                                const shouldShow = i === 0 || i === nonZeroData.length - 1 || d.day === 0 || i % labelStep === 0;
+                                const shouldShow = i === 0 || i === bucketedData.length - 1 || d.containsToday || i % labelStep === 0;
                                 return shouldShow ? i : -1;
                             })
                             .filter((i): i is number => i >= 0);
 
-                        const todayIndex = nonZeroData.findIndex(d => d.day === 0);
+                        const todayIndex = bucketedData.findIndex(d => d.containsToday);
                         const visibleLabelIndices = new Set<number>();
                         const canPlaceLabel = (index: number) => {
                             const x = getX(index);
@@ -1591,7 +1718,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                             visibleLabelIndices.add(index);
                         };
 
-                        const priorityIndices = [todayIndex, 0, nonZeroData.length - 1].filter(
+                        const priorityIndices = [todayIndex, 0, bucketedData.length - 1].filter(
                             (idx, pos, arr): idx is number => idx >= 0 && arr.indexOf(idx) === pos
                         );
 
@@ -1643,32 +1770,34 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
 
                                 <g clipPath={`url(#${ids.clip})`}>
                                     {showDailyLoadLine && (
-                                        <>
+                                        <g>
                                             <line
                                                 x1={padding.left}
                                                 y1={getYCount(dailyLoadValue)}
                                                 x2={vWidth - padding.right}
                                                 y2={getYCount(dailyLoadValue)}
                                                 stroke="var(--chart-strong)"
-                                                strokeWidth="1.2"
-                                                strokeDasharray="4 3"
-                                                opacity="0.9"
+                                                strokeWidth="1.5"
+                                                strokeDasharray="5 4"
+                                                opacity="0.8"
+                                                data-tooltip={`Avg Load: ${dailyLoad}`}
+                                                data-tooltip-trigger="tap"
+                                                style={{ cursor: 'help' }}
                                             />
-                                        </>
+                                        </g>
                                     )}
                                     {/* Bars */}
-                                    {nonZeroData.map((d, i) => {
+                                    {bucketedData.map((d, i) => {
                                         const barWidth = Math.max(14, Math.min(40, step * 0.96));
                                         const x = getX(i);
                                         const height = Math.max(0, chartHeight - padding.bottom - getYCount(d.count));
                                         const bgY = padding.top + 6;
                                         const bgHeight = plotHeight - 6;
                                         const isPeak = d.count === maxCount;
-                                        const hasXAxisLabel = visibleLabelIndices.has(i);
                                         const reviewLabel = `${d.count} review${d.count === 1 ? '' : 's'}`;
-                                        const tooltip = hasXAxisLabel
+                                        const tooltip = d.startDay === d.endDay
                                             ? reviewLabel
-                                            : `${reviewLabel} (${formatDayLabel(d.day)})`;
+                                            : `${reviewLabel} (${d.label})`;
                                         return (
                                             <g key={i}>
                                                 <path
@@ -1679,7 +1808,7 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                                 <path
                                                     d={roundedPath(x - barWidth / 2, getYCount(d.count), barWidth, height, 14, 6)}
                                                     fill="color-mix(in srgb, var(--accent) 72%, var(--background) 28%)"
-                                                    opacity={d.day < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
+                                                    opacity={d.endDay < 0 ? 0.45 : isPeak ? 0.95 : 0.6}
                                                     data-tooltip={tooltip}
                                                     data-tooltip-trigger="tap"
                                                     style={{ cursor: 'pointer' }}
@@ -1704,10 +1833,13 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                 })}
 
                                 {/* X-axis labels */}
-                                {nonZeroData.map((d, i) => {
+                                {bucketedData.map((d, i) => {
                                     if (!visibleLabelIndices.has(i)) return null;
                                     const x = getX(i);
                                     const y = chartHeight - padding.bottom + 18;
+
+                                    const displayLabel = d.containsToday ? 'Today' : formatSingleDayLabel(d.startDay);
+
                                     return (
                                         <text
                                             key={`label-${i}`}
@@ -1715,9 +1847,11 @@ function FutureDueChart({ data, minDay, maxDay, dailyLoad }: { data: any[]; minD
                                             y={y}
                                             textAnchor="middle"
                                             fontSize={xAxisFontSize}
-                                            fill="var(--foreground-secondary)"
+                                            fill={d.containsToday ? "var(--foreground)" : "var(--foreground-secondary)"}
+                                            fontWeight={d.containsToday ? "700" : "normal"}
+                                            transform={rotateLabels ? `rotate(-22 ${x} ${y})` : undefined}
                                         >
-                                            {formatDayLabel(d.day)}
+                                            {displayLabel}
                                         </text>
                                     );
                                 })}

@@ -21,6 +21,7 @@ const SENSITIVE_PATH_PREFIXES = [
   '/api/access-state',
   '/api/account/delete-request',
   '/api/paddle',
+  '/api/teacher',
   '/api/premade-mindmaps',
 ]
 
