@@ -985,6 +985,10 @@
   padding: 0 1rem;
 }
 
+.pricing-grid.single-plan {
+  grid-template-columns: minmax(280px, 480px);
+}
+
 /* Styling for the Single Pricing Card */
 .price-card {
   background:
