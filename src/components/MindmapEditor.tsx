@@ -493,14 +493,6 @@ function MindmapEditorContent({
         }
     }, [activeInitialSnapshot]);
 
-    if (isActuallyLoading) {
-        return (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Spinner size={32} text="Loading Mindmap..." />
-            </div>
-        );
-    }
-
     useMindmapBackGestureGuard(true);
 
     useEffect(() => {
@@ -999,6 +991,14 @@ function MindmapEditorContent({
         SharePanel: null,
         MainMenu: null,
     }), []);
+
+    if (isActuallyLoading) {
+        return (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spinner size={32} text="Loading Mindmap..." />
+            </div>
+        );
+    }
 
     return (
         <div
