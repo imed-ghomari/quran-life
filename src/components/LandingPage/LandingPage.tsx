@@ -18,8 +18,7 @@ import {
 } from 'lucide-react';
 import './LandingPage.css';
 import RoadmapSection from './RoadmapSection';
-import { clampTeacherSeatCount, formatCurrency, getStudentPlanPrice, getTeacherSeatPrice, getTeacherTotalPrice } from '@/lib/teacherPlan';
-import { clientEnv } from '@/lib/env/client';
+import { formatCurrency, getStudentPlanPrice } from '@/lib/teacherPlan';
 
 type ShowcaseItem = {
   title: string;
@@ -188,20 +187,14 @@ const FaqItem = ({ question, answer }: { question: string; answer: string }) => 
 
 interface LandingPageProps {
   onBuy: (options: {
-    role: 'student' | 'teacher';
     cycle: 'monthly' | 'yearly';
-    students?: number;
   }) => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
-  const [teacherStudentCount, setTeacherStudentCount] = useState(8);
   const { theme, setTheme } = useTheme();
-  const showTeacherPricingUi = clientEnv.NEXT_PUBLIC_ENABLE_TEACHER_PRICING_UI;
-  const teacherTotal = getTeacherTotalPrice(billingCycle, teacherStudentCount);
   const studentPrice = getStudentPlanPrice(billingCycle);
-  const teacherSeatPrice = getTeacherSeatPrice(billingCycle);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -274,7 +267,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             >
               {getThemeIcon()}
             </button>
-            <button className="btn btn-primary" onClick={() => onBuy({ role: 'student', cycle: billingCycle })}>
+            <button className="btn btn-primary" onClick={() => onBuy({ cycle: billingCycle })}>
               Get Started
             </button>
           </div>
@@ -354,9 +347,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <div className="section-header">
               <h2 className="section-title">Invest in your Akhirah</h2>
               <p>
-                {showTeacherPricingUi
-                  ? 'Choose the plan that fits your memorization journey or your classroom.'
-                  : 'One simple plan for full Quran Life access.'}
+                One simple plan for full Quran Life access.
               </p>
 
               {/* Billing Toggle */}
@@ -379,9 +370,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </div>
             </div>
 
-            <div className={`pricing-grid${showTeacherPricingUi ? '' : ' single-plan'}`}>
+            <div className="pricing-grid single-plan">
               <div className="price-card student-plan">
-                <div className="badge">{showTeacherPricingUi ? 'Student' : 'Premium'}</div>
+                <div className="badge">Premium</div>
 
                 <div className="price">{formatCurrency(studentPrice)}<span>{billingCycle === 'monthly' ? '/mo' : '/yr'}</span></div>
 
@@ -400,78 +391,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
                 <button
                   className="btn btn-secondary btn-full btn-lg"
-                  onClick={() => onBuy({ role: 'student', cycle: billingCycle })}
-                  aria-label="Purchase student subscription"
+                  onClick={() => onBuy({ cycle: billingCycle })}
+                  aria-label="Purchase premium subscription"
                 >
                   Get Full Access Now
                 </button>
                 <p className="guarantee">1 week trial</p>
               </div>
-
-              {showTeacherPricingUi ? (
-                <div className="price-card premium">
-                  <div className="badge">Teacher</div>
-
-                  <div className="price">{formatCurrency(teacherTotal)}<span>{billingCycle === 'monthly' ? '/mo' : '/yr'}</span></div>
-
-                  <p>
-                    Cover your own account plus every student seat in one subscription.
-                  </p>
-
-                  <div className="teacher-seat-picker">
-                    <div className="teacher-seat-picker-header">
-                      <span>Students covered</span>
-                    </div>
-                    <div className="teacher-seat-picker-controls">
-                      <button
-                        type="button"
-                        className="teacher-seat-stepper"
-                        onClick={() => setTeacherStudentCount((current) => clampTeacherSeatCount(current - 1))}
-                        aria-label="Decrease student seats"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        max={500}
-                        value={teacherStudentCount}
-                        onChange={(event) => setTeacherStudentCount(clampTeacherSeatCount(event.target.value))}
-                        className="teacher-seat-input"
-                        aria-label="Teacher student count"
-                      />
-                      <button
-                        type="button"
-                        className="teacher-seat-stepper"
-                        onClick={() => setTeacherStudentCount((current) => clampTeacherSeatCount(current + 1))}
-                        aria-label="Increase student seats"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <p className="teacher-seat-summary">
-                      Teacher base + {teacherStudentCount} student {teacherStudentCount === 1 ? 'seat' : 'seats'} at {formatCurrency(teacherSeatPrice)} each.
-                    </p>
-                  </div>
-
-                  <ul className="features-list">
-                    <li><Check size={20} className="check-icon" /> Everything in the student plan</li>
-                    <li><Check size={20} className="check-icon" /> Shared class code for student onboarding</li>
-                    <li><Check size={20} className="check-icon" /> Seat capacity tracking inside settings</li>
-                    <li><Check size={20} className="check-icon" /> Increase or reduce covered students later</li>
-                    <li><Check size={20} className="check-icon" /> Official Pre-Made Mindmaps</li>
-                  </ul>
-
-                  <button
-                    className="btn btn-primary btn-full btn-lg"
-                    onClick={() => onBuy({ role: 'teacher', cycle: billingCycle, students: teacherStudentCount })}
-                    aria-label="Purchase teacher subscription"
-                  >
-                    Start Teacher Plan
-                  </button>
-                  <p className="guarantee">Teacher base + per-student seats. Adjust seats later from settings.</p>
-                </div>
-              ) : null}
             </div>
           </div>
         </section>
