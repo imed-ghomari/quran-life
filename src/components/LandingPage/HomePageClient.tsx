@@ -60,21 +60,13 @@ export default function HomePageClient() {
   }, [isAuthLoading, user, router]);
 
   const handleGetStarted = ({
-    role,
     cycle,
-    students,
   }: {
-    role: 'student' | 'teacher';
     cycle: 'monthly' | 'yearly';
-    students?: number;
   }) => {
     const params = new URLSearchParams({
       plan: cycle,
-      role,
     });
-    if (role === 'teacher' && students) {
-      params.set('students', String(students));
-    }
     window.location.href = `/auth?${params.toString()}`;
   };
 

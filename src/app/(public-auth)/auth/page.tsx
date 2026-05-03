@@ -8,7 +8,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
-import { Mail, ArrowRight, Lock, Hash, Ticket, Users } from 'lucide-react';
+import { Mail, ArrowRight, Lock, Hash, Ticket } from 'lucide-react';
 
 // Import Suspense for handling asynchronous components
 import { Suspense } from 'react';
@@ -20,7 +20,7 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
 import { buildCheckoutItems } from '@/lib/paddle/prices';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
-import { clampTeacherSeatCount, formatCurrency, generateClassCode, getStudentPlanPrice, getTeacherSeatPrice, getTeacherTotalPrice, normalizeClassCode } from '@/lib/teacherPlan';
+import { formatCurrency, getStudentPlanPrice, normalizeClassCode } from '@/lib/teacherPlan';
 
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -60,20 +60,10 @@ function AuthContent() {
         const rawPlan = searchParams?.get('plan');
         return rawPlan === 'monthly' || rawPlan === 'yearly' ? rawPlan : null;
     }, [searchParams]);
-    const roleFromQuery = useMemo(() => {
-        const rawRole = searchParams?.get('role');
-        return rawRole === 'teacher' ? 'teacher' : 'student';
-    }, [searchParams]);
-    const studentsFromQuery = useMemo(() => {
-        return clampTeacherSeatCount(searchParams?.get('students') ?? 1);
-    }, [searchParams]);
     const classCodeFromQuery = useMemo(() => normalizeClassCode(searchParams?.get('classCode')), [searchParams]);
     const shouldReplaceGraceSponsorship = useMemo(() => searchParams?.get('replaceSponsorship') === '1', [searchParams]);
     const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
-    const [role, setRole] = useState<'student' | 'teacher'>(() => roleFromQuery);
-    const [teacherSeatCount, setTeacherSeatCount] = useState(() => studentsFromQuery);
     const [classCodeInput, setClassCodeInput] = useState(() => classCodeFromQuery);
-    const [generatedTeacherClassCode, setGeneratedTeacherClassCode] = useState('');
     const [classCodeError, setClassCodeError] = useState<string | null>(null);
     const [isRedeemingClassCode, setIsRedeemingClassCode] = useState(false);
     const [isOpening, setIsOpening] = useState(false);
@@ -83,23 +73,12 @@ function AuthContent() {
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
-    const isTeacherFlow = role === 'teacher';
     const shouldAllowGraceCheckout = accessSource === 'teacher_grace' && shouldReplaceGraceSponsorship;
-    const teacherTotal = getTeacherTotalPrice(plan, teacherSeatCount);
-    const teacherSeatPrice = getTeacherSeatPrice(plan);
 
     useEffect(() => {
         if (!planFromQuery) return;
         setPlan(planFromQuery);
     }, [planFromQuery]);
-
-    useEffect(() => {
-        setRole(roleFromQuery);
-    }, [roleFromQuery]);
-
-    useEffect(() => {
-        setTeacherSeatCount(studentsFromQuery);
-    }, [studentsFromQuery]);
 
     useEffect(() => {
         if (!classCodeFromQuery) return;
@@ -181,30 +160,12 @@ function AuthContent() {
         if (!paddle) return;
         setIsOpening(true);
 
-        const checkoutItems = buildCheckoutItems(
-            role,
-            plan,
-            teacherSeatCount,
-        );
-        const teacherClassCode = isTeacherFlow
-            ? (generatedTeacherClassCode || generateClassCode())
-            : '';
-        if (isTeacherFlow && !generatedTeacherClassCode) {
-            setGeneratedTeacherClassCode(teacherClassCode);
-        }
-        const checkoutCustomData = isTeacherFlow
-            ? {
-                userId: user.id,
-                subscriptionKind: 'teacher',
-                billingInterval: plan,
-                seatCount: teacherSeatCount,
-                classCode: teacherClassCode,
-            }
-            : {
-                userId: user.id,
-                subscriptionKind: 'student',
-                billingInterval: plan,
-            };
+        const checkoutItems = buildCheckoutItems('student', plan);
+        const checkoutCustomData = {
+            userId: user.id,
+            subscriptionKind: 'student',
+            billingInterval: plan,
+        };
 
         paddle.Checkout.open({
             items: checkoutItems,
@@ -219,44 +180,12 @@ function AuthContent() {
     const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
         setPlan(nextPlan);
         if (!paddle || !isCheckoutOpen) return;
-        const teacherClassCode = generatedTeacherClassCode || (isTeacherFlow ? generateClassCode() : '');
-        if (isTeacherFlow && !generatedTeacherClassCode) {
-            setGeneratedTeacherClassCode(teacherClassCode);
-        }
         paddle.Checkout.updateCheckout({
-            items: buildCheckoutItems(role, nextPlan, teacherSeatCount),
-            customData: isTeacherFlow
-                ? {
-                    userId: user?.id ?? '',
-                    subscriptionKind: 'teacher',
-                    billingInterval: nextPlan,
-                    seatCount: teacherSeatCount,
-                    classCode: teacherClassCode,
-                }
-                : {
-                    userId: user?.id ?? '',
-                    subscriptionKind: 'student',
-                    billingInterval: nextPlan,
-                },
-        });
-    };
-
-    const handleTeacherSeatCountChange = (nextCount: number) => {
-        const normalized = clampTeacherSeatCount(nextCount);
-        setTeacherSeatCount(normalized);
-        if (!paddle || !isCheckoutOpen || role !== 'teacher') return;
-        const teacherClassCode = generatedTeacherClassCode || generateClassCode();
-        if (!generatedTeacherClassCode) {
-            setGeneratedTeacherClassCode(teacherClassCode);
-        }
-        paddle.Checkout.updateCheckout({
-            items: buildCheckoutItems('teacher', plan, normalized),
+            items: buildCheckoutItems('student', nextPlan),
             customData: {
                 userId: user?.id ?? '',
-                subscriptionKind: 'teacher',
-                billingInterval: plan,
-                seatCount: normalized,
-                classCode: teacherClassCode,
+                subscriptionKind: 'student',
+                billingInterval: nextPlan,
             },
         });
     };
@@ -684,70 +613,66 @@ function AuthContent() {
                 ) : (
                     <div>
                         <h1 className="checkout-title" style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                            {isTeacherFlow ? 'Activate your teacher plan' : 'Unlock premium access'}
+                            Unlock premium access
                         </h1>
 
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
-                            {isTeacherFlow
-                                ? 'Choose how often you want to be billed and how many students you want to cover.'
-                                : shouldAllowGraceCheckout
-                                    ? 'Your teacher-sponsored access is ending soon. Start your own plan to keep access without interruption.'
-                                    : 'Have a teacher class code? Redeem it below to skip checkout. Otherwise, continue with your own plan.'}
+                            {shouldAllowGraceCheckout
+                                ? 'Your teacher-sponsored access is ending soon. Start your own plan to keep access without interruption.'
+                                : 'Have a teacher class code? Redeem it below to skip checkout. Otherwise, continue with your own plan.'}
                         </p>
 
-                        {!isTeacherFlow && (
-                            <div style={{
-                                marginBottom: '1.25rem',
-                                padding: '1rem',
-                                borderRadius: '18px',
-                                border: '1px solid var(--border)',
-                                background: 'var(--background-secondary)',
-                                display: 'grid',
-                                gap: '0.85rem',
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                    <Ticket size={18} style={{ color: 'var(--accent)' }} />
-                                    <span style={{ fontWeight: 700 }}>Redeem teacher class code</span>
-                                </div>
-                                <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr auto' }}>
-                                    <input
-                                        type="text"
-                                        placeholder="QL-ABCD-EFGH"
-                                        value={classCodeInput}
-                                        onChange={(event) => {
-                                            setClassCodeInput(event.target.value.toUpperCase());
-                                            if (classCodeError) setClassCodeError(null);
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.85rem 1rem',
-                                            borderRadius: '12px',
-                                            border: '1px solid var(--border)',
-                                            background: 'var(--background)',
-                                            fontSize: '1rem',
-                                            color: 'var(--foreground)',
-                                        }}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        disabled={isRedeemingClassCode}
-                                        onClick={() => {
-                                            void handleRedeemClassCode();
-                                        }}
-                                        style={{ justifyContent: 'center', minWidth: '150px' }}
-                                    >
-                                        {isRedeemingClassCode ? 'Redeeming...' : 'Redeem code'}
-                                    </button>
-                                </div>
-                                {classCodeError && (
-                                    <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0 }}>{classCodeError}</p>
-                                )}
-                                <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.82rem', margin: 0 }}>
-                                    Once redeemed, your teacher covers the checkout and you go straight to the app.
-                                </p>
+                        <div style={{
+                            marginBottom: '1.25rem',
+                            padding: '1rem',
+                            borderRadius: '18px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--background-secondary)',
+                            display: 'grid',
+                            gap: '0.85rem',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                <Ticket size={18} style={{ color: 'var(--accent)' }} />
+                                <span style={{ fontWeight: 700 }}>Redeem teacher class code</span>
                             </div>
-                        )}
+                            <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr auto' }}>
+                                <input
+                                    type="text"
+                                    placeholder="QL-ABCD-EFGH"
+                                    value={classCodeInput}
+                                    onChange={(event) => {
+                                        setClassCodeInput(event.target.value.toUpperCase());
+                                        if (classCodeError) setClassCodeError(null);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.85rem 1rem',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--background)',
+                                        fontSize: '1rem',
+                                        color: 'var(--foreground)',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    disabled={isRedeemingClassCode}
+                                    onClick={() => {
+                                        void handleRedeemClassCode();
+                                    }}
+                                    style={{ justifyContent: 'center', minWidth: '150px' }}
+                                >
+                                    {isRedeemingClassCode ? 'Redeeming...' : 'Redeem code'}
+                                </button>
+                            </div>
+                            {classCodeError && (
+                                <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0 }}>{classCodeError}</p>
+                            )}
+                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.82rem', margin: 0 }}>
+                                Once redeemed, your teacher covers the checkout and you go straight to the app.
+                            </p>
+                        </div>
 
                         <div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
                             Choose your billing plan:
@@ -779,13 +704,11 @@ function AuthContent() {
                             >
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                     <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly plan</span>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                        {isTeacherFlow ? 'Flexible seat management' : 'Pay as you go'}
-                                    </span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Pay as you go</span>
                                     <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
                                 </div>
                                 <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
-                                    {formatCurrency(isTeacherFlow ? teacherTotal : getStudentPlanPrice('monthly'))}
+                                    {formatCurrency(getStudentPlanPrice('monthly'))}
                                 </span>
                             </button>
                             <button
@@ -830,76 +753,14 @@ function AuthContent() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                         <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly plan</span>
                                     </div>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
-                                        {isTeacherFlow ? 'Best value for full classes' : 'Best value'}
-                                    </span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best value</span>
                                     <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
                                 </div>
                                 <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
-                                    {formatCurrency(isTeacherFlow ? getTeacherTotalPrice('yearly', teacherSeatCount) : getStudentPlanPrice('yearly'))}
+                                    {formatCurrency(getStudentPlanPrice('yearly'))}
                                 </span>
                             </button>
                         </div>
-
-                        {isTeacherFlow && (
-                            <div style={{
-                                marginBottom: '1.25rem',
-                                padding: '1rem',
-                                borderRadius: '18px',
-                                border: '1px solid var(--border)',
-                                background: 'var(--background-secondary)',
-                                display: 'grid',
-                                gap: '0.85rem',
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                    <Users size={18} style={{ color: 'var(--accent)' }} />
-                                    <span style={{ fontWeight: 700 }}>Students covered</span>
-                                </div>
-                                <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'auto 1fr auto' }}>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => handleTeacherSeatCountChange(teacherSeatCount - 1)}
-                                        disabled={isCheckoutLocked || teacherSeatCount <= 1}
-                                        style={{ minWidth: '48px', justifyContent: 'center' }}
-                                    >
-                                        -
-                                    </button>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={500}
-                                        value={teacherSeatCount}
-                                        onChange={(event) => handleTeacherSeatCountChange(Number(event.target.value))}
-                                        disabled={isCheckoutLocked}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.85rem 1rem',
-                                            borderRadius: '12px',
-                                            border: '1px solid var(--border)',
-                                            background: 'var(--background)',
-                                            fontSize: '1rem',
-                                            color: 'var(--foreground)',
-                                            textAlign: 'center',
-                                        }}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => handleTeacherSeatCountChange(teacherSeatCount + 1)}
-                                        disabled={isCheckoutLocked}
-                                        style={{ minWidth: '48px', justifyContent: 'center' }}
-                                    >
-                                        +
-                                    </button>
-                                </div>
-                                <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                                    Teacher base + {teacherSeatCount} student {teacherSeatCount === 1 ? 'seat' : 'seats'}.
-                                    <br />
-                                    {formatCurrency(getTeacherSeatPrice(plan))} per student seat on the {plan} cycle.
-                                </div>
-                            </div>
-                        )}
 
                         <button
                             className="btn btn-primary"
@@ -909,11 +770,9 @@ function AuthContent() {
                         >
                             {isOpening
                                 ? 'Opening checkout...'
-                                : isTeacherFlow
-                                    ? `Start teacher plan for ${formatCurrency(teacherTotal)}`
-                                    : shouldAllowGraceCheckout
-                                        ? 'Start your own plan'
-                                        : 'Proceed'}
+                                : shouldAllowGraceCheckout
+                                    ? 'Start your own plan'
+                                    : 'Proceed'}
                         </button>
                         <button
                             type="button"

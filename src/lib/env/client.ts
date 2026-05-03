@@ -77,10 +77,6 @@ export const clientEnv = {
     process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_ENABLED,
     false
   ),
-  NEXT_PUBLIC_ENABLE_TEACHER_PRICING_UI: parseBoolean(
-    process.env.NEXT_PUBLIC_ENABLE_TEACHER_PRICING_UI,
-    false
-  ),
   NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA: parsePositiveInt(
     process.env.NEXT_PUBLIC_FSRS_OPTIMIZATION_LOG_DELTA,
     defaultOptimizationLogDelta
