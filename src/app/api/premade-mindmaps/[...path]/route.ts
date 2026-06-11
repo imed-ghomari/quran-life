@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { forbidden, notFound, unauthorized } from '@/lib/apiUtils';
+import { notFound, unauthorized } from '@/lib/apiUtils';
 import { getServerAccessState } from '@/lib/server/access';
 
 const premadeDir = path.join(process.cwd(), 'private-assets', 'premade-mindmaps');
@@ -44,10 +44,6 @@ export async function GET(
 
   if (!access.isAuthenticated) {
     return withNoStoreHeaders(unauthorized());
-  }
-
-  if (!access.hasPremiumAccess) {
-    return withNoStoreHeaders(forbidden());
   }
 
   const { path: requestedPath } = await params;

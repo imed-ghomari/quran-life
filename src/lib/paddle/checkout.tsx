@@ -14,7 +14,7 @@ export function usePaddle() {
     if (!window.navigator.onLine) return;
     if (!clientEnv.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN) return;
 
-    const successUrl = `${window.location.origin}/dashboard`;
+    const successUrl = `${window.location.origin}/supporter/success`;
 
     initializePaddle({
       environment: clientEnv.NEXT_PUBLIC_PADDLE_ENV ?? 'sandbox',
@@ -22,7 +22,7 @@ export function usePaddle() {
       eventCallback: (event) => {
         if (event?.name === CheckoutEventNames.CHECKOUT_COMPLETED) {
           window.localStorage.setItem('checkout:completed', Date.now().toString());
-          window.location.assign('/dashboard');
+          window.location.assign('/supporter/success');
         }
       },
       checkout: {

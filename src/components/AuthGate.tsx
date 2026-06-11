@@ -4,10 +4,9 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
 import PageSkeleton from '@/components/ui/PageSkeleton';
-import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
+import { OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
-const CHECKOUT_GRACE_PERIOD_MS = 10 * 60 * 1000;
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const FORCE_OFFLINE_OPEN_KEY = 'auth:forceOfflineOpen';
@@ -67,18 +66,13 @@ export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isOnline = useContext(OnlineStatusContext);
-  const { hasActiveSubscription, hasPremiumAccess, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [isHydrated, setIsHydrated] = useState(() => hasClientHydratedOnce);
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
-  const [hasRecentCheckout, setHasRecentCheckout] = useState(false);
-  const [hasCheckedCheckout, setHasCheckedCheckout] = useState(false);
   const [hasOfflineAccess, setHasOfflineAccess] = useState(false);
   const [hasForcedOfflineOpen, setHasForcedOfflineOpen] = useState(false);
 
   const isPublic = useMemo(() => PUBLIC_PATHS.has(pathname), [pathname]);
-  const isCheckoutRoute = useMemo(() => pathname === '/checkout', [pathname]);
-  const hasAccess = hasPremiumAccess || hasRecentCheckout;
 
   useEffect(() => {
     setIsHydrated(true);
@@ -90,32 +84,6 @@ export default function AuthGate({ children }: AuthGateProps) {
     setHasResolvedAuthOnce(readAuthResolvedOnceMarker());
     setHasOfflineAccess(hasValidOfflineAccessMarker());
   }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (hasActiveSubscription) {
-      window.localStorage.removeItem('checkout:completed');
-      setHasRecentCheckout(false);
-      setHasCheckedCheckout(true);
-      return;
-    }
-    const raw = window.localStorage.getItem('checkout:completed');
-    if (!raw) {
-      setHasRecentCheckout(false);
-      setHasCheckedCheckout(true);
-      return;
-    }
-    const timestamp = Number(raw);
-    if (!Number.isFinite(timestamp)) {
-      window.localStorage.removeItem('checkout:completed');
-      setHasRecentCheckout(false);
-      setHasCheckedCheckout(true);
-      return;
-    }
-    const isFresh = Date.now() - timestamp <= CHECKOUT_GRACE_PERIOD_MS;
-    setHasRecentCheckout(isFresh);
-    setHasCheckedCheckout(true);
-  }, [hasActiveSubscription]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -162,7 +130,6 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (isPublic) return;
     if (isAuthLoading) return;
-    if (!hasPremiumAccess && !hasCheckedCheckout) return;
     if (!isOnline || (hasOfflineAccess && hasForcedOfflineOpen)) return;
 
     if (typeof window !== 'undefined') {
@@ -185,32 +152,13 @@ export default function AuthGate({ children }: AuthGateProps) {
       router.replace('/auth');
       return;
     }
-
-    if (isSubscriptionLoading) return;
-
-    if (!hasAccess && !isCheckoutRoute) {
-      router.replace('/auth');
-      return;
-    }
-
-    if (hasAccess && isCheckoutRoute) {
-      router.replace('/dashboard');
-      return;
-    }
   }, [
     isPublic,
     isAuthLoading,
-    isSubscriptionLoading,
-    hasActiveSubscription,
-    hasPremiumAccess,
-    isPaymentBypass,
-    hasCheckedCheckout,
     isOnline,
     hasOfflineAccess,
     hasForcedOfflineOpen,
     user,
-    hasAccess,
-    isCheckoutRoute,
     router,
   ]);
 
@@ -222,17 +170,12 @@ export default function AuthGate({ children }: AuthGateProps) {
     return <>{children}</>;
   }
 
-  const needsCheckoutDecision =
-    !hasPremiumAccess && !hasCheckedCheckout;
-  const shouldBlockOnCheckoutDecision = !shouldTreatAsOffline && needsCheckoutDecision && !user && !hasResolvedAuthOnce;
-  const shouldBlockOnSubscriptionLoad = !shouldTreatAsOffline && isSubscriptionLoading;
   const isRedirecting =
     !shouldTreatAsOffline
-    && user
-    && !shouldBlockOnCheckoutDecision
-    && ((hasAccess && isCheckoutRoute) || (!hasAccess && !isCheckoutRoute));
+    && !user
+    && hasResolvedAuthOnce;
 
-  if (shouldBlockOnAuthLoad || shouldBlockOnSubscriptionLoad || shouldBlockOnCheckoutDecision || isRedirecting) {
+  if (shouldBlockOnAuthLoad || isRedirecting) {
     return <PageSkeleton />;
   }
 

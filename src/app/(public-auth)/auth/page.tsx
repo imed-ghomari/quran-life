@@ -8,7 +8,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
-import { Mail, ArrowRight, Lock, Hash, Ticket } from 'lucide-react';
+import { Mail, ArrowRight, Lock, Hash } from 'lucide-react';
 
 // Import Suspense for handling asynchronous components
 import { Suspense } from 'react';
@@ -20,7 +20,7 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
 import { buildCheckoutItems } from '@/lib/paddle/prices';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
-import { formatCurrency, getStudentPlanPrice, normalizeClassCode } from '@/lib/teacherPlan';
+import { formatCurrency, getStudentPlanPrice } from '@/lib/teacherPlan';
 
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -38,7 +38,7 @@ function AuthContent() {
     };
     const { user, isLoading: isAuthLoading, error: authStateError } = authState;
     const isOnline = useContext(OnlineStatusContext);
-    const { accessSource, hasPremiumAccess, isSubscriptionLoading } = useContext(AccessStateContext);
+    const { hasActiveSubscription, isSubscriptionLoading } = useContext(AccessStateContext);
     const userEmail = user?.email ?? 'your account';
     const searchParams = useSearchParams();
     const paddle = usePaddle();
@@ -60,12 +60,10 @@ function AuthContent() {
         const rawPlan = searchParams?.get('plan');
         return rawPlan === 'monthly' || rawPlan === 'yearly' ? rawPlan : null;
     }, [searchParams]);
-    const classCodeFromQuery = useMemo(() => normalizeClassCode(searchParams?.get('classCode')), [searchParams]);
-    const shouldReplaceGraceSponsorship = useMemo(() => searchParams?.get('replaceSponsorship') === '1', [searchParams]);
+    const wantsSupporterCheckout = useMemo(() => {
+        return searchParams?.get('support') === '1' || Boolean(planFromQuery);
+    }, [planFromQuery, searchParams]);
     const [plan, setPlan] = useState<'monthly' | 'yearly'>(() => planFromQuery ?? 'monthly');
-    const [classCodeInput, setClassCodeInput] = useState(() => classCodeFromQuery);
-    const [classCodeError, setClassCodeError] = useState<string | null>(null);
-    const [isRedeemingClassCode, setIsRedeemingClassCode] = useState(false);
     const [isOpening, setIsOpening] = useState(false);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [canOpenOfflineApp, setCanOpenOfflineApp] = useState(false);
@@ -73,17 +71,11 @@ function AuthContent() {
     // Environment variables for Google OAuth configuration
     const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const GOOGLE_CLIENT_NAME = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_NAME || 'google';
-    const shouldAllowGraceCheckout = accessSource === 'teacher_grace' && shouldReplaceGraceSponsorship;
 
     useEffect(() => {
         if (!planFromQuery) return;
         setPlan(planFromQuery);
     }, [planFromQuery]);
-
-    useEffect(() => {
-        if (!classCodeFromQuery) return;
-        setClassCodeInput(classCodeFromQuery);
-    }, [classCodeFromQuery]);
 
     useEffect(() => {
         if (!forceCheckoutBlur) return;
@@ -92,7 +84,7 @@ function AuthContent() {
     }, [forceCheckoutBlur, user?.email]);
 
     const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
-    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || (hasPremiumAccess && !shouldAllowGraceCheckout);
+    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -119,9 +111,9 @@ function AuthContent() {
     useEffect(() => {
         if (!user) return;
         if (isSubscriptionLoading) return;
-        if (!hasPremiumAccess || shouldAllowGraceCheckout) return;
+        if (wantsSupporterCheckout && !hasActiveSubscription) return;
         window.location.replace('/dashboard');
-    }, [user, isSubscriptionLoading, hasPremiumAccess, shouldAllowGraceCheckout]);
+    }, [user, isSubscriptionLoading, hasActiveSubscription, wantsSupporterCheckout]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -154,7 +146,7 @@ function AuthContent() {
 
     const handleCheckout = () => {
         if (!user) {
-            setAuthError('Please sign in or create an account before proceeding to checkout.');
+            setAuthError('Please sign in or create an account before becoming a supporter.');
             return;
         }
         if (!paddle) return;
@@ -165,6 +157,7 @@ function AuthContent() {
             userId: user.id,
             subscriptionKind: 'student',
             billingInterval: plan,
+            supporterTier: true,
         };
 
         paddle.Checkout.open({
@@ -186,43 +179,9 @@ function AuthContent() {
                 userId: user?.id ?? '',
                 subscriptionKind: 'student',
                 billingInterval: nextPlan,
+                supporterTier: true,
             },
         });
-    };
-
-    const handleRedeemClassCode = async () => {
-        if (!user) {
-            setClassCodeError('Please sign in before redeeming a class code.');
-            return;
-        }
-
-        const normalizedClassCode = normalizeClassCode(classCodeInput);
-        if (!normalizedClassCode) {
-            setClassCodeError('Enter a valid class code.');
-            return;
-        }
-
-        setIsRedeemingClassCode(true);
-        setClassCodeError(null);
-
-        try {
-            const response = await fetch('/api/teacher/redeem-class-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ classCode: normalizedClassCode }),
-            });
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-                throw new Error(payload?.error || 'Could not redeem that class code.');
-            }
-
-            window.location.replace('/dashboard');
-        } catch (error) {
-            setClassCodeError(error instanceof Error ? error.message : 'Could not redeem that class code.');
-        } finally {
-            setIsRedeemingClassCode(false);
-        }
     };
 
     // Handle the magic link authentication process
@@ -289,7 +248,7 @@ function AuthContent() {
         return <PageSkeleton />;
     }
 
-    if (user && hasPremiumAccess && !shouldAllowGraceCheckout) {
+    if (user && (!wantsSupporterCheckout || hasActiveSubscription)) {
         return <PageSkeleton />;
     }
 
@@ -613,13 +572,11 @@ function AuthContent() {
                 ) : (
                     <div>
                         <h1 className="checkout-title" style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                            Unlock premium access
+                            Become a Supporter
                         </h1>
 
                         <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
-                            {shouldAllowGraceCheckout
-                                ? 'Your teacher-sponsored access is ending soon. Start your own plan to keep access without interruption.'
-                                : 'Have a teacher class code? Redeem it below to skip checkout. Otherwise, continue with your own plan.'}
+                            Quran Life is free for everyone. The Supporter tier helps maintain the app and includes the weekly Discord group Q&A.
                         </p>
 
                         <div style={{
@@ -629,53 +586,18 @@ function AuthContent() {
                             border: '1px solid var(--border)',
                             background: 'var(--background-secondary)',
                             display: 'grid',
-                            gap: '0.85rem',
+                            gap: '0.55rem',
+                            color: 'var(--foreground-secondary)',
+                            fontSize: '0.9rem',
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                <Ticket size={18} style={{ color: 'var(--accent)' }} />
-                                <span style={{ fontWeight: 700 }}>Redeem teacher class code</span>
-                            </div>
-                            <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr auto' }}>
-                                <input
-                                    type="text"
-                                    placeholder="QL-ABCD-EFGH"
-                                    value={classCodeInput}
-                                    onChange={(event) => {
-                                        setClassCodeInput(event.target.value.toUpperCase());
-                                        if (classCodeError) setClassCodeError(null);
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '0.85rem 1rem',
-                                        borderRadius: '12px',
-                                        border: '1px solid var(--border)',
-                                        background: 'var(--background)',
-                                        fontSize: '1rem',
-                                        color: 'var(--foreground)',
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    disabled={isRedeemingClassCode}
-                                    onClick={() => {
-                                        void handleRedeemClassCode();
-                                    }}
-                                    style={{ justifyContent: 'center', minWidth: '150px' }}
-                                >
-                                    {isRedeemingClassCode ? 'Redeeming...' : 'Redeem code'}
-                                </button>
-                            </div>
-                            {classCodeError && (
-                                <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0 }}>{classCodeError}</p>
-                            )}
-                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.82rem', margin: 0 }}>
-                                Once redeemed, your teacher covers the checkout and you go straight to the app.
-                            </p>
+                            <div style={{ fontWeight: 700, color: 'var(--foreground)' }}>Supporter includes:</div>
+                            <div>Weekly group Q&A with supporter members in Discord.</div>
+                            <div>Direct help with Quran Life questions and study workflow.</div>
+                            <div>Ongoing support for app hosting, fixes, and maintenance.</div>
                         </div>
 
                         <div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-                            Choose your billing plan:
+                            Choose your supporter plan:
                         </div>
                         <div className="checkout-plan-grid" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.25rem' }}>
                             <button
@@ -703,8 +625,8 @@ function AuthContent() {
                                 }}
                             >
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                    <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly plan</span>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Pay as you go</span>
+                                    <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly supporter</span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Flexible support</span>
                                     <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
                                 </div>
                                 <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
@@ -751,9 +673,9 @@ function AuthContent() {
                                 </span>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                        <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly plan</span>
+                                        <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly supporter</span>
                                     </div>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best value</span>
+                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best support</span>
                                     <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
                                 </div>
                                 <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
@@ -770,9 +692,7 @@ function AuthContent() {
                         >
                             {isOpening
                                 ? 'Opening checkout...'
-                                : shouldAllowGraceCheckout
-                                    ? 'Start your own plan'
-                                    : 'Proceed'}
+                                : 'Continue as Supporter'}
                         </button>
                         <button
                             type="button"
@@ -800,7 +720,7 @@ function AuthContent() {
 
                         {!paddle && (
                             <p style={{ marginTop: '0.75rem', color: 'var(--foreground-secondary)' }}>
-                                Preparing secure checkout...
+                                Preparing secure supporter checkout...
                             </p>
                         )}
                         <div style={{

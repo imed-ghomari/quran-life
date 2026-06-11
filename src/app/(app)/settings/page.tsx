@@ -1445,9 +1445,9 @@ export default function SettingsPage() {
         : isTeacherBillingAccount
             ? `Teacher • ${billingIntervalLabel}`
             : latestSubscription?.subscriptionKind === 'student'
-                ? `Student • ${billingIntervalLabel}`
+                ? `Supporter • ${billingIntervalLabel}`
                 : latestSubscription?.priceId
-                    ? `Student • ${billingIntervalLabel}`
+                    ? `Supporter • ${billingIntervalLabel}`
                     : 'N/A';
     const billingNextRenewal = billingStatus === 'none'
         ? 'N/A'
@@ -1468,7 +1468,7 @@ export default function SettingsPage() {
             ? 'Grace period'
             : 'Teacher sponsored'
         : billingStatus === 'none'
-            ? 'No subscription'
+            ? 'No supporter plan'
             : billingStatus;
     const billingStatusColor = accessSource === 'teacher_grace'
         ? '#d97706'
@@ -1795,8 +1795,8 @@ export default function SettingsPage() {
                             <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Teacher Sponsorship</div>
                             <div style={{ color: 'var(--foreground-secondary)', fontSize: '0.82rem' }}>
                                 {sponsorshipSummary.teacherEmail
-                                    ? `Your premium access is covered by ${sponsorshipSummary.teacherEmail}.`
-                                    : 'Your premium access is covered by a teacher plan.'}
+                                    ? `Your Quran Life account is linked to ${sponsorshipSummary.teacherEmail}'s teacher plan.`
+                                    : 'Your Quran Life account is linked to a teacher plan.'}
                             </div>
                             <div style={{ display: 'grid', gap: '0.35rem', fontSize: '0.82rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
@@ -1825,7 +1825,7 @@ export default function SettingsPage() {
                                     onClick={() => router.push('/auth?plan=monthly&replaceSponsorship=1')}
                                     style={{ padding: '0.75rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem' }}
                                 >
-                                    Start Your Own Subscription
+                                    Start Your Own Supporter Plan
                                 </button>
                             )}
                         </div>
@@ -1869,7 +1869,7 @@ export default function SettingsPage() {
                             cursor: 'pointer'
                         }}
                     >
-                        {isOpeningPortal ? 'Opening billing portal...' : 'Manage Subscription'}
+                        {isOpeningPortal ? 'Opening billing portal...' : 'Manage Supporter Plan'}
                     </button>
                 )}
                 <button
@@ -3842,7 +3842,7 @@ export default function SettingsPage() {
     const handleRevokeTeacherStudent = useCallback(async (studentUserId: string, studentEmail: string | null) => {
         const ok = await confirm({
             title: 'Remove Student',
-            message: `Remove ${studentEmail || 'this student'} from your teacher plan? They will keep premium access for a short grace period before needing their own subscription.`,
+            message: `Remove ${studentEmail || 'this student'} from your teacher plan? They will keep teacher-sponsored status for a short grace period before returning to the free app.`,
             confirmLabel: 'Remove Student',
             isDestructive: true,
         });

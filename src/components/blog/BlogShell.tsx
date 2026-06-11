@@ -32,7 +32,7 @@ export default function BlogShell({ activePath, children }: BlogShellProps) {
               Home
             </Link>
             <BlogThemeToggle />
-            <Link href="/auth?plan=monthly" className={styles.siteCta}>
+            <Link href="/auth" className={styles.siteCta}>
               Get Started
             </Link>
           </nav>

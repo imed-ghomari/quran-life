@@ -57,7 +57,7 @@ export default function Home() {
     offers: {
       '@type': 'AggregateOffer',
       priceCurrency: 'USD',
-      lowPrice: '10',
+      lowPrice: '0',
       highPrice: '96',
       offerCount: 2,
     },

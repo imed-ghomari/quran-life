@@ -61,10 +61,18 @@ export default function HomePageClient() {
 
   const handleGetStarted = ({
     cycle,
+    support,
   }: {
     cycle: 'monthly' | 'yearly';
+    support?: boolean;
   }) => {
+    if (!support) {
+      window.location.href = '/auth';
+      return;
+    }
+
     const params = new URLSearchParams({
+      support: '1',
       plan: cycle,
     });
     window.location.href = `/auth?${params.toString()}`;
