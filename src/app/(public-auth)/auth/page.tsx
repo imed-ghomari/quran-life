@@ -38,7 +38,7 @@ function AuthContent() {
     };
     const { user, isLoading: isAuthLoading, error: authStateError } = authState;
     const isOnline = useContext(OnlineStatusContext);
-    const { hasActiveSubscription, isSubscriptionLoading } = useContext(AccessStateContext);
+    const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
     const userEmail = user?.email ?? 'your account';
     const searchParams = useSearchParams();
     const paddle = usePaddle();
@@ -117,8 +117,12 @@ function AuthContent() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
+        if (user && isSubscriptionLoading) {
+            return;
+        }
+
         if (user) {
-            setCanOpenOfflineApp(true);
+            setCanOpenOfflineApp(Boolean(hasActiveSubscription || isPaymentBypass));
             return;
         }
 
@@ -129,11 +133,11 @@ function AuthContent() {
         }
 
         try {
-            const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+            const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number; supporter?: boolean };
             const updatedAt = Number(parsed?.updatedAt ?? 0);
             const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
             const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
-            const valid = hasValidTimestamp && hasUserId;
+            const valid = hasValidTimestamp && hasUserId && parsed?.supporter === true;
             setCanOpenOfflineApp(valid);
             if (!valid) {
                 window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
@@ -142,7 +146,7 @@ function AuthContent() {
             window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
             setCanOpenOfflineApp(false);
         }
-    }, [user]);
+    }, [hasActiveSubscription, isPaymentBypass, isSubscriptionLoading, user]);
 
     const handleCheckout = () => {
         if (!user) {
@@ -283,7 +287,7 @@ function AuthContent() {
                         </button>
                     ) : (
                         <p style={{ color: 'var(--foreground-secondary)' }}>
-                            Connect once to sign in, then offline mode will be available.
+                            Offline mode is available for supporter accounts after you sign in online once.
                         </p>
                     )}
                 </div>

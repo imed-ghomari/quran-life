@@ -15,11 +15,11 @@ function hasValidOfflineAccessMarker() {
   if (!raw) return false;
 
   try {
-    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number; supporter?: boolean };
     const updatedAt = Number(parsed?.updatedAt ?? 0);
     const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
     const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
-    return hasValidTimestamp && hasUserId;
+    return hasValidTimestamp && hasUserId && parsed?.supporter === true;
   } catch {
     return false;
   }

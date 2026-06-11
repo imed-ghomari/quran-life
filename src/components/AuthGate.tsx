@@ -4,7 +4,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { db } from '@/lib/instant';
 import PageSkeleton from '@/components/ui/PageSkeleton';
-import { OnlineStatusContext } from '@/components/Providers';
+import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
 
 const PUBLIC_PATHS = new Set(['/', '/auth']);
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -49,11 +49,11 @@ function hasValidOfflineAccessMarker() {
   if (!raw) return false;
 
   try {
-    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number; supporter?: boolean };
     const updatedAt = Number(parsed?.updatedAt ?? 0);
     const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
     const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
-    return hasValidTimestamp && hasUserId;
+    return hasValidTimestamp && hasUserId && parsed?.supporter === true;
   } catch {
     return false;
   }
@@ -66,6 +66,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isOnline = useContext(OnlineStatusContext);
+  const { hasActiveSubscription, isPaymentBypass, isSubscriptionLoading } = useContext(AccessStateContext);
   const { user, isLoading: isAuthLoading } = db.useAuth();
   const [isHydrated, setIsHydrated] = useState(() => hasClientHydratedOnce);
   const [hasResolvedAuthOnce, setHasResolvedAuthOnce] = useState(false);
@@ -88,10 +89,20 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    if (user?.id && isSubscriptionLoading) {
+      return;
+    }
+
     if (user?.id) {
-      const marker = JSON.stringify({ userId: user.id, updatedAt: Date.now() });
-      window.localStorage.setItem(OFFLINE_ACCESS_KEY, marker);
-      setHasOfflineAccess(true);
+      if (hasActiveSubscription || isPaymentBypass) {
+        const marker = JSON.stringify({ userId: user.id, updatedAt: Date.now(), supporter: true });
+        window.localStorage.setItem(OFFLINE_ACCESS_KEY, marker);
+        setHasOfflineAccess(true);
+        return;
+      }
+
+      window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
+      setHasOfflineAccess(false);
       return;
     }
 
@@ -100,7 +111,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!valid) {
       window.localStorage.removeItem(OFFLINE_ACCESS_KEY);
     }
-  }, [user?.id]);
+  }, [hasActiveSubscription, isPaymentBypass, isSubscriptionLoading, user?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
