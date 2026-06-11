@@ -1470,6 +1470,10 @@ export default function SettingsPage() {
         : billingStatus === 'none'
             ? 'No supporter plan'
             : billingStatus;
+    const shouldShowBecomeSupporterAction =
+        !isSponsoredAccount
+        && !billingSummary.canManageSubscription
+        && accessSource === 'none';
     const billingStatusColor = accessSource === 'teacher_grace'
         ? '#d97706'
         : isSponsoredAccount || isActiveBilling
@@ -1845,7 +1849,7 @@ export default function SettingsPage() {
         <div style={{ display: 'grid', gap: '0.75rem' }}>
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: billingSummary.canManageSubscription && !isSponsoredAccount
+                gridTemplateColumns: (billingSummary.canManageSubscription && !isSponsoredAccount) || shouldShowBecomeSupporterAction
                     ? 'repeat(2, minmax(0, 1fr))'
                     : 'minmax(0, 1fr)',
                 gap: '0.75rem',
@@ -1870,6 +1874,27 @@ export default function SettingsPage() {
                         }}
                     >
                         {isOpeningPortal ? 'Opening billing portal...' : 'Manage Supporter Plan'}
+                    </button>
+                )}
+                {shouldShowBecomeSupporterAction && (
+                    <button
+                        className="btn btn-secondary std-normal-btn account-action-btn account-action-btn--manage"
+                        onClick={() => router.push('/auth?support=1&plan=monthly')}
+                        disabled={!isOnline}
+                        style={{
+                            width: '100%',
+                            minWidth: 0,
+                            padding: '0.85rem 0.65rem',
+                            borderRadius: '12px',
+                            fontFamily: 'inherit',
+                            fontWeight: 600,
+                            fontSize: '0.86rem',
+                            lineHeight: 1.2,
+                            textAlign: 'center',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Become Supporter
                     </button>
                 )}
                 <button
