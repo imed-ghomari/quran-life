@@ -14,11 +14,11 @@ function hasValidOfflineAccessMarker() {
   if (!raw) return false;
 
   try {
-    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number };
+    const parsed = JSON.parse(raw) as { userId?: string; updatedAt?: number; supporter?: boolean };
     const updatedAt = Number(parsed?.updatedAt ?? 0);
     const hasValidTimestamp = Number.isFinite(updatedAt) && Date.now() - updatedAt <= OFFLINE_ACCESS_TTL_MS;
     const hasUserId = typeof parsed?.userId === 'string' && parsed.userId.length > 0;
-    return hasValidTimestamp && hasUserId;
+    return hasValidTimestamp && hasUserId && parsed?.supporter === true;
   } catch {
     return false;
   }
@@ -92,11 +92,23 @@ export default function OfflineAppPage() {
         <div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Offline access unavailable</h2>
           <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>
-            Connect once to sign in, then reopen the app offline.
+            Offline mode is available for supporter accounts after you sign in online once.
           </p>
-          <button type="button" className="btn btn-primary" onClick={() => window.location.assign('/auth')}>
-            Go to sign in
-          </button>
+          <p style={{ color: 'var(--foreground-secondary)', marginBottom: '1rem' }}>
+            Support the app to unlock offline access on this device and keep Quran Life available when you do not have internet.
+          </p>
+          <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => window.location.assign('/auth?support=1&plan=monthly')}
+            >
+              Become Supporter
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => window.location.assign('/auth')}>
+              Go to sign in
+            </button>
+          </div>
         </div>
       )}
     </div>

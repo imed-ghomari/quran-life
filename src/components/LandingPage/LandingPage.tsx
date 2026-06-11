@@ -387,7 +387,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   <li><Check size={20} className="check-icon" /> Advanced Spaced Repetition System</li>
                   <li><Check size={20} className="check-icon" /> Mutashabihat (Similar Verses) Tool</li>
                   <li><Check size={20} className="check-icon" /> Cross-device Cloud Sync</li>
-                  <li><Check size={20} className="check-icon" /> Offline Access</li>
                 </ul>
 
                 <button
@@ -411,6 +410,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <ul className="features-list">
                   <li><Check size={20} className="check-icon" /> Weekly supporter group Q&A in Discord</li>
                   <li><Check size={20} className="check-icon" /> Help with Quran Life questions and setup</li>
+                  <li><Check size={20} className="check-icon" /> Offline mode on your devices</li>
                   <li><Check size={20} className="check-icon" /> Support ongoing hosting and maintenance</li>
                   <li><Check size={20} className="check-icon" /> Keep Quran Life free for other learners</li>
                 </ul>
