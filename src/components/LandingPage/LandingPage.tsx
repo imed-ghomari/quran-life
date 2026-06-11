@@ -188,13 +188,14 @@ const FaqItem = ({ question, answer }: { question: string; answer: string }) => 
 interface LandingPageProps {
   onBuy: (options: {
     cycle: 'monthly' | 'yearly';
+    support?: boolean;
   }) => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const { theme, setTheme } = useTheme();
-  const studentPrice = getStudentPlanPrice(billingCycle);
+  const supporterPrice = getStudentPlanPrice(billingCycle);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -341,13 +342,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
           </div>
         </section>
 
-        {/* --- Pricing Section (Premium Only) --- */}
+        {/* --- Pricing Section --- */}
         <section id="pricing" className="pricing">
           <div className="container">
             <div className="section-header">
-              <h2 className="section-title">Invest in your Akhirah</h2>
+              <h2 className="section-title">Free for every learner</h2>
               <p>
-                One simple plan for full Quran Life access.
+                Quran Life is fully open to use. Supporter membership is optional and helps keep it maintained.
               </p>
 
               {/* Billing Toggle */}
@@ -370,14 +371,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               </div>
             </div>
 
-            <div className="pricing-grid single-plan">
+            <div className="pricing-grid">
               <div className="price-card student-plan">
-                <div className="badge">Premium</div>
+                <div className="badge">Free</div>
 
-                <div className="price">{formatCurrency(studentPrice)}<span>{billingCycle === 'monthly' ? '/mo' : '/yr'}</span></div>
+                <div className="price">$0<span>/forever</span></div>
 
                 <p>
-                  Full Quran Life access for one learner.
+                  Full Quran Life access for every learner.
                 </p>
 
                 <ul className="features-list">
@@ -392,11 +393,36 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 <button
                   className="btn btn-secondary btn-full btn-lg"
                   onClick={() => onBuy({ cycle: billingCycle })}
-                  aria-label="Purchase premium subscription"
+                  aria-label="Start using Quran Life for free"
                 >
-                  Get Full Access Now
+                  Start Free
                 </button>
-                <p className="guarantee">1 week trial</p>
+              </div>
+
+              <div className="price-card student-plan">
+                <div className="badge">Supporter</div>
+
+                <div className="price">{formatCurrency(supporterPrice)}<span>{billingCycle === 'monthly' ? '/mo' : '/yr'}</span></div>
+
+                <p>
+                  Optional support for the app and for your own Quran Life workflow.
+                </p>
+
+                <ul className="features-list">
+                  <li><Check size={20} className="check-icon" /> Weekly supporter group Q&A in Discord</li>
+                  <li><Check size={20} className="check-icon" /> Help with Quran Life questions and setup</li>
+                  <li><Check size={20} className="check-icon" /> Support ongoing hosting and maintenance</li>
+                  <li><Check size={20} className="check-icon" /> Keep Quran Life free for other learners</li>
+                </ul>
+
+                <button
+                  className="btn btn-secondary btn-full btn-lg"
+                  onClick={() => onBuy({ cycle: billingCycle, support: true })}
+                  aria-label="Become a Quran Life supporter"
+                >
+                  Become a Supporter
+                </button>
+                <p className="guarantee">App access stays free whether you support or not.</p>
               </div>
             </div>
           </div>

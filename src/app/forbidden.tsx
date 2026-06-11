@@ -11,14 +11,14 @@ export default function ForbiddenPage() {
         </div>
 
         <p className={styles.kicker}>403</p>
-        <h1 className={styles.title}>Subscription renewal required</h1>
+        <h1 className={styles.title}>Access unavailable</h1>
         <p className={styles.description}>
-          Your subscription is no longer active. Renew to continue accessing member pages.
+          This page is not available for your current account state.
         </p>
 
         <div className={styles.actions}>
-          <Link href="/auth" className={styles.buttonPrimary}>
-            Go to subscription page
+          <Link href="/dashboard" className={styles.buttonPrimary}>
+            Go to dashboard
           </Link>
           <Link href="/" className={styles.buttonGhost}>
             Back to landing page

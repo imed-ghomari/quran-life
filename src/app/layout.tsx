@@ -119,6 +119,12 @@ export default function RootLayout({
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}
                 </Script>
+                <Script
+                    src="https://cdn.affonso.io/js/pixel.min.js"
+                    data-affonso="cmovvwyu7000635gjipiwbu6r"
+                    data-cookie_duration="30"
+                    strategy="afterInteractive"
+                />
                 <ScrollbarVisibilityController />
                 <Providers>
                     <ErrorBoundary>

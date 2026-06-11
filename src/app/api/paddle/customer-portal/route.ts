@@ -17,7 +17,7 @@ export async function POST() {
 
   const latestSubscription = await getLatestSubscriptionForUser(user.id);
   if (!latestSubscription) {
-    return NextResponse.json({ ok: false, error: 'No subscription found' }, { status: 404 });
+    return NextResponse.json({ ok: false, error: 'No supporter plan found' }, { status: 404 });
   }
 
   const paddleCustomerId = String(latestSubscription.paddleCustomerId ?? '').trim();

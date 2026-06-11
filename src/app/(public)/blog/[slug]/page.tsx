@@ -219,7 +219,7 @@ export default async function BlogPostPage({ params }: PageProps) {
             <h2 className={styles.ctaTitle}>{cta.title}</h2>
             <p className={styles.ctaDescription}>{cta.description}</p>
             <div className={styles.ctaActions}>
-              <Link href="/auth?plan=monthly" className={styles.siteCta}>
+              <Link href="/auth" className={styles.siteCta}>
                 {cta.primaryLabel}
               </Link>
               <Link href="/blog" className={styles.ctaButtonSecondary}>

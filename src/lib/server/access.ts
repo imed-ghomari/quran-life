@@ -78,21 +78,18 @@ export async function getServerAccessState() {
 
   let accessSource: AccessSource = 'none';
   let sponsorshipEndsAt: string | null = null;
-  let hasPremiumAccess = false;
+  let hasPremiumAccess = true;
   let subscriptionKind: SubscriptionKind | null = normalizedLatestSubscription?.subscriptionKind ?? null;
 
   if (isPaymentBypass) {
     accessSource = 'bypass';
-    hasPremiumAccess = true;
   } else if (hasActiveSubscription) {
     accessSource = 'self_paid';
-    hasPremiumAccess = true;
   } else {
     const sponsoredAccess = await resolveSponsoredAccessForStudent(user.id);
     if (sponsoredAccess) {
       accessSource = sponsoredAccess.accessSource;
       sponsorshipEndsAt = sponsoredAccess.graceEndsAt;
-      hasPremiumAccess = true;
       subscriptionKind = sponsoredAccess.teacherSubscription?.subscriptionKind ?? null;
     }
   }
