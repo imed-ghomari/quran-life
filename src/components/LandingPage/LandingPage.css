@@ -1296,7 +1296,12 @@
   .logo {
     font-size: 1.1rem;
     gap: 0.35rem;
-    /* Tighter logo gap */
+  }
+
+  @media (max-width: 360px) {
+    .logo span {
+      display: none;
+    }
   }
 
   .logo svg {
