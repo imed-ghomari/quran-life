@@ -993,6 +993,7 @@
 .pricing {
   padding: 4rem 0;
   position: relative;
+  scroll-margin-top: 80px;
 }
 
 .pricing-grid {
@@ -1401,7 +1402,7 @@
   }
 
   .section-title {
-    font-size: 1.75rem;
+    font-size: 1.4rem;
   }
 
   .grid {
@@ -1416,10 +1417,10 @@
 
   .feature-showcase-list {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
     justify-content: center;
+    padding-bottom: 0.25rem;
   }
 
   .feature-showcase-inverted .feature-showcase-list,
@@ -1439,21 +1440,25 @@
   .feature-showcase-card {
     width: auto;
     min-width: 0;
-    padding: 0.6rem 1rem;
+    padding: 0.6rem 0.9rem;
     grid-template-columns: auto 1fr;
-    gap: 0.6rem;
+    gap: 0.5rem;
     border-radius: 100px;
-    white-space: nowrap;
   }
 
   .feature-showcase-card-icon {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     margin-top: 0;
   }
 
+  .feature-showcase-card-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
   .feature-showcase-card-title {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
   }
 
   .feature-showcase-card-description {
@@ -1502,6 +1507,7 @@
   /* Pricing Section */
   .pricing {
     padding: 2.5rem 0;
+    scroll-margin-top: 72px;
   }
 
   .price-card {
