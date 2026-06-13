@@ -1566,6 +1566,57 @@
   }
 }
 
+/* ── Tablet Layout ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .feature-showcase {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .feature-showcase-list {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  .feature-showcase-card {
+    flex: 1;
+    min-width: 0;
+    padding: 0.6rem 0.9rem;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 100px;
+  }
+
+  .feature-showcase-card-icon {
+    width: 28px;
+    height: 28px;
+    margin-top: 0;
+  }
+
+  .feature-showcase-card-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .feature-showcase-card-title {
+    font-size: 0.88rem;
+  }
+
+  .feature-showcase-card-description {
+    display: none;
+  }
+
+  .feature-showcase-description {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--foreground-secondary);
+    line-height: 1.65;
+    margin-bottom: 0.75rem;
+  }
+}
+
 /* Billing Toggle */
 .billing-toggle-container {
   display: flex;
