@@ -4,7 +4,7 @@
 import { db } from '@/lib/instant';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { User as InstantUser } from '@instantdb/core';
 
 // Import UI icons from lucide-react
@@ -20,7 +20,6 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { usePaddle } from '@/lib/paddle/checkout';
 import { buildCheckoutItems } from '@/lib/paddle/prices';
 import { AccessStateContext, OnlineStatusContext } from '@/components/Providers';
-import { formatCurrency, getStudentPlanPrice } from '@/lib/teacherPlan';
 
 const OFFLINE_ACCESS_KEY = 'auth:offlineAccess';
 const OFFLINE_ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -84,7 +83,6 @@ function AuthContent() {
     }, [forceCheckoutBlur, user?.email]);
 
     const shouldBlockOnSubscriptionLoad = isOnline && isSubscriptionLoading;
-    const isCheckoutLocked = !user || shouldBlockOnSubscriptionLoad || forceCheckoutBlur || hasActiveSubscription;
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -107,6 +105,8 @@ function AuthContent() {
             window.localStorage.removeItem(POST_SIGN_OUT_UNTIL_KEY);
         }
     }, [isAuthLoading, user]);
+
+    const autoOpenedRef = useRef(false);
 
     useEffect(() => {
         if (!user) return;
@@ -174,19 +174,15 @@ function AuthContent() {
         setIsCheckoutOpen(true);
     };
 
-    const handlePlanChange = (nextPlan: 'monthly' | 'yearly') => {
-        setPlan(nextPlan);
-        if (!paddle || !isCheckoutOpen) return;
-        paddle.Checkout.updateCheckout({
-            items: buildCheckoutItems('student', nextPlan),
-            customData: {
-                userId: user?.id ?? '',
-                subscriptionKind: 'student',
-                billingInterval: nextPlan,
-                supporterTier: true,
-            },
-        });
-    };
+    useEffect(() => {
+        if (!user) return;
+        if (!paddle) return;
+        if (!wantsSupporterCheckout) return;
+        if (hasActiveSubscription) return;
+        if (autoOpenedRef.current) return;
+        autoOpenedRef.current = true;
+        handleCheckout();
+    }, [user, paddle, wantsSupporterCheckout, hasActiveSubscription]);
 
     // Handle the magic link authentication process
     const handleAuth = async (e: React.FormEvent) => {
@@ -583,104 +579,18 @@ function AuthContent() {
                             Quran Life is free for everyone. The Supporter tier helps maintain the app and includes the weekly Discord group Q&A.
                         </p>
 
-<div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-                            Choose your supporter plan:
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', margin: '2rem 0' }}>
+                            <div className="spinner" style={{
+                                width: '28px', height: '28px',
+                                border: '3px solid var(--border)',
+                                borderTopColor: 'var(--accent)',
+                                borderRadius: '50%',
+                                animation: 'spin 0.7s linear infinite'
+                            }} />
+                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem' }}>
+                                {paddle ? 'Opening checkout...' : 'Preparing secure supporter checkout...'}
+                            </p>
                         </div>
-                        <div className="checkout-plan-grid" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.25rem' }}>
-                            <button
-                                type="button"
-                                onClick={() => handlePlanChange('monthly')}
-                                disabled={isCheckoutLocked}
-                                className="card"
-                                style={{
-                                    border: plan === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                    background: 'var(--background)',
-                                    color: 'var(--foreground)',
-                                    width: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '1rem',
-                                    padding: '1.5rem',
-                                    borderRadius: '20px',
-                                    boxShadow: plan === 'monthly'
-                                        ? '0 12px 30px rgba(91, 143, 185, 0.2)'
-                                        : '0 10px 24px rgba(0, 0, 0, 0.06)',
-                                    textAlign: 'left',
-                                    position: 'relative',
-                                    cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                    <span style={{ fontWeight: 700, color: plan === 'monthly' ? 'var(--accent)' : 'var(--foreground)' }}>Monthly supporter</span>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Flexible support</span>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
-                                </div>
-                                <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
-                                    {formatCurrency(getStudentPlanPrice('monthly'))}
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handlePlanChange('yearly')}
-                                disabled={isCheckoutLocked}
-                                className="card"
-                                style={{
-                                    border: plan === 'yearly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                    background: 'var(--background)',
-                                    color: 'var(--foreground)',
-                                    width: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '1rem',
-                                    padding: '1.5rem',
-                                    borderRadius: '20px',
-                                    boxShadow: plan === 'yearly'
-                                        ? '0 12px 30px rgba(91, 143, 185, 0.2)'
-                                        : '0 10px 24px rgba(0, 0, 0, 0.06)',
-                                    textAlign: 'left',
-                                    position: 'relative',
-                                    cursor: isCheckoutLocked ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                <span style={{
-                                    position: 'absolute',
-                                    top: '-10px',
-                                    right: '16px',
-                                    padding: '0.25rem 0.6rem',
-                                    borderRadius: '999px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    color: 'white',
-                                    background: 'var(--accent)',
-                                    boxShadow: '0 6px 16px rgba(91, 143, 185, 0.35)'
-                                }}>
-                                    Save 20%
-                                </span>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                        <span style={{ fontWeight: 700, color: plan === 'yearly' ? 'var(--accent)' : 'var(--foreground)' }}>Yearly supporter</span>
-                                    </div>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Best support</span>
-                                    <span style={{ color: 'var(--foreground-secondary)', fontSize: '0.8rem' }}>Renews automatically until canceled</span>
-                                </div>
-                                <span style={{ fontWeight: 800, fontSize: '1.6rem' }}>
-                                    {formatCurrency(getStudentPlanPrice('yearly'))}
-                                </span>
-                            </button>
-                        </div>
-
-                        <button
-                            className="btn btn-primary"
-                            onClick={handleCheckout}
-                            disabled={!paddle || isOpening || isCheckoutLocked}
-                            style={{ width: '100%' }}
-                        >
-                            {isOpening
-                                ? 'Opening checkout...'
-                                : 'Continue as Supporter'}
-                        </button>
                         <button
                             type="button"
                             onClick={async () => {
@@ -705,11 +615,6 @@ function AuthContent() {
                             Use a different email
                         </button>
 
-                        {!paddle && (
-                            <p style={{ marginTop: '0.75rem', color: 'var(--foreground-secondary)' }}>
-                                Preparing secure supporter checkout...
-                            </p>
-                        )}
                         <div style={{
                             marginTop: '2rem',
                             paddingTop: '1.5rem',

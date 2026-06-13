@@ -245,15 +245,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <span>Quran Life</span>
           </div>
           <div className="nav-actions">
-            <a href="#features" className="nav-link">
+            <button className="nav-link" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>
               Features
-            </a>
-<a href="#faq" className="nav-link">
+            </button>
+            <button className="nav-link" onClick={() => document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' })}>
               FAQ
-            </a>
-            <a href="#roadmap" className="nav-link">
+            </button>
+            <button className="nav-link" onClick={() => document.getElementById('roadmap')?.scrollIntoView({ behavior: 'smooth' })}>
               Roadmap
-            </a>
+            </button>
             <span className="nav-divider" aria-hidden="true" />
             <Link href="/blog" className="nav-link">
               Blog
