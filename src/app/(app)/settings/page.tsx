@@ -2926,7 +2926,7 @@ export default function SettingsPage() {
                         }}
                     >
                         <span style={{ color: 'var(--foreground-secondary)' }}>
-                            Need support or more details? Join our Discord server.
+                            {isActiveBilling || isSponsoredAccount ? 'Access private support channels' : 'Need support or more details? Join our Discord server.'}
                         </span>
                         <a
                             className="settings-support-discord-link"
@@ -5127,7 +5127,7 @@ export default function SettingsPage() {
                             )}
                         </div>
                         <div className="settings-support-cta">
-                            <span>Need support or more details? Join our Discord server.</span>
+                            <span>{isActiveBilling || isSponsoredAccount ? 'Access private support channels' : 'Need support or more details? Join our Discord server.'}</span>
                             <a
                                 className="settings-support-discord-link"
                                 href="https://discord.gg/6wy3YRG2qB"

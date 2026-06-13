@@ -268,7 +268,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             >
               {getThemeIcon()}
             </button>
-            <button className="btn btn-primary" onClick={() => onBuy({ cycle: billingCycle })}>
+            <button className="btn btn-primary" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
               Get Started
             </button>
           </div>
@@ -394,7 +394,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                   onClick={() => onBuy({ cycle: billingCycle })}
                   aria-label="Start using Quran Life for free"
                 >
-                  Start Free
+                  Get Started
                 </button>
               </div>
 
