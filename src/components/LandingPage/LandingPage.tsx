@@ -409,10 +409,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
 
                 <ul className="features-list">
                   <li><Check size={20} className="check-icon" /> Weekly supporter group Q&A in Discord</li>
-                  <li><Check size={20} className="check-icon" /> Help with Quran Life questions and setup</li>
                   <li><Check size={20} className="check-icon" /> Offline mode on your devices</li>
-                  <li><Check size={20} className="check-icon" /> Support ongoing hosting and maintenance</li>
-                  <li><Check size={20} className="check-icon" /> Keep Quran Life free for other learners</li>
+                  <li><Check size={20} className="check-icon" /> Support ongoing hosting and keep Quran Life free for other learners</li>
+                  <li><Check size={20} className="check-icon" /> Follow pre-made mindmap creation progress</li>
                 </ul>
 
                 <button
@@ -422,7 +421,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 >
                   Become a Supporter
                 </button>
-                <p className="guarantee">App access stays free whether you support or not.</p>
+
               </div>
             </div>
           </div>

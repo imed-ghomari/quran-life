@@ -1006,8 +1006,8 @@
 }
 
 .price-card.student-plan {
-  border: 1px solid var(--border);
-  box-shadow: var(--glass-shadow);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 1px var(--landing-accent-light), var(--glass-shadow), 0 4px 12px color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .price-card p {
