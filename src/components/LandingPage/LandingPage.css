@@ -224,6 +224,12 @@
   letter-spacing: 0.2px;
 }
 
+.nav .btn-secondary:hover {
+  border-color: var(--foreground-secondary);
+  background-color: var(--landing-bg-secondary);
+  transform: translateY(-1px);
+}
+
 .nav .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(91, 143, 185, 0.2);
@@ -254,25 +260,6 @@
 
 .hero-copy {
   text-align: left;
-  position: relative;
-  isolation: isolate;
-}
-
-.hero-copy::before {
-  content: 'قرآن';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(90px, 12vw, 170px);
-  font-weight: 700;
-  color: var(--accent);
-  opacity: 0.04;
-  pointer-events: none;
-  user-select: none;
-  line-height: 1;
-  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Amiri', serif;
 }
 
 .hero-media {
@@ -396,11 +383,7 @@
     margin: 0 auto;
   }
 
-  .hero-copy::before {
-    font-size: clamp(70px, 20vw, 120px);
   }
-
-}
 
 /* Buttons */
 .btn {
@@ -437,6 +420,7 @@
 .btn-secondary:hover {
   border-color: var(--foreground-secondary);
   background-color: var(--landing-bg-secondary);
+  transform: translateY(-1px);
 }
 
 .btn-lg {
