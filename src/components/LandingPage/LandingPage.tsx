@@ -398,7 +398,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
                 </button>
               </div>
 
-              <div className="price-card student-plan">
+              <div className="price-card student-plan supporter-card">
                 <div className="badge">Supporter</div>
 
                 <div className="price">{formatCurrency(supporterPrice)}<span>{billingCycle === 'monthly' ? '/mo' : '/yr'}</span></div>
