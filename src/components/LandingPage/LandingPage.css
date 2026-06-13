@@ -1567,7 +1567,7 @@
 }
 
 /* ── Tablet Layout ── */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (min-width: 769px) and (orientation: portrait) {
   .feature-showcase {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -1577,6 +1577,11 @@
     display: flex;
     flex-direction: row;
     gap: 0.5rem;
+  }
+
+  .feature-showcase-inverted .feature-showcase-list,
+  .feature-showcase-inverted .feature-showcase-preview {
+    order: initial;
   }
 
   .feature-showcase-card {
