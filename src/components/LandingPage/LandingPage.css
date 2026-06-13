@@ -1006,12 +1006,21 @@
 }
 
 .price-card.student-plan {
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
+}
+
+.price-card.supporter-card {
   border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
   box-shadow: 0 0 0 1px var(--landing-accent-light), var(--glass-shadow), 0 4px 12px color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .price-card p {
   color: var(--foreground-secondary);
+}
+
+.price-card .btn {
+  margin-top: auto;
 }
 
 .price-card.premium {
@@ -1050,7 +1059,7 @@
   list-style: none;
   margin: 1.5rem 0 2rem;
   text-align: left;
-  /* Keep bullets aligned left even if card is centered */
+  flex: 1;
 }
 
 .features-list li {
