@@ -262,6 +262,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               Blog
             </Link>
             <button
+              className="btn btn-secondary"
+              onClick={() => window.location.href = '/auth'}
+            >
+              Sign in
+            </button>
+            <button
               className="btn btn-secondary nav-theme-btn"
               onClick={cycleTheme}
               aria-label="Toggle Theme"
