@@ -1416,10 +1416,10 @@
   }
 
   .feature-showcase-list {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
-    justify-content: center;
+    justify-items: stretch;
     padding-bottom: 0.25rem;
   }
 
@@ -1428,27 +1428,19 @@
     order: initial;
   }
 
-  .feature-showcase-list::-webkit-scrollbar {
-    height: 6px;
-  }
-
-  .feature-showcase-list::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--foreground) 20%, transparent);
-    border-radius: 999px;
-  }
-
   .feature-showcase-card {
-    flex: 0 1 auto;
     min-width: 0;
+    width: auto;
     padding: 0.5rem 0.65rem;
     grid-template-columns: auto 1fr;
     gap: 0.4rem;
     border-radius: 100px;
   }
 
-  .feature-showcase-card:nth-child(1),
-  .feature-showcase-card:nth-child(2) {
-    flex: 1 0 calc(50% - 0.25rem);
+  .feature-showcase-card:last-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: auto;
   }
 
   .feature-showcase-card-icon {
