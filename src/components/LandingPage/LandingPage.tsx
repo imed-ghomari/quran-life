@@ -104,7 +104,7 @@ const FeatureShowcase = ({
 
   return (
     <div className={`feature-showcase${inverted ? ' feature-showcase-inverted' : ''}`}>
-      <div className="feature-showcase-list" role="tablist" aria-orientation="vertical">
+      <div className="feature-showcase-list" role="tablist" aria-orientation="horizontal">
         {items.map((item, index) => {
           const Icon = item.icon;
           const isActive = index === activeIndex;
@@ -131,6 +131,10 @@ const FeatureShowcase = ({
             </button>
           );
         })}
+      </div>
+
+      <div className="feature-showcase-description" aria-hidden="true">
+        {activeItem.description}
       </div>
 
       <div
