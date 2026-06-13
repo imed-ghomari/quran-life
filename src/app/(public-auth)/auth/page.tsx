@@ -583,24 +583,7 @@ function AuthContent() {
                             Quran Life is free for everyone. The Supporter tier helps maintain the app and includes the weekly Discord group Q&A.
                         </p>
 
-                        <div style={{
-                            marginBottom: '1.25rem',
-                            padding: '1rem',
-                            borderRadius: '18px',
-                            border: '1px solid var(--border)',
-                            background: 'var(--background-secondary)',
-                            display: 'grid',
-                            gap: '0.55rem',
-                            color: 'var(--foreground-secondary)',
-                            fontSize: '0.9rem',
-                        }}>
-                            <div style={{ fontWeight: 700, color: 'var(--foreground)' }}>Supporter includes:</div>
-                            <div>Weekly group Q&A with supporter members in Discord.</div>
-                            <div>Direct help with Quran Life questions and study workflow.</div>
-                            <div>Ongoing support for app hosting, fixes, and maintenance.</div>
-                        </div>
-
-                        <div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+<div className="checkout-plan-label" style={{ color: 'var(--foreground-secondary)', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
                             Choose your supporter plan:
                         </div>
                         <div className="checkout-plan-grid" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.25rem' }}>
