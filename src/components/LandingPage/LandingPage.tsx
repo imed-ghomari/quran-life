@@ -248,10 +248,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
             <a href="#features" className="nav-link">
               Features
             </a>
-            <a href="#pricing" className="nav-link">
-              Pricing
-            </a>
-            <a href="#faq" className="nav-link">
+<a href="#faq" className="nav-link">
               FAQ
             </a>
             <a href="#roadmap" className="nav-link">
@@ -262,17 +259,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onBuy }) => {
               Blog
             </Link>
             <button
-              className="btn btn-secondary"
-              onClick={() => window.location.href = '/auth'}
-            >
-              Sign in
-            </button>
-            <button
               className="btn btn-secondary nav-theme-btn"
               onClick={cycleTheme}
               aria-label="Toggle Theme"
             >
               {getThemeIcon()}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => window.location.href = '/auth'}
+            >
+              Sign in
             </button>
             <button className="btn btn-primary" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
               Get Started
