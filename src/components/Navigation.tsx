@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpen, BarChart3, Settings, ListTodo, HelpCircle } from 'lucide-react';
+import { BookOpen, BarChart3, Settings, HelpCircle } from 'lucide-react';
 import {
     useSharedInstantListeningProgress,
     useSharedInstantMindMaps,
@@ -79,8 +79,7 @@ function NavigationContent({ pendingHref, onNavigateStart }: NavigationContentPr
     }, [settings, dueNodes, mindmaps, errors, listeningProgress, hasHydratedNavMetrics]);
 
     const navItems = [
-        { href: '/dashboard', icon: BookOpen, label: 'Today', badge: navMetrics.hideBadges ? undefined : navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
-        { href: '/todo', icon: ListTodo, label: 'Todo', showStatusDot: false },
+        { href: '/dashboard', icon: BookOpen, label: 'Practice', badge: navMetrics.hideBadges ? undefined : navMetrics.todayTasks, showStatusDot: !navMetrics.isDailyPortionComplete },
         { href: '/statistics', icon: BarChart3, label: 'Statistics', showStatusDot: false },
         { href: '/docs', icon: HelpCircle, label: 'Docs', showStatusDot: false },
         { href: '/settings', icon: Settings, label: 'Settings', showStatusDot: false },

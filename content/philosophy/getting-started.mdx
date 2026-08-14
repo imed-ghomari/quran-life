@@ -6,19 +6,19 @@ Quran Life is more than just a tracking app—it's a complete system for memoriz
 
 When you first launch the app, you'll go through an **Onboarding** process to set your initial preferences. If you ever need to adjust them, you can do so in the [Settings](/docs/philosophy/settings) tab:
 
-1.  **Set Your Active Part**: Choose the Part (Juz) you are working on. This focuses your Daily Portion and overall progression on your current goal, while the Todo tab still shows all cards. Quran Life currently uses a [7-part system](/docs/mindmaps/part-0) for active focus.
-2.  **Skipping Surahs**: You can mark Surahs you have already fully mastered (like Surah Al-Fatiha or Al-Ikhlas) as **Skipped**. This removes them from your daily portion, todo list, and reviews to prevent cluttering your workflow with things you already know perfectly.
+1.  **Set Your Active Part**: Choose the Part (Juz) you are working on. This focuses your Daily Portion and overall progression on your current goal, while Practice focuses the active preparation and repair queues on the same daily workflow. Quran Life currently uses a [7-part system](/docs/mindmaps/part-0) for active focus.
+2.  **Skipping Surahs**: You can mark Surahs you have already fully mastered (like Surah Al-Fatiha or Al-Ikhlas) as **Skipped**. This removes them from your daily portion, preparation queue, and reviews to prevent cluttering your workflow with things you already know perfectly.
 3. **Setting surah maturity**: You can change the maturity of a surah in the [settings](/docs/philosophy/settings), if you already know that it is strongly embeded in your memory. This will change the behavior of the relevant review items that are talked about in phase 4 below.
 
 ## Phase 2: The Passive memorization (Daily portion)
 
-Every day, open the **Today** tab. Your first goal is **Passive Exposure**. This ensures that you maintain a constant relationship with the entire text you are memorizing.
+Every day, open the **Practice** tab. Your first goal is **Passive Exposure**. This ensures that you maintain a constant relationship with the entire text you are memorizing.
 
 -   **Listen/Read Your Portion**: This is a specific set of verses the app gives you daily. Listen to it to subconsciously absorb the verses.
 -   **How it's Calculated**: Daily portion only includes surahs in your active part that are still in passive exposure. Skipped surahs are excluded, and a surah also leaves daily portion as soon as any of its verse groups has entered review. If you later reset that surah's verse-group memory nodes back to fresh/new state in [Settings](/docs/philosophy/settings), it can appear in daily portion again. After eligibility is decided, the app sizes the portion around your chosen **daily minutes** and then derives the cycle length from whatever content is still eligible.
 -   **Goal**: The intent is to keep your daily time steady while the number of cycle days adjusts to the amount of material still in passive exposure.
 -   **Hafs Mushaf Standard**: We use the official **Hafs Mushaf** text to ensure your memorization matches the most widely used standard.
--   **The Dot**: A small dot on the "Today" icon will remind you if you haven't finished your daily portion yet.
+-   **The Dot**: A small dot on the "Practice" icon will remind you if you haven't finished your daily portion yet.
 
 It is recommended to move on to the **active learning phase** (marking it as complete for reviews) once you have completed enough Daily Portion **cycles** to feel the "sound" and general flow of the verses. Once you meet this criteria, you might need a tiny amount of rote repetition at the very end to bridge any final gaps before marking a Surah as fully learned. This should be quick and targeted. 
 
@@ -26,7 +26,7 @@ However, if you are in a rush, you can bypass the passive learning phase and use
 
 ## Phase 3: Active Memorization (Visual Mindmaps)
 
-This is where the real work happens in the **Todo** tab. Instead of just repeating verses, you will associate them with a visual "map."
+This is where the real work happens in the **Practice** tab preparation queue. Instead of just repeating verses, you will associate them with a visual "map."
 
 1.  **Choose Your Path**: For every Surah, you have two options:
     -   **Use a Pre-Made Map**: Start with the official mindmap for speed and reference (as of now only part 7 mindmaps are available).
@@ -34,12 +34,7 @@ This is where the real work happens in the **Todo** tab. Instead of just repeati
 2.  **Setup Your Verse Groups**: If you're creating your own mindmaps, use the **Splits configuration modal** to split the Surah into visual segments (we call these "chunks").
 3.  **Mark as Complete**: Once your map is ready and you feel familiar with the verses through your **Daily Portion** cycles, mark the Surah as complete to begin your **Smart Review** cycle. Only now does the verse appear in the review queue. This is necessary because without a visual map, your brain has no "place" to store the verses, leading to weak, isolated memories that fade quickly. The map provides the structure that holds the verses together.
 
-> To help you situate yourself, we have added icons that appear directly on the Kanban cards themselves:
-> - Brain: Custom mindmap (not an official template).
-> - BadgeCheck: Official (pre-made) mindmap.
-> - PenSquare: Official map edited by you.
-> - Layers: Custom map, but an official reset is available.
-> - scissors: Splits not created yet.
+> Preparation cards keep the item name visible and place mindmap, split, and documentation actions directly on the card so you do not have to open a separate Kanban board.
 
 *Deep Dive: [How to create effective Mindmaps](/docs/philosophy/mindmap-strategy)*
 
@@ -48,11 +43,11 @@ This is where the real work happens in the **Todo** tab. Instead of just repeati
 Once you've "learned" a Surah, the app will ask you to review it periodically.
 
 -   **When to Review**: The app uses a [Smart Review System](/docs/philosophy/spaced-repetition) to show you verses groups or mindmaps just as you're about to forget them.
--   **Today Counter**: The counter on the "Today" tab shows the number of reviews that are due or overdue.
+-   **Practice Counter**: The counter on the "Practice" tab shows the number of reviews that are due or overdue.
 
 ## Maintenance: Managing Your Tasks
 
-As you progress, the **Todo** tab will be your hub for maintenance. Watch for the **Todo Counter**, which indicates structural tasks that need attention:
+As you progress, the **Practice** tab remediation queue becomes your hub for maintenance. Watch the Repair pill and queue summary for structural tasks that need attention:
 
 -   **Memory Gaps (Suspended Verse Groups)**: If you fail a review 3 times, the app [Suspends the related review item](/docs/philosophy/re-learning). This forces you to stop and fix your mindmap before moving on.
 -   **Similar Verses (Mutashabihat)**: The app will alert you to [Similar Verses](/docs/philosophy/mutashabihat). Use logic and thematic flow to distinguish them, rather than simple tricks.

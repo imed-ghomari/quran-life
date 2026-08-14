@@ -59,7 +59,7 @@ import {
 } from '@/hooks/useInstantData';
 import { reviewCard, getSchedulingPreview, createNewFSRSState } from '@/lib/fsrs';
 import { optimizeWeights } from '../../actions';
-import { surahAyahToAbsolute, getMutashabihatForAbsolute, doesSimilarityEntryOverlapChunk } from '@/lib/mutashabihat';
+import { absoluteToSurahAyah, surahAyahToAbsolute, getMutashabihatForAbsolute, doesSimilarityEntryOverlapChunk } from '@/lib/mutashabihat';
 import { isSimilarityEntryResolved } from '@/lib/mutashabihatResolution';
 import { useTheme } from '@/components/ThemeProvider';
 import { OnlineStatusContext } from '@/components/Providers';
@@ -216,6 +216,7 @@ export default function TodayPage() {
     const [hasResolvedInitialReviewSelection, setHasResolvedInitialReviewSelection] = useState(false);
     const [hasHydratedReviewQueue, setHasHydratedReviewQueue] = useState(false);
     const [isMindmapRevealPending, setIsMindmapRevealPending] = useState(false);
+    const [showReviewSummary, setShowReviewSummary] = useState(true);
 
     // Local helper to find anchor for range using InstantDB mindmaps
     const findAnchorForRange = useCallback((surahId: number, start: number, end: number) => {
@@ -1760,6 +1761,168 @@ export default function TodayPage() {
         return map;
     }, [allVerses]);
 
+
+    const preparationQueueItems = useMemo(() => {
+        if (!settings) return [];
+        const skipped = new Set((settings.skippedSurahs || []).map((surahId) => Number(surahId)));
+        const activeSurahs = getSurahsByPart(settings.activePart)
+            .filter((surah) => !skipped.has(surah.id))
+            .map((surah) => {
+                const mindmap = mindmaps.find((mm) => Number((mm as any).surahId) === surah.id);
+                const hasMindmapContent = !!mindmap?.tldrawSnapshot || !!mindmap?.imageUrl || !!mindmap?.imageUrlDark;
+                const anchors = getEffectiveSurahAnchors(surah.id, mindmap);
+                const isReady = !!mindmap?.isComplete && hasMindmapContent && anchors.length > 0;
+                return {
+                    id: `surah-${surah.id}`,
+                    type: 'surah' as const,
+                    label: `${surah.arabicName} (${surah.name})`,
+                    detail: isReady ? `${anchors.length} review split${anchors.length === 1 ? '' : 's'} ready` : 'Needs mindmap completion or verse splits',
+                    isReady,
+                    surahId: surah.id,
+                    mindmap,
+                };
+            })
+            .filter((item) => !item.isReady);
+
+        const activePart = settings.activePart as QuranPart;
+        const partMindmap = partMindMaps.find((pm) => Number((pm as any).partId) === activePart);
+        const hasPartMindmapContent = !!partMindmap?.tldrawSnapshot || !!partMindmap?.imageUrl || !!partMindmap?.imageUrlDark;
+        const partItems = activePart > 0 && (!partMindmap?.isComplete || !hasPartMindmapContent)
+            ? [{
+                id: `part-${activePart}`,
+                type: 'part' as const,
+                label: `Part ${activePart} mindmap`,
+                detail: 'Needs mindmap completion',
+                isReady: false,
+                partId: activePart,
+                mindmap: partMindmap,
+            }]
+            : [];
+
+        return [...partItems, ...activeSurahs];
+    }, [settings, mindmaps, partMindMaps]);
+
+    const remediationQueueItems = useMemo(() => {
+        const skipped = new Set((settings?.skippedSurahs || []).map((surahId) => Number(surahId)));
+        const suspendedItems = Array.from(suspendedVerseGroupKeys).map((groupKey) => {
+            const [surahIdPart] = groupKey.split('-');
+            const surahId = Number(surahIdPart);
+            if (!Number.isFinite(surahId) || skipped.has(surahId)) return null;
+            const surah = getSurah(surahId);
+            return {
+                id: `suspended-${groupKey}`,
+                type: 'error' as const,
+                label: surah ? `${surah.arabicName} (${surah.name})` : `Surah ${surahId}`,
+                detail: 'Suspended after repeated recall errors',
+            };
+        }).filter((item): item is NonNullable<typeof item> => !!item);
+
+        const similarityByAbsolute = new Map<number, { id: string; type: 'similarity'; label: string; detail: string }>();
+        reviewErrors.forEach((error) => {
+            if (error?.type !== 'similarity' || !error.absoluteAyah) return;
+            const absolute = Number(error.absoluteAyah);
+            if (!Number.isFinite(absolute) || similarityByAbsolute.has(absolute)) return;
+            const refs = absoluteToSurahAyah(absolute);
+            const surah = getSurah(refs.surahId);
+            similarityByAbsolute.set(absolute, {
+                id: `similarity-origin-${absolute}`,
+                type: 'similarity' as const,
+                label: surah ? `${surah.arabicName} (${surah.name}) ${refs.ayahId}` : `Ayah ${absolute}`,
+                detail: 'Similarity check from a failed review',
+            });
+        });
+
+        return [...suspendedItems, ...Array.from(similarityByAbsolute.values())];
+    }, [reviewErrors, settings?.skippedSurahs, suspendedVerseGroupKeys]);
+
+    const practiceQueueSummary = useMemo(() => ({
+        srs: orderedDueNodes.length,
+        preparation: preparationQueueItems.length,
+        remediation: remediationQueueItems.length,
+        passive: listeningComplete || eligibleSurahs.length === 0 ? 0 : todaysPortion.length,
+    }), [orderedDueNodes.length, preparationQueueItems.length, remediationQueueItems.length, listeningComplete, eligibleSurahs.length, todaysPortion.length]);
+
+    const openPracticeDoc = useCallback((href: string) => {
+        if (typeof window === 'undefined') return;
+        window.location.href = href;
+    }, []);
+
+    const openSettingsSimilarity = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        window.location.href = '/settings?tab=tracking';
+    }, []);
+
+    const ignoreSimilarityFromPractice = useCallback(async (itemId: string) => {
+        addToast('postpone', 'Similarity ignored', itemId.replace('similarity-origin-', 'Ayah '));
+    }, [addToast]);
+
+    const renderPreparationQueueCard = useCallback((item: (typeof preparationQueueItems)[number]) => {
+        const isSurah = item.type === 'surah';
+        const docLink = isSurah ? `/docs/mindmaps/surah-${item.surahId}` : `/docs/mindmaps/part-${item.partId}`;
+        const hasMindmap = !!item.mindmap?.tldrawSnapshot || !!item.mindmap?.imageUrl || !!item.mindmap?.imageUrlDark;
+        return (
+            <div key={item.id} className="practice-queue-card" style={{ display: 'grid', gap: '0.65rem', padding: '0.85rem', border: '1px solid var(--border)', borderRadius: 14, background: 'var(--background-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <strong>{item.label}</strong>
+                    <span className="review-header-pill"><span className="review-header-pill__segment"><span className="review-header-pill__label">Prep</span></span></span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: isSurah ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))', gap: '0.4rem' }}>
+                    <button className="btn btn-secondary std-normal-btn" onClick={() => isSurah ? setActiveMindmapEditor({ surahId: item.surahId, snapshot: item.mindmap?.tldrawSnapshot }) : setActivePartEditor({ partId: item.partId, snapshot: item.mindmap?.tldrawSnapshot })}>
+                        <PenTool size={14} /> {hasMindmap ? 'Edit Mindmap' : 'Create Mindmap'}
+                    </button>
+                    {isSurah && (
+                        <button className="btn btn-secondary std-normal-btn" onClick={() => setActiveMindmapEditor({ surahId: item.surahId, snapshot: item.mindmap?.tldrawSnapshot })}>
+                            <Move size={14} /> Change Splits
+                        </button>
+                    )}
+                    <button className="btn btn-secondary std-normal-btn" onClick={() => openPracticeDoc(docLink)}>
+                        <BookOpen size={14} /> Docs
+                    </button>
+                </div>
+            </div>
+        );
+    }, [openPracticeDoc, preparationQueueItems]);
+
+    const renderRemediationQueueCard = useCallback((item: (typeof remediationQueueItems)[number]) => {
+        const isSimilarity = item.type === 'similarity';
+        const primarySurahId = (() => {
+            if (!isSimilarity) {
+                const match = item.id.match(/^suspended-(\d+)-/);
+                return match ? Number(match[1]) : null;
+            }
+            return null;
+        })();
+        const mindmap = primarySurahId ? mindmaps.find((mm) => Number((mm as any).surahId) === primarySurahId) : undefined;
+        return (
+            <div key={item.id} className="practice-queue-card" style={{ display: 'grid', gap: '0.65rem', padding: '0.85rem', border: '1px solid var(--border)', borderRadius: 14, background: 'var(--background-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <strong>{item.label}</strong>
+                    <span className="review-header-pill"><span className="review-header-pill__segment"><span className="review-header-pill__label">{isSimilarity ? 'Similarity' : 'Error'}</span></span></span>
+                </div>
+                <div style={{ padding: '0.75rem', borderRadius: 12, background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>
+                    <strong style={{ color: 'var(--foreground)' }}>{isSimilarity ? 'Similarity context' : 'Verse context'}</strong>
+                    <p style={{ marginTop: '0.35rem' }}>{item.detail}</p>
+                    <p style={{ marginTop: '0.25rem' }}>This context is shown inline so repair work can happen after SRS without returning to a Kanban column.</p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: isSimilarity ? 'repeat(3, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))', gap: '0.4rem' }}>
+                    {isSimilarity ? (
+                        <>
+                            <button className="btn btn-secondary std-normal-btn" onClick={() => openSettingsSimilarity()}><ZoomIn size={14} /> Open Context</button>
+                            <button className="btn btn-secondary std-normal-btn std-normal-danger" onClick={() => ignoreSimilarityFromPractice(item.id)}><X size={14} /> Ignore</button>
+                            <button className="btn btn-secondary std-normal-btn" onClick={() => openSettingsSimilarity()}><BookOpen size={14} /> Settings</button>
+                        </>
+                    ) : (
+                        <>
+                            <button className="btn btn-secondary std-normal-btn" onClick={() => primarySurahId && setActiveMindmapEditor({ surahId: primarySurahId, snapshot: mindmap?.tldrawSnapshot })}><PenTool size={14} /> Edit Mindmap</button>
+                            <button className="btn btn-secondary std-normal-btn" onClick={() => primarySurahId && setActiveMindmapEditor({ surahId: primarySurahId, snapshot: mindmap?.tldrawSnapshot })}><Move size={14} /> Edit Splits</button>
+                            <button className="btn btn-secondary std-normal-btn" onClick={() => addToast('postpone', 'Verse context visible', item.label)}><BookOpen size={14} /> Verse Context</button>
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    }, [addToast, ignoreSimilarityFromPractice, mindmaps, openSettingsSimilarity, remediationQueueItems]);
+
     const activeContent = useMemo(() => {
         if (orderedDueNodes.length === 0 || currentReviewIndex >= orderedDueNodes.length) return null;
         const node = orderedDueNodes[currentReviewIndex];
@@ -2270,8 +2433,19 @@ export default function TodayPage() {
                 />
             )}
             <div className="today-header">
-                <h1 className="text-2xl font-bold">Today</h1>
+                <h1 className="text-2xl font-bold">Active Practice Hub</h1>
                 <div className="today-header-actions">
+                    {!showReviewSummary && (
+                        <button
+                            className="today-header-btn"
+                            onClick={() => setShowReviewSummary(true)}
+                            data-tooltip="Back to queue summary"
+                            data-tooltip-trigger="hover"
+                            aria-label="Back to queue summary"
+                        >
+                            <ChevronDown size={16} style={{ transform: 'rotate(90deg)' }} />
+                        </button>
+                    )}
                     <button
                         className="today-header-btn"
                         onClick={() => handleUndo('keyboard')}
@@ -2336,6 +2510,11 @@ export default function TodayPage() {
                                                     `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
                                         </span>
                                         {reviewFreshnessPill}
+                                        <span className="review-header-pill" role="status" aria-label={`Preparation items: ${practiceQueueSummary.preparation}. Remediation items: ${practiceQueueSummary.remediation}.`}>
+                                            <span className="review-header-pill__segment"><span className="review-header-pill__label">Prep</span><span className="review-header-pill__count">{practiceQueueSummary.preparation}</span></span>
+                                            <span className="review-header-pill__divider" aria-hidden="true" />
+                                            <span className="review-header-pill__segment"><span className="review-header-pill__label">Repair</span><span className="review-header-pill__count">{practiceQueueSummary.remediation}</span></span>
+                                        </span>
                                     </span>
                                 )}
                                 <span className={`collapse-icon ${viewState.reviewExpanded ? 'open' : ''}`}><ChevronDown size={20} /></span>
@@ -2350,11 +2529,44 @@ export default function TodayPage() {
                                     <div className="empty-state">
                                         <Spinner text="Preparing reviews..." />
                                     </div>
+                                ) : showReviewSummary ? (
+                                    <div className="empty-state" style={{ alignItems: 'stretch', gap: '1rem' }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <Brain size={40} className="empty-icon" />
+                                            <p style={{ fontWeight: 700 }}>Practice queue summary</p>
+                                            <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>Preparation → SRS reviews → remediation, all in one review flow.</p>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.5rem' }}>
+                                            <div className="review-header-pill" style={{ justifyContent: 'center' }}><span className="review-header-pill__segment"><span className="review-header-pill__label">Prep</span><span className="review-header-pill__count">{practiceQueueSummary.preparation}</span></span></div>
+                                            <div className="review-header-pill" style={{ justifyContent: 'center' }}><span className="review-header-pill__segment"><span className="review-header-pill__label">SRS</span><span className="review-header-pill__count">{practiceQueueSummary.srs}</span></span></div>
+                                            <div className="review-header-pill" style={{ justifyContent: 'center' }}><span className="review-header-pill__segment"><span className="review-header-pill__label">Repair</span><span className="review-header-pill__count">{practiceQueueSummary.remediation}</span></span></div>
+                                        </div>
+                                        <div style={{ display: 'grid', gap: '0.5rem', textAlign: 'left' }}>
+                                            {orderedDueNodes.length === 0 && preparationQueueItems.slice(0, 3).map(renderPreparationQueueCard)}
+                                            {orderedDueNodes.length > 0 && <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem' }}>SRS reviews are due, so they will run before preparation and remediation.</p>}
+                                            {orderedDueNodes.length === 0 && preparationQueueItems.length === 0 && remediationQueueItems.length === 0 && <p style={{ color: 'var(--foreground-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>All active practice queues are clear.</p>}
+                                        </div>
+                                        <button className="btn btn-primary btn-full std-normal-btn" onClick={() => setShowReviewSummary(false)} disabled={practiceQueueSummary.srs === 0 && practiceQueueSummary.preparation === 0 && practiceQueueSummary.remediation === 0}>
+                                            Begin practice
+                                        </button>
+                                    </div>
                                 ) : orderedDueNodes.length === 0 ? (
                                     /* Empty state */
-                                    <div className="empty-state">
+                                    <div className="empty-state" style={{ alignItems: 'stretch', gap: '1rem' }}>
                                         <CheckCircle size={40} className="empty-icon" />
-                                        <p>No reviews due!</p>
+                                        <p>No SRS reviews due!</p>
+                                        {preparationQueueItems.length > 0 && (
+                                            <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                                <p style={{ fontWeight: 700 }}>Preparation queue</p>
+                                                {preparationQueueItems.slice(0, 5).map(renderPreparationQueueCard)}
+                                            </div>
+                                        )}
+                                        {remediationQueueItems.length > 0 && (
+                                            <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                                <p style={{ fontWeight: 700 }}>Remediation queue</p>
+                                                {remediationQueueItems.slice(0, 5).map(renderRemediationQueueCard)}
+                                            </div>
+                                        )}
                                     </div>
                                 ) : activeContent && (
                                   <div
@@ -2369,6 +2581,11 @@ export default function TodayPage() {
                                                             `${formatSurahContextLabel(activeContent.surah)} (${activeContent.verses?.length || 0} verses)`}
                                                 </span>
                                                 {reviewFreshnessPill}
+                                                <span className="review-header-pill" role="status" aria-label={`Preparation items: ${practiceQueueSummary.preparation}. Remediation items: ${practiceQueueSummary.remediation}.`}>
+                                                    <span className="review-header-pill__segment"><span className="review-header-pill__label">Prep</span><span className="review-header-pill__count">{practiceQueueSummary.preparation}</span></span>
+                                                    <span className="review-header-pill__divider" aria-hidden="true" />
+                                                    <span className="review-header-pill__segment"><span className="review-header-pill__label">Repair</span><span className="review-header-pill__count">{practiceQueueSummary.remediation}</span></span>
+                                                </span>
                                             </div>
                                         )}
 
@@ -2494,7 +2711,7 @@ export default function TodayPage() {
                                     </div>
                                 )}
                             </div>
-                            {!isReviewQueueHydrating && orderedDueNodes.length > 0 && activeContent && (
+                            {!isReviewQueueHydrating && !showReviewSummary && orderedDueNodes.length > 0 && activeContent && (
                                 <div className="today-card-footer">
                                     {activeContent.type === 'verse' && (
                                         <div className="review-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
