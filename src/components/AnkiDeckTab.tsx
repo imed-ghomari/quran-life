@@ -320,32 +320,9 @@ export default function AnkiDeckTab() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4 mt-4">
-          <div>
-            <label className="adv-label mb-2 block">Deck name</label>
-            <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
-          </div>
-          <div>
-            <label className="adv-label mb-2 block">Mindmap to edit</label>
-            <select value={selectedMindmapKey} onChange={e => setSelectedMindmapKey(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
-              <optgroup label="Surahs">
-                {SURAHS.map(s => (
-                  <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>
-                ))}
-              </optgroup>
-              <optgroup label="Parts & Meta">
-                <option value="meta-0">Meta - Overview across all parts</option>
-                <option value="part-1">Part 1 - Surah 1-5</option>
-                <option value="part-2">Part 2 - Surah 6-9</option>
-                <option value="part-3">Part 3 - Surah 10-24</option>
-                <option value="part-4">Part 4 - Surah 25-33</option>
-                <option value="part-5">Part 5 - Surah 34-49</option>
-                <option value="part-6">Part 6 - Surah 50-66</option>
-                <option value="part-7">Part 7 - Surah 67-114</option>
-                <option value="part-8">All Quran</option>
-              </optgroup>
-            </select>
-          </div>
+        <div className="mt-4">
+          <label className="adv-label mb-2 block">Deck name</label>
+          <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
         </div>
 
         <button onClick={() => setShowExportPopup(true)} className="mt-4 w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90">
@@ -354,7 +331,7 @@ export default function AnkiDeckTab() {
         <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">One file contains everything - verse groups, mindmaps, and notes. Re-importing updates existing cards and keeps your progress.</p>
       </div>
 
-      {/* Mindmap - unified for surah/part/meta, splits hidden for part/meta */}
+      {/* Mindmap - unified, selector now inside this card */}
       {(() => {
         const isPartMeta = selectedMindmapKey.startsWith('part-') || selectedMindmapKey.startsWith('meta-');
         const displayMindmap = isPartMeta ? (mindmaps as any)[selectedMindmapKey] as any : currentMindmap;
@@ -364,6 +341,27 @@ export default function AnkiDeckTab() {
         const displaySurah = surah;
         return (
           <div className="card">
+            <div className="mb-3">
+              <label className="adv-label mb-2 block">Mindmap to edit</label>
+              <select value={selectedMindmapKey} onChange={e => setSelectedMindmapKey(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
+                <optgroup label="Surahs">
+                  {SURAHS.map(s => (
+                    <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Parts & Meta">
+                  <option value="meta-0">Meta - Overview across all parts</option>
+                  <option value="part-1">Part 1 - Surah 1-5</option>
+                  <option value="part-2">Part 2 - Surah 6-9</option>
+                  <option value="part-3">Part 3 - Surah 10-24</option>
+                  <option value="part-4">Part 4 - Surah 25-33</option>
+                  <option value="part-5">Part 5 - Surah 34-49</option>
+                  <option value="part-6">Part 6 - Surah 50-66</option>
+                  <option value="part-7">Part 7 - Surah 67-114</option>
+                  <option value="part-8">All Quran</option>
+                </optgroup>
+              </select>
+            </div>
             <div className="flex items-center justify-between">
               <h3 className="font-semibold flex items-center gap-2"><ImageIcon size={16} /> Mindmap for {displayTitle}</h3>
               <div className="flex gap-2">
@@ -386,41 +384,57 @@ export default function AnkiDeckTab() {
             {displayMindmap?.snapshot && isPartMeta && (
               <p className="text-xs text-[var(--foreground-secondary)] mt-2">Preview hidden until you click View.</p>
             )}
-            {!isPartMeta && (
+            {!isPartMeta && displaySurah && (
               <div className="mt-4 border-t border-[var(--border)] pt-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm flex items-center gap-2"><Split size={14} /> Verse Groups for this Surah</h4>
-                  <button onClick={() => setShowSplitsModal(true)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Split size={12} /> Edit Splits</button>
-                </div>
-                {displaySurah && displaySurah.verseCount <= 10 && anchors.length === 1 && anchors[0].startVerse===1 && anchors[0].endVerse===displaySurah.verseCount ? (
-                  <p className="text-xs text-[var(--foreground-secondary)] mt-2">Short surah auto-split: one card for whole surah. Use Edit Splits to change.</p>
-                ) : null}
-                <div className="mt-2 grid gap-1.5 max-h-32 overflow-y-auto">
-                  {anchors.length === 0 ? (
-                    <p className="text-xs text-[var(--foreground-secondary)]">No groups yet.</p>
-                  ) : (
-                    anchors.slice().sort((a,b)=>a.startVerse-b.startVerse).map(a => (
-                      <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
-                        <span>{a.startVerse}-{a.endVerse} — {a.label}</span>
-                        <span className="opacity-60">{a.endVerse - a.startVerse + 1}v</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
-                  <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview Cards'}</button>
-                </div>
-                {showPreview && (
-                  <div className="mt-2 grid gap-1.5 max-h-40 overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background-secondary)]">
-                    {buildAnkiCards(anchors, allVerses).map((c, i) => (
-                      <div key={i} className="p-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-xs">
-                        <div className="font-medium">{c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
-                        {c.relatedGroups.length>0 && <div className="opacity-70">Similar to: {c.relatedGroups.join(', ')}</div>}
-                      </div>
-                    ))}
+                <h4 className="font-medium text-sm flex items-center gap-2"><Split size={14} /> Define Splits for this Surah</h4>
+                <p className="text-xs text-[var(--foreground-secondary)] mt-1">Drag to split where the mindmap changes topic. This defines your Anki groups.</p>
+                <div className="mt-3 rounded-xl border border-[var(--border)] overflow-hidden bg-[var(--background-secondary)]">
+                  <div className="p-2">
+                    {/* Inline visual splitter - same as modal but embedded */}
+                    <div className="splits-inline-editor">
+                      {(() => {
+                        const verseCount = displaySurah.verseCount;
+                        const breaks = builderState.breaks;
+                        return (
+                          <div className="grid gap-2">
+                            <div className="flex flex-wrap gap-1.5">
+                              {Array.from({ length: verseCount }, (_, i) => i + 1).map(v => {
+                                const isBreak = breaks.includes(v);
+                                const isLast = v === verseCount;
+                                return (
+                                  <div key={v} className="flex items-center gap-1">
+                                    <span className="px-2 py-1 rounded-lg border text-xs bg-[var(--background)]" style={{ borderColor: isBreak ? 'var(--accent)' : 'var(--border)' }}>{v}</span>
+                                    {!isLast && (
+                                      <button
+                                        onClick={() => isBreak ? handleRemoveBreak(v) : handleAddBreak(v)}
+                                        className={`w-6 h-6 rounded-full text-xs flex items-center justify-center border ${isBreak ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'bg-[var(--background)] border-[var(--border)] hover:border-[var(--accent)]'}`}
+                                        title={isBreak ? 'Remove split' : 'Add split'}
+                                      >
+                                        {isBreak ? '×' : '+'}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
+                              <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
+                            </div>
+                            {showPreview && (
+                              <div className="mt-2 grid gap-1.5 max-h-32 overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background)]">
+                                {buildAnkiCards(anchors, allVerses).slice(0,3).map((c, i) => (
+                                  <div key={i} className="text-xs"><b>{c.startVerse}-{c.endVerse}</b> — {c.anchorLabel}</div>
+                                ))}
+                                {buildAnkiCards(anchors, allVerses).length > 3 && <div className="text-xs opacity-60">+ {buildAnkiCards(anchors, allVerses).length - 3} more groups</div>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
             <div className="mt-4 border-t border-[var(--border)] pt-3">
@@ -533,6 +547,10 @@ export default function AnkiDeckTab() {
           <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
             <div className="font-medium">Backup will also be downloaded</div>
             <p className="text-xs mt-1 opacity-80">A small JSON backup is downloaded together with the .apkg. Keep it. If browser storage is cleared, use Import backup to restore.</p>
+          </div>
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
+            <div className="font-medium">If you changed splits for a Surah</div>
+            <p className="text-xs mt-1 opacity-80">Old groups for that Surah get new IDs. Before re-importing, delete that Surah's old cards in Anki: open Browser, search <code>deck:QuranLife tag:surah::50</code> (change number), select all, delete. Then import the new file. Unchanged Surahs keep their due dates.</p>
           </div>
         </div>
       </ConfirmationModal>
