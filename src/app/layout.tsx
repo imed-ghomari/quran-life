@@ -2,11 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import Script from 'next/script';
 import './globals.css';
-import 'tldraw/tldraw.css';
-import { Providers } from '@/components/Providers';
-import AppShell from '@/components/AppShell';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import InstantDataProvider from '@/components/InstantDataProvider';
 import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityController';
 import { getSiteUrl } from '@/lib/siteUrl';
 
@@ -83,25 +80,8 @@ export default function RootLayout({
   try {
     const APP_THEME_KEY = 'theme';
     const APP_ACCENT_THEME_KEY = 'accent-theme';
-    const PUBLIC_THEME_KEY = 'public-theme';
-    const path = window.location.pathname;
-    const isPostAuthRoute = path.startsWith('/dashboard')
-      || path.startsWith('/todo')
-      || path.startsWith('/settings')
-      || path.startsWith('/statistics')
-      || path.startsWith('/docs');
     const root = window.document.documentElement;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (!isPostAuthRoute) {
-      const storedPublicTheme = window.localStorage.getItem(PUBLIC_THEME_KEY);
-      const resolvedPublicTheme = storedPublicTheme === 'dark' || storedPublicTheme === 'light'
-        ? storedPublicTheme
-        : (prefersDark ? 'dark' : 'light');
-      root.setAttribute('data-theme', resolvedPublicTheme);
-      root.setAttribute('data-accent-theme', 'default');
-      return;
-    }
-
     const stored = window.localStorage.getItem(APP_THEME_KEY);
     const resolved = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light');
     root.setAttribute('data-theme', resolved);
@@ -119,22 +99,12 @@ export default function RootLayout({
                 <Script id="theme-bootstrap" strategy="beforeInteractive">
                     {themeBootstrapScript}
                 </Script>
-                <Script
-                    src="https://cdn.affonso.io/js/pixel.min.js"
-                    data-affonso="cmovvwyu7000635gjipiwbu6r"
-                    data-cookie_duration="30"
-                    strategy="afterInteractive"
-                />
                 <ScrollbarVisibilityController />
-                <Providers>
+                <ThemeProvider>
                     <ErrorBoundary>
-                        <InstantDataProvider>
-                            <AppShell>
-                                {children}
-                            </AppShell>
-                        </InstantDataProvider>
+                        {children}
                     </ErrorBoundary>
-                </Providers>
+                </ThemeProvider>
             </body>
         </html>
     );

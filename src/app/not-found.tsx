@@ -1,15 +1,7 @@
-'use client';
-
 import Link from 'next/link';
 import styles from './not-found.module.css';
-import { db } from '@/lib/instant';
 
 export default function NotFound() {
-  const authState = db.useAuth();
-  const { user, isLoading } = authState ?? {};
-  const showDashboard = Boolean(user);
-  const showLanding = !user && !isLoading;
-
   return (
     <main className={styles.page}>
       <section className={styles.card}>
@@ -25,16 +17,12 @@ export default function NotFound() {
         </p>
 
         <div className={styles.actions}>
-          {showLanding && (
-            <Link href="/" className={styles.buttonPrimary}>
-              Back to landing page
-            </Link>
-          )}
-          {showDashboard && (
-            <Link href="/dashboard" className={styles.buttonGhost}>
-              Go to dashboard
-            </Link>
-          )}
+          <Link href="/" className={styles.buttonPrimary}>
+            Back to home
+          </Link>
+          <Link href="/dashboard" className={styles.buttonGhost}>
+            Go to dashboard
+          </Link>
         </div>
       </section>
     </main>
