@@ -28,7 +28,7 @@ export default function AnkiDeckTab() {
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [exportMode, setExportMode] = useState<'all' | 'single'>('single');
+  const [showExportPopup, setShowExportPopup] = useState(false);
   const [mindmaps, setMindmaps] = useState<Record<string, any>>({});
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
   const [showMindmapViewer, setShowMindmapViewer] = useState(false);
@@ -237,46 +237,47 @@ export default function AnkiDeckTab() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (withBackup = true) => {
     if (isExporting) return;
     setIsExporting(true);
     try {
-      let cards;
       const docsMap = loadMindmapDocs();
-      if (exportMode === 'single') {
-        if (anchors.length === 0) {
-          showToast('No anchors to export');
-          setIsExporting(false);
-          return;
+      const allAnchors: AnkiAnchor[] = [];
+      Object.entries(splits).forEach(([k, arr]) => allAnchors.push(...arr));
+      SURAHS.forEach(s => {
+        if (s.verseCount <= 10 && !splits[s.id]) {
+          allAnchors.push({ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` });
         }
-        cards = buildAnkiCards(anchors, allVerses, { mindmapDocsMap: docsMap });
-      } else {
-        // all surahs
-        const allAnchors: AnkiAnchor[] = [];
-        Object.entries(splits).forEach(([k, arr]) => allAnchors.push(...arr));
-        // add auto for short surahs not in splits
-        SURAHS.forEach(s => {
-          if (s.verseCount <= 10 && !splits[s.id]) {
-            allAnchors.push({ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` });
-          }
-        });
-        if (allAnchors.length === 0) {
-          showToast('No splits defined yet');
-          setIsExporting(false);
-          return;
-        }
-        cards = buildAnkiCards(allAnchors, allVerses, { mindmapDocsMap: docsMap });
+      });
+      if (allAnchors.length === 0) {
+        showToast('No splits defined yet');
+        setIsExporting(false);
+        return;
       }
+      const cards = buildAnkiCards(allAnchors, allVerses, { mindmapDocsMap: docsMap });
       const blob = await generateApkgBlob(cards, deckName);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = exportMode === 'single' ? `quran-life-surah-${selectedSurah}.apkg` : `quran-life-deck.apkg`;
+      a.download = `quran-life-deck.apkg`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showToast(`Exported ${cards.length} card(s)`);
+      showToast(`Exported ${cards.length} cards`);
+      if (withBackup) {
+        const backup = { splits, mindmaps, mindmapDocs: docsMap, deckName, exportedAt: new Date().toISOString() };
+        const bBlob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const bUrl = URL.createObjectURL(bBlob);
+        const b = document.createElement('a');
+        b.href = bUrl;
+        b.download = `quran-life-anki-backup-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(b);
+        b.click();
+        b.remove();
+        URL.revokeObjectURL(bUrl);
+      }
+      setShowExportPopup(false);
     } catch (e) {
       console.error(e);
       showToast('Export failed');
@@ -333,16 +334,10 @@ export default function AnkiDeckTab() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button onClick={() => setExportMode('single')} className={`px-3 py-2 rounded-xl border text-sm ${exportMode==='single' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}>Export single surah</button>
-          <button onClick={() => setExportMode('all')} className={`px-3 py-2 rounded-xl border text-sm ${exportMode==='all' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}>Export all ({allCardsCount} cards)</button>
-          <span className="text-xs text-[var(--foreground-secondary)] self-center ml-2">{exportMode==='single' ? `${totalCardsPreview} card(s) for this surah` : `${allCardsCount} total cards`}</span>
-        </div>
-
-        <button onClick={handleExport} disabled={isExporting} className="mt-4 w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50">
-          <Download size={18} /> {isExporting ? 'Generating...' : exportMode==='single' ? `Export Surah ${selectedSurah} (.apkg)` : 'Export Full Deck (.apkg)'}
+        <button onClick={() => setShowExportPopup(true)} className="mt-4 w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90">
+          <Download size={18} /> Export Full Deck to Anki
         </button>
-        <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">You can export right away. If you edit a Surah later, export again — your progress in Anki will be kept.</p>
+        <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">One file contains everything - verse groups, mindmaps, and notes. Re-importing updates existing cards and keeps your progress.</p>
       </div>
 
       {/* Mindmap + Splits */}
@@ -534,6 +529,35 @@ export default function AnkiDeckTab() {
           hasReviewedHistory={false}
           hasSuspendedCards={false}
         />
+      )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowExportPopup(false)}>
+          <div className="bg-[var(--background)] rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-5">
+              <h3 className="font-semibold text-lg">Export Full Deck</h3>
+              <p className="text-sm text-[var(--foreground-secondary)] mt-1">One file contains everything. Re-importing updates existing cards and keeps your progress.</p>
+              <div className="mt-4 p-3 rounded-xl bg-[var(--verse-bg)] border border-[var(--border)] text-sm">
+                <div className="font-medium mb-2">What will be exported:</div>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>{allCardsCount} verse groups from {Object.keys(splits).length} Surahs you edited {SURAHS.filter(s=>s.verseCount<=10 && !splits[s.id]).length>0 && `+ ${SURAHS.filter(s=>s.verseCount<=10 && !splits[s.id]).length} short Surahs`}</li>
+                  <li>{Object.keys(mindmaps).filter(k=>k.startsWith('surah-')).length} Surah mindmaps</li>
+                  <li>{Object.keys(mindmaps).filter(k=>k.startsWith('part-')||k.startsWith('meta-')).length} Part & Meta mindmaps</li>
+                  <li>{Object.keys(mindmapDocs).length} mindmap notes (added as a field in Anki so you can read them while reviewing)</li>
+                </ul>
+                <p className="text-xs mt-3 opacity-70">Edited since last export is included automatically. Due dates in Anki stay the same because cards are updated, not recreated.</p>
+              </div>
+              <div className="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
+                <div className="font-medium">Also downloading a backup</div>
+                <p className="text-xs mt-1 opacity-80">A small JSON backup will be downloaded together with the .apkg. Keep it safe. If your browser storage is cleared, you can use <b>Import backup</b> to restore your mindmaps, splits, and notes before exporting again.</p>
+              </div>
+              <div className="mt-5 flex gap-2">
+                <button onClick={() => setShowExportPopup(false)} className="flex-1 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">Cancel</button>
+                <button onClick={() => handleExport(true)} disabled={isExporting} className="flex-1 py-2.5 rounded-xl bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-50">{isExporting ? 'Generating...' : 'Export Deck + Backup'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {viewerData && (

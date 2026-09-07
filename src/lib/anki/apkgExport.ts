@@ -166,8 +166,9 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
 
     const now = Date.now();
     const crt = Math.floor(now / 1000);
-    const deckId = Math.floor(Math.random() * 1e9) + 1;
-    const modelId = Math.floor(Math.random() * 1e9) + 2;
+    // Fixed IDs so re-importing full deck updates existing notes and keeps due dates/FSRS
+    const deckId = 1600000000000;
+    const modelId = 1600000000001;
 
     const m = modelJson();
     const model = {
