@@ -13,6 +13,7 @@ import type { Verse } from '@/lib/types';
 import { Save, Eye, FileJson, Layers, PenTool, Split, Image as ImageIcon, Download, Upload } from 'lucide-react';
 import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useTheme } from '@/components/ThemeProvider';
+import ConfirmationModal from '@/components/todo/ConfirmationModal';
 
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
@@ -448,11 +449,7 @@ export default function AnkiDeckTab() {
             )}
           </div>
         </div>
-        {( (mindmaps as any)[`part-${selectedPart}`] || (selectedPart===0 && (mindmaps as any)[`meta-0`]) )?.snapshot && (
-          <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 180 }}>
-            <MindmapViewer snapshot={((mindmaps as any)[`part-${selectedPart}`] || (mindmaps as any)[`meta-0`])?.snapshot} isDark={false} height="180px" />
-          </div>
-        )}
+
         <div className="mt-3 border-t border-[var(--border)] pt-3">
           <label className="adv-label mb-2 block">Notes for this part mindmap (added to Anki)</label>
           <textarea
@@ -531,34 +528,33 @@ export default function AnkiDeckTab() {
         />
       )}
 
-      {showExportPopup && (
-        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowExportPopup(false)}>
-          <div className="bg-[var(--background)] rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-5">
-              <h3 className="font-semibold text-lg">Export Full Deck</h3>
-              <p className="text-sm text-[var(--foreground-secondary)] mt-1">One file contains everything. Re-importing updates existing cards and keeps your progress.</p>
-              <div className="mt-4 p-3 rounded-xl bg-[var(--verse-bg)] border border-[var(--border)] text-sm">
-                <div className="font-medium mb-2">What will be exported:</div>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>{allCardsCount} verse groups from {Object.keys(splits).length} Surahs you edited {SURAHS.filter(s=>s.verseCount<=10 && !splits[s.id]).length>0 && `+ ${SURAHS.filter(s=>s.verseCount<=10 && !splits[s.id]).length} short Surahs`}</li>
-                  <li>{Object.keys(mindmaps).filter(k=>k.startsWith('surah-')).length} Surah mindmaps</li>
-                  <li>{Object.keys(mindmaps).filter(k=>k.startsWith('part-')||k.startsWith('meta-')).length} Part & Meta mindmaps</li>
-                  <li>{Object.keys(mindmapDocs).length} mindmap notes (added as a field in Anki so you can read them while reviewing)</li>
-                </ul>
-                <p className="text-xs mt-3 opacity-70">Edited since last export is included automatically. Due dates in Anki stay the same because cards are updated, not recreated.</p>
-              </div>
-              <div className="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
-                <div className="font-medium">Also downloading a backup</div>
-                <p className="text-xs mt-1 opacity-80">A small JSON backup will be downloaded together with the .apkg. Keep it safe. If your browser storage is cleared, you can use <b>Import backup</b> to restore your mindmaps, splits, and notes before exporting again.</p>
-              </div>
-              <div className="mt-5 flex gap-2">
-                <button onClick={() => setShowExportPopup(false)} className="flex-1 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">Cancel</button>
-                <button onClick={() => handleExport(true)} disabled={isExporting} className="flex-1 py-2.5 rounded-xl bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-50">{isExporting ? 'Generating...' : 'Export Deck + Backup'}</button>
-              </div>
-            </div>
+      <ConfirmationModal
+        isOpen={showExportPopup}
+        title="Export Full Deck"
+        message={`One file contains everything. Re-importing updates existing cards and keeps your progress.`}
+        confirmLabel={isExporting ? 'Generating...' : 'Export Deck + Backup'}
+        cancelLabel="Cancel"
+        isDestructive={false}
+        isProcessing={isExporting}
+        onConfirm={() => handleExport(true)}
+        onCancel={() => setShowExportPopup(false)}
+      >
+        <div className="space-y-3 text-sm">
+          <div className="p-3 rounded-xl bg-[var(--verse-bg)] border border-[var(--border)]">
+            <div className="font-medium mb-2">What will be exported:</div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>{allCardsCount} verse groups</li>
+              <li>{Object.keys(mindmaps).filter(k=>k.startsWith('surah-')).length} Surah mindmaps</li>
+              <li>{Object.keys(mindmaps).filter(k=>k.startsWith('part-')||k.startsWith('meta-')).length} Part & Meta mindmaps</li>
+              <li>{Object.keys(mindmapDocs).length} notes</li>
+            </ul>
+          </div>
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
+            <div className="font-medium">Backup will also be downloaded</div>
+            <p className="text-xs mt-1 opacity-80">A small JSON backup is downloaded together with the .apkg. Keep it. If browser storage is cleared, use Import backup to restore.</p>
           </div>
         </div>
-      )}
+      </ConfirmationModal>
 
       {viewerData && (
         <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setViewerData(null)}>
