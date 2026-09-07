@@ -362,6 +362,42 @@ export default function AnkiDeckTab() {
             <MindmapViewer snapshot={currentMindmap.snapshot} imageUrl={currentMindmap.imageUrl} imageUrlDark={currentMindmap.imageUrlDark} isDark={false} height="220px" />
           </div>
         )}
+        {/* Splits - now inline between preview and docs */}
+        <div className="mt-4 border-t border-[var(--border)] pt-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-sm flex items-center gap-2"><Split size={14} /> Verse Groups for this Surah</h4>
+            <button onClick={() => setShowSplitsModal(true)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Split size={12} /> Edit Splits</button>
+          </div>
+          {surah && surah.verseCount <= 10 && anchors.length === 1 && anchors[0].startVerse===1 && anchors[0].endVerse===surah.verseCount ? (
+            <p className="text-xs text-[var(--foreground-secondary)] mt-2">Short surah auto-split: one card for whole surah. Use Edit Splits to change.</p>
+          ) : null}
+          <div className="mt-2 grid gap-1.5 max-h-32 overflow-y-auto">
+            {anchors.length === 0 ? (
+              <p className="text-xs text-[var(--foreground-secondary)]">No groups yet.</p>
+            ) : (
+              anchors.slice().sort((a,b)=>a.startVerse-b.startVerse).map(a => (
+                <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
+                  <span>{a.startVerse}-{a.endVerse} — {a.label}</span>
+                  <span className="opacity-60">{a.endVerse - a.startVerse + 1}v</span>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
+            <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview Cards'}</button>
+          </div>
+          {showPreview && (
+            <div className="mt-2 grid gap-1.5 max-h-40 overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background-secondary)]">
+              {buildAnkiCards(anchors, allVerses).map((c, i) => (
+                <div key={i} className="p-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-xs">
+                  <div className="font-medium">{c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
+                  {c.relatedGroups.length>0 && <div className="opacity-70">Similar to: {c.relatedGroups.join(', ')}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {/* Docs for this mindmap */}
         <div className="mt-4 border-t border-[var(--border)] pt-3">
           <label className="adv-label mb-2 block">Notes for this mindmap (will be added to Anki cards)</label>
@@ -381,46 +417,6 @@ export default function AnkiDeckTab() {
           />
           <p className="text-xs text-[var(--foreground-secondary)] mt-1">This text will be saved with the mindmap and added as a field in Anki so you can read it while reviewing.</p>
         </div>
-      </div>
-
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2"><Split size={16} /> Splits for {surah?.arabicName} ({surah?.name}) - {surah?.verseCount} verses</h3>
-          <div className="flex gap-2">
-            <button onClick={() => setShowSplitsModal(true)} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Split size={14} /> Edit Splits</button>
-            <button onClick={handleSave} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><Save size={14} /> Save</button>
-          </div>
-        </div>
-        {surah && surah.verseCount <= 10 && anchors.length === 1 && anchors[0].startVerse===1 && anchors[0].endVerse===surah.verseCount && (
-          <p className="text-xs text-[var(--foreground-secondary)] mt-2">Short surah auto-split: one card for whole surah. You can still split further.</p>
-        )}
-        <div className="mt-3 grid gap-2">
-          {anchors.length === 0 ? (
-            <p className="text-sm text-[var(--foreground-secondary)]">No groups yet. Use Edit Splits to create them.</p>
-          ) : (
-            anchors.slice().sort((a,b)=>a.startVerse-b.startVerse).map(a => (
-              <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
-                <span>{a.startVerse}-{a.endVerse} — {a.label}</span>
-                <span className="text-xs opacity-60">{a.endVerse - a.startVerse + 1} verses</span>
-              </div>
-            ))
-          )}
-        </div>
-        <p className="text-xs text-[var(--foreground-secondary)] mt-3">Tap Edit Splits to use the visual splitter from the main app - it shows your mindmap preview and lets you drag to split.</p>
-        <div className="mt-3 flex gap-2">
-          <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-2 rounded-xl border border-[var(--border)] text-sm flex items-center gap-1"><Eye size={14} /> {showPreview ? 'Hide' : 'Preview'} </button>
-        </div>
-        {showPreview && (
-          <div className="mt-3 grid gap-2 max-h-96 overflow-y-auto border border-[var(--border)] rounded-xl p-2 bg-[var(--background-secondary)]">
-            {buildAnkiCards(anchors, allVerses).map((c, i) => (
-              <div key={i} className="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)]">
-                <div className="text-sm font-medium">{c.arabicName} {c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
-                <div className="text-xs opacity-70 mt-1">{c.verseTexts.join(' | ').slice(0,120)} {c.verseTexts.join(' ').length>120?'...':''}</div>
-                {c.relatedGroups.length>0 && <div className="text-xs mt-1 opacity-70">Similar to: {c.relatedGroups.join(', ')}</div>}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Part Mindmaps - bring back part & meta */}
