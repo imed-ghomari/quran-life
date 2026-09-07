@@ -22,7 +22,7 @@ const SplitsModal = dynamic(() => import('@/components/todo/SplitsModal'), { ssr
 export default function AnkiDeckTab() {
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
   const [isVersesLoaded, setIsVersesLoaded] = useState(false);
-  const [selectedSurah, setSelectedSurah] = useState<number>(2);
+  const [selectedSurah, setSelectedSurah] = useState<number>(50);
   const [splits, setSplits] = useState<Record<number, AnkiAnchor[]>>({});
   const [anchors, setAnchors] = useState<AnkiAnchor[]>([]);
   const [deckName, setDeckName] = useState('QuranLife::Review');
