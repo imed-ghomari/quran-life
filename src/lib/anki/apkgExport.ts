@@ -245,7 +245,9 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
         newSortOrder: 0,
         newGatherPriority: 0,
         buryInterdayLearning: false,
+        fsrs: true,
         fsrsWeights: [],
+        desiredRetention: 0.9,
       },
     };
 

@@ -35,9 +35,7 @@ export default function AnkiDeckTab() {
   const [viewerData, setViewerData] = useState<{ snapshot: any; title: string } | null>(null);
   const [showSplitsModal, setShowSplitsModal] = useState(false);
   const [selectedPart, setSelectedPart] = useState<number>(1);
-  const [selectedCluster, setSelectedCluster] = useState<number>(1);
   const [showPartEditor, setShowPartEditor] = useState(false);
-  const [showClusterEditor, setShowClusterEditor] = useState(false);
   const [mindmapDocs, setMindmapDocs] = useState<Record<string, string>>({});
   const [editingDocKey, setEditingDocKey] = useState<string | null>(null);
   const [editingDocText, setEditingDocText] = useState('');
@@ -61,10 +59,48 @@ export default function AnkiDeckTab() {
 
   useEffect(() => {
     const loaded = loadSplits();
-    setSplits(loaded);
-    const mm = loadAnkiMindmaps();
-    setMindmaps(mm as any);
-    setMindmapDocs(loadMindmapDocs());
+    const mm = loadAnkiMindmaps() as any;
+    const docs = loadMindmapDocs();
+    const hasData = Object.keys(loaded).length > 0 || Object.keys(mm).length > 0;
+    if (!hasData) {
+      fetch('/premade-anki-data.json')
+        .then(r => r.json())
+        .then(data => {
+          let newSplits = loaded;
+          let hasNewSplits = false;
+          if (data.splits && typeof data.splits === 'object') {
+            const premadeSplits: Record<string, any> = {};
+            Object.entries(data.splits as Record<string, any>).forEach(([k, v]) => {
+              if (Array.isArray(v)) premadeSplits[k] = v;
+            });
+            if (Object.keys(premadeSplits).length > 0) {
+              try { localStorage.setItem('quran-life:anki:splits:v1', JSON.stringify(premadeSplits)); } catch {}
+              newSplits = premadeSplits as any;
+              hasNewSplits = true;
+            }
+          }
+          if (data.mindmaps && typeof data.mindmaps === 'object') {
+            Object.entries(data.mindmaps as Record<string, any>).forEach(([k, v]) => {
+              if (v) saveAnkiMindmapByKey(k, v);
+            });
+          }
+          if (data.mindmapDocs && typeof data.mindmapDocs === 'object') {
+            Object.entries(data.mindmapDocs as Record<string, string>).forEach(([k, v]) => saveMindmapDoc(k, v));
+          }
+          setSplits(hasNewSplits ? (newSplits as any) : loaded);
+          setMindmaps(loadAnkiMindmaps() as any);
+          setMindmapDocs(loadMindmapDocs());
+        })
+        .catch(() => {
+          setSplits(loaded);
+          setMindmaps(mm);
+          setMindmapDocs(docs);
+        });
+    } else {
+      setSplits(loaded);
+      setMindmaps(mm);
+      setMindmapDocs(docs);
+    }
   }, []);
 
   useEffect(() => {
@@ -79,8 +115,6 @@ export default function AnkiDeckTab() {
   const currentPartMindmap = (mindmaps as any)[currentPartKey] as any;
   const currentMetaKey = `meta-0`;
   const currentMetaMindmap = (mindmaps as any)[currentMetaKey] as any || (mindmaps as any)[`part-0`] as any;
-  const currentClusterKey = `cluster-${selectedCluster}`;
-  const currentClusterMindmap = (mindmaps as any)[currentClusterKey] as any;
   const builderState = useMemo(() => {
     const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
     const breaks = sorted.slice(0, -1).map(a => a.endVerse);
@@ -443,50 +477,6 @@ export default function AnkiDeckTab() {
         </div>
       </div>
 
-      {/* Cluster Mindmaps */}
-      <div className="card">
-        <h3 className="font-semibold flex items-center gap-2"><Layers size={16} /> Cluster Mindmaps</h3>
-        <p className="text-xs text-[var(--foreground-secondary)] mt-1">Cluster maps group related Surahs across parts. Edit them here - same editor as surah maps.</p>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <div>
-            <label className="adv-label mb-2 block">Cluster</label>
-            <select value={selectedCluster} onChange={e => setSelectedCluster(Number(e.target.value))} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
-              {Array.from({ length: 7 }, (_, i) => i + 1).map(n => (
-                <option key={n} value={n}>Cluster {n}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end gap-2">
-            <button onClick={() => setShowClusterEditor(true)} className="flex-1 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center justify-center gap-1"><PenTool size={14} /> {(mindmaps as any)[`cluster-${selectedCluster}`]?.snapshot ? 'Edit' : 'Create'} Cluster Mindmap</button>
-            {(mindmaps as any)[`cluster-${selectedCluster}`]?.snapshot && (
-              <button onClick={() => setViewerData({ snapshot: (mindmaps as any)[`cluster-${selectedCluster}`].snapshot, title: `Cluster ${selectedCluster}` })} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm"><Eye size={14} /></button>
-            )}
-          </div>
-        </div>
-        {(mindmaps as any)[`cluster-${selectedCluster}`]?.snapshot && (
-          <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 180 }}>
-            <MindmapViewer snapshot={(mindmaps as any)[`cluster-${selectedCluster}`].snapshot} isDark={false} height="180px" />
-          </div>
-        )}
-        <div className="mt-3 border-t border-[var(--border)] pt-3">
-          <label className="adv-label mb-2 block">Notes for this cluster (added to Anki)</label>
-          <textarea
-            value={editingDocKey === `cluster-${selectedCluster}` ? editingDocText : getDocForKey(`cluster-${selectedCluster}`)}
-            onFocus={() => { setEditingDocKey(`cluster-${selectedCluster}`); setEditingDocText(getDocForKey(`cluster-${selectedCluster}`)); }}
-            onChange={e => setEditingDocText(e.target.value)}
-            onBlur={() => {
-              if (editingDocKey === `cluster-${selectedCluster}`) {
-                const next = saveMindmapDoc(`cluster-${selectedCluster}`, editingDocText);
-                setMindmapDocs(next);
-                setEditingDocKey(null);
-              }
-            }}
-            placeholder="Describe this cluster's theme..."
-            className="w-full min-h-[80px] p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm"
-          />
-        </div>
-      </div>
-
         <div className="text-center text-xs text-[var(--foreground-secondary)]">
         <p>Your cards will show verses step by step with context. Similar verses are highlighted to help you tell them apart. Mindmap notes you write above are added as a field in Anki so you can read them while reviewing.</p>
       </div>
@@ -522,24 +512,6 @@ export default function AnkiDeckTab() {
               showToast('Part mindmap saved');
             }}
             title={`${selectedPart === 0 ? 'Meta' : `Part ${selectedPart}`} mindmap`}
-          />
-        </div>
-      )}
-
-      {showClusterEditor && (
-        <div className="fixed inset-0 z-[100] bg-[var(--background)]">
-          <MindmapEditor
-            partId={selectedCluster}
-            initialSnapshot={(mindmaps as any)[`cluster-${selectedCluster}`]?.snapshot}
-            onClose={() => setShowClusterEditor(false)}
-            onSave={async (snapshot, images) => {
-              const key = `cluster-${selectedCluster}`;
-              const next = saveAnkiMindmapByKey(key, { snapshot, isComplete: true, kind: 'cluster', partId: selectedCluster });
-              setMindmaps(next as any);
-              setShowClusterEditor(false);
-              showToast('Cluster mindmap saved');
-            }}
-            title={`Cluster ${selectedCluster} mindmap`}
           />
         </div>
       )}
