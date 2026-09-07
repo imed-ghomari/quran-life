@@ -15,24 +15,27 @@ export default function AppTabs() {
     <div className="content-wrapper">
       <div className="max-w-5xl mx-auto px-4 py-4">
         {/* Tab bar */}
-        <div className="flex items-center gap-2 p-1 mb-6 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] w-fit mx-auto">
+        <div suppressHydrationWarning className="flex items-center gap-2 p-1 mb-6 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] w-fit mx-auto">
           <button
+            suppressHydrationWarning
             onClick={() => setActiveTab('daily')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'daily' ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--verse-bg)]'}`}
           >
-            <BookOpen size={16} /> Daily Portion
+            <span suppressHydrationWarning><BookOpen size={16} /></span> Daily Portion
           </button>
           <button
+            suppressHydrationWarning
             onClick={() => setActiveTab('anki')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'anki' ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--verse-bg)]'}`}
           >
-            <Layers size={16} /> Anki Deck
+            <span suppressHydrationWarning><Layers size={16} /></span> Anki Deck
           </button>
           <button
+            suppressHydrationWarning
             onClick={() => setActiveTab('docs')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'docs' ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--verse-bg)]'}`}
           >
-            <FileText size={16} /> Documentation
+            <span suppressHydrationWarning><FileText size={16} /></span> Documentation
           </button>
         </div>
 

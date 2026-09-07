@@ -130,6 +130,34 @@ const nextConfig = {
     images: {
         unoptimized: true,
     },
+    webpack: (config, { isServer }) => {
+        // sql.js uses node:crypto in its distribution; prevent Webpack from trying to bundle it for client
+        // Mark node: scheme as external and fallback crypto/fs
+        config.resolve.fallback = {
+            ...config.resolve.fallback,
+            crypto: false,
+            fs: false,
+            path: false,
+            'node:crypto': false,
+        };
+        // Handle node: scheme URIs (Webpack 5)
+        if (!config.resolve.byDependency) config.resolve.byDependency = {};
+        config.resolve.byDependency['wasm'] = {
+            ...config.resolve.byDependency['wasm'],
+        };
+        config.experiments = {
+            ...config.experiments,
+            asyncWebAssembly: true,
+            layers: true,
+            topLevelAwait: true,
+        };
+        // Ignore node:crypto warnings
+        config.ignoreWarnings = [
+            ...(config.ignoreWarnings || []),
+            { module: /node:crypto/ },
+        ];
+        return config;
+    },
     async headers() {
         return [
             {

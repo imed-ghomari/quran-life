@@ -93,6 +93,7 @@ export function buildAnkiCards(
       tags,
       mindmapDocs,
       mindmapSnapshotKey: docsKey,
+      mindmapImage: '', // filled at export time from snapshot -> media
     };
   });
 }

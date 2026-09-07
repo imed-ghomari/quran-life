@@ -3,6 +3,179 @@
 // Simplified: if sql.js fails, fallback to CSV download via Blob
 
 import { AnkiCard } from './types';
+import { loadAnkiMindmaps } from './mindmapStore';
+
+// Strip any media references from docs to avoid Anki "file not found" when docs contain <img> HTML
+function stripMediaRefs(s: string): string {
+  if (!s) return s;
+  // Remove <img ...> tags entirely
+  let out = s.replace(/<img\b[^>]*>/gi, '');
+  // Remove markdown images ![alt](url)
+  out = out.replace(/!\[[^\]]*\]\([^)]+\)/g, '');
+  // Remove [sound:...] Anki sound refs
+  out = out.replace(/\[sound:[^\]]+\]/g, '');
+  return out;
+}
+
+// Generate PNG media for each tldraw mindmap snapshot at export time
+// Returns map from surah key (e.g. "surah-50") to { filename, blob, fieldHtml }
+async function generateMindmapMedia(onProgress?: (p: number) => void): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
+  const mediaMap: Record<string, string> = {};
+  const mediaFiles: Record<string, Blob> = {};
+  const fieldMap: Record<string, string> = {};
+  if (typeof window === 'undefined' || typeof document === 'undefined') return { mediaMap, mediaFiles, fieldMap };
+
+  let mindmaps: Record<string, any> = {};
+  try {
+    mindmaps = loadAnkiMindmaps() as any;
+  } catch {}
+  // Also merge premade mindmaps if available via fetch? For now use local only; AnkiDeckTab already merged.
+
+  const entries = Object.entries(mindmaps).filter(([k, v]: any) => v?.snapshot);
+  if (entries.length === 0) return { mediaMap, mediaFiles, fieldMap };
+
+  // Helper to render one snapshot to blob
+  const renderOne = async (key: string, snapshot: any): Promise<Blob | null> => {
+    try {
+      const { sanitizeMindmapSnapshot } = await import('@/lib/mindmapSnapshot');
+      const sanitized = sanitizeMindmapSnapshot(snapshot) || snapshot;
+      // Count shapes
+      const store = (sanitized as any)?.store;
+      if (!store || Object.keys(store).filter(k => k.startsWith('shape:')).length === 0) return null;
+
+      // Dynamically import tldraw and react
+      const [{ Tldraw }, React, ReactDOMClient] = await Promise.all([
+        import('tldraw'),
+        import('react'),
+        import('react-dom/client'),
+      ]);
+
+      return await new Promise<Blob | null>((resolve) => {
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.left = '-10000px';
+        container.style.top = '-10000px';
+        container.style.width = '1000px';
+        container.style.height = '700px';
+        container.style.overflow = 'hidden';
+        container.style.background = 'white';
+        document.body.appendChild(container);
+
+        let editorRef: any = null;
+        let timeoutId: any = null;
+        let resolved = false;
+
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          try {
+            const root: any = (container as any)._reactRoot;
+            if (root) root.unmount();
+          } catch {}
+          if (container.parentNode) container.parentNode.removeChild(container);
+        };
+
+        const finish = (blob: Blob | null) => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          resolve(blob);
+        };
+
+        const onMount = async (editor: any) => {
+          editorRef = editor;
+          try {
+            // Ensure snapshot is loaded (Tldraw will load via prop, but ensure)
+            // Wait a bit for shapes to render
+            await new Promise(r => setTimeout(r, 600));
+            const shapeIds = Array.from(editor.getCurrentPageShapeIds() as Set<string>);
+            if (shapeIds.length === 0) {
+              finish(null);
+              return;
+            }
+            // Zoom to fit before export
+            try { editor.zoomToFit({ duration: 0 }); } catch {}
+            await new Promise(r => setTimeout(r, 300));
+            const result = await editor.toImage([...shapeIds], {
+              format: 'png',
+              quality: 0.92,
+              pixelRatio: 1.4,
+              padding: 16,
+              background: true,
+            });
+            if (result && result.blob) {
+              finish(result.blob as Blob);
+            } else {
+              finish(null);
+            }
+          } catch (e) {
+            console.warn('mindmap toImage failed', key, e);
+            finish(null);
+          }
+        };
+
+        // Timeout fallback
+        timeoutId = setTimeout(() => {
+          console.warn('mindmap render timeout', key);
+          finish(null);
+        }, 8000);
+
+        try {
+          const element = (React as any).createElement(Tldraw, {
+            snapshot: sanitized,
+            onMount,
+            hideUi: true,
+          });
+          const root = (ReactDOMClient as any).createRoot(container);
+          (container as any)._reactRoot = root;
+          root.render(element);
+        } catch (e) {
+          console.warn('tldraw mount failed', e);
+          finish(null);
+        }
+      });
+    } catch (e) {
+      console.warn('renderOne outer failed', key, e);
+      return null;
+    }
+  };
+
+  // Process sequentially to avoid overloading
+  let idx = 0;
+  const total = entries.length;
+  if (onProgress) onProgress(5);
+  for (let i = 0; i < entries.length; i++) {
+    const [key, val] = entries[i];
+    const snapshot = (val as any).snapshot;
+    if (!snapshot) {
+      if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
+      continue;
+    }
+    // Filename for Anki media: must be ascii, no spaces
+    const safeKey = key.replace(/[^a-z0-9_-]/gi, '_');
+    const filename = `mindmap-${safeKey}.png`;
+    try {
+      const blob = await renderOne(key, snapshot);
+      if (blob) {
+        const mediaKey = String(idx);
+        mediaMap[mediaKey] = filename;
+        mediaFiles[mediaKey] = blob;
+        fieldMap[key] = `<img src="${filename}" style="max-width:100%; border:1px solid #ddd; border-radius:8px;" />`;
+        idx += 1;
+      } else {
+        fieldMap[key] = '';
+      }
+    } catch (e) {
+      console.warn('failed to generate image for', key, e);
+      fieldMap[key] = '';
+    }
+    if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
+    // Small delay between renders to let browser breathe
+    await new Promise(r => setTimeout(r, 150));
+  }
+  if (onProgress) onProgress(80);
+
+  return { mediaMap, mediaFiles, fieldMap };
+}
 
 // Lazily load jszip
 async function getJSZip() {
@@ -47,6 +220,8 @@ function modelJson() {
 #grading button { flex:1; padding:10px; border-radius:10px; border:1px solid #ddd; background:#f7f7f7; cursor:pointer; font-weight:600; }
 #grading button.good { background:#5b8fb9; color:white; }
 .related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #f6f6f6; padding:8px; border-radius:8px; direction:ltr; text-align:left; }
+.mindmap-img { margin-top:12px; text-align:center; }
+.mindmap-img img { max-width:100%; border:1px solid #ddd; border-radius:8px; }
 `.trim();
 
   return {
@@ -117,35 +292,79 @@ function modelJson() {
   <div style="font-size:1.35rem; line-height:2.1">{{VerseFull}}</div>
   {{#RelatedGroups}}<div class="related"><b>Related groups:</b> {{RelatedGroups}}</div>{{/RelatedGroups}}
   {{#MindmapDocs}}<div class="related" style="direction:rtl; text-align:right; background:#fffbe6; border:1px solid #f0d76a"><b>Mindmap notes:</b> {{MindmapDocs}}</div>{{/MindmapDocs}}
+  {{#MindmapImage}}<div class="mindmap-img">{{MindmapImage}}</div>{{/MindmapImage}}
   <div style="margin-top:8px; font-size:0.75rem; opacity:0.6">Anchor: {{AnchorLabel}} • {{Range}}</div>
 </div>
 `.trim(),
   };
 }
 
-export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Promise<Blob> {
+export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number) => void): Promise<Blob> {
   const JSZip = await getJSZip();
   if (!JSZip) {
-    // Fallback to TSV
-    return generateTsvBlob(cards);
+    throw new Error('JSZip not available for apkg');
   }
 
-  // Try sql.js path
+  // Try sql.js path - must succeed to produce valid apkg with collection.anki2
+  // If this fails we throw instead of returning a TSV zip masquerading as .apkg (which causes "file not found in archive")
   try {
-    // Attempt to create real sqlite apkg
-    // Lazy load sql.js wasm via cdn if not available
-    // For now we generate a minimal apkg using JSZip + fake sqlite (Anki will still import TSV-like?)
-    // Instead we generate a zip with media and a TSV for manual import plus instructions
-    // To create a valid .apkg we need sqlite - we fallback to a valid but minimal sqlite using sql.js if available
+    // Generate mindmap media first - but don't let it kill the whole export if it fails
+    let mediaMap: Record<string, string> = {};
+    let mediaFiles: Record<string, Blob> = {};
+    let fieldMap: Record<string, string> = {};
+    try {
+      if (onProgress) onProgress(2);
+      const res = await generateMindmapMedia(onProgress ? (p) => onProgress(Math.round(5 + (p / 100) * 75)) : undefined);
+      mediaMap = res.mediaMap;
+      mediaFiles = res.mediaFiles;
+      fieldMap = res.fieldMap;
+      if (onProgress) onProgress(82);
+    } catch (e) {
+      console.warn('mindmap media generation failed, continuing without images', e);
+    }
 
-    // Try dynamic sql.js - use local wasm for offline and to avoid CDN 500
+    // Try dynamic sql.js - robust for Vercel (public/ at root, wasm via fetch, fallback to wasmBinary)
+    // Use Function() to avoid Webpack bundling node:crypto at build time (sql.js uses node:crypto in its Node entry)
+    // Robust sql.js loading for Vercel: avoid Webpack bundling node:crypto, use wasmBinary with CDN fallbacks
     let SQL: any = null;
     try {
-      const mod: any = await import('sql.js');
-      const initSqlJs = mod.default || mod;
-      SQL = await initSqlJs({
-        locateFile: (file: string) => `/${file}`,
-      });
+      let initSqlJs: any = null;
+      try {
+        const mod: any = await import(/* webpackIgnore: true */ 'sql.js');
+        initSqlJs = mod.default || mod;
+      } catch {
+        try {
+          const mod2: any = await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js');
+          initSqlJs = mod2.default || mod2;
+        } catch {
+          initSqlJs = await new Promise<any>((resolve, reject) => {
+            if ((window as any).initSqlJs) return resolve((window as any).initSqlJs);
+            const script = document.createElement('script');
+            script.src = 'https://sql.js.org/dist/sql-wasm.js';
+            script.async = true;
+            script.onload = () => resolve((window as any).initSqlJs);
+            script.onerror = () => reject(new Error('CDN sql.js load failed'));
+            document.head.appendChild(script);
+            setTimeout(() => reject(new Error('CDN timeout')), 8000);
+          });
+        }
+      }
+      const wasmUrls = ['/sql-wasm.wasm', 'https://sql.js.org/dist/sql-wasm.wasm', 'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm'];
+      let wasmBinary: ArrayBuffer | null = null;
+      for (const url of wasmUrls) {
+        try {
+          const resp = await fetch(url, { cache: 'no-store' as any });
+          if (resp.ok) {
+            wasmBinary = await resp.arrayBuffer();
+            break;
+          }
+        } catch {}
+      }
+      if (wasmBinary) {
+        SQL = await initSqlJs({ wasmBinary });
+      } else {
+        SQL = await initSqlJs({ locateFile: (file: string) => `/${file}` });
+      }
     } catch (e) {
       console.warn('sql.js not available', e);
       throw new Error('Failed to create Anki package. Please try again.');
@@ -191,14 +410,15 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
           },
         ],
         flds: [
-          { name: 'Surah', ord: 0 },
-          { name: 'Range', ord: 1 },
-          { name: 'AnchorLabel', ord: 2 },
-          { name: 'VerseFull', ord: 3 },
-          { name: 'VerseChunksFront', ord: 4 },
-          { name: 'ContextFront', ord: 5 },
-          { name: 'RelatedGroups', ord: 6 },
-          { name: 'MindmapDocs', ord: 7 },
+          { name: 'Surah', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'Range', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'AnchorLabel', ord: 2, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'VerseFull', ord: 3, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
+          { name: 'VerseChunksFront', ord: 4, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
+          { name: 'ContextFront', ord: 5, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
+          { name: 'RelatedGroups', ord: 6, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'MindmapDocs', ord: 7, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'MindmapImage', ord: 8, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
         ],
         css: m.css,
         req: [[0, 'all', [0]]],
@@ -285,7 +505,10 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
         contextFront += visible.map(v => `<span><span class="verse-badge">${v.ayahId}</span> ${escapeField(v.text)} </span>`).join('');
       }
       const related = card.relatedGroups.join(', ');
-      const docs = (card as any).mindmapDocs ? escapeField(String((card as any).mindmapDocs)) : '';
+      const rawDocs = (card as any).mindmapDocs ? String((card as any).mindmapDocs) : '';
+      const docs = rawDocs ? escapeField(stripMediaRefs(rawDocs)) : '';
+      const mindmapKey = (card as any).mindmapSnapshotKey || `surah-${card.surahId}`;
+      const mindmapImageHtml = fieldMap[mindmapKey] || fieldMap[`surah-${card.surahId}`] || (card as any).mindmapImage || '';
 
       const flds = [
         escapeField(card.arabicName + ' ' + card.surahName),
@@ -296,6 +519,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
         contextFront,
         escapeField(related),
         docs,
+        mindmapImageHtml,
       ].join('\x1f');
 
       const csum = 0;
@@ -325,16 +549,25 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
       ]);
     }
 
+    if (onProgress) onProgress(85);
     const data = db.export();
+    if (onProgress) onProgress(90);
     const zip = new JSZip();
     zip.file('collection.anki2', data);
-    zip.file('media', JSON.stringify({}));
+    zip.file('media', JSON.stringify(mediaMap));
+    // Add each mindmap PNG as file named by its media key ("0", "1", ...)
+    for (const [key, blob] of Object.entries(mediaFiles)) {
+      const ab = await (blob as Blob).arrayBuffer();
+      zip.file(key, ab);
+    }
+    if (onProgress) onProgress(95);
 
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    if (onProgress) onProgress(100);
     return blob;
   } catch (e) {
-    console.error('apkg gen failed, fallback', e);
-    return generateZipWithTsv(cards, deckName, JSZip);
+    console.error('apkg gen failed', e);
+    throw e;
   }
 }
 

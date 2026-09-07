@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { getQuranVerses, getSurah, SURAHS } from '@/lib/quranData';
 import { buildAnkiCards } from '@/lib/anki/cardBuilder';
 import { generateApkgBlob } from '@/lib/anki/apkgExport';
-import { loadSplits, saveSplits, getSplitsForSurah, setSplitsForSurah, importSplitsFromBackup, ensureDefaultSplits } from '@/lib/anki/splitStore';
+import { loadSplits, saveSplits, getSplitsForSurah, setSplitsForSurah, importSplitsFromBackup, ensureDefaultSplits, buildAnchorsFromBreaks, sanitizeAnchors } from '@/lib/anki/splitStore';
 import { loadAnkiMindmaps, saveAnkiMindmap, saveAnkiMindmapByKey, getAnkiMindmap, getAnkiMindmapByKey } from '@/lib/anki/mindmapStore';
 import { loadMindmapDocs, saveMindmapDoc } from '@/lib/anki/mindmapDocsStore';
 import { AnkiAnchor } from '@/lib/anki/types';
@@ -32,6 +32,7 @@ export default function AnkiDeckTab() {
   const [anchors, setAnchors] = useState<AnkiAnchor[]>([]);
   const [deckName, setDeckName] = useState('QuranLife::Review');
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showExportPopup, setShowExportPopup] = useState(false);
@@ -44,8 +45,21 @@ export default function AnkiDeckTab() {
   const [mindmapDocs, setMindmapDocs] = useState<Record<string, string>>({});
   const [editingDocKey, setEditingDocKey] = useState<string | null>(null);
   const [editingDocText, setEditingDocText] = useState('');
+  const [isAnkiDataLoaded, setIsAnkiDataLoaded] = useState(false);
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const [systemIsDark, setSystemIsDark] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemIsDark(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
+    if (mq.addEventListener) {
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+    mq.addListener(handler);
+    return () => mq.removeListener(handler);
+  }, []);
+  const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
 
   useEffect(() => {
     let cancelled = false;
@@ -95,16 +109,63 @@ export default function AnkiDeckTab() {
           setSplits(hasNewSplits ? (newSplits as any) : loaded);
           setMindmaps(loadAnkiMindmaps() as any);
           setMindmapDocs(loadMindmapDocs());
+          setIsAnkiDataLoaded(true);
         })
         .catch(() => {
           setSplits(loaded);
           setMindmaps(mm);
           setMindmapDocs(docs);
+          setIsAnkiDataLoaded(true);
         });
     } else {
       setSplits(loaded);
       setMindmaps(mm);
       setMindmapDocs(docs);
+      setIsAnkiDataLoaded(true);
+      // Background merge for missing preconfigured mindmaps (77-114) when user already has data
+      fetch('/premade-anki-data.json')
+        .then(r => r.json())
+        .then(data => {
+          let hasNewMindmap = false;
+          if (data.mindmaps && typeof data.mindmaps === 'object') {
+            const currentMM = loadAnkiMindmaps() as any;
+            Object.entries(data.mindmaps as Record<string, any>).forEach(([k, v]) => {
+              if (v && !currentMM[k]) {
+                saveAnkiMindmapByKey(k, v);
+                hasNewMindmap = true;
+              }
+            });
+            if (hasNewMindmap) setMindmaps(loadAnkiMindmaps() as any);
+          }
+          let hasNewDoc = false;
+          if (data.mindmapDocs && typeof data.mindmapDocs === 'object') {
+            const currentDocs = loadMindmapDocs();
+            Object.entries(data.mindmapDocs as Record<string, string>).forEach(([k, v]) => {
+              if (typeof v === 'string' && !currentDocs[k]) {
+                saveMindmapDoc(k, v);
+                hasNewDoc = true;
+              }
+            });
+            if (hasNewDoc) setMindmapDocs(loadMindmapDocs());
+          }
+          if (data.splits && typeof data.splits === 'object') {
+            const currentSplits = loadSplits();
+            let newSplits: Record<string, any> = { ...currentSplits } as any;
+            let splitsUpdated = false;
+            Object.entries(data.splits as Record<string, any>).forEach(([k, v]) => {
+              const sid = Number(k);
+              if (Array.isArray(v) && !newSplits[sid] && Number.isFinite(sid)) {
+                newSplits[sid] = v;
+                splitsUpdated = true;
+              }
+            });
+            if (splitsUpdated) {
+              try { localStorage.setItem('quran-life:anki:splits:v1', JSON.stringify(newSplits)); } catch {}
+              setSplits(newSplits as any);
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -133,19 +194,22 @@ export default function AnkiDeckTab() {
 
   const allCardsCount = useMemo(() => {
     if (!allVerses.length) return 0;
+    const mindmapKeys = new Set(Object.keys(mindmaps).filter(k => (mindmaps as any)[k]?.snapshot));
     let count = 0;
     Object.entries(splits).forEach(([k, arr]) => {
       const sId = Number(k);
       if (!Number.isFinite(sId)) return;
-      // only count if anchors valid
+      if (!mindmapKeys.has(`surah-${sId}`)) return;
       count += arr.length;
     });
-    // also include short surahs with auto splits if not in splits
     SURAHS.forEach(s => {
-      if (s.verseCount <= 10 && !splits[s.id]) count += 1;
+      const key = `surah-${s.id}`;
+      if (!mindmapKeys.has(key)) return;
+      const hasSplit = !!splits[s.id];
+      if (!hasSplit) count += 1; // auto single group for surahs with mindmap but no splits
     });
     return count;
-  }, [splits, allVerses]);
+  }, [splits, allVerses, mindmaps]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -171,28 +235,27 @@ export default function AnkiDeckTab() {
   };
 
   const handleAddBreak = (val: number) => {
-    const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
-    const idx = sorted.findIndex(a => a.startVerse <= val && val < a.endVerse);
-    if (idx === -1) return;
-    const target = sorted[idx];
-    const left: AnkiAnchor = { id: `anchor-${selectedSurah}-${target.startVerse}-${val}`, surahId: selectedSurah, startVerse: target.startVerse, endVerse: val, label: target.label };
-    const right: AnkiAnchor = { id: `anchor-${selectedSurah}-${val + 1}-${target.endVerse}`, surahId: selectedSurah, startVerse: val + 1, endVerse: target.endVerse, label: `Verses ${val + 1}-${target.endVerse}` };
-    const next = [...sorted];
-    next.splice(idx, 1, left, right);
-    setAnchors(next);
+    const verseCount = surah?.verseCount;
+    if (!verseCount || val <= 0 || val >= verseCount) return;
+    const currentBreaks = builderState.breaks;
+    if (currentBreaks.includes(val)) return;
+    // Rebuild from breaks: handles empty anchors (no splits) correctly by treating whole surah as one group
+    const nextBreaks = [...currentBreaks, val].sort((a, b) => a - b);
+    const next = buildAnchorsFromBreaks(selectedSurah, nextBreaks, verseCount);
+    setAnchors(next.length ? next : ensureDefaultSplits(selectedSurah));
   };
 
   const handleRemoveBreak = (val: number) => {
-    const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
-    const idx = sorted.findIndex(a => a.endVerse === val);
-    if (idx === -1 || idx + 1 >= sorted.length) return;
-    const left = sorted[idx];
-    const right = sorted[idx + 1];
-    if (right.startVerse !== val + 1) return;
-    const merged: AnkiAnchor = { id: `anchor-${selectedSurah}-${left.startVerse}-${right.endVerse}`, surahId: selectedSurah, startVerse: left.startVerse, endVerse: right.endVerse, label: left.label };
-    const next = [...sorted];
-    next.splice(idx, 2, merged);
-    setAnchors(next);
+    const verseCount = surah?.verseCount;
+    if (!verseCount) return;
+    const currentBreaks = builderState.breaks;
+    if (!currentBreaks.includes(val)) return;
+    const nextBreaks = currentBreaks.filter(b => b !== val);
+    const next = buildAnchorsFromBreaks(selectedSurah, nextBreaks, verseCount);
+    // If removal leaves no breaks, buildAnchorsFromBreaks returns single anchor covering whole surah
+    // For short surahs fallback, keep default
+    if (next.length) setAnchors(next);
+    else setAnchors(ensureDefaultSplits(selectedSurah).length ? ensureDefaultSplits(selectedSurah) : next);
   };
 
   const handleSaveSplits = async () => {
@@ -241,6 +304,7 @@ export default function AnkiDeckTab() {
   const handleExport = async (withBackup = true) => {
     if (isExporting) return;
     setIsExporting(true);
+    setExportProgress(0);
     try {
       const docsMap = loadMindmapDocs();
       const allAnchors: AnkiAnchor[] = [];
@@ -250,13 +314,24 @@ export default function AnkiDeckTab() {
           allAnchors.push({ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` });
         }
       });
-      if (allAnchors.length === 0) {
-        showToast('No splits defined yet');
+      // Only export verse groups for surahs that have a mindmap (snapshot) linked — avoids referencing missing media
+      const mindmapKeys = new Set(Object.keys(mindmaps).filter(k => (mindmaps as any)[k]?.snapshot));
+      // Also ensure every surah with a mindmap has at least one anchor (default whole-surah) even if no splits yet
+      SURAHS.forEach(s => {
+        const key = `surah-${s.id}`;
+        if (mindmapKeys.has(key) && !allAnchors.some(a => a.surahId === s.id)) {
+          allAnchors.push({ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` });
+        }
+      });
+      const filteredAnchors = allAnchors.filter(a => mindmapKeys.has(`surah-${a.surahId}`));
+      if (filteredAnchors.length === 0) {
+        showToast('No surah with a linked mindmap to export — create a mindmap first');
         setIsExporting(false);
         return;
       }
-      const cards = buildAnkiCards(allAnchors, allVerses, { mindmapDocsMap: docsMap });
-      const blob = await generateApkgBlob(cards, deckName);
+      const cards = buildAnkiCards(filteredAnchors, allVerses, { mindmapDocsMap: docsMap });
+      setExportProgress(3);
+      const blob = await generateApkgBlob(cards, deckName, (p) => setExportProgress(p));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -284,10 +359,11 @@ export default function AnkiDeckTab() {
       showToast('Export failed');
     } finally {
       setIsExporting(false);
+      setTimeout(() => setExportProgress(0), 800);
     }
   };
 
-  if (!isVersesLoaded) return <PageSkeleton />;
+  if (!isVersesLoaded || !isAnkiDataLoaded) return <PageSkeleton />;
 
   return (
     <div className="space-y-6">
@@ -320,14 +396,15 @@ export default function AnkiDeckTab() {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="adv-label mb-2 block">Deck name</label>
-          <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
+        <div className="mt-4 flex gap-3 items-end">
+          <div className="flex-1 min-w-0">
+            <label className="adv-label mb-2 block">Deck name</label>
+            <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
+          </div>
+          <button onClick={() => setShowExportPopup(true)} className="shrink-0 py-2.5 px-4 sm:px-5 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 whitespace-nowrap text-sm">
+            <Download size={18} /> Export Full Deck to Anki
+          </button>
         </div>
-
-        <button onClick={() => setShowExportPopup(true)} className="mt-4 w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90">
-          <Download size={18} /> Export Full Deck to Anki
-        </button>
         <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">One file contains everything - verse groups, mindmaps, and notes. Re-importing updates existing cards and keeps your progress.</p>
       </div>
 
@@ -376,9 +453,9 @@ export default function AnkiDeckTab() {
             ) : (
               <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with the drawing editor. This is optional.</p>
             )}
-            {displayMindmap?.snapshot && !isPartMeta && (
+            {displayMindmap?.snapshot && !isPartMeta && !showMindmapEditor && !showPartEditor && (
               <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 220 }}>
-                <MindmapViewer snapshot={displayMindmap.snapshot} imageUrl={displayMindmap.imageUrl} imageUrlDark={displayMindmap.imageUrlDark} isDark={false} height="220px" />
+                <MindmapViewer snapshot={displayMindmap.snapshot} imageUrl={displayMindmap.imageUrl} imageUrlDark={displayMindmap.imageUrlDark} isDark={isDark} height="220px" />
               </div>
             )}
             {displayMindmap?.snapshot && isPartMeta && (
@@ -396,37 +473,39 @@ export default function AnkiDeckTab() {
                         const verseCount = displaySurah.verseCount;
                         const breaks = builderState.breaks;
                         return (
-                          <div className="grid gap-2">
-                            <div className="flex flex-wrap gap-1.5">
-                              {Array.from({ length: verseCount }, (_, i) => i + 1).map(v => {
-                                const isBreak = breaks.includes(v);
-                                const isLast = v === verseCount;
-                                return (
-                                  <div key={v} className="flex items-center gap-1">
-                                    <span className="px-2 py-1 rounded-lg border text-xs bg-[var(--background)]" style={{ borderColor: isBreak ? 'var(--accent)' : 'var(--border)' }}>{v}</span>
-                                    {!isLast && (
-                                      <button
-                                        onClick={() => isBreak ? handleRemoveBreak(v) : handleAddBreak(v)}
-                                        className={`w-6 h-6 rounded-full text-xs flex items-center justify-center border ${isBreak ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'bg-[var(--background)] border-[var(--border)] hover:border-[var(--accent)]'}`}
-                                        title={isBreak ? 'Remove split' : 'Add split'}
-                                      >
-                                        {isBreak ? '×' : '+'}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="flex gap-2 mt-2">
-                              <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
-                              <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
+                          <div className={`flex gap-3 ${showPreview ? 'items-start' : 'items-stretch'}`}>
+                            <div className={`${showPreview ? 'w-[70%]' : 'w-full'} grid gap-2`}>
+                              <div className="flex flex-wrap gap-1.5">
+                                {Array.from({ length: verseCount }, (_, i) => i + 1).map(v => {
+                                  const isBreak = breaks.includes(v);
+                                  const isLast = v === verseCount;
+                                  return (
+                                    <div key={v} className="flex items-center gap-1">
+                                      <span className="px-2 py-1 rounded-lg border text-xs bg-[var(--background)]" style={{ borderColor: isBreak ? 'var(--accent)' : 'var(--border)' }}>{v}</span>
+                                      {!isLast && (
+                                        <button
+                                          onClick={() => isBreak ? handleRemoveBreak(v) : handleAddBreak(v)}
+                                          className={`w-6 h-6 rounded-full text-xs flex items-center justify-center border ${isBreak ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'bg-[var(--background)] border-[var(--border)] hover:border-[var(--accent)]'}`}
+                                          title={isBreak ? 'Remove split' : 'Add split'}
+                                        >
+                                          {isBreak ? '×' : '+'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
+                                <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
+                              </div>
                             </div>
                             {showPreview && (
-                              <div className="mt-2 grid gap-1.5 max-h-32 overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background)]">
-                                {buildAnkiCards(anchors, allVerses).slice(0,3).map((c, i) => (
+                              <div className="w-[30%] grid gap-1.5 max-h-[220px] overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background)] content-start">
+                                {buildAnkiCards(anchors, allVerses).map((c, i) => (
                                   <div key={i} className="text-xs"><b>{c.startVerse}-{c.endVerse}</b> — {c.anchorLabel}</div>
                                 ))}
-                                {buildAnkiCards(anchors, allVerses).length > 3 && <div className="text-xs opacity-60">+ {buildAnkiCards(anchors, allVerses).length - 3} more groups</div>}
+                                {buildAnkiCards(anchors, allVerses).length === 0 && <div className="text-xs opacity-60">No groups</div>}
                               </div>
                             )}
                           </div>
@@ -527,10 +606,11 @@ export default function AnkiDeckTab() {
         isOpen={showExportPopup}
         title="Export Full Deck"
         message={`One file contains everything. Re-importing updates existing cards and keeps your progress.`}
-        confirmLabel={isExporting ? 'Generating...' : 'Export Deck + Backup'}
+        confirmLabel="Export Deck + Backup"
         cancelLabel="Cancel"
         isDestructive={false}
         isProcessing={isExporting}
+        progress={isExporting ? exportProgress : undefined}
         onConfirm={() => handleExport(true)}
         onCancel={() => setShowExportPopup(false)}
       >
@@ -563,7 +643,7 @@ export default function AnkiDeckTab() {
               <button onClick={() => setViewerData(null)} className="p-1 rounded hover:bg-[var(--verse-bg)]">✕</button>
             </div>
             <div className="flex-1 overflow-hidden" style={{ height: 600 }}>
-              <MindmapViewer snapshot={viewerData.snapshot} isDark={false} height="600px" />
+              <MindmapViewer snapshot={viewerData.snapshot} isDark={isDark} height="600px" />
             </div>
           </div>
         </div>

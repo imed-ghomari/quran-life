@@ -23,6 +23,7 @@ export type AnkiCard = {
   tags: string[];
   mindmapDocs?: string; // docs for this mindmap, added to Anki field
   mindmapSnapshotKey?: string; // key for mindmap
+  mindmapImage?: string; // <img> tag for rendered tldraw snapshot, filled at export
 };
 
 export type AnkiExportOptions = {
