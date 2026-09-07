@@ -5,6 +5,8 @@ import { notFound } from 'next/navigation';
 import { mdxComponents } from '../mdx-components';
 import MindmapDocHeader from '../MindmapDocHeader';
 
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
     params: Promise<{
         slug: string[];

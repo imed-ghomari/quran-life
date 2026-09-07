@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { ReactNode, Suspense } from 'react';
+
+export const dynamic = 'force-dynamic';
 import MobileDocsNav from './MobileDocsNav';
 import SidebarNav, { SidebarItem } from './SidebarNav';
 import TableOfContents from './TableOfContents';

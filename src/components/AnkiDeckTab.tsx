@@ -9,11 +9,13 @@ import { loadSplits, saveSplits, getSplitsForSurah, setSplitsForSurah, importSpl
 import { loadAnkiMindmaps, saveAnkiMindmap, getAnkiMindmap } from '@/lib/anki/mindmapStore';
 import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
-import { Upload, Download, Plus, Trash2, Save, Eye, FileJson, Layers, PenTool, Split, Image as ImageIcon } from 'lucide-react';
+import { Save, Eye, FileJson, Layers, PenTool, Split, Image as ImageIcon, Download, Upload } from 'lucide-react';
 import PageSkeleton from '@/components/ui/PageSkeleton';
+import { useTheme } from '@/components/ThemeProvider';
 
 const MindmapEditor = dynamic(() => import('@/components/MindmapEditor'), { ssr: false });
 const MindmapViewer = dynamic(() => import('@/components/MindmapViewer'), { ssr: false });
+const SplitsModal = dynamic(() => import('@/components/todo/SplitsModal'), { ssr: false });
 
 export default function AnkiDeckTab() {
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
@@ -29,6 +31,9 @@ export default function AnkiDeckTab() {
   const [mindmaps, setMindmaps] = useState<Record<number, any>>({});
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
   const [showMindmapViewer, setShowMindmapViewer] = useState(false);
+  const [showSplitsModal, setShowSplitsModal] = useState(false);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +65,13 @@ export default function AnkiDeckTab() {
 
   const surah = getSurah(selectedSurah);
   const currentMindmap = mindmaps[selectedSurah];
+  const builderState = useMemo(() => {
+    const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
+    const breaks = sorted.slice(0, -1).map(a => a.endVerse);
+    const labels: Record<number, string> = {};
+    sorted.forEach(a => { labels[a.endVerse] = a.label; });
+    return { breaks, labels };
+  }, [anchors]);
   const totalCardsPreview = useMemo(() => {
     if (!allVerses.length) return 0;
     const cards = buildAnkiCards(anchors, allVerses);
@@ -105,12 +117,36 @@ export default function AnkiDeckTab() {
     setAnchors([...anchors, { id: `anchor-${selectedSurah}-${nextStart}-${nextEnd}`, surahId: selectedSurah, startVerse: nextStart, endVerse: nextEnd, label: `Verses ${nextStart}-${nextEnd}` }]);
   };
 
-  const handleRemove = (idx: number) => {
-    setAnchors(anchors.filter((_, i) => i !== idx));
+  const handleAddBreak = (val: number) => {
+    const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
+    const idx = sorted.findIndex(a => a.startVerse <= val && val < a.endVerse);
+    if (idx === -1) return;
+    const target = sorted[idx];
+    const left: AnkiAnchor = { id: `anchor-${selectedSurah}-${target.startVerse}-${val}`, surahId: selectedSurah, startVerse: target.startVerse, endVerse: val, label: target.label };
+    const right: AnkiAnchor = { id: `anchor-${selectedSurah}-${val + 1}-${target.endVerse}`, surahId: selectedSurah, startVerse: val + 1, endVerse: target.endVerse, label: `Verses ${val + 1}-${target.endVerse}` };
+    const next = [...sorted];
+    next.splice(idx, 1, left, right);
+    setAnchors(next);
   };
 
-  const handleAnchorChange = (idx: number, patch: Partial<AnkiAnchor>) => {
-    setAnchors(anchors.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
+  const handleRemoveBreak = (val: number) => {
+    const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
+    const idx = sorted.findIndex(a => a.endVerse === val);
+    if (idx === -1 || idx + 1 >= sorted.length) return;
+    const left = sorted[idx];
+    const right = sorted[idx + 1];
+    if (right.startVerse !== val + 1) return;
+    const merged: AnkiAnchor = { id: `anchor-${selectedSurah}-${left.startVerse}-${right.endVerse}`, surahId: selectedSurah, startVerse: left.startVerse, endVerse: right.endVerse, label: left.label };
+    const next = [...sorted];
+    next.splice(idx, 2, merged);
+    setAnchors(next);
+  };
+
+  const handleSaveSplits = async () => {
+    const next = setSplitsForSurah(selectedSurah, anchors, splits);
+    setSplits(next);
+    showToast(`Saved ${anchors.length} groups for Surah ${selectedSurah}`);
+    setShowSplitsModal(false);
   };
 
   const handleImportJson = async (file: File) => {
@@ -249,42 +285,31 @@ export default function AnkiDeckTab() {
         <div className="flex items-center justify-between">
           <h3 className="font-semibold flex items-center gap-2"><Split size={16} /> Splits for {surah?.arabicName} ({surah?.name}) - {surah?.verseCount} verses</h3>
           <div className="flex gap-2">
-            <button onClick={handleAddAnchor} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Plus size={14} /> Add anchor</button>
+            <button onClick={() => setShowSplitsModal(true)} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Split size={14} /> Edit Splits</button>
             <button onClick={handleSave} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><Save size={14} /> Save</button>
           </div>
         </div>
         {surah && surah.verseCount <= 10 && anchors.length === 1 && anchors[0].startVerse===1 && anchors[0].endVerse===surah.verseCount && (
           <p className="text-xs text-[var(--foreground-secondary)] mt-2">Short surah auto-split: one card for whole surah. You can still split further.</p>
         )}
-        <div className="mt-4 grid gap-3">
-          {anchors.length === 0 && <p className="text-sm text-[var(--foreground-secondary)]">No anchors yet. Click Add anchor.</p>}
-          {anchors.map((a, idx) => (
-            <div key={idx} className="p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] grid gap-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs opacity-70">Start</label>
-                  <input type="number" min={1} max={surah?.verseCount} value={a.startVerse} onChange={e => handleAnchorChange(idx, { startVerse: Number(e.target.value), id: `anchor-${selectedSurah}-${Number(e.target.value)}-${a.endVerse}` })} className="w-full p-2 rounded-lg border border-[var(--border)] bg-[var(--background-secondary)] text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70">End</label>
-                  <input type="number" min={1} max={surah?.verseCount} value={a.endVerse} onChange={e => handleAnchorChange(idx, { endVerse: Number(e.target.value), id: `anchor-${selectedSurah}-${a.startVerse}-${Number(e.target.value)}` })} className="w-full p-2 rounded-lg border border-[var(--border)] bg-[var(--background-secondary)] text-sm" />
-                </div>
-                <div className="flex items-end">
-                  <button onClick={() => handleRemove(idx)} className="w-full p-2 rounded-lg border border-[var(--danger)] text-[var(--danger)] text-sm flex items-center justify-center gap-1 hover:bg-[var(--danger)] hover:text-white"><Trash2 size={14} /> Remove</button>
-                </div>
+        <div className="mt-3 grid gap-2">
+          {anchors.length === 0 ? (
+            <p className="text-sm text-[var(--foreground-secondary)]">No groups yet. Use Edit Splits to create them.</p>
+          ) : (
+            anchors.slice().sort((a,b)=>a.startVerse-b.startVerse).map(a => (
+              <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
+                <span>{a.startVerse}-{a.endVerse} — {a.label}</span>
+                <span className="text-xs opacity-60">{a.endVerse - a.startVerse + 1} verses</span>
               </div>
-              <div>
-                <label className="text-xs opacity-70">Label</label>
-                <input value={a.label} onChange={e => handleAnchorChange(idx, { label: e.target.value })} className="w-full p-2 rounded-lg border border-[var(--border)] bg-[var(--background-secondary)] text-sm" placeholder={`Verses ${a.startVerse}-${a.endVerse}`} />
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
-        <div className="mt-4 flex gap-2">
+        <p className="text-xs text-[var(--foreground-secondary)] mt-3">Tap Edit Splits to use the visual splitter from the main app - it shows your mindmap preview and lets you drag to split.</p>
+        <div className="mt-3 flex gap-2">
           <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-2 rounded-xl border border-[var(--border)] text-sm flex items-center gap-1"><Eye size={14} /> {showPreview ? 'Hide' : 'Preview'} </button>
         </div>
         {showPreview && (
-          <div className="mt-4 grid gap-2 max-h-96 overflow-y-auto border border-[var(--border)] rounded-xl p-2 bg-[var(--background-secondary)]">
+          <div className="mt-3 grid gap-2 max-h-96 overflow-y-auto border border-[var(--border)] rounded-xl p-2 bg-[var(--background-secondary)]">
             {buildAnkiCards(anchors, allVerses).map((c, i) => (
               <div key={i} className="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)]">
                 <div className="text-sm font-medium">{c.arabicName} {c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
@@ -307,7 +332,6 @@ export default function AnkiDeckTab() {
             initialSnapshot={currentMindmap?.snapshot}
             onClose={() => setShowMindmapEditor(false)}
             onSave={async (snapshot, images) => {
-              // images are Blobs for light/dark; we store snapshot only for now
               const next = saveAnkiMindmap(selectedSurah, { snapshot, isComplete: true });
               setMindmaps(next);
               setShowMindmapEditor(false);
@@ -316,6 +340,26 @@ export default function AnkiDeckTab() {
             title={`${surah?.arabicName} mindmap`}
           />
         </div>
+      )}
+
+      {showSplitsModal && surah && (
+        <SplitsModal
+          isOpen={showSplitsModal}
+          onClose={() => setShowSplitsModal(false)}
+          isMobile={false}
+          surahId={selectedSurah}
+          verseCount={surah.verseCount}
+          builderState={builderState}
+          mindmapImageUrl={currentMindmap?.imageUrl || null}
+          mindmapImageUrlDark={currentMindmap?.imageUrlDark || null}
+          snapshot={currentMindmap?.snapshot}
+          isDark={isDark}
+          onAddBreak={handleAddBreak}
+          onRemoveBreak={handleRemoveBreak}
+          onSave={handleSaveSplits}
+          hasReviewedHistory={false}
+          hasSuspendedCards={false}
+        />
       )}
 
       {showMindmapViewer && currentMindmap?.snapshot && (
