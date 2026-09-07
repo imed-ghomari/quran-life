@@ -153,14 +153,34 @@ export default function AnkiDeckTab() {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
-      const imported = importSplitsFromBackup(json);
+      // Handle both old backup format and new export format with {splits,mindmaps}
+      const splitsSource = json.splits || json;
+      const imported = importSplitsFromBackup(splitsSource);
       const merged = { ...splits, ...imported };
       saveSplits(merged);
       setSplits(merged);
-      // refresh current
+      if (json.mindmaps && typeof json.mindmaps === 'object') {
+        const mm = json.mindmaps as Record<number, any>;
+        Object.entries(mm).forEach(([k, v]) => {
+          const sid = Number(k);
+          if (Number.isFinite(sid) && v) saveAnkiMindmap(sid, v);
+        });
+        setMindmaps(loadAnkiMindmaps());
+      } else if (json.mindmaps === undefined && json.splits === undefined) {
+        // Try mindmaps at top level alongside splits
+        const maybeMindmaps = json.mindmaps || json.ankiMindmaps;
+        if (maybeMindmaps) {
+          Object.entries(maybeMindmaps).forEach(([k, v]) => {
+            const sid = Number(k);
+            if (Number.isFinite(sid) && v) saveAnkiMindmap(sid, v);
+          });
+          setMindmaps(loadAnkiMindmaps());
+        }
+      }
       const cur = imported[selectedSurah] || getSplitsForSurah(selectedSurah, merged);
       if (cur) setAnchors(cur);
-      showToast(`Imported ${Object.keys(imported).length} surah(s) splits`);
+      if (json.deckName) setDeckName(String(json.deckName));
+      showToast(`Imported ${Object.keys(imported).length} surah(s)`);
     } catch (e) {
       showToast('Invalid JSON');
     }
@@ -225,6 +245,21 @@ export default function AnkiDeckTab() {
             <p className="text-sm text-[var(--foreground-secondary)] mt-1">Create your review cards. Choose how verses are grouped, then export to Anki.</p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => {
+              const data = { splits, mindmaps, exportedAt: new Date().toISOString(), deckName };
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `quran-life-anki-backup-${new Date().toISOString().slice(0,10)}.json`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+              showToast('Backup exported');
+            }} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-2 hover:bg-[var(--verse-bg)]">
+              <Upload size={16} /> Export backup
+            </button>
             <label className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-2 cursor-pointer hover:bg-[var(--verse-bg)]">
               <FileJson size={16} /> Import backup <input type="file" accept=".json" className="hidden" onChange={e => e.target.files?.[0] && handleImportJson(e.target.files[0])} />
             </label>

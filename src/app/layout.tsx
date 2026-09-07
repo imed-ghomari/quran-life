@@ -5,6 +5,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ScrollbarVisibilityController from '@/components/ScrollbarVisibilityController';
+import { ConfirmDialogProvider } from '@/components/ConfirmDialogProvider';
 import { getSiteUrl } from '@/lib/siteUrl';
 
 const outfit = localFont({
@@ -101,9 +102,11 @@ export default function RootLayout({
                 </Script>
                 <ScrollbarVisibilityController />
                 <ThemeProvider>
-                    <ErrorBoundary>
-                        {children}
-                    </ErrorBoundary>
+                    <ConfirmDialogProvider>
+                        <ErrorBoundary>
+                            {children}
+                        </ErrorBoundary>
+                    </ConfirmDialogProvider>
                 </ThemeProvider>
             </body>
         </html>
