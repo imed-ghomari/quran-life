@@ -21,6 +21,8 @@ export type AnkiCard = {
   contextVerses: { ayahId: number; text: string }[];
   relatedGroups: string[]; // e.g. "2:23 ~ 11:45"
   tags: string[];
+  mindmapDocs?: string; // docs for this mindmap, added to Anki field
+  mindmapSnapshotKey?: string; // key for mindmap
 };
 
 export type AnkiExportOptions = {

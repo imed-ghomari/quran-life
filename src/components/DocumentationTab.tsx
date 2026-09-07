@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { marked } from 'marked';
-import { BookOpen, ChevronRight, Search } from 'lucide-react';
+import { BookOpen, ChevronRight } from 'lucide-react';
 
 type DocItem = { slug: string; title: string; href: string };
 
@@ -24,7 +24,6 @@ export default function DocumentationTab() {
   const [source, setSource] = useState<string>('');
   const [html, setHtml] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState('');
 
   useEffect(() => {
     fetch('/api/docs-list')
@@ -59,8 +58,6 @@ export default function DocumentationTab() {
     return () => { cancelled = true; };
   }, [activeSlug]);
 
-  const filtered = items.filter(i => !query || i.title.toLowerCase().includes(query.toLowerCase()) || i.slug.toLowerCase().includes(query.toLowerCase()));
-
   return (
     <div className="card !p-0 overflow-hidden flex flex-col" style={{ height: '75vh' }}>
       <div className="p-3 border-b border-[var(--border)] bg-[var(--background-secondary)] flex items-center justify-between gap-3">
@@ -73,15 +70,9 @@ export default function DocumentationTab() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-[240px] md:w-[260px] border-r border-[var(--border)] bg-[var(--background-secondary)] hidden md:flex flex-col">
-          <div className="p-3 border-b border-[var(--border)]">
-            <div className="relative">
-              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 opacity-50" />
-              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search docs" className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm" />
-            </div>
-          </div>
           <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
             <div className="space-y-1">
-              {filtered.map(item => (
+              {items.map(item => (
                 <button
                   key={item.slug}
                   onClick={() => setActiveSlug(item.slug)}

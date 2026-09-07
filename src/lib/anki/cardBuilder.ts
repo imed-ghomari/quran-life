@@ -1,6 +1,8 @@
 import { SURAHS } from '@/lib/quranData';
 import { getReviewVerseChunkDescriptors } from '@/lib/reviewVerseChunks';
 import { surahAyahToAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
+import { AnkiAnchor, AnkiCard } from './types';
+import type { Verse } from '@/lib/types';
 
 function absoluteToKey(absolute: number): string {
   let remaining = absolute;
@@ -10,17 +12,16 @@ function absoluteToKey(absolute: number): string {
   }
   return '114:6';
 }
-import { AnkiAnchor, AnkiCard } from './types';
-import type { Verse } from '@/lib/types';
 
 const getSurah = (id: number) => SURAHS.find(s => s.id === id);
 
 export function buildAnkiCards(
   anchors: AnkiAnchor[],
   verses: Verse[],
-  options?: { includeRelated?: boolean }
+  options?: { includeRelated?: boolean; mindmapDocsMap?: Record<string, string> }
 ): AnkiCard[] {
   const includeRelated = options?.includeRelated ?? true;
+  const mindmapDocsMap = options?.mindmapDocsMap || {};
   const verseMap = new Map<string, Verse>();
   verses.forEach(v => verseMap.set(`${v.surahId}:${v.ayahId}`, v));
 
@@ -72,6 +73,8 @@ export function buildAnkiCards(
     if (relatedGroups.length > 0) tags.push('mutashabihat');
 
     const guid = `ql-${anchor.surahId}-${anchor.startVerse}-${anchor.endVerse}`;
+    const docsKey = `surah-${anchor.surahId}`;
+    const mindmapDocs = mindmapDocsMap[docsKey] || '';
 
     return {
       id: guid,
@@ -88,6 +91,8 @@ export function buildAnkiCards(
       contextVerses,
       relatedGroups,
       tags,
+      mindmapDocs,
+      mindmapSnapshotKey: docsKey,
     };
   });
 }

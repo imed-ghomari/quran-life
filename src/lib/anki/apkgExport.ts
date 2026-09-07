@@ -115,7 +115,8 @@ function modelJson() {
 <hr id="answer">
 <div style="margin-top:10px">
   <div style="font-size:1.35rem; line-height:2.1">{{VerseFull}}</div>
-  {{#RelatedGroups}}<div class="related"><b>Related groups (mutashabihat):</b> {{RelatedGroups}}</div>{{/RelatedGroups}}
+  {{#RelatedGroups}}<div class="related"><b>Related groups:</b> {{RelatedGroups}}</div>{{/RelatedGroups}}
+  {{#MindmapDocs}}<div class="related" style="direction:rtl; text-align:right; background:#fffbe6; border:1px solid #f0d76a"><b>Mindmap notes:</b> {{MindmapDocs}}</div>{{/MindmapDocs}}
   <div style="margin-top:8px; font-size:0.75rem; opacity:0.6">Anchor: {{AnchorLabel}} • {{Range}}</div>
 </div>
 `.trim(),
@@ -197,6 +198,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
           { name: 'VerseChunksFront', ord: 4 },
           { name: 'ContextFront', ord: 5 },
           { name: 'RelatedGroups', ord: 6 },
+          { name: 'MindmapDocs', ord: 7 },
         ],
         css: m.css,
         req: [[0, 'all', [0]]],
@@ -281,6 +283,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
         contextFront += visible.map(v => `<span><span class="verse-badge">${v.ayahId}</span> ${escapeField(v.text)} </span>`).join('');
       }
       const related = card.relatedGroups.join(', ');
+      const docs = (card as any).mindmapDocs ? escapeField(String((card as any).mindmapDocs)) : '';
 
       const flds = [
         escapeField(card.arabicName + ' ' + card.surahName),
@@ -290,6 +293,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
         verseChunksFront,
         contextFront,
         escapeField(related),
+        docs,
       ].join('\x1f');
 
       const csum = 0;
