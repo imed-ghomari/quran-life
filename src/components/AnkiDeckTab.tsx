@@ -22,7 +22,12 @@ const SplitsModal = dynamic(() => import('@/components/todo/SplitsModal'), { ssr
 export default function AnkiDeckTab() {
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
   const [isVersesLoaded, setIsVersesLoaded] = useState(false);
-  const [selectedSurah, setSelectedSurah] = useState<number>(50);
+  const [selectedMindmapKey, setSelectedMindmapKey] = useState<string>('surah-50');
+  const selectedSurah = useMemo(() => {
+    if (selectedMindmapKey.startsWith('surah-')) return Number(selectedMindmapKey.replace('surah-','')) || 50;
+    return 2;
+  }, [selectedMindmapKey]);
+  const isPartOrMeta = selectedMindmapKey.startsWith('part-') || selectedMindmapKey.startsWith('meta-');
   const [splits, setSplits] = useState<Record<number, AnkiAnchor[]>>({});
   const [anchors, setAnchors] = useState<AnkiAnchor[]>([]);
   const [deckName, setDeckName] = useState('QuranLife::Review');
@@ -35,7 +40,6 @@ export default function AnkiDeckTab() {
   const [showMindmapViewer, setShowMindmapViewer] = useState(false);
   const [viewerData, setViewerData] = useState<{ snapshot: any; title: string } | null>(null);
   const [showSplitsModal, setShowSplitsModal] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<number>(1);
   const [showPartEditor, setShowPartEditor] = useState(false);
   const [mindmapDocs, setMindmapDocs] = useState<Record<string, string>>({});
   const [editingDocKey, setEditingDocKey] = useState<string | null>(null);
@@ -112,10 +116,6 @@ export default function AnkiDeckTab() {
 
   const surah = getSurah(selectedSurah);
   const currentMindmap = (mindmaps as any)[`surah-${selectedSurah}`] as any;
-  const currentPartKey = `part-${selectedPart}`;
-  const currentPartMindmap = (mindmaps as any)[currentPartKey] as any;
-  const currentMetaKey = `meta-0`;
-  const currentMetaMindmap = (mindmaps as any)[currentMetaKey] as any || (mindmaps as any)[`part-0`] as any;
   const builderState = useMemo(() => {
     const sorted = [...anchors].sort((a, b) => a.startVerse - b.startVerse);
     const breaks = sorted.slice(0, -1).map(a => a.endVerse);
@@ -326,11 +326,24 @@ export default function AnkiDeckTab() {
             <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
           </div>
           <div>
-            <label className="adv-label mb-2 block">Surah</label>
-            <select value={selectedSurah} onChange={e => setSelectedSurah(Number(e.target.value))} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
-              {SURAHS.map(s => (
-                <option key={s.id} value={s.id}>{s.id}. {s.arabicName} ({s.name}) - {s.verseCount}v</option>
-              ))}
+            <label className="adv-label mb-2 block">Mindmap to edit</label>
+            <select value={selectedMindmapKey} onChange={e => setSelectedMindmapKey(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
+              <optgroup label="Surahs">
+                {SURAHS.map(s => (
+                  <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>
+                ))}
+              </optgroup>
+              <optgroup label="Parts & Meta">
+                <option value="meta-0">Meta - Overview across all parts</option>
+                <option value="part-1">Part 1 - Surah 1-5</option>
+                <option value="part-2">Part 2 - Surah 6-9</option>
+                <option value="part-3">Part 3 - Surah 10-24</option>
+                <option value="part-4">Part 4 - Surah 25-33</option>
+                <option value="part-5">Part 5 - Surah 34-49</option>
+                <option value="part-6">Part 6 - Surah 50-66</option>
+                <option value="part-7">Part 7 - Surah 67-114</option>
+                <option value="part-8">All Quran</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -341,129 +354,96 @@ export default function AnkiDeckTab() {
         <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">One file contains everything - verse groups, mindmaps, and notes. Re-importing updates existing cards and keeps your progress.</p>
       </div>
 
-      {/* Mindmap + Splits */}
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2"><ImageIcon size={16} /> Mindmap for {surah?.arabicName}</h3>
-          <div className="flex gap-2">
-            {currentMindmap?.snapshot || currentMindmap?.imageUrl ? (
-              <button onClick={() => setViewerData({ snapshot: currentMindmap.snapshot, title: `Surah ${selectedSurah} - ${surah?.arabicName}` })} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> View</button>
-            ) : null}
-            <button onClick={() => setShowMindmapEditor(true)} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><PenTool size={14} /> {currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
-          </div>
-        </div>
-        {currentMindmap?.snapshot ? (
-          <p className="text-xs text-[var(--foreground-secondary)] mt-2">Mindmap saved. It will be shown as a preview.</p>
-        ) : (
-          <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with the drawing editor. This is optional.</p>
-        )}
-        {currentMindmap?.snapshot && (
-          <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 220 }}>
-            <MindmapViewer snapshot={currentMindmap.snapshot} imageUrl={currentMindmap.imageUrl} imageUrlDark={currentMindmap.imageUrlDark} isDark={false} height="220px" />
-          </div>
-        )}
-        {/* Splits - now inline between preview and docs */}
-        <div className="mt-4 border-t border-[var(--border)] pt-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium text-sm flex items-center gap-2"><Split size={14} /> Verse Groups for this Surah</h4>
-            <button onClick={() => setShowSplitsModal(true)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Split size={12} /> Edit Splits</button>
-          </div>
-          {surah && surah.verseCount <= 10 && anchors.length === 1 && anchors[0].startVerse===1 && anchors[0].endVerse===surah.verseCount ? (
-            <p className="text-xs text-[var(--foreground-secondary)] mt-2">Short surah auto-split: one card for whole surah. Use Edit Splits to change.</p>
-          ) : null}
-          <div className="mt-2 grid gap-1.5 max-h-32 overflow-y-auto">
-            {anchors.length === 0 ? (
-              <p className="text-xs text-[var(--foreground-secondary)]">No groups yet.</p>
-            ) : (
-              anchors.slice().sort((a,b)=>a.startVerse-b.startVerse).map(a => (
-                <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
-                  <span>{a.startVerse}-{a.endVerse} — {a.label}</span>
-                  <span className="opacity-60">{a.endVerse - a.startVerse + 1}v</span>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
-            <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview Cards'}</button>
-          </div>
-          {showPreview && (
-            <div className="mt-2 grid gap-1.5 max-h-40 overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background-secondary)]">
-              {buildAnkiCards(anchors, allVerses).map((c, i) => (
-                <div key={i} className="p-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-xs">
-                  <div className="font-medium">{c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
-                  {c.relatedGroups.length>0 && <div className="opacity-70">Similar to: {c.relatedGroups.join(', ')}</div>}
-                </div>
-              ))}
+      {/* Mindmap - unified for surah/part/meta, splits hidden for part/meta */}
+      {(() => {
+        const isPartMeta = selectedMindmapKey.startsWith('part-') || selectedMindmapKey.startsWith('meta-');
+        const displayMindmap = isPartMeta ? (mindmaps as any)[selectedMindmapKey] as any : currentMindmap;
+        const displayTitle = isPartMeta
+          ? (selectedMindmapKey === 'meta-0' ? 'Meta Overview' : `Part ${selectedMindmapKey.replace('part-','')}`)
+          : `${surah?.arabicName} - Surah ${selectedSurah}`;
+        const displaySurah = surah;
+        return (
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2"><ImageIcon size={16} /> Mindmap for {displayTitle}</h3>
+              <div className="flex gap-2">
+                {displayMindmap?.snapshot || displayMindmap?.imageUrl ? (
+                  <button onClick={() => setViewerData({ snapshot: displayMindmap.snapshot, title: displayTitle })} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> View</button>
+                ) : null}
+                <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
+              </div>
             </div>
-          )}
-        </div>
-        {/* Docs for this mindmap */}
-        <div className="mt-4 border-t border-[var(--border)] pt-3">
-          <label className="adv-label mb-2 block">Notes for this mindmap (will be added to Anki cards)</label>
-          <textarea
-            value={editingDocKey === `surah-${selectedSurah}` ? editingDocText : getDocForKey(`surah-${selectedSurah}`)}
-            onFocus={() => { setEditingDocKey(`surah-${selectedSurah}`); setEditingDocText(getDocForKey(`surah-${selectedSurah}`)); }}
-            onChange={e => setEditingDocText(e.target.value)}
-            onBlur={() => {
-              if (editingDocKey === `surah-${selectedSurah}`) {
-                const next = saveMindmapDoc(`surah-${selectedSurah}`, editingDocText);
-                setMindmapDocs(next);
-                setEditingDocKey(null);
-              }
-            }}
+            {displayMindmap?.snapshot ? (
+              <p className="text-xs text-[var(--foreground-secondary)] mt-2">Mindmap saved. It will be shown as a preview.</p>
+            ) : (
+              <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with the drawing editor. This is optional.</p>
+            )}
+            {displayMindmap?.snapshot && !isPartMeta && (
+              <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 220 }}>
+                <MindmapViewer snapshot={displayMindmap.snapshot} imageUrl={displayMindmap.imageUrl} imageUrlDark={displayMindmap.imageUrlDark} isDark={false} height="220px" />
+              </div>
+            )}
+            {displayMindmap?.snapshot && isPartMeta && (
+              <p className="text-xs text-[var(--foreground-secondary)] mt-2">Preview hidden until you click View.</p>
+            )}
+            {!isPartMeta && (
+              <div className="mt-4 border-t border-[var(--border)] pt-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-sm flex items-center gap-2"><Split size={14} /> Verse Groups for this Surah</h4>
+                  <button onClick={() => setShowSplitsModal(true)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Split size={12} /> Edit Splits</button>
+                </div>
+                {displaySurah && displaySurah.verseCount <= 10 && anchors.length === 1 && anchors[0].startVerse===1 && anchors[0].endVerse===displaySurah.verseCount ? (
+                  <p className="text-xs text-[var(--foreground-secondary)] mt-2">Short surah auto-split: one card for whole surah. Use Edit Splits to change.</p>
+                ) : null}
+                <div className="mt-2 grid gap-1.5 max-h-32 overflow-y-auto">
+                  {anchors.length === 0 ? (
+                    <p className="text-xs text-[var(--foreground-secondary)]">No groups yet.</p>
+                  ) : (
+                    anchors.slice().sort((a,b)=>a.startVerse-b.startVerse).map(a => (
+                      <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
+                        <span>{a.startVerse}-{a.endVerse} — {a.label}</span>
+                        <span className="opacity-60">{a.endVerse - a.startVerse + 1}v</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
+                  <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview Cards'}</button>
+                </div>
+                {showPreview && (
+                  <div className="mt-2 grid gap-1.5 max-h-40 overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background-secondary)]">
+                    {buildAnkiCards(anchors, allVerses).map((c, i) => (
+                      <div key={i} className="p-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-xs">
+                        <div className="font-medium">{c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
+                        {c.relatedGroups.length>0 && <div className="opacity-70">Similar to: {c.relatedGroups.join(', ')}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-4 border-t border-[var(--border)] pt-3">
+              <label className="adv-label mb-2 block">Notes for this mindmap (will be added to Anki cards)</label>
+              <textarea
+                value={editingDocKey === selectedMindmapKey ? editingDocText : getDocForKey(selectedMindmapKey)}
+                onFocus={() => { setEditingDocKey(selectedMindmapKey); setEditingDocText(getDocForKey(selectedMindmapKey)); }}
+                onChange={e => setEditingDocText(e.target.value)}
+                onBlur={() => {
+                  if (editingDocKey === selectedMindmapKey) {
+                    const next = saveMindmapDoc(selectedMindmapKey, editingDocText);
+                    setMindmapDocs(next);
+                    setEditingDocKey(null);
+                  }
+                }}
             placeholder="Write what this mindmap means, how its parts connect, or any notes you want to see in Anki..."
             className="w-full min-h-[90px] p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm"
           />
           <p className="text-xs text-[var(--foreground-secondary)] mt-1">This text will be saved with the mindmap and added as a field in Anki so you can read it while reviewing.</p>
         </div>
       </div>
-
-      {/* Part Mindmaps - bring back part & meta */}
-      <div className="card">
-        <h3 className="font-semibold flex items-center gap-2"><Layers size={16} /> Part & Meta Mindmaps</h3>
-        <p className="text-xs text-[var(--foreground-secondary)] mt-1">These are the cluster-level maps for each Juz and the meta overview. They were hidden before - now you can edit them here.</p>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <div>
-            <label className="adv-label mb-2 block">Part</label>
-            <select value={selectedPart} onChange={e => setSelectedPart(Number(e.target.value))} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
-              <option value={0}>Meta (Overview across all parts)</option>
-              <option value={1}>Part 1 - Surah 1-5</option>
-              <option value={2}>Part 2 - Surah 6-9</option>
-              <option value={3}>Part 3 - Surah 10-24</option>
-              <option value={4}>Part 4 - Surah 25-33</option>
-              <option value={5}>Part 5 - Surah 34-49</option>
-              <option value={6}>Part 6 - Surah 50-66</option>
-              <option value={7}>Part 7 - Surah 67-114</option>
-              <option value={8}>All Quran</option>
-            </select>
-          </div>
-          <div className="flex items-end gap-2">
-            <button onClick={() => setShowPartEditor(true)} className="flex-1 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center justify-center gap-1"><PenTool size={14} /> {((mindmaps as any)[`part-${selectedPart}`] || (mindmaps as any)[`meta-0`])?.snapshot ? 'Edit' : 'Create'} Part Mindmap</button>
-            {((mindmaps as any)[`part-${selectedPart}`] || (mindmaps as any)[`meta-0`])?.snapshot && (
-              <button onClick={() => setViewerData({ snapshot: ((mindmaps as any)[`part-${selectedPart}`] || (mindmaps as any)[`meta-0`])?.snapshot, title: selectedPart===0 ? 'Meta Overview' : `Part ${selectedPart}` })} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm"><Eye size={14} /></button>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-3 border-t border-[var(--border)] pt-3">
-          <label className="adv-label mb-2 block">Notes for this part mindmap (added to Anki)</label>
-          <textarea
-            value={editingDocKey === `part-${selectedPart}` ? editingDocText : getDocForKey(`part-${selectedPart}`)}
-            onFocus={() => { setEditingDocKey(`part-${selectedPart}`); setEditingDocText(getDocForKey(`part-${selectedPart}`)); }}
-            onChange={e => setEditingDocText(e.target.value)}
-            onBlur={() => {
-              if (editingDocKey === `part-${selectedPart}`) {
-                const next = saveMindmapDoc(`part-${selectedPart}`, editingDocText);
-                setMindmapDocs(next);
-                setEditingDocKey(null);
-              }
-            }}
-            placeholder="Explain this part's theme and how its Surahs connect..."
-            className="w-full min-h-[80px] p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm"
-          />
-        </div>
-      </div>
+          );
+        })()}
 
         <div className="text-center text-xs text-[var(--foreground-secondary)]">
         <p>Your cards will show verses step by step with context. Similar verses are highlighted to help you tell them apart. Mindmap notes you write above are added as a field in Anki so you can read them while reviewing.</p>
@@ -486,23 +466,28 @@ export default function AnkiDeckTab() {
         </div>
       )}
 
-      {showPartEditor && (
-        <div className="fixed inset-0 z-[100] bg-[var(--background)]">
-          <MindmapEditor
-            partId={selectedPart}
-            initialSnapshot={((mindmaps as any)[`part-${selectedPart}`] || (mindmaps as any)[`meta-0`])?.snapshot}
-            onClose={() => setShowPartEditor(false)}
-            onSave={async (snapshot, images) => {
-              const key = selectedPart === 0 ? 'meta-0' : `part-${selectedPart}`;
-              const next = saveAnkiMindmapByKey(key, { snapshot, isComplete: true, kind: selectedPart === 0 ? 'meta' : 'part', partId: selectedPart });
-              setMindmaps(next as any);
-              setShowPartEditor(false);
-              showToast('Part mindmap saved');
-            }}
-            title={`${selectedPart === 0 ? 'Meta' : `Part ${selectedPart}`} mindmap`}
-          />
-        </div>
-      )}
+      {showPartEditor && (() => {
+        const isMeta = selectedMindmapKey === 'meta-0';
+        const partId = isMeta ? 0 : Number(selectedMindmapKey.replace('part-','')) || 1;
+        const key = selectedMindmapKey;
+        const snap = (mindmaps as any)[key]?.snapshot;
+        return (
+          <div className="fixed inset-0 z-[100] bg-[var(--background)]">
+            <MindmapEditor
+              partId={partId}
+              initialSnapshot={snap}
+              onClose={() => setShowPartEditor(false)}
+              onSave={async (snapshot, images) => {
+                const next = saveAnkiMindmapByKey(key, { snapshot, isComplete: true, kind: isMeta ? 'meta' : 'part', partId });
+                setMindmaps(next as any);
+                setShowPartEditor(false);
+                showToast(isMeta ? 'Meta mindmap saved' : 'Part mindmap saved');
+              }}
+              title={`${isMeta ? 'Meta' : `Part ${partId}`} mindmap`}
+            />
+          </div>
+        );
+      })()}
 
       {showSplitsModal && surah && (
         <SplitsModal
