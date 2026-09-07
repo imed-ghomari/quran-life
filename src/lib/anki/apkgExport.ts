@@ -2,7 +2,7 @@
 // For browser export we generate a valid .apkg zip with collection.anki2 sqlite
 // Simplified: if sql.js fails, fallback to CSV download via Blob
 
-import { AnkiCard } from './types';
+import { AnkiCard, AnkiMindmapCard } from './types';
 import { loadAnkiMindmaps } from './mindmapStore';
 
 // Strip any media references from docs to avoid Anki "file not found" when docs contain <img> HTML
@@ -209,16 +209,17 @@ function modelJson() {
 .context { opacity: 0.6; font-size: 0.95rem; margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 8px; }
 .context .extra { display:none; }
 .context.show-all .extra { display:inline; }
+#verseContainer { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding-bottom: 8px; }
 .verse-block { margin: 8px 0; line-height: 2.1; font-size: 1.35rem; }
 .verse-badge { font-size: 0.65rem; opacity:0.7; margin-left: 6px; border:1px solid #ccc; padding:1px 4px; border-radius:4px; vertical-align: middle; }
 .chunk { transition: filter 0.2s, opacity 0.2s; }
 .chunk.blurred { filter: blur(8px); opacity: 0.45; user-select:none; }
 .chunk.revealed { filter: none; opacity:1; }
 .chunk.next { filter: blur(5px); opacity:0.65; outline: 1px dashed #88a; }
-#revealBtn { width:100%; padding:12px; border-radius:12px; border:none; background:#5b8fb9; color:white; font-weight:600; margin-top:14px; cursor:pointer; }
-#grading { display:flex; gap:8px; margin-top:14px; }
-#grading button { flex:1; padding:10px; border-radius:10px; border:1px solid #ddd; background:#f7f7f7; cursor:pointer; font-weight:600; }
-#grading button.good { background:#5b8fb9; color:white; }
+#revealBtn { width:100%; padding:12px; border-radius:12px; border:none; background:#5b8fb9; color:white; font-weight:600; margin-top:14px; cursor:pointer; position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
+#revealBtn:active { opacity:0.9; }
+#counter { font-size:0.7rem; opacity:0.5; margin-top:6px; text-align:center; }
+#doneHint { display:none; margin-top:12px; padding:10px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; text-align:center; font-size:0.9rem; color:#2e7d32; }
 .related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #f6f6f6; padding:8px; border-radius:8px; direction:ltr; text-align:left; }
 .mindmap-img { margin-top:12px; text-align:center; }
 .mindmap-img img { max-width:100%; border:1px solid #ddd; border-radius:8px; }
@@ -235,22 +236,37 @@ function modelJson() {
     {{VerseChunksFront}}
   </div>
   <button id="revealBtn" onclick="qlReveal()">Reveal next</button>
-  <div id="grading" style="display:none">
-    <button onclick="pycmd('ansAgain')" style="background:#b07c7c;color:white">Not remembered</button>
-    <button onclick="pycmd('ansGood')" class="good">Remembered</button>
-    <button onclick="pycmd('ansBury')">Postpone</button>
-  </div>
-  <div id="counter" style="font-size:0.7rem;opacity:0.5;margin-top:6px"></div>
+  <div id="counter"></div>
+  <div id="doneHint">✓ All revealed — press <b>Show Answer</b> (Space) to grade with Anki</div>
 </div>
 <script>
 (function(){
   var revealed=0;
   var chunks=document.querySelectorAll('.chunk');
   var total=chunks.length;
-  var grading=document.getElementById('grading');
   var btn=document.getElementById('revealBtn');
   var counter=document.getElementById('counter');
+  var hint=document.getElementById('doneHint');
   var ctx=document.getElementById('contextBox');
+  var verseCont=document.getElementById('verseContainer');
+  function scrollToEl(el){
+    if(!el) return;
+    try{
+      el.scrollIntoView({behavior:'smooth', block:'center', inline:'nearest'});
+    }catch(e){
+      try{ el.scrollIntoView(); }catch{}
+    }
+    // Fallback: ensure verseContainer scrolls to show next chunk (restricted height)
+    try{
+      if(verseCont){
+        var cRect=verseCont.getBoundingClientRect();
+        var r=el.getBoundingClientRect();
+        if(r.top < cRect.top || r.bottom > cRect.bottom){
+          // Already handled by scrollIntoView, but ensure container scrolls
+        }
+      }
+    }catch{}
+  }
   function update(){
     for(var i=0;i<chunks.length;i++){
       if(i<revealed){ chunks[i].className='chunk revealed'; }
@@ -260,46 +276,75 @@ function modelJson() {
     if(counter) counter.textContent = revealed + ' / ' + total + ' chunks';
     if(revealed>=total){
       if(btn) btn.style.display='none';
-      if(grading) grading.style.display='flex';
-      // expand context if mutashabihat tag present
+      if(hint) { hint.style.display='block'; scrollToEl(hint); }
       if(ctx && document.body.dataset.hasMutashabihat==='1'){ ctx.classList.add('show-all'); }
     } else {
-      if(btn) btn.style.display='block';
-      if(grading) grading.style.display='none';
+      if(btn) { btn.style.display='block'; btn.textContent = 'Reveal next (' + (total - revealed) + ' left)'; }
+      if(hint) hint.style.display='none';
+      var target = chunks[revealed];
+      if(target) scrollToEl(target);
     }
   }
   window.qlReveal=function(){
     if(revealed<total){ revealed++; update(); }
   };
-  // auto-bind space
+  // Space reveals next while chunks remain; once done, let Anki handle Space as Show Answer / Good
   document.addEventListener('keydown', function(e){
-    if(e.code==='Space'){ e.preventDefault(); window.qlReveal(); }
+    if(e.code==='Space' || e.key===' '){
+      if(revealed < total){ e.preventDefault(); window.qlReveal(); }
+    }
   });
   // init
-  // hide extra context verses initially if >2
   if(ctx){
     var extras=ctx.querySelectorAll('.extra');
     if(extras.length>0 && !ctx.classList.contains('show-all')){}
   }
   update();
+  // Ensure first next is visible on load
+  setTimeout(function(){
+    var t=chunks[0];
+    if(t) scrollToEl(t);
+  }, 80);
 })();
 </script>
 `.trim(),
     back: `
-{{FrontSide}}
-<hr id="answer">
 <div style="margin-top:10px">
-  <div style="font-size:1.35rem; line-height:2.1">{{VerseFull}}</div>
   {{#RelatedGroups}}<div class="related"><b>Related groups:</b> {{RelatedGroups}}</div>{{/RelatedGroups}}
   {{#MindmapDocs}}<div class="related" style="direction:rtl; text-align:right; background:#fffbe6; border:1px solid #f0d76a"><b>Mindmap notes:</b> {{MindmapDocs}}</div>{{/MindmapDocs}}
   {{#MindmapImage}}<div class="mindmap-img">{{MindmapImage}}</div>{{/MindmapImage}}
-  <div style="margin-top:8px; font-size:0.75rem; opacity:0.6">Anchor: {{AnchorLabel}} • {{Range}}</div>
+  <div style="margin-top:8px; font-size:0.75rem; opacity:0.6">Anchor: {{AnchorLabel}} • {{Range}} — {{Surah}}</div>
 </div>
 `.trim(),
   };
 }
 
-export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number) => void): Promise<Blob> {
+function modelJsonMindmap() {
+  const css = `
+.card { font-family: sans-serif; text-align: center; background: #fff; color: #222; padding: 16px; }
+.mindmap-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }
+.mindmap-img img { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; }
+.related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #fffbe6; padding:8px; border-radius:8px; text-align:left; border:1px solid #f0d76a; }
+`.trim();
+  return {
+    css,
+    front: `
+<div class="card">
+  <div class="mindmap-title">{{Title}}</div>
+  <div style="font-size:0.85rem; opacity:0.7;">Tap Show Answer to reveal mindmap</div>
+</div>
+`.trim(),
+    back: `
+<div class="card">
+  <div class="mindmap-title">{{Title}}</div>
+  <div class="mindmap-img">{{MindmapImage}}</div>
+  {{#MindmapDocs}}<div class="related"><b>Notes:</b> {{MindmapDocs}}</div>{{/MindmapDocs}}
+</div>
+`.trim(),
+  };
+}
+
+export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number) => void, mindmapCards: AnkiMindmapCard[] = []): Promise<Blob> {
   const JSZip = await getJSZip();
   if (!JSZip) {
     throw new Error('JSZip not available for apkg');
@@ -389,6 +434,8 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
     const modelId = 1600000000001;
 
     const m = modelJson();
+    const mm = modelJsonMindmap();
+    const modelIdMindmap = 1600000000002;
     const model = {
       [modelId]: {
         id: modelId,
@@ -421,6 +468,33 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
           { name: 'MindmapImage', ord: 8, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
         ],
         css: m.css,
+        req: [[0, 'all', [0]]],
+      },
+      [modelIdMindmap]: {
+        id: modelIdMindmap,
+        name: 'QuranLife Mindmap',
+        type: 0,
+        mod: now,
+        usn: -1,
+        sortf: 0,
+        did: deckId,
+        tmpls: [
+          {
+            name: 'Card 1',
+            ord: 0,
+            qfmt: mm.front,
+            afmt: mm.back,
+            did: null,
+            bqfmt: '',
+            bafmt: '',
+          },
+        ],
+        flds: [
+          { name: 'Title', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'MindmapImage', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'MindmapDocs', ord: 2, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+        ],
+        css: mm.css,
         req: [[0, 'all', [0]]],
       },
     };
@@ -507,8 +581,8 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const related = card.relatedGroups.join(', ');
       const rawDocs = (card as any).mindmapDocs ? String((card as any).mindmapDocs) : '';
       const docs = rawDocs ? escapeField(stripMediaRefs(rawDocs)) : '';
-      const mindmapKey = (card as any).mindmapSnapshotKey || `surah-${card.surahId}`;
-      const mindmapImageHtml = fieldMap[mindmapKey] || fieldMap[`surah-${card.surahId}`] || (card as any).mindmapImage || '';
+      // Verse group cards no longer embed mindmap image (only mindmap cards do) — keeps export fast
+      const mindmapImageHtml = '';
 
       const flds = [
         escapeField(card.arabicName + ' ' + card.surahName),
@@ -545,6 +619,46 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
         mod,
         usn,
         deckId, // due
+        '',
+      ]);
+    }
+
+    // Insert mindmap cards (one per surah/part/meta with snapshot)
+    // Use a separate nid sequence to avoid collision with verse cards
+    let midNid = now + 10000000;
+    for (const mCard of mindmapCards) {
+      midNid += 1;
+      const guid = `ql-mindmap-${mCard.key}`;
+      // Simple hash for guid stability (fallback to key)
+      let h = 0;
+      for (let i = 0; i < guid.length; i++) h = ((h << 5) - h + guid.charCodeAt(i)) | 0;
+      const guidStr = Math.abs(h).toString(36).padStart(10, '0') + 'm';
+      const tags = mCard.tags.join(' ');
+      const title = escapeField(mCard.title);
+      const docs = mCard.mindmapDocs ? escapeField(stripMediaRefs(String(mCard.mindmapDocs))) : '';
+      const imgHtml = fieldMap[mCard.key] || '';
+      const flds = [title, imgHtml, docs].join('\x1f');
+      const sfld = title;
+      db.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)', [
+        midNid,
+        guidStr,
+        modelIdMindmap,
+        now,
+        -1,
+        tags,
+        flds,
+        sfld,
+        0,
+        '',
+      ]);
+      const cid2 = midNid + 2000000;
+      db.run('INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, ?, 0, 0, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)', [
+        cid2,
+        midNid,
+        deckId,
+        now,
+        -1,
+        deckId,
         '',
       ]);
     }

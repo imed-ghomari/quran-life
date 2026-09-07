@@ -26,6 +26,18 @@ export type AnkiCard = {
   mindmapImage?: string; // <img> tag for rendered tldraw snapshot, filled at export
 };
 
+export type AnkiMindmapCard = {
+  id: string; // stable guid per mindmap key
+  key: string; // e.g. "surah-50", "part-1", "meta-0"
+  kind: 'surah' | 'part' | 'meta';
+  surahId?: number;
+  partId?: number;
+  title: string; // e.g. "Surah 50 - Qaf" or "Part 1"
+  tags: string[];
+  mindmapDocs?: string;
+  mindmapImage?: string;
+};
+
 export type AnkiExportOptions = {
   deckName: string;
   includeContext: boolean;

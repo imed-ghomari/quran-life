@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { getQuranVerses, getSurah, SURAHS } from '@/lib/quranData';
-import { buildAnkiCards } from '@/lib/anki/cardBuilder';
+import { buildAnkiCards, buildMindmapCards } from '@/lib/anki/cardBuilder';
 import { generateApkgBlob } from '@/lib/anki/apkgExport';
 import { loadSplits, saveSplits, getSplitsForSurah, setSplitsForSurah, importSplitsFromBackup, ensureDefaultSplits, buildAnchorsFromBreaks, sanitizeAnchors } from '@/lib/anki/splitStore';
 import { loadAnkiMindmaps, saveAnkiMindmap, saveAnkiMindmapByKey, getAnkiMindmap, getAnkiMindmapByKey } from '@/lib/anki/mindmapStore';
@@ -46,6 +46,8 @@ export default function AnkiDeckTab() {
   const [editingDocKey, setEditingDocKey] = useState<string | null>(null);
   const [editingDocText, setEditingDocText] = useState('');
   const [isAnkiDataLoaded, setIsAnkiDataLoaded] = useState(false);
+  const [showAllVerses, setShowAllVerses] = useState(false);
+  const [isViewerReady, setIsViewerReady] = useState(false);
   const { theme } = useTheme();
   const [systemIsDark, setSystemIsDark] = useState(false);
   useEffect(() => {
@@ -61,118 +63,194 @@ export default function AnkiDeckTab() {
   }, []);
   const isDark = theme === 'system' ? systemIsDark : theme === 'dark';
 
+  // Lazy: only load verses for selected surah + lightweight cache, not all 6236 at once
+  const [surahVerses, setSurahVerses] = useState<Verse[]>([]);
   useEffect(() => {
     let cancelled = false;
+    // Use cached allVerses if already loaded, otherwise fetch only needed surah via getQuranVerses then filter
     (async () => {
       try {
+        // Try to use already cached allVerses to avoid re-fetching whole file on every tab switch
+        if (allVerses.length > 0) {
+          const filtered = allVerses.filter(v => v.surahId === selectedSurah);
+          if (!cancelled) {
+            setSurahVerses(filtered);
+            setIsVersesLoaded(true);
+          }
+          return;
+        }
         const verses = await getQuranVerses();
-        if (!cancelled) setAllVerses(verses);
+        if (cancelled) return;
+        setAllVerses(verses);
+        setSurahVerses(verses.filter(v => v.surahId === selectedSurah));
       } catch {
-        if (!cancelled) setAllVerses([]);
+        if (!cancelled) {
+          setAllVerses([]);
+          setSurahVerses([]);
+        }
       } finally {
         if (!cancelled) setIsVersesLoaded(true);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedSurah, allVerses.length]);
+
+  // Lazy: only load splits/mindmaps/docs for selected key, not all 69 snapshots at once
+  // Keep lightweight in-memory cache for already-seen keys to avoid re-reading localStorage
+  const mindmapCacheRef = useMemo(() => new Map<string, any>(), []);
+  const docsCacheRef = useMemo(() => new Map<string, string>(), []);
+  const splitsCacheRef = useMemo(() => new Map<number, AnkiAnchor[]>(), []);
+
+  const fetchPremadeForKey = async (key: string) => {
+    try {
+      const res = await fetch('/premade-anki-data.json', { cache: 'force-cache' } as any);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (key.startsWith('surah-') || key.startsWith('part-') || key.startsWith('meta-')) {
+        if (data.mindmaps?.[key]) return { mindmap: data.mindmaps[key], docs: data.mindmapDocs?.[key], splits: null };
+        // For surah also check splits
+        const sid = Number(key.replace('surah-', ''));
+        if (Number.isFinite(sid) && data.splits?.[String(sid)]) {
+          return { mindmap: data.mindmaps?.[key] || null, docs: data.mindmapDocs?.[key] || null, splits: data.splits[String(sid)] };
+        }
+      }
+      return null;
+    } catch { return null; }
+  };
 
   useEffect(() => {
-    const loaded = loadSplits();
-    const mm = loadAnkiMindmaps() as any;
-    const docs = loadMindmapDocs();
-    const hasData = Object.keys(loaded).length > 0 || Object.keys(mm).length > 0;
-    if (!hasData) {
-      fetch('/premade-anki-data.json')
-        .then(r => r.json())
-        .then(data => {
-          let newSplits = loaded;
-          let hasNewSplits = false;
-          if (data.splits && typeof data.splits === 'object') {
-            const premadeSplits: Record<string, any> = {};
-            Object.entries(data.splits as Record<string, any>).forEach(([k, v]) => {
-              if (Array.isArray(v)) premadeSplits[k] = v;
-            });
-            if (Object.keys(premadeSplits).length > 0) {
-              try { localStorage.setItem('quran-life:anki:splits:v1', JSON.stringify(premadeSplits)); } catch {}
-              newSplits = premadeSplits as any;
-              hasNewSplits = true;
+    let cancelled = false;
+    (async () => {
+      // Start with cached or empty, show skeleton only if selected key not yet cached
+      const isSurah = selectedMindmapKey.startsWith('surah-');
+      const sid = isSurah ? Number(selectedMindmapKey.replace('surah-', '')) : NaN;
+
+      // Splits: try cache -> localStorage -> premade for this surah only
+      let currentAnchors: AnkiAnchor[] | null = null;
+      if (Number.isFinite(sid) && splitsCacheRef.has(sid)) {
+        currentAnchors = splitsCacheRef.get(sid)!;
+      } else if (Number.isFinite(sid)) {
+        const bySurah = getSplitsForSurah(sid, loadSplits());
+        if (bySurah.length > 0) {
+          currentAnchors = bySurah;
+          splitsCacheRef.set(sid, bySurah);
+        } else {
+          // Try premade for this surah only
+          const premade = await fetchPremadeForKey(selectedMindmapKey);
+          if (premade?.splits && Array.isArray(premade.splits)) {
+            const normalized = (premade.splits as any[]).map((a: any) => ({ id: a.id || `anchor-${sid}-${a.startVerse}-${a.endVerse}`, surahId: sid, startVerse: a.startVerse, endVerse: a.endVerse, label: a.label || `Verses ${a.startVerse}-${a.endVerse}` }));
+            if (normalized.length) {
+              try { localStorage.setItem('quran-life:anki:splits:v1', JSON.stringify({ ...loadSplits(), [sid]: normalized })); } catch {}
+              splitsCacheRef.set(sid, normalized);
+              currentAnchors = normalized;
             }
           }
-          if (data.mindmaps && typeof data.mindmaps === 'object') {
-            Object.entries(data.mindmaps as Record<string, any>).forEach(([k, v]) => {
-              if (v) saveAnkiMindmapByKey(k, v);
-            });
+        }
+      }
+
+      // Mindmap: cache -> localStorage single key -> premade single key
+      let currentMM: any = mindmapCacheRef.get(selectedMindmapKey) || null;
+      if (!currentMM) {
+        const local = getAnkiMindmapByKey(selectedMindmapKey) || (isSurah ? getAnkiMindmap(sid) : null);
+        if (local?.snapshot) {
+          currentMM = local;
+          mindmapCacheRef.set(selectedMindmapKey, local);
+        } else {
+          const premade = await fetchPremadeForKey(selectedMindmapKey);
+          if (premade?.mindmap) {
+            saveAnkiMindmapByKey(selectedMindmapKey, premade.mindmap);
+            currentMM = premade.mindmap;
+            mindmapCacheRef.set(selectedMindmapKey, premade.mindmap);
           }
-          if (data.mindmapDocs && typeof data.mindmapDocs === 'object') {
-            Object.entries(data.mindmapDocs as Record<string, string>).forEach(([k, v]) => saveMindmapDoc(k, v));
+        }
+      }
+
+      // Docs: cache -> localStorage single key -> premade single key
+      let currentDoc = docsCacheRef.get(selectedMindmapKey);
+      if (currentDoc === undefined) {
+        const localDoc = loadMindmapDocs()[selectedMindmapKey];
+        if (typeof localDoc === 'string') {
+          currentDoc = localDoc;
+          docsCacheRef.set(selectedMindmapKey, localDoc);
+        } else {
+          const premade = await fetchPremadeForKey(selectedMindmapKey);
+          if (typeof premade?.docs === 'string') {
+            saveMindmapDoc(selectedMindmapKey, premade.docs);
+            currentDoc = premade.docs;
+            docsCacheRef.set(selectedMindmapKey, premade.docs);
+          } else {
+            currentDoc = '';
+            docsCacheRef.set(selectedMindmapKey, '');
           }
-          setSplits(hasNewSplits ? (newSplits as any) : loaded);
-          setMindmaps(loadAnkiMindmaps() as any);
-          setMindmapDocs(loadMindmapDocs());
-          setIsAnkiDataLoaded(true);
-        })
-        .catch(() => {
-          setSplits(loaded);
-          setMindmaps(mm);
-          setMindmapDocs(docs);
-          setIsAnkiDataLoaded(true);
+        }
+      }
+
+      if (cancelled) return;
+
+      // Update state only for selected key (lazy) - keep other keys in cache, not in state
+      setMindmaps(prev => {
+        const next: any = { ...prev };
+        if (currentMM) next[selectedMindmapKey] = currentMM;
+        // Also keep surah-* alias for displayMindmap lookup
+        if (isSurah && currentMM) next[`surah-${sid}`] = currentMM;
+        return next;
+      });
+      setMindmapDocs(prev => {
+        const next: any = { ...prev };
+        if (currentDoc !== undefined) next[selectedMindmapKey] = currentDoc;
+        return next;
+      });
+      if (Number.isFinite(sid) && currentAnchors) {
+        // Update splits map lazily
+        setSplits(prev => {
+          const next = { ...prev };
+          if (currentAnchors && currentAnchors.length) next[sid] = currentAnchors!;
+          return next;
         });
-    } else {
-      setSplits(loaded);
-      setMindmaps(mm);
-      setMindmapDocs(docs);
+      } else if (!Number.isFinite(sid)) {
+        // For part/meta, ensure splits not needed but mark loaded
+        setSplits(prev => prev);
+      }
+
+      // Also do lightweight background merge for missing 77-114 only once per session (not on every switch)
+      // Use sessionStorage flag to avoid re-fetching whole premade on every tab switch
+      try {
+        const flag = sessionStorage.getItem('anki-premade-merged-v2');
+        if (!flag) {
+          sessionStorage.setItem('anki-premade-merged-v2', '1');
+          fetch('/premade-anki-data.json', { cache: 'force-cache' } as any)
+            .then(r => r.json())
+            .then(data => {
+              let hasNew = false;
+              const curMM = loadAnkiMindmaps() as any;
+              Object.entries(data.mindmaps || {}).forEach(([k, v]: any) => {
+                if (v && !curMM[k] && (k.startsWith('surah-') || k.startsWith('part-') || k.startsWith('meta-'))) {
+                  // Only cache, don't set state for all - will be loaded on demand
+                  mindmapCacheRef.set(k, v);
+                  saveAnkiMindmapByKey(k, v);
+                  hasNew = true;
+                }
+              });
+              if (hasNew) setMindmaps(loadAnkiMindmaps() as any);
+            })
+            .catch(() => {});
+        }
+      } catch {}
+
       setIsAnkiDataLoaded(true);
-      // Background merge for missing preconfigured mindmaps (77-114) when user already has data
-      fetch('/premade-anki-data.json')
-        .then(r => r.json())
-        .then(data => {
-          let hasNewMindmap = false;
-          if (data.mindmaps && typeof data.mindmaps === 'object') {
-            const currentMM = loadAnkiMindmaps() as any;
-            Object.entries(data.mindmaps as Record<string, any>).forEach(([k, v]) => {
-              if (v && !currentMM[k]) {
-                saveAnkiMindmapByKey(k, v);
-                hasNewMindmap = true;
-              }
-            });
-            if (hasNewMindmap) setMindmaps(loadAnkiMindmaps() as any);
-          }
-          let hasNewDoc = false;
-          if (data.mindmapDocs && typeof data.mindmapDocs === 'object') {
-            const currentDocs = loadMindmapDocs();
-            Object.entries(data.mindmapDocs as Record<string, string>).forEach(([k, v]) => {
-              if (typeof v === 'string' && !currentDocs[k]) {
-                saveMindmapDoc(k, v);
-                hasNewDoc = true;
-              }
-            });
-            if (hasNewDoc) setMindmapDocs(loadMindmapDocs());
-          }
-          if (data.splits && typeof data.splits === 'object') {
-            const currentSplits = loadSplits();
-            let newSplits: Record<string, any> = { ...currentSplits } as any;
-            let splitsUpdated = false;
-            Object.entries(data.splits as Record<string, any>).forEach(([k, v]) => {
-              const sid = Number(k);
-              if (Array.isArray(v) && !newSplits[sid] && Number.isFinite(sid)) {
-                newSplits[sid] = v;
-                splitsUpdated = true;
-              }
-            });
-            if (splitsUpdated) {
-              try { localStorage.setItem('quran-life:anki:splits:v1', JSON.stringify(newSplits)); } catch {}
-              setSplits(newSplits as any);
-            }
-          }
-        })
-        .catch(() => {});
-    }
-  }, []);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedMindmapKey, selectedSurah]);
 
   useEffect(() => {
     const current = getSplitsForSurah(selectedSurah, splits);
     if (current.length > 0) setAnchors(current);
     else setAnchors(ensureDefaultSplits(selectedSurah));
+    setShowAllVerses(false);
+    setShowPreview(false);
+    setIsViewerReady(false);
+    const t = setTimeout(() => setIsViewerReady(true), 120);
+    return () => clearTimeout(t);
   }, [selectedSurah, splits]);
 
   const surah = getSurah(selectedSurah);
@@ -187,10 +265,11 @@ export default function AnkiDeckTab() {
   const getDocKey = (k: string) => k;
   const getDocForKey = (k: string) => (mindmapDocs as any)[k] || '';
   const totalCardsPreview = useMemo(() => {
-    if (!allVerses.length) return 0;
-    const cards = buildAnkiCards(anchors, allVerses);
+    const versesForPreview = surahVerses.length ? surahVerses : allVerses;
+    if (!versesForPreview.length) return 0;
+    const cards = buildAnkiCards(anchors, versesForPreview);
     return cards.length;
-  }, [anchors, allVerses]);
+  }, [anchors, allVerses, surahVerses]);
 
   const allCardsCount = useMemo(() => {
     if (!allVerses.length) return 0;
@@ -208,7 +287,9 @@ export default function AnkiDeckTab() {
       const hasSplit = !!splits[s.id];
       if (!hasSplit) count += 1; // auto single group for surahs with mindmap but no splits
     });
-    return count;
+    // Add mindmap cards: one per surah/part/meta with snapshot
+    const mindmapCardCount = Object.keys(mindmaps).filter(k => (mindmaps as any)[k]?.snapshot).length;
+    return count + mindmapCardCount;
   }, [splits, allVerses, mindmaps]);
 
   const showToast = (msg: string) => {
@@ -306,16 +387,24 @@ export default function AnkiDeckTab() {
     setIsExporting(true);
     setExportProgress(0);
     try {
+      // Ensure all verses are loaded for export (lazy tab may only have surahVerses)
+      let versesForExport = allVerses;
+      if (!versesForExport.length) {
+        try { versesForExport = await getQuranVerses(); setAllVerses(versesForExport); } catch {}
+      }
       const docsMap = loadMindmapDocs();
+      // Use full splits/mindmaps from storage for export, not just lazy state's ones
+      const fullSplits = loadSplits();
+      const fullMindmaps = loadAnkiMindmaps() as any;
       const allAnchors: AnkiAnchor[] = [];
-      Object.entries(splits).forEach(([k, arr]) => allAnchors.push(...arr));
+      Object.entries(fullSplits).forEach(([k, arr]) => allAnchors.push(...(arr as any)));
       SURAHS.forEach(s => {
-        if (s.verseCount <= 10 && !splits[s.id]) {
+        if (s.verseCount <= 10 && !fullSplits[s.id]) {
           allAnchors.push({ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` });
         }
       });
       // Only export verse groups for surahs that have a mindmap (snapshot) linked — avoids referencing missing media
-      const mindmapKeys = new Set(Object.keys(mindmaps).filter(k => (mindmaps as any)[k]?.snapshot));
+      const mindmapKeys = new Set(Object.keys(fullMindmaps).filter(k => (fullMindmaps as any)[k]?.snapshot));
       // Also ensure every surah with a mindmap has at least one anchor (default whole-surah) even if no splits yet
       SURAHS.forEach(s => {
         const key = `surah-${s.id}`;
@@ -324,14 +413,15 @@ export default function AnkiDeckTab() {
         }
       });
       const filteredAnchors = allAnchors.filter(a => mindmapKeys.has(`surah-${a.surahId}`));
-      if (filteredAnchors.length === 0) {
-        showToast('No surah with a linked mindmap to export — create a mindmap first');
+      const mindmapCards = buildMindmapCards(fullMindmaps as any, docsMap);
+      if (filteredAnchors.length === 0 && mindmapCards.length === 0) {
+        showToast('No surah/part/meta with a linked mindmap to export — create a mindmap first');
         setIsExporting(false);
         return;
       }
-      const cards = buildAnkiCards(filteredAnchors, allVerses, { mindmapDocsMap: docsMap });
+      const cards = buildAnkiCards(filteredAnchors, versesForExport, { mindmapDocsMap: docsMap });
       setExportProgress(3);
-      const blob = await generateApkgBlob(cards, deckName, (p) => setExportProgress(p));
+      const blob = await generateApkgBlob(cards, deckName, (p) => setExportProgress(p), mindmapCards);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -340,7 +430,8 @@ export default function AnkiDeckTab() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showToast(`Exported ${cards.length} cards`);
+      const mindmapCardsCount = buildMindmapCards(mindmaps as any, docsMap).length;
+      showToast(`Exported ${cards.length} verse cards + ${mindmapCardsCount} mindmap cards`);
       if (withBackup) {
         const backup = { splits, mindmaps, mindmapDocs: docsMap, deckName, exportedAt: new Date().toISOString() };
         const bBlob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -453,9 +544,14 @@ export default function AnkiDeckTab() {
             ) : (
               <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with the drawing editor. This is optional.</p>
             )}
-            {displayMindmap?.snapshot && !isPartMeta && !showMindmapEditor && !showPartEditor && (
+            {displayMindmap?.snapshot && !isPartMeta && !showMindmapEditor && !showPartEditor && isViewerReady && (
               <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 220 }}>
                 <MindmapViewer snapshot={displayMindmap.snapshot} imageUrl={displayMindmap.imageUrl} imageUrlDark={displayMindmap.imageUrlDark} isDark={isDark} height="220px" />
+              </div>
+            )}
+            {displayMindmap?.snapshot && !isPartMeta && !showMindmapEditor && !showPartEditor && !isViewerReady && (
+              <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)] flex items-center justify-center" style={{ height: 220 }}>
+                <span className="text-xs text-[var(--foreground-secondary)]">Loading preview…</span>
               </div>
             )}
             {displayMindmap?.snapshot && isPartMeta && (
@@ -476,7 +572,7 @@ export default function AnkiDeckTab() {
                           <div className={`flex gap-3 ${showPreview ? 'items-start' : 'items-stretch'}`}>
                             <div className={`${showPreview ? 'w-[70%]' : 'w-full'} grid gap-2`}>
                               <div className="flex flex-wrap gap-1.5">
-                                {Array.from({ length: verseCount }, (_, i) => i + 1).map(v => {
+                                {(showAllVerses ? Array.from({ length: verseCount }, (_, i) => i + 1) : Array.from({ length: Math.min(verseCount, 60) }, (_, i) => i + 1)).map(v => {
                                   const isBreak = breaks.includes(v);
                                   const isLast = v === verseCount;
                                   return (
@@ -494,6 +590,16 @@ export default function AnkiDeckTab() {
                                     </div>
                                   );
                                 })}
+                                {verseCount > 60 && !showAllVerses && (
+                                  <button onClick={() => setShowAllVerses(true)} className="px-2 py-1 rounded-lg border border-dashed border-[var(--border)] text-xs bg-[var(--background)] hover:bg-[var(--verse-bg)]">
+                                    +{verseCount - 60} more
+                                  </button>
+                                )}
+                                {showAllVerses && verseCount > 60 && (
+                                  <button onClick={() => setShowAllVerses(false)} className="px-2 py-1 rounded-lg border text-xs bg-[var(--background)] hover:bg-[var(--verse-bg)]">
+                                    Show less
+                                  </button>
+                                )}
                               </div>
                               <div className="flex gap-2 mt-2">
                                 <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
@@ -502,10 +608,10 @@ export default function AnkiDeckTab() {
                             </div>
                             {showPreview && (
                               <div className="w-[30%] grid gap-1.5 max-h-[220px] overflow-y-auto border border-[var(--border)] rounded-lg p-1.5 bg-[var(--background)] content-start">
-                                {buildAnkiCards(anchors, allVerses).map((c, i) => (
+                                {buildAnkiCards(anchors, surahVerses.length ? surahVerses : allVerses).map((c, i) => (
                                   <div key={i} className="text-xs"><b>{c.startVerse}-{c.endVerse}</b> — {c.anchorLabel}</div>
                                 ))}
-                                {buildAnkiCards(anchors, allVerses).length === 0 && <div className="text-xs opacity-60">No groups</div>}
+                                {buildAnkiCards(anchors, surahVerses.length ? surahVerses : allVerses).length === 0 && <div className="text-xs opacity-60">No groups</div>}
                               </div>
                             )}
                           </div>
@@ -618,9 +724,9 @@ export default function AnkiDeckTab() {
           <div className="p-3 rounded-xl bg-[var(--verse-bg)] border border-[var(--border)]">
             <div className="font-medium mb-2">What will be exported:</div>
             <ul className="list-disc pl-5 space-y-1">
-              <li>{allCardsCount} verse groups</li>
-              <li>{Object.keys(mindmaps).filter(k=>k.startsWith('surah-')).length} Surah mindmaps</li>
-              <li>{Object.keys(mindmaps).filter(k=>k.startsWith('part-')||k.startsWith('meta-')).length} Part & Meta mindmaps</li>
+              <li>{allCardsCount} total cards ({allCardsCount - Object.keys(mindmaps).filter(k=>(mindmaps as any)[k]?.snapshot).length} verse groups + {Object.keys(mindmaps).filter(k=>(mindmaps as any)[k]?.snapshot).length} mindmap image cards)</li>
+              <li>{Object.keys(mindmaps).filter(k=>k.startsWith('surah-')).length} Surah mindmaps (each → verse groups + 1 mindmap card)</li>
+              <li>{Object.keys(mindmaps).filter(k=>k.startsWith('part-')||k.startsWith('meta-')).length} Part & Meta mindmaps (each → 1 mindmap card only)</li>
               <li>{Object.keys(mindmapDocs).length} notes</li>
             </ul>
           </div>

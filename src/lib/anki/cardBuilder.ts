@@ -69,7 +69,7 @@ export function buildAnkiCards(
 
     const tags: string[] = [];
     tags.push(`surah::${anchor.surahId}`);
-    tags.push(`range::${anchor.startVerse}-${anchor.endVerse}`);
+    tags.push('verse-group');
     if (relatedGroups.length > 0) tags.push('mutashabihat');
 
     const guid = `ql-${anchor.surahId}-${anchor.startVerse}-${anchor.endVerse}`;
@@ -100,4 +100,65 @@ export function buildAnkiCards(
 
 export function getVerseCountForSurah(surahId: number): number {
   return getSurah(surahId)?.verseCount || 0;
+}
+
+export function buildMindmapCards(
+  mindmaps: Record<string, any>,
+  mindmapDocsMap: Record<string, string> = {}
+): import('./types').AnkiMindmapCard[] {
+  const cards: import('./types').AnkiMindmapCard[] = [];
+  for (const [key, val] of Object.entries(mindmaps)) {
+    if (!val?.snapshot) continue;
+    // Only include surah/part/meta that have a mindmap (snapshot)
+    const kind = (val.kind as any) || (key.startsWith('surah-') ? 'surah' : key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : 'surah');
+    if (!['surah', 'part', 'meta'].includes(kind)) continue;
+
+    let title = '';
+    let surahId: number | undefined;
+    let partId: number | undefined;
+    const tags: string[] = ['mindmap'];
+
+    if (kind === 'surah') {
+      const sid = Number(val.surahId || key.replace('surah-', '')) || Number(key.replace('surah-', ''));
+      surahId = sid;
+      const surah = getSurah(sid);
+      title = surah ? `${surah.arabicName} - Surah ${sid} (${surah.name})` : `Surah ${sid}`;
+      tags.push(`surah::${sid}`, `mindmap::surah-${sid}`);
+    } else if (kind === 'part') {
+      const pid = Number(val.partId || key.replace('part-', '')) || 1;
+      partId = pid;
+      // Part ranges as in AnkiDeckTab
+      const partLabels: Record<number, string> = {
+        1: 'Part 1 - Surah 1-5',
+        2: 'Part 2 - Surah 6-9',
+        3: 'Part 3 - Surah 10-24',
+        4: 'Part 4 - Surah 25-33',
+        5: 'Part 5 - Surah 34-49',
+        6: 'Part 6 - Surah 50-66',
+        7: 'Part 7 - Surah 67-114',
+        8: 'All Quran',
+      };
+      title = partLabels[pid] || `Part ${pid}`;
+      tags.push(`part::${pid}`, `mindmap::part-${pid}`);
+    } else if (kind === 'meta') {
+      title = 'Meta Overview - All Parts';
+      tags.push('part::meta', 'mindmap::meta-0');
+    }
+
+    const docsKey = key;
+    const mindmapDocs = mindmapDocsMap[docsKey] || '';
+
+    cards.push({
+      id: `ql-mindmap-${key}`,
+      key,
+      kind: kind as any,
+      surahId,
+      partId,
+      title,
+      tags,
+      mindmapDocs,
+      mindmapImage: '', // filled at export time
+    });
+  }
+  return cards;
 }
