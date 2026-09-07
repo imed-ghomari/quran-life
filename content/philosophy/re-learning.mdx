@@ -1,29 +1,19 @@
-# Fixing Memory Gaps (Re-learning)
+# Fixing Memory Gaps
 
-> **Branch update (Anki):** The automatic **3-Strike suspend** is replaced by **Leech / Flag manual**. There is no automatic **Re-learning Phase** inside the app.
+Even with a perfect system, some verses will be harder to remember than others. When a group keeps causing mistakes, it needs extra attention.
 
-Even with a perfect system, some verses will be harder to remember than others. When a specific verse chunk fails multiple times, it needs re-learning.
+## How to Know a Group Needs Fixing
 
-## The 3-Strike Rule (Now Manual)
-
-Old app: If you made 3 errors in a row, anywhere inside the same verse group, the app would:
-
-1. **Suspend the verse group**: It was removed from your daily review queue.
-2. **Save your error**: It showed you the exact part of the verse group where the error happened whenever chunk-level context was available.
-
-**On this branch:**
-
-1. **Anki Leech**: Set Deck Options → Leech threshold **3**, Action **Tag Only**. After 3 **Again**, Anki adds tag `leech`.
-2. **Manual**: You can also add **Flag Red** or tag `error::similar` yourself when you feel stuck. No automatic suspension; you decide.
-3. **No chunk-level saved error**: The card's front is the whole group; after failing, review the group text and use **RelatedGroups** to see confusion source.
+If you keep marking the same group as not remembered, Anki will mark it for you so you know it needs fixing. You can also flag a card yourself when you feel stuck.
 
 ## How to Fix a Memory Gap
 
-When an item is flagged/leeched, follow these steps in the **Anki Deck** tab:
-- **Review Your Map**: Open **Edit Mindmap** for that Surah. Is the visual flow clear?
-- **Update the Map**: Add a more detailed image or a better "story" for that verse chunk.
-- **Refine the Split**: Use **Splits** → **Add anchor** / **Edit Splits** to split the difficult chunk into even smaller pieces, then **Save** and **Re-export** the surah.
+When a group needs fixing:
+
+- **Review Your Map**: Open the mindmap for that Surah. Is the visual flow clear?
+- **Update the Map**: Add a more detailed image or a better story for that part.
+- **Refine the Split**: If a group feels too long, split it into smaller pieces, save, and export again.
 
 ## Why This Matters
 
-This phase ensures you aren’t just “guessing” your way through reviews by building a solid, error-free foundation. Previously the app forced you to stop; now you make that call yourself via flag/leech and fix the underlying map/split before the next export.
+This step keeps you from just guessing through reviews. Fixing the map or split builds a solid foundation so the memory sticks.

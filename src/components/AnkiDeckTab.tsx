@@ -185,12 +185,12 @@ export default function AnkiDeckTab() {
       <div className="card">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold flex items-center gap-2"><Layers size={20} className="text-[var(--accent)]" /> Anki Deck Generator</h2>
-            <p className="text-sm text-[var(--foreground-secondary)] mt-1">Build verse-group cards with chunk reveal. Edit splits per surah, then export .apkg for Anki.</p>
+            <h2 className="text-xl font-bold flex items-center gap-2"><Layers size={20} className="text-[var(--accent)]" /> Anki Deck</h2>
+            <p className="text-sm text-[var(--foreground-secondary)] mt-1">Create your review cards. Choose how verses are grouped, then export to Anki.</p>
           </div>
           <div className="flex items-center gap-2">
             <label className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-2 cursor-pointer hover:bg-[var(--verse-bg)]">
-              <FileJson size={16} /> Import JSON <input type="file" accept=".json" className="hidden" onChange={e => e.target.files?.[0] && handleImportJson(e.target.files[0])} />
+              <FileJson size={16} /> Import backup <input type="file" accept=".json" className="hidden" onChange={e => e.target.files?.[0] && handleImportJson(e.target.files[0])} />
             </label>
           </div>
         </div>
@@ -219,7 +219,7 @@ export default function AnkiDeckTab() {
         <button onClick={handleExport} disabled={isExporting} className="mt-4 w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50">
           <Download size={18} /> {isExporting ? 'Generating...' : exportMode==='single' ? `Export Surah ${selectedSurah} (.apkg)` : 'Export Full Deck (.apkg)'}
         </button>
-        <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">First export works without changing splits. Re-export after editing a surah overwrites only that surah in Anki (keep due dates via stable guid).</p>
+        <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">You can export right away. If you edit a Surah later, export again — your progress in Anki will be kept.</p>
       </div>
 
       {/* Mindmap + Splits */}
@@ -234,9 +234,9 @@ export default function AnkiDeckTab() {
           </div>
         </div>
         {currentMindmap?.snapshot ? (
-          <p className="text-xs text-[var(--foreground-secondary)] mt-2">Mindmap saved locally. It will be included as preview in splits editor and exported as reference.</p>
+          <p className="text-xs text-[var(--foreground-secondary)] mt-2">Mindmap saved. It will be shown as a preview.</p>
         ) : (
-          <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with tldraw (same editor as main branch). Optional but helps with splitter preview.</p>
+          <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with the drawing editor. This is optional.</p>
         )}
         {currentMindmap?.snapshot && (
           <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 220 }}>
@@ -274,15 +274,14 @@ export default function AnkiDeckTab() {
                 </div>
               </div>
               <div>
-                <label className="text-xs opacity-70">Label (meaning anchor)</label>
+                <label className="text-xs opacity-70">Label</label>
                 <input value={a.label} onChange={e => handleAnchorChange(idx, { label: e.target.value })} className="w-full p-2 rounded-lg border border-[var(--border)] bg-[var(--background-secondary)] text-sm" placeholder={`Verses ${a.startVerse}-${a.endVerse}`} />
               </div>
-              <div className="text-xs text-[var(--foreground-secondary)]">ID: {a.id}</div>
             </div>
           ))}
         </div>
         <div className="mt-4 flex gap-2">
-          <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-2 rounded-xl border border-[var(--border)] text-sm flex items-center gap-1"><Eye size={14} /> {showPreview ? 'Hide' : 'Preview'} cards</button>
+          <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-2 rounded-xl border border-[var(--border)] text-sm flex items-center gap-1"><Eye size={14} /> {showPreview ? 'Hide' : 'Preview'} </button>
         </div>
         {showPreview && (
           <div className="mt-4 grid gap-2 max-h-96 overflow-y-auto border border-[var(--border)] rounded-xl p-2 bg-[var(--background-secondary)]">
@@ -290,17 +289,15 @@ export default function AnkiDeckTab() {
               <div key={i} className="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)]">
                 <div className="text-sm font-medium">{c.arabicName} {c.startVerse}-{c.endVerse} - {c.anchorLabel}</div>
                 <div className="text-xs opacity-70 mt-1">{c.verseTexts.join(' | ').slice(0,120)} {c.verseTexts.join(' ').length>120?'...':''}</div>
-                <div className="text-xs mt-1">Chunks: {c.chunks.map(arr=>arr.join(' / ')).join(' || ').slice(0,120)}</div>
-                {c.relatedGroups.length>0 && <div className="text-xs mt-1 opacity-70">Related: {c.relatedGroups.join(', ')}</div>}
-                <div className="text-xs mt-1">Tags: {c.tags.join(', ')}</div>
+                {c.relatedGroups.length>0 && <div className="text-xs mt-1 opacity-70">Similar to: {c.relatedGroups.join(', ')}</div>}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div className="text-center text-xs text-[var(--foreground-secondary)]">
-        <p>Generates verse-group cards with chunk reveal JS, context verses, and mutashabihat tags. Mindmap preview above is from your tldraw editor (same as main branch).</p>
+        <div className="text-center text-xs text-[var(--foreground-secondary)]">
+        <p>Your cards will show verses step by step with context. Similar verses are highlighted to help you tell them apart.</p>
       </div>
 
       {showMindmapEditor && (

@@ -1,58 +1,30 @@
-# Active Practice Hub
+# Anki Deck & Reviews
 
-> **Branch update (daily-portion-only + Anki):** The in-app **Practice Hub** with automatic queues is **replaced** by the **Anki Deck** tab + **Anki** itself. This doc is kept for reference but describes the old flow.
+This app does not have a review queue inside it. Your reviews happen in **Anki**.
 
-The Practice tab was the main working space for active memorization. It replaced the old habit of switching between a Today review view and a separate Todo/Kanban board.
+## Where Everything Lives
 
-## Queue Summary First (Old App)
+- **Daily Portion tab** — daily reading or listening. This is passive and stays in the app.
+- **Anki Deck tab** — this is where you prepare. Choose a Surah, create or edit its mindmap, adjust how its verses are split into groups, preview the cards, then export.
+- **Anki app** — this is where you review. After you import, Anki shows you cards when they are due.
 
-When you opened Practice, the review section started with a summary card. It showed three active queues:
+## Preparing in the Anki Deck Tab
 
-1. **Prep** — mindmaps or verse splits that need setup before they can become review material.
-2. **SRS** — due spaced-repetition review cards.
-3. **Repair** — suspended error cards and similarity checks created from review mistakes.
+For each Surah:
 
-Pressing **Begin practice** entered the active review flow.
+1. **Mindmap:** tap **Create Mindmap** or **Edit Mindmap** to draw. You can view it afterwards.
+2. **Splits:** use **Add anchor** to add a new group, edit the start and end verse and the label, then **Save**.
+3. **Preview:** check how the verses will appear as cards.
+4. **Export:** export a single Surah or the full deck, then import the file into Anki.
 
-## Adaptive Priority (Now in Anki)
+A Surah is ready when it has a mindmap (optional but recommended) and its verses are split into groups.
 
-Practice followed this order:
+## Reviewing in Anki
 
-1. If SRS cards were due, review them first.
-2. When SRS was clear, use the preparation queue for unfinished active-part mindmaps and splits.
-3. Repair cards sat after SRS so repeated errors and mutashabihat checks could be handled in context.
+Open Anki each day. Cards are shown when due. Try to recall before revealing the next part of the verse.
 
-This kept the learning pipeline in one place: **Preparation → Retrieval → Repair**.
+- **Remembered** — you recalled correctly.
+- **Not Remembered** — you made a mistake, you will see it sooner.
+- **Postpone** — skip for a day if you are unsure.
 
-**On this branch:**
-
-- **Preparation** → Do in **Anki Deck** tab: **Edit Mindmap** (tldraw) + **Edit Splits** (Add anchor / Save), preview cards, then **Export .apkg**.
-- **SRS** → Do in **Anki**: reviews sorted by Due Date with FSRS. No in-app counter.
-- **Repair** → Manual in **Anki**: flag red or let **Leech** (threshold 3 Tag Only) tag after 3 fails. No automatic Repair cards. Fix by editing mindmap in **Anki Deck** tab and re-exporting.
-
-## Preparation Queue (Now Anki Deck Tab)
-
-Preparation cards previously showed the item name and actions:
-
-- Create or edit the mindmap.
-- Change splits for Surah cards.
-- Open the relevant mindmap documentation.
-
-A mindmap became review-ready when it was marked complete, had mindmap content, and had usable splits. Short Surahs could still use the automatic single split where supported.
-
-**On this branch:** same actions live in **Anki Deck** tab per surah. Select Surah → **Edit Mindmap** / **View** → **Add anchor** → **Save**.
-
-## Remediation Queue (Now Manual)
-
-Repair work was created from review failures:
-
-- **Error cards** appeared when a verse group reached the repeated-error suspension threshold.
-- **Similarity cards** appeared from mutashabihat-related failed chunks.
-
-Repair cards showed their context inline. Their action buttons mirrored the old Kanban submenu.
-
-**On this branch:** No automatic Repair cards. Failures are handled by you: recognize if confusion was similar-verse related, add **Flag** / **tag `error::similar`**, and check **RelatedGroups** field on the card back to see which groups to contrast. Edit the mindmap to separate them visually.
-
-## Passive Consumption
-
-The Daily Portion remains, but now as its own **Daily Portion** tab (not inside Practice). It is separate from the Anki workflow but still part of the same daily workflow.
+To find cards that need fixing, use Anki's flags and tags. If a group keeps failing, go back to the **Anki Deck** tab, improve its mindmap or split it smaller, save, and export again.

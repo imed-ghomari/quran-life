@@ -1,42 +1,20 @@
-# Smart Review System (FSRS) - Now via Anki
+# How Reviews Work
 
-> **Branch update:** In-app Smart Reviews are replaced by **Anki Deck** + **Anki FSRS**. This doc describes the algorithm, which is the same on both sides.
+Reviews are managed by Anki using spaced repetition. You see cards just before you are about to forget them, so you remember longer with less effort.
 
-Quran Life uses the advanced **FSRS (Free Spaced Repetition Scheduler)** algorithm to manage your review schedule. FSRS is a modern, data-driven system that outperforms older algorithms (like SM-2). On this branch reviews happen in **Anki**; the card template bakes the same chunk reveal logic and Anki's Deck Options FSRS does the scheduling.
+## How a Review Feels
 
-## How Your Brain Remembers
+- **Step by Step:** Long verses are shown in small parts. Reveal the next part only after trying to recall it.
+- **Recall First:** Try to say the verse from memory before you reveal it.
+- **Grade Yourself:** After you have revealed the full group, choose Remembered, Not Remembered, or Postpone.
 
-Memories fade over time, but if you review information just as you are about to forget it, that memory becomes significantly stronger. FSRS calculates this “forgetting curve” precisely for every review item (verse group/mindmaps), ensuring minimal wasted effort through spaced repetition. This way, you don’t spend time reviewing what you already know well, and you don’t lose progress on what you’ve just learned—the app handles the “when,” so you can focus on the “what.”
+## Scheduling
 
-## The Review Process
+Anki decides when you see a card next. As you keep remembering a group, you see it less often — from days to weeks to months. If you mark it as not remembered, you will see it sooner.
 
-The smart system schedules reviews at optimal intervals to minimize your workload while maximizing retention. On this branch the front shows blurred chunks built at export time (by stop marks `ۘۙۚ` or max 10 words).
+If you change how a Surah is split into groups, that group has changed. Export that Surah again and re-import; Anki will treat it as an updated card.
 
-- **Step-by-Step Revelation**: Long verses are divided into smaller parts (same `src/lib/reviewVerseChunks.ts` logic, baked at export). The card's **Reveal** button unblurs next chunk. This helps you check recitation in small pieces.
-- **Recall, Don't Read**: The goal is to recall the verse from memory *before* clicking to reveal it.
-- **Grading Your Performance**: After revealing the verses, you have in-card buttons that map to Anki:
-    -   **Remembered** → Anki **Good** (increase interval)
-    -   **Not Remembered** → Anki **Again** (show sooner)
-    -   **Not Sure / Postpone** → Anki **Bury** (postpone by one day, without FSRS reset). Also available as Anki's native Bury.
--   **Anki Setup**: Deck Options → FSRS Enable, Desired Retention 0.90. Leech threshold 3 Tag Only replaces the old auto-suspend.
+## Tips
 
-## Efficient Learning
-
-FSRS is highly efficient. As you prove your mastery, you will see items much less often—eventually reaching a "Mastered" state where reviews occur years apart. This saves you hours of unnecessary review time in the long run.
-
-Note that there is an optimization mechanism that is triggered after a certain number of reviews to further customize the intervals for each user; however, this feature has not yet been enabled, pending further testing.
-
-## Why Reviews Sometimes Reset
-
-Occasionally, a review interval might be shortened or reset. This happens to ensure your memory stays perfectly aligned with the app:
-1. **Manual Changes**: If you manualy reset a mindmap or verse group in the knowledge tracking setting section.
-2. **Changing Verse Ranges**: If you change the start or end of a verse chunk by changing the splits in the splits configuration modal. This is necessary because the "chunk" you memorized has changed, therefore the app asks you to verify it again.
-3. **[Repeated Mistakes](/docs/philosophy/re-learning)**: If you mark "Not Remembered" multiple times, the system will naturally show that item more frequently until you've mastered it again.
-
-## Keyboard Shortcuts (Anki)
-
-For a faster and more focused review experience on desktop Anki, use:
-- **Space / Arrow Right**: Reveal the next verse chunk, or when fully revealed, mark as **Remembered/Good**.
-- **Arrow Left**: Mark as **Not Sure** / **Postpone** (Bury).
-- **Arrow Down / 1**: Mark as **Not Remembered** / **Again**.
-- Grading is via the in-card buttons that call `pycmd('ansGood')` etc., plus Anki's bottom bar. Template is set to show grading only after all chunks are revealed.
+- Be honest when grading. It keeps the schedule accurate.
+- Use **Space** to reveal the next part quickly on desktop.

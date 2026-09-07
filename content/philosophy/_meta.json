@@ -1,10 +1,10 @@
 {
-    "getting-started": "Getting Started",
-    "practice-hub": "Active Practice Hub",
+    "getting-started": "Getting Started (3 Tabs)",
+    "practice-hub": "Anki Deck & Reviews",
     "mindmap-strategy": "Mindmap Strategy",
-    "spaced-repetition": "Spaced Repetition",
-    "mutashabihat": "Mutashabihat",
-    "re-learning": "Re-Learning",
-    "statistics": "Statistics",
-    "settings": "Settings"
+    "spaced-repetition": "How Reviews Work",
+    "mutashabihat": "Similar Verses",
+    "re-learning": "Fixing Mistakes",
+    "statistics": "Tracking Progress",
+    "settings": "Settings & Daily Portion"
 }

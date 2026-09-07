@@ -1,39 +1,23 @@
-# Managing Similar Verses (Mutashabihat)
+# Similar Verses
 
-> **Branch update (Anki):** Similar detection is now **tag-based manual**, not automatic remediation queue. Cards carry tag `mutashabihat` if the group has any related groups.
+Similar Verses are verses that look or sound almost identical. They are one of the most common challenges in Quran memorization.
 
-**Similar Verses** (known technically as *Mutashabihat*) are verses that look or sound almost identical. They are one of the most common challenges in Quran memorization. Quran Life helps you tackle them head-on.
+## How the App Helps
 
-## Awareness During Review
-
-On this branch, cards with any mutashabihat carry tag `mutashabihat` and field `RelatedGroups` (e.g. `2:23 ~ 11:45`) listing up to 8 related groups. The card back shows this list, not word-range-filtered. The template bakes 5 context verses before start and shows 2 normally, expanding to 5 when `mutashabihat` is present. No automatic hints until similarity ends.
+During review, cards that have known similarities will show you which groups are related, so you can keep them apart. Some cards may show a little more context before the verse to help you remember which one it is.
 
 ## How to Approach Similarities
 
-You can handle similar verses in two main ways:
-
-1. **Reactive (Errors during Review - Manual)**: When you fail a card and recognize confusion with a similar verse, add **Flag Red** or tag `error::similar` yourself. This replaces the app automatically flagging similar verses in the **Practice** remediation queue. You decide if it was similar-related.
-
-2. **Proactive Study**: If you want to be thorough, search in Anki Browser `tag:mutashabihat` to see all groups with similarities. The builder bakes `RelatedGroups` at export time. No in-app [Settings](/docs/philosophy/settings) similarity list on this branch.
-
-## What the Similarity Count Means (Old App)
-
-When you saw a similarity card in **Practice**, the number was meant to answer: **How many comparison verses still need my attention right now?**
-
-That is why the app did **not** count every raw match. Instead, it focused on actionable ones:
-
-- **Ready now**: If the matching verse belonged to a Surah you already learned well enough.
-- **Not ready yet**: If that matching verse belonged to a Surah you have not reached yet.
-- **Still open**: If you have not solved that distinction yet.
-- **Already handled**: If you marked it resolved or chose to ignore it.
-
-**On this branch:** There is no dynamic count. Every card with any related group simply gets tag `mutashabihat`. To see how many are still flagged as errors, search Anki Browser `tag:mutashabihat tag:error::similar` or `flag:1`.
+1. **When you make a mistake**: If you failed because you confused two similar verses, mark the card so you can find it later and use the flag in Anki to keep track.
+2. **To study ahead**: You can search for all cards that have similarities to see what to pay attention to next.
 
 ## The Best Way to Distinguish
 
-When two verses are similar, it's tempting to use "tricks" (like remembering which letter comes first). However, we highly recommend using **logic**:
-- **Thematic Flow**: Understand *why* a specific word is used based on the theme of the Surah. Logic is much harder to forget than a simple trick.
-- **Visual Separation**: Place similar verses in different locations on your [Mindmap](/docs/philosophy/mindmap-strategy) to create a clear distinction in your mind.
+When two verses are similar, it's tempting to use small tricks like remembering which letter comes first. We recommend using **logic** instead:
+
+- **Thematic Flow**: Understand *why* a specific word is used based on the theme of the Surah.
+- **Visual Separation**: Place similar verses in different places on your mindmap to create a clear distinction.
 
 ## Why This Matters
-By addressing similar verses explicitly, you remove the "second-guessing" that often happens during recitation. Instead of being unsure, you make a conscious decision on how to tell them apart.
+
+By addressing similar verses directly, you remove the second-guessing that often happens during recitation and make a clear decision on how to tell them apart.

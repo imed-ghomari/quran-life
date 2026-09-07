@@ -67,9 +67,8 @@ export default function DocumentationTab() {
         <div className="flex items-center gap-2">
           <BookOpen size={16} className="text-[var(--accent)]" />
           <h2 className="font-semibold text-sm">Documentation</h2>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--verse-bg)] border border-[var(--border)] hidden md:inline">Same as main, updated for Anki</span>
         </div>
-        <a href="/docs" className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--verse-bg)] hidden md:block">Open /docs</a>
+        <span className="text-xs text-[var(--foreground-secondary)] hidden md:block">Guides to help you memorize</span>
       </div>
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
