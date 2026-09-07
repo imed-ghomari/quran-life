@@ -138,21 +138,20 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string): Pro
     // Instead we generate a zip with media and a TSV for manual import plus instructions
     // To create a valid .apkg we need sqlite - we fallback to a valid but minimal sqlite using sql.js if available
 
-    // Try dynamic sql.js
+    // Try dynamic sql.js - use local wasm for offline and to avoid CDN 500
     let SQL: any = null;
     try {
       const mod: any = await import('sql.js');
       const initSqlJs = mod.default || mod;
       SQL = await initSqlJs({
-        locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
+        locateFile: (file: string) => `/${file}`,
       });
     } catch (e) {
-      // sql.js not available, fallback to TSV zip
-      console.warn('sql.js not available, fallback to TSV zip', e);
-      return generateZipWithTsv(cards, deckName, JSZip);
+      console.warn('sql.js not available', e);
+      throw new Error('Failed to create Anki package. Please try again.');
     }
 
-    if (!SQL) return generateZipWithTsv(cards, deckName, JSZip);
+    if (!SQL) throw new Error('sql.js failed to init');
 
     const db = new SQL.Database();
     // Create minimal Anki schema (simplified, compatible with Anki 2.1)
