@@ -1,5 +1,5 @@
 'use client';
-import DailyPortion from '@/components/DailyPortion';
+import AppTabs from '@/components/AppTabs';
 export default function DashboardPage() {
-  return <DailyPortion />;
+  return <AppTabs />;
 }

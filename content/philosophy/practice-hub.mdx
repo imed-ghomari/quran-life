@@ -1,46 +1,58 @@
 # Active Practice Hub
 
-The Practice tab is the main working space for active memorization. It replaces the old habit of switching between a Today review view and a separate Todo/Kanban board.
+> **Branch update (daily-portion-only + Anki):** The in-app **Practice Hub** with automatic queues is **replaced** by the **Anki Deck** tab + **Anki** itself. This doc is kept for reference but describes the old flow.
 
-## Queue Summary First
+The Practice tab was the main working space for active memorization. It replaced the old habit of switching between a Today review view and a separate Todo/Kanban board.
 
-When you open Practice, the review section starts with a summary card. It shows three active queues:
+## Queue Summary First (Old App)
+
+When you opened Practice, the review section started with a summary card. It showed three active queues:
 
 1. **Prep** — mindmaps or verse splits that need setup before they can become review material.
 2. **SRS** — due spaced-repetition review cards.
 3. **Repair** — suspended error cards and similarity checks created from review mistakes.
 
-Press **Begin practice** to enter the active review flow. Use the back control in the Practice header to return to the summary.
+Pressing **Begin practice** entered the active review flow.
 
-## Adaptive Priority
+## Adaptive Priority (Now in Anki)
 
-Practice follows this order:
+Practice followed this order:
 
-1. If SRS cards are due, review them first.
-2. When SRS is clear, use the preparation queue for unfinished active-part mindmaps and splits.
-3. Repair cards sit after SRS so repeated errors and mutashabihat checks can be handled in context without opening a Kanban board.
+1. If SRS cards were due, review them first.
+2. When SRS was clear, use the preparation queue for unfinished active-part mindmaps and splits.
+3. Repair cards sat after SRS so repeated errors and mutashabihat checks could be handled in context.
 
-This keeps the learning pipeline in one place: **Preparation → Retrieval → Repair**.
+This kept the learning pipeline in one place: **Preparation → Retrieval → Repair**.
 
-## Preparation Queue
+**On this branch:**
 
-Preparation cards show the item name and the same actions that used to live in the Kanban card menu:
+- **Preparation** → Do in **Anki Deck** tab: **Edit Mindmap** (tldraw) + **Edit Splits** (Add anchor / Save), preview cards, then **Export .apkg**.
+- **SRS** → Do in **Anki**: reviews sorted by Due Date with FSRS. No in-app counter.
+- **Repair** → Manual in **Anki**: flag red or let **Leech** (threshold 3 Tag Only) tag after 3 fails. No automatic Repair cards. Fix by editing mindmap in **Anki Deck** tab and re-exporting.
+
+## Preparation Queue (Now Anki Deck Tab)
+
+Preparation cards previously showed the item name and actions:
 
 - Create or edit the mindmap.
 - Change splits for Surah cards.
 - Open the relevant mindmap documentation.
 
-A mindmap becomes review-ready when it is marked complete, has mindmap content, and has usable splits. Short Surahs can still use the automatic single split where supported by the app.
+A mindmap became review-ready when it was marked complete, had mindmap content, and had usable splits. Short Surahs could still use the automatic single split where supported.
 
-## Remediation Queue
+**On this branch:** same actions live in **Anki Deck** tab per surah. Select Surah → **Edit Mindmap** / **View** → **Add anchor** → **Save**.
 
-Repair work is created from review failures:
+## Remediation Queue (Now Manual)
 
-- **Error cards** appear when a verse group reaches the repeated-error suspension threshold.
-- **Similarity cards** appear from mutashabihat-related failed chunks.
+Repair work was created from review failures:
 
-Repair cards show their context inline so you can see why the item exists before taking action. Their action buttons mirror the old Kanban submenu: edit the mindmap, edit splits, open verse context, open similarity context, ignore similarity, or jump to similarity settings as appropriate.
+- **Error cards** appeared when a verse group reached the repeated-error suspension threshold.
+- **Similarity cards** appeared from mutashabihat-related failed chunks.
+
+Repair cards showed their context inline. Their action buttons mirrored the old Kanban submenu.
+
+**On this branch:** No automatic Repair cards. Failures are handled by you: recognize if confusion was similar-verse related, add **Flag** / **tag `error::similar`**, and check **RelatedGroups** field on the card back to see which groups to contrast. Edit the mindmap to separate them visually.
 
 ## Passive Consumption
 
-The Daily Portion remains on the Practice page as the passive consumption section. It is separate from the active review queue but still part of the same daily workflow.
+The Daily Portion remains, but now as its own **Daily Portion** tab (not inside Practice). It is separate from the Anki workflow but still part of the same daily workflow.

@@ -2,7 +2,7 @@ import { init } from '@instantdb/react';
 import { clientEnv } from '@/lib/env/client';
 import { schema } from '@/lib/instant-schema';
 
-export const APP_ID = clientEnv.NEXT_PUBLIC_INSTANT_APP_ID;
+export const APP_ID = clientEnv.NEXT_PUBLIC_INSTANT_APP_ID || '00000000-0000-0000-0000-000000000000';
 if (!APP_ID) {
   throw new Error('Missing NEXT_PUBLIC_INSTANT_APP_ID');
 }

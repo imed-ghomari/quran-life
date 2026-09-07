@@ -1,27 +1,33 @@
-# Tracking Your Progress (Statistics)
+# Tracking Your Progress
 
-The **Statistics** tab gives you a bird's-eye view of your memorization journey. It's designed to show you not just *how much* you've learned, but *how well* you know it.
+> **Branch update:** Verse/mindmap maturity and review forecast are now in **Anki Stats**, not the app's Statistics tab. Daily Portion progress stays in-app.
 
-## Understanding Memory Strength (Maturity)
+The **Statistics** tab previously gave you a bird's-eye view of your memorization journey. On this branch it is **not used** for verse reviews.
 
-We use **Maturity Levels** to show the strength of your memory for each verse chunk. The more times you successfully remember a verse, the "more mature" it becomes:
+## Understanding Memory Strength (Maturity) - Now in Anki
+
+Previously we used **Maturity Levels** to show the strength of your memory for each verse chunk. The more times you successfully remembered a verse, the "more mature" it became:
 - **New**: Recently started or recently forgotten (reviewed every 1-14 days).
 - **Medium**: Starting to stick in your long-term memory (reviewed every 14-30 days).
 - **Strong**: Very solid retention (reviewed every 30-90 days).
 - **Mastered**: Deeply encoded; you likely only need to see these once every few months.
 
-The legend under each chart shows you exactly how many items fall into each of these buckets.
+The legend under each chart showed you exactly how many items fell into each of these buckets.
 
-## What You Can Track
+**On this branch:** See **Anki → Stats** for retention, interval, maturity. Anki's FSRS Desired Retention and deck options drive this.
 
-- **Verse Progress**: See the maturity of the verses. You can toggle between viewing by "Chunks" (detailed) or "Surahs" (aggregated).
-- **Surah Mindmaps**: Track which Surahs have completed mindmaps and how mature those visual memories are.
+## What You Can Track (Old App)
+
+- **Verse Progress**: See the maturity of the verses. You could toggle between viewing by "Chunks" (detailed) or "Surahs" (aggregated).
+- **Surah Mindmaps**: Track which Surahs had completed mindmaps and how mature those visual memories were.
 - **Part Mindmaps**: A high-level view of your "Global" maps for entire Parts (Juz).
 - **Daily Portion**: Shows your progress through your listening/reading cycles (how many Surahs completed vs. remaining in the current cycle).
-- **Similar Verses (Mutashabihat)**: Tracks how many "Similar Verse" confusion points you have resolved (via Notes or Mindmaps) versus those still pending.
-- **Review Plan**: Forecasts your review load over time and includes a **Daily Load** reference line to help you see whether upcoming days are above or below your target pace.
-- **Daily Reviews**: A 180-day heatmap showing review consistency by day. It includes **Avg/Day** as a summary of your recent review rhythm.
-- **Weak Surahs**: Highlights Surahs with the highest **mistake counts** in the selected range. It counts both **mindmap** and **verse-group** review errors for each Surah.
+- **Similar Verses (Mutashabihat)**: Tracked how many "Similar Verse" confusion points you had resolved (via Notes or Mindmaps) versus those still pending.
+- **Review Plan**: Forecasted your review load over time and included a **Daily Load** reference line.
+- **Daily Reviews**: A 180-day heatmap showing review consistency by day.
+- **Weak Surahs**: Highlighted Surahs with the highest **mistake counts** in the selected range.
+
+**On this branch:** Keep **Daily Portion** progress in the app (still shows surahs completed vs remaining). For verse/review stats, use **Anki Stats** and Browser searches like `tag:leech` `tag:mutashabihat` `tag:error::similar`.
 
 ## Accuracy & Filters
-To give you the most accurate picture, the statistics are filtered by your **Active Part** and automatically exclude any Surahs you've marked as **Skipped** in the Settings.
+Previously the statistics were filtered by your **Active Part** and automatically excluded any Surahs you've marked as **Skipped** in the Settings. On this branch, Daily Portion stats still respect **Active Part** / **Skipped**; Anki stats respect whatever you suspended/tagged in Anki.

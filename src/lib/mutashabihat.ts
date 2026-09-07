@@ -1,5 +1,3 @@
-'use client';
-
 import phrasesRaw from '../../Mutashabihat ul Quran/phrases.json';
 import phraseVersesRaw from '../../Mutashabihat ul Quran/phrase_verses.json';
 import { SURAHS } from './quranData';

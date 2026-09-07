@@ -1,33 +1,33 @@
 # Managing Similar Verses (Mutashabihat)
 
+> **Branch update (Anki):** Similar detection is now **tag-based manual**, not automatic remediation queue. Cards carry tag `mutashabihat` if the group has any related groups.
+
 **Similar Verses** (known technically as *Mutashabihat*) are verses that look or sound almost identical. They are one of the most common challenges in Quran memorization. Quran Life helps you tackle them head-on.
 
 ## Awareness During Review
 
-To help during review, the app automatically identifies these verses and provide extra context—automatically showing more of the verse or giving hints—until the point where the similarity ends.
+On this branch, cards with any mutashabihat carry tag `mutashabihat` and field `RelatedGroups` (e.g. `2:23 ~ 11:45`) listing up to 8 related groups. The card back shows this list, not word-range-filtered. The template bakes 5 context verses before start and shows 2 normally, expanding to 5 when `mutashabihat` is present. No automatic hints until similarity ends.
 
 ## How to Approach Similarities
 
 You can handle similar verses in two main ways:
 
-1. **Reactive (Errors during Review)**: This is the most efficient way. The app automatically flags similar verses in the **Practice** remediation queue only when you make a mistake on a verse with a known similarity during a review. This ensures you only solve problems when they actually arise or become relevant.
+1. **Reactive (Errors during Review - Manual)**: When you fail a card and recognize confusion with a similar verse, add **Flag Red** or tag `error::similar` yourself. This replaces the app automatically flagging similar verses in the **Practice** remediation queue. You decide if it was similar-related.
 
-2. **Proactive Study**: If you want to be thorough, you can find a complete list of all similarities for your active part in the [Settings](/docs/philosophy/settings) tab.
+2. **Proactive Study**: If you want to be thorough, search in Anki Browser `tag:mutashabihat` to see all groups with similarities. The builder bakes `RelatedGroups` at export time. No in-app [Settings](/docs/philosophy/settings) similarity list on this branch.
 
-## What the Similarity Count Means
+## What the Similarity Count Means (Old App)
 
-When you see a similarity card in **Practice**, the number is meant to answer a simple question:
+When you saw a similarity card in **Practice**, the number was meant to answer: **How many comparison verses still need my attention right now?**
 
-**How many comparison verses still need my attention right now?**
+That is why the app did **not** count every raw match. Instead, it focused on actionable ones:
 
-That is why the app does **not** count every raw match in the dataset. Instead, it focuses on the ones that are actually actionable for you at the moment:
+- **Ready now**: If the matching verse belonged to a Surah you already learned well enough.
+- **Not ready yet**: If that matching verse belonged to a Surah you have not reached yet.
+- **Still open**: If you have not solved that distinction yet.
+- **Already handled**: If you marked it resolved or chose to ignore it.
 
-- **Ready now**: If the matching verse belongs to a Surah you already learned well enough, it can appear in the count.
-- **Not ready yet**: If that matching verse belongs to a Surah you have not reached yet, it stays out of the count for now.
-- **Still open**: If you have not solved that distinction yet, it stays in the count.
-- **Already handled**: If you marked it resolved or chose to ignore it, it drops out of the count.
-
-So in practice, the Practice repair number reflects **only the unlocked comparison verses that are still unresolved**. This keeps the card focused on what you can meaningfully work on now, instead of overwhelming you with every theoretical similarity.
+**On this branch:** There is no dynamic count. Every card with any related group simply gets tag `mutashabihat`. To see how many are still flagged as errors, search Anki Browser `tag:mutashabihat tag:error::similar` or `flag:1`.
 
 ## The Best Way to Distinguish
 

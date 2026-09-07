@@ -1,24 +1,26 @@
-# Managing Your Journey (Settings)
+# Managing Your Journey (Settings / Anki Deck)
 
-The **Settings** tab is the control center for your memorization plan. Here, you tell the app what you want to achieve and what you already know.
+> **Branch update:** Settings is split. **Daily Portion** settings stay in the app; **mindmaps/splits** moved to **Anki Deck** tab.
 
-## Define Your Scope
+The **Settings** tab is the control center for your daily reading, while the **Anki Deck** tab controls verse groups.
 
-- **Active Part (Juz)**: This is your current focus area. The app uses it to shape your **Daily Portion** and overall progression, while the **Practice** tab uses that scope for preparation and daily work. Quran Life currently uses a [7-part structure](/docs/mindmaps/part-0), and you can change your active part at any time as you progress.
+## Define Your Scope (Daily Portion Tab)
+
+- **Active Part (Juz)**: This is your current focus area. The app uses it to shape your **Daily Portion** and overall progression. Quran Life currently uses a [7-part structure](/docs/mindmaps/part-0), and you can change your active part at any time as you progress.
 - **Daily Portion Time**: How many minutes do you want to spend on your daily portion each day? Quran Life keeps that time target steady, then derives the cycle length from the currently eligible surahs in your Active Part. You can also reset your daily portion progress here if needed.
 
 ## Skipped Surah
 
-This section allows you to manage Surahs you want to exclude from your daily cycle and review section. You can unskip them at any time to add them back to your review queue.
+In Daily Portion settings you can still manage Surahs you want to exclude from your daily cycle. You can unskip them at any time. For Anki reviews, skip by **suspending** `tag:surah::X` in Anki Browser - there is no in-app review queue filter on this branch.
 
-## Knowledge Tracking
+## Knowledge Tracking (Now in Anki)
 
-This section allows you to quickly check or update the maturity of Surahs or mindmaps, individually or in bulk. You can also filter by their state for quick navigation.
+The old **Knowledge Tracking** section that let you bulk set maturity for Surahs/mindmaps is replaced. Track and update maturity via **Anki Browser** and Deck Options FSRS. The app no longer stores SM2/FSRS states.
 
-## Similar Coverage
+## Similar Coverage (Now in Anki)
 
-This section helps you identify Surahs that contain many "Similar Verses" (Mutashabihat). You can see which ones are causing confusion and prioritize them.
+The old **Similar Coverage** section that listed similarities per surah is replaced. In the **Anki Deck** tab each card bakes `RelatedGroups`, and in Anki you search `tag:mutashabihat` to find Surahs with many similar verses.
 
 ## Advanced options
 
-In this section, you can change some default behaviors of the app, such as review queue sorting, the default daily portion mode, and how completed mindmaps and verse groups participate in review.
+The old **Advanced options** (review queue sorting, default daily portion mode, how completed mindmaps and verse groups participate in review) are obsolete on this branch. Daily Portion mode stays in its tab; review sorting is **Anki Due Date**. How splits participate is decided by what you export in the **Anki Deck** tab.

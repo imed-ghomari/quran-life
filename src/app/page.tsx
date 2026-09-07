@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import DailyPortion from '@/components/DailyPortion';
+import AppTabs from '@/components/AppTabs';
 import { getSiteUrl } from '@/lib/siteUrl';
 
 export const metadata: Metadata = {
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <DailyPortion />;
+  return <AppTabs />;
 }
