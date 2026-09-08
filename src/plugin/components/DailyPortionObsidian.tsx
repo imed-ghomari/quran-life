@@ -4,18 +4,14 @@ import { useState, useEffect, useRef, useMemo, useCallback, startTransition } fr
 import { getQuranVerses, getSurah, getSurahsByPart, SURAHS } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import { Verse, ACTIVE_PART_OPTIONS, QuranPart, ALL_QURAN_PART } from '@/lib/types';
-import { CheckCircle, BookOpen, Settings, ChevronDown, X, Check, RotateCcw, Sliders, Headphones, Book } from 'lucide-react';
+import { CheckCircle, BookOpen, Check, RotateCcw, Headphones, Book } from 'lucide-react';
 import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks/useVaultDailyStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
 import {
   DEFAULT_DAILY_TARGET_MINUTES,
-  estimateVerseDurationMinutes,
   getProgressStartIndexFromEligibleSurahs,
-  getVerseKey,
 } from '@/lib/dailyPortionUtils';
-import PageSkeleton from '@/components/ui/PageSkeleton';
-import { useTheme } from '@/components/ThemeProvider';
 
 import AudioPlayerLocal from '@/components/AudioPlayerLocal';
 
@@ -34,19 +30,10 @@ function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
   return groups;
 }
 
-function getLocalDayKeyNow() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 export default function DailyPortionObsidian({ vaultStore }: { vaultStore: VaultStore }) {
   const { settings, saveSettings, isLoading: settingsLoading } = useVaultDailySettings(vaultStore);
   const { progress: listeningProgress, saveProgress, resetProgress, isLoading: progressLoading } = useVaultListeningProgress(vaultStore);
   const { averageSecondsPerWordBySurah } = useDailyPortionTiming();
-  const { theme } = useTheme();
 
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
   const [isVersesLoaded, setIsVersesLoaded] = useState(false);
@@ -54,7 +41,6 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [highlightedWordIndex, setHighlightedWordIndex] = useState<number>(-1);
   const [listeningComplete, setListeningComplete] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{ id: string; msg: string } | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
 
@@ -249,19 +235,6 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     setListeningComplete(false);
     showToast('Progress reset for this part.');
   };
-  const handleResetAll = async () => {
-    if (!confirm('Reset ALL progress? This will clear all parts.')) return;
-    await resetProgress();
-    setListeningComplete(false);
-    showToast('All progress reset.');
-  };
-
-  const toggleSurah = async (surahId: number) => {
-    const current = new Set(settings.skippedSurahs || []);
-    if (current.has(surahId)) current.delete(surahId);
-    else current.add(surahId);
-    await saveSettings({ skippedSurahs: Array.from(current) });
-  };
 
   const handlePartChange = async (partId: QuranPart) => {
     await saveSettings({ activePart: partId });
@@ -296,253 +269,161 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     }
   }, [currentVerseIndex, highlightedWordIndex]);
 
+  const openPluginSettings = useCallback(() => {
+    try {
+      const app: any = (vaultStore as any)?.app ?? (window as any).app;
+      if (app?.setting?.open) {
+        app.setting.open();
+        // try to open Quran Life tab
+        setTimeout(() => {
+          try { app.setting.openTabById?.('quran-life'); } catch {}
+        }, 150);
+      } else {
+        showToast('Open Settings → Quran Life → Daily Portion');
+      }
+    } catch { showToast('Open Settings → Quran Life → Daily Portion'); }
+  }, [vaultStore, showToast]);
+
   if (!isLoaded) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'50vh', flexDirection:'column', gap:8 }}>
-      <div style={{ width:24, height:24, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
-      <span style={{ fontSize:'0.85em', opacity:0.7 }}>Loading Quran data…</span>
-      <span style={{ fontSize:'0.75em', opacity:0.5 }}>If stuck, ensure QuranLife/assets/qpc-hafs-word-by-word.json exists (plugin copies it on first load) or check console.</span>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', flexDirection:'column', gap:10, padding:24 }}>
+      <div style={{ width:28, height:28, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+      <span style={{ fontSize:'0.9em', color:'var(--text-muted)' }}>Loading…</span>
     </div>
   );
   if (allVerses.length === 0) return (
-    <div style={{ padding:24, textAlign:'center' }}>
-      <p style={{ fontWeight:600 }}>Quran data not found</p>
-      <p style={{ fontSize:'0.85em', opacity:0.7, marginTop:4 }}>Daily portion needs Quran text. Expected at <code>QuranLife/assets/qpc-hafs-word-by-word.json</code> or plugin folder <code>.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json</code>.</p>
-      <p style={{ fontSize:'0.8em', opacity:0.6, marginTop:8 }}>The plugin copies it automatically on first launch (see <code>ensureDataRoot</code>). If this is first load, wait a second and reload view. Check <code>Developer Tools → Console</code> for <code>Failed to load quran JSON</code>.</p>
-      <button onClick={()=>window.location.reload()} style={{ marginTop:12, padding:'6px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)' }}>Reload</button>
+    <div style={{ padding:24, textAlign:'center', maxWidth:520, margin:'0 auto' }}>
+      <div style={{ padding:'20px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)' }}>
+        <p style={{ fontWeight:600, margin:'0 0 6px 0', color:'var(--text-normal)' }}>Quran data not found</p>
+        <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:'0 0 12px 0' }}>Missing <code>qpc-hafs-word-by-word.json</code></p>
+        <button onClick={()=>window.location.reload()} style={{ marginTop:14, padding:'6px 14px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--interactive-accent)', color:'var(--text-on-accent)', cursor:'pointer', fontWeight:600 }}>Reload</button>
+      </div>
     </div>
   );
 
+  // Obsidian-native inline styles helpers
+  const cardBase: React.CSSProperties = {
+    border: '1px solid var(--background-modifier-border)',
+    borderRadius: 12,
+    background: 'var(--background-secondary)',
+    padding: 16,
+  };
+
+  // Inject Obsidian-friendly overrides for AudioPlayerLocal (which uses web CSS vars)
+  const obsidianAudioCss = `
+    .quran-life-daily .audio-player { background: var(--background-secondary) !important; border: none !important; border-radius: 0 !important; padding: 10px 12px !important; }
+    .quran-life-daily .reciter-select-container { margin-bottom: 8px; }
+    .quran-life-daily .reciter-select { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 0.85em; }
+    .quran-life-daily .player-progress { height: 6px; background: var(--background-modifier-border); border-radius: 999px; overflow: hidden; margin: 8px 0; }
+    .quran-life-daily .progress-bar { height: 100%; background: transparent; }
+    .quran-life-daily .progress-fill { height: 100%; background: var(--interactive-accent); transition: width 0.2s; }
+    .quran-life-daily .player-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 4px; }
+    .quran-life-daily .time-display { font-size: 0.78em; color: var(--text-muted); font-weight: 500; }
+    .quran-life-daily .control-buttons { display: flex; gap: 6px; align-items: center; }
+    .quran-life-daily .control-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .quran-life-daily .play-btn { width: 40px; height: 40px; border-radius: 999px; border: none; background: var(--interactive-accent); color: var(--text-on-accent); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 700; }
+    .quran-life-daily .play-btn:disabled, .quran-life-daily .control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .quran-life-daily .speed-control { display: flex; gap: 6px; align-items: center; }
+    .quran-life-daily .speed-btn { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 0.78em; font-weight: 600; cursor: pointer; }
+    .quran-life-daily .audio-word { padding: 1px 3px; border-radius: 6px; }
+    .quran-life-daily .audio-word--active { background: var(--interactive-accent) !important; color: var(--text-on-accent) !important; box-shadow: 0 0 0 1px var(--interactive-accent-hover) !important; }
+  `;
+
   return (
-    <div className="content-wrapper">
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <BookOpen size={24} className="text-[var(--accent)]" />
-              Daily Portion
-            </h1>
-            <p className="text-sm text-[var(--foreground-secondary)] mt-1">
-              {eligibleSurahs.length > 0 ? (
-                <>
-                  {portionData.totalVerses} verses in scope • ~{Math.round(portionData.snappedMinutes)} min today • {portionData.derivedCompletionDays} day cycle
-                </>
-              ) : (
-                'No surahs selected'
-              )}
-            </p>
-          </div>
+    <div className="quran-life-daily" style={{ padding:'16px', maxWidth:720, margin:'0 auto', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
+      <style>{obsidianAudioCss}</style>
+      {/* Header — Obsidian native */}
+      <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:32, height:32, borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)' }}>
+            <BookOpen size={18} />
+          </span>
+          <h2 style={{ margin:0, fontSize:'1.35em', fontWeight:700, letterSpacing:'-0.01em' }}>Daily Portion</h2>
+          <span style={{ marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:999, background:'var(--background-modifier-border)', fontSize:'0.72em', fontWeight:600, color:'var(--text-muted)' }}>
+            {readOnlyMode ? <Book size={12}/> : <Headphones size={12}/>}
+            {readOnlyMode ? 'Reading' : 'Listening'} • {settings.dailyTargetMinutes} min/day
+          </span>
+        </div>
+        <div style={{ fontSize:'0.84em', color:'var(--text-muted)', lineHeight:1.4 }}>
+          {eligibleSurahs.length > 0 ? (
+            <span>{portionData.totalVerses} verses • ~{Math.round(portionData.snappedMinutes)} min • {portionData.derivedCompletionDays} days</span>
+          ) : (
+            <span>No surahs selected</span>
+          )}
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:2 }}>
           <button
-            onClick={() => setShowSettings(v => !v)}
-            className="p-2 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] hover:bg-[var(--verse-bg)] transition"
-            aria-label="Settings"
+            onClick={openPluginSettings}
+            style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500 }}
           >
-            <Settings size={20} />
+            Settings
           </button>
         </div>
+      </div>
 
-        {/* Settings Panel */}
-        {showSettings && (
-          <div className="card mb-6" style={{ animation: 'fadeUp 0.2s ease' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="flex items-center gap-2 text-base font-semibold">
-                <Sliders size={18} />
-                Configure Daily Portion
-              </h2>
-              <button onClick={() => setShowSettings(false)} className="p-1 rounded hover:bg-[var(--verse-bg)]">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="grid gap-6">
-              {/* Part selection */}
-              <div>
-                <label className="adv-label mb-2 block">Qur&apos;an Part</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {ACTIVE_PART_OPTIONS.map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => handlePartChange(opt.id)}
-                      className={`p-3 rounded-xl border text-sm font-medium transition text-left ${settings.activePart === opt.id ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)] bg-[var(--background)] hover:bg-[var(--verse-bg)]'}`}
-                    >
-                      <div className="font-semibold">{opt.name}</div>
-                      <div className="text-xs opacity-70">{getSurahsByPart(opt.id).length} surahs</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Daily target & mode */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="adv-label mb-2 block">Daily Target: {settings.dailyTargetMinutes} minutes</label>
-                  <input
-                    type="range"
-                    min={5}
-                    max={180}
-                    step={5}
-                    value={settings.dailyTargetMinutes}
-                    onChange={e => saveSettings({ dailyTargetMinutes: Number(e.target.value) })}
-                    className="w-full accent-[var(--accent)]"
-                  />
-                  <div className="flex justify-between text-xs text-[var(--foreground-secondary)]">
-                    <span>5 min</span>
-                    <span>~{portionData.derivedCompletionDays} days to complete</span>
-                    <span>180 min</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="adv-label mb-2 block">Mode</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => saveSettings({ dailyPortionMode: 'audio' })}
-                      className={`p-3 rounded-xl border flex items-center gap-2 justify-center font-medium ${settings.dailyPortionMode === 'audio' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
-                    >
-                      <Headphones size={16} /> Listening
-                    </button>
-                    <button
-                      onClick={() => saveSettings({ dailyPortionMode: 'reading' })}
-                      className={`p-3 rounded-xl border flex items-center gap-2 justify-center font-medium ${settings.dailyPortionMode === 'reading' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
-                    >
-                      <Book size={16} /> Reading
-                    </button>
-                  </div>
-                  {settings.dailyPortionMode === 'reading' && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => saveSettings({ dailyReadingStyle: 'paragraph' })}
-                        className={`p-2 rounded-lg border text-sm ${settings.dailyReadingStyle === 'paragraph' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
+      {/* Main content — differentiated player vs reader */}
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        {listeningComplete || eligibleSurahs.length === 0 ? (
+          <div style={{ ...cardBase, textAlign:'center', padding:'28px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            {listeningComplete ? (
+              <>
+                <span style={{ display:'inline-flex', padding:10, borderRadius:999, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
+                  <CheckCircle size={36} style={{ color:'var(--interactive-accent)' }} />
+                </span>
+                <p style={{ fontWeight:700, fontSize:'1.05em', margin:0 }}>Completed</p>
+                <p style={{ fontSize:'0.86em', color:'var(--text-muted)', margin:0, maxWidth:380 }}>Come back tomorrow.</p>
+                <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:8, width:'100%', maxWidth:360, alignItems:'stretch' }}>
+                  <button onClick={handleResetCurrent} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer', fontSize:'0.86em' }}>
+                    <RotateCcw size={14} /> Restart this part
+                  </button>
+                  {otherPartsWithContent.length > 0 && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6, textAlign:'left', padding:10, border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-primary)' }}>
+                      <span style={{ fontSize:'0.8em', color:'var(--text-muted)', fontWeight:600 }}>Or switch part</span>
+                      <select
+                        className="dropdown"
+                        style={{ width:'100%', padding:'6px 8px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)' }}
+                        value=""
+                        onChange={e => handlePartChange(Number(e.target.value) as QuranPart)}
                       >
-                        Paragraph
-                      </button>
-                      <button
-                        onClick={() => saveSettings({ dailyReadingStyle: 'line_by_line' })}
-                        className={`p-2 rounded-lg border text-sm ${settings.dailyReadingStyle === 'line_by_line' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
-                      >
-                        Line by Line
-                      </button>
+                        <option value="" disabled>Select a part…</option>
+                        {otherPartsWithContent.map(opt => (
+                          <option key={opt.id} value={opt.id}>{opt.name}</option>
+                        ))}
+                      </select>
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Surah selection */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="adv-label">Surahs in Portion ({eligibleSurahs.length}/{getSurahsByPart(settings.activePart).length} selected)</label>
-                  <div className="flex gap-2">
-                    <button onClick={() => saveSettings({ skippedSurahs: [] })} className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--verse-bg)]">Select All</button>
-                    <button onClick={() => saveSettings({ skippedSurahs: getSurahsByPart(settings.activePart).map(s => s.id) })} className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--verse-bg)]">Clear All</button>
-                  </div>
-                </div>
-                <div className="max-h-64 overflow-y-auto border border-[var(--border)] rounded-xl p-2 bg-[var(--background)] custom-scrollbar">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-                    {getSurahsByPart(settings.activePart).map(surah => {
-                      const isSkipped = (settings.skippedSurahs || []).includes(surah.id);
-                      const isSelected = !isSkipped;
-                      return (
-                        <label key={surah.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-[var(--verse-bg)] ${isSelected ? '' : 'opacity-60'}`}>
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleSurah(surah.id)} className="accent-[var(--accent)]" />
-                          <span className="text-sm flex-1">
-                            <span className="font-medium">{surah.id}. {surah.arabicName}</span>
-                            <span className="text-xs text-[var(--foreground-secondary)] ml-1">({surah.name} • {surah.verseCount}v)</span>
-                          </span>
-                          {isSelected && <Check size={14} className="text-[var(--accent)]" />}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-                <p className="text-xs text-[var(--foreground-secondary)] mt-2">Uncheck surahs you want to exclude from daily portions. Progress resets to handle new scope.</p>
-              </div>
-
-              {/* Reset */}
-              <div className="border-t border-[var(--border)] pt-4">
-                <label className="adv-label mb-2 block">Reset Progress</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleResetCurrent} className="p-3 rounded-xl border border-[var(--border)] hover:bg-[var(--verse-bg)] flex items-center justify-center gap-2 text-sm">
-                    <RotateCcw size={16} /> Reset This Part
-                  </button>
-                  <button onClick={handleResetAll} className="p-3 rounded-xl border border-[var(--danger)] text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white flex items-center justify-center gap-2 text-sm">
-                    <X size={16} /> Reset All Parts
-                  </button>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-[var(--foreground-secondary)]">
-                  <span>Current pointer:</span>
-                  <code className="px-2 py-1 rounded bg-[var(--verse-bg)] border border-[var(--border)]">{activeProgress?.nextStartVerseKey || '1:1 (start)'}</code>
-                  <span>• Cycle {activeProgress?.cycles || 0}</span>
-                </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <BookOpen size={36} style={{ opacity:0.45 }} />
+                <p style={{ fontWeight:600, margin:0 }}>No surahs</p>
+                <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:0 }}>Select surahs in Settings.</p>
+                <button onClick={openPluginSettings} style={{ marginTop:6, padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor:'pointer', fontWeight:600, fontSize:'0.85em' }}>
+                  Open Settings
+                </button>
+              </>
+            )}
           </div>
-        )}
-
-        {/* Daily Portion Card */}
-        <div className="card">
-          {listeningComplete || eligibleSurahs.length === 0 ? (
-            <div className="empty-state py-12 text-center">
-              {listeningComplete ? (
-                <>
-                  <CheckCircle size={48} className="mx-auto text-[var(--success)] mb-3" />
-                  <p className="font-semibold text-lg">Daily portion complete!</p>
-                  <p className="text-sm text-[var(--foreground-secondary)] mt-1">You&apos;ve finished today&apos;s reading. Come back tomorrow for the next portion.</p>
-                  <div className="mt-6 flex flex-col items-center gap-3">
-                    <button onClick={handleResetCurrent} className="px-4 py-2 rounded-xl border border-[var(--border)] text-sm flex items-center gap-2">
-                      <RotateCcw size={16} /> Restart Part
-                    </button>
-                    {otherPartsWithContent.length > 0 && (
-                      <div className="w-full max-w-xs">
-                        <p className="text-xs text-[var(--foreground-secondary)] mb-2">Or switch part:</p>
-                        <select
-                          className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm"
-                          value=""
-                          onChange={e => handlePartChange(Number(e.target.value) as QuranPart)}
-                        >
-                          <option value="" disabled>
-                            Select a part...
-                          </option>
-                          {otherPartsWithContent.map(opt => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <BookOpen size={48} className="mx-auto opacity-40 mb-3" />
-                  <p className="font-medium">No surahs selected</p>
-                  <p className="text-sm text-[var(--foreground-secondary)] mt-1">Select at least one surah in settings to generate a portion.</p>
-                  <button onClick={() => setShowSettings(true)} className="mt-4 px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-sm">
-                    Open Settings
-                  </button>
-                </>
-              )}
+        ) : (
+          <>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap', padding:'8px 12px', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-primary)', fontSize:'0.82em', color:'var(--text-muted)' }}>
+              <span><b style={{ color:'var(--text-normal)' }}>{todaysPortion.length} verses</b> {portionData.nextStartVerseKey ? <span>• Next {portionData.nextStartVerseKey}</span> : null}</span>
+              <span style={{ padding:'2px 8px', borderRadius:999, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', fontSize:'0.78em' }}>
+                {ACTIVE_PART_OPTIONS.find(o=>o.id===settings.activePart)?.name}
+              </span>
             </div>
-          ) : (
-            <>
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-sm text-[var(--foreground-secondary)]">
-                  <span className="font-medium text-[var(--foreground)]">{todaysPortion.length} verses</span>
-                  {portionData.startVerseKey && portionData.nextStartVerseKey && (
-                    <span className="ml-2">
-                      Next: {portionData.nextStartVerseKey}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-2 py-1 rounded-full bg-[var(--verse-bg)] border border-[var(--border)]">
-                    {settings.dailyPortionMode === 'audio' ? 'Listening' : 'Reading'} • {settings.dailyTargetMinutes} min/day
-                  </span>
-                </div>
-              </div>
 
-              {!readOnlyMode ? (
-                <div className="audio-mode-section">
-                  <div className="mb-3">
+            {!readOnlyMode ? (
+              <>
+                <div style={{ ...cardBase, background:'var(--background-primary)', borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'var(--interactive-accent)', color:'var(--text-on-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em' }}>
+                      <Headphones size={12} /> PLAYER
+                    </span>
+                    <span style={{ marginLeft:'auto', fontSize:'0.74em', color:'var(--text-muted)' }}>{currentVerseIndex+1} / {todaysPortion.length}</span>
+                  </div>
+                  {/* Audio player — Obsidian-native wrapper */}
+                  <div style={{ border:'1px solid var(--background-modifier-border)', borderRadius:10, overflow:'hidden', background:'var(--background-secondary)' }}>
                     <AudioPlayerLocal
                       verses={todaysPortion}
                       currentVerseIndex={currentVerseIndex}
@@ -551,96 +432,95 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       onWordIndexChange={handleAudioWordIndexChange}
                     />
                   </div>
-                  <div
-                    ref={verseContainerRef}
-                    className="verse-item daily-verse-preview p-4 border rounded-xl overflow-y-auto"
-                    style={{ maxHeight: '45vh', minHeight: '120px' }}
-                  >
-                    {currentDailyVerse && (
-                      <>
-                        <div className="verse-ref font-arabic text-sm opacity-70 mb-1">
-                          {getSurah(currentDailyVerse.surahId)?.arabicName} : {currentDailyVerse.ayahId}
-                        </div>
-                        {currentDailyVerse.ayahId === 1 ? (
-                          currentDailyVerse.surahId !== 1 &&
-                          currentDailyVerse.surahId !== 9 && (
-                            <div className="arabic-text text-center opacity-80 mb-2" style={{ fontSize: '1.1rem' }}>
-                              بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                            </div>
-                          )
-                        ) : currentVerseIndex === 0 ? (
-                          <div className="arabic-text text-center opacity-80 mb-2" style={{ fontSize: '1.1rem' }}>
-                            أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
-                          </div>
-                        ) : null}
-                        <div className="arabic-text" style={{ fontSize: '1.35rem', lineHeight: 2 }}>
-                          {dailyPreviewWords.map((word, i) => (
-                            <span
-                              key={i}
-                              ref={el => {
-                                wordElementRefs.current[i] = el;
-                              }}
-                              className={`audio-word ${i === highlightedWordIndex ? 'audio-word--active' : ''}`}
-                            >
-                              {word}{' '}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-xs text-[var(--foreground-secondary)]">
-                          <span>
-                            Verse {currentVerseIndex + 1} / {todaysPortion.length}
-                          </span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => setCurrentVerseIndex(v => Math.max(0, v - 1))}
-                              disabled={currentVerseIndex === 0}
-                              className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
-                            >
-                              Prev
-                            </button>
-                            <button
-                              onClick={() => setCurrentVerseIndex(v => Math.min(todaysPortion.length - 1, v + 1))}
-                              disabled={currentVerseIndex === todaysPortion.length - 1}
-                              className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
                 </div>
-              ) : (
-                <div className="read-view custom-scrollbar max-h-[60vh] overflow-y-auto pr-1">
+
+                {/* VERSE PREVIEW — reader preview for audio mode, visually distinct */}
+                <div
+                  ref={verseContainerRef}
+                  style={{
+                    border:'1px solid var(--background-modifier-border)',
+                    borderRadius:12,
+                    background:'var(--background-secondary)',
+                    padding:'16px',
+                    maxHeight:'42vh',
+                    minHeight:120,
+                    overflowY:'auto',
+                    display:'flex',
+                    flexDirection:'column',
+                    gap:8,
+                  }}
+                >
+                  {currentDailyVerse ? (
+                    <>
+                      <div style={{ fontSize:'0.78em', color:'var(--text-muted)', fontWeight:600, letterSpacing:'0.02em' }}>
+                        {getSurah(currentDailyVerse.surahId)?.arabicName} • Ayah {currentDailyVerse.ayahId}
+                      </div>
+                      {(currentDailyVerse.ayahId === 1 ? (currentDailyVerse.surahId !== 1 && currentDailyVerse.surahId !== 9) : currentVerseIndex === 0) ? (
+                        <div style={{ fontFamily:'var(--font-text, serif)', textAlign:'center', color:'var(--text-muted)', fontSize:'1.05em', padding:'4px 0', borderBottom:'1px dashed var(--background-modifier-border)', marginBottom:4 }}>
+                          {currentDailyVerse.ayahId === 1 ? 'بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ' : 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ'}
+                        </div>
+                      ) : null}
+                      <div style={{ fontFamily:'var(--font-text, serif)', fontSize:'1.45em', lineHeight:2, direction:'rtl', textAlign:'right', color:'var(--text-normal)' }}>
+                        {dailyPreviewWords.map((word, i) => (
+                          <span
+                            key={i}
+                            ref={el => { wordElementRefs.current[i] = el; }}
+                            style={{
+                              display:'inline-block',
+                              padding:'1px 3px',
+                              margin:'1px',
+                              borderRadius:6,
+                              background: i === highlightedWordIndex ? 'var(--interactive-accent)' : 'transparent',
+                              color: i === highlightedWordIndex ? 'var(--text-on-accent)' : 'inherit',
+                              boxShadow: i === highlightedWordIndex ? '0 0 0 1px var(--interactive-accent-hover)' : 'none',
+                              transition:'background 0.15s, color 0.15s',
+                            }}
+                          >
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ color:'var(--text-faint)', fontSize:'0.85em' }}>Select a verse</span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ ...cardBase, background:'var(--background-primary)', borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12, maxHeight:'62vh', overflow:'hidden' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, paddingBottom:8, borderBottom:'1px solid var(--background-modifier-border)' }}>
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
+                    <Book size={12} /> READER
+                  </span>
+                  <span style={{ fontSize:'0.76em', color:'var(--text-muted)', fontWeight:500 }}>{dailyReadingStyle === 'paragraph' ? 'Paragraph' : 'Line by line'}</span>
+                </div>
+                <div style={{ flex:1, overflowY:'auto', paddingRight:4, display:'flex', flexDirection:'column', gap:14, minHeight:0 }}>
                   {dailyReadingStyle === 'paragraph' ? (
                     dailyPortionSurahGroups.map((group, idx) => {
                       const surah = getSurah(group.surahId);
                       const firstVerse = group.verses[0];
                       if (!firstVerse) return null;
                       return (
-                        <div key={`${group.surahId}-${idx}`} className="mb-4">
+                        <div key={`${group.surahId}-${idx}`} style={{ display:'flex', flexDirection:'column', gap:8 }}>
                           {surah && (
-                            <div className="text-center py-3 my-2 bg-[var(--verse-bg)] rounded-lg">
-                              <h3 className="font-arabic" style={{ fontSize: '1.2rem' }}>
-                                {surah.arabicName}
-                              </h3>
+                            <div style={{ textAlign:'center', padding:'10px 8px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
+                              <div style={{ fontWeight:700, fontSize:'1.15em', color:'var(--text-normal)' }}>{surah.arabicName}</div>
+                              <div style={{ fontSize:'0.78em', color:'var(--text-muted)', marginTop:2 }}>{surah.name} • {surah.id} • {group.verses.length} verses</div>
                               {firstVerse.ayahId === 1 ? (
-                                surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
+                                surah.id !== 9 && surah.id !== 1 && <div style={{ marginTop:6, fontSize:'1.05em', color:'var(--text-muted)', fontFamily:'var(--font-text, serif)' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
                               ) : (
-                                <p className="arabic-text opacity-80" style={{ fontSize: '1.1rem' }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
+                                <div style={{ marginTop:6, fontSize:'1.05em', color:'var(--text-muted)', fontFamily:'var(--font-text, serif)' }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</div>
                               )}
                             </div>
                           )}
-                          <div className="verse-item" style={{ textAlign: 'right' }}>
-                            <div className="grouped-verse" style={{ fontSize: '1.05rem', lineHeight: 1.95, textAlign: 'justify', textAlignLast: 'right' as any }}>
-                              {group.verses.map(v => (
-                                <span key={`${v.surahId}-${v.ayahId}`} className="grouped-verse-block">
-                                  <span className="verse-badge" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{v.ayahId}</span>
-                                  <span className="grouped-verse-text arabic-text" style={{ fontSize: '1.25rem', lineHeight: 1.9 }}>{v.text}</span>
-                                </span>
-                              ))}
-                            </div>
+                          <div style={{ padding:'12px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8, textAlign:'justify', direction:'rtl', lineHeight:1.9 }}>
+                            {group.verses.map(v => (
+                              <span key={`${v.surahId}-${v.ayahId}`} style={{ display:'inline' }}>
+                                <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', minWidth:18, height:18, padding:'0 4px', margin:'0 4px 0 6px', borderRadius:999, background:'var(--background-modifier-border)', color:'var(--text-muted)', fontSize:'0.6em', fontWeight:700, verticalAlign:'middle' }}>{v.ayahId}</span>
+                                <span style={{ fontFamily:'var(--font-text, serif)', fontSize:'1.28em', color:'var(--text-normal)' }}>{v.text}</span>
+                                {' '}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       );
@@ -651,55 +531,65 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       const isNewSurah = !prev || prev.surahId !== v.surahId;
                       const surah = getSurah(v.surahId);
                       return (
-                        <div key={idx}>
+                        <div key={`${v.surahId}-${v.ayahId}-${idx}`} style={{ display:'flex', flexDirection:'column', gap:6 }}>
                           {isNewSurah && surah && (
-                            <div className="text-center py-3 my-2 bg-[var(--verse-bg)] rounded-lg">
-                              <h3 className="font-arabic" style={{ fontSize: '1.2rem' }}>{surah.arabicName}</h3>
+                            <div style={{ textAlign:'center', padding:'8px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
+                              <div style={{ fontWeight:700, fontSize:'1.05em' }}>{surah.arabicName}</div>
+                              <div style={{ fontSize:'0.78em', color:'var(--text-muted)' }}>{surah.name} • Surah {surah.id}</div>
                               {v.ayahId === 1 ? (
-                                surah.id !== 9 && surah.id !== 1 && <p className="arabic-text" style={{ fontSize: '1.1rem' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</p>
+                                surah.id !== 9 && surah.id !== 1 && <div style={{ marginTop:4, fontFamily:'var(--font-text, serif)', color:'var(--text-muted)' }}>بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
                               ) : (
-                                <p className="arabic-text opacity-80" style={{ fontSize: '1.1rem' }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</p>
+                                <div style={{ marginTop:4, fontFamily:'var(--font-text, serif)', color:'var(--text-muted)' }}>أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ</div>
                               )}
                             </div>
                           )}
-                          <div className="verse-item" style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'right' }}>
-                            <span className="verse-ref" style={{ float: 'left', fontSize: '0.7rem' }}>{v.ayahId}</span>
-                            <span className="arabic-text" style={{ fontSize: '1.25rem' }}>{v.text}</span>
+                          <div style={{ display:'flex', gap:10, alignItems:'baseline', padding:'10px 12px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8, direction:'rtl', textAlign:'right' }}>
+                            <span style={{ flex:1, fontFamily:'var(--font-text, serif)', fontSize:'1.28em', lineHeight:1.8, color:'var(--text-normal)' }}>{v.text}</span>
+                            <span style={{ flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:999, background:'var(--interactive-accent)', color:'var(--text-on-accent)', fontSize:'0.7em', fontWeight:700 }}>{v.ayahId}</span>
                           </div>
                         </div>
                       );
                     })
                   )}
                 </div>
-              )}
-
-              <div className="mt-6">
-                <button
-                  onClick={handleComplete}
-                  disabled={isCompleting}
-                  className="w-full py-3 rounded-xl bg-[var(--success)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50"
-                >
-                  <Check size={20} /> {isCompleting ? 'Saving...' : 'Mark Complete'}
-                </button>
-                <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">
-                  This advances to next portion. You can undo via browser back or reset in settings.
-                </p>
               </div>
-            </>
-          )}
-        </div>
+            )}
 
-        <div className="text-center mt-6 text-xs text-[var(--foreground-secondary)]">
-          <p>Works offline • Progress saved locally • PWA installable</p>
-          <p className="mt-1">Configure surahs, timing and mode in settings (gear icon).</p>
-        </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)' }}>
+              <button
+                onClick={handleComplete}
+                disabled={isCompleting}
+                style={{
+                  width:'100%',
+                  padding:'10px 14px',
+                  borderRadius:8,
+                  border:'none',
+                  background: isCompleting ? 'var(--background-modifier-border)' : 'var(--interactive-accent)',
+                  color: 'var(--text-on-accent)',
+                  fontWeight:700,
+                  fontSize:'0.95em',
+                  display:'inline-flex',
+                  alignItems:'center',
+                  justifyContent:'center',
+                  gap:8,
+                  cursor: isCompleting ? 'not-allowed' : 'pointer',
+                  opacity: isCompleting ? 0.7 : 1,
+                }}
+              >
+                <Check size={18} /> {isCompleting ? 'Saving…' : 'Mark Complete'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[var(--background-secondary)] border border-[var(--border)] shadow-lg rounded-xl px-4 py-2 text-sm flex items-center gap-2 z-50">
-          <CheckCircle size={16} className="text-[var(--success)]" /> {toast.msg}
+        <div style={{ position:'fixed', bottom:18, left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', boxShadow:'0 8px 24px rgba(0,0,0,0.14)', borderRadius:10, padding:'8px 14px', fontSize:'0.86em', display:'flex', alignItems:'center', gap:8, zIndex:50, color:'var(--text-normal)' }}>
+          <CheckCircle size={14} style={{ color:'var(--interactive-accent)' }} /> {toast.msg}
         </div>
       )}
+
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }

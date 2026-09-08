@@ -537,8 +537,42 @@ function MindmapEditorContent({
 
     useEffect(() => {
         if (!editor) return;
-        const colorScheme = theme === 'system' ? 'system' : theme;
-        editor.user.updateUserPreferences({ colorScheme });
+        const getObsidianTheme = () => {
+            if (typeof document === 'undefined') return null as 'light' | 'dark' | null;
+            if (document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')) return 'dark';
+            if (document.body.classList.contains('theme-light') || document.documentElement.classList.contains('theme-light')) return 'light';
+            return null;
+        };
+        const apply = () => {
+            const obs = getObsidianTheme();
+            let resolved: 'light' | 'dark' | 'system';
+            if (obs) resolved = obs;
+            else if (theme === 'system') {
+                const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+                resolved = mqDark ? 'dark' : 'light';
+            } else resolved = theme as 'light' | 'dark';
+            // Always force explicit light/dark, not system, when Obsidian theme is known
+            editor.user.updateUserPreferences({ colorScheme: resolved });
+        };
+        apply();
+        const observer = new MutationObserver(apply);
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        let mq: MediaQueryList | null = null;
+        let mqHandler: (() => void) | null = null;
+        if (!getObsidianTheme() && theme === 'system' && typeof window !== 'undefined' && window.matchMedia) {
+            mq = window.matchMedia('(prefers-color-scheme: dark)');
+            mqHandler = () => apply();
+            if (mq.addEventListener) mq.addEventListener('change', mqHandler);
+            else mq.addListener(mqHandler);
+        }
+        return () => {
+            observer.disconnect();
+            if (mq && mqHandler) {
+                if (mq.removeEventListener) mq.removeEventListener('change', mqHandler);
+                else mq.removeListener(mqHandler);
+            }
+        };
     }, [editor, theme]);
 
     useEffect(() => {

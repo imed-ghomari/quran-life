@@ -17,3 +17,6 @@ data.json
 /qpc-hafs-word-by-word.json
 /premade-anki-data.json
 tsconfig.tsbuildinfo
+.obsidian/
+obsidian-importer/
+recitations/

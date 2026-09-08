@@ -374,30 +374,203 @@ export class VaultStore {
   }
 
   // Migration helper: import legacy giant JSON (localStorage backup) into split files
+  // Handles multiple backup formats:
+  // - Web backup: { splits, mindmaps: { "surah-50": { snapshot } }, mindmapDocs, anki: { splits, mindmaps, ... } }
+  // - InstantDB export: { mindmaps: { "50": { tldrawSnapshot, anchors, surahId } }, partMindmaps: { "1": { tldrawSnapshot } } }
+  // - quran-mindmaps-restore.json: { mindmaps: { "50": { tldrawSnapshot } }, partMindmaps: {...} }
+  // Keys are normalized to vault format: surah-##, part-#, meta-0
   async migrateFromLegacyJson(legacy: any): Promise<{ splits: number; mindmaps: number; docs: number }> {
     let splits = 0, mindmaps = 0, docs = 0;
+
+    const isValidSnapshot = (snap: any) => snap && typeof snap === 'object' && snap.store && typeof snap.store === 'object';
+
+    const normalizeMindmapKey = (rawKey: string, val: any, kindHint?: string): string => {
+      const k = String(rawKey).trim();
+      if (k.startsWith('surah-') || k.startsWith('part-') || k.startsWith('meta-') || k.startsWith('cluster-')) return k;
+      if (k === 'timestamp' || k === '_isLargeData' || k === 'settings') return '';
+      // partHint overrides
+      if (kindHint === 'part') {
+        const num = Number(k);
+        if (Number.isFinite(num)) return num === 0 ? 'meta-0' : `part-${num}`;
+        return `part-${k}`;
+      }
+      if (kindHint === 'meta') return 'meta-0';
+      // numeric surah id
+      if (/^\d+$/.test(k)) {
+        const num = Number(k);
+        // If val indicates part (has partId or kind part/meta), treat as part
+        if (val && typeof val === 'object') {
+          if (val.kind === 'part' || val.kind === 'meta') return val.kind === 'meta' ? 'meta-0' : `part-${num}`;
+          if (typeof val.partId === 'number' && Number.isFinite(val.partId)) return val.partId === 0 ? 'meta-0' : `part-${val.partId}`;
+          if (typeof val.surahId === 'number' && Number.isFinite(val.surahId)) return `surah-${val.surahId}`;
+        }
+        if (num >= 1 && num <= 114) return `surah-${num}`;
+        // fallback part
+        if (num >= 1 && num <= 7) return `part-${num}`;
+        return `surah-${num}`;
+      }
+      return k;
+    };
+
+    const extractSnapshot = (val: any): any | null => {
+      if (!val || typeof val !== 'object') return null;
+      // Direct snapshot field
+      if (isValidSnapshot(val.snapshot)) return val.snapshot;
+      if (isValidSnapshot(val.tldrawSnapshot)) return val.tldrawSnapshot;
+      // val itself is a snapshot (has store)
+      if (isValidSnapshot(val)) return val;
+      // nested snapshot inside data?
+      if (isValidSnapshot(val.data)) return val.data;
+      // some backups store under 'snapshot' but as stringified?
+      if (typeof val.snapshot === 'string') {
+        try { const parsed = JSON.parse(val.snapshot); if (isValidSnapshot(parsed)) return parsed; } catch {}
+      }
+      if (typeof val.tldrawSnapshot === 'string') {
+        try { const parsed = JSON.parse(val.tldrawSnapshot); if (isValidSnapshot(parsed)) return parsed; } catch {}
+      }
+      return null;
+    };
+
+    const saveMindmapEntry = async (rawKey: string, val: any, kindHint?: string): Promise<boolean> => {
+      if (!val || typeof val !== 'object') return false;
+      // skip deleted entries
+      if (val.deletedAt) return false;
+      const snapshot = extractSnapshot(val);
+      if (!snapshot) return false;
+      const vaultKey = normalizeMindmapKey(rawKey, val, kindHint);
+      if (!vaultKey) return false;
+      const kind = vaultKey.startsWith('part-') ? 'part' : vaultKey.startsWith('meta-') ? 'meta' : vaultKey.startsWith('cluster-') ? 'cluster' : 'surah';
+      let surahId: number | undefined;
+      let partId: number | undefined;
+      if (kind === 'surah') {
+        const m = vaultKey.match(/surah-(\d+)/);
+        surahId = m ? Number(m[1]) : (typeof val.surahId === 'number' ? val.surahId : undefined);
+      } else if (kind === 'part') {
+        const m = vaultKey.match(/part-(\d+)/);
+        partId = m ? Number(m[1]) : (typeof val.partId === 'number' ? val.partId : undefined);
+      } else if (kind === 'meta') {
+        partId = 0;
+      }
+      const toSave: any = {
+        key: vaultKey,
+        kind,
+        snapshot,
+        isComplete: val.isComplete ?? true,
+        updatedAt: val.updatedAt ?? new Date().toISOString(),
+      };
+      if (Number.isFinite(surahId as number)) toSave.surahId = surahId;
+      if (Number.isFinite(partId as number)) toSave.partId = partId;
+      // Also handle description field for parts
+      if (typeof val.description === 'string') toSave.description = val.description;
+      try {
+        await this.saveMindmap(vaultKey, toSave);
+        return true;
+      } catch { return false; }
+    };
+
+    // 1. Splits directly from splits maps (web backup)
     const srcSplits = legacy?.splits || legacy?.anki?.splits || {};
-    for (const [k, v] of Object.entries(srcSplits as Record<string, any>)) {
-      const sid = Number(k);
-      if (Number.isFinite(sid) && Array.isArray(v) && v.length) {
-        await this.saveSplitsForSurah(sid, v as any[]);
-        splits++;
+    if (srcSplits && typeof srcSplits === 'object' && !Array.isArray(srcSplits)) {
+      for (const [k, v] of Object.entries(srcSplits as Record<string, any>)) {
+        const sid = Number(k);
+        if (Number.isFinite(sid) && Array.isArray(v) && v.length) {
+          try { await this.saveSplitsForSurah(sid, v as any[]); splits++; } catch {}
+        }
       }
     }
-    const srcMaps = legacy?.mindmaps || legacy?.anki?.mindmaps || {};
-    for (const [k, v] of Object.entries(srcMaps as Record<string, any>)) {
-      if (v?.snapshot) {
-        await this.saveMindmap(k, v);
-        mindmaps++;
+
+    // 2. Mindmaps from various sources — collect all candidates
+    const mindmapSources: Array<{ src: Record<string, any>; hint?: string }> = [];
+    if (legacy?.mindmaps && typeof legacy.mindmaps === 'object' && !Array.isArray(legacy.mindmaps)) mindmapSources.push({ src: legacy.mindmaps, hint: 'surah' });
+    if (legacy?.anki?.mindmaps && typeof legacy.anki.mindmaps === 'object' && !Array.isArray(legacy.anki.mindmaps)) mindmapSources.push({ src: legacy.anki.mindmaps, hint: 'surah' });
+    if (legacy?.partMindmaps && typeof legacy.partMindmaps === 'object' && !Array.isArray(legacy.partMindmaps)) mindmapSources.push({ src: legacy.partMindmaps, hint: 'part' });
+    if (legacy?.anki?.partMindmaps && typeof legacy.anki.partMindmaps === 'object') mindmapSources.push({ src: legacy.anki.partMindmaps, hint: 'part' });
+    // Some InstantDB backups nest under 'mindmaps' with numeric keys plus partMindmaps separate — already handled
+    // Also handle case where legacy itself is a mindmaps dict (user pasted raw mindmaps object)
+    if (!mindmapSources.length && legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
+      // heuristic: if top-level keys look like "50","51" with tldrawSnapshot, treat legacy itself as mindmaps map
+      const keys = Object.keys(legacy);
+      const looksLikeMindmapDict = keys.every(k => /^\d+$/.test(k)) && keys.length > 0 && typeof (legacy as any)[keys[0]]?.tldrawSnapshot === 'object';
+      if (looksLikeMindmapDict) mindmapSources.push({ src: legacy as Record<string, any>, hint: 'surah' });
+    }
+
+    const seenMindmapKeys = new Set<string>();
+    for (const { src, hint } of mindmapSources) {
+      for (const [k, v] of Object.entries(src as Record<string, any>)) {
+        if (k === 'timestamp' || k === '_isLargeData' || k === 'settings' || k === 'exportedAt' || k === 'version' || k === 'deckName') continue;
+        if (!v || typeof v !== 'object') continue;
+        // Deduplicate: same vaultKey from top-level and anki (they are duplicates in v2 backups)
+        const vaultKeyPreview = normalizeMindmapKey(k, v, hint);
+        if (vaultKeyPreview && seenMindmapKeys.has(vaultKeyPreview)) continue;
+        const saved = await saveMindmapEntry(k, v, hint);
+        if (saved) {
+          mindmaps++;
+          if (vaultKeyPreview) seenMindmapKeys.add(vaultKeyPreview);
+        }
+        // 2b. Also extract anchors as splits (InstantDB backups store splits inside mindmap.anchors)
+        if (Array.isArray((v as any).anchors) && (v as any).anchors.length) {
+          const anchors = (v as any).anchors as any[];
+          // Determine surahId for splits
+          let sid: number | undefined;
+          if (typeof (v as any).surahId === 'number' && Number.isFinite((v as any).surahId)) sid = (v as any).surahId;
+          else {
+            const maybe = Number(k);
+            if (Number.isFinite(maybe) && maybe >= 1 && maybe <= 114) sid = maybe;
+            else {
+              const m = String(k).match(/surah-(\d+)/);
+              if (m) sid = Number(m[1]);
+            }
+          }
+          if (sid && sid >= 1 && sid <= 114) {
+            try {
+              const existing = await this.loadSplitsForSurah(sid);
+              if (!existing || existing.length === 0) {
+                await this.saveSplitsForSurah(sid, anchors);
+                // Count only if not already counted from srcSplits
+                const srcKey = String(sid);
+                const alreadyCounted = srcSplits && (srcSplits[srcKey] || srcSplits[sid as any]);
+                if (!alreadyCounted) splits++;
+              }
+            } catch {}
+          }
+        }
       }
     }
-    const srcDocs = legacy?.mindmapDocs || legacy?.anki?.mindmapDocs || {};
-    for (const [k, v] of Object.entries(srcDocs as Record<string, string>)) {
-      if (typeof v === "string" && v.trim()) {
-        await this.saveDoc(k, v);
-        docs++;
+
+    // 3. Docs — dedupe keys (top-level and anki are duplicates in v2)
+    const docSources: Array<Record<string, any>> = [];
+    if (legacy?.mindmapDocs && typeof legacy.mindmapDocs === 'object' && !Array.isArray(legacy.mindmapDocs)) docSources.push(legacy.mindmapDocs);
+    if (legacy?.anki?.mindmapDocs && typeof legacy.anki.mindmapDocs === 'object') docSources.push(legacy.anki.mindmapDocs);
+    if (legacy?.docs && typeof legacy.docs === 'object') docSources.push(legacy.docs);
+    const seenDocKeys = new Set<string>();
+    for (const srcDocs of docSources) {
+      for (const [k, v] of Object.entries(srcDocs as Record<string, string>)) {
+        if (seenDocKeys.has(k)) continue;
+        if (typeof v === 'string' && v.trim()) {
+          try { await this.saveDoc(k, v); docs++; seenDocKeys.add(k); } catch {}
+        }
       }
     }
+
+    // 4. Listening progress (optional) — migrate listeningProgress array to per-part files if present
+    // Backup may have listeningProgress: [{ partId, lastVerseIndex, nextStartVerseKey, cycles, updatedAt }]
+    const lp = legacy?.listeningProgress || legacy?.daily?.progress || legacy?.progress;
+    if (Array.isArray(lp)) {
+      for (const entry of lp as any[]) {
+        if (!entry || typeof entry !== 'object') continue;
+        const pid = Number(entry.partId);
+        if (!Number.isFinite(pid)) continue;
+        try { await this.saveProgress(pid, entry); } catch {}
+      }
+    } else if (lp && typeof lp === 'object' && !Array.isArray(lp)) {
+      // sometimes stored as { "1": {...}, "2": {...} }
+      for (const [k, v] of Object.entries(lp as Record<string, any>)) {
+        const pid = Number(k);
+        if (!Number.isFinite(pid)) continue;
+        try { await this.saveProgress(pid, { partId: pid, ...(v as any) }); } catch {}
+      }
+    }
+
     return { splits, mindmaps, docs };
   }
 }

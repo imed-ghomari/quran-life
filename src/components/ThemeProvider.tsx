@@ -14,19 +14,39 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function getObsidianTheme(): 'light' | 'dark' | null {
+    if (typeof document === 'undefined') return null;
+    if (document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')) return 'dark';
+    if (document.body.classList.contains('theme-light') || document.documentElement.classList.contains('theme-light')) return 'light';
+    // also check parent for obsidian workspace class
+    if (document.body.classList.contains('is-mobile')) {
+        // mobile may still have theme classes
+        if (document.body.classList.contains('theme-dark')) return 'dark';
+        if (document.body.classList.contains('theme-light')) return 'light';
+    }
+    return null;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const APP_THEME_KEY = 'theme';
     const APP_ACCENT_THEME_KEY = 'accent-theme';
     const [theme, setThemeState] = useState<Theme>('system');
     const [accentTheme, setAccentThemeState] = useState<AccentTheme>('default');
     const [hydrated, setHydrated] = useState(false);
+    const [obsidianTheme, setObsidianTheme] = useState<'light' | 'dark' | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
         setHydrated(true);
-        const stored = localStorage.getItem(APP_THEME_KEY) as Theme | null;
-        if (stored && ['light', 'dark', 'system'].includes(stored)) {
-            setThemeState(stored);
+        const obs = getObsidianTheme();
+        if (obs) {
+            setObsidianTheme(obs);
+            setThemeState(obs);
+        } else {
+            const stored = localStorage.getItem(APP_THEME_KEY) as Theme | null;
+            if (stored && ['light', 'dark', 'system'].includes(stored)) {
+                setThemeState(stored);
+            }
         }
         const storedAccent = localStorage.getItem(APP_ACCENT_THEME_KEY) as AccentTheme | null;
         if (storedAccent && ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'].includes(storedAccent)) {
@@ -34,24 +54,49 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    // Watch Obsidian theme changes (body class mutation)
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        const check = () => {
+            const obs = getObsidianTheme();
+            if (obs) {
+                setObsidianTheme(obs);
+                setThemeState(prev => (prev === obs ? prev : obs));
+            } else {
+                setObsidianTheme(null);
+            }
+        };
+        check();
+        const observer = new MutationObserver(check);
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        // also listen to Obsidian's theme change via matchMedia when not in Obsidian
+        return () => observer.disconnect();
+    }, []);
+
     useEffect(() => {
         if (typeof window === 'undefined' || !hydrated) return;
         const root = window.document.documentElement;
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
         const applyTheme = () => {
-            const resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
+            const obs = obsidianTheme ?? getObsidianTheme();
+            let resolved: 'light' | 'dark';
+            if (obs) resolved = obs;
+            else resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme as 'light' | 'dark';
             root.setAttribute('data-theme', resolved);
-            localStorage.setItem(APP_THEME_KEY, theme);
+            // Only persist when not controlled by Obsidian
+            if (!obs) localStorage.setItem(APP_THEME_KEY, theme);
         };
         applyTheme();
-        const handler = () => { if (theme === 'system') applyTheme(); };
+        const handler = () => { if (!obsidianTheme && theme === 'system') applyTheme(); };
         if (mq.addEventListener) {
             mq.addEventListener('change', handler);
             return () => mq.removeEventListener('change', handler);
         }
+        // @ts-ignore legacy
         mq.addListener(handler);
         return () => mq.removeListener(handler);
-    }, [theme, hydrated]);
+    }, [theme, hydrated, obsidianTheme]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !hydrated) return;
@@ -72,11 +117,9 @@ export function useTheme() {
     if (context === undefined) {
         // Obsidian fallback: derive from Obsidian's body class or system preference
         // This makes MindmapEditor and DailyPortion work inside Obsidian ItemView without requiring explicit ThemeProvider wrapper
-        const isObsidianDark = typeof document !== 'undefined'
-            ? document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')
-            : false;
+        const obs = getObsidianTheme();
         const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
-        const resolved: Theme = isObsidianDark || mqDark ? 'dark' : 'light';
+        const resolved: Theme = obs ?? (mqDark ? 'dark' : 'light');
         return {
             theme: resolved,
             setTheme: () => {},

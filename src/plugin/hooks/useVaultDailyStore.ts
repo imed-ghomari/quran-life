@@ -90,6 +90,12 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
   const [settings, setSettingsState] = useState<LocalDailySettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
+  const reload = useCallback(async () => {
+    const raw = await vaultStore.loadSettings<any>(null as any);
+    setSettingsState(raw ? parseSettings(raw) : { ...DEFAULT_SETTINGS });
+    setIsLoading(false);
+  }, [vaultStore]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -101,6 +107,28 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
     return () => { cancelled = true; };
   }, [vaultStore]);
 
+  // Listen for external changes from Settings tab (hidden file not triggering vault.on)
+  useEffect(() => {
+    const handler = () => { void reload(); };
+    window.addEventListener('quran-life:daily-settings-changed', handler as any);
+    // Also poll on visibility change (user switches back from Settings)
+    const visHandler = () => { if (document.visibilityState === 'visible') void reload(); };
+    document.addEventListener('visibilitychange', visHandler);
+    // Listen to Obsidian vault modify for visible path fallback
+    const app: any = (vaultStore as any)?.app;
+    let ref: any = null;
+    if (app?.vault?.on) {
+      ref = app.vault.on('modify', (file: any) => {
+        if (file?.path && file.path.endsWith('settings.json')) void reload();
+      });
+    }
+    return () => {
+      window.removeEventListener('quran-life:daily-settings-changed', handler as any);
+      document.removeEventListener('visibilitychange', visHandler);
+      if (ref && app?.vault?.offref) try { app.vault.offref(ref); } catch {}
+    };
+  }, [vaultStore, reload]);
+
   const saveSettings = useCallback(async (patch: Partial<LocalDailySettings>) => {
     setSettingsState(prev => {
       const next: LocalDailySettings = { ...prev, ...patch } as LocalDailySettings;
@@ -108,7 +136,9 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
       if (patch.dailyTargetMinutes !== undefined) next.dailyTargetMinutes = clampDailyTargetMinutes(Number(patch.dailyTargetMinutes));
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) next.activePart = prev.activePart;
       const payload = { ...next, updatedAt: new Date().toISOString() };
-      void vaultStore.saveSettings(payload);
+      void vaultStore.saveSettings(payload).then(() => {
+        try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch {}
+      });
       return payload;
     });
   }, [vaultStore]);
@@ -117,9 +147,10 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
     const next = { ...DEFAULT_SETTINGS, updatedAt: new Date().toISOString() };
     setSettingsState(next);
     await vaultStore.saveSettings(next);
+    try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch {}
   }, [vaultStore]);
 
-  return useMemo(() => ({ settings, saveSettings, resetSettings, isLoading }), [settings, saveSettings, resetSettings, isLoading]);
+  return useMemo(() => ({ settings, saveSettings, resetSettings, isLoading, reload }), [settings, saveSettings, resetSettings, isLoading, reload]);
 }
 
 export function useVaultListeningProgress(vaultStore: VaultStore) {

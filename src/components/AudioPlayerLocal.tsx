@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { PlaybackSpeed, Verse } from '@/lib/types';
-import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse } from '@/lib/audio';
+import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl } from '@/lib/audio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -301,13 +301,20 @@ export default function AudioPlayerLocal({
             if (audioRef.current) { audioRef.current.pause(); audioRef.current.removeAttribute('src'); audioRef.current.load(); }
             setIsPlaying(false); setIsAudioPreparing(false); setIsAudioReady(false); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; pendingSeekTimeRef.current = null; configuredTrackKeyRef.current = ''; return;
         }
-        const url = info.url;
+        const rawUrl = info.url;
         const startTime = info.startTime || 0;
         const endTime = info.endTime || null;
         const segments = sortSegmentsByStart(info.segments || null);
-        if (url) {
-            let usedSeamlessSurahAdvance = false;
-            if (audioRef.current) {
+        if (rawUrl) {
+            let cancelled = false;
+            (async () => {
+                // Resolve via Obsidian requestUrl for tarteel CDN (no CORS) — falls back to direct url
+                const url = await resolveAudioUrl(rawUrl);
+                if (cancelled) return;
+                if (!audioRef.current) return;
+                const currentInfo = getAudioInfoForVerse(reciterForPlayback, currentRecitationData, currentSurahId, currentAyahId);
+                if (currentInfo?.url !== rawUrl) return;
+                let usedSeamlessSurahAdvance = false;
                 const currentSrcPath = audioRef.current.src.split('?')[0];
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
                 let desiredStartTime = startTime;
@@ -323,7 +330,7 @@ export default function AudioPlayerLocal({
                     pendingSeekTimeRef.current = clamped;
                 }
                 const targetTime = pendingSeekTimeRef.current ?? desiredStartTime;
-                const trackKey = `${selectedReciterId}:${currentVerseKey}:${url}:${targetTime}:${endTime ?? 'null'}`;
+                const trackKey = `${selectedReciterId}:${currentVerseKey}:${rawUrl}:${targetTime}:${endTime ?? 'null'}`;
                 if (configuredTrackKeyRef.current === trackKey) {
                     audioRef.current.playbackRate = speedRef.current;
                     setVerseStartTime(startTime); setVerseEndTime(endTime); setActiveSegments(segments); return;
@@ -345,19 +352,20 @@ export default function AudioPlayerLocal({
                 audioRef.current.playbackRate = speedRef.current;
                 if (!canContinueSeamlessly) setElapsedTime(desiredStartTime);
                 if (currentSrcPath === newSrcPath && !canContinueSeamlessly) void finalizePendingPlayback();
-            }
-            setVerseStartTime(startTime); setVerseEndTime(endTime); setActiveSegments(segments);
-            let initialIndex = -1;
-            const shouldSkipInitialWordReset = usedSeamlessSurahAdvance;
-            if (!shouldSkipInitialWordReset && onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0 && isPlayingRef.current) {
-                if (segments && segments.length > 0) {
-                    const maxWordIndex = segments.reduce((max, s) => Math.max(max, s[0] ?? 0), 0);
-                    const indexOffset = maxWordIndex === currentVerseWordCount ? -1 : 0;
-                    const rawIndex = (segments[0]?.[0] ?? 0) + indexOffset;
-                    initialIndex = rawIndex >= 0 && rawIndex < currentVerseWordCount ? rawIndex : 0;
-                } else initialIndex = 0;
-            }
-            if (initialIndex !== lastWordIndexRef.current) { onWordIndexChange?.(initialIndex); lastWordIndexRef.current = initialIndex; }
+                setVerseStartTime(startTime); setVerseEndTime(endTime); setActiveSegments(segments);
+                let initialIndex = -1;
+                const shouldSkipInitialWordReset = usedSeamlessSurahAdvance;
+                if (!shouldSkipInitialWordReset && onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0 && isPlayingRef.current) {
+                    if (segments && segments.length > 0) {
+                        const maxWordIndex = segments.reduce((max, s) => Math.max(max, s[0] ?? 0), 0);
+                        const indexOffset = maxWordIndex === currentVerseWordCount ? -1 : 0;
+                        const rawIndex = (segments[0]?.[0] ?? 0) + indexOffset;
+                        initialIndex = rawIndex >= 0 && rawIndex < currentVerseWordCount ? rawIndex : 0;
+                    } else initialIndex = 0;
+                }
+                if (initialIndex !== lastWordIndexRef.current) { onWordIndexChange?.(initialIndex); lastWordIndexRef.current = initialIndex; }
+            })();
+            return () => { cancelled = true; };
         }
     }, [currentVerseKey, currentSurahId, currentAyahId, selectedReciterId, selectedReciterType, selectedReciterPath, currentRecitationData, isLoadingReciter, currentVerseWordCount, finalizePendingPlayback, onWordIndexChange, preparePendingTrack, setPendingTrackWithoutLoader]);
 

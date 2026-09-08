@@ -188,6 +188,117 @@ export async function getAudioPlayerReciters(): Promise<Reciter[]> {
     return ALLOWED_RECITERS;
 }
 
+function isObsidianEnv(): boolean {
+    try {
+        return typeof window !== 'undefined' && !!(window as any)?.app?.vault?.adapter;
+    } catch { return false; }
+}
+
+async function fetchViaObsidianRequestUrl(url: string): Promise<any | null> {
+    if (!isObsidianEnv()) return null;
+    try {
+        let req: any = null;
+        try {
+            const obs: any = await import('obsidian');
+            req = obs.requestUrl;
+        } catch {
+            req = (window as any).requestUrl;
+        }
+        if (!req) return null;
+        const res: any = await req({ url, method: 'GET', headers: { 'Accept': 'application/json' } });
+        const status: number = typeof res.status === 'number' ? res.status : 0;
+        if (status >= 200 && status < 300) {
+            if (res.json !== undefined && res.json !== null) {
+                // Obsidian requestUrl returns parsed json if content-type is json
+                if (typeof res.json === 'object') return res.json;
+                try { return JSON.parse(res.json); } catch {}
+            }
+            if (typeof res.text === 'string' && res.text.trim()) {
+                try { return JSON.parse(res.text); } catch {}
+            }
+            if (res.arrayBuffer) {
+                try {
+                    const txt = new TextDecoder().decode(res.arrayBuffer);
+                    if (txt.trim()) return JSON.parse(txt);
+                } catch {}
+            }
+        }
+    } catch {}
+    return null;
+}
+
+async function fetchJsonWithObsidianFallback(urlPath: string): Promise<any | null> {
+    // 1) Try normal fetch first (web)
+    try {
+        const res = await fetch(urlPath);
+        if (res.ok) {
+            const j = await res.json();
+            return j;
+        }
+    } catch {}
+
+    if (!isObsidianEnv()) return null;
+
+    const app: any = (window as any).app;
+    const adapter: any = app?.vault?.adapter;
+    if (!adapter) return null;
+
+    // Candidate vault paths to try
+    const normalized = urlPath.startsWith('/') ? urlPath.slice(1) : urlPath;
+    const candidates = [
+        normalized, // e.g. recitations/.../surah.json
+        `public/${normalized}`,
+        `.obsidian/plugins/quran-life/${normalized}`,
+        `.obsidian/plugins/quran-life/public/${normalized}`,
+        `QuranLife/${normalized}`,
+    ];
+    // 2) Try direct vault adapter read (hidden-aware)
+    for (const cand of candidates) {
+        try {
+            if (adapter.exists) {
+                const exists = await adapter.exists(cand);
+                if (!exists) continue;
+            }
+            const raw = await adapter.read(cand);
+            if (raw && raw.trim()) {
+                try { return JSON.parse(raw); } catch {}
+            }
+        } catch {}
+    }
+    // 3) Try via getResourcePath -> fetch app:// URL
+    if (adapter.getResourcePath) {
+        for (const cand of candidates) {
+            try {
+                const resourceUrl = adapter.getResourcePath(cand);
+                if (!resourceUrl) continue;
+                const res = await fetch(resourceUrl);
+                if (res.ok) {
+                    const j = await res.json();
+                    return j;
+                }
+            } catch {}
+        }
+    }
+    // 4) Final fallback: try absolute site URL (for Obsidian where local files not bundled)
+    // Use Obsidian requestUrl to bypass CORS in Electron
+    const siteBase = (typeof window !== 'undefined' && (window as any)?.location?.origin && !(window as any).location.origin.startsWith('app://') && !(window as any).location.origin.startsWith('capacitor://'))
+        ? (window as any).location.origin
+        : 'https://quran-life.org';
+    const absolute = `${siteBase.replace(/\/$/, '')}${urlPath}`;
+    // Try native fetch first (works in web, may fail in Obsidian due to CORS)
+    try {
+        const res = await fetch(absolute);
+        if (res.ok) return await res.json();
+    } catch {}
+    // Fallback to Obsidian requestUrl (no CORS)
+    const viaRequest = await fetchViaObsidianRequestUrl(absolute);
+    if (viaRequest) return viaRequest;
+    // Also try original urlPath via requestUrl (in case urlPath already absolute or same-origin)
+    const viaOriginal = await fetchViaObsidianRequestUrl(urlPath);
+    if (viaOriginal) return viaOriginal;
+    return null;
+}
+
 export async function loadRecitationData(reciter: Reciter, surahId: number) {
     const cacheKey = reciter.type === 'surah-based'
         ? `${reciter.id}-${surahId}`
@@ -198,33 +309,28 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
 
     try {
         if (reciter.type === 'surah-based') {
-            const [surahRes, segmentsRes] = await Promise.all([
-                fetch(`${reciter.relativePath}/surah.json`),
-                fetch(`${reciter.relativePath}/segments.json`)
-            ]);
-
             const [surahData, segmentsData] = await Promise.all([
-                surahRes.json(),
-                segmentsRes.json(),
+                fetchJsonWithObsidianFallback(`${reciter.relativePath}/surah.json`),
+                fetchJsonWithObsidianFallback(`${reciter.relativePath}/segments.json`)
             ]);
 
-            // Normalize
+            if (!surahData) throw new Error(`surah.json not found for ${reciter.id}`);
+
+            // Normalize — segments may be null in Obsidian if file missing, but allow playback without word timing
             data = {
                 surahId,
-                surahNumber: surahData[surahId]?.surah_number,
+                surahNumber: surahData[surahId]?.surah_number ?? surahId,
                 audioUrl: surahData[surahId]?.audio_url,
-                timings: segmentsData // Keyed by "Surah:Ayah"
+                timings: segmentsData || {} // Keyed by "Surah:Ayah" — may be empty, getAudioInfo will fallback
             };
+            if (!data.audioUrl) {
+                // Some reciters use different structure — try alternative
+                const alt = surahData[surahId] || surahData[String(surahId)];
+                if (alt?.audio_url) data.audioUrl = alt.audio_url;
+            }
         } else {
-            // Ayah based - single large file for all Quran or per surah?
-            // The file structure seen is "ayah-recitation-NAME.json" which likely contains ALL verses?
-            // Let's assume it contains all verses based on file size/naming.
-            // If it's huge, we might need to be careful. But we fetch it once.
-            // Wait, "ayah-recitation-....json" - does it contain 6236 keys?
-            // I should check the size of one of these files.
-            
-            const res = await fetch(reciter.relativePath);
-            const json = await res.json();
+            const json = await fetchJsonWithObsidianFallback(reciter.relativePath);
+            if (!json) throw new Error(`recitation json not found for ${reciter.id}`);
             
             // This is a huge map "1:1" -> { audio_url ... }
             data = {
@@ -237,6 +343,43 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
     } catch (e) {
         console.error('Error loading recitation data', e);
         return null;
+    }
+}
+
+const audioBlobUrlCache = new Map<string, string>();
+
+export async function resolveAudioUrl(url: string): Promise<string> {
+    if (!url) return url;
+    if (!isObsidianEnv()) return url;
+    // Only proxy tarteel CDN which lacks CORS; quranicaudio already has CORS
+    const needsProxy = url.includes('audio-cdn.tarteel.ai') || url.includes('tarteel');
+    if (!needsProxy) return url;
+    if (audioBlobUrlCache.has(url)) return audioBlobUrlCache.get(url)!;
+    try {
+        let req: any = null;
+        try {
+            const obs: any = await import('obsidian');
+            req = obs.requestUrl;
+        } catch {
+            req = (window as any).requestUrl;
+        }
+        if (!req) return url;
+        const res: any = await req({ url, method: 'GET' });
+        // Obsidian requestUrl returns arrayBuffer for binary
+        let buf: ArrayBuffer | null = null;
+        if (res.arrayBuffer) buf = res.arrayBuffer;
+        else if (res.body instanceof ArrayBuffer) buf = res.body;
+        else if (typeof res.text === 'string' && res.text) {
+            // fallback shouldn't happen for mp3
+        }
+        if (!buf || buf.byteLength === 0) return url;
+        const blob = new Blob([buf], { type: 'audio/mpeg' });
+        const blobUrl = URL.createObjectURL(blob);
+        audioBlobUrlCache.set(url, blobUrl);
+        return blobUrl;
+    } catch (e) {
+        console.warn('resolveAudioUrl failed, falling back to direct url', url, e);
+        return url;
     }
 }
 
@@ -269,7 +412,11 @@ export function getAudioInfoForVerse(
         const timing = data.timings?.[key];
         
         if (!timing) {
-            // Fallback: play from start if no timing? No, that's bad.
+            // Obsidian fallback: if segments.json missing or timing not found, still allow playback of whole surah file.
+            // This keeps play button enabled; word highlight will be disabled (no segments) but audio will work.
+            if (data.audioUrl) {
+                return { url: data.audioUrl, segments: null as any };
+            }
             return null;
         }
 

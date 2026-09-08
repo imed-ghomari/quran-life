@@ -235,9 +235,20 @@ export default class QuranLifePlugin extends Plugin {
   }
 
   private async promptLegacyMigration(): Promise<void> {
-    // Simple: look for backup file at vault root or ask user to pick file
-    // For now, check QuranLife/legacy-backup.json or prompt
-    const candidates = ["quran-life-backup.json", `${this.settings.dataRoot}/legacy-backup.json`];
+    // Try multiple candidate filenames at vault root and in plugin data folder.
+    // Supports: web backup (quran-life-backup-*.json), InstantDB export (quran-app-backup-*.json), restore file (quran-mindmaps-restore.json)
+    const dataRoot = normalizePath(this.settings.dataRoot || DEFAULT_DATA_ROOT);
+    const candidates = [
+      "quran-life-backup.json",
+      "quran-life-backup (test).json",
+      `${dataRoot}/legacy-backup.json`,
+      "quran-app-backup-2026-01-22.json",
+      "quran-mindmaps-restore.json",
+      "quran-life-anki-backup.json",
+      "QuranLife/legacy-backup.json",
+      "QuranLife/quran-life-backup.json",
+    ];
+    // 1) Direct candidates via vault API (visible files)
     for (const path of candidates) {
       const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
       if (file instanceof TFile) {
@@ -245,11 +256,67 @@ export default class QuranLifePlugin extends Plugin {
         try {
           const json = JSON.parse(raw);
           const res = await this.vaultStore.migrateFromLegacyJson(json);
-          new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs`);
+          new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs from ${path}`);
           return;
-        } catch (e: any) { new Notice(`Migration failed: ${e?.message || e}`); return; }
+        } catch (e: any) { new Notice(`Migration failed for ${path}: ${e?.message || e}`); return; }
       }
     }
-    new Notice("No legacy backup found. Place quran-life-backup.json at vault root and retry.");
+    // 2) Hidden plugin folder via adapter (for users who place backup in .obsidian/plugins/quran-life/)
+    const hiddenCandidates = [
+      ".obsidian/plugins/quran-life/quran-life-backup.json",
+      ".obsidian/plugins/quran-life/quran-life-backup (test).json",
+      ".obsidian/plugins/quran-life/data/quran-life-backup.json",
+      ".obsidian/plugins/quran-life/data/quran-life-backup (test).json",
+      ".obsidian/plugins/quran-life/quran-app-backup-2026-01-22.json",
+      ".obsidian/plugins/quran-life/quran-mindmaps-restore.json",
+    ];
+    for (const path of hiddenCandidates) {
+      try {
+        const adapter: any = this.app.vault.adapter;
+        if (adapter?.exists && await adapter.exists(path)) {
+          const raw = await adapter.read(path);
+          const json = JSON.parse(raw);
+          const res = await this.vaultStore.migrateFromLegacyJson(json);
+          new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs from ${path}`);
+          return;
+        }
+      } catch {}
+    }
+    // 3) Scan vault root for any *.json that looks like a backup (has mindmaps or splits)
+    try {
+      const rootFiles: string[] = [];
+      const adapter: any = this.app.vault.adapter;
+      if (adapter?.list) {
+        const listed = await adapter.list("");
+        const files: string[] = listed?.files || [];
+        for (const f of files) if (f.toLowerCase().endsWith(".json") && /quran|backup|mindmap/i.test(f)) rootFiles.push(f);
+      } else {
+        // fallback via vault.getMarkdownFiles? but json not markdown, so use getFiles
+        // @ts-ignore
+        const allFiles = this.app.vault.getFiles();
+        for (const f of allFiles) if (f.path.toLowerCase().endsWith(".json") && /quran|backup|mindmap/i.test(f.path)) rootFiles.push(f.path);
+      }
+      // try each candidate root file
+      for (const path of rootFiles) {
+        try {
+          const file = this.app.vault.getAbstractFileByPath(path);
+          let raw: string | null = null;
+          if (file instanceof TFile) raw = await this.app.vault.read(file);
+          else if ((this.app.vault.adapter as any)?.read) raw = await (this.app.vault.adapter as any).read(path);
+          if (!raw) continue;
+          const json = JSON.parse(raw);
+          // heuristic: contains mindmaps or splits
+          if (json?.mindmaps || json?.splits || json?.anki?.mindmaps || json?.partMindmaps) {
+            const res = await this.vaultStore.migrateFromLegacyJson(json);
+            if (res.mindmaps > 0 || res.splits > 0) {
+              new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs from ${path}`);
+              return;
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+
+    new Notice("No legacy backup found. Place your backup JSON (e.g., quran-life-backup.json, quran-app-backup-2026-01-22.json, or quran-mindmaps-restore.json) at vault root and retry. Also supports .obsidian/plugins/quran-life/quran-life-backup.json");
   }
 }

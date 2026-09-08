@@ -123,6 +123,52 @@ if (prod) {
   } catch (e) {
     console.warn("Could not copy premade JSON", e);
   }
+  // Copy recitations JSONs to plugin folder for Obsidian offline fallback (audio player needs surah.json/segments.json)
+  // The vault's public/recitations already exists, but plugin folder (.obsidian/plugins/quran-life) is what adapter reads via ".obsidian/plugins/quran-life/..." — ensure it's there
+  try {
+    const srcRecitations = path.join("public", "recitations");
+    if (fs.existsSync(srcRecitations)) {
+      const destChoices = [
+        path.join(".obsidian", "plugins", "quran-life", "recitations"),
+        path.join(".obsidian", "plugins", "quran-life", "public", "recitations"),
+      ];
+      for (const dest of destChoices) {
+        try {
+          if (fs.cpSync) {
+            fs.cpSync(srcRecitations, dest, { recursive: true, force: true });
+          } else {
+            // fallback manual copy
+            const copyRecursive = (src, dest) => {
+              if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+              for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+                const s = path.join(src, entry.name);
+                const d = path.join(dest, entry.name);
+                if (entry.isDirectory()) copyRecursive(s, d);
+                else if (entry.name.endsWith(".json")) {
+                  if (!fs.existsSync(d) || fs.statSync(s).mtimeMs > fs.statSync(d).mtimeMs) fs.copyFileSync(s, d);
+                }
+              }
+            };
+            copyRecursive(srcRecitations, dest);
+          }
+          console.log(`✓ recitations JSONs copied to ${dest} for Obsidian audio fallback`);
+        } catch (e) {
+          console.warn(`Could not copy recitations to ${dest}`, e);
+        }
+      }
+      // Also ensure plugin root recitations for direct adapter read ".obsidian/plugins/quran-life/..." already covered, plus copy to ./recitations for completeness
+      try {
+        const destRootRecitations = path.join(".", "recitations");
+        if (!fs.existsSync(destRootRecitations)) {
+          if (fs.cpSync) fs.cpSync(srcRecitations, destRootRecitations, { recursive: true, force: true });
+          console.log("✓ recitations copied to ./recitations");
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.warn("Could not copy recitations", e);
+  }
+  await context.dispose();
   process.exit(0);
 } else {
   await context.watch();
