@@ -1,7 +1,9 @@
 'use client';
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { Tldraw } from 'tldraw';
 import { useTheme } from '@/components/ThemeProvider';
+
+const { useCallback, useState, useEffect, useMemo } = React;
 
 interface Props {
   snapshot?: any;

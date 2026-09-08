@@ -1,10 +1,12 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { AnkiAnchor } from '@/lib/anki/types';
 import { getSurah } from '@/lib/quranData';
 import { sanitizeAnchors, buildAnchorsFromBreaks } from '@/lib/anki/splitStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { VAULT_PATHS, isHiddenPath } from '@/plugin/storage/vaultAdapter';
+
+const { useCallback, useEffect, useMemo, useState } = React;
 
 // Premade cache — like web's fetch('/premade-anki-data.json') with force-cache
 let premadeCache: any | null = null;

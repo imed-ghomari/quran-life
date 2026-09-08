@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import React from 'react';
 import { X } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
-import { useMindMapSnapshot } from '@/hooks/useInstantData';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import {
@@ -43,6 +42,8 @@ import {
     STROKE_SIZES
 } from 'tldraw';
 import { getStrokePoints, getSvgPathFromStrokePoints } from '@/utils/tldrawStroke';
+
+const { useCallback, useEffect, useState, useMemo, useRef } = React;
 
 // Mutation of stroke sizes as requested
 STROKE_SIZES.s = 0.1;
@@ -281,10 +282,11 @@ function MindmapEditorContent({
     contextLabel,
     vaultStore
 }: MindmapEditorProps) {
-    const { snapshot: fetchedDbSnapshot, isLoading: isLoadingDb } = useMindMapSnapshot({
-        surahId: initialSnapshot || vaultStore ? undefined : surahId,
-        partId: initialSnapshot || vaultStore ? undefined : partId
-    });
+    // Obsidian uses VaultStore exclusively. Do not import the web app's
+    // InstantDB hook here: it is unavailable in Obsidian Mobile and this
+    // editor is always opened with a vault-backed store.
+    const fetchedDbSnapshot = null;
+    const isLoadingDb = false;
     const [vaultSnapshot, setVaultSnapshot] = useState<any>(null);
     const [isVaultLoading, setIsVaultLoading] = useState(!!vaultStore && !initialSnapshot);
     useEffect(() => {

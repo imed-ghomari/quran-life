@@ -1,8 +1,10 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { DEFAULT_DAILY_TARGET_MINUTES, clampDailyTargetMinutes } from '@/lib/dailyPortionUtils';
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from '@/lib/types';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
+
+const { useCallback, useEffect, useMemo, useState } = React;
 
 export type DailyPortionMode = 'audio' | 'reading';
 export type DailyReadingStyle = 'line_by_line' | 'paragraph';

@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React from 'react';
 import { getQuranVerses, getSurah, SURAHS } from '@/lib/quranData';
 import { buildAnkiCards, buildMindmapCards } from '@/lib/anki/cardBuilder';
 import { generateApkgBlob } from '@/lib/anki/apkgExport';
@@ -11,6 +11,8 @@ import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/
 import { Save, Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
+
+const { useEffect, useMemo, useState, useCallback } = React;
 
 export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStore }) {
   const [allVerses, setAllVerses] = useState<Verse[]>([]);

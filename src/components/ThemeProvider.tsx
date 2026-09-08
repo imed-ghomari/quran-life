@@ -1,6 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React from 'react';
+
+const { createContext, useContext, useEffect, useState } = React;
 
 export type Theme = 'light' | 'dark' | 'system';
 export type AccentTheme = 'default' | 'dracula' | 'nord' | 'catppuccin' | 'solarized' | 'tokyo-night';

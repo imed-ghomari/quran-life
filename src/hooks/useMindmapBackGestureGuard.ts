@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect } from 'react';
+import React from 'react';
+
+const { useEffect, useLayoutEffect } = React;
 
 let guardCount = 0;
 let originalBodyOverscrollX: string | null = null;
