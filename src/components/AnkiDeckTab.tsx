@@ -626,8 +626,8 @@ export default function AnkiDeckTab() {
             <label className="adv-label mb-2 block">Deck name</label>
             <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
           </div>
-          <button onClick={() => setShowExportPopup(true)} className="shrink-0 py-2.5 px-4 sm:px-5 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 whitespace-nowrap text-sm">
-            <Download size={18} /> Export Full Deck to Anki
+          <button onClick={() => setShowExportPopup(true)} className="btn btn-primary shrink-0 whitespace-nowrap">
+            <Download size={16} /> Export Full Deck to Anki
           </button>
         </div>
         <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">One file contains everything - verse groups, mindmaps, and notes. Re-importing updates existing cards and keeps your progress.</p>
@@ -667,12 +667,12 @@ export default function AnkiDeckTab() {
               <h3 className="font-semibold flex items-center gap-2"><ImageIcon size={16} /> Mindmap for {displayTitle}</h3>
               <div className="flex gap-2">
                 {displayMindmap?.snapshot || displayMindmap?.imageUrl ? (
-                  <button onClick={() => setShowMindmapPreview(v => !v)} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> {showMindmapPreview ? 'Hide' : 'View'}</button>
+                  <button onClick={() => setShowMindmapPreview(v => !v)} className="btn btn-secondary std-normal-btn"><Eye size={14} /> {showMindmapPreview ? 'Hide' : 'View'}</button>
                 ) : null}
                 {displayMindmap?.snapshot ? (
-                  <button onClick={() => setShowDeleteConfirm(true)} className="px-3 py-2 rounded-xl border border-red-200 bg-white text-red-600 text-sm flex items-center gap-1 hover:bg-red-50"><Trash2 size={14} /> Delete</button>
+                  <button onClick={() => setShowDeleteConfirm(true)} className="btn btn-secondary std-normal-btn std-normal-danger"><Trash2 size={14} /> Delete</button>
                 ) : null}
-                <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
+                <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="btn btn-primary"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
               </div>
             </div>
             {displayMindmap?.snapshot ? (
@@ -724,19 +724,19 @@ export default function AnkiDeckTab() {
                                   );
                                 })}
                                 {verseCount > 60 && !showAllVerses && (
-                                  <button onClick={() => setShowAllVerses(true)} className="px-2 py-1 rounded-lg border border-dashed border-[var(--border)] text-xs bg-[var(--background)] hover:bg-[var(--verse-bg)]">
+                                  <button onClick={() => setShowAllVerses(true)} className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs !border-dashed">
                                     +{verseCount - 60} more
                                   </button>
                                 )}
                                 {showAllVerses && verseCount > 60 && (
-                                  <button onClick={() => setShowAllVerses(false)} className="px-2 py-1 rounded-lg border text-xs bg-[var(--background)] hover:bg-[var(--verse-bg)]">
+                                  <button onClick={() => setShowAllVerses(false)} className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs">
                                     Show less
                                   </button>
                                 )}
                               </div>
                               <div className="flex gap-2 mt-2">
-                                <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
-                                <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
+                                <button onClick={handleSave} className="btn btn-primary !py-1.5 !px-3 text-xs"><Save size={12} /> Save Splits</button>
+                                <button onClick={() => setShowPreview(v=>!v)} className="btn btn-secondary std-normal-btn !py-1.5 !px-3 text-xs"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
                               </div>
                             </div>
                             {showPreview && (
@@ -797,7 +797,7 @@ export default function AnkiDeckTab() {
             <div className="card">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold flex items-center gap-2"><BarChart3 size={16} /> Deck Statistics</h3>
-                <button onClick={() => setShowStatsDetails(v => !v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]">
+                <button onClick={() => setShowStatsDetails(v => !v)} className="btn btn-secondary std-normal-btn !py-1.5 !px-3 text-xs">
                   {showStatsDetails ? 'Hide details' : 'Show details'}
                 </button>
               </div>

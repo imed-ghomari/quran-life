@@ -320,10 +320,10 @@ export default function DailyPortion() {
           </div>
           <button
             onClick={() => setShowSettings(v => !v)}
-            className="p-2 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] hover:bg-[var(--verse-bg)] transition"
+            className="today-header-btn"
             aria-label="Settings"
           >
-            <Settings size={20} />
+            <Settings size={18} />
           </button>
         </div>
 
@@ -335,8 +335,8 @@ export default function DailyPortion() {
                 <Sliders size={18} />
                 Configure Daily Portion
               </h2>
-              <button onClick={() => setShowSettings(false)} className="p-1 rounded hover:bg-[var(--verse-bg)]">
-                <X size={18} />
+              <button onClick={() => setShowSettings(false)} className="today-header-btn" aria-label="Close settings">
+                <X size={16} />
               </button>
             </div>
 
@@ -349,7 +349,7 @@ export default function DailyPortion() {
                     <button
                       key={opt.id}
                       onClick={() => handlePartChange(opt.id)}
-                      className={`p-3 rounded-xl border text-sm font-medium transition text-left ${settings.activePart === opt.id ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)] bg-[var(--background)] hover:bg-[var(--verse-bg)]'}`}
+                      className={`btn btn-secondary std-normal-btn !justify-start !items-start flex-col p-3 text-sm w-full ${settings.activePart === opt.id ? 'adv-seg-active' : ''}`}
                     >
                       <div className="font-semibold">{opt.name}</div>
                       <div className="text-xs opacity-70">{getSurahsByPart(opt.id).length} surahs</div>
@@ -382,13 +382,13 @@ export default function DailyPortion() {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => saveSettings({ dailyPortionMode: 'audio' })}
-                      className={`p-3 rounded-xl border flex items-center gap-2 justify-center font-medium ${settings.dailyPortionMode === 'audio' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
+                      className={`btn btn-secondary std-normal-btn ${settings.dailyPortionMode === 'audio' ? 'adv-seg-active' : ''}`}
                     >
                       <Headphones size={16} /> Listening
                     </button>
                     <button
                       onClick={() => saveSettings({ dailyPortionMode: 'reading' })}
-                      className={`p-3 rounded-xl border flex items-center gap-2 justify-center font-medium ${settings.dailyPortionMode === 'reading' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
+                      className={`btn btn-secondary std-normal-btn ${settings.dailyPortionMode === 'reading' ? 'adv-seg-active' : ''}`}
                     >
                       <Book size={16} /> Reading
                     </button>
@@ -397,13 +397,13 @@ export default function DailyPortion() {
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <button
                         onClick={() => saveSettings({ dailyReadingStyle: 'paragraph' })}
-                        className={`p-2 rounded-lg border text-sm ${settings.dailyReadingStyle === 'paragraph' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
+                        className={`btn btn-secondary std-normal-btn !py-2 text-sm ${settings.dailyReadingStyle === 'paragraph' ? 'adv-seg-active' : ''}`}
                       >
                         Paragraph
                       </button>
                       <button
                         onClick={() => saveSettings({ dailyReadingStyle: 'line_by_line' })}
-                        className={`p-2 rounded-lg border text-sm ${settings.dailyReadingStyle === 'line_by_line' ? 'border-[var(--accent)] bg-[var(--verse-bg)] text-[var(--accent)]' : 'border-[var(--border)]'}`}
+                        className={`btn btn-secondary std-normal-btn !py-2 text-sm ${settings.dailyReadingStyle === 'line_by_line' ? 'adv-seg-active' : ''}`}
                       >
                         Line by Line
                       </button>
@@ -417,8 +417,8 @@ export default function DailyPortion() {
                 <div className="flex items-center justify-between mb-2">
                   <label className="adv-label">Surahs in Portion ({eligibleSurahs.length}/{getSurahsByPart(settings.activePart).length} selected)</label>
                   <div className="flex gap-2">
-                    <button onClick={() => saveSettings({ skippedSurahs: [] })} className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--verse-bg)]">Select All</button>
-                    <button onClick={() => saveSettings({ skippedSurahs: getSurahsByPart(settings.activePart).map(s => s.id) })} className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--verse-bg)]">Clear All</button>
+                    <button onClick={() => saveSettings({ skippedSurahs: [] })} className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs">Select All</button>
+                    <button onClick={() => saveSettings({ skippedSurahs: getSurahsByPart(settings.activePart).map(s => s.id) })} className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs">Clear All</button>
                   </div>
                 </div>
                 <div className="max-h-64 overflow-y-auto border border-[var(--border)] rounded-xl p-2 bg-[var(--background)] custom-scrollbar">
@@ -446,10 +446,10 @@ export default function DailyPortion() {
               <div className="border-t border-[var(--border)] pt-4">
                 <label className="adv-label mb-2 block">Reset Progress</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleResetCurrent} className="p-3 rounded-xl border border-[var(--border)] hover:bg-[var(--verse-bg)] flex items-center justify-center gap-2 text-sm">
+                  <button onClick={handleResetCurrent} className="btn btn-secondary std-normal-btn">
                     <RotateCcw size={16} /> Reset This Part
                   </button>
-                  <button onClick={handleResetAll} className="p-3 rounded-xl border border-[var(--danger)] text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white flex items-center justify-center gap-2 text-sm">
+                  <button onClick={handleResetAll} className="btn btn-secondary std-normal-btn std-normal-danger">
                     <X size={16} /> Reset All Parts
                   </button>
                 </div>
@@ -473,7 +473,7 @@ export default function DailyPortion() {
                   <p className="font-semibold text-lg">Daily portion complete!</p>
                   <p className="text-sm text-[var(--foreground-secondary)] mt-1">You&apos;ve finished today&apos;s reading. Come back tomorrow for the next portion.</p>
                   <div className="mt-6 flex flex-col items-center gap-3">
-                    <button onClick={handleResetCurrent} className="px-4 py-2 rounded-xl border border-[var(--border)] text-sm flex items-center gap-2">
+                    <button onClick={handleResetCurrent} className="btn btn-secondary std-normal-btn">
                       <RotateCcw size={16} /> Restart Part
                     </button>
                     {otherPartsWithContent.length > 0 && (
@@ -502,7 +502,7 @@ export default function DailyPortion() {
                   <BookOpen size={48} className="mx-auto opacity-40 mb-3" />
                   <p className="font-medium">No surahs selected</p>
                   <p className="text-sm text-[var(--foreground-secondary)] mt-1">Select at least one surah in settings to generate a portion.</p>
-                  <button onClick={() => setShowSettings(true)} className="mt-4 px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-sm">
+                  <button onClick={() => setShowSettings(true)} className="btn btn-primary mt-4">
                     Open Settings
                   </button>
                 </>
@@ -580,14 +580,14 @@ export default function DailyPortion() {
                             <button
                               onClick={() => setCurrentVerseIndex(v => Math.max(0, v - 1))}
                               disabled={currentVerseIndex === 0}
-                              className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
+                              className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs"
                             >
                               Prev
                             </button>
                             <button
                               onClick={() => setCurrentVerseIndex(v => Math.min(todaysPortion.length - 1, v + 1))}
                               disabled={currentVerseIndex === todaysPortion.length - 1}
-                              className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
+                              className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs"
                             >
                               Next
                             </button>
@@ -663,9 +663,9 @@ export default function DailyPortion() {
                 <button
                   onClick={handleComplete}
                   disabled={isCompleting}
-                  className="w-full py-3 rounded-xl bg-[var(--success)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50"
+                  className="btn btn-success btn-full"
                 >
-                  <Check size={20} /> {isCompleting ? 'Saving...' : 'Mark Complete'}
+                  <Check size={18} /> {isCompleting ? 'Saving...' : 'Mark Complete'}
                 </button>
                 <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">
                   This advances to next portion. You can undo via browser back or reset in settings.
