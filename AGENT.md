@@ -15,6 +15,11 @@
 ## Branch Constraint
 - ALWAYS work on `daily-portion-only` branch only. Do NOT update `main` branch. All new app work is on `daily-portion-only`.
 
+## Git Workflow - Push After Each Prompt
+- After finishing **every** user prompt (feature, fix, or docs), push to GitHub immediately in the same turn.
+- Use **one long command** to save time: `git add <files> && git commit -m "..." && git push origin daily-portion-only` (combine add/commit/push, don't run them as separate tool calls).
+- Never leave unpushed commits locally after a prompt is done.
+
 ## User Preferences
 - Language: concise, factual, file_path:line_number references when referencing code.
 - Verify fixes via execution where possible, but never rebuild.
