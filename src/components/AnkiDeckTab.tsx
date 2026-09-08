@@ -10,7 +10,7 @@ import { loadAnkiMindmaps, saveAnkiMindmap, saveAnkiMindmapByKey, getAnkiMindmap
 import { loadMindmapDocs, saveMindmapDoc, deleteMindmapDoc } from '@/lib/anki/mindmapDocsStore';
 import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
-import { Save, Eye, Layers, PenTool, Split, Image as ImageIcon, Download, Trash2 } from 'lucide-react';
+import { Save, Eye, Layers, PenTool, Split, Image as ImageIcon, Download, Trash2, BarChart3, Check, X, FileText } from 'lucide-react';
 import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useTheme } from '@/components/ThemeProvider';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
@@ -48,6 +48,7 @@ export default function AnkiDeckTab() {
   const [isViewerReady, setIsViewerReady] = useState(false);
   const [showMindmapPreview, setShowMindmapPreview] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showStatsDetails, setShowStatsDetails] = useState(false);
   const { theme } = useTheme();
   const [systemIsDark, setSystemIsDark] = useState(false);
   useEffect(() => {
@@ -770,6 +771,132 @@ export default function AnkiDeckTab() {
           <p className="text-xs text-[var(--foreground-secondary)] mt-1">This text will be saved with the mindmap and added as a field in Anki so you can read it while reviewing.</p>
         </div>
       </div>
+          );
+        })()}
+
+        {/* Deck Statistics */}
+        {(() => {
+          const surahMindmapCount = Object.keys(mindmaps).filter(k => k.startsWith('surah-') && (mindmaps as any)[k]?.snapshot).length;
+          const partMetaCount = Object.keys(mindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (mindmaps as any)[k]?.snapshot).length;
+          const totalVerseGroups = SURAHS.reduce((acc, s) => {
+            const hasMM = !!(mindmaps as any)[`surah-${s.id}`]?.snapshot;
+            if (!hasMM) return acc;
+            const groups = splits[s.id]?.length;
+            return acc + (groups && groups > 0 ? groups : 1);
+          }, 0);
+          const docsWithContent = Object.keys(mindmapDocs).filter(k => {
+            const v = (mindmapDocs as any)[k];
+            return typeof v === 'string' && v.trim().length > 0 && !v.includes('_Not added yet._');
+          }).length;
+          const docsTotal = Object.keys(mindmapDocs).filter(k => typeof (mindmapDocs as any)[k] === 'string' && (mindmapDocs as any)[k].trim().length > 0).length;
+          return (
+            <div className="card">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold flex items-center gap-2"><BarChart3 size={16} /> Deck Statistics</h3>
+                <button onClick={() => setShowStatsDetails(v => !v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]">
+                  {showStatsDetails ? 'Hide details' : 'Show details'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                <div className="p-3 rounded-xl bg-[var(--background-secondary)] border border-[var(--border)] text-center">
+                  <div className="text-lg font-bold">{surahMindmapCount}/114</div>
+                  <div className="text-xs text-[var(--foreground-secondary)]">Surahs with mindmap</div>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--background-secondary)] border border-[var(--border)] text-center">
+                  <div className="text-lg font-bold">{partMetaCount}/8</div>
+                  <div className="text-xs text-[var(--foreground-secondary)]">Parts/Meta with mindmap</div>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--background-secondary)] border border-[var(--border)] text-center">
+                  <div className="text-lg font-bold">{totalVerseGroups}</div>
+                  <div className="text-xs text-[var(--foreground-secondary)]">Verse groups</div>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--background-secondary)] border border-[var(--border)] text-center">
+                  <div className="text-lg font-bold">{docsWithContent}/{docsTotal}</div>
+                  <div className="text-xs text-[var(--foreground-secondary)]">Docs with notes</div>
+                  <div className="text-[10px] text-[var(--foreground-secondary)] opacity-70">excl. placeholders</div>
+                </div>
+              </div>
+              {showStatsDetails && (
+                <div className="mt-4 border-t border-[var(--border)] pt-3">
+                  <h4 className="text-sm font-medium mb-2">Surahs 1-114</h4>
+                  <div className="max-h-[320px] overflow-y-auto border border-[var(--border)] rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-[var(--background-secondary)] border-b border-[var(--border)]">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Surah</th>
+                          <th className="text-center p-2 font-medium">Mindmap</th>
+                          <th className="text-center p-2 font-medium">Groups</th>
+                          <th className="text-center p-2 font-medium">Docs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {SURAHS.map(s => {
+                          const key = `surah-${s.id}`;
+                          const hasMM = !!(mindmaps as any)[key]?.snapshot;
+                          const groups = hasMM ? (splits[s.id]?.length ?? 1) : 0;
+                          const doc = (mindmapDocs as any)[key] as string | undefined;
+                          const hasDoc = typeof doc === 'string' && doc.trim().length > 0;
+                          const isPlaceholder = hasDoc && doc.includes('_Not added yet._');
+                          return (
+                            <tr key={s.id} className="border-t border-[var(--border)] hover:bg-[var(--verse-bg)]">
+                              <td className="p-2">
+                                <span className="font-medium">{s.id}.</span> {s.arabicName} <span className="opacity-60">({s.name})</span>
+                              </td>
+                              <td className="p-2 text-center">
+                                {hasMM ? <Check size={14} className="inline text-green-600" /> : <X size={14} className="inline text-[var(--foreground-secondary)] opacity-40" />}
+                              </td>
+                              <td className="p-2 text-center">
+                                {hasMM ? <span className="px-1.5 py-0.5 rounded bg-[var(--verse-bg)] border border-[var(--border)]">{groups}</span> : <span className="opacity-40">—</span>}
+                              </td>
+                              <td className="p-2 text-center">
+                                {!hasDoc ? <X size={14} className="inline text-[var(--foreground-secondary)] opacity-40" /> : isPlaceholder ? <span title="Placeholder" className="inline-flex items-center gap-1 text-amber-600"><FileText size={12} />•</span> : <Check size={14} className="inline text-green-600" />}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <h4 className="text-sm font-medium mt-4 mb-2">Parts & Meta</h4>
+                  <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-[var(--background-secondary)] border-b border-[var(--border)]">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Part</th>
+                          <th className="text-center p-2 font-medium">Mindmap</th>
+                          <th className="text-center p-2 font-medium">Docs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { key: 'meta-0', label: 'Meta Overview' },
+                          { key: 'part-1', label: 'Part 1 — Surah 1-5' },
+                          { key: 'part-2', label: 'Part 2 — Surah 6-9' },
+                          { key: 'part-3', label: 'Part 3 — Surah 10-24' },
+                          { key: 'part-4', label: 'Part 4 — Surah 25-33' },
+                          { key: 'part-5', label: 'Part 5 — Surah 34-49' },
+                          { key: 'part-6', label: 'Part 6 — Surah 50-66' },
+                          { key: 'part-7', label: 'Part 7 — Surah 67-114' },
+                        ].map(row => {
+                          const hasMM = !!(mindmaps as any)[row.key]?.snapshot;
+                          const doc = (mindmapDocs as any)[row.key] as string | undefined;
+                          const hasDoc = typeof doc === 'string' && doc.trim().length > 0;
+                          const isPlaceholder = hasDoc && doc.includes('_Not added yet._');
+                          return (
+                            <tr key={row.key} className="border-t border-[var(--border)] hover:bg-[var(--verse-bg)]">
+                              <td className="p-2">{row.label} <span className="opacity-60">({row.key})</span></td>
+                              <td className="p-2 text-center">{hasMM ? <Check size={14} className="inline text-green-600" /> : <X size={14} className="inline text-[var(--foreground-secondary)] opacity-40" />}</td>
+                              <td className="p-2 text-center">{!hasDoc ? <X size={14} className="inline text-[var(--foreground-secondary)] opacity-40" /> : isPlaceholder ? <span title="Placeholder" className="inline-flex items-center gap-1 text-amber-600"><FileText size={12} />•</span> : <Check size={14} className="inline text-green-600" />}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[10px] text-[var(--foreground-secondary)] mt-2">• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups for deck (1 if mindmap but no splits).</p>
+                </div>
+              )}
+            </div>
           );
         })()}
 
