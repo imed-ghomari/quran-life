@@ -188,14 +188,19 @@ export async function getAudioPlayerReciters(): Promise<Reciter[]> {
     return ALLOWED_RECITERS;
 }
 
-function isObsidianEnv(): boolean {
+function getObsidianApp(appOverride?: any): any | null {
     try {
-        return typeof window !== 'undefined' && !!(window as any)?.app?.vault?.adapter;
-    } catch { return false; }
+        const app = appOverride ?? (typeof window !== 'undefined' ? (window as any)?.app : null);
+        return app?.vault?.adapter ? app : null;
+    } catch { return null; }
 }
 
-async function fetchViaObsidianRequestUrl(url: string): Promise<any | null> {
-    if (!isObsidianEnv()) return null;
+function isObsidianEnv(appOverride?: any): boolean {
+    return getObsidianApp(appOverride) !== null;
+}
+
+async function fetchViaObsidianRequestUrl(url: string, appOverride?: any): Promise<any | null> {
+    if (!isObsidianEnv(appOverride)) return null;
     try {
         let req: any = null;
         try {
@@ -227,7 +232,7 @@ async function fetchViaObsidianRequestUrl(url: string): Promise<any | null> {
     return null;
 }
 
-async function fetchJsonWithObsidianFallback(urlPath: string): Promise<any | null> {
+async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any): Promise<any | null> {
     // 1) Try normal fetch first (web)
     try {
         const res = await fetch(urlPath);
@@ -237,9 +242,9 @@ async function fetchJsonWithObsidianFallback(urlPath: string): Promise<any | nul
         }
     } catch {}
 
-    if (!isObsidianEnv()) return null;
+    const app = getObsidianApp(appOverride);
+    if (!app) return null;
 
-    const app: any = (window as any).app;
     const adapter: any = app?.vault?.adapter;
     if (!adapter) return null;
 
@@ -291,15 +296,15 @@ async function fetchJsonWithObsidianFallback(urlPath: string): Promise<any | nul
         if (res.ok) return await res.json();
     } catch {}
     // Fallback to Obsidian requestUrl (no CORS)
-    const viaRequest = await fetchViaObsidianRequestUrl(absolute);
+    const viaRequest = await fetchViaObsidianRequestUrl(absolute, app);
     if (viaRequest) return viaRequest;
     // Also try original urlPath via requestUrl (in case urlPath already absolute or same-origin)
-    const viaOriginal = await fetchViaObsidianRequestUrl(urlPath);
+    const viaOriginal = await fetchViaObsidianRequestUrl(urlPath, app);
     if (viaOriginal) return viaOriginal;
     return null;
 }
 
-export async function loadRecitationData(reciter: Reciter, surahId: number) {
+export async function loadRecitationData(reciter: Reciter, surahId: number, appOverride?: any) {
     const cacheKey = reciter.type === 'surah-based'
         ? `${reciter.id}-${surahId}`
         : reciter.id;
@@ -310,8 +315,8 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
     try {
         if (reciter.type === 'surah-based') {
             const [surahData, segmentsData] = await Promise.all([
-                fetchJsonWithObsidianFallback(`${reciter.relativePath}/surah.json`),
-                fetchJsonWithObsidianFallback(`${reciter.relativePath}/segments.json`)
+                fetchJsonWithObsidianFallback(`${reciter.relativePath}/surah.json`, appOverride),
+                fetchJsonWithObsidianFallback(`${reciter.relativePath}/segments.json`, appOverride)
             ]);
 
             if (!surahData) throw new Error(`surah.json not found for ${reciter.id}`);
@@ -329,7 +334,7 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
                 if (alt?.audio_url) data.audioUrl = alt.audio_url;
             }
         } else {
-            const json = await fetchJsonWithObsidianFallback(reciter.relativePath);
+            const json = await fetchJsonWithObsidianFallback(reciter.relativePath, appOverride);
             if (!json) throw new Error(`recitation json not found for ${reciter.id}`);
             
             // This is a huge map "1:1" -> { audio_url ... }
@@ -348,9 +353,9 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
 
 const audioBlobUrlCache = new Map<string, string>();
 
-export async function resolveAudioUrl(url: string): Promise<string> {
+export async function resolveAudioUrl(url: string, appOverride?: any): Promise<string> {
     if (!url) return url;
-    if (!isObsidianEnv()) return url;
+    if (!isObsidianEnv(appOverride)) return url;
     // Only proxy tarteel CDN which lacks CORS; quranicaudio already has CORS
     const needsProxy = url.includes('audio-cdn.tarteel.ai') || url.includes('tarteel');
     if (!needsProxy) return url;

@@ -432,6 +432,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       currentVerseWordCount={dailyPreviewWords.length}
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
+                      obsidianApp={(vaultStore as any)?.app}
                     />
                   </div>
                 </div>

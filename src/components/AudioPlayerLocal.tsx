@@ -17,6 +17,7 @@ interface AudioPlayerLocalProps {
     onVerseChange: (index: number) => void;
     onPlayStateChange?: (isPlaying: boolean) => void;
     onWordIndexChange?: (index: number) => void;
+    obsidianApp?: any;
 }
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2];
@@ -73,7 +74,8 @@ export default function AudioPlayerLocal({
     currentVerseWordCount,
     onVerseChange,
     onPlayStateChange,
-    onWordIndexChange
+    onWordIndexChange,
+    obsidianApp,
 }: AudioPlayerLocalProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -205,7 +207,7 @@ export default function AudioPlayerLocal({
         const reciterForLoad: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
         const load = async () => {
             setIsLoadingReciter(true);
-            const data = await loadRecitationData(reciterForLoad, requestedSurahId);
+            const data = await loadRecitationData(reciterForLoad, requestedSurahId, obsidianApp);
             if (!isActive) return;
             if (reciterForLoad.id !== reciterId) return;
             if (reciterForLoad.type === 'surah-based' && data?.surahId !== requestedSurahId) return;
@@ -214,7 +216,7 @@ export default function AudioPlayerLocal({
         };
         load();
         return () => { isActive = false; };
-    }, [selectedReciterId, selectedReciterType, selectedReciterPath, currentSurahId]);
+    }, [selectedReciterId, selectedReciterType, selectedReciterPath, currentSurahId, obsidianApp]);
 
     useEffect(() => {
         if (!selectedReciterId || selectedReciterType !== 'surah-based' || !selectedReciterPath || verses.length === 0) return;
@@ -224,7 +226,7 @@ export default function AudioPlayerLocal({
         let isActive = true;
         const loadAll = async () => {
             setIsLoadingReciter(true);
-            const entries = await Promise.all(surahIds.map(async (surahId) => [surahId, await loadRecitationData(reciterForLoad, surahId)] as const));
+            const entries = await Promise.all(surahIds.map(async (surahId) => [surahId, await loadRecitationData(reciterForLoad, surahId, obsidianApp)] as const));
             if (!isActive) return;
             const nextMap: Record<number, any> = {};
             entries.forEach(([sid, data]) => { if (data) nextMap[sid] = data; });
@@ -233,7 +235,7 @@ export default function AudioPlayerLocal({
         };
         loadAll();
         return () => { isActive = false; };
-    }, [selectedReciterId, selectedReciterType, selectedReciterPath, versesSurahIdsKey, verses.length]);
+    }, [selectedReciterId, selectedReciterType, selectedReciterPath, versesSurahIdsKey, verses.length, obsidianApp]);
 
     useEffect(() => { if (currentVerseIndex < totalVerses - 1) setIsCompleted(false); }, [currentVerseIndex, totalVerses]);
     useEffect(() => { setIsCompleted(false); }, [verses]);
@@ -313,7 +315,7 @@ export default function AudioPlayerLocal({
             let cancelled = false;
             (async () => {
                 // Resolve via Obsidian requestUrl for tarteel CDN (no CORS) — falls back to direct url
-                const url = await resolveAudioUrl(rawUrl);
+                const url = await resolveAudioUrl(rawUrl, obsidianApp);
                 if (cancelled) return;
                 if (!audioRef.current) return;
                 const currentInfo = getAudioInfoForVerse(reciterForPlayback, currentRecitationData, currentSurahId, currentAyahId);
@@ -371,7 +373,7 @@ export default function AudioPlayerLocal({
             })();
             return () => { cancelled = true; };
         }
-    }, [currentVerseKey, currentSurahId, currentAyahId, selectedReciterId, selectedReciterType, selectedReciterPath, currentRecitationData, isLoadingReciter, currentVerseWordCount, finalizePendingPlayback, onWordIndexChange, preparePendingTrack, setPendingTrackWithoutLoader]);
+    }, [currentVerseKey, currentSurahId, currentAyahId, selectedReciterId, selectedReciterType, selectedReciterPath, currentRecitationData, isLoadingReciter, currentVerseWordCount, finalizePendingPlayback, onWordIndexChange, preparePendingTrack, setPendingTrackWithoutLoader, obsidianApp]);
 
     useEffect(() => {
         if (!audioRef.current) return;
