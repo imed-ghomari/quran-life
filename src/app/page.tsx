@@ -3,8 +3,8 @@ import AppTabs from '@/components/AppTabs';
 import { getSiteUrl } from '@/lib/siteUrl';
 
 export const metadata: Metadata = {
-  title: 'Daily Portion - Quran Life',
-  description: 'Complete your Quran portions in manageable daily readings - works offline',
+  title: 'Quran Anki Companion',
+  description: 'Daily portion and Anki companion for Quran memorization — works offline',
   manifest: '/manifest.json',
 };
 

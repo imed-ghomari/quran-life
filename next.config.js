@@ -19,18 +19,23 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     publicExcludes: [
         '!recitations/**/*',
         '!qpc-hafs-word-by-word.json',
+        '!premade-anki-data.json',
+        '!sql-wasm.wasm',
+        '!search-index.json',
     ],
     workboxOptions: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         additionalManifestEntries: [
             { url: '/', revision: PWA_CACHE_VERSION },
             { url: '/dashboard', revision: PWA_CACHE_VERSION },
             { url: '/offline-app', revision: PWA_CACHE_VERSION },
             { url: '/qpc-hafs-word-by-word.json', revision: PWA_CACHE_VERSION },
             { url: '/search-index.json', revision: PWA_CACHE_VERSION },
+            { url: '/premade-anki-data.json', revision: PWA_CACHE_VERSION },
+            { url: '/sql-wasm.wasm', revision: PWA_CACHE_VERSION },
         ],
         runtimeCaching: [
             {
@@ -44,7 +49,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                     && !url.pathname.startsWith('/api/'),
                 handler: 'NetworkFirst',
                 options: {
-                    cacheName: `pages-v13-${PWA_CACHE_VERSION}`,
+                    cacheName: `pages-v14-${PWA_CACHE_VERSION}`,
                     networkTimeoutSeconds: 6,
                     cacheableResponse: { statuses: [200] },
                     expiration: { maxEntries: 64, maxAgeSeconds: 24 * 60 * 60 },
@@ -61,7 +66,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                     ),
                 handler: 'NetworkFirst',
                 options: {
-                    cacheName: `rsc-v13-${PWA_CACHE_VERSION}`,
+                    cacheName: `rsc-v14-${PWA_CACHE_VERSION}`,
                     networkTimeoutSeconds: 3,
                     matchOptions: { ignoreSearch: true },
                     cacheableResponse: { statuses: [200] },
@@ -90,7 +95,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\/_next\/static\/.*/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: `static-assets-v13-${PWA_CACHE_VERSION}`,
+                    cacheName: `static-assets-v14-${PWA_CACHE_VERSION}`,
                     expiration: { maxEntries: 256, maxAgeSeconds: 7 * 24 * 60 * 60 },
                     cacheableResponse: { statuses: [0, 200] },
                 },
@@ -99,17 +104,26 @@ const withPWA = require('@ducanh2912/next-pwa').default({
                 urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg|ico)$/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: `image-assets-v13-${PWA_CACHE_VERSION}`,
+                    cacheName: `image-assets-v14-${PWA_CACHE_VERSION}`,
                     expiration: { maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60 },
                     cacheableResponse: { statuses: [0, 200] },
                 },
             },
             {
-                urlPattern: /\/(search-index\.json|qpc-hafs-word-by-word\.json)/i,
+                urlPattern: /\/(search-index\.json|qpc-hafs-word-by-word\.json|premade-anki-data\.json|sql-wasm\.wasm)/i,
                 handler: 'StaleWhileRevalidate',
                 options: {
-                    cacheName: `offline-content-v13-${PWA_CACHE_VERSION}`,
+                    cacheName: `offline-content-v14-${PWA_CACHE_VERSION}`,
                     expiration: { maxEntries: 128, maxAgeSeconds: 30 * 24 * 60 * 60 },
+                    cacheableResponse: { statuses: [0, 200] },
+                },
+            },
+            {
+                urlPattern: ({ url }) => url.pathname === '/api/docs-list' || url.pathname === '/api/docs-content',
+                handler: 'StaleWhileRevalidate',
+                options: {
+                    cacheName: `docs-api-v14-${PWA_CACHE_VERSION}`,
+                    expiration: { maxEntries: 64, maxAgeSeconds: 30 * 24 * 60 * 60 },
                     cacheableResponse: { statuses: [0, 200] },
                 },
             },

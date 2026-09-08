@@ -1,6 +1,6 @@
 'use client';
-import DailyPortion from '@/components/DailyPortion';
+import AppTabs from '@/components/AppTabs';
 
 export default function OfflineAppPage() {
-  return <DailyPortion />;
+  return <AppTabs />;
 }
