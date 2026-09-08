@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback, startTransition } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, startTransition } from 'react';
 import { getQuranVerses, getSurah, getSurahsByPart, SURAHS } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import { Verse, ACTIVE_PART_OPTIONS, QuranPart, ALL_QURAN_PART } from '@/lib/types';

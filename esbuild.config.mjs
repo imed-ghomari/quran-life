@@ -42,6 +42,12 @@ const context = await esbuild.context({
   ],
   format: "cjs",
   target: "es2018",
+  // Obsidian Mobile's WebView can load React itself, but its bundled module
+  // loader does not reliably preserve the lazy react/jsx-runtime bindings.
+  // Use the classic transform for plugin-owned TSX so views call the already
+  // bundled React.createElement API directly. The web app keeps tsconfig's
+  // automatic JSX transform via the plugin-only tsconfig.
+  tsconfig: "tsconfig.plugin.json",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,

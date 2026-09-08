@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl } from '@/lib/audio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
