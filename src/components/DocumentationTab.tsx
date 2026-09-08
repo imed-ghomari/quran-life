@@ -76,9 +76,9 @@ export default function DocumentationTab() {
                 <button
                   key={item.slug}
                   onClick={() => setActiveSlug(item.slug)}
-                  className={`btn btn-secondary std-normal-btn w-full !justify-between !px-3 !py-2 text-sm ${activeSlug === item.slug ? 'adv-seg-active' : ''}`}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between ${activeSlug === item.slug ? 'bg-[var(--verse-bg)] text-[var(--accent)] font-medium border border-[var(--border)]' : 'hover:bg-[var(--verse-bg)] text-[var(--foreground-secondary)]'}`}
                 >
-                  <span className="truncate text-left">{item.title}</span>
+                  <span className="truncate">{item.title}</span>
                   {activeSlug === item.slug && <ChevronRight size={14} />}
                 </button>
               ))}

@@ -48,6 +48,13 @@ export default function AnkiDeckTab() {
   const [showMindmapPreview, setShowMindmapPreview] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStatsDetails, setShowStatsDetails] = useState(false);
+  const [premadeForStats, setPremadeForStats] = useState<any>(null);
+  useEffect(() => {
+    fetch('/premade-anki-data.json', { cache: 'force-cache' } as any)
+      .then(r => r.json())
+      .then(data => setPremadeForStats(data))
+      .catch(() => {});
+  }, []);
   const { theme } = useTheme();
   const [systemIsDark, setSystemIsDark] = useState(false);
   useEffect(() => {
@@ -626,8 +633,8 @@ export default function AnkiDeckTab() {
             <label className="adv-label mb-2 block">Deck name</label>
             <input value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm" placeholder="QuranLife::Review" />
           </div>
-          <button onClick={() => setShowExportPopup(true)} className="btn btn-primary shrink-0 whitespace-nowrap">
-            <Download size={16} /> Export Full Deck to Anki
+          <button onClick={() => setShowExportPopup(true)} className="shrink-0 py-2.5 px-4 sm:px-5 rounded-xl bg-[var(--accent)] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 whitespace-nowrap text-sm">
+            <Download size={18} /> Export Full Deck to Anki
           </button>
         </div>
         <p className="text-xs text-center text-[var(--foreground-secondary)] mt-2">One file contains everything - verse groups, mindmaps, and notes. Re-importing updates existing cards and keeps your progress.</p>
@@ -667,12 +674,12 @@ export default function AnkiDeckTab() {
               <h3 className="font-semibold flex items-center gap-2"><ImageIcon size={16} /> Mindmap for {displayTitle}</h3>
               <div className="flex gap-2">
                 {displayMindmap?.snapshot || displayMindmap?.imageUrl ? (
-                  <button onClick={() => setShowMindmapPreview(v => !v)} className="btn btn-secondary std-normal-btn"><Eye size={14} /> {showMindmapPreview ? 'Hide' : 'View'}</button>
+                  <button onClick={() => setShowMindmapPreview(v => !v)} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> {showMindmapPreview ? 'Hide' : 'View'}</button>
                 ) : null}
                 {displayMindmap?.snapshot ? (
-                  <button onClick={() => setShowDeleteConfirm(true)} className="btn btn-secondary std-normal-btn std-normal-danger"><Trash2 size={14} /> Delete</button>
+                  <button onClick={() => setShowDeleteConfirm(true)} className="px-3 py-2 rounded-xl border border-red-200 bg-white text-red-600 text-sm flex items-center gap-1 hover:bg-red-50"><Trash2 size={14} /> Delete</button>
                 ) : null}
-                <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="btn btn-primary"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
+                <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
               </div>
             </div>
             {displayMindmap?.snapshot ? (
@@ -724,19 +731,19 @@ export default function AnkiDeckTab() {
                                   );
                                 })}
                                 {verseCount > 60 && !showAllVerses && (
-                                  <button onClick={() => setShowAllVerses(true)} className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs !border-dashed">
+                                  <button onClick={() => setShowAllVerses(true)} className="px-2 py-1 rounded-lg border border-dashed border-[var(--border)] text-xs bg-[var(--background)] hover:bg-[var(--verse-bg)]">
                                     +{verseCount - 60} more
                                   </button>
                                 )}
                                 {showAllVerses && verseCount > 60 && (
-                                  <button onClick={() => setShowAllVerses(false)} className="btn btn-secondary std-normal-btn !py-1 !px-2 text-xs">
+                                  <button onClick={() => setShowAllVerses(false)} className="px-2 py-1 rounded-lg border text-xs bg-[var(--background)] hover:bg-[var(--verse-bg)]">
                                     Show less
                                   </button>
                                 )}
                               </div>
                               <div className="flex gap-2 mt-2">
-                                <button onClick={handleSave} className="btn btn-primary !py-1.5 !px-3 text-xs"><Save size={12} /> Save Splits</button>
-                                <button onClick={() => setShowPreview(v=>!v)} className="btn btn-secondary std-normal-btn !py-1.5 !px-3 text-xs"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
+                                <button onClick={handleSave} className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs flex items-center gap-1"><Save size={12} /> Save Splits</button>
+                                <button onClick={() => setShowPreview(v=>!v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1"><Eye size={12} /> {showPreview ? 'Hide' : 'Preview'}</button>
                               </div>
                             </div>
                             {showPreview && (
@@ -778,26 +785,46 @@ export default function AnkiDeckTab() {
           );
         })()}
 
-        {/* Deck Statistics */}
+        {/* Deck Statistics — uses merged premade + local (balanced lazy) so counts are correct without eager load */}
         {(() => {
-          const surahMindmapCount = Object.keys(mindmaps).filter(k => k.startsWith('surah-') && (mindmaps as any)[k]?.snapshot).length;
-          const partMetaCount = Object.keys(mindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (mindmaps as any)[k]?.snapshot).length;
+          const deletedSet: Set<string> = (() => { try { return loadDeletedMindmapKeys(); } catch { return new Set<string>(); } })();
+          const premadeMM: any = premadeForStats?.mindmaps || {};
+          const filteredPremadeMM: any = {};
+          Object.entries(premadeMM).forEach(([k, v]: any) => { if (!deletedSet.has(k) && (v as any)?.snapshot) filteredPremadeMM[k] = v; });
+          const fullMindmapsForStats: any = { ...filteredPremadeMM, ...mindmaps };
+          deletedSet.forEach(k => delete fullMindmapsForStats[k]);
+          const premadeSplits: any = premadeForStats?.splits || {};
+          const fullSplitsForStats: any = { ...splits };
+          Object.entries(premadeSplits).forEach(([k, arr]: any) => {
+            const sid = Number(k);
+            if (!Number.isFinite(sid) || (fullSplitsForStats as any)[sid] || !Array.isArray(arr) || arr.length === 0) return;
+            const normalized = (arr as any[]).filter((a: any) => Number.isFinite(Number(a?.startVerse)) && Number.isFinite(Number(a?.endVerse)));
+            if (normalized.length) (fullSplitsForStats as any)[sid] = arr;
+          });
+          const premadeDocs: any = premadeForStats?.mindmapDocs || {};
+          const fullDocsForStats: any = { ...mindmapDocs };
+          Object.entries(premadeDocs).forEach(([k, v]: any) => {
+            if (deletedSet.has(k)) return;
+            if (typeof v === 'string' && v && !fullDocsForStats[k]) fullDocsForStats[k] = v;
+          });
+          const surahMindmapCount = Object.keys(fullMindmapsForStats).filter(k => k.startsWith('surah-') && (fullMindmapsForStats as any)[k]?.snapshot).length;
+          const partMetaCount = Object.keys(fullMindmapsForStats).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (fullMindmapsForStats as any)[k]?.snapshot).length;
           const totalVerseGroups = SURAHS.reduce((acc, s) => {
-            const hasMM = !!(mindmaps as any)[`surah-${s.id}`]?.snapshot;
+            const hasMM = !!(fullMindmapsForStats as any)[`surah-${s.id}`]?.snapshot;
             if (!hasMM) return acc;
-            const groups = splits[s.id]?.length;
+            const groups = (fullSplitsForStats as any)[s.id]?.length;
             return acc + (groups && groups > 0 ? groups : 1);
           }, 0);
-          const docsWithContent = Object.keys(mindmapDocs).filter(k => {
-            const v = (mindmapDocs as any)[k];
+          const docsWithContent = Object.keys(fullDocsForStats).filter(k => {
+            const v = (fullDocsForStats as any)[k];
             return typeof v === 'string' && v.trim().length > 0 && !v.includes('_Not added yet._');
           }).length;
-          const docsTotal = Object.keys(mindmapDocs).filter(k => typeof (mindmapDocs as any)[k] === 'string' && (mindmapDocs as any)[k].trim().length > 0).length;
+          const docsTotal = Object.keys(fullDocsForStats).filter(k => typeof (fullDocsForStats as any)[k] === 'string' && (fullDocsForStats as any)[k].trim().length > 0).length;
           return (
             <div className="card">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold flex items-center gap-2"><BarChart3 size={16} /> Deck Statistics</h3>
-                <button onClick={() => setShowStatsDetails(v => !v)} className="btn btn-secondary std-normal-btn !py-1.5 !px-3 text-xs">
+                <button onClick={() => setShowStatsDetails(v => !v)} className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs flex items-center gap-1 hover:bg-[var(--verse-bg)]">
                   {showStatsDetails ? 'Hide details' : 'Show details'}
                 </button>
               </div>
@@ -836,9 +863,9 @@ export default function AnkiDeckTab() {
                       <tbody>
                         {SURAHS.map(s => {
                           const key = `surah-${s.id}`;
-                          const hasMM = !!(mindmaps as any)[key]?.snapshot;
-                          const groups = hasMM ? (splits[s.id]?.length ?? 1) : 0;
-                          const doc = (mindmapDocs as any)[key] as string | undefined;
+                          const hasMM = !!(fullMindmapsForStats as any)[key]?.snapshot;
+                          const groups = hasMM ? ((fullSplitsForStats as any)[s.id]?.length ?? 1) : 0;
+                          const doc = (fullDocsForStats as any)[key] as string | undefined;
                           const hasDoc = typeof doc === 'string' && doc.trim().length > 0;
                           const isPlaceholder = hasDoc && doc.includes('_Not added yet._');
                           return (
@@ -882,8 +909,8 @@ export default function AnkiDeckTab() {
                           { key: 'part-6', label: 'Part 6 — Surah 50-66' },
                           { key: 'part-7', label: 'Part 7 — Surah 67-114' },
                         ].map(row => {
-                          const hasMM = !!(mindmaps as any)[row.key]?.snapshot;
-                          const doc = (mindmapDocs as any)[row.key] as string | undefined;
+                          const hasMM = !!(fullMindmapsForStats as any)[row.key]?.snapshot;
+                          const doc = (fullDocsForStats as any)[row.key] as string | undefined;
                           const hasDoc = typeof doc === 'string' && doc.trim().length > 0;
                           const isPlaceholder = hasDoc && doc.includes('_Not added yet._');
                           return (

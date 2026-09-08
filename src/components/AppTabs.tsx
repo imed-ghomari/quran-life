@@ -142,43 +142,40 @@ export default function AppTabs() {
   return (
     <div className="content-wrapper">
       <div className="max-w-5xl mx-auto px-4 py-4">
-        {/* Tab bar with global actions — uses main branch design tokens: adv-segmented + today-header-btn + btn */}
+        {/* Tab bar with global actions */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-          <div className="adv-segmented flex items-center gap-1 p-1 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] w-fit flex-wrap">
+          <div className="flex items-center gap-2 p-1 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] w-fit">
             <button
               suppressHydrationWarning
               onClick={() => setActiveTab('daily')}
-              className={`adv-seg-btn flex items-center gap-2 ${activeTab === 'daily' ? 'adv-seg-active' : ''}`}
-              aria-pressed={activeTab === 'daily'}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'daily' ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--verse-bg)]'}`}
             >
               <span suppressHydrationWarning><BookOpen size={16} /></span> Daily Portion
             </button>
             <button
               suppressHydrationWarning
               onClick={() => setActiveTab('anki')}
-              className={`adv-seg-btn flex items-center gap-2 ${activeTab === 'anki' ? 'adv-seg-active' : ''}`}
-              aria-pressed={activeTab === 'anki'}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'anki' ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--verse-bg)]'}`}
             >
               <span suppressHydrationWarning><Layers size={16} /></span> Anki Deck
             </button>
             <button
               suppressHydrationWarning
               onClick={() => setActiveTab('docs')}
-              className={`adv-seg-btn flex items-center gap-2 ${activeTab === 'docs' ? 'adv-seg-active' : ''}`}
-              aria-pressed={activeTab === 'docs'}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'docs' ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--verse-bg)]'}`}
             >
               <span suppressHydrationWarning><FileText size={16} /></span> Documentation
             </button>
 
-            {/* Divider — separates tabs from global actions */}
+            {/* Divider */}
             <div className="w-px h-6 bg-[var(--border)] mx-1 hidden sm:block" />
 
-            {/* Global actions — today-header-btn for icon, btn secondary for text actions (main guidelines) */}
+            {/* Global actions */}
             <div className="flex items-center gap-1.5">
               <button
                 onClick={cycleTheme}
                 title={`Theme: ${theme} (click to cycle)`}
-                className="today-header-btn"
+                className="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--verse-bg)] text-[var(--foreground-secondary)] hover:text-[var(--foreground)] transition"
                 aria-label="Toggle theme"
               >
                 <ThemeIcon size={16} />
@@ -189,16 +186,16 @@ export default function AppTabs() {
               <button
                 onClick={handleExportBackup}
                 title="Export backup (all data: daily portion + anki + theme)"
-                className="btn btn-secondary std-normal-btn !py-2 !px-3 text-xs"
+                className="p-2 sm:px-3 sm:py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--verse-bg)] text-sm flex items-center gap-1.5 transition"
               >
-                <Upload size={14} /> <span className="hidden sm:inline">Export</span>
+                <Upload size={16} /> <span className="hidden sm:inline text-xs font-medium">Export</span>
               </button>
 
               <label
                 title="Import backup (all data)"
-                className="btn btn-secondary std-normal-btn !py-2 !px-3 text-xs cursor-pointer"
+                className="p-2 sm:px-3 sm:py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--verse-bg)] text-sm flex items-center gap-1.5 cursor-pointer transition"
               >
-                <FileJson size={14} /> <span className="hidden sm:inline">Import</span>
+                <FileJson size={16} /> <span className="hidden sm:inline text-xs font-medium">Import</span>
                 <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={e => e.target.files?.[0] && handleImportBackup(e.target.files[0])} />
               </label>
             </div>
