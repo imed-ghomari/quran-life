@@ -1,10 +1,14 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React from 'react';
 import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl } from '@/lib/audio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
+
+// Use React's default export for the Obsidian bundle. Some Obsidian Mobile
+// WebViews do not expose CommonJS named React imports consistently.
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
 interface AudioPlayerLocalProps {
     verses: Verse[];
