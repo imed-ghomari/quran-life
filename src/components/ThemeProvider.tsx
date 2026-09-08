@@ -70,7 +70,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme() {
     const context = useContext(ThemeContext);
     if (context === undefined) {
-        throw new Error('useTheme must be used within a ThemeProvider');
+        // Obsidian fallback: derive from Obsidian's body class or system preference
+        // This makes MindmapEditor and DailyPortion work inside Obsidian ItemView without requiring explicit ThemeProvider wrapper
+        const isObsidianDark = typeof document !== 'undefined'
+            ? document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')
+            : false;
+        const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+        const resolved: Theme = isObsidianDark || mqDark ? 'dark' : 'light';
+        return {
+            theme: resolved,
+            setTheme: () => {},
+            accentTheme: 'default' as AccentTheme,
+            setAccentTheme: () => {},
+        } as ThemeContextType;
     }
     return context;
 }

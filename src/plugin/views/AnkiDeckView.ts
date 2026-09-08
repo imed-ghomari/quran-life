@@ -3,6 +3,8 @@ import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import QuranLifePlugin from "../main";
 import AnkiDeckObsidian from "../components/AnkiDeckObsidian";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { PluginErrorBoundary } from "../components/PluginErrorBoundary";
 
 export const VIEW_TYPE_ANKI = "quran-life-anki";
 
@@ -27,8 +29,10 @@ export class AnkiDeckView extends ItemView {
     mountEl.style.height = "100%";
     this.root = createRoot(mountEl);
     this.root.render(
-      React.createElement(React.StrictMode, null,
-        React.createElement(AnkiDeckObsidian, { vaultStore: this.plugin.vaultStore })
+      React.createElement(ThemeProvider, null,
+        React.createElement(PluginErrorBoundary, null,
+          React.createElement(AnkiDeckObsidian, { vaultStore: this.plugin.vaultStore })
+        )
       )
     );
   }

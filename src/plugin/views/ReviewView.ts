@@ -3,6 +3,8 @@ import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import QuranLifePlugin from "../main";
 import ReviewObsidian from "../components/ReviewObsidian";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { PluginErrorBoundary } from "../components/PluginErrorBoundary";
 
 export const VIEW_TYPE_REVIEW = "quran-life-review";
 
@@ -21,7 +23,13 @@ export class ReviewView extends ItemView {
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
     mountEl.style.height = "100%";
     this.root = createRoot(mountEl);
-    this.root.render(React.createElement(React.StrictMode, null, React.createElement(ReviewObsidian, { vaultStore: this.plugin.vaultStore })));
+    this.root.render(
+      React.createElement(ThemeProvider, null,
+        React.createElement(PluginErrorBoundary, null,
+          React.createElement(ReviewObsidian, { vaultStore: this.plugin.vaultStore })
+        )
+      )
+    );
   }
   async onClose(): Promise<void> {
     if (this.root) { try { this.root.unmount(); } catch {} this.root = null; }

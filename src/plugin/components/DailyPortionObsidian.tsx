@@ -296,7 +296,21 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     }
   }, [currentVerseIndex, highlightedWordIndex]);
 
-  if (!isLoaded) return <PageSkeleton />;
+  if (!isLoaded) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'50vh', flexDirection:'column', gap:8 }}>
+      <div style={{ width:24, height:24, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+      <span style={{ fontSize:'0.85em', opacity:0.7 }}>Loading Quran data…</span>
+      <span style={{ fontSize:'0.75em', opacity:0.5 }}>If stuck, ensure QuranLife/assets/qpc-hafs-word-by-word.json exists (plugin copies it on first load) or check console.</span>
+    </div>
+  );
+  if (allVerses.length === 0) return (
+    <div style={{ padding:24, textAlign:'center' }}>
+      <p style={{ fontWeight:600 }}>Quran data not found</p>
+      <p style={{ fontSize:'0.85em', opacity:0.7, marginTop:4 }}>Daily portion needs Quran text. Expected at <code>QuranLife/assets/qpc-hafs-word-by-word.json</code> or plugin folder <code>.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json</code>.</p>
+      <p style={{ fontSize:'0.8em', opacity:0.6, marginTop:8 }}>The plugin copies it automatically on first launch (see <code>ensureDataRoot</code>). If this is first load, wait a second and reload view. Check <code>Developer Tools → Console</code> for <code>Failed to load quran JSON</code>.</p>
+      <button onClick={()=>window.location.reload()} style={{ marginTop:12, padding:'6px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)' }}>Reload</button>
+    </div>
+  );
 
   return (
     <div className="content-wrapper">

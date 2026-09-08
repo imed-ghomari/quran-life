@@ -86,6 +86,25 @@ if (prod) {
   } catch (e) {
     console.warn("Could not append tldraw.css", e);
   }
+  // Copy Quran JSON to plugin root for vault fallback (Obsidian has no /public server)
+  try {
+    const srcJson = path.join("public", "qpc-hafs-word-by-word.json");
+    const destJson = path.join(".", "qpc-hafs-word-by-word.json");
+    if (fs.existsSync(srcJson) && !fs.existsSync(destJson)) {
+      fs.copyFileSync(srcJson, destJson);
+      console.log("✓ qpc-hafs-word-by-word.json copied to plugin root for Obsidian vault fallback");
+    } else if (fs.existsSync(srcJson)) {
+      // Update if source newer
+      const srcStat = fs.statSync(srcJson);
+      const destStat = fs.existsSync(destJson) ? fs.statSync(destJson) : null;
+      if (!destStat || srcStat.mtimeMs > destStat.mtimeMs) {
+        fs.copyFileSync(srcJson, destJson);
+        console.log("✓ qpc-hafs-word-by-word.json updated at plugin root");
+      }
+    }
+  } catch (e) {
+    console.warn("Could not copy quran JSON", e);
+  }
   process.exit(0);
 } else {
   await context.watch();

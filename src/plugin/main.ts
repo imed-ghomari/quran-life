@@ -3,8 +3,8 @@ import { VaultStore, DEFAULT_DATA_ROOT, DebouncedVaultWriter } from "./storage/v
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
-import { MindmapView, VIEW_TYPE_MINDMAP } from "./views/MindmapView";
 import { ReviewView, VIEW_TYPE_REVIEW } from "./views/ReviewView";
+export const VIEW_TYPE_MINDMAP = "quran-life-mindmap"; // deprecated alias, now merged into Anki Deck
 
 /**
  * Quran Life — Obsidian plugin
@@ -30,20 +30,23 @@ export default class QuranLifePlugin extends Plugin {
     });
 
     // Register native views — no iframe, containerEl only
+    // Anki Deck is merged with Mindmap (like web app): one view handles splits + mindmaps + docs
     this.registerView(VIEW_TYPE_DAILY, (leaf) => new DailyPortionView(leaf, this));
     this.registerView(VIEW_TYPE_ANKI, (leaf) => new AnkiDeckView(leaf, this));
-    this.registerView(VIEW_TYPE_MINDMAP, (leaf) => new MindmapView(leaf, this));
     this.registerView(VIEW_TYPE_REVIEW, (leaf) => new ReviewView(leaf, this));
+    // Deprecated mindmap type — alias to merged Anki Deck for backward-compat workspaces
+    this.registerView(VIEW_TYPE_MINDMAP, (leaf) => new AnkiDeckView(leaf, this));
 
     // Commands to reveal views (mobile + desktop)
     this.addCommand({ id: "open-daily-portion", name: "Open Daily Portion", callback: () => this.activateView(VIEW_TYPE_DAILY) });
-    this.addCommand({ id: "open-anki-deck", name: "Open Anki Deck", callback: () => this.activateView(VIEW_TYPE_ANKI) });
+    this.addCommand({ id: "open-anki-deck", name: "Open Anki Deck (Mindmaps + Splits)", callback: () => this.activateView(VIEW_TYPE_ANKI) });
     this.addCommand({ id: "open-review", name: "Open Reviews", callback: () => this.activateView(VIEW_TYPE_REVIEW) });
-    this.addCommand({ id: "open-mindmap", name: "Open Mindmap Editor", callback: () => this.activateView(VIEW_TYPE_MINDMAP) });
+    // Back-compat: old mindmap command now opens the merged Anki Deck view
+    this.addCommand({ id: "open-mindmap", name: "Open Mindmap Editor", callback: () => this.activateView(VIEW_TYPE_ANKI) });
 
-    // Ribbon icons (native, not React)
+    // Ribbon icons (native, not React) — Anki icon now opens merged Mindmap+Anki view
     this.addRibbonIcon("book-open", "Quran Life — Daily Portion", () => this.activateView(VIEW_TYPE_DAILY));
-    this.addRibbonIcon("layers", "Quran Life — Anki Deck", () => this.activateView(VIEW_TYPE_ANKI));
+    this.addRibbonIcon("layers", "Quran Life — Anki Deck (Mindmaps + Splits)", () => this.activateView(VIEW_TYPE_ANKI));
 
     // Settings tab
     this.addSettingTab(new QuranLifeSettingTab(this.app, this));
@@ -81,7 +84,7 @@ export default class QuranLifePlugin extends Plugin {
     if (!this.app.vault.getAbstractFileByPath(root)) {
       try { await this.app.vault.createFolder(root); } catch {}
     }
-    for (const sub of ["splits", "mindmaps", "docs", "daily/progress", "meta", "nodes"]) {
+    for (const sub of ["splits", "mindmaps", "docs", "daily/progress", "meta", "nodes", "assets"]) {
       const p = normalizePath(`${root}/${sub}`);
       if (!this.app.vault.getAbstractFileByPath(p)) {
         try { await this.app.vault.createFolder(p); } catch {}
@@ -91,6 +94,51 @@ export default class QuranLifePlugin extends Plugin {
     const settingsPath = normalizePath(`${root}/settings.json`);
     if (!(this.app.vault.getAbstractFileByPath(settingsPath) instanceof TFile)) {
       try { await this.app.vault.create(settingsPath, JSON.stringify({ updatedAt: new Date().toISOString() }, null, 2)); } catch {}
+    }
+    // Ensure Quran JSON is available in vault for offline/Daily portion (plugin has no /public server)
+    // Copy from plugin folder (.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json) to vault assets if missing
+    const vaultQuranPath = normalizePath(`${root}/assets/qpc-hafs-word-by-word.json`);
+    if (!(this.app.vault.getAbstractFileByPath(vaultQuranPath) instanceof TFile)) {
+      const pluginCandidates = [
+        ".obsidian/plugins/quran-life/qpc-hafs-word-by-word.json",
+        "qpc-hafs-word-by-word.json",
+        "public/qpc-hafs-word-by-word.json",
+      ];
+      for (const cand of pluginCandidates) {
+        try {
+          const raw = await this.app.vault.adapter.read(cand);
+          if (raw && raw.trim().startsWith("{")) {
+            await this.app.vault.create(vaultQuranPath, raw);
+            new Notice(`Quran data copied to ${vaultQuranPath} for offline use`);
+            break;
+          }
+        } catch {}
+      }
+      // Fallback: try fetch via resource path (plugin bundled asset)
+      if (!(this.app.vault.getAbstractFileByPath(vaultQuranPath) instanceof TFile)) {
+        try {
+          const candidates = [
+            ".obsidian/plugins/quran-life/qpc-hafs-word-by-word.json",
+            "qpc-hafs-word-by-word.json",
+          ];
+          for (const cand of candidates) {
+            const adapter: any = this.app.vault.adapter;
+            const resourceUrl = adapter.getResourcePath ? adapter.getResourcePath(cand) : "";
+            if (!resourceUrl) continue;
+            try {
+              const res = await fetch(resourceUrl);
+              if (res.ok) {
+                const text = await res.text();
+                if (text.trim().startsWith("{")) {
+                  await this.app.vault.create(vaultQuranPath, text);
+                  new Notice(`Quran data initialized from plugin resources`);
+                  break;
+                }
+              }
+            } catch {}
+          }
+        } catch {}
+      }
     }
   }
 

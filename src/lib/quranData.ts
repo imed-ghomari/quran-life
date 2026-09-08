@@ -243,6 +243,7 @@ export async function getQuranVerses(): Promise<Verse[]> {
                         'QuranLife/assets/qpc-hafs-word-by-word.json',
                         'QuranLife/qpc-hafs-word-by-word.json',
                         '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
+                        'qpc-hafs-word-by-word.json',
                     ];
                     for (const cand of candidates) {
                         try {
@@ -256,6 +257,24 @@ export async function getQuranVerses(): Promise<Verse[]> {
                                 return cachedVerses;
                             }
                         } catch {}
+                    }
+                    // Try via getResourcePath (app:// URL for plugin asset)
+                    if (obsidianApp.vault.adapter.getResourcePath) {
+                        for (const cand of candidates) {
+                            try {
+                                const resourceUrl = obsidianApp.vault.adapter.getResourcePath(cand);
+                                if (!resourceUrl) continue;
+                                const r = await fetch(resourceUrl);
+                                if (r.ok) {
+                                    const data = await r.json();
+                                    cachedVerses = parseQuranJson(data as Record<string, any>);
+                                    if (typeof window !== 'undefined') {
+                                        try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                                    }
+                                    return cachedVerses;
+                                }
+                            } catch {}
+                        }
                     }
                 } catch {}
             }

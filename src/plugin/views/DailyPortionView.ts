@@ -3,6 +3,8 @@ import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import QuranLifePlugin from "../main";
 import DailyPortionObsidian from "../components/DailyPortionObsidian";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { PluginErrorBoundary } from "../components/PluginErrorBoundary";
 
 export const VIEW_TYPE_DAILY = "quran-life-daily";
 
@@ -24,13 +26,16 @@ export class DailyPortionView extends ItemView {
     container.style.height = "100%";
     container.style.overflow = "auto";
 
-    // Native mount — no iframe, React root in containerEl
+    // Native mount — no iframe, React root in containerEl with ThemeProvider + error boundary
+    // ThemeProvider fallback now handles Obsidian's body theme (theme-light/theme-dark) if not wrapped, but we wrap explicitly
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
     mountEl.style.height = "100%";
     this.root = createRoot(mountEl);
     this.root.render(
-      React.createElement(React.StrictMode, null,
-        React.createElement(DailyPortionObsidian, { vaultStore: this.plugin.vaultStore })
+      React.createElement(ThemeProvider, null,
+        React.createElement(PluginErrorBoundary, null,
+          React.createElement(DailyPortionObsidian, { vaultStore: this.plugin.vaultStore })
+        )
       )
     );
   }
