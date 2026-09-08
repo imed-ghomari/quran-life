@@ -243,7 +243,10 @@ export async function getQuranVerses(): Promise<Verse[]> {
                         'QuranLife/assets/qpc-hafs-word-by-word.json',
                         'QuranLife/qpc-hafs-word-by-word.json',
                         '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
+                        '.obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json',
                         'qpc-hafs-word-by-word.json',
+                        'public/qpc-hafs-word-by-word.json',
+                        'public/qpc-hafs-word-by-word.json', // vault public folder if user copied there
                     ];
                     for (const cand of candidates) {
                         try {

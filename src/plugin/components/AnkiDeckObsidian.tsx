@@ -8,7 +8,7 @@ import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
-import { Save, Eye, Layers, PenTool, Split, Image as ImageIcon, Download, Trash2, Check, X, FileText } from 'lucide-react';
+import { Save, Eye, Layers, PenTool, Split, Image as ImageIcon, Download, Trash2, Check, X, FileText, BarChart3 } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 
@@ -34,9 +34,36 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const { content: docContent, save: saveDoc } = useVaultDoc(vaultStore, selectedMindmapKey);
   const [localAnchors, setLocalAnchors] = useState<AnkiAnchor[]>([]);
   const [editingDocText, setEditingDocText] = useState('');
+  const [showStatsDetails, setShowStatsDetails] = useState(false);
+  const [allSplitsForStats, setAllSplitsForStats] = useState<Record<number, AnkiAnchor[]>>({});
+  const [allDocsForStats, setAllDocsForStats] = useState<Record<string, string>>({});
 
   useEffect(() => { setEditingDocText(docContent); }, [docContent]);
   useEffect(() => { if (vaultAnchors.length) setLocalAnchors(vaultAnchors); else setLocalAnchors(ensureDefaultSplits(selectedSurah)); }, [vaultAnchors, selectedSurah]);
+
+  // Load all splits/docs for Deck Statistics (like web app's premadeForStats + local merge)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const splits: Record<number, AnkiAnchor[]> = {};
+      for (let sid=1; sid<=114; sid++) {
+        const arr = await vaultStore.loadSplitsForSurah(sid);
+        if (arr && arr.length) splits[sid] = arr as AnkiAnchor[];
+      }
+      const docs: Record<string, string> = {};
+      for (const key of Object.keys(allMindmaps)) {
+        const d = await vaultStore.loadDoc(key);
+        if (typeof d === 'string' && d.trim()) docs[key] = d;
+      }
+      // also include current unsaved doc
+      if (editingDocText.trim() && !docs[selectedMindmapKey]) docs[selectedMindmapKey] = editingDocText;
+      if (!cancelled) {
+        setAllSplitsForStats(splits);
+        setAllDocsForStats(docs);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [vaultStore, allMindmaps, editingDocText, selectedMindmapKey]);
 
   const surah = getSurah(selectedSurah);
   const [surahVerses, setSurahVerses] = useState<Verse[]>([]);
@@ -218,6 +245,79 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           <p style={{ fontSize:'0.75em', opacity:0.6 }}>Saved as markdown per file — editable directly in Obsidian, synced via Resilio.</p>
         </div>
       </div>
+
+      {/* Deck Statistics — like web app, at end of view */}
+      {(() => {
+        const surahMindmapCount = Object.keys(allMindmaps).filter(k => k.startsWith('surah-') && (allMindmaps as any)[k]?.snapshot).length;
+        const partMetaCount = Object.keys(allMindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (allMindmaps as any)[k]?.snapshot).length;
+        const totalVerseGroups = SURAHS.reduce((acc, s) => {
+          const hasMM = !!(allMindmaps as any)[`surah-${s.id}`]?.snapshot;
+          if (!hasMM) return acc;
+          const groups = (allSplitsForStats as any)[s.id]?.length;
+          return acc + (groups && groups > 0 ? groups : 1);
+        }, 0);
+        const docsWithContent = Object.keys(allDocsForStats).filter(k => {
+          const v = (allDocsForStats as any)[k];
+          return typeof v === 'string' && v.trim().length > 0 && !v.includes('_Not added yet._');
+        }).length;
+        const docsTotal = Object.keys(allDocsForStats).filter(k => typeof (allDocsForStats as any)[k] === 'string' && (allDocsForStats as any)[k].trim().length > 0).length;
+        return (
+          <div className="card">
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <h3 style={{ display:'flex', gap:6, alignItems:'center', fontSize:'0.95em', fontWeight:600 }}><BarChart3 size={16} /> Deck Statistics</h3>
+              <button onClick={()=>setShowStatsDetails(v=>!v)} style={{ padding:'4px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', fontSize:'0.8em' }}>{showStatsDetails ? 'Hide details' : 'Show details'}</button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8, marginTop:10 }}>
+              <div style={{ padding:10, borderRadius:8, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', textAlign:'center' }}>
+                <div style={{ fontWeight:700, fontSize:'1.1em' }}>{surahMindmapCount}/114</div>
+                <div style={{ fontSize:'0.75em', opacity:0.7 }}>Surahs with mindmap</div>
+              </div>
+              <div style={{ padding:10, borderRadius:8, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', textAlign:'center' }}>
+                <div style={{ fontWeight:700, fontSize:'1.1em' }}>{partMetaCount}/8</div>
+                <div style={{ fontSize:'0.75em', opacity:0.7 }}>Parts/Meta with mindmap</div>
+              </div>
+              <div style={{ padding:10, borderRadius:8, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', textAlign:'center' }}>
+                <div style={{ fontWeight:700, fontSize:'1.1em' }}>{totalVerseGroups}</div>
+                <div style={{ fontSize:'0.75em', opacity:0.7 }}>Verse groups</div>
+              </div>
+              <div style={{ padding:10, borderRadius:8, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', textAlign:'center' }}>
+                <div style={{ fontWeight:700, fontSize:'1.1em' }}>{docsWithContent}/{docsTotal}</div>
+                <div style={{ fontSize:'0.75em', opacity:0.7 }}>Docs with notes</div>
+              </div>
+            </div>
+            {showStatsDetails && (
+              <div style={{ marginTop:12, borderTop:'1px solid var(--background-modifier-border)', paddingTop:8 }}>
+                <h4 style={{ fontSize:'0.85em', fontWeight:600, marginBottom:6 }}>Surahs 1-114</h4>
+                <div style={{ maxHeight:280, overflow:'auto', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
+                  <table style={{ width:'100%', fontSize:'0.8em', borderCollapse:'collapse' }}>
+                    <thead style={{ position:'sticky', top:0, background:'var(--background-secondary)', borderBottom:'1px solid var(--background-modifier-border)' }}>
+                      <tr><th style={{ textAlign:'left', padding:'6px 8px' }}>Surah</th><th style={{ padding:'6px 8px' }}>Mindmap</th><th style={{ padding:'6px 8px' }}>Groups</th><th style={{ padding:'6px 8px' }}>Docs</th></tr>
+                    </thead>
+                    <tbody>
+                      {SURAHS.map(s=>{
+                        const key=`surah-${s.id}`;
+                        const hasMM=!!(allMindmaps as any)[key]?.snapshot;
+                        const groups=hasMM ? ((allSplitsForStats as any)[s.id]?.length ?? 1) : 0;
+                        const doc=(allDocsForStats as any)[key] as string | undefined;
+                        const hasDoc=typeof doc==='string' && doc.trim().length>0;
+                        const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
+                        return (
+                          <tr key={s.id} style={{ borderTop:'1px solid var(--background-modifier-border)' }}>
+                            <td style={{ padding:'6px 8px' }}><span style={{ fontWeight:600 }}>{s.id}.</span> {s.arabicName} <span style={{ opacity:0.6 }}>({s.name})</span></td>
+                            <td style={{ padding:'6px 8px', textAlign:'center' }}>{hasMM ? <Check size={14} style={{ color:'var(--text-success)', display:'inline' }} /> : <X size={14} style={{ display:'inline', opacity:0.3 }} />}</td>
+                            <td style={{ padding:'6px 8px', textAlign:'center' }}>{hasMM ? <span style={{ padding:'2px 6px', borderRadius:4, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)' }}>{groups}</span> : <span style={{ opacity:0.3 }}>—</span>}</td>
+                            <td style={{ padding:'6px 8px', textAlign:'center' }}>{!hasDoc ? <X size={14} style={{ display:'inline', opacity:0.3 }} /> : isPlaceholder ? <span style={{ color:'var(--text-warning)' }}><FileText size={12} style={{ display:'inline' }} />•</span> : <Check size={14} style={{ color:'var(--text-success)', display:'inline' }} />}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {showMindmapEditor && (
         <div style={{ position:'fixed', inset:0, zIndex:100, background:'var(--background-primary)' }}>

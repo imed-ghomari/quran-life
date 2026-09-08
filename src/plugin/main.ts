@@ -3,7 +3,6 @@ import { VaultStore, DEFAULT_DATA_ROOT, DebouncedVaultWriter } from "./storage/v
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
-import { ReviewView, VIEW_TYPE_REVIEW } from "./views/ReviewView";
 export const VIEW_TYPE_MINDMAP = "quran-life-mindmap"; // deprecated alias, now merged into Anki Deck
 
 /**
@@ -30,19 +29,15 @@ export default class QuranLifePlugin extends Plugin {
     });
 
     // Register native views — no iframe, containerEl only
-    // Anki Deck is merged with Mindmap (like web app): one view handles splits + mindmaps + docs
+    // Like web app: Daily Portion + Anki Deck (mindmaps + splits merged). No separate Review view.
     this.registerView(VIEW_TYPE_DAILY, (leaf) => new DailyPortionView(leaf, this));
     this.registerView(VIEW_TYPE_ANKI, (leaf) => new AnkiDeckView(leaf, this));
-    this.registerView(VIEW_TYPE_REVIEW, (leaf) => new ReviewView(leaf, this));
-    // Deprecated mindmap type — alias to merged Anki Deck for backward-compat workspaces
+    // Deprecated mindmap type — keep alias for old workspaces, but no command (merged into Anki Deck)
     this.registerView(VIEW_TYPE_MINDMAP, (leaf) => new AnkiDeckView(leaf, this));
 
-    // Commands to reveal views (mobile + desktop)
+    // Commands to reveal views (mobile + desktop) — only 2 views like web app
     this.addCommand({ id: "open-daily-portion", name: "Open Daily Portion", callback: () => this.activateView(VIEW_TYPE_DAILY) });
-    this.addCommand({ id: "open-anki-deck", name: "Open Anki Deck (Mindmaps + Splits)", callback: () => this.activateView(VIEW_TYPE_ANKI) });
-    this.addCommand({ id: "open-review", name: "Open Reviews", callback: () => this.activateView(VIEW_TYPE_REVIEW) });
-    // Back-compat: old mindmap command now opens the merged Anki Deck view
-    this.addCommand({ id: "open-mindmap", name: "Open Mindmap Editor", callback: () => this.activateView(VIEW_TYPE_ANKI) });
+    this.addCommand({ id: "open-anki-deck", name: "Open Anki Deck", callback: () => this.activateView(VIEW_TYPE_ANKI) });
 
     // Ribbon icons (native, not React) — Anki icon now opens merged Mindmap+Anki view
     this.addRibbonIcon("book-open", "Quran Life — Daily Portion", () => this.activateView(VIEW_TYPE_DAILY));
@@ -101,8 +96,10 @@ export default class QuranLifePlugin extends Plugin {
     if (!(this.app.vault.getAbstractFileByPath(vaultQuranPath) instanceof TFile)) {
       const pluginCandidates = [
         ".obsidian/plugins/quran-life/qpc-hafs-word-by-word.json",
+        ".obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json",
         "qpc-hafs-word-by-word.json",
         "public/qpc-hafs-word-by-word.json",
+        "QuranLife/qpc-hafs-word-by-word.json",
       ];
       for (const cand of pluginCandidates) {
         try {
@@ -119,7 +116,9 @@ export default class QuranLifePlugin extends Plugin {
         try {
           const candidates = [
             ".obsidian/plugins/quran-life/qpc-hafs-word-by-word.json",
+            ".obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json",
             "qpc-hafs-word-by-word.json",
+            "public/qpc-hafs-word-by-word.json",
           ];
           for (const cand of candidates) {
             const adapter: any = this.app.vault.adapter;
