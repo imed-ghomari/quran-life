@@ -459,31 +459,6 @@ export default function DailyPortion() {
                   <span>• Cycle {activeProgress?.cycles || 0}</span>
                 </div>
               </div>
-
-              {/* Theme (kept minimal) */}
-              <div className="border-t border-[var(--border)] pt-4">
-                <label className="adv-label mb-2 block">Appearance</label>
-                <div className="flex gap-2">
-                  {(['light', 'dark', 'system'] as const).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => {
-                        const k = 'theme';
-                        localStorage.setItem(k, m);
-                        const root = document.documentElement;
-                        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                        const resolved = m === 'system' ? (prefersDark ? 'dark' : 'light') : m;
-                        root.setAttribute('data-theme', resolved);
-                        // force re-render via theme provider state? simple reload not needed
-                        window.dispatchEvent(new Event('storage'));
-                      }}
-                      className="flex-1 p-2 rounded-lg border border-[var(--border)] text-sm capitalize hover:bg-[var(--verse-bg)]"
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         )}

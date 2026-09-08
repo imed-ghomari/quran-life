@@ -10,7 +10,7 @@ import { loadAnkiMindmaps, saveAnkiMindmap, saveAnkiMindmapByKey, getAnkiMindmap
 import { loadMindmapDocs, saveMindmapDoc, deleteMindmapDoc } from '@/lib/anki/mindmapDocsStore';
 import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
-import { Save, Eye, FileJson, Layers, PenTool, Split, Image as ImageIcon, Download, Upload, Trash2 } from 'lucide-react';
+import { Save, Eye, Layers, PenTool, Split, Image as ImageIcon, Download, Trash2 } from 'lucide-react';
 import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useTheme } from '@/components/ThemeProvider';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
@@ -611,31 +611,9 @@ export default function AnkiDeckTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="card">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold flex items-center gap-2"><Layers size={20} className="text-[var(--accent)]" /> Anki Deck</h2>
-            <p className="text-sm text-[var(--foreground-secondary)] mt-1">Create your review cards. Choose how verses are grouped, then export to Anki.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => {
-              const data = { splits, mindmaps, mindmapDocs, exportedAt: new Date().toISOString(), deckName };
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `quran-life-anki-backup-${new Date().toISOString().slice(0,10)}.json`;
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-              URL.revokeObjectURL(url);
-              showToast('Backup exported');
-            }} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-2 hover:bg-[var(--verse-bg)]">
-              <Upload size={16} /> Export backup
-            </button>
-            <label className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-2 cursor-pointer hover:bg-[var(--verse-bg)]">
-              <FileJson size={16} /> Import backup <input type="file" accept=".json" className="hidden" onChange={e => e.target.files?.[0] && handleImportJson(e.target.files[0])} />
-            </label>
-          </div>
+        <div>
+          <h2 className="text-xl font-bold flex items-center gap-2"><Layers size={20} className="text-[var(--accent)]" /> Anki Deck</h2>
+          <p className="text-sm text-[var(--foreground-secondary)] mt-1">Create your review cards. Choose how verses are grouped, then export to Anki. Use the global Export/Import in the top bar for full backups (includes Daily Portion).</p>
         </div>
 
         <div className="mt-4 flex gap-3 items-end">
