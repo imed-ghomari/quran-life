@@ -1,5 +1,5 @@
 import { Plugin, WorkspaceLeaf, Notice, TFile, normalizePath } from "obsidian";
-import { VaultStore, DEFAULT_DATA_ROOT, DebouncedVaultWriter } from "./storage/vaultAdapter";
+import { VaultStore, DEFAULT_DATA_ROOT, LEGACY_DATA_ROOT, DebouncedVaultWriter, ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
@@ -76,43 +76,109 @@ export default class QuranLifePlugin extends Plugin {
 
   private async ensureDataRoot(): Promise<void> {
     const root = normalizePath(this.settings.dataRoot || DEFAULT_DATA_ROOT);
-    if (!this.app.vault.getAbstractFileByPath(root)) {
-      try { await this.app.vault.createFolder(root); } catch {}
-    }
+    // Create root and subfolders using hidden-aware ensureFolder
+    await ensureFolder(this.app, root);
     for (const sub of ["splits", "mindmaps", "docs", "daily/progress", "meta", "nodes", "assets"]) {
-      const p = normalizePath(`${root}/${sub}`);
-      if (!this.app.vault.getAbstractFileByPath(p)) {
-        try { await this.app.vault.createFolder(p); } catch {}
+      await ensureFolder(this.app, normalizePath(`${root}/${sub}`));
+    }
+    // Migrate from legacy QuranLife folder if new hidden root is empty and legacy exists
+    if (isHiddenPath(root) && root !== normalizePath(LEGACY_DATA_ROOT)) {
+      const legacyRoot = normalizePath(LEGACY_DATA_ROOT);
+      const legacyExists = isHiddenPath(legacyRoot)
+        ? await (this.app.vault.adapter as any).exists?.(legacyRoot)
+        : !!this.app.vault.getAbstractFileByPath(legacyRoot);
+      const newExists = await (async () => {
+        if (isHiddenPath(root)) {
+          try { return await (this.app.vault.adapter as any).exists(root); } catch { return false; }
+        }
+        return !!this.app.vault.getAbstractFileByPath(root);
+      })();
+      // If legacy has files and new is empty (only just created), offer migration via notice
+      if (legacyExists) {
+        try {
+          const adapter: any = this.app.vault.adapter;
+          const legacyList = adapter.list ? await adapter.list(legacyRoot) : null;
+          const newList = adapter.list ? await adapter.list(root) : null;
+          const legacyFiles = legacyList?.files?.length || 0;
+          const newFiles = newList?.files?.length || 0;
+          if (legacyFiles > 0 && newFiles <= 1) { // only settings.json
+            new Notice(`Migrating existing QuranLife data to new plugin folder for single-folder Resilio sync...`);
+            // Copy splits, mindmaps, docs via adapter
+            const copyDir = async (src: string, dest: string) => {
+              try {
+                const listed = await adapter.list(src);
+                const files: string[] = listed?.files || [];
+                for (const f of files) {
+                  try {
+                    const rel = f.startsWith(src) ? f.slice(src.length + 1) : f.split("/").pop()!;
+                    const srcPath = f;
+                    const destPath = normalizePath(`${dest}/${rel}`);
+                    const data = await adapter.read(srcPath);
+                    await ensureFolder(this.app, dest);
+                    await adapter.write(destPath, data);
+                  } catch {}
+                }
+                const folders: string[] = listed?.folders || [];
+                for (const fld of folders) {
+                  const rel = fld.startsWith(src) ? fld.slice(src.length + 1) : fld.split("/").pop()!;
+                  await copyDir(fld, normalizePath(`${dest}/${rel}`));
+                }
+              } catch {}
+            };
+            await copyDir(legacyRoot, root);
+            new Notice(`Migration complete: legacy ${legacyRoot} → ${root}. You can now sync only ${root} via Resilio.`);
+          }
+        } catch {}
       }
     }
-    // Ensure settings.json exists
+    // Ensure settings.json exists (hidden-aware)
     const settingsPath = normalizePath(`${root}/settings.json`);
-    if (!(this.app.vault.getAbstractFileByPath(settingsPath) instanceof TFile)) {
-      try { await this.app.vault.create(settingsPath, JSON.stringify({ updatedAt: new Date().toISOString() }, null, 2)); } catch {}
+    const settingsExists = isHiddenPath(settingsPath)
+      ? await (this.app.vault.adapter as any).exists?.(settingsPath)
+      : !!this.app.vault.getAbstractFileByPath(settingsPath);
+    if (!settingsExists) {
+      try {
+        if (isHiddenPath(settingsPath)) {
+          await (this.app.vault.adapter as any).write(settingsPath, JSON.stringify({ updatedAt: new Date().toISOString() }, null, 2));
+        } else {
+          await this.app.vault.create(settingsPath, JSON.stringify({ updatedAt: new Date().toISOString() }, null, 2));
+        }
+      } catch {}
     }
     // Ensure Quran JSON is available in vault for offline/Daily portion (plugin has no /public server)
     // Copy from plugin folder (.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json) to vault assets if missing
     const vaultQuranPath = normalizePath(`${root}/assets/qpc-hafs-word-by-word.json`);
-    if (!(this.app.vault.getAbstractFileByPath(vaultQuranPath) instanceof TFile)) {
+    const vaultQuranExists = isHiddenPath(vaultQuranPath)
+      ? await (this.app.vault.adapter as any).exists?.(vaultQuranPath)
+      : !!this.app.vault.getAbstractFileByPath(vaultQuranPath);
+    if (!vaultQuranExists) {
       const pluginCandidates = [
         ".obsidian/plugins/quran-life/qpc-hafs-word-by-word.json",
         ".obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json",
         "qpc-hafs-word-by-word.json",
         "public/qpc-hafs-word-by-word.json",
         "QuranLife/qpc-hafs-word-by-word.json",
+        "QuranLife/assets/qpc-hafs-word-by-word.json",
       ];
       for (const cand of pluginCandidates) {
         try {
           const raw = await this.app.vault.adapter.read(cand);
           if (raw && raw.trim().startsWith("{")) {
-            await this.app.vault.create(vaultQuranPath, raw);
+            if (isHiddenPath(vaultQuranPath)) {
+              await (this.app.vault.adapter as any).write(vaultQuranPath, raw);
+            } else {
+              await this.app.vault.create(vaultQuranPath, raw);
+            }
             new Notice(`Quran data copied to ${vaultQuranPath} for offline use`);
             break;
           }
         } catch {}
       }
       // Fallback: try fetch via resource path (plugin bundled asset)
-      if (!(this.app.vault.getAbstractFileByPath(vaultQuranPath) instanceof TFile)) {
+      const vaultQuranExists2 = isHiddenPath(vaultQuranPath)
+        ? await (this.app.vault.adapter as any).exists?.(vaultQuranPath)
+        : this.app.vault.getAbstractFileByPath(vaultQuranPath) instanceof TFile;
+      if (!vaultQuranExists2) {
         try {
           const candidates = [
             ".obsidian/plugins/quran-life/qpc-hafs-word-by-word.json",
@@ -129,7 +195,11 @@ export default class QuranLifePlugin extends Plugin {
               if (res.ok) {
                 const text = await res.text();
                 if (text.trim().startsWith("{")) {
-                  await this.app.vault.create(vaultQuranPath, text);
+                  if (isHiddenPath(vaultQuranPath)) {
+                    await (this.app.vault.adapter as any).write(vaultQuranPath, text);
+                  } else {
+                    await this.app.vault.create(vaultQuranPath, text);
+                  }
                   new Notice(`Quran data initialized from plugin resources`);
                   break;
                 }

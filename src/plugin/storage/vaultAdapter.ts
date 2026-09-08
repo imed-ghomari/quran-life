@@ -12,7 +12,10 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
 
 // Vault layout (all paths relative to vault root)
-export const DEFAULT_DATA_ROOT = "QuranLife";
+// User requested: store everything in plugin folder so only one folder needs Resilio Sync
+// This is hidden but accessible via adapter (vault API hides .obsidian, but adapter can read hidden)
+export const DEFAULT_DATA_ROOT = ".obsidian/plugins/quran-life/data";
+export const LEGACY_DATA_ROOT = "QuranLife"; // previous location, for migration
 
 export const VAULT_PATHS = {
   // Global settings (small, rarely conflicted)
@@ -46,8 +49,28 @@ export const VAULT_PATHS = {
 
 // ---------- low-level helpers ----------
 
-async function ensureFolder(app: App, folderPath: string): Promise<void> {
+export function isHiddenPath(path: string): boolean {
+  return normalizePath(path).startsWith(".obsidian");
+}
+
+export async function ensureFolder(app: App, folderPath: string): Promise<void> {
   const normalized = normalizePath(folderPath);
+  if (isHiddenPath(normalized)) {
+    // Hidden .obsidian paths need adapter (vault API hides them)
+    const adapter: any = (app as any).vault?.adapter;
+    if (adapter?.exists && adapter?.mkdir) {
+      const parts = normalized.split("/");
+      let cur = "";
+      for (const part of parts) {
+        cur = cur ? `${cur}/${part}` : part;
+        try {
+          const exists = await adapter.exists(cur);
+          if (!exists) await adapter.mkdir(cur);
+        } catch {}
+      }
+      return;
+    }
+  }
   if (app.vault.getAbstractFileByPath(normalized) instanceof TFolder) return;
   // vault.createFolder throws if exists, so check first; create recursively
   const parts = normalized.split("/");
@@ -68,6 +91,15 @@ async function writeJsonAtomic(app: App, filePath: string, data: unknown): Promi
   const normalized = normalizePath(filePath);
   const text = JSON.stringify(data, null, 2);
   await ensureFolder(app, normalized.split("/").slice(0, -1).join("/") || "/");
+  if (isHiddenPath(normalized)) {
+    const adapter: any = (app as any).vault?.adapter;
+    if (adapter?.write) {
+      try {
+        await adapter.write(normalized, text);
+        return;
+      } catch {}
+    }
+  }
   const file = app.vault.getAbstractFileByPath(normalized);
   if (file instanceof TFile) {
     // Use process for atomicity: guarantees no overwrite of external (Resilio) change between read/write
@@ -79,7 +111,22 @@ async function writeJsonAtomic(app: App, filePath: string, data: unknown): Promi
 }
 
 async function readJson<T>(app: App, filePath: string, fallback: T): Promise<T> {
-  const file = app.vault.getAbstractFileByPath(normalizePath(filePath));
+  const normalized = normalizePath(filePath);
+  if (isHiddenPath(normalized)) {
+    const adapter: any = (app as any).vault?.adapter;
+    if (adapter?.exists && adapter?.read) {
+      try {
+        const exists = await adapter.exists(normalized);
+        if (!exists) return fallback;
+        const raw = await adapter.read(normalized);
+        if (!raw || !raw.trim()) return fallback;
+        return JSON.parse(raw) as T;
+      } catch {
+        return fallback;
+      }
+    }
+  }
+  const file = app.vault.getAbstractFileByPath(normalized);
   if (!(file instanceof TFile)) return fallback;
   try {
     const raw = await app.vault.read(file); // not cachedRead — we need fresh for external sync
@@ -91,13 +138,73 @@ async function readJson<T>(app: App, filePath: string, fallback: T): Promise<T> 
 }
 
 async function readText(app: App, filePath: string, fallback: string | null = null): Promise<string | null> {
-  const file = app.vault.getAbstractFileByPath(normalizePath(filePath));
+  const normalized = normalizePath(filePath);
+  if (isHiddenPath(normalized)) {
+    const adapter: any = (app as any).vault?.adapter;
+    if (adapter?.exists && adapter?.read) {
+      try {
+        const exists = await adapter.exists(normalized);
+        if (!exists) return fallback;
+        return await adapter.read(normalized);
+      } catch {
+        return fallback;
+      }
+    }
+  }
+  const file = app.vault.getAbstractFileByPath(normalized);
   if (!(file instanceof TFile)) return fallback;
   try {
     return await app.vault.read(file);
   } catch {
     return fallback;
   }
+}
+
+async function adapterExists(app: App, path: string): Promise<boolean> {
+  const normalized = normalizePath(path);
+  if (isHiddenPath(normalized)) {
+    const adapter: any = (app as any).vault?.adapter;
+    if (adapter?.exists) {
+      try { return await adapter.exists(normalized); } catch { return false; }
+    }
+  }
+  return !!app.vault.getAbstractFileByPath(normalized);
+}
+
+async function adapterRead(app: App, path: string): Promise<string | null> {
+  const normalized = normalizePath(path);
+  if (isHiddenPath(normalized)) {
+    const adapter: any = (app as any).vault?.adapter;
+    try {
+      if (adapter?.exists && !(await adapter.exists(normalized))) return null;
+      return await adapter.read(normalized);
+    } catch { return null; }
+  }
+  const file = app.vault.getAbstractFileByPath(normalized);
+  if (file instanceof TFile) {
+    try { return await app.vault.read(file); } catch { return null; }
+  }
+  return null;
+}
+
+async function adapterListFiles(app: App, dirPath: string): Promise<string[]> {
+  const normalized = normalizePath(dirPath);
+  if (isHiddenPath(normalized)) {
+    const adapter: any = (app as any).vault?.adapter;
+    if (adapter?.list) {
+      try {
+        const listed = await adapter.list(normalized);
+        // adapter.list returns { files: string[], folders: string[] }
+        if (Array.isArray(listed?.files)) return listed.files;
+        if (Array.isArray(listed)) return listed;
+      } catch {}
+    }
+  }
+  const folder = app.vault.getAbstractFileByPath(normalized);
+  if (folder instanceof TFolder) {
+    return folder.children.filter(c => c instanceof TFile).map(c => c.path);
+  }
+  return [];
 }
 
 // ---------- debounced writer (for tldraw high-frequency edits) ----------
@@ -165,22 +272,43 @@ export class VaultStore {
   }
   async saveSplitsForSurah(surahId: number, anchors: any[]): Promise<void> {
     if (anchors.length === 0) {
-      const file = this.app.vault.getAbstractFileByPath(VAULT_PATHS.splitFile(this.dataRoot, surahId));
-      if (file instanceof TFile) await this.app.vault.delete(file);
+      const path = VAULT_PATHS.splitFile(this.dataRoot, surahId);
+      if (isHiddenPath(path)) {
+        const adapter: any = (this.app as any).vault?.adapter;
+        try {
+          if (adapter?.exists && (await adapter.exists(path))) await adapter.remove(path);
+        } catch {}
+      } else {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof TFile) await this.app.vault.delete(file);
+      }
       return;
     }
     await writeJsonAtomic(this.app, VAULT_PATHS.splitFile(this.dataRoot, surahId), anchors);
   }
   async loadAllSplits(): Promise<Record<number, any[]>> {
-    const dir = this.app.vault.getAbstractFileByPath(VAULT_PATHS.splitsDir(this.dataRoot));
-    if (!(dir instanceof TFolder)) return {};
     const out: Record<number, any[]> = {};
-    for (const child of dir.children) {
-      if (!(child instanceof TFile) || !child.name.endsWith(".json")) continue;
-      const m = child.name.match(/surah-(\d+)\.json/);
+    const files = await adapterListFiles(this.app, VAULT_PATHS.splitsDir(this.dataRoot));
+    for (const filePath of files) {
+      if (!filePath.endsWith(".json")) continue;
+      const base = filePath.split("/").pop() || "";
+      const m = base.match(/surah-(\d+)\.json/);
       if (!m) continue;
       const sid = Number(m[1]);
-      out[sid] = await readJson(this.app, child.path, [] as any[]);
+      out[sid] = await readJson(this.app, filePath, [] as any[]);
+    }
+    // Fallback for non-hidden legacy vault API (if adapterListFiles returned empty but vault folder exists)
+    if (Object.keys(out).length === 0 && !isHiddenPath(VAULT_PATHS.splitsDir(this.dataRoot))) {
+      const dir = this.app.vault.getAbstractFileByPath(VAULT_PATHS.splitsDir(this.dataRoot));
+      if (dir instanceof TFolder) {
+        for (const child of dir.children) {
+          if (!(child instanceof TFile) || !child.name.endsWith(".json")) continue;
+          const m = child.name.match(/surah-(\d+)\.json/);
+          if (!m) continue;
+          const sid = Number(m[1]);
+          out[sid] = await readJson(this.app, child.path, [] as any[]);
+        }
+      }
     }
     return out;
   }
@@ -193,8 +321,16 @@ export class VaultStore {
     await writeJsonAtomic(this.app, VAULT_PATHS.mindmapFile(this.dataRoot, key), data);
   }
   async deleteMindmap(key: string): Promise<void> {
-    const file = this.app.vault.getAbstractFileByPath(VAULT_PATHS.mindmapFile(this.dataRoot, key));
-    if (file instanceof TFile) await this.app.vault.delete(file);
+    const path = VAULT_PATHS.mindmapFile(this.dataRoot, key);
+    if (isHiddenPath(path)) {
+      const adapter: any = (this.app as any).vault?.adapter;
+      try {
+        if (adapter?.exists && (await adapter.exists(path))) await adapter.remove(path);
+      } catch {}
+    } else {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (file instanceof TFile) await this.app.vault.delete(file);
+    }
     // tombstone for Resilio: track deleted to not re-import premade
     const deleted = await this.loadDeletedKeys();
     deleted.add(key);
@@ -215,6 +351,13 @@ export class VaultStore {
   async saveDoc(key: string, content: string): Promise<void> {
     const path = VAULT_PATHS.docFile(this.dataRoot, key);
     await ensureFolder(this.app, VAULT_PATHS.docsDir(this.dataRoot));
+    if (isHiddenPath(path)) {
+      const adapter: any = (this.app as any).vault?.adapter;
+      try {
+        await adapter.write(path, content);
+        return;
+      } catch {}
+    }
     const file = this.app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) await this.app.vault.modify(file, content);
     else await this.app.vault.create(path, content);

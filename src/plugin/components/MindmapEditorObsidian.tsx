@@ -165,7 +165,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     render() {
         if (this.state.hasError) {
             return (
-                <div style={{ padding: 20, color: 'red', background: 'white', overflow: 'auto', height: '100%' }}>
+                <div style={{ padding: 20, color: 'var(--text-error)', background: 'var(--background-primary)', overflow: 'auto', height: '100%' }}>
                     <h3>Editor Crashed</h3>
                     <p>{this.state.error?.message}</p>
                     <button
@@ -1009,7 +1009,7 @@ function MindmapEditorContent({
 
     if (isActuallyLoading) {
         return (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spinner size={32} text="Loading Mindmap..." />
             </div>
         );
@@ -1019,13 +1019,15 @@ function MindmapEditorContent({
         <div
             ref={containerRef}
             data-mindmap-swipe-guard="true"
-            style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background, white)', display: 'flex', flexDirection: 'column' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background-primary)', display: 'flex', flexDirection: 'column' }}
         >
             <div
                 className="mindmap-editor-header"
                 style={{
                 height: '50px',
-                borderBottom: '1px solid var(--border)',
+                borderBottom: '1px solid var(--background-modifier-border)',
+                background: 'var(--background-primary)',
+                color: 'var(--text-normal)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1080,7 +1082,7 @@ function MindmapEditorContent({
                 left: 0, 
                 right: 0, 
                 bottom: 0, 
-                background: '#f8f9fa',
+                background: 'var(--background-primary)',
                 overscrollBehaviorX: 'none' // Prevent browser back navigation gesture
             }}>
                 <Tldraw

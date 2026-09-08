@@ -236,18 +236,20 @@ export async function getQuranVerses(): Promise<Verse[]> {
             // Try Obsidian vault first (plugin context, no /public server)
             // When running inside Obsidian, window.app.vault is available
             const obsidianApp: any = typeof window !== 'undefined' ? (window as any).app : null;
-            if (obsidianApp?.vault?.adapter?.read) {
+            const isObsidian = !!obsidianApp?.vault?.adapter;
+            const candidates = [
+                '.obsidian/plugins/quran-life/data/assets/qpc-hafs-word-by-word.json',
+                'QuranLife/assets/qpc-hafs-word-by-word.json',
+                'QuranLife/qpc-hafs-word-by-word.json',
+                '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
+                '.obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json',
+                '.obsidian/plugins/quran-life/data/qpc-hafs-word-by-word.json',
+                'qpc-hafs-word-by-word.json',
+                'public/qpc-hafs-word-by-word.json',
+            ];
+            if (isObsidian) {
                 try {
                     // Try plugin-bundled asset via vault adapter resource path, or vault file QuranLife/assets/...
-                    const candidates = [
-                        'QuranLife/assets/qpc-hafs-word-by-word.json',
-                        'QuranLife/qpc-hafs-word-by-word.json',
-                        '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
-                        '.obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json',
-                        'qpc-hafs-word-by-word.json',
-                        'public/qpc-hafs-word-by-word.json',
-                        'public/qpc-hafs-word-by-word.json', // vault public folder if user copied there
-                    ];
                     for (const cand of candidates) {
                         try {
                             const raw = await obsidianApp.vault.adapter.read(cand);
@@ -280,6 +282,21 @@ export async function getQuranVerses(): Promise<Verse[]> {
                         }
                     }
                 } catch {}
+            }
+
+            // In Obsidian, don't try web fetch to /public (no dev server) — it will always fail and log Failed to fetch
+            if (isObsidian) {
+                console.warn('[QuranLife] Quran JSON not found in vault candidates, checked:', candidates);
+                // Try one last vault read for legacy path without isObsidian check
+                try {
+                    const raw = await (window as any).app?.vault?.adapter?.read('QuranLife/assets/qpc-hafs-word-by-word.json');
+                    if (raw) {
+                        const data = JSON.parse(raw);
+                        cachedVerses = parseQuranJson(data as Record<string, any>);
+                        return cachedVerses;
+                    }
+                } catch {}
+                throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in plugin folder or QuranLife/assets/. Plugin will copy it on next restart from .obsidian/plugins/quran-life/qpc-hafs-word-by-word.json if present.');
             }
 
             const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });

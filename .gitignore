@@ -15,4 +15,5 @@ main.js
 data.json
 .hot-reload
 /qpc-hafs-word-by-word.json
+/premade-anki-data.json
 tsconfig.tsbuildinfo

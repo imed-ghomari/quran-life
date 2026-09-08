@@ -7,7 +7,7 @@ export interface QuranLifePluginSettings {
 }
 
 export const DEFAULT_SETTINGS: QuranLifePluginSettings = {
-  dataRoot: "QuranLife",
+  dataRoot: ".obsidian/plugins/quran-life/data",
   autoSyncDebounceMs: 700,
 };
 
@@ -24,13 +24,14 @@ export class QuranLifeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Data folder")
-      .setDesc("Vault folder where Quran Life stores splits, mindmaps and docs. Sync this folder with Resilio Sync across devices. Each surah/mindmap is a separate file to avoid sync conflicts.")
+      .setDesc("Plugin folder synced via Resilio Sync (hide .obsidian if needed: Resilio can sync hidden folders — add this path as a Resilio folder). Each surah/mindmap is a separate file to avoid conflicts. Default is plugin's data folder so only one folder needs syncing.")
       .addText((text) =>
         text
-          .setPlaceholder("QuranLife")
+          .setPlaceholder(".obsidian/plugins/quran-life/data")
           .setValue(this.plugin.settings.dataRoot)
           .onChange(async (value) => {
-            const normalized = value.trim().replace(/^\/+|\/+$/g, "") || "QuranLife";
+            const normalized = value.trim().replace(/^\/+|\/+$/g, "") || ".obsidian/plugins/quran-life/data";
+            // Allow hidden .obsidian prefix, otherwise treat as vault-relative
             this.plugin.settings.dataRoot = normalized;
             await this.plugin.saveSettings();
           })
@@ -65,6 +66,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const info = containerEl.createEl("div", { cls: "setting-item-description" });
     info.createEl("p", { text: "• Split files = no conflicts: editing Surah 2 on phone and Surah 50 on desktop touches different files." });
     info.createEl("p", { text: "• One giant JSON (old) = last-writer-wins on whole app, 15MB rewrites per stroke." });
-    info.createEl("p", { text: "• Keep .obsidian/plugins out of Resilio; only sync the vault folder (QuranLife/)." });
+    info.createEl("p", { text: "• Data now lives in plugin folder (.obsidian/plugins/quran-life/data) — add this folder to Resilio Sync on each device (enable 'Show hidden files' or add hidden folder manually). Only one folder to sync." });
   }
 }
