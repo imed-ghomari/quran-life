@@ -1,0 +1,3 @@
+/* Quran Life — Obsidian styles (tldraw overrides will go here) */
+.quran-life-hint { color: var(--text-muted); font-size: 0.85em; }
+.quran-life-mindmap-bar select, .quran-life-mindmap-bar button { font-size: 0.9em; }
