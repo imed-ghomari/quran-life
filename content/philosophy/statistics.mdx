@@ -1,23 +1,39 @@
-# Tracking Your Progress
+# Tracking Your Progress — Two Places
 
-Your progress is shown in two places: your daily reading and your reviews.
+Your progress is now split: **daily reading** in the app, **reviews** in `Anki`.
 
-## Understanding Memory Strength
+## Understanding Memory Strength (Anki FSRS)
 
-As you review, your memory for each group gets stronger:
+Anki's `FSRS` maps to the old `New/Medium/Strong/Mastered`:
 
-- **New**: Recently started or recently forgotten.
-- **Medium**: Starting to stick in your long-term memory.
-- **Strong**: Very solid retention.
-- **Mastered**: Deeply known; you only need to see it every few months.
+- **New** (red): `Again` recently or `Forget` — `Due` = `New #`, `Ivl` = `0`.
+- **Learning / Medium** (orange/green): `Ivl` `14–30` days — `prop:ivl>14 prop:ivl<30` in `Browse`.
+- **Strong** (blue): `Ivl` `30–90` days.
+- **Mastered** (deep): `Ivl` `>90` days, eventually months.
+
+Check `Anki → Stats` (click deck → `Stats`) for `Retention`, `Due`, `Retention` vs `Desired Retention 0.90`.
 
 ## What You Can Track
 
-- **Daily Portion**: Shows how far you are in your current reading cycle.
-- **Reviews**: See how well you know each group and how often you will see it again.
+- **Daily Portion (in-app):** `Anki Deck` tab → `Deck Statistics` card `src/components/AnkiDeckTab.tsx:781` shows `Surahs/Parts with mindmap`, `Verse groups`, `Docs` (with `•` for placeholder). Details table lists all `114` Surahs + `8` parts/meta with `Mindmap`/`Groups`/`Docs` icons (balanced via `premadeForStats` fetch, not lazy state).
+- **Reviews (in Anki):**
+  - `Browse → deck:QuranLife is:due` — due today
+  - `Browse → tag:leech` — 3-strike list (needs map fix)
+  - `Browse → tag:mutashabihat` — all similar groups
+  - `Browse → flag:1` — your manual red flags
+  - `Browse → tag:surah::67` — per-Surah
+  - `Stats → Calendar` — review heatmap (replaces old `Daily Reviews` heatmap).
 
-You can view your daily progress in the app and your review progress in Anki.
+## Filters (Anki Browser)
 
-## Filters
+- `is:due`, `is:new`, `is:learn`, `prop:ivl>21`, `prop:due<7`, `tag:leech`, `tag:mutashabihat`, `flag:1`, `deck:QuranLife`, `tag:surah::67`.
+- Combine: `deck:QuranLife tag:mutashabihat is:due` — due similar groups to prioritize.
 
-Your daily progress respects your chosen Part and the Surahs you have chosen to skip.
+## Filters (Daily Portion)
+
+Your daily progress still respects `Active Part` and `Skipped Surahs` checked in `Daily Portion → Settings`. Changing `Active Part` does **not** affect Anki `Due`; Anki is global. Use `Suspend`/`Unsuspend` in `Browse` to hide/show Surahs for reviews.
+
+## When to Reset
+
+- **Daily reading:** `Daily Portion → Settings → Reset This Part / Reset All`.
+- **Reviews:** `Browse → Select cards → Forget` (makes `New`) or `Reschedule` (sets new `Due`). Do this after you `Delete` obsolete `Range` cards when you changed splits (see [How Reviews Work](/docs/philosophy/spaced-repetition)).

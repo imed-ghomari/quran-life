@@ -1,18 +1,41 @@
-# Settings & Daily Portion
+# Settings & Daily Portion — Where to Set What (Anki-native)
 
-This is where you choose what you focus on each day.
+This branch split settings: **Daily reading** stays in the app (`Daily Portion` tab), **maturity / splits / mindmaps** moved to `Anki` (`Browse`) + `Anki Deck` tab.
 
-## Daily Portion
+## Daily Portion (in-app)
 
-You set these in the **Daily Portion** tab:
+You set these in `Daily Portion → Settings` (gear icon):
 
-- **Active Part:** Choose the part you are working on. This decides which Surahs appear in your daily reading.
-- **Daily Time:** Choose how many minutes you want to read or listen each day. The app keeps that time steady and tells you how many days you need to finish the part. You can also reset your progress here.
+- **Active Part:** `1–7` + `All Quran` (`QuranPart` `src/lib/types.ts`). Decides which Surahs appear in `getSurahsByPart` and `eligibleSurahs` for your daily cycle.
+- **Daily Target:** `5–180` min (`DEFAULT_DAILY_TARGET_MINUTES` `src/lib/dailyPortionUtils.ts`). App keeps minutes steady and derives `derivedCompletionDays`.
+- **Mode:** `Listening` (`AudioPlayerLocal`) vs `Reading` (`paragraph` / `line_by_line`). Reading style is `paragraph` (grouped by Surah) or `line_by_line`.
+- **Surahs in Portion:** Check/uncheck per Surah in `Active Part`. `Select All` / `Clear All` are `btn btn-secondary`. Unchecking removes them from *daily reading only* — for reviews, `Suspend` in Anki instead (see below).
 
-## Skipped Surahs
+## Skipped / Maturity for Reviews (in Anki Browser — replaces old Knowledge Tracking)
 
-You can exclude Surahs you already know well from your daily reading. Add them back at any time. To skip a Surah for reviews, suspend it in Anki.
+There is **no** `Settings → Knowledge Tracking` slider anymore. Do this in `Anki → Browse`:
 
-## Mindmaps and Splits
+- **Skip a Surah for reviews:** `Browse → tag:surah::1` → select all its verse-group cards → `Suspend` (`Ctrl+J`). They disappear from `is:due`. To include again, `Unsuspend`.
+- **Set maturity per Surah / group:**
+  - `Browse → deck:QuranLife tag:surah::67` → select its 4 groups (`67:1-5` etc.) → Right-click → `Reschedule`:
+    - *Already known well* → `Set Due Date: 60` (or `Set Interval: 45`) — makes them `Strong`.
+    - *Need to relearn* → `Forget` — makes them `New` (red).
+    - *Postpone one group* → `Bury`.
+  - You can also `Flag` (`Flag Red` = similarity confusion, `Flag Orange` = weak map) and filter later `flag:1`.
+- **Bulk maturity:** `tag:surah::67 OR tag:surah::68` → `Reschedule` same way.
 
-Mindmaps and splits are not in Settings. Open the **Anki Deck** tab, select a Surah, edit its mindmap or splits, then export.
+## Mindmaps and Splits (Anki Deck tab)
+
+Not in `Settings`. Open `Anki Deck` tab:
+
+- **Mindmap:** `Select Surah/Part/Meta` → `Create/Edit Mindmap` (`tldraw` `src/components/MindmapEditor.tsx`) → `Save`. `View` toggles inline preview *under* selector (hidden by default to keep tab fast) — same for `part/meta` (above notes).
+- **Splits:** `Define Splits` → `+`/`×` per verse, `Save Splits` (`btn btn-primary`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits replace it. See `private-assets/premade-mindmaps/*.chunks.txt` for the default splits per premade mindmap (now copied to `public/premade-anki-data.json` `splits`).
+- **Notes:** `Notes for this mindmap` textarea `src/components/AnkiDeckTab.tsx:733` saved on `blur` or tab switch (`docsCacheRef`) and exported as `MindmapDocs` field.
+
+## What Anki Already Sets for You (first import)
+
+`public/premade-anki-data.json` export contains stable `DeckId/ModelId` `src/lib/anki/apkgExport.ts:436`, `FSRS` `Desired Retention 0.90`, `Leech 3 Tag Only`, and card template `src/lib/anki/apkgExport.ts:209` (`VerseChunksFront` blurred, `ContextFront` 2→5 when `mutashabihat`). After first import just verify `Deck Options → FSRS`.
+
+## Global Backup (includes Daily Portion)
+
+Use the **top bar** `Export` / `Import` next to tabs `src/components/AppTabs.tsx:186` — it backs up `anki` (`splits/mindmaps/docs/deleted`) + `daily` (`settings/progress`) + `theme` in one `version:2` JSON and reloads on import. This replaces the old buried buttons.
