@@ -570,7 +570,38 @@ export default function AnkiDeckTab() {
           allAnchors.push({ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` });
         }
       });
-      const filteredAnchors = allAnchors.filter(a => mindmapKeys.has(`surah-${a.surahId}`));
+      // Deduplicate: if a surah has splits plus an extra whole-surah, keep only splits
+      const anchorsBySurahForDedup = new Map<number, AnkiAnchor[]>();
+      allAnchors.forEach(a => {
+        const arr = anchorsBySurahForDedup.get(a.surahId) || [];
+        arr.push(a);
+        anchorsBySurahForDedup.set(a.surahId, arr);
+      });
+      const dedupedAnchors: AnkiAnchor[] = [];
+      for (const [surahId, anchors] of anchorsBySurahForDedup) {
+        if (anchors.length > 1) {
+          const surah = SURAHS.find(s => s.id === surahId);
+          const vc = surah?.verseCount;
+          if (vc) {
+            const wholeIndices: number[] = [];
+            anchors.forEach((a, idx) => { if (a.startVerse === 1 && a.endVerse === vc) wholeIndices.push(idx); });
+            if (wholeIndices.length > 0) {
+              const hasNonWhole = anchors.some(a => !(a.startVerse === 1 && a.endVerse === vc));
+              if (hasNonWhole) {
+                // Remove all whole-surah anchors, keep only splits
+                dedupedAnchors.push(...anchors.filter(a => !(a.startVerse === 1 && a.endVerse === vc)));
+                continue;
+              } else {
+                // All are whole duplicates — keep one
+                dedupedAnchors.push(anchors[0]);
+                continue;
+              }
+            }
+          }
+        }
+        dedupedAnchors.push(...anchors);
+      }
+      const filteredAnchors = dedupedAnchors.filter(a => mindmapKeys.has(`surah-${a.surahId}`));
       const mindmapCards = buildMindmapCards(fullMindmaps as any, docsMap);
       if (filteredAnchors.length === 0 && mindmapCards.length === 0) {
         showToast('No surah/part/meta with a linked mindmap to export — create a mindmap first');
