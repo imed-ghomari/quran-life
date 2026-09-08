@@ -233,6 +233,33 @@ export async function getQuranVerses(): Promise<Verse[]> {
         }
 
         try {
+            // Try Obsidian vault first (plugin context, no /public server)
+            // When running inside Obsidian, window.app.vault is available
+            const obsidianApp: any = typeof window !== 'undefined' ? (window as any).app : null;
+            if (obsidianApp?.vault?.adapter?.read) {
+                try {
+                    // Try plugin-bundled asset via vault adapter resource path, or vault file QuranLife/assets/...
+                    const candidates = [
+                        'QuranLife/assets/qpc-hafs-word-by-word.json',
+                        'QuranLife/qpc-hafs-word-by-word.json',
+                        '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
+                    ];
+                    for (const cand of candidates) {
+                        try {
+                            const raw = await obsidianApp.vault.adapter.read(cand);
+                            if (raw) {
+                                const data = JSON.parse(raw);
+                                cachedVerses = parseQuranJson(data as Record<string, any>);
+                                if (typeof window !== 'undefined') {
+                                    try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                                }
+                                return cachedVerses;
+                            }
+                        } catch {}
+                    }
+                } catch {}
+            }
+
             const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
             if (!res.ok) throw new Error(`Failed to load quran JSON: ${res.status}`);
             const data = await res.json();

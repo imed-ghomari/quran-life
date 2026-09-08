@@ -29,6 +29,16 @@ const context = await esbuild.context({
     "@lezer/highlight",
     "@lezer/lr",
     ...builtins,
+    "node:fs",
+    "node:crypto",
+    "node:path",
+    "node:os",
+    "node:util",
+    "fs",
+    "crypto",
+    "path",
+    "os",
+    "util",
   ],
   format: "cjs",
   target: "es2018",
@@ -40,10 +50,42 @@ const context = await esbuild.context({
   define: {
     "process.env.NODE_ENV": prod ? '"production"' : '"development"',
   },
+  loader: {
+    ".png": "dataurl",
+    ".jpg": "dataurl",
+    ".jpeg": "dataurl",
+    ".svg": "text",
+    ".woff": "dataurl",
+    ".woff2": "dataurl",
+    ".ttf": "dataurl",
+    ".css": "text",
+    ".wasm": "dataurl",
+  },
+  // tldraw CSS is imported as text and injected at runtime to avoid sideEffects tree-shaking
+  inject: [],
 });
+
+import fs from "fs";
+import path from "path";
 
 if (prod) {
   await context.rebuild();
+  // Append tldraw CSS to styles.css for Obsidian (no iframe, native view needs styles)
+  try {
+    const tldrawCssPath = path.join("node_modules", "tldraw", "tldraw.css");
+    const stylesPath = "styles.css";
+    if (fs.existsSync(tldrawCssPath)) {
+      const tldrawCss = fs.readFileSync(tldrawCssPath, "utf-8");
+      const existing = fs.existsSync(stylesPath) ? fs.readFileSync(stylesPath, "utf-8") : "";
+      // Avoid duplicating if already contains tldraw
+      if (!existing.includes("tl-canvas")) {
+        fs.writeFileSync(stylesPath, existing + "\n/* tldraw */\n" + tldrawCss);
+        console.log("✓ tldraw.css appended to styles.css");
+      }
+    }
+  } catch (e) {
+    console.warn("Could not append tldraw.css", e);
+  }
   process.exit(0);
 } else {
   await context.watch();

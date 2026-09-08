@@ -1,10 +1,14 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
+import * as React from "react";
+import { createRoot, Root } from "react-dom/client";
 import QuranLifePlugin from "../main";
+import AnkiDeckObsidian from "../components/AnkiDeckObsidian";
 
 export const VIEW_TYPE_ANKI = "quran-life-anki";
 
 export class AnkiDeckView extends ItemView {
   private plugin: QuranLifePlugin;
+  private root: Root | null = null;
   constructor(leaf: WorkspaceLeaf, plugin: QuranLifePlugin) {
     super(leaf);
     this.plugin = plugin;
@@ -17,18 +21,20 @@ export class AnkiDeckView extends ItemView {
     const container = this.contentEl;
     container.empty();
     container.addClass("quran-life-anki");
-    container.createEl("h4", { text: "Anki Deck" });
-    container.createEl("p", {
-      text: "Splits per surah: QuranLife/splits/surah-*.json · Mindmaps: QuranLife/mindmaps/*.json · Docs: QuranLife/docs/*.md — each file syncs independently via Resilio.",
-    });
-
-    const splits = await this.plugin.vaultStore.loadAllSplits();
-    const count = Object.keys(splits).length;
-    container.createEl("div", { text: `Loaded ${count} surahs with splits` });
-
-    // TODO: mount React AnkiDeckTab but backed by VaultStore, not useLocalStorage:
-    // adapter: { loadSplitsForSurah, saveSplitsForSurah, loadMindmap, saveMindmap, loadDoc, saveDoc }
+    container.style.height = "100%";
+    container.style.overflow = "auto";
+    const mountEl = container.createDiv({ cls: "quran-life-react-root" });
+    mountEl.style.height = "100%";
+    this.root = createRoot(mountEl);
+    this.root.render(
+      React.createElement(React.StrictMode, null,
+        React.createElement(AnkiDeckObsidian, { vaultStore: this.plugin.vaultStore })
+      )
+    );
   }
 
-  async onClose(): Promise<void> {}
+  async onClose(): Promise<void> {
+    if (this.root) { try { this.root.unmount(); } catch {} this.root = null; }
+    this.contentEl.empty();
+  }
 }

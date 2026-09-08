@@ -1,10 +1,14 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
+import * as React from "react";
+import { createRoot, Root } from "react-dom/client";
 import QuranLifePlugin from "../main";
+import DailyPortionObsidian from "../components/DailyPortionObsidian";
 
 export const VIEW_TYPE_DAILY = "quran-life-daily";
 
 export class DailyPortionView extends ItemView {
   private plugin: QuranLifePlugin;
+  private root: Root | null = null;
   constructor(leaf: WorkspaceLeaf, plugin: QuranLifePlugin) {
     super(leaf);
     this.plugin = plugin;
@@ -17,28 +21,25 @@ export class DailyPortionView extends ItemView {
     const container = this.contentEl;
     container.empty();
     container.addClass("quran-life-daily");
+    container.style.height = "100%";
+    container.style.overflow = "auto";
 
-    // Native Obsidian view — no iframe. Mount React or vanilla.
-    // For now skeleton; mount actual DailyPortion component via React root in next iteration.
-    const header = container.createEl("h4", { text: "Daily Portion" });
-    header.style.marginBottom = "8px";
-    const desc = container.createEl("p", {
-      text: "Resilio-synced daily reading/listening. Progress stored per part in QuranLife/daily/progress/part-*.json (split, not one giant JSON).",
-    });
-    desc.addClass("quran-life-hint");
-
-    // Example: render vault data via VaultStore (async)
-    const settings = await this.plugin.vaultStore.loadSettings<{ activePart?: number } | null>(null);
-    const info = container.createEl("div");
-    info.createEl("small", { text: `Data root: ${this.plugin.settings.dataRoot} · activePart: ${settings?.activePart ?? "—"}` });
-
-    // TODO: mount React DailyPortion with vault adapter:
-    // const root = createRoot(container);
-    // root.render(React.createElement(DailyPortionObsidian, { vaultStore: this.plugin.vaultStore }));
-    // Store root for onClose cleanup.
+    // Native mount — no iframe, React root in containerEl
+    const mountEl = container.createDiv({ cls: "quran-life-react-root" });
+    mountEl.style.height = "100%";
+    this.root = createRoot(mountEl);
+    this.root.render(
+      React.createElement(React.StrictMode, null,
+        React.createElement(DailyPortionObsidian, { vaultStore: this.plugin.vaultStore })
+      )
+    );
   }
 
   async onClose(): Promise<void> {
-    // cleanup React root if mounted
+    if (this.root) {
+      try { this.root.unmount(); } catch {}
+      this.root = null;
+    }
+    this.contentEl.empty();
   }
 }
