@@ -19,17 +19,20 @@ function stripMediaRefs(s: string): string {
 
 // Generate PNG media for each tldraw mindmap snapshot at export time
 // Returns map from surah key (e.g. "surah-50") to { filename, blob, fieldHtml }
-async function generateMindmapMedia(onProgress?: (p: number) => void): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
+async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMindmaps?: Record<string, any>): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
   const mediaMap: Record<string, string> = {};
   const mediaFiles: Record<string, Blob> = {};
   const fieldMap: Record<string, string> = {};
   if (typeof window === 'undefined' || typeof document === 'undefined') return { mediaMap, mediaFiles, fieldMap };
 
   let mindmaps: Record<string, any> = {};
-  try {
-    mindmaps = loadAnkiMindmaps() as any;
-  } catch {}
-  // Also merge premade mindmaps if available via fetch? For now use local only; AnkiDeckTab already merged.
+  if (overrideMindmaps) {
+    mindmaps = overrideMindmaps;
+  } else {
+    try {
+      mindmaps = loadAnkiMindmaps() as any;
+    } catch {}
+  }
 
   const entries = Object.entries(mindmaps).filter(([k, v]: any) => v?.snapshot);
   if (entries.length === 0) return { mediaMap, mediaFiles, fieldMap };
@@ -344,7 +347,7 @@ function modelJsonMindmap() {
   };
 }
 
-export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number) => void, mindmapCards: AnkiMindmapCard[] = []): Promise<Blob> {
+export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number) => void, mindmapCards: AnkiMindmapCard[] = [], fullMindmapsOverride?: Record<string, any>): Promise<Blob> {
   const JSZip = await getJSZip();
   if (!JSZip) {
     throw new Error('JSZip not available for apkg');
@@ -359,7 +362,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
     let fieldMap: Record<string, string> = {};
     try {
       if (onProgress) onProgress(2);
-      const res = await generateMindmapMedia(onProgress ? (p) => onProgress(Math.round(5 + (p / 100) * 75)) : undefined);
+      const res = await generateMindmapMedia(onProgress ? (p) => onProgress(Math.round(5 + (p / 100) * 75)) : undefined, fullMindmapsOverride);
       mediaMap = res.mediaMap;
       mediaFiles = res.mediaFiles;
       fieldMap = res.fieldMap;

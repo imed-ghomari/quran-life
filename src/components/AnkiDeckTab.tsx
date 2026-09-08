@@ -38,8 +38,6 @@ export default function AnkiDeckTab() {
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [mindmaps, setMindmaps] = useState<Record<string, any>>({});
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
-  const [showMindmapViewer, setShowMindmapViewer] = useState(false);
-  const [viewerData, setViewerData] = useState<{ snapshot: any; title: string } | null>(null);
   const [showSplitsModal, setShowSplitsModal] = useState(false);
   const [showPartEditor, setShowPartEditor] = useState(false);
   const [mindmapDocs, setMindmapDocs] = useState<Record<string, string>>({});
@@ -48,6 +46,7 @@ export default function AnkiDeckTab() {
   const [isAnkiDataLoaded, setIsAnkiDataLoaded] = useState(false);
   const [showAllVerses, setShowAllVerses] = useState(false);
   const [isViewerReady, setIsViewerReady] = useState(false);
+  const [showMindmapPreview, setShowMindmapPreview] = useState(false);
   const { theme } = useTheme();
   const [systemIsDark, setSystemIsDark] = useState(false);
   useEffect(() => {
@@ -100,6 +99,28 @@ export default function AnkiDeckTab() {
   const mindmapCacheRef = useMemo(() => new Map<string, any>(), []);
   const docsCacheRef = useMemo(() => new Map<string, string>(), []);
   const splitsCacheRef = useMemo(() => new Map<number, AnkiAnchor[]>(), []);
+
+  // Persist pending doc edit when switching mindmap (textarea unmounts before onBlur)
+  useEffect(() => {
+    if (editingDocKey && editingDocKey !== selectedMindmapKey) {
+      const keyToSave = editingDocKey;
+      const textToSave = editingDocText;
+      try {
+        const next = saveMindmapDoc(keyToSave, textToSave);
+        docsCacheRef.set(keyToSave, textToSave);
+        setMindmapDocs(prev => ({ ...prev, ...next, [keyToSave]: textToSave }));
+      } catch {}
+      setEditingDocKey(null);
+    }
+  }, [selectedMindmapKey]);
+
+  // Hide preview by default when switching mindmap — reduces initial load
+  useEffect(() => {
+    setShowMindmapPreview(false);
+    setIsViewerReady(false);
+    const t = setTimeout(() => setIsViewerReady(true), 120);
+    return () => clearTimeout(t);
+  }, [selectedMindmapKey]);
 
   const fetchPremadeForKey = async (key: string) => {
     try {
@@ -214,6 +235,7 @@ export default function AnkiDeckTab() {
 
       // Also do lightweight background merge for missing 77-114 only once per session (not on every switch)
       // Use sessionStorage flag to avoid re-fetching whole premade on every tab switch
+      // Bulk persist to localStorage is skipped to avoid quota (13MB > 5-10MB limit); keep in-memory cache and rely on export-time merge.
       try {
         const flag = sessionStorage.getItem('anki-premade-merged-v2');
         if (!flag) {
@@ -221,17 +243,60 @@ export default function AnkiDeckTab() {
           fetch('/premade-anki-data.json', { cache: 'force-cache' } as any)
             .then(r => r.json())
             .then(data => {
-              let hasNew = false;
               const curMM = loadAnkiMindmaps() as any;
+              let cachedCount = 0;
               Object.entries(data.mindmaps || {}).forEach(([k, v]: any) => {
                 if (v && !curMM[k] && (k.startsWith('surah-') || k.startsWith('part-') || k.startsWith('meta-'))) {
-                  // Only cache, don't set state for all - will be loaded on demand
                   mindmapCacheRef.set(k, v);
-                  saveAnkiMindmapByKey(k, v);
-                  hasNew = true;
+                  cachedCount++;
                 }
               });
-              if (hasNew) setMindmaps(loadAnkiMindmaps() as any);
+              // splits: persist missing premade splits (small, 3KB) so counts + export splits are accurate
+              const curSplits = loadSplits();
+              let newSplitsCount = 0;
+              Object.entries(data.splits || {}).forEach(([k, arr]: any) => {
+                const sid = Number(k);
+                if (!Number.isFinite(sid) || (curSplits as any)[sid] || !Array.isArray(arr) || arr.length === 0) return;
+                const normalized = (arr as any[]).map((a: any) => {
+                  const sv = Number(a?.startVerse);
+                  const ev = Number(a?.endVerse);
+                  if (!Number.isFinite(sv) || !Number.isFinite(ev) || sv <= 0 || ev < sv) return null;
+                  const surah = SURAHS.find(s => s.id === sid);
+                  if (surah && (ev > surah.verseCount || sv > surah.verseCount)) return null;
+                  return { id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${sid}-${sv}-${ev}`, surahId: sid, startVerse: sv, endVerse: ev, label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}` } as AnkiAnchor;
+                }).filter(Boolean) as AnkiAnchor[];
+                if (!normalized.length) return;
+                const sanitized = sanitizeAnchors(sid, normalized);
+                const toSave = sanitized.length ? sanitized : normalized;
+                if (toSave.length) {
+                  (curSplits as any)[sid] = toSave;
+                  newSplitsCount++;
+                }
+              });
+              if (newSplitsCount) {
+                try { saveSplits(curSplits); setSplits(curSplits); } catch {}
+              }
+              // docs: cache missing docs for export field
+              const curDocs = loadMindmapDocs();
+              let newDocsCount = 0;
+              Object.entries(data.mindmapDocs || {}).forEach(([k, v]: any) => {
+                if (typeof v === 'string' && v && !curDocs[k]) {
+                  (curDocs as any)[k] = v;
+                  try { saveMindmapDoc(k, v); } catch {}
+                  newDocsCount++;
+                }
+              });
+              if (newDocsCount) setMindmapDocs({ ...curDocs });
+              // Update state from cache (not just localStorage) so counts + UI reflect premade without persisting bulk
+              if (cachedCount) {
+                setMindmaps(prev => {
+                  const next: any = { ...prev };
+                  mindmapCacheRef.forEach((v, k) => { if (!next[k]) next[k] = v; });
+                  // also include already persisted
+                  Object.assign(next, curMM);
+                  return next;
+                });
+              }
             })
             .catch(() => {});
         }
@@ -359,19 +424,30 @@ export default function AnkiDeckTab() {
       if (json.mindmaps && typeof json.mindmaps === 'object') {
         Object.entries(json.mindmaps as Record<string, any>).forEach(([k, v]) => {
           if (!v) return;
-          if (k.includes('-')) saveAnkiMindmapByKey(k, v);
-          else {
+          if (k.includes('-')) {
+            saveAnkiMindmapByKey(k, v);
+            mindmapCacheRef.set(k, v);
+          } else {
             const sid = Number(k);
-            if (Number.isFinite(sid)) saveAnkiMindmap(sid, v);
+            if (Number.isFinite(sid)) {
+              saveAnkiMindmap(sid, v);
+              const kk = `surah-${sid}`;
+              mindmapCacheRef.set(kk, v);
+            }
           }
         });
-        setMindmaps(loadAnkiMindmaps() as any);
+        const nextStorage = loadAnkiMindmaps() as any;
+        setMindmaps(prev => ({ ...prev, ...nextStorage }));
       }
       if (json.mindmapDocs && typeof json.mindmapDocs === 'object') {
         Object.entries(json.mindmapDocs as Record<string, string>).forEach(([k, v]) => {
-          if (typeof v === 'string') saveMindmapDoc(k, v);
+          if (typeof v === 'string') {
+            saveMindmapDoc(k, v);
+            docsCacheRef.set(k, v);
+          }
         });
-        setMindmapDocs(loadMindmapDocs());
+        const nextDocs = loadMindmapDocs();
+        setMindmapDocs(prev => ({ ...prev, ...nextDocs }));
       }
       const cur = imported[selectedSurah] || getSplitsForSurah(selectedSurah, merged);
       if (cur) setAnchors(cur);
@@ -392,10 +468,46 @@ export default function AnkiDeckTab() {
       if (!versesForExport.length) {
         try { versesForExport = await getQuranVerses(); setAllVerses(versesForExport); } catch {}
       }
-      const docsMap = loadMindmapDocs();
-      // Use full splits/mindmaps from storage for export, not just lazy state's ones
-      const fullSplits = loadSplits();
-      const fullMindmaps = loadAnkiMindmaps() as any;
+      // Merge local storage with premade so export includes all 50-114 even if not yet persisted (quota / lazy load)
+      let docsMap = loadMindmapDocs();
+      let fullSplits = loadSplits();
+      let fullMindmaps = loadAnkiMindmaps() as any;
+      try {
+        const res = await fetch('/premade-anki-data.json', { cache: 'force-cache' } as any);
+        if (res.ok) {
+          const premade = await res.json();
+          // docs: premade fills missing
+          if (premade.mindmapDocs && typeof premade.mindmapDocs === 'object') {
+            Object.entries(premade.mindmapDocs as Record<string, string>).forEach(([k, v]) => {
+              if (typeof v === 'string' && v && !docsMap[k]) (docsMap as any)[k] = v;
+            });
+          }
+          // mindmaps: premade base, local overrides (user edits win)
+          if (premade.mindmaps && typeof premade.mindmaps === 'object') {
+            fullMindmaps = { ...(premade.mindmaps as any), ...fullMindmaps };
+          }
+          // splits: add premade splits for surahs not in local (sanitized). Empty arrays in premade are ignored -> auto anchor will handle.
+          if (premade.splits && typeof premade.splits === 'object') {
+            Object.entries(premade.splits as Record<string, any[]>).forEach(([k, arr]) => {
+              const sid = Number(k);
+              if (!Number.isFinite(sid) || fullSplits[sid]) return;
+              if (!Array.isArray(arr) || arr.length === 0) return;
+              const normalized = (arr as any[]).map((a: any) => {
+                const sv = Number(a?.startVerse);
+                const ev = Number(a?.endVerse);
+                if (!Number.isFinite(sv) || !Number.isFinite(ev) || sv <= 0 || ev < sv) return null;
+                const surah = SURAHS.find(s => s.id === sid);
+                if (surah && (ev > surah.verseCount || sv > surah.verseCount)) return null;
+                return { id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${sid}-${sv}-${ev}`, surahId: sid, startVerse: sv, endVerse: ev, label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}` } as AnkiAnchor;
+              }).filter(Boolean) as AnkiAnchor[];
+              if (!normalized.length) return;
+              const sanitized = sanitizeAnchors(sid, normalized);
+              if (sanitized.length) fullSplits[sid] = sanitized;
+              else if (normalized.length) fullSplits[sid] = normalized;
+            });
+          }
+        }
+      } catch {}
       const allAnchors: AnkiAnchor[] = [];
       Object.entries(fullSplits).forEach(([k, arr]) => allAnchors.push(...(arr as any)));
       SURAHS.forEach(s => {
@@ -421,7 +533,7 @@ export default function AnkiDeckTab() {
       }
       const cards = buildAnkiCards(filteredAnchors, versesForExport, { mindmapDocsMap: docsMap });
       setExportProgress(3);
-      const blob = await generateApkgBlob(cards, deckName, (p) => setExportProgress(p), mindmapCards);
+      const blob = await generateApkgBlob(cards, deckName, (p) => setExportProgress(p), mindmapCards, fullMindmaps);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -430,10 +542,10 @@ export default function AnkiDeckTab() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      const mindmapCardsCount = buildMindmapCards(mindmaps as any, docsMap).length;
+      const mindmapCardsCount = mindmapCards.length;
       showToast(`Exported ${cards.length} verse cards + ${mindmapCardsCount} mindmap cards`);
       if (withBackup) {
-        const backup = { splits, mindmaps, mindmapDocs: docsMap, deckName, exportedAt: new Date().toISOString() };
+        const backup = { splits: fullSplits, mindmaps: fullMindmaps, mindmapDocs: docsMap, deckName, exportedAt: new Date().toISOString() };
         const bBlob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
         const bUrl = URL.createObjectURL(bBlob);
         const b = document.createElement('a');
@@ -526,7 +638,6 @@ export default function AnkiDeckTab() {
                   <option value="part-5">Part 5 - Surah 34-49</option>
                   <option value="part-6">Part 6 - Surah 50-66</option>
                   <option value="part-7">Part 7 - Surah 67-114</option>
-                  <option value="part-8">All Quran</option>
                 </optgroup>
               </select>
             </div>
@@ -534,28 +645,25 @@ export default function AnkiDeckTab() {
               <h3 className="font-semibold flex items-center gap-2"><ImageIcon size={16} /> Mindmap for {displayTitle}</h3>
               <div className="flex gap-2">
                 {displayMindmap?.snapshot || displayMindmap?.imageUrl ? (
-                  <button onClick={() => setViewerData({ snapshot: displayMindmap.snapshot, title: displayTitle })} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> View</button>
+                  <button onClick={() => setShowMindmapPreview(v => !v)} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> {showMindmapPreview ? 'Hide' : 'View'}</button>
                 ) : null}
                 <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
               </div>
             </div>
             {displayMindmap?.snapshot ? (
-              <p className="text-xs text-[var(--foreground-secondary)] mt-2">Mindmap saved. It will be shown as a preview.</p>
+              <p className="text-xs text-[var(--foreground-secondary)] mt-2">Mindmap saved. Click View to preview.</p>
             ) : (
               <p className="text-xs text-[var(--foreground-secondary)] mt-2">No mindmap yet. Create one with the drawing editor. This is optional.</p>
             )}
-            {displayMindmap?.snapshot && !isPartMeta && !showMindmapEditor && !showPartEditor && isViewerReady && (
+            {displayMindmap?.snapshot && showMindmapPreview && !showMindmapEditor && !showPartEditor && isViewerReady && (
               <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)]" style={{ height: 220 }}>
                 <MindmapViewer snapshot={displayMindmap.snapshot} imageUrl={displayMindmap.imageUrl} imageUrlDark={displayMindmap.imageUrlDark} isDark={isDark} height="220px" />
               </div>
             )}
-            {displayMindmap?.snapshot && !isPartMeta && !showMindmapEditor && !showPartEditor && !isViewerReady && (
+            {displayMindmap?.snapshot && showMindmapPreview && !showMindmapEditor && !showPartEditor && !isViewerReady && (
               <div className="mt-3 border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background-secondary)] flex items-center justify-center" style={{ height: 220 }}>
                 <span className="text-xs text-[var(--foreground-secondary)]">Loading preview…</span>
               </div>
-            )}
-            {displayMindmap?.snapshot && isPartMeta && (
-              <p className="text-xs text-[var(--foreground-secondary)] mt-2">Preview hidden until you click View.</p>
             )}
             {!isPartMeta && displaySurah && (
               <div className="mt-4 border-t border-[var(--border)] pt-3">
@@ -630,8 +738,9 @@ export default function AnkiDeckTab() {
                 onChange={e => setEditingDocText(e.target.value)}
                 onBlur={() => {
                   if (editingDocKey === selectedMindmapKey) {
-                    const next = saveMindmapDoc(selectedMindmapKey, editingDocText);
-                    setMindmapDocs(next);
+                    const nextStorage = saveMindmapDoc(selectedMindmapKey, editingDocText);
+                    docsCacheRef.set(selectedMindmapKey, editingDocText);
+                    setMindmapDocs(prev => ({ ...prev, ...nextStorage, [selectedMindmapKey]: editingDocText }));
                     setEditingDocKey(null);
                   }
                 }}
@@ -655,8 +764,11 @@ export default function AnkiDeckTab() {
             initialSnapshot={currentMindmap?.snapshot}
             onClose={() => setShowMindmapEditor(false)}
             onSave={async (snapshot, images) => {
-              const next = saveAnkiMindmap(selectedSurah, { snapshot, isComplete: true });
-              setMindmaps(next as any);
+              const key = `surah-${selectedSurah}`;
+              const nextStorage = saveAnkiMindmap(selectedSurah, { snapshot, isComplete: true });
+              const newEntry: any = { key, kind: 'surah', surahId: selectedSurah, snapshot, isComplete: true, updatedAt: new Date().toISOString() };
+              mindmapCacheRef.set(key, { ...mindmapCacheRef.get(key), ...newEntry });
+              setMindmaps(prev => ({ ...prev, ...(nextStorage as any), [key]: { ...(prev as any)[key], ...newEntry } }));
               setShowMindmapEditor(false);
               showToast('Mindmap saved');
             }}
@@ -677,8 +789,10 @@ export default function AnkiDeckTab() {
               initialSnapshot={snap}
               onClose={() => setShowPartEditor(false)}
               onSave={async (snapshot, images) => {
-                const next = saveAnkiMindmapByKey(key, { snapshot, isComplete: true, kind: isMeta ? 'meta' : 'part', partId });
-                setMindmaps(next as any);
+                const nextStorage = saveAnkiMindmapByKey(key, { snapshot, isComplete: true, kind: isMeta ? 'meta' : 'part', partId });
+                const newEntry: any = { key, kind: isMeta ? 'meta' : 'part', partId, snapshot, isComplete: true, updatedAt: new Date().toISOString() };
+                mindmapCacheRef.set(key, { ...mindmapCacheRef.get(key), ...newEntry });
+                setMindmaps(prev => ({ ...prev, ...(nextStorage as any), [key]: { ...(prev as any)[key], ...newEntry } }));
                 setShowPartEditor(false);
                 showToast(isMeta ? 'Meta mindmap saved' : 'Part mindmap saved');
               }}
@@ -740,20 +854,6 @@ export default function AnkiDeckTab() {
           </div>
         </div>
       </ConfirmationModal>
-
-      {viewerData && (
-        <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setViewerData(null)}>
-          <div className="bg-[var(--background)] rounded-2xl overflow-hidden w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-              <span className="font-semibold">{viewerData.title}</span>
-              <button onClick={() => setViewerData(null)} className="p-1 rounded hover:bg-[var(--verse-bg)]">✕</button>
-            </div>
-            <div className="flex-1 overflow-hidden" style={{ height: 600 }}>
-              <MindmapViewer snapshot={viewerData.snapshot} isDark={isDark} height="600px" />
-            </div>
-          </div>
-        </div>
-      )}
 
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[var(--background-secondary)] border border-[var(--border)] shadow-lg rounded-xl px-4 py-2 text-sm z-50">{toast}</div>
