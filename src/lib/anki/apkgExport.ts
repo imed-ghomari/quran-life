@@ -316,7 +316,6 @@ function modelJson() {
 <div style="margin-top:10px">
   {{#RelatedGroups}}<div class="related"><b>Related groups:</b> {{RelatedGroups}}</div>{{/RelatedGroups}}
   {{#MindmapDocs}}<div class="related" style="direction:rtl; text-align:right; background:#fffbe6; border:1px solid #f0d76a"><b>Mindmap notes:</b> {{MindmapDocs}}</div>{{/MindmapDocs}}
-  {{#MindmapImage}}<div class="mindmap-img">{{MindmapImage}}</div>{{/MindmapImage}}
   <div style="margin-top:8px; font-size:0.75rem; opacity:0.6">Anchor: {{AnchorLabel}} • {{Range}} — {{Surah}}</div>
 </div>
 `.trim(),
@@ -464,12 +463,10 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
           { name: 'Surah', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
           { name: 'Range', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
           { name: 'AnchorLabel', ord: 2, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
-          { name: 'VerseFull', ord: 3, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
-          { name: 'VerseChunksFront', ord: 4, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
-          { name: 'ContextFront', ord: 5, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
-          { name: 'RelatedGroups', ord: 6, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
-          { name: 'MindmapDocs', ord: 7, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
-          { name: 'MindmapImage', ord: 8, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'VerseChunksFront', ord: 3, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
+          { name: 'ContextFront', ord: 4, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
+          { name: 'RelatedGroups', ord: 5, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'MindmapDocs', ord: 6, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
         ],
         css: m.css,
         req: [[0, 'all', [0]]],
@@ -562,7 +559,6 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const mod = now;
       const usn = -1;
       const tags = card.tags.join(' ');
-      const verseFull = card.verseTexts.join(' <span style="opacity:0.4"> ۝ </span> ');
       // Build VerseChunksFront: each verse with badges + chunks spans
       let verseChunksFront = '';
       card.verseIds.forEach((ayahId, idx) => {
@@ -588,19 +584,15 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const related = card.relatedGroups.join(', ');
       const rawDocs = (card as any).mindmapDocs ? String((card as any).mindmapDocs) : '';
       const docs = rawDocs ? escapeField(stripMediaRefs(rawDocs)) : '';
-      // Verse group cards no longer embed mindmap image (only mindmap cards do) — keeps export fast
-      const mindmapImageHtml = '';
 
       const flds = [
         escapeField(card.arabicName + ' ' + card.surahName),
         escapeField(`${card.surahId}:${card.startVerse}-${card.endVerse}`),
         escapeField(card.anchorLabel),
-        escapeField(verseFull),
         verseChunksFront,
         contextFront,
         escapeField(related),
         docs,
-        mindmapImageHtml,
       ].join('\x1f');
 
       const csum = 0;
