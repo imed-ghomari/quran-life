@@ -15,7 +15,7 @@ import {
 
 import AudioPlayerLocal from '@/components/AudioPlayerLocal';
 
-const { useState, useEffect, useRef, useMemo, useCallback } = React;
+const { useState, useEffect, useRef, useMemo, useCallback, startTransition } = React;
 
 type DailyPortionSurahGroup = {
   surahId: number;
