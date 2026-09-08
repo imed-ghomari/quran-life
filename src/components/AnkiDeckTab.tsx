@@ -11,7 +11,6 @@ import { loadMindmapDocs, saveMindmapDoc, deleteMindmapDoc } from '@/lib/anki/mi
 import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
 import { Save, Eye, Layers, PenTool, Split, Image as ImageIcon, Download, Trash2, BarChart3, Check, X, FileText } from 'lucide-react';
-import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useTheme } from '@/components/ThemeProvider';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
 
@@ -606,10 +605,15 @@ export default function AnkiDeckTab() {
     }
   };
 
-  if (!isVersesLoaded || !isAnkiDataLoaded) return <PageSkeleton />;
+  // No full-page skeleton on tab switch — lazy data + preview hidden by default means no hang
+  // Show inline loading only where needed; keep tab instantly interactive
+  const isInitialLoading = !isVersesLoaded || !isAnkiDataLoaded;
 
   return (
     <div className="space-y-6">
+      {isInitialLoading && (
+        <div className="text-xs text-center text-[var(--foreground-secondary)] py-2 animate-pulse">Loading deck…</div>
+      )}
       {/* Header */}
       <div className="card">
         <div>
