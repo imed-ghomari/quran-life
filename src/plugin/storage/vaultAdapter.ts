@@ -9,13 +9,19 @@
  * See: obsidian-developer-docs/en/Plugins/Vault.md, src/lib/anki/* legacy stores
  */
 
-import { App, TFile, TFolder, normalizePath } from "obsidian";
+import { App, TFile, TFolder, normalizePath, Platform } from "obsidian";
 
 // Vault layout (all paths relative to vault root)
 // User requested: store everything in plugin folder so only one folder needs Resilio Sync
 // This is hidden but accessible via adapter (vault API hides .obsidian, but adapter can read hidden)
+// On mobile, hidden .obsidian paths use adapter and may be sandboxed — keep API but guard gracefully and allow fallback to visible folder
 export const DEFAULT_DATA_ROOT = ".obsidian/plugins/quran-life/data";
-export const LEGACY_DATA_ROOT = "QuranLife"; // previous location, for migration
+export const LEGACY_DATA_ROOT = "QuranLife"; // previous location, for migration + mobile fallback
+export function getMobileAwareDefaultRoot(): string {
+  try { if ((Platform as any)?.isMobile) return LEGACY_DATA_ROOT; } catch {}
+  try { if ((Platform as any)?.isMobileOS) return LEGACY_DATA_ROOT; } catch {}
+  return DEFAULT_DATA_ROOT;
+}
 
 export const VAULT_PATHS = {
   // Global settings (small, rarely conflicted)
@@ -54,36 +60,46 @@ export function isHiddenPath(path: string): boolean {
 }
 
 export async function ensureFolder(app: App, folderPath: string): Promise<void> {
-  const normalized = normalizePath(folderPath);
-  if (isHiddenPath(normalized)) {
-    // Hidden .obsidian paths need adapter (vault API hides them)
-    const adapter: any = (app as any).vault?.adapter;
-    if (adapter?.exists && adapter?.mkdir) {
-      const parts = normalized.split("/");
-      let cur = "";
-      for (const part of parts) {
-        cur = cur ? `${cur}/${part}` : part;
-        try {
-          const exists = await adapter.exists(cur);
-          if (!exists) await adapter.mkdir(cur);
-        } catch {}
+  try {
+    const normalized = normalizePath(folderPath);
+    if (isHiddenPath(normalized)) {
+      // Hidden .obsidian paths need adapter (vault API hides them)
+      // On mobile (Platform.isMobile) adapter may be Capacitor FS — guard and do not throw
+      const adapter: any = (app as any).vault?.adapter;
+      if (adapter?.exists && adapter?.mkdir) {
+        const parts = normalized.split("/");
+        let cur = "";
+        for (const part of parts) {
+          cur = cur ? `${cur}/${part}` : part;
+          try {
+            const exists = await adapter.exists(cur);
+            if (!exists) await adapter.mkdir(cur);
+          } catch {}
+        }
+        return;
       }
+      // Fallback: if hidden and no adapter support (mobile sandbox), try vault API as best-effort but don't throw
+      try {
+        if (app.vault.getAbstractFileByPath(normalized) instanceof TFolder) return;
+      } catch {}
       return;
     }
-  }
-  if (app.vault.getAbstractFileByPath(normalized) instanceof TFolder) return;
-  // vault.createFolder throws if exists, so check first; create recursively
-  const parts = normalized.split("/");
-  let cur = "";
-  for (const part of parts) {
-    cur = cur ? `${cur}/${part}` : part;
-    if (!app.vault.getAbstractFileByPath(cur)) {
-      try {
-        await app.vault.createFolder(cur);
-      } catch (e: any) {
-        if (!String(e?.message || "").includes("already exists")) throw e;
+    if (app.vault.getAbstractFileByPath(normalized) instanceof TFolder) return;
+    // vault.createFolder throws if exists, so check first; create recursively
+    const parts = normalized.split("/");
+    let cur = "";
+    for (const part of parts) {
+      cur = cur ? `${cur}/${part}` : part;
+      if (!app.vault.getAbstractFileByPath(cur)) {
+        try {
+          await app.vault.createFolder(cur);
+        } catch (e: any) {
+          if (!String(e?.message || "").includes("already exists")) throw e;
+        }
       }
     }
+  } catch {
+    // Never throw from ensureFolder — mobile may sandbox hidden paths, plugin should still enable
   }
 }
 

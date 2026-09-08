@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import { App, PluginSettingTab, Setting, Notice, Platform } from "obsidian";
 import QuranLifePlugin from "./main";
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
 import { SURAHS, getSurahsByPart } from "@/lib/quranData";
@@ -13,6 +13,10 @@ export const DEFAULT_SETTINGS: QuranLifePluginSettings = {
   dataRoot: ".obsidian/plugins/quran-life/data",
   autoSyncDebounceMs: 700,
 };
+function getDefaultDataRootForPlatform(): string {
+  try { if ((Platform as any)?.isMobile) return "QuranLife"; } catch {}
+  return ".obsidian/plugins/quran-life/data";
+}
 
 type DailyPortionMode = 'audio' | 'reading';
 type DailyReadingStyle = 'line_by_line' | 'paragraph';
@@ -58,26 +62,30 @@ function parseDaily(raw: any): DailySettings {
 
 export class QuranLifeSettingTab extends PluginSettingTab {
   plugin: QuranLifePlugin;
+  private displayGeneration = 0;
   constructor(app: App, plugin: QuranLifePlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
 
   async display(): Promise<void> {
+    const myGen = ++this.displayGeneration;
     const { containerEl } = this;
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "Storage & Sync" });
 
+    const platformDefault = getDefaultDataRootForPlatform();
+    const isMobile = (()=>{ try{ return !!(Platform as any)?.isMobile; }catch{return false;}})();
     new Setting(containerEl)
       .setName("Data folder")
-      .setDesc("Resilio-synced folder. Default: .obsidian/plugins/quran-life/data")
+      .setDesc(isMobile ? "Resilio-synced folder. On mobile defaults to QuranLife (visible); desktop uses .obsidian/plugins/quran-life/data (one folder sync)" : "Resilio-synced folder. Default: .obsidian/plugins/quran-life/data")
       .addText((text) =>
         text
-          .setPlaceholder(".obsidian/plugins/quran-life/data")
+          .setPlaceholder(platformDefault)
           .setValue(this.plugin.settings.dataRoot)
           .onChange(async (value) => {
-            const normalized = value.trim().replace(/^\/+|\/+$/g, "") || ".obsidian/plugins/quran-life/data";
+            const normalized = value.trim().replace(/^\/+|\/+$/g, "") || platformDefault;
             this.plugin.settings.dataRoot = normalized;
             await this.plugin.saveSettings();
           })
@@ -107,14 +115,19 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         })
       );
 
-    // Daily Portion
-    containerEl.createEl("h2", { text: "Daily Portion" });
-
+    // Daily Portion — guard against async race that appends duplicate UI on rapid re-display (mobile/settings navigation)
     let daily: DailySettings = { ...DEFAULT_DAILY };
     try {
       const raw = await this.plugin.vaultStore.loadSettings<any>(null as any);
+      // If a newer display() started while we were awaiting, abort — the newer one will render alone
+      if (myGen !== this.displayGeneration) return;
       daily = parseDaily(raw);
-    } catch { }
+    } catch {
+      if (myGen !== this.displayGeneration) return;
+    }
+    if (myGen !== this.displayGeneration) return;
+    // Create header only after validated generation — ensures it appears once
+    containerEl.createEl("h2", { text: "Daily Portion" });
     let updateMinutesDesc: () => void = () => {};
     let renderSurahList: () => void = () => {};
     let updateExtraDesc: () => void = () => {};
@@ -266,7 +279,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Current part")
       .addButton(btn => btn.setButtonText("Reset").onClick(async () => {
-        if (!confirm(`Reset part ${daily.activePart}?`)) return;
+        try { if (typeof confirm === 'function' && !confirm(`Reset part ${daily.activePart}?`)) return; } catch { /* mobile WebView may not support confirm — allow */ }
         try {
           const paths = [
             `.obsidian/plugins/quran-life/data/daily/progress/part-${daily.activePart}.json`,
@@ -289,7 +302,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("All parts")
       .addButton(btn => btn.setButtonText("Reset all").setWarning().onClick(async () => {
-        if (!confirm("Reset all progress?")) return;
+        try { if (typeof confirm === 'function' && !confirm("Reset all progress?")) return; } catch {}
         for (let pid=1; pid<=8; pid++) {
           const paths = [
             `.obsidian/plugins/quran-life/data/daily/progress/part-${pid}.json`,

@@ -230,7 +230,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   };
 
   const handleResetCurrent = async () => {
-    if (!confirm('Reset progress for current part? This will restart daily portion from the beginning.')) return;
+    try { if (typeof confirm === 'function' && !confirm('Reset progress for current part? This will restart daily portion from the beginning.')) return; } catch {}
     await resetProgress(settings.activePart);
     setListeningComplete(false);
     showToast('Progress reset for this part.');

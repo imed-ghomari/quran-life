@@ -1,5 +1,5 @@
-import { Plugin, WorkspaceLeaf, Notice, TFile, normalizePath } from "obsidian";
-import { VaultStore, DEFAULT_DATA_ROOT, LEGACY_DATA_ROOT, DebouncedVaultWriter, ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
+import { Plugin, WorkspaceLeaf, Notice, TFile, normalizePath, Platform } from "obsidian";
+import { VaultStore, DEFAULT_DATA_ROOT, LEGACY_DATA_ROOT, DebouncedVaultWriter, ensureFolder, isHiddenPath, getMobileAwareDefaultRoot } from "./storage/vaultAdapter";
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
@@ -19,12 +19,24 @@ export default class QuranLifePlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || DEFAULT_DATA_ROOT);
+    // Mobile: prefer visible folder if hidden not supported — getMobileAwareDefaultRoot handles Platform.isMobile
+    const effectiveDefault = getMobileAwareDefaultRoot();
+    // Migrate hidden default to visible on mobile if user hasn't customized
+    if ((Platform as any)?.isMobile && this.settings.dataRoot === DEFAULT_DATA_ROOT) {
+      this.settings.dataRoot = effectiveDefault;
+      await this.saveData(this.settings);
+    }
+    this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || effectiveDefault);
     this.debouncedWriter = new DebouncedVaultWriter(this.app);
 
-    // Ensure data root exists on layout ready (expensive init deferred)
+    // Ensure data root exists on layout ready (expensive init deferred) — wrap to avoid mobile crash blocking enable
     this.app.workspace.onLayoutReady(async () => {
-      await this.ensureDataRoot();
+      try {
+        await this.ensureDataRoot();
+      } catch (e) {
+        console.warn("Quran Life: ensureDataRoot failed (mobile fallback, will retry on demand)", e);
+        new Notice("Quran Life: data folder will be created on first use (mobile)");
+      }
       this.registerVaultWatchers();
     });
 
@@ -53,10 +65,14 @@ export default class QuranLifePlugin extends Plugin {
       callback: () => this.promptLegacyMigration(),
     });
 
-    // Status bar for sync feedback (Resilio is external, show last write time)
-    const statusEl = this.addStatusBarItem();
-    statusEl.setText("Quran Life ✓");
-    statusEl.title = `Data root: ${this.settings.dataRoot} (Resilio Sync)`;
+    // Status bar for sync feedback (Resilio is external, show last write time) — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
+    try {
+      const statusEl: HTMLElement | null = (this as any).addStatusBarItem?.();
+      if (statusEl) {
+        statusEl.setText("Quran Life ✓");
+        (statusEl as any).title = `Data root: ${this.settings.dataRoot} (Resilio Sync)`;
+      }
+    } catch { /* mobile: no status bar */ }
   }
 
   onunload(): void {
@@ -66,12 +82,18 @@ export default class QuranLifePlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const data = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
+    // Mobile fallback: if no dataRoot customized and on mobile, use visible folder
+    try { if ((Platform as any)?.isMobile && (!this.settings.dataRoot || this.settings.dataRoot === DEFAULT_DATA_ROOT)) {
+      // keep hidden as default for desktop, but ensure mobile can still read if hidden folder already exists
+      // do not auto-overwrite if hidden folder already has data — checked in ensureDataRoot
+    }} catch {}
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     // recreate store if dataRoot changed
-    this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || DEFAULT_DATA_ROOT);
+    const effectiveDefault = getMobileAwareDefaultRoot();
+    this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || effectiveDefault);
   }
 
   private async ensureDataRoot(): Promise<void> {
