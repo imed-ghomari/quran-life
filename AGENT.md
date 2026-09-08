@@ -13,11 +13,11 @@
 - `public/premade-anki-data.json`: Sanitized surahs 50,79,81 from 12/17/9 overlapping anchors to 6/9/4 sequential valid coverings.
 
 ## Branch Constraint
-- ALWAYS work on `daily-portion-only` branch only. Do NOT update `main` branch. All new app work is on `daily-portion-only`.
+- ALWAYS work on `quran-anki-companion` branch only (renamed from `daily-portion-only` on 2026-09-08). Do NOT update `main` branch. All new app work is on `quran-anki-companion` — even though the branch changed name, still only this branch.
 
 ## Git Workflow - Push After Each Prompt
 - After finishing **every** user prompt (feature, fix, or docs), push to GitHub immediately in the same turn.
-- Use **one long command** to save time: `git add <files> && git commit -m "..." && git push origin daily-portion-only` (combine add/commit/push, don't run them as separate tool calls).
+- Use **one long command** to save time: `git add <files> && git commit -m "..." && git push origin quran-anki-companion` (combine add/commit/push, don't run them as separate tool calls).
 - Never leave unpushed commits locally after a prompt is done.
 
 ## User Preferences

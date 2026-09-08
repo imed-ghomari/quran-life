@@ -33,16 +33,16 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
     metadataBase: new URL(getSiteUrl()),
-    title: 'Quran Life',
-    description: 'Complete your learned Quran portions in manageable daily readings',
+    title: 'Quran Anki Companion',
+    description: 'Daily portion and Anki companion for Quran memorization — mindmaps, splits and scheduled reviews',
     verification: {
         google: process.env.GOOGLE_SITE_VERIFICATION ?? process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
     },
     openGraph: {
         type: 'website',
-        title: 'Quran Life',
-        description: 'Complete your learned Quran portions in manageable daily readings',
-        siteName: 'Quran Life',
+        title: 'Quran Anki Companion',
+        description: 'Daily portion and Anki companion for Quran memorization — mindmaps, splits and scheduled reviews',
+        siteName: 'Quran Anki Companion',
         images: [
             {
                 url: '/og-image.jpg',
@@ -54,8 +54,8 @@ export const metadata: Metadata = {
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'Quran Life',
-        description: 'Complete your learned Quran portions in manageable daily readings',
+        title: 'Quran Anki Companion',
+        description: 'Daily portion and Anki companion for Quran memorization — mindmaps, splits and scheduled reviews',
         images: ['/og-image.jpg'],
     },
     manifest: '/manifest.json',
