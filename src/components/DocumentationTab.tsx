@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { marked } from 'marked';
-import { BookOpen, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 type DocItem = { slug: string; title: string; href: string };
 
@@ -60,12 +60,11 @@ export default function DocumentationTab() {
 
   return (
     <div className="card !p-0 overflow-hidden flex flex-col" style={{ height: '75vh' }}>
-      <div className="p-3 border-b border-[var(--border)] bg-[var(--background-secondary)] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <BookOpen size={16} className="text-[var(--accent)]" />
-          <h2 className="font-semibold text-sm">Documentation</h2>
-        </div>
-        <span className="text-xs text-[var(--foreground-secondary)] hidden md:block">Guides to help you memorize</span>
+      {/* Mobile select */}
+      <div className="md:hidden p-2 border-b border-[var(--border)] bg-[var(--background-secondary)]">
+        <select value={activeSlug} onChange={e => setActiveSlug(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
+          {items.map(i => <option key={i.slug} value={i.slug}>{i.title}</option>)}
+        </select>
       </div>
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
@@ -86,16 +85,9 @@ export default function DocumentationTab() {
           </div>
         </aside>
 
-        {/* Mobile select */}
-        <div className="md:hidden p-2 border-b border-[var(--border)] bg-[var(--background-secondary)] w-full absolute top-[57px] left-0 right-0 z-10">
-          <select value={activeSlug} onChange={e => setActiveSlug(e.target.value)} className="w-full p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm">
-            {items.map(i => <option key={i.slug} value={i.slug}>{i.title}</option>)}
-          </select>
-        </div>
-
         {/* Content */}
         <main className="flex-1 overflow-y-auto bg-[var(--background)] custom-scrollbar">
-          <div className="max-w-3xl mx-auto p-4 md:p-6 pt-12 md:pt-6">
+          <div className="max-w-3xl mx-auto p-4 md:p-6">
             {loading ? (
               <div className="flex items-center justify-center py-20 text-sm text-[var(--foreground-secondary)]">Loading...</div>
             ) : (
