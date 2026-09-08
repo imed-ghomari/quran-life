@@ -11,26 +11,21 @@ You set these in `Daily Portion → Settings` (gear icon):
 - **Mode:** `Listening` (`AudioPlayerLocal`) vs `Reading` (`paragraph` / `line_by_line`). Reading style is `paragraph` (grouped by Surah) or `line_by_line`.
 - **Surahs in Portion:** Check/uncheck per Surah in `Active Part`. `Select All` / `Clear All` are `btn btn-secondary`. Unchecking removes them from *daily reading only* — for reviews, `Suspend` in Anki instead (see below).
 
-## Skipped / Maturity for Reviews (in Anki Browser — replaces old Knowledge Tracking)
+## Skipped / Maturity for Reviews (in Anki Browser)
 
-There is **no** `Settings → Knowledge Tracking` slider anymore. Do this in `Anki → Browse`:
+There is **no** `Settings → Knowledge Tracking` anymore. For how to `Suspend`/`Unsuspend`, `Reschedule` (`Set Due Date`/`Set Interval`), `Forget`, `Flag`, and bulk operations, see:
 
-- **Skip a Surah for reviews:** `Browse → tag:surah::1` → select all its verse-group cards → `Suspend` (`Ctrl+J`). They disappear from `is:due`. To include again, `Unsuspend`.
-- **Set maturity per Surah / group:**
-  - `Browse → deck:QuranLife tag:surah::67` → select its 4 groups (`67:1-5` etc.) → Right-click → `Reschedule`:
-    - *Already known well* → `Set Due Date: 60` (or `Set Interval: 45`) — makes them `Strong`.
-    - *Need to relearn* → `Forget` — makes them `New` (red).
-    - *Postpone one group* → `Bury`.
-  - You can also `Flag` (`Flag Red` = similarity confusion, `Flag Orange` = weak map) and filter later `flag:1`.
-- **Bulk maturity:** `tag:surah::67 OR tag:surah::68` → `Reschedule` same way.
+**→ [How Reviews Work](/docs/philosophy/spaced-repetition)**
+
+The same `Browse` workflow (`tag:surah::67`, `is:due`, `prop:ivl>21`) is detailed there.
 
 ## Mindmaps and Splits (Anki Deck tab)
 
-Not in `Settings`. Open `Anki Deck` tab:
+Not in `Settings`. For `Create/Edit Mindmap`, `View` preview, `Define Splits`, and `Notes` handling, see:
 
-- **Mindmap:** `Select Surah/Part/Meta` → `Create/Edit Mindmap` (`tldraw` `src/components/MindmapEditor.tsx`) → `Save`. `View` toggles inline preview *under* selector (hidden by default to keep tab fast) — same for `part/meta` (above notes).
-- **Splits:** `Define Splits` → `+`/`×` per verse, `Save Splits` (`btn btn-primary`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits replace it. See `private-assets/premade-mindmaps/*.chunks.txt` for the default splits per premade mindmap (now copied to `public/premade-anki-data.json` `splits`).
-- **Notes:** `Notes for this mindmap` textarea `src/components/AnkiDeckTab.tsx:733` saved on `blur` or tab switch (`docsCacheRef`) and exported as `MindmapDocs` field.
+**→ [Anki Deck & Reviews — Preparing](/docs/philosophy/practice-hub#preparing-in-the-anki-deck-tab)**
+
+Default splits come from `private-assets/premade-mindmaps/*.chunks.txt` → `public/premade-anki-data.json` `splits`.
 
 ## What Anki Already Sets for You (first import)
 

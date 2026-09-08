@@ -1,6 +1,6 @@
-# Anki Deck & Reviews — How to Use
+# Anki Deck & Reviews
 
-This app does not have a review queue inside it. Your reviews happen in **Anki** with the custom card you exported.
+This app does not have a review queue inside it. Your reviews happen in **Anki**.
 
 ## Where Everything Lives
 
@@ -12,38 +12,25 @@ This app does not have a review queue inside it. Your reviews happen in **Anki**
 
 For each Surah:
 
-1. **Mindmap:** `Create Mindmap` or `Edit Mindmap` (full `tldraw` `src/components/MindmapEditor.tsx`) → `Save`. `View` toggles an inline preview *under* the selector (hidden by default, above `Define Splits` for surah or above `Notes` for part/meta).
-2. **Splits:** `Define Splits` → `+` / `×` per verse, `Save Splits` (`btn btn-primary`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits replace it (source `private-assets/premade-mindmaps/*.chunks.txt` → `public/premade-anki-data.json` `splits`).
+1. **Mindmap:** `Create Mindmap` or `Edit Mindmap` (`tldraw` `src/components/MindmapEditor.tsx`) → `Save`. `View` toggles an inline preview *under* the selector (hidden by default).
+2. **Splits:** `Define Splits` → `+` / `×` per verse, `Save Splits` (`btn btn-primary`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits replace it.
 3. **Notes:** `Notes for this mindmap` textarea is saved on `blur` or tab switch and exported as `MindmapDocs`.
-4. **Export:** `Export Full Deck to Anki` → import `.apkg` into Anki. Re-importing same deck **updates** existing notes (stable `guid` `ql-{surah}-{start}-{end}`) and keeps `Due`/`Ivl` for unchanged groups.
+4. **Export:** `Export Full Deck to Anki` → import `.apkg` into Anki. Re-importing same deck **updates** existing notes (stable `guid` `ql-{surah}-{start}-{end}`) and keeps `Due` for unchanged groups.
 
 A Surah is ready when it has a mindmap (optional but recommended) and its verses are split.
 
-## Reviewing a Verse-Group Card in Anki — Walkthrough
+## Reviewing — See Detailed Walkthrough
 
-This is the core loop — **don't just flip**:
+The verse-group card has custom reveal logic (context, blurred chunks, `Reveal next`, `doneHint`). For the full step-by-step — what the front looks like, how to reveal with `Space`, when extra context appears, and how to grade (`Again`/`Good`/`Bury`) — see:
 
-**Front:**
-- Top: `ContextFront` — 2 verses before the group (or `Surah — الفاتحة (1)` for `1:1`), dashed. If the card is `tag:mutashabihat`, 3 more appear as `extra` *after* you reveal all chunks `src/lib/anki/apkgExport.ts:284`.
-- Middle: `VerseChunksFront` — each verse `badge` + `span.chunk` (`blurred` → `next` dashed → `revealed`). `VerseContainer` is `62vh` scrollable, auto-scrolls to `next`.
-- Bottom: `Reveal next` (`Space`) + counter `2 / 5 chunks` + hidden `doneHint`.
+**→ [How Reviews Work](/docs/philosophy/spaced-repetition) — Card Walkthrough + FSRS + Shortcuts**
 
-**Steps:**
-1. **Recall `next`:** Look at context + `next` badge (e.g., `3`), try to say that whole chunk *before* revealing.
-2. **Reveal:** Click `Reveal next` or `Space`. It unblurs one chunk, next becomes `next`, counter updates, scrolls.
-3. **Repeat** until `doneHint` (`✓ All revealed — press Show Answer`) appears and `Reveal` hides. If `mutashabihat`, the 3 extra context verses now appear.
-4. **Grade:** Press `Space` again → Anki `Show Answer` → `Again` / `Good` / `Bury` (`1`/`2`/`B`). `Good` increases interval, `Again` shows sooner, `Bury` postpones 1 day without reset.
+## After Review — Manual Fixes (Links)
 
-**Back:** `RelatedGroups` (`2:23 ~ 11:45`), `MindmapDocs` (your notes), `AnchorLabel • Range — Surah`. No `VerseFull`/`MindmapImage` on verse cards (removed for speed).
+- **Leech (3× `Again`):** See [Fixing Mistakes](/docs/philosophy/re-learning) (`tag:leech` → fix map → `Forget`).
+- **Similar confusion:** See [Similar Verses](/docs/philosophy/mutashabihat) (`Flag Red` → `flag:1` → spread on map).
+- **Split changed:** See [How Reviews Work](/docs/philosophy/spaced-repetition) (`deck:QuranLife tag:surah::67` → delete old `Range`).
 
-**Shortcuts:** `Space` reveal → `Show Answer`, `1` Again, `2` Good, `B` Bury. Mindmap cards are separate: Front `Title`, Back `MindmapImage` + `Docs`.
+## Deck Statistics
 
-## After Review — Manual Fixes
-
-- **Leech (3× `Again`):** `Browse → tag:leech` → fix its mindmap (see [Fixing Gaps](/docs/philosophy/re-learning)), then `Cards → Forget` to make it `New` again.
-- **Similar confusion:** `Flag Red` during review → `Browse → flag:1` → spread them on the map.
-- **Split changed:** `Browse → deck:QuranLife tag:surah::67` → delete the old `1-30` whole card, keep the new `1-5` etc.
-
-## Deck Statistics (in-app)
-
-`Anki Deck → Deck Statistics` `src/components/AnkiDeckTab.tsx:781` shows `Surahs/Parts with mindmap`, `Verse groups`, `Docs` (excl. placeholders) using merged `premadeForStats` (so correct even with lazy load). Details table lists all `114` + `8` parts/meta with `Mindmap`/`Groups`/`Docs` icons.
+`Anki Deck → Deck Statistics` `src/components/AnkiDeckTab.tsx:781` shows `Surahs/Parts with mindmap`, `Verse groups`, `Docs` using merged `premadeForStats`. See [Tracking Progress](/docs/philosophy/statistics) for `Anki Stats` vs daily.

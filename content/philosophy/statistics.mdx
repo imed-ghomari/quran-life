@@ -15,19 +15,13 @@ Check `Anki → Stats` (click deck → `Stats`) for `Retention`, `Due`, `Retenti
 
 ## What You Can Track
 
-- **Daily Portion (in-app):** `Anki Deck` tab → `Deck Statistics` card `src/components/AnkiDeckTab.tsx:781` shows `Surahs/Parts with mindmap`, `Verse groups`, `Docs` (with `•` for placeholder). Details table lists all `114` Surahs + `8` parts/meta with `Mindmap`/`Groups`/`Docs` icons (balanced via `premadeForStats` fetch, not lazy state).
-- **Reviews (in Anki):**
-  - `Browse → deck:QuranLife is:due` — due today
-  - `Browse → tag:leech` — 3-strike list (needs map fix)
-  - `Browse → tag:mutashabihat` — all similar groups
-  - `Browse → flag:1` — your manual red flags
-  - `Browse → tag:surah::67` — per-Surah
-  - `Stats → Calendar` — review heatmap (replaces old `Daily Reviews` heatmap).
+- **Daily Portion (in-app):** `Anki Deck → Deck Statistics` `src/components/AnkiDeckTab.tsx:781` — see [Anki Deck & Reviews](/docs/philosophy/practice-hub) for the breakdown.
+- **Reviews (in Anki):** For `is:due`, `tag:leech` (3-strike), `tag:mutashabihat`, `flag:1`, and per-Surah filters, see:
+  - **[Fixing Mistakes](/docs/philosophy/re-learning)** for `leech`/`flag`
+  - **[Similar Verses](/docs/philosophy/mutashabihat)** for `mutashabihat` checks
+  - **[How Reviews Work](/docs/philosophy/spaced-repetition)** for `is:due`/`prop:ivl` and maturity
 
-## Filters (Anki Browser)
-
-- `is:due`, `is:new`, `is:learn`, `prop:ivl>21`, `prop:due<7`, `tag:leech`, `tag:mutashabihat`, `flag:1`, `deck:QuranLife`, `tag:surah::67`.
-- Combine: `deck:QuranLife tag:mutashabihat is:due` — due similar groups to prioritize.
+  In `Anki → Stats` you get `Retention`, `Due`, and `Calendar` heatmap (replaces old in-app heatmap).
 
 ## Filters (Daily Portion)
 
