@@ -6,11 +6,11 @@ import { getQuranVerses, getSurah, SURAHS } from '@/lib/quranData';
 import { buildAnkiCards, buildMindmapCards } from '@/lib/anki/cardBuilder';
 import { generateApkgBlob } from '@/lib/anki/apkgExport';
 import { loadSplits, saveSplits, getSplitsForSurah, setSplitsForSurah, importSplitsFromBackup, ensureDefaultSplits, buildAnchorsFromBreaks, sanitizeAnchors } from '@/lib/anki/splitStore';
-import { loadAnkiMindmaps, saveAnkiMindmap, saveAnkiMindmapByKey, getAnkiMindmap, getAnkiMindmapByKey } from '@/lib/anki/mindmapStore';
-import { loadMindmapDocs, saveMindmapDoc } from '@/lib/anki/mindmapDocsStore';
+import { loadAnkiMindmaps, saveAnkiMindmap, saveAnkiMindmapByKey, getAnkiMindmap, getAnkiMindmapByKey, deleteAnkiMindmapByKey, loadDeletedMindmapKeys } from '@/lib/anki/mindmapStore';
+import { loadMindmapDocs, saveMindmapDoc, deleteMindmapDoc } from '@/lib/anki/mindmapDocsStore';
 import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
-import { Save, Eye, FileJson, Layers, PenTool, Split, Image as ImageIcon, Download, Upload } from 'lucide-react';
+import { Save, Eye, FileJson, Layers, PenTool, Split, Image as ImageIcon, Download, Upload, Trash2 } from 'lucide-react';
 import PageSkeleton from '@/components/ui/PageSkeleton';
 import { useTheme } from '@/components/ThemeProvider';
 import ConfirmationModal from '@/components/todo/ConfirmationModal';
@@ -47,6 +47,7 @@ export default function AnkiDeckTab() {
   const [showAllVerses, setShowAllVerses] = useState(false);
   const [isViewerReady, setIsViewerReady] = useState(false);
   const [showMindmapPreview, setShowMindmapPreview] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { theme } = useTheme();
   const [systemIsDark, setSystemIsDark] = useState(false);
   useEffect(() => {
@@ -169,21 +170,28 @@ export default function AnkiDeckTab() {
         }
       }
 
-      // Mindmap: cache -> localStorage single key -> premade single key
-      let currentMM: any = mindmapCacheRef.get(selectedMindmapKey) || null;
-      if (!currentMM) {
-        const local = getAnkiMindmapByKey(selectedMindmapKey) || (isSurah ? getAnkiMindmap(sid) : null);
-        if (local?.snapshot) {
-          currentMM = local;
-          mindmapCacheRef.set(selectedMindmapKey, local);
-        } else {
-          const premade = await fetchPremadeForKey(selectedMindmapKey);
-          if (premade?.mindmap) {
-            saveAnkiMindmapByKey(selectedMindmapKey, premade.mindmap);
-            currentMM = premade.mindmap;
-            mindmapCacheRef.set(selectedMindmapKey, premade.mindmap);
+      // Mindmap: cache -> localStorage single key -> premade single key (respect deleted)
+      const deletedForMM = loadDeletedMindmapKeys();
+      let currentMM: any = null;
+      if (!deletedForMM.has(selectedMindmapKey)) {
+        currentMM = mindmapCacheRef.get(selectedMindmapKey) || null;
+        if (!currentMM) {
+          const local = getAnkiMindmapByKey(selectedMindmapKey) || (isSurah ? getAnkiMindmap(sid) : null);
+          if (local?.snapshot) {
+            currentMM = local;
+            mindmapCacheRef.set(selectedMindmapKey, local);
+          } else {
+            const premade = await fetchPremadeForKey(selectedMindmapKey);
+            if (premade?.mindmap) {
+              saveAnkiMindmapByKey(selectedMindmapKey, premade.mindmap);
+              currentMM = premade.mindmap;
+              mindmapCacheRef.set(selectedMindmapKey, premade.mindmap);
+            }
           }
         }
+      } else {
+        // deleted premade — ensure not in cache
+        mindmapCacheRef.delete(selectedMindmapKey);
       }
 
       // Docs: cache -> localStorage single key -> premade single key
@@ -244,8 +252,10 @@ export default function AnkiDeckTab() {
             .then(r => r.json())
             .then(data => {
               const curMM = loadAnkiMindmaps() as any;
+              const deletedSetBg = loadDeletedMindmapKeys();
               let cachedCount = 0;
               Object.entries(data.mindmaps || {}).forEach(([k, v]: any) => {
+                if (deletedSetBg.has(k)) return;
                 if (v && !curMM[k] && (k.startsWith('surah-') || k.startsWith('part-') || k.startsWith('meta-'))) {
                   mindmapCacheRef.set(k, v);
                   cachedCount++;
@@ -362,6 +372,27 @@ export default function AnkiDeckTab() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const handleDeleteMindmap = () => {
+    const key = selectedMindmapKey;
+    deleteAnkiMindmapByKey(key);
+    try { deleteMindmapDoc(key); } catch {}
+    mindmapCacheRef.delete(key);
+    docsCacheRef.delete(key);
+    setMindmaps(prev => {
+      const next: any = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setMindmapDocs(prev => {
+      const next: any = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setShowMindmapPreview(false);
+    setShowDeleteConfirm(false);
+    showToast('Mindmap deleted');
+  };
+
   const handleSave = () => {
     const next = setSplitsForSurah(selectedSurah, anchors, splits);
     setSplits(next);
@@ -476,15 +507,23 @@ export default function AnkiDeckTab() {
         const res = await fetch('/premade-anki-data.json', { cache: 'force-cache' } as any);
         if (res.ok) {
           const premade = await res.json();
-          // docs: premade fills missing
+          const deletedSet = loadDeletedMindmapKeys();
+          // docs: premade fills missing (skip deleted)
           if (premade.mindmapDocs && typeof premade.mindmapDocs === 'object') {
             Object.entries(premade.mindmapDocs as Record<string, string>).forEach(([k, v]) => {
+              if (deletedSet.has(k)) return;
               if (typeof v === 'string' && v && !docsMap[k]) (docsMap as any)[k] = v;
             });
           }
-          // mindmaps: premade base, local overrides (user edits win)
+          // mindmaps: premade base, local overrides (user edits win) — skip deleted
           if (premade.mindmaps && typeof premade.mindmaps === 'object') {
-            fullMindmaps = { ...(premade.mindmaps as any), ...fullMindmaps };
+            const filteredPremade: any = {};
+            Object.entries(premade.mindmaps as any).forEach(([k, v]) => {
+              if (!deletedSet.has(k)) filteredPremade[k] = v;
+            });
+            fullMindmaps = { ...filteredPremade, ...fullMindmaps };
+            // ensure deleted keys not present even if in local (should already be deleted, but filter)
+            deletedSet.forEach(k => { delete (fullMindmaps as any)[k]; });
           }
           // splits: add premade splits for surahs not in local (sanitized). Empty arrays in premade are ignored -> auto anchor will handle.
           if (premade.splits && typeof premade.splits === 'object') {
@@ -646,6 +685,9 @@ export default function AnkiDeckTab() {
               <div className="flex gap-2">
                 {displayMindmap?.snapshot || displayMindmap?.imageUrl ? (
                   <button onClick={() => setShowMindmapPreview(v => !v)} className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm flex items-center gap-1 hover:bg-[var(--verse-bg)]"><Eye size={14} /> {showMindmapPreview ? 'Hide' : 'View'}</button>
+                ) : null}
+                {displayMindmap?.snapshot ? (
+                  <button onClick={() => setShowDeleteConfirm(true)} className="px-3 py-2 rounded-xl border border-red-200 bg-white text-red-600 text-sm flex items-center gap-1 hover:bg-red-50"><Trash2 size={14} /> Delete</button>
                 ) : null}
                 <button onClick={() => { if (isPartMeta) setShowPartEditor(true); else setShowMindmapEditor(true); }} className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-sm flex items-center gap-1"><PenTool size={14} /> {displayMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
               </div>
@@ -854,6 +896,17 @@ export default function AnkiDeckTab() {
           </div>
         </div>
       </ConfirmationModal>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        title="Delete mindmap?"
+        message={`Delete mindmap for ${selectedMindmapKey === 'meta-0' ? 'Meta Overview' : selectedMindmapKey.startsWith('part-') ? `Part ${selectedMindmapKey.replace('part-','')}` : `${surah?.arabicName || 'Surah'} ${selectedSurah}`} ? This will remove the drawing and its notes. Export will no longer include it unless you recreate it.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={handleDeleteMindmap}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
 
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[var(--background-secondary)] border border-[var(--border)] shadow-lg rounded-xl px-4 py-2 text-sm z-50">{toast}</div>
