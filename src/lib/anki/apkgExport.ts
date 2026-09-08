@@ -210,6 +210,7 @@ function modelJson() {
   const css = `
 .card { font-family: Noto Naskh Arabic, serif; direction: rtl; text-align: right; background: var(--background, #fff); color: var(--foreground, #222); padding: 16px; }
 .context { opacity: 0.6; font-size: 0.95rem; margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 8px; }
+.surah-context { opacity: 1; font-weight: 600; color: var(--accent, #5b8fb9); }
 .context .extra { display:none; }
 .context.show-all .extra { display:inline; }
 #verseContainer { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding-bottom: 8px; }
@@ -580,6 +581,9 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
           contextFront += extra.map(v => `<span class="extra"><span class="verse-badge">${v.ayahId}</span> ${escapeField(v.text)} </span>`).join('');
         }
         contextFront += visible.map(v => `<span><span class="verse-badge">${v.ayahId}</span> ${escapeField(v.text)} </span>`).join('');
+      } else {
+        // No previous verses (first verses of surah) — show surah name so user knows which surah to recall
+        contextFront = `<span class="surah-context"><span class="verse-badge">Surah</span> ${escapeField(card.arabicName)} — ${escapeField(card.surahName)} (${card.surahId})</span>`;
       }
       const related = card.relatedGroups.join(', ');
       const rawDocs = (card as any).mindmapDocs ? String((card as any).mindmapDocs) : '';
