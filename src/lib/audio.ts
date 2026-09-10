@@ -24,7 +24,7 @@ export interface AyahRecitationData {
 
 const AUDIO_PLAYER_RECITER_MODE = clientEnv.NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE;
 
-const ALLOWED_RECITERS: Reciter[] = [
+export const ALLOWED_RECITERS: Reciter[] = [
     {
         id: 'ayah-recitation-abdul-basit-abdul-samad-mujawwad-hafs-949',
         name: 'Abdul Basit Abdul Samad Mujawwad',
@@ -353,6 +353,15 @@ export async function loadRecitationData(reciter: Reciter, surahId: number, appO
 
 const audioBlobUrlCache = new Map<string, string>();
 
+function toArrayBuffer(value: unknown): ArrayBuffer | null {
+    if (value instanceof ArrayBuffer) return value;
+    if (ArrayBuffer.isView(value)) {
+        const view = value as ArrayBufferView;
+        return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+    }
+    return null;
+}
+
 export async function resolveAudioUrl(url: string, appOverride?: any): Promise<string> {
     if (!url) return url;
     if (!isObsidianEnv(appOverride)) return url;
@@ -371,12 +380,8 @@ export async function resolveAudioUrl(url: string, appOverride?: any): Promise<s
         if (!req) return url;
         const res: any = await req({ url, method: 'GET' });
         // Obsidian requestUrl returns arrayBuffer for binary
-        let buf: ArrayBuffer | null = null;
-        if (res.arrayBuffer) buf = res.arrayBuffer;
-        else if (res.body instanceof ArrayBuffer) buf = res.body;
-        else if (typeof res.text === 'string' && res.text) {
-            // fallback shouldn't happen for mp3
-        }
+        const responseBuffer = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
+        let buf: ArrayBuffer | null = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
         if (!buf || buf.byteLength === 0) return url;
         const blob = new Blob([buf], { type: 'audio/mpeg' });
         const blobUrl = URL.createObjectURL(blob);

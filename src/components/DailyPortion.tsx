@@ -144,7 +144,7 @@ export default function DailyPortion() {
     });
     return {
       portion: portionResult.portion,
-      startVerseIndex: 0,
+      startVerseIndex: portionResult.startVerseIndex,
       versesPerDay: portionResult.portion.length,
       totalVerses,
       startVerseKey: portionResult.startVerseKey,
@@ -211,6 +211,20 @@ export default function DailyPortion() {
   const readOnlyMode = settings.dailyPortionMode === 'reading';
   const dailyReadingStyle = settings.dailyReadingStyle ?? 'paragraph';
   const isLoaded = isVersesLoaded && !settingsLoading && !progressLoading;
+
+  // Cycle progress for the daily portion bar — mirrors anki deck export progress bar logic
+  const cycleProgressPercent = useMemo(() => {
+    if (portionData.totalVerses <= 0) return 0;
+    const raw = (portionData.startVerseIndex / portionData.totalVerses) * 100;
+    return Math.max(0, Math.min(100, raw));
+  }, [portionData.startVerseIndex, portionData.totalVerses]);
+
+  const cycleCurrentDay = useMemo(() => {
+    if (portionData.totalVerses <= 0 || portionData.derivedCompletionDays <= 0) return 0;
+    // Estimate current day within cycle from completed verses proportion
+    const approx = Math.ceil((portionData.startVerseIndex / portionData.totalVerses) * portionData.derivedCompletionDays);
+    return Math.max(1, Math.min(portionData.derivedCompletionDays, approx || 1));
+  }, [portionData.startVerseIndex, portionData.totalVerses, portionData.derivedCompletionDays]);
 
   const showToast = useCallback((msg: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -300,7 +314,7 @@ export default function DailyPortion() {
 
   return (
     <div className="content-wrapper">
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-3xl mx-auto px-4 py-6 pb-[calc(1.5rem+96px+env(safe-area-inset-bottom,0px))]">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -326,6 +340,31 @@ export default function DailyPortion() {
             <Settings size={20} />
           </button>
         </div>
+
+        {/* Cycle Progress Bar — same pattern as anki deck export progress (ConfirmationModal + importer) — includes current Quran part */}
+        {eligibleSurahs.length > 0 && portionData.totalVerses > 0 && (
+          <div className="mb-6 p-3 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)]">
+            <div className="flex items-center justify-between mb-2 text-xs gap-2 flex-wrap">
+              <span className="font-semibold text-[var(--foreground)]">Cycle progress</span>
+              <span className="text-[var(--foreground-secondary)] flex items-center gap-2 flex-wrap">
+                <span>{portionData.startVerseIndex}/{portionData.totalVerses} verses • {Math.round(cycleProgressPercent)}% • Day {cycleCurrentDay}/{portionData.derivedCompletionDays} • Cycle {activeProgress?.cycles ?? 0}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--background)] border border-[var(--border)] font-medium">
+                  {ACTIVE_PART_OPTIONS.find(o=>o.id===settings.activePart)?.name}
+                </span>
+              </span>
+            </div>
+            <div className="progress-bar" style={{ height: 8, borderRadius: 999 }}>
+              <div
+                className="progress-fill"
+                style={{ width: `${Math.max(0, Math.min(100, cycleProgressPercent))}%`, borderRadius: 999, transition: 'width 0.25s ease' }}
+              />
+            </div>
+            <div className="flex justify-between mt-1.5 text-[10px] text-[var(--foreground-secondary)]">
+              <span>Start: {portionData.startVerseKey || '1:1'}</span>
+              <span>Next: {portionData.nextStartVerseKey || '—'}</span>
+            </div>
+          </div>
+        )}
 
         {/* Settings Panel */}
         {showSettings && (
@@ -510,22 +549,6 @@ export default function DailyPortion() {
             </div>
           ) : (
             <>
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-sm text-[var(--foreground-secondary)]">
-                  <span className="font-medium text-[var(--foreground)]">{todaysPortion.length} verses</span>
-                  {portionData.startVerseKey && portionData.nextStartVerseKey && (
-                    <span className="ml-2">
-                      Next: {portionData.nextStartVerseKey}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-2 py-1 rounded-full bg-[var(--verse-bg)] border border-[var(--border)]">
-                    {settings.dailyPortionMode === 'audio' ? 'Listening' : 'Reading'} • {settings.dailyTargetMinutes} min/day
-                  </span>
-                </div>
-              </div>
-
               {!readOnlyMode ? (
                 <div className="audio-mode-section">
                   <div className="mb-3">
@@ -559,7 +582,7 @@ export default function DailyPortion() {
                             أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ
                           </div>
                         ) : null}
-                        <div className="arabic-text" style={{ fontSize: '1.35rem', lineHeight: 2 }}>
+                        <div className="arabic-text" style={{ fontSize: '1.20rem', lineHeight: 1.95 }}>
                           {dailyPreviewWords.map((word, i) => (
                             <span
                               key={i}
@@ -659,7 +682,7 @@ export default function DailyPortion() {
                 </div>
               )}
 
-              <div className="mt-6">
+              <div className="mt-6 pb-[env(safe-area-inset-bottom,0px)]">
                 <button
                   onClick={handleComplete}
                   disabled={isCompleting}
@@ -682,7 +705,7 @@ export default function DailyPortion() {
       </div>
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[var(--background-secondary)] border border-[var(--border)] shadow-lg rounded-xl px-4 py-2 text-sm flex items-center gap-2 z-50">
+        <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 bg-[var(--background-secondary)] border border-[var(--border)] shadow-lg rounded-xl px-4 py-2 text-sm flex items-center gap-2 z-50">
           <CheckCircle size={16} className="text-[var(--success)]" /> {toast.msg}
         </div>
       )}

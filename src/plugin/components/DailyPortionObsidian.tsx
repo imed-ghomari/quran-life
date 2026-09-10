@@ -132,7 +132,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     });
     return {
       portion: portionResult.portion,
-      startVerseIndex: 0,
+      startVerseIndex: portionResult.startVerseIndex,
       versesPerDay: portionResult.portion.length,
       totalVerses,
       startVerseKey: portionResult.startVerseKey,
@@ -199,6 +199,19 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const readOnlyMode = settings.dailyPortionMode === 'reading';
   const dailyReadingStyle = settings.dailyReadingStyle ?? 'paragraph';
   const isLoaded = isVersesLoaded && !settingsLoading && !progressLoading;
+
+  // Cycle progress — same logic as web DailyPortion, mirrors Anki export progress bar
+  const cycleProgressPercent = useMemo(() => {
+    if (portionData.totalVerses <= 0) return 0;
+    const raw = (portionData.startVerseIndex / portionData.totalVerses) * 100;
+    return Math.max(0, Math.min(100, raw));
+  }, [portionData.startVerseIndex, portionData.totalVerses]);
+
+  const cycleCurrentDay = useMemo(() => {
+    if (portionData.totalVerses <= 0 || portionData.derivedCompletionDays <= 0) return 0;
+    const approx = Math.ceil((portionData.startVerseIndex / portionData.totalVerses) * portionData.derivedCompletionDays);
+    return Math.max(1, Math.min(portionData.derivedCompletionDays, approx || 1));
+  }, [portionData.startVerseIndex, portionData.totalVerses, portionData.derivedCompletionDays]);
 
   const showToast = useCallback((msg: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -314,24 +327,25 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const obsidianAudioCss = `
     .quran-life-daily .audio-player { background: var(--background-secondary) !important; border: none !important; border-radius: 0 !important; padding: 10px 12px !important; }
     .quran-life-daily .reciter-select-container { margin-bottom: 8px; }
-    .quran-life-daily .reciter-select { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 0.85em; }
+    .quran-life-daily .reciter-select { width: 100%; min-height: 40px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 16px; }
     .quran-life-daily .player-progress { height: 6px; background: var(--background-modifier-border); border-radius: 999px; overflow: hidden; margin: 8px 0; }
     .quran-life-daily .progress-bar { height: 100%; background: transparent; }
     .quran-life-daily .progress-fill { height: 100%; background: var(--interactive-accent); transition: width 0.2s; }
-    .quran-life-daily .player-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 4px; }
+    .quran-life-daily .player-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
     .quran-life-daily .time-display { font-size: 0.78em; color: var(--text-muted); font-weight: 500; }
     .quran-life-daily .control-buttons { display: flex; gap: 6px; align-items: center; }
-    .quran-life-daily .control-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .quran-life-daily .play-btn { width: 40px; height: 40px; border-radius: 999px; border: none; background: var(--interactive-accent); color: var(--text-on-accent); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 700; }
+    .quran-life-daily .control-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .quran-life-daily .play-btn { width: 44px; height: 44px; border-radius: 999px; border: none; background: var(--interactive-accent); color: var(--text-on-accent); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 700; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .quran-life-daily .play-btn:disabled, .quran-life-daily .control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .quran-life-daily .speed-control { display: flex; gap: 6px; align-items: center; }
-    .quran-life-daily .speed-btn { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 0.78em; font-weight: 600; cursor: pointer; }
+    .quran-life-daily .speed-btn { padding: 4px 8px; min-height: 36px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 0.78em; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .quran-life-daily .audio-word { padding: 1px 3px; border-radius: 6px; }
-    .quran-life-daily .audio-word--active { background: var(--interactive-accent) !important; color: var(--text-on-accent) !important; box-shadow: 0 0 0 1px var(--interactive-accent-hover) !important; }
+    .quran-life-daily .audio-word--active { background: color-mix(in srgb, var(--interactive-accent) 18%, transparent) !important; color: var(--text-normal) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent) !important; border: 1px solid color-mix(in srgb, var(--interactive-accent) 22%, var(--background-primary)) !important; }
+    @media (max-width: 480px) { .quran-life-daily .player-controls { justify-content: center; } .quran-life-daily .time-display { flex: 1 0 100%; order: 3; text-align: center; } }
   `;
 
   return (
-    <div className="quran-life-daily" style={{ padding:'16px', maxWidth:720, margin:'0 auto', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
+    <div className="quran-life-daily" style={{ padding:'16px', paddingBottom:'calc(16px + 96px + env(safe-area-inset-bottom, 0px))', maxWidth:720, margin:'0 auto', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
       <style>{obsidianAudioCss}</style>
       {/* Header — Obsidian native */}
       <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
@@ -361,6 +375,28 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
           </button>
         </div>
       </div>
+
+      {/* Cycle Progress Bar — mirrors AnkiDeck export progress bar (importer-progress-bar style) — now includes current Quran part */}
+      {eligibleSurahs.length > 0 && portionData.totalVerses > 0 && (
+        <div style={{ ...cardBase, padding:'10px 12px', display:'flex', flexDirection:'column', gap:6 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap', fontSize:'0.78em', color:'var(--text-muted)' }}>
+            <span style={{ fontWeight:700, color:'var(--text-normal)', fontSize:'0.95em' }}>Cycle progress</span>
+            <span style={{ display:'inline-flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+              <span>{portionData.startVerseIndex}/{portionData.totalVerses} verses • {Math.round(cycleProgressPercent)}% • Day {cycleCurrentDay}/{portionData.derivedCompletionDays} • Cycle {activeProgress?.cycles ?? 0}</span>
+              <span style={{ padding:'2px 8px', borderRadius:999, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', fontSize:'0.92em', fontWeight:600, color:'var(--text-muted)' }}>
+                {ACTIVE_PART_OPTIONS.find(o=>o.id===settings.activePart)?.name}
+              </span>
+            </span>
+          </div>
+          <div style={{ width:'100%', height:8, background:'var(--background-modifier-border)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' } as React.CSSProperties}>
+            <div style={{ width: `${Math.max(0, Math.min(100, cycleProgressPercent))}%`, height:'100%', background:'var(--interactive-accent)', transition:'width 0.25s ease', borderRadius:999 }} />
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72em', color:'var(--text-faint)' }}>
+            <span>Start: {portionData.startVerseKey || '1:1'}</span>
+            <span>Next: {portionData.nextStartVerseKey || '—'}</span>
+          </div>
+        </div>
+      )}
 
       {/* Main content — differentiated player vs reader */}
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -408,13 +444,6 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
           </div>
         ) : (
           <>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap', padding:'8px 12px', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-primary)', fontSize:'0.82em', color:'var(--text-muted)' }}>
-              <span><b style={{ color:'var(--text-normal)' }}>{todaysPortion.length} verses</b> {portionData.nextStartVerseKey ? <span>• Next {portionData.nextStartVerseKey}</span> : null}</span>
-              <span style={{ padding:'2px 8px', borderRadius:999, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', fontSize:'0.78em' }}>
-                {ACTIVE_PART_OPTIONS.find(o=>o.id===settings.activePart)?.name}
-              </span>
-            </div>
-
             {!readOnlyMode ? (
               <>
                 <div style={{ ...cardBase, background:'var(--background-primary)', borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
@@ -463,7 +492,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                           {currentDailyVerse.ayahId === 1 ? 'بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ' : 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَانِ ٱلرَّجِيمِ'}
                         </div>
                       ) : null}
-                      <div style={{ fontFamily:'var(--font-text, serif)', fontSize:'1.45em', lineHeight:2, direction:'rtl', textAlign:'right', color:'var(--text-normal)' }}>
+                      <div style={{ fontFamily:'var(--font-text, serif)', fontSize:'1.20em', lineHeight:2, direction:'rtl', textAlign:'right', color:'var(--text-normal)' }}>
                         {dailyPreviewWords.map((word, i) => (
                           <span
                             key={i}
@@ -473,9 +502,10 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                               padding:'1px 3px',
                               margin:'1px',
                               borderRadius:6,
-                              background: i === highlightedWordIndex ? 'var(--interactive-accent)' : 'transparent',
-                              color: i === highlightedWordIndex ? 'var(--text-on-accent)' : 'inherit',
-                              boxShadow: i === highlightedWordIndex ? '0 0 0 1px var(--interactive-accent-hover)' : 'none',
+                              background: i === highlightedWordIndex ? 'color-mix(in srgb, var(--interactive-accent) 18%, transparent)' : 'transparent',
+                              color: i === highlightedWordIndex ? 'var(--text-normal)' : 'inherit',
+                              boxShadow: i === highlightedWordIndex ? '0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent)' : 'none',
+                              border: i === highlightedWordIndex ? '1px solid color-mix(in srgb, var(--interactive-accent) 22%, var(--background-primary))' : '1px solid transparent',
                               transition:'background 0.15s, color 0.15s',
                             }}
                           >
@@ -558,7 +588,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
               </div>
             )}
 
-            <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)', marginBottom:'env(safe-area-inset-bottom, 0px)' }}>
               <button
                 onClick={handleComplete}
                 disabled={isCompleting}
@@ -586,8 +616,11 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
         )}
       </div>
 
+      {/* Bottom safe-area spacer for Obsidian mobile toolbar */}
+      <div style={{ height:'calc(24px + env(safe-area-inset-bottom, 0px))', flexShrink:0 }} aria-hidden />
+
       {toast && (
-        <div style={{ position:'fixed', bottom:18, left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', boxShadow:'0 8px 24px rgba(0,0,0,0.14)', borderRadius:10, padding:'8px 14px', fontSize:'0.86em', display:'flex', alignItems:'center', gap:8, zIndex:50, color:'var(--text-normal)' }}>
+        <div style={{ position:'fixed', bottom:'calc(18px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', boxShadow:'0 8px 24px rgba(0,0,0,0.14)', borderRadius:10, padding:'8px 14px', fontSize:'0.86em', display:'flex', alignItems:'center', gap:8, zIndex:50, color:'var(--text-normal)' }}>
           <CheckCircle size={14} style={{ color:'var(--interactive-accent)' }} /> {toast.msg}
         </div>
       )}

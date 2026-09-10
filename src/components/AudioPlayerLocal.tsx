@@ -3,6 +3,7 @@
 import React from 'react';
 import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl } from '@/lib/audio';
+import { getOfflineAudioUrlIfAvailable } from '@/plugin/offlineAudio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -103,11 +104,18 @@ export default function AudioPlayerLocal({
     const stallCheckRef = useRef<{ t: number; wall: number }>({ t: 0, wall: 0 });
     const pendingTrackRef = useRef<{ key: string; targetTime: number; shouldAutoplay: boolean } | null>(null);
     const configuredTrackKeyRef = useRef('');
+    const remoteFallbackUrlRef = useRef<string | null>(null);
+    const onlineFallbackTriedRef = useRef(false);
     const lastStableTimeRef = useRef(0);
     const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
     const preloadedTrackKeyRef = useRef('');
     const seamlessSurahAdvanceKeyRef = useRef('');
     const surahAdvanceGuardRef = useRef<{ verseKey: string; until: number }>({ verseKey: '', until: 0 });
+    const basmalaAudioRef = useRef<HTMLAudioElement | null>(null);
+    const basmalaPendingNextIndexRef = useRef<number | null>(null);
+    const wasPlayingBeforeBasmalaRef = useRef(false);
+    const isBasmalaPlayingRef = useRef(false);
+    const [isBasmalaPlaying, setIsBasmalaPlaying] = useState(false);
 
     const currentVerse = verses[currentVerseIndex];
     const currentSurahId = currentVerse?.surahId ?? null;
@@ -117,7 +125,6 @@ export default function AudioPlayerLocal({
     const selectedReciterType = selectedReciter?.type ?? null;
     const selectedReciterPath = selectedReciter?.relativePath ?? '';
     const totalVerses = verses.length;
-    const verseProgress = totalVerses > 0 ? ((currentVerseIndex + 1) / totalVerses) * 100 : 0;
     const versesSurahIdsKey = useMemo(() => {
         const surahIds = Array.from(new Set(verses.map((verse) => verse.surahId)));
         return surahIds.join(',');
@@ -154,6 +161,128 @@ export default function AudioPlayerLocal({
         const timestamp = Number.isFinite(opts?.timestamp ?? NaN) ? Math.max(0, opts?.timestamp as number) : Math.max(0, fallbackTimestamp);
         writeStoredPlaybackState({ reciterId, surahId: verse.surahId, ayahId: verse.ayahId, timestamp });
     }, [currentVerse, selectedReciterId, verseStartTime]);
+
+    // --- Basmala interstitial for surah transitions (Obsidian) ---
+    const fetchBasmalaInfo = useCallback(async (): Promise<{ url: string; startTime?: number; endTime?: number; segments?: number[][] } | null> => {
+        if (!selectedReciter) return null;
+        try {
+            if (selectedReciter.type === 'ayah-based') {
+                const data = recitationData;
+                const verseData = (data as any)?.verses?.['1:1'];
+                if (verseData?.audio_url) return { url: verseData.audio_url, segments: verseData.segments };
+                const fresh = await loadRecitationData({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath }, 1, obsidianApp);
+                const v = (fresh as any)?.verses?.['1:1'];
+                if (v?.audio_url) return { url: v.audio_url, segments: v.segments };
+                return null;
+            } else {
+                let surahOneData: any = recitationDataMap[1] || (recitationData?.surahId === 1 ? recitationData : null);
+                if (!surahOneData) {
+                    const loaded = await loadRecitationData({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath }, 1, obsidianApp);
+                    if (loaded) {
+                        surahOneData = loaded;
+                        // cache for next time without blocking render
+                        setRecitationDataMap(prev => (prev[1] ? prev : { ...prev, 1: loaded }));
+                    }
+                }
+                if (!surahOneData) return null;
+                const info = getAudioInfoForVerse({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath }, surahOneData, 1, 1);
+                return info;
+            }
+        } catch { return null; }
+    }, [selectedReciter, recitationData, recitationDataMap, obsidianApp]);
+
+    const cancelBasmala = useCallback(() => {
+        if (!isBasmalaPlayingRef.current) return;
+        const a = basmalaAudioRef.current;
+        if (a) { try { a.pause(); } catch {} a.removeAttribute('src'); try { a.load(); } catch {} }
+        isBasmalaPlayingRef.current = false;
+        setIsBasmalaPlaying(false);
+        basmalaPendingNextIndexRef.current = null;
+    }, []);
+
+    const handleBasmalaEnded = useCallback(() => {
+        if (!isBasmalaPlayingRef.current) return;
+        const nextIdx = basmalaPendingNextIndexRef.current;
+        const wasPlaying = wasPlayingBeforeBasmalaRef.current;
+        const a = basmalaAudioRef.current;
+        if (a) { try { a.pause(); } catch {} a.removeAttribute('src'); try { a.load(); } catch {} }
+        isBasmalaPlayingRef.current = false;
+        setIsBasmalaPlaying(false);
+        basmalaPendingNextIndexRef.current = null;
+        if (nextIdx !== null && nextIdx !== undefined && nextIdx >= 0 && nextIdx < verses.length) {
+            onVerseChange(nextIdx);
+            if (wasPlaying) setTimeout(() => setIsPlaying(true), 80);
+        }
+    }, [onVerseChange, verses.length]);
+
+    const handleBasmalaTimeUpdate = useCallback(() => {
+        const a = basmalaAudioRef.current;
+        if (!a || !isBasmalaPlayingRef.current) return;
+        const end = (a as any)._basmalaEndTime as number | null;
+        if (end !== null && end !== undefined && Number.isFinite(end) && a.currentTime >= end - 0.05) {
+            handleBasmalaEnded();
+        }
+    }, [handleBasmalaEnded]);
+
+    const handleBasmalaError = useCallback(() => {
+        handleBasmalaEnded();
+    }, [handleBasmalaEnded]);
+
+    const playBasmalaThenAdvance = useCallback(async (nextIdx: number) => {
+        const nextVerse = verses[nextIdx];
+        if (!nextVerse) { onVerseChange(nextIdx); return; }
+        const isNewSurah = nextVerse.surahId !== currentVerse?.surahId && nextVerse.surahId !== 1 && nextVerse.surahId !== 9 && nextVerse.ayahId === 1;
+        if (!isNewSurah || isBasmalaPlayingRef.current) { onVerseChange(nextIdx); return; }
+        const basmalaInfo = await fetchBasmalaInfo();
+        if (!basmalaInfo?.url) { onVerseChange(nextIdx); return; }
+        wasPlayingBeforeBasmalaRef.current = isPlayingRef.current;
+        if (audioRef.current && !audioRef.current.paused) try { audioRef.current.pause(); } catch {}
+        setIsPlaying(false);
+        isBasmalaPlayingRef.current = true;
+        setIsBasmalaPlaying(true);
+        basmalaPendingNextIndexRef.current = nextIdx;
+        const basmalaAudio = basmalaAudioRef.current;
+        if (!basmalaAudio) { onVerseChange(nextIdx); isBasmalaPlayingRef.current = false; setIsBasmalaPlaying(false); return; }
+        try {
+            let url: string | null = null;
+            try {
+              const offlineBasmala = await getOfflineAudioUrlIfAvailable({ id: selectedReciter!.id, name: "", type: selectedReciter!.type, relativePath: selectedReciter!.relativePath } as Reciter, 1, 1, obsidianApp);
+              if (offlineBasmala) url = offlineBasmala;
+            } catch {}
+            if (!url) url = await resolveAudioUrl(basmalaInfo.url, obsidianApp);
+            const start = basmalaInfo.startTime || 0;
+            const end = basmalaInfo.endTime ?? null;
+            (basmalaAudio as any)._basmalaEndTime = end;
+            (basmalaAudio as any)._basmalaStartTime = start;
+            basmalaAudio.src = url;
+            basmalaAudio.load();
+            try { basmalaAudio.currentTime = start; } catch {}
+            basmalaAudio.playbackRate = speedRef.current;
+            const started = await basmalaAudio.play().then(() => true).catch(() => false);
+            // Mobile WebViews can reject an automatic second-audio play because it
+            // is no longer inside the original user gesture. Skip the interstitial
+            // in that case so the daily portion keeps playing instead of getting
+            // stuck on a paused Basmala player.
+            if (!started) handleBasmalaEnded();
+        } catch {
+            isBasmalaPlayingRef.current = false;
+            setIsBasmalaPlaying(false);
+            basmalaPendingNextIndexRef.current = null;
+            onVerseChange(nextIdx);
+        }
+    }, [verses, currentVerse, fetchBasmalaInfo, obsidianApp, onVerseChange]);
+
+    useEffect(() => {
+        if (basmalaAudioRef.current) basmalaAudioRef.current.playbackRate = speed;
+    }, [speed]);
+
+    useEffect(() => {
+        // cancel basmala if verse changes manually while basmala pending and target differs
+        if (isBasmalaPlayingRef.current && basmalaPendingNextIndexRef.current !== null && basmalaPendingNextIndexRef.current !== currentVerseIndex) {
+            // if user manually navigated away, cancel pending basmala if new index is not the pending one
+            // but if we are in basmala phase, currentVerseIndex is still old, so no cancel yet
+        }
+    }, [currentVerseIndex]);
 
     useEffect(() => {
         getAudioPlayerReciters().then(list => setReciters(list));
@@ -300,26 +429,55 @@ export default function AudioPlayerLocal({
 
     useEffect(() => {
         if (!currentVerseKey || currentSurahId === null || currentAyahId === null || !selectedReciterId || !selectedReciterType || !selectedReciterPath) return;
-        if (isLoadingReciter && !currentRecitationData) { setIsAudioPreparing(true); setIsAudioReady(false); return; }
-        const reciterForPlayback: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
-        const info = getAudioInfoForVerse(reciterForPlayback, currentRecitationData, currentSurahId, currentAyahId);
-        if (!info) {
-            if (audioRef.current) { audioRef.current.pause(); audioRef.current.removeAttribute('src'); audioRef.current.load(); }
-            setIsPlaying(false); setIsAudioPreparing(false); setIsAudioReady(false); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; pendingSeekTimeRef.current = null; configuredTrackKeyRef.current = ''; return;
-        }
-        const rawUrl = info.url;
-        const startTime = info.startTime || 0;
-        const endTime = info.endTime || null;
-        const segments = sortSegmentsByStart(info.segments || null);
-        if (rawUrl) {
-            let cancelled = false;
-            (async () => {
-                // Resolve via Obsidian requestUrl for tarteel CDN (no CORS) — falls back to direct url
-                const url = await resolveAudioUrl(rawUrl, obsidianApp);
+        let cancelled = false;
+        (async () => {
+            const reciterForPlayback: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
+
+            // Always probe the vault first. This makes a downloaded track usable even
+            // when the recitation metadata request is unavailable offline.
+            let offlineUrl: string | null = null;
+            try {
+                offlineUrl = await getOfflineAudioUrlIfAvailable(reciterForPlayback, currentSurahId, currentAyahId, obsidianApp);
+            } catch {}
+            if (cancelled) return;
+
+            const metadataInfo = getAudioInfoForVerse(reciterForPlayback, currentRecitationData, currentSurahId, currentAyahId);
+            const info: ReturnType<typeof getAudioInfoForVerse> = metadataInfo
+                ? { ...metadataInfo, url: offlineUrl ?? metadataInfo.url }
+                : offlineUrl
+                    ? { url: offlineUrl, startTime: undefined, endTime: undefined, segments: undefined }
+                    : null;
+            if (!info) {
+                if (cancelled) return;
+                // The metadata loaders may still be reading bundled/local JSON. Keep the
+                // player in a loading state until that finishes instead of declaring the
+                // track unavailable and disabling it prematurely.
+                if (isLoadingReciter) {
+                    setIsAudioPreparing(true);
+                    setIsAudioReady(false);
+                    return;
+                }
+                if (audioRef.current) { audioRef.current.pause(); audioRef.current.removeAttribute('src'); audioRef.current.load(); }
+                remoteFallbackUrlRef.current = null;
+                onlineFallbackTriedRef.current = false;
+                setIsPlaying(false); setIsAudioPreparing(false); setIsAudioReady(false); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; pendingSeekTimeRef.current = null; configuredTrackKeyRef.current = ''; return;
+            }
+            const rawUrl = info.url;
+            const startTime = info.startTime || 0;
+            const endTime = info.endTime || null;
+            const segments = sortSegmentsByStart(info.segments || null);
+            if (rawUrl) {
+                // `offlineUrl` was checked first above. Only resolve the remote URL when
+                // no local file exists.
+                const url = offlineUrl ?? (String(rawUrl).startsWith('blob:') ? rawUrl : await resolveAudioUrl(rawUrl, obsidianApp));
                 if (cancelled) return;
                 if (!audioRef.current) return;
                 const currentInfo = getAudioInfoForVerse(reciterForPlayback, currentRecitationData, currentSurahId, currentAyahId);
-                if (currentInfo?.url !== rawUrl) return;
+                // An offline-only track has no metadata URL to compare against. When
+                // metadata exists, still guard against a stale async load.
+                if (metadataInfo && currentInfo?.url !== metadataInfo.url) return;
+                remoteFallbackUrlRef.current = offlineUrl ? metadataInfo?.url ?? null : null;
+                onlineFallbackTriedRef.current = false;
                 let usedSeamlessSurahAdvance = false;
                 const currentSrcPath = audioRef.current.src.split('?')[0];
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
@@ -339,6 +497,7 @@ export default function AudioPlayerLocal({
                 const trackKey = `${selectedReciterId}:${currentVerseKey}:${rawUrl}:${targetTime}:${endTime ?? 'null'}`;
                 if (configuredTrackKeyRef.current === trackKey) {
                     audioRef.current.playbackRate = speedRef.current;
+                    setIsAudioPreparing(false); setIsAudioReady(true);
                     setVerseStartTime(startTime); setVerseEndTime(endTime); setActiveSegments(segments); return;
                 }
                 configuredTrackKeyRef.current = trackKey;
@@ -370,9 +529,9 @@ export default function AudioPlayerLocal({
                     } else initialIndex = 0;
                 }
                 if (initialIndex !== lastWordIndexRef.current) { onWordIndexChange?.(initialIndex); lastWordIndexRef.current = initialIndex; }
-            })();
-            return () => { cancelled = true; };
-        }
+            }
+        })();
+        return () => { cancelled = true; };
     }, [currentVerseKey, currentSurahId, currentAyahId, selectedReciterId, selectedReciterType, selectedReciterPath, currentRecitationData, isLoadingReciter, currentVerseWordCount, finalizePendingPlayback, onWordIndexChange, preparePendingTrack, setPendingTrackWithoutLoader, obsidianApp]);
 
     useEffect(() => {
@@ -453,6 +612,7 @@ export default function AudioPlayerLocal({
     useEffect(() => () => { if (preloadAudioRef.current) { preloadAudioRef.current.pause(); preloadAudioRef.current.removeAttribute('src'); preloadAudioRef.current.load(); preloadAudioRef.current = null; } }, []);
 
     const maybeAdvanceVerse = useCallback((currentTime: number) => {
+        if (isBasmalaPlayingRef.current) return true;
         const verseKey = `${currentVerse?.surahId ?? 0}:${currentVerse?.ayahId ?? 0}:${currentVerseIndex}`;
         const nextVerse = currentVerseIndex < totalVerses - 1 ? verses[currentVerseIndex + 1] : null;
         const verseAfterNext = currentVerseIndex < totalVerses - 2 ? verses[currentVerseIndex + 2] : null;
@@ -470,11 +630,16 @@ export default function AudioPlayerLocal({
         if (state.key === verseKey && now - state.at < 700) return true;
         autoAdvanceStateRef.current = { key: verseKey, at: now, attempts: state.key === verseKey ? state.attempts + 1 : 1 };
         if (currentVerseIndex < totalVerses - 1) {
+            const isSurahTransition = nextVerse ? (nextVerse.surahId !== currentVerse?.surahId && nextVerse.surahId !== 1 && nextVerse.surahId !== 9 && nextVerse.ayahId === 1) : false;
+            if (isSurahTransition) {
+                void playBasmalaThenAdvance(currentVerseIndex + 1);
+                return true;
+            }
             if (selectedReciterType === 'surah-based' && nextVerseKey) { seamlessSurahAdvanceKeyRef.current = nextVerseKey; surahAdvanceGuardRef.current = { verseKey: nextVerseKey, until: now + SURAH_ADVANCE_SETTLE_MS }; } else pausePlaybackAt(verseEndTime);
             onVerseChange(currentVerseIndex + 1);
         } else { seamlessSurahAdvanceKeyRef.current = ''; surahAdvanceGuardRef.current = { verseKey: '', until: 0 }; pausePlaybackAt(verseEndTime); setIsPlaying(false); setIsCompleted(true); }
         return true;
-    }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex, totalVerses, verses, verseEndTime, nextVerseStartTime, nextVerseUsesCurrentSource, selectedReciterType, pausePlaybackAt, onVerseChange]);
+    }, [currentVerse?.surahId, currentVerse?.ayahId, currentVerseIndex, totalVerses, verses, verseEndTime, nextVerseStartTime, nextVerseUsesCurrentSource, selectedReciterType, pausePlaybackAt, onVerseChange, playBasmalaThenAdvance]);
 
     useEffect(() => {
         if (selectedReciterType !== 'surah-based' || !isPlaying || !isAudioReady || pendingTrackRef.current || verseEndTime === null) return;
@@ -486,11 +651,13 @@ export default function AudioPlayerLocal({
 
     const handleTimeUpdate = useCallback(() => {
         if (audioRef.current) {
-            if (pendingTrackRef.current || isAudioPreparing || !isAudioReady) return;
             const current = audioRef.current.currentTime;
-            if (maybeAdvanceVerse(current)) return;
-            lastStableTimeRef.current = current;
+            // Keep the visual progress moving even while the track is finalizing
+            // a seek/buffer handoff (common with offline mobile Blob URLs).
             setElapsedTime(current);
+            lastStableTimeRef.current = current;
+            if (pendingTrackRef.current || isAudioPreparing || !isAudioReady) return;
+            if (maybeAdvanceVerse(current)) return;
             let nextIndex: number | null = null;
             if (activeSegments && onWordIndexChange) {
                 const timeMs = current * 1000;
@@ -532,21 +699,58 @@ export default function AudioPlayerLocal({
     }, [verseEndTime, verseStartTime, activeSegments, onWordIndexChange, currentVerseWordCount, isAudioPreparing, isAudioReady, maybeAdvanceVerse]);
 
     const handleEnded = useCallback(() => {
+        if (isBasmalaPlayingRef.current) return;
         if (pendingTrackRef.current || isAudioPreparing || !isAudioReady) return;
-        if (currentVerseIndex < totalVerses - 1) onVerseChange(currentVerseIndex + 1);
+        if (currentVerseIndex < totalVerses - 1) {
+            const nextVerse = verses[currentVerseIndex + 1];
+            const isNewSurah = nextVerse ? (nextVerse.surahId !== currentVerse?.surahId && nextVerse.surahId !== 1 && nextVerse.surahId !== 9 && nextVerse.ayahId === 1) : false;
+            if (isNewSurah) { void playBasmalaThenAdvance(currentVerseIndex + 1); return; }
+            onVerseChange(currentVerseIndex + 1);
+        }
         else { setIsPlaying(false); setIsCompleted(true); }
-    }, [currentVerseIndex, totalVerses, onVerseChange, isAudioPreparing, isAudioReady]);
+    }, [currentVerseIndex, totalVerses, verses, currentVerse, onVerseChange, isAudioPreparing, isAudioReady, playBasmalaThenAdvance]);
 
     const handleLoadedMetadata = useCallback(() => { void finalizePendingPlayback(); }, [finalizePendingPlayback]);
     const handleCanPlay = useCallback(() => { if (!pendingTrackRef.current) { setIsAudioPreparing(false); setIsAudioReady(true); return; } void finalizePendingPlayback(); }, [finalizePendingPlayback]);
     const handlePlaying = useCallback(() => { setIsAudioPreparing(false); setIsAudioReady(true); if (audioRef.current) { lastStableTimeRef.current = audioRef.current.currentTime; stallCheckRef.current = { t: audioRef.current.currentTime, wall: Date.now() }; } }, []);
-    const handleError = useCallback(() => { setIsPlaying(false); setIsAudioPreparing(false); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; pendingSeekTimeRef.current = null; configuredTrackKeyRef.current = ''; }, [onWordIndexChange]);
+    const handleError = useCallback(() => {
+        const audio = audioRef.current;
+        const fallbackUrl = remoteFallbackUrlRef.current;
+        if (audio && fallbackUrl && !onlineFallbackTriedRef.current) {
+            // A stale/corrupt local file should not permanently strand playback.
+            // Retry the original remote source once, after the offline-first attempt.
+            onlineFallbackTriedRef.current = true;
+            const targetTime = Number.isFinite(audio.currentTime) && audio.currentTime > 0
+                ? audio.currentTime
+                : verseStartTime;
+            const shouldAutoplay = isPlayingRef.current;
+            void resolveAudioUrl(fallbackUrl, obsidianApp).then((url) => {
+                if (!audioRef.current || audioRef.current !== audio) return;
+                remoteFallbackUrlRef.current = null;
+                configuredTrackKeyRef.current = '';
+                preparePendingTrack({ targetTime, shouldAutoplay });
+                audio.pause();
+                audio.src = url;
+                audio.playbackRate = speedRef.current;
+                audio.load();
+            }).catch(() => {
+                setIsPlaying(false);
+                setIsAudioPreparing(false);
+                setIsAudioReady(false);
+            });
+            return;
+        }
+        setIsPlaying(false); setIsAudioPreparing(false); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; pendingSeekTimeRef.current = null; configuredTrackKeyRef.current = '';
+    }, [obsidianApp, onWordIndexChange, preparePendingTrack, verseStartTime]);
     const handleWaitingOrStalled = useCallback(() => { if (!isPlayingRef.current || !audioRef.current) return; freezePlaybackAt(audioRef.current.currentTime); }, [freezePlaybackAt]);
 
     const handleReciterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const id = e.target.value;
         const reciter = reciters.find(r => r.id === id);
         if (reciter) {
+            cancelBasmala();
+            remoteFallbackUrlRef.current = null;
+            onlineFallbackTriedRef.current = false;
             audioRef.current?.pause(); seamlessSurahAdvanceKeyRef.current = ''; surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
             setRecitationData(null); setRecitationDataMap({}); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); setIsAudioPreparing(true); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; configuredTrackKeyRef.current = ''; setIsLoadingReciter(true);
             setSelectedReciter(reciter); localStorage.setItem(RECITER_STORAGE_KEY, id); setIsPlaying(false);
@@ -562,7 +766,33 @@ export default function AudioPlayerLocal({
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const togglePlay = () => { if (isCompleted) return; setIsPlaying(prev => !prev); };
+    const togglePlay = () => {
+        if (isBasmalaPlayingRef.current) {
+            const a = basmalaAudioRef.current;
+            if (a) {
+                if (a.paused) a.play().catch(() => {});
+                else a.pause();
+            }
+            return;
+        }
+        if (isCompleted) return;
+        const audio = audioRef.current;
+        if (isPlaying) {
+            audio?.pause();
+            setIsPlaying(false);
+            return;
+        }
+
+        // Start directly from the tap/click when possible. This is important on
+        // iOS/Android WebViews, where a later effect-triggered play() can be
+        // rejected as autoplay even though the user just pressed Play.
+        setIsPlaying(true);
+        if (audio && isAudioReady) {
+            audio.play().catch((error) => {
+                if (error?.name !== 'AbortError') setIsPlaying(false);
+            });
+        }
+    };
 
     const restartDailyPortion = () => {
         if (!selectedReciter || verses.length === 0) return;
@@ -612,16 +842,39 @@ export default function AudioPlayerLocal({
         });
     }, [selectedReciter, verses, recitationData, recitationDataMap]);
 
-    const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; if (verseDurationsSec.some(d => d === null)) return null; return verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); }, [verseDurationsSec]);
+    const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; if (verseDurationsSec.some(d => d === null)) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); const s = speed || 1; return sum / s; }, [verseDurationsSec, speed]);
     const elapsedTotalSec = useMemo(() => {
         if (!verseDurationsSec) return null;
         const prior = verseDurationsSec.slice(0, currentVerseIndex).reduce((sum, d) => sum + (d || 0), 0);
         const currentDuration = verseDurationsSec[currentVerseIndex] || 0;
         const currentElapsed = Math.min(elapsedTime, currentDuration || elapsedTime);
-        return prior + currentElapsed;
-    }, [verseDurationsSec, currentVerseIndex, elapsedTime]);
+        const s = speed || 1;
+        return (prior + currentElapsed) / s;
+    }, [verseDurationsSec, currentVerseIndex, elapsedTime, speed]);
 
-    const isPlayButtonLoading = reciters.length === 0 || !selectedReciterId || (!currentRecitationData && Boolean(currentVerse)) || isAudioPreparing;
+    // Progress bar now fills during playback (time-based), fallback to verse count if durations unavailable
+    const verseProgress = useMemo(() => {
+        if (isBasmalaPlaying) return totalVerses > 0 ? ((currentVerseIndex) / totalVerses) * 100 : 0;
+        if (totalDurationSec !== null && elapsedTotalSec !== null && totalDurationSec > 0) {
+            return Math.max(0, Math.min(100, (elapsedTotalSec / totalDurationSec) * 100));
+        }
+        // Offline-only playback can have audio but no timing metadata. Use the
+        // actual HTMLAudioElement position so the bar still advances smoothly.
+        const audioDuration = audioRef.current?.duration ?? 0;
+        if (Number.isFinite(audioDuration) && audioDuration > 0 && totalVerses > 0) {
+            const fraction = verseEndTime !== null && verseEndTime > verseStartTime
+                ? (elapsedTime - verseStartTime) / (verseEndTime - verseStartTime)
+                : (audioRef.current?.currentTime ?? elapsedTime) / audioDuration;
+            const clampedFraction = Math.max(0, Math.min(1, fraction));
+            return Math.max(0, Math.min(100, ((currentVerseIndex + clampedFraction) / totalVerses) * 100));
+        }
+        return totalVerses > 0 ? ((currentVerseIndex + 1) / totalVerses) * 100 : 0;
+    }, [totalDurationSec, elapsedTotalSec, currentVerseIndex, totalVerses, isBasmalaPlaying, elapsedTime, verseStartTime, verseEndTime]);
+    const safeVerseProgress = Number.isFinite(verseProgress) ? Math.max(0, Math.min(100, verseProgress)) : 0;
+
+    // Metadata can be unavailable offline while the downloaded MP3 is ready.
+    // Readiness is therefore determined by the audio element, not metadata alone.
+    const isPlayButtonLoading = reciters.length === 0 || !selectedReciterId || isAudioPreparing;
     const isPlayButtonDisabled = isCompleted || verses.length === 0 || !currentVerse || isPlayButtonLoading || !isAudioReady;
 
     return (
@@ -639,29 +892,53 @@ export default function AudioPlayerLocal({
                 onSeeked={handleCanPlay}
                 onPlaying={handlePlaying}
                 preload="auto"
+                playsInline
+            />
+            <audio
+                ref={basmalaAudioRef}
+                onEnded={handleBasmalaEnded}
+                onTimeUpdate={handleBasmalaTimeUpdate}
+                onError={handleBasmalaError}
+                preload="auto"
+                playsInline
+                style={{ display: 'none' }}
             />
             <div className="reciter-select-container">
                 <select className="reciter-select" value={selectedReciter?.id || ''} onChange={handleReciterChange} disabled={reciters.length === 0}>
                     {reciters.length === 0 ? <option value="">Loading reciters...</option> : reciters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
             </div>
-            <div className="player-progress">
-                <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${verseProgress}%` }} />
+            <div
+                className="player-progress"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={safeVerseProgress}
+                style={{ width: '100%', height: 8, background: 'var(--border, var(--background-modifier-border))', borderRadius: 999, overflow: 'hidden' }}
+            >
+                <div
+                    className="progress-fill"
+                    data-progress={safeVerseProgress}
+                    style={{ display: 'block', width: `${safeVerseProgress}%`, minWidth: safeVerseProgress > 0 ? 1 : 0, height: '100%', background: 'var(--accent, var(--interactive-accent))', transition: 'width 0.25s ease', borderRadius: 999 }}
+                />
                 </div>
-            </div>
             <div className="player-controls">
-                <div className="time-display">{elapsedTotalSec !== null && totalDurationSec !== null ? `${formatTime(elapsedTotalSec)} / ${formatTime(totalDurationSec)}` : `${currentVerseIndex + 1} / ${totalVerses}`}</div>
+                <div className="time-display">{isBasmalaPlaying ? 'بِسْمِ ٱللَّهِ...' : elapsedTotalSec !== null && totalDurationSec !== null ? `${formatTime(elapsedTotalSec)} / ${formatTime(totalDurationSec)}` : `${currentVerseIndex + 1} / ${totalVerses}`}</div>
                 <div className="control-buttons">
-                    <button className="control-btn" onClick={() => onVerseChange(Math.max(0, currentVerseIndex - 1))} disabled={currentVerseIndex === 0}><SkipBack size={18} /></button>
-                    <button className="play-btn" onClick={togglePlay} disabled={isPlayButtonDisabled}>{isPlayButtonLoading ? <Spinner size={16} /> : isPlaying ? <Pause size={18} /> : <Play size={18} />}</button>
-                    <button className="control-btn" onClick={() => onVerseChange(Math.min(totalVerses - 1, currentVerseIndex + 1))} disabled={currentVerseIndex === totalVerses - 1}><SkipForward size={18} /></button>
+                    <button className="control-btn" onClick={() => { if (isBasmalaPlaying) cancelBasmala(); onVerseChange(Math.max(0, currentVerseIndex - 1)); }} disabled={currentVerseIndex === 0 && !isBasmalaPlaying}><SkipBack size={18} /></button>
+                    <button className="play-btn" onClick={togglePlay} disabled={isPlayButtonDisabled && !isBasmalaPlaying}>{isPlayButtonLoading ? <Spinner size={16} /> : (isPlaying || isBasmalaPlaying) ? <Pause size={18} /> : <Play size={18} />}</button>
+                    <button className="control-btn" onClick={() => { if (isBasmalaPlaying) cancelBasmala(); onVerseChange(Math.min(totalVerses - 1, currentVerseIndex + 1)); }} disabled={currentVerseIndex === totalVerses - 1 && !isBasmalaPlaying}><SkipForward size={18} /></button>
                 </div>
                 <div className="speed-control">
                     <button className="speed-btn" onClick={changeSpeed}>{speed}x</button>
                     {isCompleted && <button className="control-btn" onClick={restartDailyPortion}><RotateCcw size={16} /></button>}
                 </div>
             </div>
+            {isBasmalaPlaying && (
+                <div style={{ marginTop:8, padding:'6px 10px', borderRadius:8, background:'color-mix(in srgb, var(--interactive-accent) 10%, transparent)', border:'1px solid color-mix(in srgb, var(--interactive-accent) 18%, transparent)', textAlign:'center', fontFamily:'var(--font-text, serif)', fontSize:'0.95em', color:'var(--text-muted)' }}>
+                    بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                </div>
+            )}
         </div>
     );
 }

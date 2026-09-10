@@ -3077,6 +3077,102 @@ body[data-mindmap-open="true"] .bottom-nav {
   border-radius: 8px;
 }
 
+/* Shared controls used by AudioPlayerLocal (web + mobile web). */
+.audio-player .reciter-select-container {
+  margin-bottom: 0.75rem;
+}
+
+.audio-player .reciter-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background-secondary);
+  color: var(--foreground);
+  font-size: 16px;
+}
+
+.audio-player .player-progress {
+  height: 6px;
+  margin: 0.5rem 0;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.audio-player .progress-bar,
+.audio-player .progress-fill {
+  height: 100%;
+}
+
+.audio-player .player-controls {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 0.65rem 0 0.25rem;
+}
+
+.audio-player .control-buttons,
+.audio-player .speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.audio-player .control-btn,
+.audio-player .play-btn,
+.audio-player .speed-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.audio-player .control-btn,
+.audio-player .play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--foreground);
+  background: var(--background-secondary);
+  border: 1px solid var(--border);
+}
+
+.audio-player .control-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.audio-player .play-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.audio-player .control-btn:disabled,
+.audio-player .play-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .audio-player .player-controls {
+    justify-content: center;
+    column-gap: 0.65rem;
+    row-gap: 0.5rem;
+  }
+
+  .audio-player .time-display {
+    flex: 1 0 100%;
+    order: 3;
+    text-align: center;
+    font-size: 0.8rem;
+  }
+}
+
 /* Statistics Layout */
 .stats-grid-main {
   display: grid;

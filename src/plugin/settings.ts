@@ -3,6 +3,16 @@ import QuranLifePlugin from "./main";
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
 import { SURAHS, getSurahsByPart } from "@/lib/quranData";
 import { clampDailyTargetMinutes, DEFAULT_DAILY_TARGET_MINUTES, estimateEligibleCycleDays, getEligibleVerseCount } from "@/lib/dailyPortionUtils";
+import { ALLOWED_RECITERS, getAudioPlayerReciters, Reciter } from "@/lib/audio";
+import {
+  getOfflinePartStatus,
+  getTotalOfflineStorageUsage,
+  downloadPartAudio,
+  deletePartAudio,
+  deleteAllOfflineAudioForReciter,
+  formatBytes,
+  OFFLINE_AUDIO_ROOT,
+} from "./offlineAudio";
 
 export interface QuranLifePluginSettings {
   dataRoot: string;
@@ -316,5 +326,272 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         }
         new Notice("All reset");
       }));
+
+    // ---------- Offline Audio — download selected part audio for offline use ----------
+    containerEl.createEl("h2", { text: "Offline Audio" });
+    const offlineDesc = containerEl.createEl("p", { cls: "setting-item-description" });
+    offlineDesc.setText("Download Quran part audio for offline use. Stored in plugin folder (.obsidian/plugins/quran-life/offline-audio) — works on mobile. Player auto-uses offline files when available, fallback to online.");
+    offlineDesc.style.marginBottom = "12px";
+
+    // Storage overview
+    const storageInfoEl = containerEl.createDiv();
+    storageInfoEl.style.fontSize = "0.85em";
+    storageInfoEl.style.color = "var(--text-muted)";
+    storageInfoEl.style.marginBottom = "8px";
+    storageInfoEl.setText("Calculating storage...");
+    let totalStorageRefresh: () => Promise<void> = async () => {};
+    const refreshTotalStorage = async () => {
+      try {
+        const usage = await getTotalOfflineStorageUsage(this.app);
+        if (usage.fileCount === 0) storageInfoEl.setText(`Offline storage: 0 files • 0 B • ${OFFLINE_AUDIO_ROOT}`);
+        else storageInfoEl.setText(`Offline storage: ${usage.fileCount} files • ${formatBytes(usage.totalBytes)} total`);
+        // also per-reciter breakdown if multiple
+        // keep simple
+      } catch { storageInfoEl.setText(`Offline storage: ${OFFLINE_AUDIO_ROOT}`); }
+    };
+    totalStorageRefresh = refreshTotalStorage;
+    void refreshTotalStorage();
+
+    // Reciter + Part selectors
+    let offlineReciter: Reciter | null = null;
+    let offlinePart: QuranPart = daily.activePart;
+    let offlineReciters: Reciter[] = [];
+    try {
+      const recs = await getAudioPlayerReciters();
+      offlineReciters = recs.length ? recs : ALLOWED_RECITERS;
+    } catch { offlineReciters = ALLOWED_RECITERS; }
+    if (offlineReciters.length && !offlineReciter) offlineReciter = offlineReciters[0];
+
+    // Try to restore last selected reciter from localStorage (web) or default to first
+    try {
+      const savedReciterId = typeof window !== 'undefined' ? localStorage.getItem("selected_reciter_id") || "" : "";
+      const found = offlineReciters.find(r => r.id === savedReciterId);
+      if (found) offlineReciter = found;
+    } catch {}
+
+    const offlineReciterSetting = new Setting(containerEl)
+      .setName("Reciter")
+      .setDesc("Voice for offline download");
+    let offlinePartSetting: Setting;
+    let offlineStatusEl: HTMLElement;
+    let offlineProgressWrap: HTMLElement;
+    let offlineProgressFill: HTMLElement;
+    let offlineProgressText: HTMLElement;
+    let offlineCurrentFileEl: HTMLElement;
+    let offlineStoragePartEl: HTMLElement;
+    let abortController: AbortController | null = null;
+    let isDownloading = false;
+
+    const updateOfflineStatus = async () => {
+      if (!offlineReciter) return;
+      try {
+        const status = await getOfflinePartStatus(offlineReciter, offlinePart, this.app);
+        const total = status.totalFiles;
+        const existing = status.existingFiles;
+        const pct = total > 0 ? Math.round((existing / total) * 100) : 0;
+        const sizeStr = formatBytes(status.totalBytes);
+        if (offlineStatusEl) {
+          if (status.isComplete) offlineStatusEl.setText(`Downloaded: ${existing}/${total} files • ${sizeStr} • ${pct}% — Complete`);
+          else if (status.isPartial) offlineStatusEl.setText(`Downloaded: ${existing}/${total} files • ${sizeStr} • ${pct}% — Partial`);
+          else offlineStatusEl.setText(`Not downloaded: 0/${total} files • 0 B`);
+        }
+        if (offlineStoragePartEl) offlineStoragePartEl.setText(`Part ${offlinePart}: ${offlineReciter.name} — ${existing}/${total} files`);
+      } catch (e) {
+        if (offlineStatusEl) offlineStatusEl.setText("Status unavailable");
+      }
+      void refreshTotalStorage();
+    };
+
+    offlineReciterSetting.addDropdown(drop => {
+      offlineReciters.forEach(r => drop.addOption(r.id, r.name));
+      if (offlineReciter) drop.setValue(offlineReciter.id);
+      drop.onChange(async v => {
+        const found = offlineReciters.find(r => r.id === v);
+        if (found) { offlineReciter = found; await updateOfflineStatus(); }
+      });
+    });
+
+    offlinePartSetting = new Setting(containerEl)
+      .setName("Quran part")
+      .setDesc("Which part to download");
+    offlinePartSetting.addDropdown(drop => {
+      ACTIVE_PART_OPTIONS.forEach(opt => drop.addOption(String(opt.id), `${opt.name}`));
+      drop.setValue(String(offlinePart));
+      drop.onChange(async v => { offlinePart = Number(v) as QuranPart; await updateOfflineStatus(); });
+    });
+
+    // Status line
+    offlineStatusEl = containerEl.createDiv();
+    offlineStatusEl.style.fontSize = "0.82em";
+    offlineStatusEl.style.color = "var(--text-muted)";
+    offlineStatusEl.style.margin = "6px 0 8px 0";
+    offlineStatusEl.style.padding = "6px 10px";
+    offlineStatusEl.style.border = "1px solid var(--background-modifier-border)";
+    offlineStatusEl.style.borderRadius = "6px";
+    offlineStatusEl.style.background = "var(--background-secondary)";
+    offlineStatusEl.setText("Checking...");
+    offlineStoragePartEl = containerEl.createDiv();
+    offlineStoragePartEl.style.fontSize = "0.78em";
+    offlineStoragePartEl.style.color = "var(--text-faint)";
+    offlineStoragePartEl.style.marginBottom = "8px";
+
+    void updateOfflineStatus();
+
+    // Progress bar (Anki deck export style: .importer-progress-bar + inner)
+    offlineProgressWrap = containerEl.createDiv();
+    offlineProgressWrap.style.display = "none";
+    offlineProgressWrap.style.margin = "10px 0";
+    offlineProgressWrap.style.padding = "10px 12px";
+    offlineProgressWrap.style.border = "1px solid var(--background-modifier-border)";
+    offlineProgressWrap.style.borderRadius = "8px";
+    offlineProgressWrap.style.background = "var(--background-secondary)";
+    const progressLabelEl = offlineProgressWrap.createDiv({ text: "Downloading..." });
+    progressLabelEl.style.fontSize = "0.8em";
+    progressLabelEl.style.fontWeight = "600";
+    progressLabelEl.style.marginBottom = "6px";
+    progressLabelEl.style.color = "var(--text-normal)";
+    const barOuter = offlineProgressWrap.createDiv();
+    barOuter.style.width = "100%";
+    barOuter.style.height = "8px";
+    barOuter.style.background = "var(--background-modifier-border)";
+    barOuter.style.borderRadius = "999px";
+    barOuter.style.overflow = "hidden";
+    barOuter.style.boxShadow = "inset 0 0 0 1px var(--background-modifier-border)";
+    offlineProgressFill = barOuter.createDiv();
+    offlineProgressFill.style.width = "0%";
+    offlineProgressFill.style.height = "100%";
+    offlineProgressFill.style.background = "var(--interactive-accent)";
+    offlineProgressFill.style.transition = "width 0.25s ease";
+    offlineProgressFill.style.borderRadius = "999px";
+    offlineCurrentFileEl = offlineProgressWrap.createDiv();
+    offlineCurrentFileEl.style.fontSize = "0.75em";
+    offlineCurrentFileEl.style.color = "var(--text-muted)";
+    offlineCurrentFileEl.style.marginTop = "6px";
+    offlineCurrentFileEl.style.whiteSpace = "nowrap";
+    offlineCurrentFileEl.style.overflow = "hidden";
+    offlineCurrentFileEl.style.textOverflow = "ellipsis";
+    offlineProgressText = offlineProgressWrap.createDiv();
+    offlineProgressText.style.fontSize = "0.75em";
+    offlineProgressText.style.color = "var(--text-muted)";
+    offlineProgressText.style.marginTop = "4px";
+    offlineProgressText.setText("0% • 0/0 files • 0 B");
+
+    // Action buttons row
+    const offlineActionsSetting = new Setting(containerEl)
+      .setName("Offline audio actions")
+      .setDesc("Download uses moderated concurrency (3 at a time, 250ms stagger) to avoid rate limits. Delete removes files permanently (no trash) to free storage.");
+
+    let downloadBtn: any = null;
+    let cancelBtn: any = null;
+    let deleteBtn: any = null;
+    let deleteAllBtn: any = null;
+
+    offlineActionsSetting.addButton(btn => {
+      downloadBtn = btn;
+      btn.setButtonText("Download").setCta().onClick(async () => {
+        if (!offlineReciter) { new Notice("Select a reciter first"); return; }
+        if (isDownloading) { new Notice("Already downloading"); return; }
+        isDownloading = true;
+        abortController = new AbortController();
+        downloadBtn.setDisabled(true);
+        if (cancelBtn) cancelBtn.setDisabled(false);
+        if (deleteBtn) deleteBtn.setDisabled(true);
+        offlineProgressWrap.style.display = "block";
+        offlineProgressFill.style.width = "0%";
+        offlineProgressText.setText("Starting...");
+        offlineCurrentFileEl.setText("");
+        try {
+          const result = await downloadPartAudio(offlineReciter!, offlinePart, this.app, {
+            concurrency: 3,
+            delayMs: 250,
+            signal: abortController.signal,
+            onProgress: (p) => {
+              const pct = Math.max(0, Math.min(100, p.percent));
+              offlineProgressFill.style.width = `${pct}%`;
+              const downloadedStr = formatBytes(p.downloadedBytes);
+              // total bytes unknown; show downloaded + files
+              offlineProgressText.setText(`${pct}% • ${p.completedFiles}/${p.totalFiles} files • ${downloadedStr}${p.failedFiles ? ` • ${p.failedFiles} failed` : ""}`);
+              if (p.currentFile) offlineCurrentFileEl.setText(`Current: ${p.currentFile}`);
+            },
+          });
+          new Notice(`Downloaded ${result.downloadedFiles} new files • ${formatBytes(result.totalBytes)} total`);
+        } catch (e: any) {
+          if (String(e?.message || "").includes("cancelled") || String(e?.message || "").includes("aborted")) {
+            new Notice("Download cancelled");
+          } else {
+            new Notice(`Download failed: ${e?.message || e}`);
+          }
+        } finally {
+          isDownloading = false;
+          abortController = null;
+          downloadBtn.setDisabled(false);
+          if (cancelBtn) cancelBtn.setDisabled(true);
+          if (deleteBtn) deleteBtn.setDisabled(false);
+          // keep progress visible for a moment then hide if complete?
+          setTimeout(() => { /* keep visible */ }, 300);
+          await updateOfflineStatus();
+        }
+      });
+      return btn;
+    });
+
+    offlineActionsSetting.addButton(btn => {
+      cancelBtn = btn;
+      btn.setButtonText("Cancel").onClick(async () => {
+        if (abortController && isDownloading) {
+          abortController.abort();
+          new Notice("Cancelling...");
+        }
+      });
+      btn.setDisabled(true);
+      return btn;
+    });
+
+    offlineActionsSetting.addButton(btn => {
+      deleteBtn = btn;
+      btn.setButtonText("Delete part").onClick(async () => {
+        if (!offlineReciter) return;
+        if (isDownloading) { new Notice("Cannot delete while downloading"); return; }
+        try { if (typeof confirm === 'function' && !confirm(`Delete offline audio for ${offlineReciter.name} — Part ${offlinePart}? This permanently removes files (no trash).`)) return; } catch {}
+        btn.setDisabled(true);
+        try {
+          const res = await deletePartAudio(offlineReciter!.id, offlinePart, this.app);
+          new Notice(`Deleted ${res.deletedFiles} files • freed ${formatBytes(res.freedBytes)}`);
+          offlineProgressFill.style.width = "0%";
+          offlineProgressText.setText("0% • 0/0 files • 0 B");
+          offlineProgressWrap.style.display = "none";
+        } catch (e:any) { new Notice(`Delete failed: ${e?.message||e}`); }
+        btn.setDisabled(false);
+        await updateOfflineStatus();
+      });
+      return btn;
+    });
+
+    offlineActionsSetting.addButton(btn => {
+      deleteAllBtn = btn;
+      btn.setButtonText("Delete all (reciter)").setWarning().onClick(async () => {
+        if (!offlineReciter) return;
+        if (isDownloading) { new Notice("Cannot delete while downloading"); return; }
+        try { if (typeof confirm === 'function' && !confirm(`Delete ALL offline audio for ${offlineReciter.name}? This permanently removes all files for this reciter (no trash).`)) return; } catch {}
+        btn.setDisabled(true);
+        try {
+          const res = await deleteAllOfflineAudioForReciter(offlineReciter!.id, this.app);
+          new Notice(`Deleted ${res.deletedFiles} files • freed ${formatBytes(res.freedBytes)}`);
+          offlineProgressFill.style.width = "0%";
+          offlineProgressWrap.style.display = "none";
+        } catch (e:any) { new Notice(`Delete failed: ${e?.message||e}`); }
+        btn.setDisabled(false);
+        await updateOfflineStatus();
+      });
+      return btn;
+    });
+
+    // Info footer
+    const offlineInfo = containerEl.createDiv();
+    offlineInfo.style.fontSize = "0.75em";
+    offlineInfo.style.color = "var(--text-faint)";
+    offlineInfo.style.marginTop = "8px";
+    offlineInfo.style.lineHeight = "1.4";
+    offlineInfo.setText("Tip: Player auto-uses offline files when available. Check Daily Portion → Player reciter matches download reciter. Downloads are throttled (3 concurrent) to avoid blacklist.");
   }
 }
