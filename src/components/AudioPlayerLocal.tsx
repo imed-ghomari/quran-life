@@ -211,7 +211,9 @@ export default function AudioPlayerLocal({
         basmalaPendingNextIndexRef.current = null;
         if (nextIdx !== null && nextIdx !== undefined && nextIdx >= 0 && nextIdx < verses.length) {
             onVerseChange(nextIdx);
-            if (wasPlaying) setTimeout(() => setIsPlaying(true), 80);
+            // Keep the original play state across the Basmala handoff so the
+            // next surah is loaded with autoplay enabled.
+            setIsPlaying(wasPlaying);
         }
     }, [onVerseChange, verses.length]);
 
@@ -237,7 +239,6 @@ export default function AudioPlayerLocal({
         if (!basmalaInfo?.url) { onVerseChange(nextIdx); return; }
         wasPlayingBeforeBasmalaRef.current = isPlayingRef.current;
         if (audioRef.current && !audioRef.current.paused) try { audioRef.current.pause(); } catch {}
-        setIsPlaying(false);
         isBasmalaPlayingRef.current = true;
         setIsBasmalaPlaying(true);
         basmalaPendingNextIndexRef.current = nextIdx;
@@ -770,8 +771,14 @@ export default function AudioPlayerLocal({
         if (isBasmalaPlayingRef.current) {
             const a = basmalaAudioRef.current;
             if (a) {
-                if (a.paused) a.play().catch(() => {});
-                else a.pause();
+                if (a.paused) {
+                    wasPlayingBeforeBasmalaRef.current = true;
+                    a.play().catch(() => {});
+                } else {
+                    wasPlayingBeforeBasmalaRef.current = false;
+                    a.pause();
+                    setIsPlaying(false);
+                }
             }
             return;
         }
@@ -934,11 +941,6 @@ export default function AudioPlayerLocal({
                     {isCompleted && <button className="control-btn" onClick={restartDailyPortion}><RotateCcw size={16} /></button>}
                 </div>
             </div>
-            {isBasmalaPlaying && (
-                <div style={{ marginTop:8, padding:'6px 10px', borderRadius:8, background:'color-mix(in srgb, var(--interactive-accent) 10%, transparent)', border:'1px solid color-mix(in srgb, var(--interactive-accent) 18%, transparent)', textAlign:'center', fontFamily:'var(--font-text, serif)', fontSize:'0.95em', color:'var(--text-muted)' }}>
-                    بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                </div>
-            )}
         </div>
     );
 }
