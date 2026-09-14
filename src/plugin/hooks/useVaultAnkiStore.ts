@@ -74,8 +74,11 @@ export function useVaultSplits(vaultStore: VaultStore, surahId: number) {
 
   useEffect(() => {
     let cancelled = false;
+    // Reset immediately so consumers never see the previous surah's anchors
+    // while the new surah is loading (prevents stale sync + wrong-surah flash).
+    setAnchors([]);
+    setIsLoading(true);
     (async () => {
-      setIsLoading(true);
       let raw = await vaultStore.loadSplitsForSurah(surahId);
       let usedPremade = false;
       // Fallback to premade if vault has no splits for this surah (like web's premadeForStats)

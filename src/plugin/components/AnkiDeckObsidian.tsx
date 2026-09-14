@@ -37,16 +37,63 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [exportProgress, setExportProgress] = useState<null | { status: string; current: number; total: number; logs: string[]; verseCards?: number; mindmapCards?: number }>(null);
   const { mindmap: currentMindmap, save: saveMindmap, remove: deleteMindmap, isLoading: isMindmapLoading } = useVaultMindmap(vaultStore, selectedMindmapKey);
   const { mindmaps: allMindmaps } = useVaultMindmaps(vaultStore);
-  const { anchors: vaultAnchors, saveAnchors } = useVaultSplits(vaultStore, selectedSurah);
+  const { anchors: vaultAnchors, saveAnchors, isLoading: isSplitsLoading } = useVaultSplits(vaultStore, selectedSurah);
   const { content: docContent, save: saveDoc } = useVaultDoc(vaultStore, selectedMindmapKey);
   const [localAnchors, setLocalAnchors] = useState<AnkiAnchor[]>([]);
   const [editingDocText, setEditingDocText] = useState('');
+  // Latest local splits for auto-flush on mindmap switch/unmount. Assigned during
+  // render so switch-cleanups always read the freshest value (effect ordering safe).
+  const localAnchorsRef = React.useRef<AnkiAnchor[]>([]);
+  localAnchorsRef.current = localAnchors;
+  // True once the user edits splits and no successful persist has happened yet.
+  // Used to avoid writing spurious default files for untouched surahs on switch.
+  const splitsDirtyRef = React.useRef(false);
+  // Latest doc text + its key for the same auto-flush treatment (blur may not fire on switch).
+  const editingDocTextRef = React.useRef('');
+  editingDocTextRef.current = editingDocText;
+  const docSavedRef = React.useRef('');
+  useEffect(() => { docSavedRef.current = docContent; }, [docContent]);
   const [showStatsDetails, setShowStatsDetails] = useState(false);
   const [allSplitsForStats, setAllSplitsForStats] = useState<Record<number, AnkiAnchor[]>>({});
   const [allDocsForStats, setAllDocsForStats] = useState<Record<string, string>>({});
 
   useEffect(() => { setEditingDocText(docContent); }, [docContent]);
-  useEffect(() => { if (vaultAnchors.length) setLocalAnchors(vaultAnchors); else setLocalAnchors(ensureDefaultSplits(selectedSurah)); }, [vaultAnchors, selectedSurah]);
+  // Adopt vault splits once the current surah has finished loading. The loading
+  // guard prevents the previous surah's (now reset) anchors from clobbering the
+  // new surah's editor, and a successful adopt clears the dirty flag.
+  useEffect(() => {
+    if (isSplitsLoading) return;
+    if (vaultAnchors.length) setLocalAnchors(vaultAnchors);
+    else setLocalAnchors(ensureDefaultSplits(selectedSurah));
+    splitsDirtyRef.current = false;
+  }, [vaultAnchors, selectedSurah, isSplitsLoading]);
+
+  // Auto-flush unsaved splits + notes when switching mindmaps (or unmounting).
+  // Split +/- edits update local state; without this, switching the dropdown
+  // discards them via the adopt effect above. The cleanup runs for the previous
+  // surah/key before the new one loads, persisting exactly what the user left.
+  useEffect(() => {
+    const surahAtMount = selectedSurah;
+    const keyAtMount = selectedMindmapKey;
+    return () => {
+      try {
+        if (splitsDirtyRef.current) {
+          const pending = localAnchorsRef.current;
+          if (Array.isArray(pending) && pending.length && pending.every(a => a && (a as AnkiAnchor).surahId === surahAtMount)) {
+            splitsDirtyRef.current = false;
+            void vaultStore.saveSplitsForSurah(surahAtMount, pending).catch(() => { splitsDirtyRef.current = true; });
+          }
+        }
+      } catch {}
+      try {
+        const pendingDoc = editingDocTextRef.current;
+        if (typeof pendingDoc === 'string' && pendingDoc !== docSavedRef.current) {
+          docSavedRef.current = pendingDoc;
+          void vaultStore.saveDoc(keyAtMount, pendingDoc).catch(() => {});
+        }
+      } catch {}
+    };
+  }, [selectedSurah, selectedMindmapKey, vaultStore]);
 
   // Load all splits/docs for Deck Statistics
   useEffect(() => {
@@ -102,17 +149,42 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const handleAddBreak = (val: number) => {
     const vc = surah?.verseCount; if (!vc) return;
     const next = buildAnchorsFromBreaks(selectedSurah, [...builderState.breaks, val].sort((a,b)=>a-b), vc);
-    setLocalAnchors(next.length ? next : ensureDefaultSplits(selectedSurah));
+    const resolved = next.length ? next : ensureDefaultSplits(selectedSurah);
+    setLocalAnchors(resolved);
+    // Persist immediately so switching mindmaps never loses the edit, even if
+    // the user never presses Save. The Save button remains as explicit confirm.
+    splitsDirtyRef.current = true;
+    void (async () => {
+      try {
+        await saveAnchors(resolved);
+        // Only clear dirty if no newer edit superseded this save (concurrent writes).
+        if (localAnchorsRef.current === resolved) splitsDirtyRef.current = false;
+      }
+      catch { /* keep dirty so the switch-flush retries */ }
+    })();
   };
   const handleRemoveBreak = (val: number) => {
     const vc = surah?.verseCount; if (!vc) return;
     const nextBreaks = builderState.breaks.filter(b=>b!==val);
     const next = buildAnchorsFromBreaks(selectedSurah, nextBreaks, vc);
-    setLocalAnchors(next.length ? next : ensureDefaultSplits(selectedSurah));
+    const resolved = next.length ? next : ensureDefaultSplits(selectedSurah);
+    setLocalAnchors(resolved);
+    // Same immediate persist as handleAddBreak (see above).
+    splitsDirtyRef.current = true;
+    void (async () => {
+      try {
+        await saveAnchors(resolved);
+        // Only clear dirty if no newer edit superseded this save (concurrent writes).
+        if (localAnchorsRef.current === resolved) splitsDirtyRef.current = false;
+      }
+      catch { /* keep dirty so the switch-flush retries */ }
+    })();
   };
   const handleSaveSplits = async () => {
-    await saveAnchors(localAnchors);
-    showToast(`Saved ${localAnchors.length} groups for Surah ${selectedSurah}`);
+    const snapshot = localAnchors;
+    await saveAnchors(snapshot);
+    if (localAnchorsRef.current === snapshot) splitsDirtyRef.current = false;
+    showToast(`Saved ${snapshot.length} groups for Surah ${selectedSurah}`);
   };
 
   // Silent persist for autosave + pre-exit save. Must NOT close the editor,
@@ -140,7 +212,9 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   };
 
   const handleDocSave = async () => {
-    await saveDoc(editingDocText);
+    const snapshot = editingDocText;
+    await saveDoc(snapshot);
+    docSavedRef.current = snapshot;
     showToast('Notes saved');
   };
 
