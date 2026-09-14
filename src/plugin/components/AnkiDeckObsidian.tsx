@@ -413,6 +413,39 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                     </tbody>
                   </table>
                 </div>
+                <div style={{ fontSize:'0.85em', fontWeight:700, marginTop:4 }}>Parts & Meta</div>
+                <div style={{ border:'1px solid var(--background-modifier-border)', borderRadius:8, overflow:'hidden', background:'var(--background-secondary)' }}>
+                  <table style={{ width:'100%', fontSize:'0.8em', borderCollapse:'collapse' }}>
+                    <thead style={{ background:'var(--background-secondary)', borderBottom:'1px solid var(--background-modifier-border)' }}>
+                      <tr><th style={{ textAlign:'left', padding:'8px', color:'var(--text-muted)', fontWeight:700 }}>Part</th><th style={{ padding:'8px', color:'var(--text-muted)' }}>Mindmap</th><th style={{ padding:'8px', color:'var(--text-muted)' }}>Docs</th></tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { key: 'meta-0', label: 'Meta Overview' },
+                        { key: 'part-1', label: 'Part 1 — Surah 1-5' },
+                        { key: 'part-2', label: 'Part 2 — Surah 6-9' },
+                        { key: 'part-3', label: 'Part 3 — Surah 10-24' },
+                        { key: 'part-4', label: 'Part 4 — Surah 25-33' },
+                        { key: 'part-5', label: 'Part 5 — Surah 34-49' },
+                        { key: 'part-6', label: 'Part 6 — Surah 50-66' },
+                        { key: 'part-7', label: 'Part 7 — Surah 67-114' },
+                      ].map(row=>{
+                        const hasMM=!!(allMindmaps as any)[row.key]?.snapshot;
+                        const doc=(allDocsForStats as any)[row.key] as string | undefined;
+                        const hasDoc=typeof doc==='string' && doc.trim().length>0;
+                        const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
+                        return (
+                          <tr key={row.key} style={{ borderTop:'1px solid var(--background-modifier-border)', background: hasMM ? 'var(--background-primary)' : 'transparent' }}>
+                            <td style={{ padding:'7px 8px' }}>{row.label} <span style={{ color:'var(--text-faint)', fontSize:'0.85em' }}>({row.key})</span></td>
+                            <td style={{ padding:'7px 8px', textAlign:'center' }}>{hasMM ? <Check size={14} style={{ color:'var(--interactive-accent)', display:'inline' }} /> : <X size={14} style={{ display:'inline', opacity:0.3 }} />}</td>
+                            <td style={{ padding:'7px 8px', textAlign:'center' }}>{!hasDoc ? <X size={14} style={{ display:'inline', opacity:0.3 }} /> : isPlaceholder ? <span style={{ color:'var(--text-warning)' }}><FileText size={12} style={{ display:'inline' }} />•</span> : <Check size={14} style={{ color:'var(--interactive-accent)', display:'inline' }} />}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups for deck (1 if mindmap but no splits).</div>
               </div>
             )}
           </div>
