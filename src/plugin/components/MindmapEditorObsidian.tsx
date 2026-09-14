@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Check, Loader2, Pencil, TriangleAlert, Minus } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
@@ -330,19 +330,45 @@ function MindmapEditorContent({
     const isRestoringHistoryRef = useRef(false);
     const allowNextBackRef = useRef(false);
     const { theme } = useTheme();
+    // Silent save-state for top-bar multi-icon indicator. Never triggers
+    // banners/toasts/navigation — autosave must not interrupt the user.
+    type MindmapSaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+    const [saveState, setSaveState] = useState<MindmapSaveState>('idle');
+    const saveStateRef = useRef<MindmapSaveState>('idle');
+    const setSaveStateBoth = useCallback((next: MindmapSaveState) => {
+        saveStateRef.current = next;
+        setSaveState(next);
+    }, []);
     const localDraftKey = useMemo(() => {
-        const draftScope = (docLink || contextLabel || title || 'default')
+        const keyScope = surahId ? `surah-${surahId}` : partId !== undefined ? (partId === 0 ? 'meta-0' : `part-${partId}`) : null;
+        const draftScope = (keyScope || docLink || contextLabel || title || 'default')
             .toLowerCase()
             .trim()
             .replace(/[^a-z0-9_-]+/g, '-')
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
         return `${MINDMAP_DRAFT_STORAGE_PREFIX}${draftScope || 'default'}`;
-    }, [docLink, contextLabel, title]);
-    const currentContextLabel = useMemo(
-        () => contextLabel || extractContextFromDocLink(docLink) || extractContextFromTitle(title),
-        [contextLabel, docLink, title]
-    );
+    }, [surahId, partId, docLink, contextLabel, title]);
+    const currentContextLabel = useMemo(() => {
+        const trimmedContext = contextLabel?.trim();
+        if (trimmedContext) return trimmedContext;
+        if (typeof surahId === 'number' && Number.isFinite(surahId)) {
+            const s = getSurah(surahId);
+            if (s) return `${s.arabicName} • Surah ${s.id}`;
+            return `Surah ${surahId}`;
+        }
+        if (typeof partId === 'number' && Number.isFinite(partId)) {
+            if (partId === 0) return 'Meta Overview';
+            return `Part ${partId}`;
+        }
+        const fromDoc = extractContextFromDocLink(docLink);
+        if (fromDoc) return fromDoc;
+        const fromTitle = extractContextFromTitle(title);
+        if (fromTitle) return fromTitle;
+        const trimmedTitle = title?.trim();
+        if (trimmedTitle && trimmedTitle.toLowerCase() !== 'mindmap editor') return trimmedTitle;
+        return null;
+    }, [contextLabel, surahId, partId, docLink, title]);
     const shouldShowContextLabel = useMemo(() => !!currentContextLabel, [currentContextLabel]);
 
     useEffect(() => {
@@ -482,6 +508,7 @@ function MindmapEditorContent({
 
                 if (localDraftSnapshot) {
                     isDirty.current = true;
+                    setSaveStateBoth('dirty');
                 }
             } catch (e) {
                 console.warn('Failed to load snapshot', e);
@@ -490,7 +517,7 @@ function MindmapEditorContent({
             // Default to lasso tool on new drawings too
             editorInstance.setCurrentTool('lasso-select');
         }
-    }, [activeInitialSnapshot, loadLocalDraftSnapshot]);
+    }, [activeInitialSnapshot, loadLocalDraftSnapshot, setSaveStateBoth]);
 
     // Update snapshot if it arrives late
     useEffect(() => {
@@ -724,6 +751,8 @@ function MindmapEditorContent({
         }
 
         isSavingRef.current = true;
+        // Silent indicator only — no banner/toast/focus change. Autosave must not interrupt.
+        setSaveStateBoth('saving');
         try {
                 // Ensure all pending shape-level updatedAt tags are present before persisting snapshot.
                 flushPendingShapeTimestampUpdates();
@@ -733,9 +762,11 @@ function MindmapEditorContent({
 
                 // Debug: Check snapshot content size
                 const storeKeys = Object.keys(snapshot?.store || {});
-                
+
                 if (storeKeys.length === 0) {
                     // Skip saving empty state if we haven't drawn anything
+                    if (isDirty.current) setSaveStateBoth('dirty');
+                    else if (saveStateRef.current === 'saving') setSaveStateBoth('idle');
                     return;
                 }
 
@@ -781,15 +812,17 @@ function MindmapEditorContent({
                 const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
                 persistLocalDraft(sanitizedSnapshot);
 
+                // NOTE: onSave is a silent vault persist only. It must never close
+                // the editor, toast, or steal focus — autosave stays invisible
+                // except for the top-bar indicator.
                 await onSave(sanitizedSnapshot, withImages ? { light: lightBlob, dark: darkBlob } : undefined, withImages);
                 isDirty.current = false;
                 clearLocalDraft();
-                
-                if (!withImages) {
-                    // appLogger.addLog('[Editor] Auto-saved successfully', 'info');
-                }
+                setSaveStateBoth('saved');
             } catch (e) {
                 console.error("Save failed", e);
+                // Silent error state via indicator only — no banner, no dialog.
+                setSaveStateBoth('error');
             } finally {
                 isSavingRef.current = false;
 
@@ -798,9 +831,12 @@ function MindmapEditorContent({
                     queuedSaveRef.current = false;
                     queuedSaveWithImagesRef.current = false;
                     void saveContent(nextSaveWithImages);
+                } else if (isDirty.current && saveStateRef.current === 'saved') {
+                    // Edits landed while saving — reflect unsaved state without banner.
+                    setSaveStateBoth('dirty');
                 }
             }
-    }, [onSave, flushPendingShapeTimestampUpdates, persistLocalDraft, clearLocalDraft]);
+    }, [onSave, flushPendingShapeTimestampUpdates, persistLocalDraft, clearLocalDraft, setSaveStateBoth]);
 
     const waitForSaveQueueToDrain = useCallback(async () => {
         const startedAt = Date.now();
@@ -886,6 +922,8 @@ function MindmapEditorContent({
 
         const handleChange = () => {
             isDirty.current = true;
+            // Silent indicator transition only — no banner/toast/focus change.
+            if (saveStateRef.current !== 'saving') setSaveStateBoth('dirty');
             scheduleLocalDraftPersist();
             
             // Clear existing debounce timer
@@ -930,7 +968,7 @@ function MindmapEditorContent({
                 localDraftTimerRef.current = null;
             }
         };
-    }, [editor, saveContent, scheduleLocalDraftPersist]);
+    }, [editor, saveContent, scheduleLocalDraftPersist, setSaveStateBoth]);
 
     useEffect(() => {
         const persistDraftOnLifecycleExit = () => {
@@ -1070,14 +1108,75 @@ function MindmapEditorContent({
                 padding: '0 1rem'
             }}>
                 <div className="mindmap-editor-header-left mindmap-header-main" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', minWidth: 0 }}>
-                    <span className="mindmap-editor-title" style={{ fontWeight: 600 }}>Mindmap Editor</span>
+                    <span className="mindmap-editor-title" style={{ fontWeight: 600, color: 'var(--text-normal)' }}>Mindmap Editor</span>
                     {shouldShowContextLabel && (
                         <span
                             className="mindmap-header-context"
+                            title={currentContextLabel || undefined}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                maxWidth: '45vw',
+                                border: '1px solid var(--background-modifier-border)',
+                                borderRadius: 999,
+                                background: 'var(--background-secondary)',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                                padding: '3px 10px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                            }}
                         >
                             {currentContextLabel}
                         </span>
                     )}
+                    {(() => {
+                        const config = (() => {
+                            switch (saveState) {
+                                case 'dirty':
+                                    return { Icon: Pencil, label: 'Unsaved', color: 'var(--text-warning)', spin: false, hint: 'Unsaved changes — autosave pending' };
+                                case 'saving':
+                                    return { Icon: Loader2, label: 'Saving…', color: 'var(--interactive-accent)', spin: true, hint: 'Autosaving — keep editing, no interruption' };
+                                case 'saved':
+                                    return { Icon: Check, label: 'Saved', color: 'var(--interactive-accent)', spin: false, hint: 'All changes saved' };
+                                case 'error':
+                                    return { Icon: TriangleAlert, label: 'Save failed', color: 'var(--text-error)', spin: false, hint: 'Last autosave failed — keep editing, will retry' };
+                                default:
+                                    return { Icon: Minus, label: 'Ready', color: 'var(--text-faint)', spin: false, hint: 'No unsaved changes' };
+                            }
+                        })();
+                        const { Icon } = config;
+                        return (
+                            <span
+                                className="mindmap-editor-save-state"
+                                title={config.hint}
+                                aria-live="off"
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    maxWidth: '40vw',
+                                    border: '1px solid var(--background-modifier-border)',
+                                    borderRadius: 999,
+                                    background: 'var(--background-secondary)',
+                                    color: config.color,
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    lineHeight: 1.2,
+                                    padding: '3px 8px',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                            >
+                                <Icon size={12} style={config.spin ? { animation: 'mindmap-spin 1s linear infinite' } : undefined} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{config.label}</span>
+                            </span>
+                        );
+                    })()}
                     {docLink && (
                         isInternalPath(docLink) ? (
                             <a
@@ -1104,20 +1203,36 @@ function MindmapEditorContent({
                 </div>
                 <button
                     onClick={() => { void handleClose(); }}
-                    className="mindmap-header-close ml-2 shrink-0 p-2 hover:bg-[var(--background-secondary)] rounded-full transition-colors"
+                    className="mindmap-header-close"
                     aria-label="Close editor"
                     disabled={isExitActionPending}
+                    style={{
+                        marginLeft: 8,
+                        flexShrink: 0,
+                        padding: 8,
+                        borderRadius: 999,
+                        border: '1px solid transparent',
+                        background: 'transparent',
+                        color: 'var(--text-muted)',
+                        cursor: isExitActionPending ? 'wait' : 'pointer',
+                        opacity: isExitActionPending ? 0.6 : 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--background-secondary)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                 >
-                    <X size={24} />
+                    <X size={20} />
                 </button>
             </div>
 
-            <div className="tldraw-container" style={{ 
-                position: 'absolute', 
-                top: '50px', 
-                left: 0, 
-                right: 0, 
-                bottom: 0, 
+            <div className="tldraw-container" style={{
+                position: 'absolute',
+                top: '50px',
+                left: 0,
+                right: 0,
+                bottom: 0,
                 background: 'var(--background-primary)',
                 overscrollBehaviorX: 'none' // Prevent browser back navigation gesture
             }}>
@@ -1128,6 +1243,7 @@ function MindmapEditorContent({
                     components={components}
                 />
             </div>
+            <style>{`@keyframes mindmap-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
         </div>
     );
 }

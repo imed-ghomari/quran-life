@@ -11,6 +11,7 @@ import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/
 import { Save, Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
+import { createPortal } from 'react-dom';
 
 const { useEffect, useMemo, useState, useCallback } = React;
 
@@ -27,6 +28,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
+  const [editorInitialSnapshot, setEditorInitialSnapshot] = useState<any>(null);
   const [showAllVerses, setShowAllVerses] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [showMindmapPreview, setShowMindmapPreview] = useState(false);
@@ -113,11 +115,22 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     showToast(`Saved ${localAnchors.length} groups for Surah ${selectedSurah}`);
   };
 
-  const handleSaveMindmap = async (snapshot: any) => {
+  // Silent persist for autosave + pre-exit save. Must NOT close the editor,
+  // must NOT toast/banner — the editor stays open until the user closes it manually.
+  // Save-state feedback lives in the editor top-bar indicator.
+  const handleSaveMindmap = useCallback(async (snapshot: any) => {
     await saveMindmap({ snapshot, isComplete: true });
+  }, [saveMindmap]);
+
+  // Frozen snapshot captured at open time so autosave-driven parent re-renders
+  // don't churn the editor's initialSnapshot prop mid-edit (no remount/focus loss).
+  const openMindmapEditor = useCallback(() => {
+    setEditorInitialSnapshot(currentMindmap?.snapshot ?? null);
+    setShowMindmapEditor(true);
+  }, [currentMindmap?.snapshot]);
+  const closeMindmapEditor = useCallback(() => {
     setShowMindmapEditor(false);
-    showToast(`Mindmap saved → mindmaps/${selectedMindmapKey}.json`);
-  };
+  }, []);
 
   const handleDeleteMindmap = async () => {
     await deleteMindmap();
@@ -285,10 +298,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {currentMindmap?.snapshot ? <button onClick={()=>setShowMindmapPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Eye size={14}/>{showMindmapPreview?'Hide preview':'View'}</button> : null}
           {currentMindmap?.snapshot ? <button onClick={()=>setShowDeleteConfirm(true)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--text-error)', color:'var(--text-error)', background:'var(--background-secondary)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Trash2 size={14}/>Delete</button> : null}
-          <button onClick={()=>setShowMindmapEditor(true)} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em', marginLeft:'auto' }}><PenTool size={14}/>{currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
+          <button onClick={openMindmapEditor} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em', marginLeft:'auto' }}><PenTool size={14}/>{currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
         </div>
 
-        {currentMindmap?.snapshot && showMindmapPreview && (
+        {currentMindmap?.snapshot && showMindmapPreview && !showMindmapEditor && (
           <div style={{ border:'1px solid var(--background-modifier-border)', borderRadius:10, overflow:'hidden', background:'var(--background-secondary)' }}>
             <MindmapViewer snapshot={currentMindmap.snapshot} height="220px" />
           </div>
@@ -452,18 +465,19 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         );
       })()}
 
-      {showMindmapEditor && (
-        <div style={{ position:'fixed', inset:0, zIndex:100, background:'var(--background-primary)' }}>
+      {showMindmapEditor && typeof document !== 'undefined' && createPortal(
+        <div style={{ position:'fixed', inset:0, zIndex:9999, background:'var(--background-primary)', isolation:'isolate', overflow:'hidden' }}>
           <MindmapEditor
-            initialSnapshot={currentMindmap?.snapshot}
+            initialSnapshot={editorInitialSnapshot}
             surahId={isPartOrMeta ? undefined : selectedSurah}
             partId={isPartOrMeta ? Number(selectedMindmapKey.replace('part-','').replace('meta-','')) : undefined}
-            onSave={async (snap)=>{ await handleSaveMindmap(snap); }}
-            onClose={()=>setShowMindmapEditor(false)}
+            onSave={handleSaveMindmap}
+            onClose={closeMindmapEditor}
             title={displayTitle}
             vaultStore={vaultStore}
           />
-        </div>
+        </div>,
+        document.body
       )}
 
       {showDeleteConfirm && (
