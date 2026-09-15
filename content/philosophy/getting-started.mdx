@@ -25,7 +25,7 @@ Open **Anki Deck**, choose a Surah from the dropdown.
 
 In **Anki Deck** `Deck name` → `Export Full Deck to Anki` → import the `.apkg` into Anki (desktop or AnkiDroid/AnkiMobile).
 
-- **Card layout:** Front shows `ContextFront` (2 prev verses, or `Surah — name` for `1:1` `src/lib/anki/apkgExport.ts:582`) + `VerseChunksFront` blurred (`src/lib/reviewVerseChunks.ts` splits by `ۘۙۚ` or max 10 words). `Reveal next` unblurs one chunk at a time. Back shows `RelatedGroups` (mutashabihat), `MindmapDocs`, and `AnchorLabel • Range — Surah`.
+- **Card layout:** Front shows `ContextFront` (2 prev verses, or `Surah — name` for `1:1` `src/lib/anki/apkgExport.ts:582`) + `VerseChunksFront` blurred (`src/lib/reviewVerseChunks.ts` splits by `ۘۙۚ` or max 10 words). `Reveal next` unblurs one chunk at a time. Back shows `VerseFullBack` (all revealed verses condensed inline, for grading), `RelatedGroups` (mutashabihat), and `AnchorLabel • Range — Surah`. Surah-level `MindmapDocs` live on the dedicated mindmap cards, not on verse backs.
 - **Grading:** After all chunks revealed, `Show Answer` → `Again` (Not Remembered), `Good` (Remembered), `Bury` (Postpone). Space reveals next, then grades.
 - **Scheduling:** The export already sets `Deck Options → FSRS Enabled, Desired Retention 0.90, Leech threshold 3 Tag Only` `src/lib/anki/apkgExport.ts:522`. After import, verify `Deck Options → FSRS` is on — no other setup.
 

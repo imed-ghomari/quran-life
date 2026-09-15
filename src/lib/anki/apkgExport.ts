@@ -308,6 +308,7 @@ function modelJson() {
 .context.show-all .extra { display:inline; }
 #verseContainer { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding-bottom: 8px; }
 .verse-block { margin: 8px 0; line-height: 2.1; font-size: 1.35rem; }
+.verse-full { line-height: 2; font-size: 1.1rem; background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }
 .verse-badge { font-size: 0.65rem; opacity:0.7; margin-left: 6px; border:1px solid #ccc; padding:1px 4px; border-radius:4px; vertical-align: middle; }
 .chunk { transition: filter 0.2s, opacity 0.2s; }
 .chunk.blurred { filter: blur(8px); opacity: 0.45; user-select:none; }
@@ -407,8 +408,8 @@ function modelJson() {
 `.trim(),
     back: `
 <div style="margin-top:10px">
+  <div class="verse-full">{{VerseFullBack}}</div>
   {{#RelatedGroups}}<div class="related"><b>Related groups:</b> {{RelatedGroups}}</div>{{/RelatedGroups}}
-  {{#MindmapDocs}}<div class="related" style="direction:rtl; text-align:right; background:#fffbe6; border:1px solid #f0d76a"><b>Mindmap notes:</b> {{MindmapDocs}}</div>{{/MindmapDocs}}
   <div style="margin-top:8px; font-size:0.75rem; opacity:0.6">Anchor: {{AnchorLabel}} • {{Range}} — {{Surah}}</div>
 </div>
 `.trim(),
@@ -575,6 +576,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
           { name: 'ContextFront', ord: 4, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
           { name: 'RelatedGroups', ord: 5, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
           { name: 'MindmapDocs', ord: 6, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'VerseFullBack', ord: 7, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
         ],
         css: m.css,
         req: [[0, 'all', [0]]],
@@ -692,6 +694,12 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const related = card.relatedGroups.join(', ');
       const rawDocs = (card as any).mindmapDocs ? String((card as any).mindmapDocs) : '';
       const docs = rawDocs ? escapeField(stripMediaRefs(rawDocs)) : '';
+      // Condensed full verses for the back: inline (not line-by-line) so the
+      // user can scan what was revealed and grade honestly (Again/Hard/Good/Easy)
+      const verseFullBack = card.verseIds.map((ayahId, idx) => {
+        const t = escapeField(card.verseTexts[idx] || '');
+        return `<span class="verse-badge">${ayahId}</span> ${t}`;
+      }).join(' ');
 
       const flds = [
         escapeField(`${card.surahId}:${card.startVerse}-${card.endVerse}`),
@@ -701,6 +709,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
         contextFront,
         escapeField(related),
         docs,
+        verseFullBack,
       ].join('\x1f');
 
       const csum = 0;
