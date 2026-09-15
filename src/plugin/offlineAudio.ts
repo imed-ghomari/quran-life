@@ -172,12 +172,26 @@ export interface OfflinePartStatus {
   totalBytes: number; // sum of existing file sizes (bytes)
   isComplete: boolean;
   isPartial: boolean;
+  skippedFiles?: number; // files excluded because their surah is unselected in Daily Portion
 }
 
-export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, appOverride?: any): Promise<OfflinePartStatus> {
+function toSkippedSet(v?: number[] | Set<number> | null): Set<number> {
+  if (v instanceof Set) {
+    const out = new Set<number>();
+    v.forEach(x => { const n = Number(x); if (Number.isInteger(n)) out.add(n); });
+    return out;
+  }
+  const out = new Set<number>();
+  if (Array.isArray(v)) v.forEach(x => { const n = Number(x); if (Number.isInteger(n)) out.add(n); });
+  return out;
+}
+
+export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, appOverride?: any, skippedSurahIds?: number[] | Set<number> | null): Promise<OfflinePartStatus> {
   const app = getApp(appOverride);
   if (!app) return { reciterId: reciter.id, partId, totalFiles: 0, existingFiles: 0, totalBytes: 0, isComplete: false, isPartial: false };
-  const surahs = getSurahsByPart(partId);
+  const skipped = toSkippedSet(skippedSurahIds);
+  const surahs = getSurahsByPart(partId).filter(s => !skipped.has(s.id));
+  const skippedSurahs = getSurahsByPart(partId).length - surahs.length;
   let totalFiles = 0;
   if (reciter.type === "surah-based") totalFiles = surahs.length;
   else totalFiles = surahs.reduce((s, sh) => s + sh.verseCount, 0);
@@ -212,6 +226,11 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
     totalBytes,
     isComplete: totalFiles > 0 && existingFiles >= totalFiles,
     isPartial: existingFiles > 0 && existingFiles < totalFiles,
+    skippedFiles: skippedSurahs > 0
+      ? (reciter.type === "surah-based"
+          ? skippedSurahs
+          : getSurahsByPart(partId).filter(s => skipped.has(s.id)).reduce((s, sh) => s + sh.verseCount, 0))
+      : 0,
   };
 }
 
@@ -256,6 +275,7 @@ export interface OfflineDownloadOptions {
   signal?: AbortSignal;
   onProgress?: (p: OfflineDownloadProgress) => void;
   skipExisting?: boolean; // default true
+  skippedSurahIds?: number[] | Set<number> | null; // surahs unselected in Daily Portion — excluded from download
 }
 
 async function fetchArrayBufferViaRequestUrl(url: string, app: App): Promise<ArrayBuffer> {
@@ -313,8 +333,9 @@ export async function downloadPartAudio(
   const concurrency = Math.max(1, Math.min(6, opts.concurrency ?? 3));
   const delayMs = opts.delayMs ?? 250;
   const skipExisting = opts.skipExisting ?? true;
+  const skipped = toSkippedSet(opts.skippedSurahIds);
 
-  const surahs = getSurahsByPart(partId);
+  const surahs = getSurahsByPart(partId).filter(s => !skipped.has(s.id));
   type Task = { type: "surah" | "ayah"; surahId: number; ayahId?: number; remoteUrl: string; offlinePath: string; label: string };
   const tasks: Task[] = [];
 
@@ -331,7 +352,7 @@ export async function downloadPartAudio(
     // If all skipped, check if we already have all files
     if (tasks.length === 0) {
       // verify completeness
-      const status = await getOfflinePartStatus(reciter, partId, app);
+      const status = await getOfflinePartStatus(reciter, partId, app, skipped);
       if (status.isComplete) return { downloadedFiles: 0, failedFiles: 0, totalBytes: status.totalBytes };
     }
   } else {
@@ -364,7 +385,7 @@ export async function downloadPartAudio(
   // For progress, we need to report against original total including skipped? Use tasks as remaining
   // But to give user correct progress, we should consider already-existing files as completed.
   // Let's compute existing count
-  const statusBefore = await getOfflinePartStatus(reciter, partId, app);
+  const statusBefore = await getOfflinePartStatus(reciter, partId, app, skipped);
   const alreadyExisting = statusBefore.existingFiles;
   const totalForPart = statusBefore.totalFiles || totalFiles + alreadyExisting;
   let completedFiles = alreadyExisting;
@@ -436,7 +457,7 @@ export async function downloadPartAudio(
   if (aborted || opts.signal?.aborted) throw new Error("Download cancelled");
 
   // Verify final status
-  const finalStatus = await getOfflinePartStatus(reciter, partId, app);
+  const finalStatus = await getOfflinePartStatus(reciter, partId, app, skipped);
   return { downloadedFiles: completedFiles - alreadyExisting, failedFiles, totalBytes: finalStatus.totalBytes };
 }
 

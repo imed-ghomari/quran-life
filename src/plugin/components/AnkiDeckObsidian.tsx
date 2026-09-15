@@ -34,7 +34,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [showMindmapPreview, setShowMindmapPreview] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Progress popup inspired by obsidian-importer/src/progress-ui.ts (cloned at ./obsidian-importer) — shows status, bar (via --importer-progress), stats and log
-  const [exportProgress, setExportProgress] = useState<null | { status: string; current: number; total: number; logs: string[]; verseCards?: number; mindmapCards?: number }>(null);
+  const [exportProgress, setExportProgress] = useState<null | { status: string; current: number; total: number; logs: string[]; verseCards?: number; mindmapCards?: number; mindmapDone?: number; mindmapTotal?: number }>(null);
   const { mindmap: currentMindmap, save: saveMindmap, remove: deleteMindmap, isLoading: isMindmapLoading } = useVaultMindmap(vaultStore, selectedMindmapKey);
   const { mindmaps: allMindmaps } = useVaultMindmaps(vaultStore);
   const { anchors: vaultAnchors, saveAnchors, isLoading: isSplitsLoading } = useVaultSplits(vaultStore, selectedSurah);
@@ -231,7 +231,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     if (isExporting) return;
     setIsExporting(true);
     setExportProgress({ status: 'Preparing export…', current: 0, total: 100, logs: ['Starting export...'] });
-    const updateProgress = (patch: Partial<{ status: string; current: number; logs: string[]; verseCards: number; mindmapCards: number }>) => {
+    const updateProgress = (patch: Partial<{ status: string; current: number; logs: string[]; verseCards: number; mindmapCards: number; mindmapDone: number; mindmapTotal: number }>) => {
       setExportProgress(prev => prev ? { ...prev, ...patch, logs: patch.logs ?? prev.logs } : null);
     };
     const pushLog = (msg: string) => setExportProgress(prev => prev ? { ...prev, logs: [...prev.logs, msg] } : null);
@@ -293,9 +293,20 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       pushLog(`Built ${cards.length} verse cards + ${mindmapCards.length} mindmap cards`);
       updateProgress({ current: 60, status: `Rendering mindmaps & packaging…`, verseCards: cards.length, mindmapCards: mindmapCards.length });
       // generateApkgBlob reports 0-100 for its internal phases (mindmap media 5-80), map to 60-96
-      const blob = await generateApkgBlob(cards, deckName, (p)=> {
+      // mmDone/mmTotal are live mindmap render counts — shown dynamically in the stats + status
+      const blob = await generateApkgBlob(cards, deckName, (p, mmDone, mmTotal)=> {
         const mapped = 60 + Math.round((p/100)*35);
-        setExportProgress(prev => prev ? { ...prev, current: Math.min(96, mapped), status: p < 80 ? `Rendering mindmaps ${p}%…` : `Packaging ${p}%…` } : null);
+        setExportProgress(prev => {
+          if (!prev) return prev;
+          const rendering = mmTotal ? (mmDone ?? 0) < mmTotal : p < 80;
+          return {
+            ...prev,
+            current: Math.min(96, mapped),
+            status: rendering && mmTotal ? `Rendering mindmaps ${mmDone ?? 0}/${mmTotal}…` : (p < 80 ? `Rendering mindmaps ${p}%…` : `Packaging ${p}%…`),
+            mindmapDone: mmDone ?? prev.mindmapDone,
+            mindmapTotal: mmTotal ?? prev.mindmapTotal,
+          };
+        });
       }, mindmapCards, allMindmaps);
       updateProgress({ current: 98, status: 'Finalizing download…' });
       const url = URL.createObjectURL(blob);
@@ -372,12 +383,12 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
           <label style={{ fontSize:'0.78em', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.03em', textTransform:'uppercase' }}>Mindmap to edit</label>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
-            <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
+            <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
             <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }}>
               <optgroup label="Surahs">{SURAHS.map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
               <optgroup label="Parts & Meta"><option value="meta-0">Meta • Overview</option><option value="part-1">Part 1 • 1-5</option><option value="part-2">Part 2 • 6-9</option><option value="part-3">Part 3 • 10-24</option><option value="part-4">Part 4 • 25-33</option><option value="part-5">Part 5 • 34-49</option><option value="part-6">Part 6 • 50-66</option><option value="part-7">Part 7 • 67-114</option></optgroup>
             </select>
-            <button onClick={()=>stepMindmap(1)} title="Next mindmap" aria-label="Next mindmap" style={{ padding:'0 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronRight size={16}/></button>
+            <button onClick={()=>stepMindmap(1)} title="Next mindmap" aria-label="Next mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronRight size={16}/></button>
           </div>
 
         </div>
@@ -595,23 +606,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               <div className="importer-progress-bar" style={{ width:'100%', height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' } as React.CSSProperties & Record<string,string>}>
                 <div className="importer-progress-bar-inner" style={{ width: `${exportProgress.current}%`, height:'100%', background:'var(--interactive-accent)', transition:'width 0.25s ease', borderRadius:999 }} />
               </div>
-              {/* stats — like importer-stats-container */}
+              {/* stats — only live numbers: verse total once built, mindmaps rendered x/y while rendering */}
               <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 <div style={{ flex:'1 1 90px', textAlign:'center', padding:'8px 6px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
                   <div style={{ fontWeight:800, fontSize:'1.05em', fontVariantNumeric:'tabular-nums' }}>{exportProgress.verseCards ?? '—'}</div>
                   <div style={{ fontSize:'0.68em', color:'var(--text-muted)', fontWeight:600, letterSpacing:'0.03em', textTransform:'uppercase' }}>Verse cards</div>
                 </div>
                 <div style={{ flex:'1 1 90px', textAlign:'center', padding:'8px 6px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
-                  <div style={{ fontWeight:800, fontSize:'1.05em', fontVariantNumeric:'tabular-nums' }}>{exportProgress.mindmapCards ?? '—'}</div>
+                  <div style={{ fontWeight:800, fontSize:'1.05em', fontVariantNumeric:'tabular-nums' }}>{exportProgress.mindmapTotal ? `${exportProgress.mindmapDone ?? 0}/${exportProgress.mindmapTotal}` : (exportProgress.mindmapCards ?? '—')}</div>
                   <div style={{ fontSize:'0.68em', color:'var(--text-muted)', fontWeight:600, letterSpacing:'0.03em', textTransform:'uppercase' }}>Mindmaps</div>
-                </div>
-                <div style={{ flex:'1 1 90px', textAlign:'center', padding:'8px 6px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
-                  <div style={{ fontWeight:800, fontSize:'1.05em', fontVariantNumeric:'tabular-nums' }}>{exportProgress.current}/{exportProgress.total}</div>
-                  <div style={{ fontSize:'0.68em', color:'var(--text-muted)', fontWeight:600, letterSpacing:'0.03em', textTransform:'uppercase' }}>Progress</div>
-                </div>
-                <div style={{ flex:'1 1 90px', textAlign:'center', padding:'8px 6px', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', borderRadius:8 }}>
-                  <div style={{ fontWeight:800, fontSize:'1.05em', fontVariantNumeric:'tabular-nums' }}>{exportProgress.logs.length}</div>
-                  <div style={{ fontSize:'0.68em', color:'var(--text-muted)', fontWeight:600, letterSpacing:'0.03em', textTransform:'uppercase' }}>Steps</div>
                 </div>
               </div>
             </div>

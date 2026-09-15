@@ -68,7 +68,7 @@ function waitForFrames(n: number): Promise<void> {
 // Returns map from surah key (e.g. "surah-50") to { filename, blob, fieldHtml }
 // Output contract (unchanged): filename `mindmap-<safeKey>.png`, fieldMap HTML,
 // mediaMap/mediaFiles keyed by sequential index, same toImage params.
-async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMindmaps?: Record<string, any>): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
+async function generateMindmapMedia(onProgress?: (p: number, done?: number, total?: number) => void, overrideMindmaps?: Record<string, any>): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
   const mediaMap: Record<string, string> = {};
   const mediaFiles: Record<string, Blob> = {};
   const fieldMap: Record<string, string> = {};
@@ -182,7 +182,8 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
   // Process sequentially on the shared editor (it is a singleton)
   let idx = 0;
   const total = entries.length;
-  if (onProgress) onProgress(5);
+  const reportMedia = (p: number, done: number) => { if (onProgress) onProgress(p, done, total); };
+  reportMedia(5, 0);
   // Warm fonts fetch once so per-map waits are short
   try {
     await Promise.race([
@@ -194,7 +195,7 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
     const [key, val] = entries[i];
     const snapshot = (val as any).snapshot;
     if (!snapshot) {
-      if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
+      reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
       continue;
     }
     // Filename for Anki media: must be ascii, no spaces
@@ -223,7 +224,7 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
             } catch (e) {
               console.warn('loadSnapshot failed', key, e);
               fieldMap[key] = '';
-              if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
+              reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
               continue;
             }
           }
@@ -251,7 +252,7 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
       console.warn('failed to generate image for', key, e);
       fieldMap[key] = '';
     }
-    if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
+    reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
     // Yield so progress bar repaints (no artificial 150ms delay)
     await new Promise((r) => setTimeout(r, 0));
   }
@@ -260,7 +261,7 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
     if (root) root.unmount();
   } catch {}
   if (container.parentNode) container.parentNode.removeChild(container);
-  if (onProgress) onProgress(80);
+  reportMedia(80, total);
 
   return { mediaMap, mediaFiles, fieldMap };
 }
@@ -439,7 +440,7 @@ function modelJsonMindmap() {
   };
 }
 
-export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number) => void, mindmapCards: AnkiMindmapCard[] = [], fullMindmapsOverride?: Record<string, any>): Promise<Blob> {
+export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number, mindmapsDone?: number, mindmapsTotal?: number) => void, mindmapCards: AnkiMindmapCard[] = [], fullMindmapsOverride?: Record<string, any>): Promise<Blob> {
   const JSZip = await getJSZip();
   if (!JSZip) {
     throw new Error('JSZip not available for apkg');
@@ -452,13 +453,22 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
     let mediaMap: Record<string, string> = {};
     let mediaFiles: Record<string, Blob> = {};
     let fieldMap: Record<string, string> = {};
+    // Last reported mindmap render counts — forwarded with every later phase too
+    let mmDone = 0;
+    let mmTotal = 0;
+    const reportApkg = (p: number) => { if (onProgress) onProgress(p, mmDone, mmTotal); };
     try {
       if (onProgress) onProgress(2);
-      const res = await generateMindmapMedia(onProgress ? (p) => onProgress(Math.round(5 + (p / 100) * 75)) : undefined, fullMindmapsOverride);
+      // Track last reported mindmap counts so later (non-media) phases keep forwarding them
+      const res = await generateMindmapMedia(onProgress ? (p, d, t) => {
+        if (d !== undefined) mmDone = d;
+        if (t !== undefined) mmTotal = t;
+        onProgress(Math.round(5 + (p / 100) * 75), mmDone, mmTotal);
+      } : undefined, fullMindmapsOverride);
       mediaMap = res.mediaMap;
       mediaFiles = res.mediaFiles;
       fieldMap = res.fieldMap;
-      if (onProgress) onProgress(82);
+      reportApkg(82);
     } catch (e) {
       console.warn('mindmap media generation failed, continuing without images', e);
     }
@@ -760,9 +770,9 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       ]);
     }
 
-    if (onProgress) onProgress(85);
+    reportApkg(85);
     const data = db.export();
-    if (onProgress) onProgress(90);
+    reportApkg(90);
     const zip = new JSZip();
     zip.file('collection.anki2', data);
     zip.file('media', JSON.stringify(mediaMap));
@@ -771,10 +781,10 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const ab = await (blob as Blob).arrayBuffer();
       zip.file(key, ab);
     }
-    if (onProgress) onProgress(95);
+    reportApkg(95);
 
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    if (onProgress) onProgress(100);
+    reportApkg(100);
     return blob;
   } catch (e) {
     console.error('apkg gen failed', e);

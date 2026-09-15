@@ -141,6 +141,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     let updateMinutesDesc: () => void = () => {};
     let renderSurahList: () => void = () => {};
     let updateExtraDesc: () => void = () => {};
+    let refreshOfflineStatus: () => void = () => {};
 
     const saveDaily = async (patch: Partial<DailySettings>) => {
       daily = { ...daily, ...patch } as DailySettings;
@@ -153,6 +154,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       try { renderSurahList(); } catch {}
       try { updateExtraDesc(); } catch {}
       try { updateMinutesDesc(); } catch {}
+      try { refreshOfflineStatus(); } catch {}
     };
 
     new Setting(containerEl)
@@ -385,22 +387,25 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const updateOfflineStatus = async () => {
       if (!offlineReciter) return;
       try {
-        const status = await getOfflinePartStatus(offlineReciter, offlinePart, this.app);
+        const status = await getOfflinePartStatus(offlineReciter, offlinePart, this.app, daily.skippedSurahs);
         const total = status.totalFiles;
         const existing = status.existingFiles;
         const pct = total > 0 ? Math.round((existing / total) * 100) : 0;
         const sizeStr = formatBytes(status.totalBytes);
+        const skippedHint = status.skippedFiles ? ` • skips ${status.skippedFiles} unselected` : "";
         if (offlineStatusEl) {
-          if (status.isComplete) offlineStatusEl.setText(`Downloaded: ${existing}/${total} files • ${sizeStr} • ${pct}% — Complete`);
-          else if (status.isPartial) offlineStatusEl.setText(`Downloaded: ${existing}/${total} files • ${sizeStr} • ${pct}% — Partial`);
-          else offlineStatusEl.setText(`Not downloaded: 0/${total} files • 0 B`);
+          if (total === 0 && (status.skippedFiles ?? 0) > 0) offlineStatusEl.setText(`All surahs in Part ${offlinePart} are unselected in Daily Portion — nothing to download`);
+          else if (status.isComplete) offlineStatusEl.setText(`Downloaded: ${existing}/${total} files • ${sizeStr} • ${pct}% — Complete${skippedHint}`);
+          else if (status.isPartial) offlineStatusEl.setText(`Downloaded: ${existing}/${total} files • ${sizeStr} • ${pct}% — Partial${skippedHint}`);
+          else offlineStatusEl.setText(`Not downloaded: 0/${total} files • 0 B${skippedHint}`);
         }
-        if (offlineStoragePartEl) offlineStoragePartEl.setText(`Part ${offlinePart}: ${offlineReciter.name} — ${existing}/${total} files`);
+        if (offlineStoragePartEl) offlineStoragePartEl.setText(`Part ${offlinePart}: ${offlineReciter.name} — ${existing}/${total} files${skippedHint}`);
       } catch (e) {
         if (offlineStatusEl) offlineStatusEl.setText("Status unavailable");
       }
       void refreshTotalStorage();
     };
+    refreshOfflineStatus = () => { void updateOfflineStatus(); };
 
     offlineReciterSetting.addDropdown(drop => {
       offlineReciters.forEach(r => drop.addOption(r.id, r.name));
@@ -491,6 +496,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       btn.setButtonText("Download").setCta().onClick(async () => {
         if (!offlineReciter) { new Notice("Select a reciter first"); return; }
         if (isDownloading) { new Notice("Already downloading"); return; }
+        const eligibleCount = getSurahsByPart(offlinePart).filter(s => !daily.skippedSurahs.includes(s.id)).length;
+        if (eligibleCount === 0) { new Notice(`All surahs in Part ${offlinePart} are unselected in Daily Portion — nothing to download`); return; }
         isDownloading = true;
         abortController = new AbortController();
         downloadBtn.setDisabled(true);
@@ -505,6 +512,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
             concurrency: 3,
             delayMs: 250,
             signal: abortController.signal,
+            skippedSurahIds: daily.skippedSurahs,
             onProgress: (p) => {
               const pct = Math.max(0, Math.min(100, p.percent));
               offlineProgressFill.style.width = `${pct}%`;
