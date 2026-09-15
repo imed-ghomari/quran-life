@@ -415,7 +415,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               <span style={{ marginLeft:'auto', fontSize:'0.74em', color:'var(--text-faint)' }}>{builderState.anchors.length} groups</span>
             </div>
 
-            <div style={{ display:'flex', gap:12, alignItems: showPreview ? 'flex-start' : 'stretch' }}>
+            <div style={{ display:'flex', gap:12, alignItems:'stretch' }}>
               <div style={{ flex: showPreview ? '1 1 70%' : '1 1 100%', display:'flex', flexDirection:'column', gap:8, minWidth:0 }}>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'8px', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
                   {(showAllVerses ? Array.from({length:vc},(_,i)=>i+1) : Array.from({length:Math.min(vc,60)},(_,i)=>i+1)).map(v=>{
@@ -437,7 +437,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                 </div>
               </div>
               {showPreview && (
-                <div style={{ flex:'0 0 30%', maxHeight:220, overflowY:'auto', border:'1px solid var(--background-modifier-border)', borderRadius:8, padding:'8px', background:'var(--background-primary)', display:'flex', flexDirection:'column', gap:6, alignSelf:'stretch' }}>
+                <div style={{ flex:'0 0 30%', border:'1px solid var(--background-modifier-border)', borderRadius:8, padding:'8px', background:'var(--background-primary)', display:'flex', flexDirection:'column', gap:6, alignSelf:'stretch', justifyContent:'flex-start' }}>
                   {builderState.anchors.length === 0 ? (
                     <div style={{ fontSize:'0.8em', color:'var(--text-faint)', textAlign:'center', padding:'8px 0' }}>No groups</div>
                   ) : builderState.anchors.map((a,i)=>(
