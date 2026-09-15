@@ -17,8 +17,57 @@ function stripMediaRefs(s: string): string {
   return out;
 }
 
+// Module-level caches: survive re-exports in the same session so unchanged
+// mindmaps are not re-rendered and heavy modules/wasm are fetched only once.
+let cachedTldrawModules: Promise<{ Tldraw: any; React: any; ReactDOMClient: any; sanitize: (s: any) => any } | null> | null = null;
+function getTldrawModules() {
+  if (!cachedTldrawModules) {
+    cachedTldrawModules = (async () => {
+      try {
+        const [{ Tldraw }, React, ReactDOMClient, snapMod] = await Promise.all([
+          import('tldraw'),
+          import('react'),
+          import('react-dom/client'),
+          import('@/lib/mindmapSnapshot'),
+        ]);
+        return { Tldraw, React, ReactDOMClient, sanitize: snapMod.sanitizeMindmapSnapshot };
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return cachedTldrawModules;
+}
+
+// key -> { hash, blob } — reused when snapshot is unchanged between exports
+const mindmapRenderCache = new Map<string, { hash: string; blob: Blob }>();
+
+function hashSnapshotString(s: string): string {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
+}
+
+function waitForFrames(n: number): Promise<void> {
+  return new Promise((resolve) => {
+    const step = (left: number) => {
+      if (left <= 0) return resolve();
+      requestAnimationFrame(() => step(left - 1));
+    };
+    step(n);
+  });
+}
+
 // Generate PNG media for each tldraw mindmap snapshot at export time
 // Returns map from surah key (e.g. "surah-50") to { filename, blob, fieldHtml }
+// Output contract (unchanged): filename `mindmap-<safeKey>.png`, fieldMap HTML,
+// mediaMap/mediaFiles keyed by sequential index, same toImage params.
 async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMindmaps?: Record<string, any>): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
   const mediaMap: Record<string, string> = {};
   const mediaFiles: Record<string, Blob> = {};
@@ -37,115 +86,110 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
   const entries = Object.entries(mindmaps).filter(([k, v]: any) => v?.snapshot);
   if (entries.length === 0) return { mediaMap, mediaFiles, fieldMap };
 
-  // Helper to render one snapshot to blob
-  const renderOne = async (key: string, snapshot: any): Promise<Blob | null> => {
+  // Load tldraw modules once (cached across exports in the same session)
+  const mods = await getTldrawModules();
+  if (!mods) {
+    for (const [key] of entries) fieldMap[key] = '';
+    return { mediaMap, mediaFiles, fieldMap };
+  }
+  const { Tldraw, React, ReactDOMClient, sanitize } = mods;
+
+  // Mount ONE hidden Tldraw and reuse its editor for every snapshot.
+  // Previously this mounted/unmounted a new React root per mindmap with
+  // 600ms + 300ms fixed sleeps + 150ms gap — the main export bottleneck.
+  // toImage params below are intentionally identical to before (same PNG output).
+  const TO_IMAGE_OPTS = {
+    format: 'png',
+    quality: 0.92,
+    pixelRatio: 1.4,
+    padding: 16,
+    background: true,
+  } as const;
+
+  const firstSanitized = (() => {
     try {
-      const { sanitizeMindmapSnapshot } = await import('@/lib/mindmapSnapshot');
-      const sanitized = sanitizeMindmapSnapshot(snapshot) || snapshot;
-      // Count shapes
-      const store = (sanitized as any)?.store;
-      if (!store || Object.keys(store).filter(k => k.startsWith('shape:')).length === 0) return null;
+      const s = sanitize((entries[0][1] as any).snapshot) || (entries[0][1] as any).snapshot;
+      const store = (s as any)?.store;
+      if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) return null;
+      return s;
+    } catch { return null; }
+  })();
 
-      // Dynamically import tldraw and react
-      const [{ Tldraw }, React, ReactDOMClient] = await Promise.all([
-        import('tldraw'),
-        import('react'),
-        import('react-dom/client'),
-      ]);
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-10000px';
+  container.style.top = '-10000px';
+  container.style.width = '1000px';
+  container.style.height = '700px';
+  container.style.overflow = 'hidden';
+  container.style.background = 'white';
+  document.body.appendChild(container);
 
-      return await new Promise<Blob | null>((resolve) => {
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.left = '-10000px';
-        container.style.top = '-10000px';
-        container.style.width = '1000px';
-        container.style.height = '700px';
-        container.style.overflow = 'hidden';
-        container.style.background = 'white';
-        document.body.appendChild(container);
+  let editor: any = null;
+  try {
+    editor = await new Promise<any>((resolve) => {
+      const timer = setTimeout(() => resolve(null), 8000);
+      try {
+        const onMount = (ed: any) => { clearTimeout(timer); resolve(ed); };
+        const element = (React as any).createElement(Tldraw, {
+          snapshot: firstSanitized || undefined,
+          onMount,
+          hideUi: true,
+        });
+        const root = (ReactDOMClient as any).createRoot(container);
+        (container as any)._reactRoot = root;
+        root.render(element);
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    });
+  } catch { editor = null; }
 
-        let editorRef: any = null;
-        let timeoutId: any = null;
-        let resolved = false;
+  if (!editor) {
+    console.warn('mindmap shared editor failed to mount, continuing without images');
+    try {
+      const root: any = (container as any)._reactRoot;
+      if (root) root.unmount();
+    } catch {}
+    if (container.parentNode) container.parentNode.removeChild(container);
+    for (const [key] of entries) fieldMap[key] = '';
+    return { mediaMap, mediaFiles, fieldMap };
+  }
 
-        const cleanup = () => {
-          if (timeoutId) clearTimeout(timeoutId);
-          try {
-            const root: any = (container as any)._reactRoot;
-            if (root) root.unmount();
-          } catch {}
-          if (container.parentNode) container.parentNode.removeChild(container);
-        };
-
-        const finish = (blob: Blob | null) => {
-          if (resolved) return;
-          resolved = true;
-          cleanup();
-          resolve(blob);
-        };
-
-        const onMount = async (editor: any) => {
-          editorRef = editor;
-          try {
-            // Ensure snapshot is loaded (Tldraw will load via prop, but ensure)
-            // Wait a bit for shapes to render
-            await new Promise(r => setTimeout(r, 600));
-            const shapeIds = Array.from(editor.getCurrentPageShapeIds() as Set<string>);
-            if (shapeIds.length === 0) {
-              finish(null);
-              return;
-            }
-            // Zoom to fit before export
-            try { editor.zoomToFit({ duration: 0 }); } catch {}
-            await new Promise(r => setTimeout(r, 300));
-            const result = await editor.toImage([...shapeIds], {
-              format: 'png',
-              quality: 0.92,
-              pixelRatio: 1.4,
-              padding: 16,
-              background: true,
-            });
-            if (result && result.blob) {
-              finish(result.blob as Blob);
-            } else {
-              finish(null);
-            }
-          } catch (e) {
-            console.warn('mindmap toImage failed', key, e);
-            finish(null);
-          }
-        };
-
-        // Timeout fallback
-        timeoutId = setTimeout(() => {
-          console.warn('mindmap render timeout', key);
-          finish(null);
-        }, 8000);
-
-        try {
-          const element = (React as any).createElement(Tldraw, {
-            snapshot: sanitized,
-            onMount,
-            hideUi: true,
-          });
-          const root = (ReactDOMClient as any).createRoot(container);
-          (container as any)._reactRoot = root;
-          root.render(element);
-        } catch (e) {
-          console.warn('tldraw mount failed', e);
-          finish(null);
-        }
-      });
+  const renderWithSharedEditor = async (key: string, sanitized: any): Promise<Blob | null> => {
+    try {
+      const shapeIds = Array.from(editor.getCurrentPageShapeIds() as Set<string>);
+      if (shapeIds.length === 0) return null;
+      try { editor.zoomToFit({ duration: 0 }); } catch {}
+      // Let layout/fonts settle: readiness signals instead of fixed 600+300ms
+      try {
+        await Promise.race([
+          (document as any).fonts?.ready ?? Promise.resolve(),
+          new Promise((r) => setTimeout(r, 800)),
+        ]);
+      } catch {}
+      await waitForFrames(2);
+      await new Promise((r) => setTimeout(r, 80));
+      const result = await editor.toImage([...(editor.getCurrentPageShapeIds() as Set<string>)], TO_IMAGE_OPTS as any);
+      return result?.blob ? (result.blob as Blob) : null;
     } catch (e) {
-      console.warn('renderOne outer failed', key, e);
+      console.warn('mindmap toImage failed', key, e);
       return null;
     }
   };
 
-  // Process sequentially to avoid overloading
+  // Process sequentially on the shared editor (it is a singleton)
   let idx = 0;
   const total = entries.length;
   if (onProgress) onProgress(5);
+  // Warm fonts fetch once so per-map waits are short
+  try {
+    await Promise.race([
+      (document as any).fonts?.ready ?? Promise.resolve(),
+      new Promise((r) => setTimeout(r, 1000)),
+    ]);
+  } catch {}
   for (let i = 0; i < entries.length; i++) {
     const [key, val] = entries[i];
     const snapshot = (val as any).snapshot;
@@ -157,39 +201,87 @@ async function generateMindmapMedia(onProgress?: (p: number) => void, overrideMi
     const safeKey = key.replace(/[^a-z0-9_-]/gi, '_');
     const filename = `mindmap-${safeKey}.png`;
     try {
-      const blob = await renderOne(key, snapshot);
-      if (blob) {
-        const mediaKey = String(idx);
-        mediaMap[mediaKey] = filename;
-        mediaFiles[mediaKey] = blob;
-        fieldMap[key] = `<img src="${filename}" style="max-width:100%; border:1px solid #ddd; border-radius:8px;" />`;
-        idx += 1;
-      } else {
+      const sanitized = i === 0 && firstSanitized ? firstSanitized : (sanitize(snapshot) || snapshot);
+      const store = (sanitized as any)?.store;
+      if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) {
         fieldMap[key] = '';
+      } else {
+        // Hash-skip: unchanged snapshots reuse last export's blob (no re-render)
+        let hash: string | null = null;
+        try {
+          hash = hashSnapshotString(JSON.stringify((sanitized as any).store ?? sanitized));
+        } catch { hash = null; }
+        const cached = mindmapRenderCache.get(key);
+        let blob: Blob | null = null;
+        if (hash && cached && cached.hash === hash && cached.blob) {
+          blob = cached.blob;
+        } else {
+          if (!(i === 0 && firstSanitized)) {
+            try {
+              if (typeof editor.loadSnapshot === 'function') editor.loadSnapshot(sanitized);
+              else if (editor.store && typeof editor.store.loadSnapshot === 'function') editor.store.loadSnapshot(sanitized);
+            } catch (e) {
+              console.warn('loadSnapshot failed', key, e);
+              fieldMap[key] = '';
+              if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
+              continue;
+            }
+          }
+          blob = await renderWithSharedEditor(key, sanitized);
+          if (blob && hash) {
+            mindmapRenderCache.set(key, { hash, blob });
+            // Bound cache to latest ~120 entries
+            if (mindmapRenderCache.size > 120) {
+              const oldest = mindmapRenderCache.keys().next().value;
+              if (oldest) mindmapRenderCache.delete(oldest);
+            }
+          }
+        }
+        if (blob) {
+          const mediaKey = String(idx);
+          mediaMap[mediaKey] = filename;
+          mediaFiles[mediaKey] = blob;
+          fieldMap[key] = `<img src="${filename}" style="max-width:100%; border:1px solid #ddd; border-radius:8px;" />`;
+          idx += 1;
+        } else {
+          fieldMap[key] = '';
+        }
       }
     } catch (e) {
       console.warn('failed to generate image for', key, e);
       fieldMap[key] = '';
     }
     if (onProgress) onProgress(5 + Math.round(((i + 1) / total) * 70));
-    // Small delay between renders to let browser breathe
-    await new Promise(r => setTimeout(r, 150));
+    // Yield so progress bar repaints (no artificial 150ms delay)
+    await new Promise((r) => setTimeout(r, 0));
   }
+  try {
+    const root: any = (container as any)._reactRoot;
+    if (root) root.unmount();
+  } catch {}
+  if (container.parentNode) container.parentNode.removeChild(container);
   if (onProgress) onProgress(80);
 
   return { mediaMap, mediaFiles, fieldMap };
 }
 
 // Lazily load jszip
+let cachedJSZip: any = null;
 async function getJSZip() {
+  if (cachedJSZip) return cachedJSZip;
   try {
     // dynamic import to avoid SSR issues
     const mod = await import('jszip');
-    return (mod as any).default || mod;
+    cachedJSZip = (mod as any).default || mod;
+    return cachedJSZip;
   } catch {
     return null;
   }
 }
+
+// sql.js wasm fetched once per session (was re-fetched from network/CDN on every export)
+let cachedWasmBinary: ArrayBuffer | null = null;
+let cachedInitSqlJs: any = null;
 
 // Escape Anki field separator
 function escapeField(s: string): string {
@@ -376,37 +468,43 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
     // Robust sql.js loading for Vercel: avoid Webpack bundling node:crypto, use wasmBinary with CDN fallbacks
     let SQL: any = null;
     try {
-      let initSqlJs: any = null;
-      try {
-        const mod: any = await import(/* webpackIgnore: true */ 'sql.js');
-        initSqlJs = mod.default || mod;
-      } catch {
+      let initSqlJs: any = cachedInitSqlJs;
+      if (!initSqlJs) {
         try {
-          const mod2: any = await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js');
-          initSqlJs = mod2.default || mod2;
+          const mod: any = await import(/* webpackIgnore: true */ 'sql.js');
+          initSqlJs = mod.default || mod;
         } catch {
-          initSqlJs = await new Promise<any>((resolve, reject) => {
-            if ((window as any).initSqlJs) return resolve((window as any).initSqlJs);
-            const script = document.createElement('script');
-            script.src = 'https://sql.js.org/dist/sql-wasm.js';
-            script.async = true;
-            script.onload = () => resolve((window as any).initSqlJs);
-            script.onerror = () => reject(new Error('CDN sql.js load failed'));
-            document.head.appendChild(script);
-            setTimeout(() => reject(new Error('CDN timeout')), 8000);
-          });
+          try {
+            const mod2: any = await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js');
+            initSqlJs = mod2.default || mod2;
+          } catch {
+            initSqlJs = await new Promise<any>((resolve, reject) => {
+              if ((window as any).initSqlJs) return resolve((window as any).initSqlJs);
+              const script = document.createElement('script');
+              script.src = 'https://sql.js.org/dist/sql-wasm.js';
+              script.async = true;
+              script.onload = () => resolve((window as any).initSqlJs);
+              script.onerror = () => reject(new Error('CDN sql.js load failed'));
+              document.head.appendChild(script);
+              setTimeout(() => reject(new Error('CDN timeout')), 8000);
+            });
+          }
         }
+        cachedInitSqlJs = initSqlJs;
       }
       const wasmUrls = ['/sql-wasm.wasm', 'https://sql.js.org/dist/sql-wasm.wasm', 'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm'];
-      let wasmBinary: ArrayBuffer | null = null;
-      for (const url of wasmUrls) {
-        try {
-          const resp = await fetch(url, { cache: 'no-store' as any });
-          if (resp.ok) {
-            wasmBinary = await resp.arrayBuffer();
-            break;
-          }
-        } catch {}
+      let wasmBinary: ArrayBuffer | null = cachedWasmBinary;
+      if (!wasmBinary) {
+        for (const url of wasmUrls) {
+          try {
+            const resp = await fetch(url, { cache: 'force-cache' as any });
+            if (resp.ok) {
+              wasmBinary = await resp.arrayBuffer();
+              break;
+            }
+          } catch {}
+        }
+        if (wasmBinary) cachedWasmBinary = wasmBinary;
       }
       if (wasmBinary) {
         SQL = await initSqlJs({ wasmBinary });
@@ -460,8 +558,8 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
           },
         ],
         flds: [
-          { name: 'Surah', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
-          { name: 'Range', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'Range', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+          { name: 'Surah', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
           { name: 'AnchorLabel', ord: 2, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
           { name: 'VerseChunksFront', ord: 3, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
           { name: 'ContextFront', ord: 4, sticky: false, rtl: true, font: 'Noto Naskh Arabic', size: 20, media: [] },
@@ -586,8 +684,8 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const docs = rawDocs ? escapeField(stripMediaRefs(rawDocs)) : '';
 
       const flds = [
-        escapeField(card.arabicName + ' ' + card.surahName),
         escapeField(`${card.surahId}:${card.startVerse}-${card.endVerse}`),
+        escapeField(card.arabicName + ' ' + card.surahName),
         escapeField(card.anchorLabel),
         verseChunksFront,
         contextFront,
@@ -596,7 +694,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       ].join('\x1f');
 
       const csum = 0;
-      const sfld = escapeField(card.anchorLabel);
+      const sfld = escapeField(`${card.surahId}:${card.startVerse}-${card.endVerse}`);
       db.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)', [
         nid,
         guid,

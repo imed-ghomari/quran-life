@@ -8,7 +8,7 @@ import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
-import { Save, Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen } from 'lucide-react';
+import { Save, Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 import { createPortal } from 'react-dom';
@@ -145,6 +145,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [localAnchors]);
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(()=>setToast(null),3000); }, []);
+
+  const mindmapOrder = useMemo(() => [...SURAHS.map(s => `surah-${s.id}`), 'meta-0', 'part-1', 'part-2', 'part-3', 'part-4', 'part-5', 'part-6', 'part-7'], []);
+  const stepMindmap = useCallback((dir: 1 | -1) => {
+    setSelectedMindmapKey(prev => {
+      const i = mindmapOrder.indexOf(prev);
+      if (i === -1) return dir === 1 ? mindmapOrder[0] : mindmapOrder[mindmapOrder.length - 1];
+      return mindmapOrder[(i + dir + mindmapOrder.length) % mindmapOrder.length];
+    });
+  }, [mindmapOrder]);
 
   const handleAddBreak = (val: number) => {
     const vc = surah?.verseCount; if (!vc) return;
@@ -362,10 +371,14 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       <div style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:14 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
           <label style={{ fontSize:'0.78em', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.03em', textTransform:'uppercase' }}>Mindmap to edit</label>
-          <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} className="dropdown" style={{ width:'100%', padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }}>
-            <optgroup label="Surahs">{SURAHS.map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
-            <optgroup label="Parts & Meta"><option value="meta-0">Meta • Overview</option><option value="part-1">Part 1 • 1-5</option><option value="part-2">Part 2 • 6-9</option><option value="part-3">Part 3 • 10-24</option><option value="part-4">Part 4 • 25-33</option><option value="part-5">Part 5 • 34-49</option><option value="part-6">Part 6 • 50-66</option><option value="part-7">Part 7 • 67-114</option></optgroup>
-          </select>
+          <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
+            <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
+            <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }}>
+              <optgroup label="Surahs">{SURAHS.map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
+              <optgroup label="Parts & Meta"><option value="meta-0">Meta • Overview</option><option value="part-1">Part 1 • 1-5</option><option value="part-2">Part 2 • 6-9</option><option value="part-3">Part 3 • 10-24</option><option value="part-4">Part 4 • 25-33</option><option value="part-5">Part 5 • 34-49</option><option value="part-6">Part 6 • 50-66</option><option value="part-7">Part 7 • 67-114</option></optgroup>
+            </select>
+            <button onClick={()=>stepMindmap(1)} title="Next mindmap" aria-label="Next mindmap" style={{ padding:'0 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronRight size={16}/></button>
+          </div>
 
         </div>
 
