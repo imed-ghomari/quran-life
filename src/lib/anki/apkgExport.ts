@@ -442,12 +442,12 @@ function modelJsonMindmap() {
 }
 
 // New-card display order (variant A — confirmed by user):
-// meta mindmap(s) first, then parts from last to first (8..1 descending),
+// meta mindmap(s) first, then parts from last to first (7..1 descending),
 // and within each part: part mindmap, then surahs first-to-last ascending,
 // each surah mindmap immediately followed by its verse-group cards
 // (verse groups sorted by startVerse/endVerse).
-// Must match cardBuilder.ts partLabels:
-// 1:1-5, 2:6-9, 3:10-24, 4:25-33, 5:34-49, 6:50-66, 7:67-114, 8:All Quran (overview only)
+// There are only 7 parts. Must match cardBuilder.ts partLabels:
+// 1:1-5, 2:6-9, 3:10-24, 4:25-33, 5:34-49, 6:50-66, 7:67-114
 const PART_SURAH_RANGES: Record<number, [number, number]> = {
   1: [1, 5],
   2: [6, 9],
@@ -519,7 +519,8 @@ export function buildOrderedExportEntries(
       metaMms.push(m);
     } else if (kind === 'part') {
       const pid = parseMindmapPartId(m);
-      if (pid === undefined) {
+      if (pid === undefined || pid < 1 || pid > 7) {
+        // Unknown part id (e.g. stale part-8) — still export it, but last
         otherMms.push(m);
       } else {
         const arr = partMmByPart.get(pid) || [];
@@ -550,7 +551,7 @@ export function buildOrderedExportEntries(
     const pid = getPartIdForSurah(sid);
     if (pid !== undefined) partIdSet.add(pid);
   }
-  // Last part first → descending (8,7,...,1)
+  // Last part first → descending (7,...,1). Only parts 1-7 exist.
   const partIdsDesc = [...partIdSet].sort((a, b) => b - a);
 
   const ordered: OrderedExportEntry[] = [];

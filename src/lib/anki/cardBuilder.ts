@@ -127,7 +127,7 @@ export function buildMindmapCards(
     } else if (kind === 'part') {
       const pid = Number(val.partId || key.replace('part-', '')) || 1;
       partId = pid;
-      // Part ranges as in AnkiDeckTab
+      // Part ranges as in AnkiDeckTab (only 7 parts)
       const partLabels: Record<number, string> = {
         1: 'Part 1 - Surah 1-5',
         2: 'Part 2 - Surah 6-9',
@@ -136,7 +136,6 @@ export function buildMindmapCards(
         5: 'Part 5 - Surah 34-49',
         6: 'Part 6 - Surah 50-66',
         7: 'Part 7 - Surah 67-114',
-        8: 'All Quran',
       };
       title = partLabels[pid] || `Part ${pid}`;
       tags.push(`part::${pid}`, `mindmap::part-${pid}`);
