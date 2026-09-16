@@ -441,6 +441,139 @@ function modelJsonMindmap() {
   };
 }
 
+// New-card display order (variant A — confirmed by user):
+// meta mindmap(s) first, then parts from last to first (8..1 descending),
+// and within each part: part mindmap, then surahs first-to-last ascending,
+// each surah mindmap immediately followed by its verse-group cards
+// (verse groups sorted by startVerse/endVerse).
+// Must match cardBuilder.ts partLabels:
+// 1:1-5, 2:6-9, 3:10-24, 4:25-33, 5:34-49, 6:50-66, 7:67-114, 8:All Quran (overview only)
+const PART_SURAH_RANGES: Record<number, [number, number]> = {
+  1: [1, 5],
+  2: [6, 9],
+  3: [10, 24],
+  4: [25, 33],
+  5: [34, 49],
+  6: [50, 66],
+  7: [67, 114],
+};
+
+function getPartIdForSurah(surahId: number): number | undefined {
+  for (const [pidStr, [start, end]] of Object.entries(PART_SURAH_RANGES)) {
+    if (surahId >= start && surahId <= end) return Number(pidStr);
+  }
+  return undefined;
+}
+
+function parseMindmapPartId(mCard: AnkiMindmapCard): number | undefined {
+  if (typeof mCard.partId === 'number' && Number.isFinite(mCard.partId)) return mCard.partId;
+  const mt = /^part-(\d+)/.exec(mCard.key || '');
+  if (mt) {
+    const n = Number(mt[1]);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function parseMindmapSurahId(mCard: AnkiMindmapCard): number | undefined {
+  if (typeof mCard.surahId === 'number' && Number.isFinite(mCard.surahId)) return mCard.surahId;
+  const mt = /^surah-(\d+)/.exec(mCard.key || '');
+  if (mt) {
+    const n = Number(mt[1]);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+export type OrderedExportEntry =
+  | { type: 'verse'; card: AnkiCard }
+  | { type: 'mindmap'; mCard: AnkiMindmapCard };
+
+// Build the global new-card order. `due` for each card = index+1 in this list.
+// Surah mindmap comes first, then its verse groups, then the next surah mindmap...
+export function buildOrderedExportEntries(
+  cards: AnkiCard[],
+  mindmapCards: AnkiMindmapCard[] = []
+): OrderedExportEntry[] {
+  const verseBySurah = new Map<number, AnkiCard[]>();
+  for (const c of cards) {
+    const sid = (c as any)?.surahId;
+    if (typeof sid !== 'number' || !Number.isFinite(sid)) continue;
+    const arr = verseBySurah.get(sid) || [];
+    arr.push(c);
+    verseBySurah.set(sid, arr);
+  }
+  for (const arr of verseBySurah.values()) {
+    arr.sort((a, b) => (a.startVerse - b.startVerse) || (a.endVerse - b.endVerse) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+  // Verse cards with missing/invalid surahId (shouldn't happen) — keep at end in input order
+  const orphanVerses = cards.filter((c) => typeof (c as any)?.surahId !== 'number' || !Number.isFinite((c as any)?.surahId));
+
+  const metaMms: AnkiMindmapCard[] = [];
+  const partMmByPart = new Map<number, AnkiMindmapCard[]>();
+  const surahMmBySurah = new Map<number, AnkiMindmapCard[]>();
+  const otherMms: AnkiMindmapCard[] = [];
+  for (const m of mindmapCards) {
+    const kind = (m as any)?.kind || (m.key?.startsWith('part-') ? 'part' : m.key?.startsWith('meta-') ? 'meta' : m.key?.startsWith('surah-') ? 'surah' : 'other');
+    if (kind === 'meta') {
+      metaMms.push(m);
+    } else if (kind === 'part') {
+      const pid = parseMindmapPartId(m);
+      if (pid === undefined) {
+        otherMms.push(m);
+      } else {
+        const arr = partMmByPart.get(pid) || [];
+        arr.push(m);
+        partMmByPart.set(pid, arr);
+      }
+    } else if (kind === 'surah') {
+      const sid = parseMindmapSurahId(m);
+      if (sid === undefined) {
+        otherMms.push(m);
+      } else {
+        const arr = surahMmBySurah.get(sid) || [];
+        arr.push(m);
+        surahMmBySurah.set(sid, arr);
+      }
+    } else {
+      otherMms.push(m);
+    }
+  }
+  metaMms.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const arr of partMmByPart.values()) arr.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const arr of surahMmBySurah.values()) arr.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  otherMms.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  const allSurahIds = new Set<number>([...verseBySurah.keys(), ...surahMmBySurah.keys()]);
+  const partIdSet = new Set<number>([...partMmByPart.keys()]);
+  for (const sid of allSurahIds) {
+    const pid = getPartIdForSurah(sid);
+    if (pid !== undefined) partIdSet.add(pid);
+  }
+  // Last part first → descending (8,7,...,1)
+  const partIdsDesc = [...partIdSet].sort((a, b) => b - a);
+
+  const ordered: OrderedExportEntry[] = [];
+  for (const m of metaMms) ordered.push({ type: 'mindmap', mCard: m });
+  for (const pid of partIdsDesc) {
+    for (const m of partMmByPart.get(pid) || []) ordered.push({ type: 'mindmap', mCard: m });
+    const surahsInPart = [...allSurahIds].filter((sid) => getPartIdForSurah(sid) === pid).sort((a, b) => a - b);
+    for (const sid of surahsInPart) {
+      for (const m of surahMmBySurah.get(sid) || []) ordered.push({ type: 'mindmap', mCard: m });
+      for (const c of verseBySurah.get(sid) || []) ordered.push({ type: 'verse', card: c });
+    }
+  }
+  // Surahs that don't map to a known part (future-proof) — ascending, mindmap then verses
+  const leftoverSurahs = [...allSurahIds].filter((sid) => getPartIdForSurah(sid) === undefined).sort((a, b) => a - b);
+  for (const sid of leftoverSurahs) {
+    for (const m of surahMmBySurah.get(sid) || []) ordered.push({ type: 'mindmap', mCard: m });
+    for (const c of verseBySurah.get(sid) || []) ordered.push({ type: 'verse', card: c });
+  }
+  for (const c of orphanVerses) ordered.push({ type: 'verse', card: c });
+  for (const m of otherMms) ordered.push({ type: 'mindmap', mCard: m });
+  return ordered;
+}
+
 export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number, mindmapsDone?: number, mindmapsTotal?: number) => void, mindmapCards: AnkiMindmapCard[] = [], fullMindmapsOverride?: Record<string, any>): Promise<Blob> {
   const JSZip = await getJSZip();
   if (!JSZip) {
@@ -661,10 +794,18 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       [crt, now, now, JSON.stringify({}), JSON.stringify(model), JSON.stringify(decks), JSON.stringify(dconf), JSON.stringify({})]
     );
 
-    // Insert notes/cards
-    let nid = now - cards.length * 1000;
-    for (const card of cards) {
-      nid += 1;
+    // Insert notes/cards in new-card display order.
+    // For new cards (type=0, queue=0) Anki uses `due` as the position, so due
+    // must be sequential 1..N in the desired order (not the same value for all
+    // cards). nids are also allocated in due order so "order added" agrees.
+    const orderedEntries = buildOrderedExportEntries(cards, mindmapCards);
+    let nidSeq = now - orderedEntries.length * 1000 - 5000;
+    for (let orderIdx = 0; orderIdx < orderedEntries.length; orderIdx++) {
+      const entry = orderedEntries[orderIdx];
+      const duePos = orderIdx + 1; // 1-based new-card position
+      nidSeq += 1;
+      if (entry.type === 'verse') {
+        const card = entry.card;
       const guid = noteGuidForCard(card);
       const mod = now;
       const usn = -1;
@@ -715,7 +856,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const csum = 0;
       const sfld = escapeField(`${card.surahId}:${card.startVerse}-${card.endVerse}`);
       db.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)', [
-        nid,
+        nidSeq,
         guid,
         modelId,
         mod,
@@ -727,23 +868,18 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
         '',
       ]);
 
-      const cid = nid + 1000000;
+      const cid = nidSeq + 1000000;
       db.run('INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, ?, 0, 0, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)', [
         cid,
-        nid,
+        nidSeq,
         deckId,
         mod,
         usn,
-        deckId, // due
+        duePos,
         '',
       ]);
-    }
-
-    // Insert mindmap cards (one per surah/part/meta with snapshot)
-    // Use a separate nid sequence to avoid collision with verse cards
-    let midNid = now + 10000000;
-    for (const mCard of mindmapCards) {
-      midNid += 1;
+      } else {
+        const mCard = entry.mCard;
       const guid = `ql-mindmap-${mCard.key}`;
       // Simple hash for guid stability (fallback to key)
       let h = 0;
@@ -756,7 +892,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
       const flds = [title, imgHtml, docs].join('\x1f');
       const sfld = title;
       db.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)', [
-        midNid,
+        nidSeq,
         guidStr,
         modelIdMindmap,
         now,
@@ -767,16 +903,17 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
         0,
         '',
       ]);
-      const cid2 = midNid + 2000000;
+      const cid2 = nidSeq + 2000000;
       db.run('INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?, ?, ?, 0, ?, ?, 0, 0, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)', [
         cid2,
-        midNid,
+        nidSeq,
         deckId,
         now,
         -1,
-        deckId,
+        duePos,
         '',
       ]);
+      }
     }
 
     reportApkg(85);
