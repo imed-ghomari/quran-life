@@ -1083,7 +1083,7 @@ function MindmapEditorContent({
 
     if (isActuallyLoading) {
         return (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '400px', flex: 1, background: 'var(--background-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spinner size={32} text="Loading Mindmap..." />
             </div>
         );
@@ -1093,12 +1093,14 @@ function MindmapEditorContent({
         <div
             ref={containerRef}
             data-mindmap-swipe-guard="true"
-            style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'var(--background-primary)', display: 'flex', flexDirection: 'column' }}
+            style={{ position: 'relative', width: '100%', height: '100%', flex: 1, minHeight: '500px', background: 'var(--background-primary)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
             <div
                 className="mindmap-editor-header"
                 style={{
                 height: '50px',
+                minHeight: '50px',
+                flexShrink: 0,
                 borderBottom: '1px solid var(--background-modifier-border)',
                 background: 'var(--background-primary)',
                 color: 'var(--text-normal)',
@@ -1228,11 +1230,11 @@ function MindmapEditorContent({
             </div>
 
             <div className="tldraw-container" style={{
-                position: 'absolute',
-                top: '50px',
-                left: 0,
-                right: 0,
-                bottom: 0,
+                position: 'relative',
+                flex: 1,
+                minHeight: 0,
+                minWidth: 0,
+                overflow: 'hidden',
                 background: 'var(--background-primary)',
                 overscrollBehaviorX: 'none' // Prevent browser back navigation gesture
             }}>

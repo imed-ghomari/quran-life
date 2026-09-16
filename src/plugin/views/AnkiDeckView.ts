@@ -26,8 +26,16 @@ export class AnkiDeckView extends ItemView {
     container.addClass("quran-life-anki");
     container.style.height = "100%";
     container.style.overflow = "auto";
+    container.style.position = "relative";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
     mountEl.style.height = "100%";
+    mountEl.style.minHeight = "100%";
+    mountEl.style.position = "relative";
+    mountEl.style.display = "flex";
+    mountEl.style.flexDirection = "column";
+    mountEl.style.flex = "1";
     this.root = createRoot(mountEl);
     this.root.render(
       React.createElement(ThemeProvider, null,
