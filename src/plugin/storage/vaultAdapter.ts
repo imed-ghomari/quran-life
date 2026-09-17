@@ -51,7 +51,7 @@ export const VAULT_PATHS = {
   nodesDir: (root: string) => normalizePath(`${root}/nodes`),
   // Theme — still in plugin data.json (loadData/saveData) or vault? Vault for Resilio.
   themeFile: (root: string) => normalizePath(`${root}/meta/theme.json`),
-  // Anki export prefs (per-part asc/desc for new-card due) — vault-synced
+  // Anki export prefs (partOrder + surahOrder) — vault-synced
   ankiExport: (root: string) => normalizePath(`${root}/meta/anki-export.json`),
 } as const;
 
@@ -381,11 +381,11 @@ export class VaultStore {
     else await this.app.vault.create(path, content);
   }
 
-  // Anki export prefs — per-part asc/desc
+  // Anki export prefs — partOrder + surahOrder
   async loadAnkiExportPrefs(): Promise<import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs> {
     const { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } = await import('@/lib/anki/ankiExportPrefs');
     const raw = await readJson(this.app, VAULT_PATHS.ankiExport(this.dataRoot), null as any);
-    if (!raw) return { partSurahOrder: { ...DEFAULT_ANKI_EXPORT_PREFS.partSurahOrder } };
+    if (!raw) return { ...DEFAULT_ANKI_EXPORT_PREFS };
     return normalizeAnkiExportPrefs(raw);
   }
   async saveAnkiExportPrefs(prefs: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs): Promise<void> {

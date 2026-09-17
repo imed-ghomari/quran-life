@@ -2,52 +2,66 @@
 
 export type SortDir = 'asc' | 'desc';
 
-export const CORE_PART_IDS = [1, 2, 3, 4, 5, 6, 7] as const;
-export type CorePartId = typeof CORE_PART_IDS[number];
-
 export interface AnkiExportPrefs {
-  /** Per-part surah order for Anki new-card `due`. Also controls verse-group order within that part when desired. */
-  partSurahOrder: Record<number, SortDir>;
+  /** Order of parts in new-card `due`. `desc` = 7→1 (last part first, previous default), `asc` = 1→7. */
+  partOrder: SortDir;
+  /** Order of surahs within each part. `asc` = first surah → last (e.g. Part 7: 67→114), `desc` = last → first (114→67). */
+  surahOrder: SortDir;
 }
 
 export const DEFAULT_ANKI_EXPORT_PREFS: AnkiExportPrefs = {
-  partSurahOrder: { 1: 'asc', 2: 'asc', 3: 'asc', 4: 'asc', 5: 'asc', 6: 'asc', 7: 'asc' },
+  partOrder: 'desc',  // keep previous behavior: last part first (7→1) then 7's surahs, then 6...
+  surahOrder: 'asc',  // within each part: first surah → last
 };
 
-export function normalizeAnkiExportPrefs(raw: any): AnkiExportPrefs {
-  const out: Record<number, SortDir> = { ...DEFAULT_ANKI_EXPORT_PREFS.partSurahOrder } as Record<number, SortDir>;
-  const src = raw && typeof raw === 'object' ? (raw.partSurahOrder ?? raw.partSort ?? raw) : null;
-  if (src && typeof src === 'object') {
-    for (const pid of CORE_PART_IDS) {
-      const v = (src as any)[String(pid)] ?? (src as any)[pid];
-      if (v === 'asc' || v === 'desc') out[pid] = v;
-      else if (typeof v === 'string') {
-        const low = v.toLowerCase().trim();
-        if (low === 'asc' || low === 'ascending' || low === '1' || low === 'first') out[pid] = 'asc';
-        else if (low === 'desc' || low === 'descending' || low === '-1' || low === 'last') out[pid] = 'desc';
-      }
-    }
+function parseDir(v: unknown, fallback: SortDir): SortDir {
+  if (v === 'asc' || v === 'desc') return v;
+  if (typeof v === 'string') {
+    const low = v.toLowerCase().trim();
+    if (low === 'asc' || low === 'ascending' || low === 'first') return 'asc';
+    if (low === 'desc' || low === 'descending' || low === 'last') return 'desc';
   }
-  return { partSurahOrder: out };
+  return fallback;
 }
 
-export function getPartSortDir(prefs: AnkiExportPrefs | undefined | null, partId: number): SortDir {
-  if (!prefs || !prefs.partSurahOrder) return 'asc';
-  const v = (prefs.partSurahOrder as any)[partId] ?? (prefs.partSurahOrder as any)[String(partId)];
-  return v === 'desc' ? 'desc' : 'asc';
+export function normalizeAnkiExportPrefs(raw: any): AnkiExportPrefs {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_ANKI_EXPORT_PREFS };
+  // New shape: { partOrder, surahOrder }
+  if ('partOrder' in raw || 'surahOrder' in raw) {
+    return {
+      partOrder: parseDir((raw as any).partOrder, DEFAULT_ANKI_EXPORT_PREFS.partOrder),
+      surahOrder: parseDir((raw as any).surahOrder, DEFAULT_ANKI_EXPORT_PREFS.surahOrder),
+    };
+  }
+  // Legacy per-part shape: { partSurahOrder: {1:'asc',...} } or { partSort } — migrate to global surahOrder
+  const legacy = (raw as any).partSurahOrder ?? (raw as any).partSort ?? raw;
+  if (legacy && typeof legacy === 'object') {
+    // If legacy had per-part dirs, use majority or any desc → global desc, else asc
+    let anyDesc = false;
+    let anyAsc = false;
+    for (const v of Object.values(legacy as Record<string, unknown>)) {
+      if (v === 'desc') anyDesc = true;
+      if (v === 'asc') anyAsc = true;
+    }
+    // Prefer desc if any part was set to desc (preserves user's intent to reverse somewhere)
+    const inferredSurahOrder: SortDir = anyDesc && !anyAsc ? 'desc' : anyDesc ? 'desc' : 'asc';
+    // Legacy had no partOrder, keep default desc for parts
+    return { partOrder: DEFAULT_ANKI_EXPORT_PREFS.partOrder, surahOrder: inferredSurahOrder };
+  }
+  return { ...DEFAULT_ANKI_EXPORT_PREFS };
 }
 
 // LocalStorage fallback for web / tests (mirrors vault file)
 const LS_KEY = 'quran-life:anki:export-sort:v1';
 
 export function loadAnkiExportPrefsLocal(): AnkiExportPrefs {
-  if (typeof window === 'undefined') return { ...DEFAULT_ANKI_EXPORT_PREFS, partSurahOrder: { ...DEFAULT_ANKI_EXPORT_PREFS.partSurahOrder } };
+  if (typeof window === 'undefined') return { ...DEFAULT_ANKI_EXPORT_PREFS };
   try {
     const raw = window.localStorage.getItem(LS_KEY);
-    if (!raw) return { ...DEFAULT_ANKI_EXPORT_PREFS, partSurahOrder: { ...DEFAULT_ANKI_EXPORT_PREFS.partSurahOrder } };
+    if (!raw) return { ...DEFAULT_ANKI_EXPORT_PREFS };
     return normalizeAnkiExportPrefs(JSON.parse(raw));
   } catch {
-    return { ...DEFAULT_ANKI_EXPORT_PREFS, partSurahOrder: { ...DEFAULT_ANKI_EXPORT_PREFS.partSurahOrder } };
+    return { ...DEFAULT_ANKI_EXPORT_PREFS };
   }
 }
 

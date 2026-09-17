@@ -292,10 +292,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       const cards = buildAnkiCards(filteredAnchors, versesForExport, { mindmapDocsMap: docsMap });
       pushLog(`Built ${cards.length} verse cards + ${mindmapCards.length} mindmap cards`);
       updateProgress({ current: 60, status: `Rendering mindmaps & packaging…`, verseCards: cards.length, mindmapCards: mindmapCards.length });
-      // per-part asc/desc from Obsidian settings → vault file meta/anki-export.json
+      // Global partOrder + surahOrder from Obsidian settings → vault file meta/anki-export.json
       let exportPrefs: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs | null = null;
       try { exportPrefs = ankiExportPrefs ?? await vaultStore.loadAnkiExportPrefs(); } catch {}
-      const prefsSummary = exportPrefs ? Object.entries(exportPrefs.partSurahOrder).map(([k,v])=>`P${k}:${v}`).join(' ') : 'default asc';
+      const prefsSummary = exportPrefs ? `partOrder=${exportPrefs.partOrder} surahOrder=${exportPrefs.surahOrder}` : 'default partOrder=desc surahOrder=asc';
       pushLog(`Anki sort prefs: ${prefsSummary}`);
       // generateApkgBlob reports 0-100 for its internal phases (mindmap media 5-80), map to 60-96
       // mmDone/mmTotal are live mindmap render counts — shown dynamically in the stats + status
@@ -403,7 +403,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
         {ankiExportPrefs && (
           <div style={{ fontSize:'0.72em', color:'var(--text-faint)', lineHeight:1.4, padding:'6px 8px', border:'1px dashed var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
-            <span style={{ fontWeight:700, color:'var(--text-muted)' }}>Anki sort:</span> {Object.entries(ankiExportPrefs.partSurahOrder).sort((a,b)=>Number(b[0])-Number(a[0])).map(([k,v])=>`P${k}:${v}`).join(' • ')} <span style={{ opacity:0.7 }}>— change in Settings → Anki Export</span>
+            <span style={{ fontWeight:700, color:'var(--text-muted)' }}>Anki sort:</span> partOrder={ankiExportPrefs.partOrder} ({ankiExportPrefs.partOrder==='asc'?'1→7':'7→1'}) • surahOrder={ankiExportPrefs.surahOrder} ({ankiExportPrefs.surahOrder==='asc'?'first→last':'last→first'}) <span style={{ opacity:0.7 }}>— change in Settings → Anki Export</span>
           </div>
         )}
 

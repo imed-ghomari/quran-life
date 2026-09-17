@@ -260,7 +260,7 @@ export function useVaultMindmaps(vaultStore: VaultStore) {
   return { mindmaps: all, isLoading, reload };
 }
 
-// Anki export prefs (per-part asc/desc)
+// Anki export prefs (partOrder + surahOrder)
 export function useVaultAnkiExportPrefs(vaultStore: VaultStore) {
   const [prefs, setPrefs] = useState<import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -277,16 +277,21 @@ export function useVaultAnkiExportPrefs(vaultStore: VaultStore) {
     setPrefs(next);
     await vaultStore.saveAnkiExportPrefs(next);
   }, [vaultStore]);
-  const setPartDir = useCallback(async (partId: number, dir: import('@/lib/anki/ankiExportPrefs').SortDir) => {
+  const setPartOrder = useCallback(async (dir: import('@/lib/anki/ankiExportPrefs').SortDir) => {
     const cur = prefs ?? await vaultStore.loadAnkiExportPrefs();
-    const updated: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs = {
-      partSurahOrder: { ...(cur as any).partSurahOrder, [partId]: dir },
-    };
+    const updated: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs = { ...cur as any, partOrder: dir };
     setPrefs(updated);
     await vaultStore.saveAnkiExportPrefs(updated);
     return updated;
   }, [vaultStore, prefs]);
-  return { prefs, isLoading, reload: load, save, setPartDir };
+  const setSurahOrder = useCallback(async (dir: import('@/lib/anki/ankiExportPrefs').SortDir) => {
+    const cur = prefs ?? await vaultStore.loadAnkiExportPrefs();
+    const updated: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs = { ...cur as any, surahOrder: dir };
+    setPrefs(updated);
+    await vaultStore.saveAnkiExportPrefs(updated);
+    return updated;
+  }, [vaultStore, prefs]);
+  return { prefs, isLoading, reload: load, save, setPartOrder, setSurahOrder };
 }
 
 // Docs — one markdown per key

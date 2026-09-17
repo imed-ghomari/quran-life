@@ -441,11 +441,12 @@ function modelJsonMindmap() {
   };
 }
 
-// New-card display order (variant A — confirmed by user):
-// meta mindmap(s) first, then parts from last to first (7..1 descending),
-// and within each part: part mindmap, then surahs first-to-last ascending,
-// each surah mindmap immediately followed by its verse-group cards
-// (verse groups sorted by startVerse/endVerse).
+// New-card display order:
+// meta mindmap(s) first, then parts ordered by prefs.partOrder (desc = 7→1, asc = 1→7),
+// and within each part: part mindmap first (always), then surahs ordered by
+// prefs.surahOrder (asc = first→last, desc = last→first), each surah's
+// mindmap first then its verse-group cards in chronological order (startVerse asc).
+// Only these two orders are configurable; mindmap-first and chronological are fixed.
 // There are only 7 parts. Must match cardBuilder.ts partLabels:
 // 1:1-5, 2:6-9, 3:10-24, 4:25-33, 5:34-49, 6:50-66, 7:67-114
 const PART_SURAH_RANGES: Record<number, [number, number]> = {
@@ -490,8 +491,8 @@ export type OrderedExportEntry =
   | { type: 'mindmap'; mCard: AnkiMindmapCard };
 
 // Build the global new-card order. `due` for each card = index+1 in this list.
-// Surah mindmap comes first, then its verse groups, then the next surah mindmap...
-// prefs.partSurahOrder[partId] = 'asc' (default, first surah → last) vs 'desc' (last → first) — only surah order within the part; verse groups stay forward (startVerse asc).
+// prefs.partOrder controls part order (desc 7→1, asc 1→7); prefs.surahOrder controls surah order within each part (asc first→last, desc last→first).
+// Invariants (not configurable): part mindmap always first in its part; for each surah, mindmap first then verse groups chronological (startVerse asc).
 export function buildOrderedExportEntries(
   cards: AnkiCard[],
   mindmapCards: AnkiMindmapCard[] = [],
@@ -553,23 +554,18 @@ export function buildOrderedExportEntries(
     const pid = getPartIdForSurah(sid);
     if (pid !== undefined) partIdSet.add(pid);
   }
-  // Last part first → descending (7,...,1). Only parts 1-7 exist.
-  const partIdsDesc = [...partIdSet].sort((a, b) => b - a);
-
-  const getDir = (pid: number): 'asc' | 'desc' => {
-    const v = (prefs as any)?.partSurahOrder?.[String(pid)] ?? (prefs as any)?.partSurahOrder?.[pid];
-    return v === 'desc' ? 'desc' : 'asc';
-  };
+  const partOrder: 'asc' | 'desc' = (prefs as any)?.partOrder === 'asc' ? 'asc' : 'desc';
+  const surahOrder: 'asc' | 'desc' = (prefs as any)?.surahOrder === 'desc' ? 'desc' : 'asc';
+  const partIdsSorted = [...partIdSet].sort((a, b) => (partOrder === 'asc' ? a - b : b - a));
 
   const ordered: OrderedExportEntry[] = [];
   for (const m of metaMms) ordered.push({ type: 'mindmap', mCard: m });
-  for (const pid of partIdsDesc) {
+  for (const pid of partIdsSorted) {
     for (const m of partMmByPart.get(pid) || []) ordered.push({ type: 'mindmap', mCard: m });
-    const dir = getDir(pid);
-    const surahsInPart = [...allSurahIds].filter((sid) => getPartIdForSurah(sid) === pid).sort((a, b) => (dir === 'asc' ? a - b : b - a));
+    const surahsInPart = [...allSurahIds].filter((sid) => getPartIdForSurah(sid) === pid).sort((a, b) => (surahOrder === 'asc' ? a - b : b - a));
     for (const sid of surahsInPart) {
       for (const m of surahMmBySurah.get(sid) || []) ordered.push({ type: 'mindmap', mCard: m });
-      // Verse groups stay in startVerse ascending order regardless of part direction — reading order within a surah is always forward
+      // Verse groups always chronological (startVerse asc) — not affected by sorting UI
       for (const c of verseBySurah.get(sid) || []) ordered.push({ type: 'verse', card: c });
     }
   }
