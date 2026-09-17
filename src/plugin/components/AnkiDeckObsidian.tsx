@@ -595,7 +595,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       })()}
 
       {showDeleteConfirm && (
-        <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:20, padding:16 }}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:101, padding:16 }}>
           <div style={{ background:'var(--background-primary)', padding:20, borderRadius:12, border:'1px solid var(--background-modifier-border)', minWidth:300, maxWidth:400, boxShadow:'0 8px 24px rgba(0,0,0,0.2)' }}>
             <p style={{ fontWeight:700, margin:'0 0 6px 0' }}>Delete mindmap for {displayTitle}?</p>
             <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:0 }}>Removes <code style={{ background:'var(--background-secondary)', padding:'1px 4px', borderRadius:4, border:'1px solid var(--background-modifier-border)' }}>mindmaps/{selectedMindmapKey}.json</code> and keeps tombstone.</p>
@@ -609,7 +609,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
       {/* Export progress popup — mirrors obsidian-importer/src/progress-ui.ts (SettingGroup + progress bar + stats + log) */}
       {exportProgress && (
-        <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:30, padding:16 }}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
           <div style={{ background:'var(--background-primary)', border:'1px solid var(--background-modifier-border)', borderRadius:12, width:'100%', maxWidth:520, maxHeight:'85vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.22)' }}>
             <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--background-modifier-border)', display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -653,7 +653,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
       )}
 
-      {toast && <div style={{ position:'absolute', bottom:14, left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:40 }}>{toast}</div>}
+      {toast && <div style={{ position:'fixed', bottom:14, left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50 }}>{toast}</div>}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );

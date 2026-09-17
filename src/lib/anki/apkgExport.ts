@@ -308,7 +308,7 @@ function modelJson() {
 .context.show-all .extra { display:inline; }
 #verseContainer { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding-bottom: 8px; }
 .verse-block { margin: 8px 0; line-height: 2.1; font-size: 1.35rem; }
-.verse-full { line-height: 2; font-size: 1.1rem; background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }
+.verse-full { line-height: 2; font-size: 1.1rem; background: #fff; color: #222; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }
 .verse-badge { font-size: 0.65rem; opacity:0.7; margin-left: 6px; border:1px solid #ccc; padding:1px 4px; border-radius:4px; vertical-align: middle; }
 .chunk { transition: filter 0.2s, opacity 0.2s; }
 .chunk.blurred { filter: blur(8px); opacity: 0.45; user-select:none; }
@@ -318,9 +318,17 @@ function modelJson() {
 #revealBtn:active { opacity:0.9; }
 #counter { font-size:0.7rem; opacity:0.5; margin-top:6px; text-align:center; }
 #doneHint { display:none; margin-top:12px; padding:10px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; text-align:center; font-size:0.9rem; color:#2e7d32; }
-.related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #f6f6f6; padding:8px; border-radius:8px; direction:ltr; text-align:left; }
+.related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #f6f6f6; color: #222; padding:8px; border-radius:8px; direction:ltr; text-align:left; border: 1px solid #eee; }
 .mindmap-img { margin-top:12px; text-align:center; }
 .mindmap-img img { max-width:100%; border:1px solid #ddd; border-radius:8px; }
+/* Anki dark mode — .nightMode is added by Anki desktop/mobile, .night_mode is legacy */
+.card.nightMode, .card.night_mode, .nightMode .card, .night_mode .card { background: #121212; color: #e0e0e0; }
+.nightMode .verse-full, .night_mode .verse-full, .card.nightMode .verse-full, .card.night_mode .verse-full { background: #2a2a2a; color: #e8e8e8; border-color: #444; }
+.nightMode .related, .night_mode .related, .card.nightMode .related, .card.night_mode .related { background: #2a2a2a; color: #e0e0e0; border-color: #444; }
+.nightMode .verse-badge, .night_mode .verse-badge { border-color: #555; color: #ccc; }
+.nightMode .surah-context, .night_mode .surah-context { color: #8ab4d6; }
+.nightMode #doneHint, .night_mode #doneHint { background: #1e3320; color: #a5d6a7; border-color: #2e5a32; }
+.nightMode #revealBtn, .night_mode #revealBtn { background: #4a7496; }
 `.trim();
 
   return {
@@ -418,10 +426,13 @@ function modelJson() {
 
 function modelJsonMindmap() {
   const css = `
-.card { font-family: sans-serif; text-align: center; background: #fff; color: #222; padding: 16px; }
+.card { font-family: sans-serif; text-align: center; background: var(--background, #fff); color: var(--foreground, #222); padding: 16px; }
 .mindmap-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }
 .mindmap-img img { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; }
-.related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #fffbe6; padding:8px; border-radius:8px; text-align:left; border:1px solid #f0d76a; }
+.related { margin-top:12px; font-size:0.85rem; opacity:0.8; background: #fffbe6; color: #222; padding:8px; border-radius:8px; text-align:left; border:1px solid #f0d76a; }
+.card.nightMode, .card.night_mode, .nightMode .card, .night_mode .card { background: #121212; color: #e0e0e0; }
+.nightMode .related, .night_mode .related, .card.nightMode .related, .card.night_mode .related { background: #3a3000; color: #e8d88a; border-color: #665500; }
+.card.nightMode .mindmap-img img, .card.night_mode .mindmap-img img, .nightMode .mindmap-img img, .night_mode .mindmap-img img { border-color: #444; filter: invert(0.88) hue-rotate(180deg) brightness(1.05) contrast(0.95); }
 `.trim();
   return {
     css,
