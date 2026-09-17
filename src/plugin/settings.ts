@@ -330,19 +330,23 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       }));
 
     // ---------- Anki Export — part order + surah-within-part order ----------
-    containerEl.createEl("h2", { text: "Anki Export" });
-    const ankiExportDesc = containerEl.createEl("p", { cls: "setting-item-description" });
+    // Wrap in a dedicated section so async-added rows (including Reset) stay under this heading and not under Offline Audio
+    const ankiSection = containerEl.createDiv({ cls: "quran-life-settings-anki" });
+    ankiSection.createEl("h2", { text: "Anki Export" });
+    const ankiExportDesc = ankiSection.createEl("p", { cls: "setting-item-description" });
     ankiExportDesc.setText("New-card `due` order: Meta mindmap first, then parts, then per part: part mindmap (always first) → surah mindmaps → each surah's verse groups chronological (startVerse asc). Only part order and surah-within-part order are configurable. Applies to next Export → .apkg.");
     ankiExportDesc.style.marginBottom = "10px";
-    const ankiPrefsInfo = containerEl.createEl("p", { cls: "setting-item-description" });
+    const ankiPrefsInfo = ankiSection.createEl("p", { cls: "setting-item-description" });
     ankiPrefsInfo.style.fontSize = "0.78em";
     ankiPrefsInfo.style.color = "var(--text-faint)";
     ankiPrefsInfo.setText("Loading Anki preferences…");
-    const ankiRowsWrap = containerEl.createDiv();
+    const ankiRowsWrap = ankiSection.createDiv();
     ankiRowsWrap.style.display = "grid";
     ankiRowsWrap.style.gridTemplateColumns = "repeat(auto-fill, minmax(280px, 1fr))";
     ankiRowsWrap.style.gap = "8px";
     ankiRowsWrap.style.marginBottom = "10px";
+    // Placeholder for Reset row inside the same section — created synchronously so it stays before Offline Audio even while prefs load async
+    const ankiResetWrap = ankiSection.createDiv();
     void (async () => {
       try {
         const { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } = await import('@/lib/anki/ankiExportPrefs');
@@ -393,7 +397,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         (surahRow as any).settingEl.style.borderRadius = "8px";
         (surahRow as any).settingEl.style.padding = "8px 10px";
         (surahRow as any).settingEl.style.background = "var(--background-secondary)";
-        const resetRow = new Setting(containerEl)
+        ankiResetWrap.empty();
+        const resetRow = new Setting(ankiResetWrap)
           .setName("Reset Anki export order")
           .setDesc("Default: parts desc (7→1), surahs asc (first→last)")
           .addButton(btn => btn.setButtonText("Reset to default").onClick(async () => {
