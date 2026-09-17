@@ -5,7 +5,7 @@ import { buildAnkiCards, buildMindmapCards } from '@/lib/anki/cardBuilder';
 import { generateApkgBlob } from '@/lib/anki/apkgExport';
 import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
-import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps } from '@/plugin/hooks/useVaultAnkiStore';
+import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps, useVaultAnkiExportPrefs } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
 import { Save, Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -38,6 +38,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const { mindmaps: allMindmaps } = useVaultMindmaps(vaultStore);
   const { anchors: vaultAnchors, saveAnchors, isLoading: isSplitsLoading } = useVaultSplits(vaultStore, selectedSurah);
   const { content: docContent, save: saveDoc } = useVaultDoc(vaultStore, selectedMindmapKey);
+  const { prefs: ankiExportPrefs } = useVaultAnkiExportPrefs(vaultStore);
   const [localAnchors, setLocalAnchors] = useState<AnkiAnchor[]>([]);
   const [editingDocText, setEditingDocText] = useState('');
   // Latest local splits for auto-flush on mindmap switch/unmount. Assigned during
@@ -291,6 +292,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       const cards = buildAnkiCards(filteredAnchors, versesForExport, { mindmapDocsMap: docsMap });
       pushLog(`Built ${cards.length} verse cards + ${mindmapCards.length} mindmap cards`);
       updateProgress({ current: 60, status: `Rendering mindmaps & packaging…`, verseCards: cards.length, mindmapCards: mindmapCards.length });
+      // per-part asc/desc from Obsidian settings → vault file meta/anki-export.json
+      let exportPrefs: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs | null = null;
+      try { exportPrefs = ankiExportPrefs ?? await vaultStore.loadAnkiExportPrefs(); } catch {}
+      const prefsSummary = exportPrefs ? Object.entries(exportPrefs.partSurahOrder).map(([k,v])=>`P${k}:${v}`).join(' ') : 'default asc';
+      pushLog(`Anki sort prefs: ${prefsSummary}`);
       // generateApkgBlob reports 0-100 for its internal phases (mindmap media 5-80), map to 60-96
       // mmDone/mmTotal are live mindmap render counts — shown dynamically in the stats + status
       const blob = await generateApkgBlob(cards, deckName, (p, mmDone, mmTotal)=> {
@@ -306,7 +312,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             mindmapTotal: mmTotal ?? prev.mindmapTotal,
           };
         });
-      }, mindmapCards, allMindmaps);
+      }, mindmapCards, allMindmaps, exportPrefs);
       updateProgress({ current: 98, status: 'Finalizing download…' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href=url; a.download='quran-life-deck.apkg'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
@@ -395,6 +401,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             <Download size={16} /> {isExporting?'Exporting…':'Export to Anki'}
           </button>
         </div>
+        {ankiExportPrefs && (
+          <div style={{ fontSize:'0.72em', color:'var(--text-faint)', lineHeight:1.4, padding:'6px 8px', border:'1px dashed var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
+            <span style={{ fontWeight:700, color:'var(--text-muted)' }}>Anki sort:</span> {Object.entries(ankiExportPrefs.partSurahOrder).sort((a,b)=>Number(b[0])-Number(a[0])).map(([k,v])=>`P${k}:${v}`).join(' • ')} <span style={{ opacity:0.7 }}>— change in Settings → Anki Export</span>
+          </div>
+        )}
 
       </div>
 

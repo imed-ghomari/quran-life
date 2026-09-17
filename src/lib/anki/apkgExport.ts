@@ -491,9 +491,11 @@ export type OrderedExportEntry =
 
 // Build the global new-card order. `due` for each card = index+1 in this list.
 // Surah mindmap comes first, then its verse groups, then the next surah mindmap...
+// prefs.partSurahOrder[partId] = 'asc' (default, first surah → last) vs 'desc' (last → first) — only surah order within the part; verse groups stay forward (startVerse asc).
 export function buildOrderedExportEntries(
   cards: AnkiCard[],
-  mindmapCards: AnkiMindmapCard[] = []
+  mindmapCards: AnkiMindmapCard[] = [],
+  prefs?: import('./ankiExportPrefs').AnkiExportPrefs | null
 ): OrderedExportEntry[] {
   const verseBySurah = new Map<number, AnkiCard[]>();
   for (const c of cards) {
@@ -554,13 +556,20 @@ export function buildOrderedExportEntries(
   // Last part first → descending (7,...,1). Only parts 1-7 exist.
   const partIdsDesc = [...partIdSet].sort((a, b) => b - a);
 
+  const getDir = (pid: number): 'asc' | 'desc' => {
+    const v = (prefs as any)?.partSurahOrder?.[String(pid)] ?? (prefs as any)?.partSurahOrder?.[pid];
+    return v === 'desc' ? 'desc' : 'asc';
+  };
+
   const ordered: OrderedExportEntry[] = [];
   for (const m of metaMms) ordered.push({ type: 'mindmap', mCard: m });
   for (const pid of partIdsDesc) {
     for (const m of partMmByPart.get(pid) || []) ordered.push({ type: 'mindmap', mCard: m });
-    const surahsInPart = [...allSurahIds].filter((sid) => getPartIdForSurah(sid) === pid).sort((a, b) => a - b);
+    const dir = getDir(pid);
+    const surahsInPart = [...allSurahIds].filter((sid) => getPartIdForSurah(sid) === pid).sort((a, b) => (dir === 'asc' ? a - b : b - a));
     for (const sid of surahsInPart) {
       for (const m of surahMmBySurah.get(sid) || []) ordered.push({ type: 'mindmap', mCard: m });
+      // Verse groups stay in startVerse ascending order regardless of part direction — reading order within a surah is always forward
       for (const c of verseBySurah.get(sid) || []) ordered.push({ type: 'verse', card: c });
     }
   }
@@ -575,7 +584,14 @@ export function buildOrderedExportEntries(
   return ordered;
 }
 
-export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onProgress?: (p: number, mindmapsDone?: number, mindmapsTotal?: number) => void, mindmapCards: AnkiMindmapCard[] = [], fullMindmapsOverride?: Record<string, any>): Promise<Blob> {
+export async function generateApkgBlob(
+  cards: AnkiCard[],
+  deckName: string,
+  onProgress?: (p: number, mindmapsDone?: number, mindmapsTotal?: number) => void,
+  mindmapCards: AnkiMindmapCard[] = [],
+  fullMindmapsOverride?: Record<string, any>,
+  exportPrefs?: import('./ankiExportPrefs').AnkiExportPrefs | null
+): Promise<Blob> {
   const JSZip = await getJSZip();
   if (!JSZip) {
     throw new Error('JSZip not available for apkg');
@@ -799,7 +815,7 @@ export async function generateApkgBlob(cards: AnkiCard[], deckName: string, onPr
     // For new cards (type=0, queue=0) Anki uses `due` as the position, so due
     // must be sequential 1..N in the desired order (not the same value for all
     // cards). nids are also allocated in due order so "order added" agrees.
-    const orderedEntries = buildOrderedExportEntries(cards, mindmapCards);
+    const orderedEntries = buildOrderedExportEntries(cards, mindmapCards, exportPrefs ?? null);
     let nidSeq = now - orderedEntries.length * 1000 - 5000;
     for (let orderIdx = 0; orderIdx < orderedEntries.length; orderIdx++) {
       const entry = orderedEntries[orderIdx];

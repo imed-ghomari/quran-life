@@ -329,6 +329,84 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         new Notice("All reset");
       }));
 
+    // ---------- Anki Export — per-part surah order (asc = first→last, desc = last→first) ----------
+    containerEl.createEl("h2", { text: "Anki Export" });
+    const ankiExportDesc = containerEl.createEl("p", { cls: "setting-item-description" });
+    ankiExportDesc.setText("New-card `due` order: Meta mindmap first, parts 7→1. Within each part: part mindmap, then surahs + verse groups. Choose asc (first surah → last) or desc (last → first) per part. Applies to next Export → .apkg.");
+    ankiExportDesc.style.marginBottom = "10px";
+    const ankiPrefsInfo = containerEl.createEl("p", { cls: "setting-item-description" });
+    ankiPrefsInfo.style.fontSize = "0.78em";
+    ankiPrefsInfo.style.color = "var(--text-faint)";
+    ankiPrefsInfo.setText("Loading Anki preferences…");
+    const ankiPartRows = containerEl.createDiv();
+    ankiPartRows.style.display = "grid";
+    ankiPartRows.style.gridTemplateColumns = "repeat(auto-fill, minmax(220px, 1fr))";
+    ankiPartRows.style.gap = "8px";
+    ankiPartRows.style.marginBottom = "10px";
+    // Load prefs (generation-guarded)
+    void (async () => {
+      try {
+        const { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } = await import('@/lib/anki/ankiExportPrefs');
+        let prefs: any = null;
+        try { prefs = await this.plugin.vaultStore.loadAnkiExportPrefs(); } catch { prefs = null; }
+        if (myGen !== this.displayGeneration) return;
+        const norm = normalizeAnkiExportPrefs(prefs ?? DEFAULT_ANKI_EXPORT_PREFS);
+        const partLabels: Record<number, string> = {
+          1: "Part 1 — Surah 1-5",
+          2: "Part 2 — Surah 6-9",
+          3: "Part 3 — Surah 10-24",
+          4: "Part 4 — Surah 25-33",
+          5: "Part 5 — Surah 34-49",
+          6: "Part 6 — Surah 50-66",
+          7: "Part 7 — Surah 67-114",
+        };
+        const updateInfo = () => {
+          const entries = Object.entries(norm.partSurahOrder).map(([k, v]) => `P${k}:${v}`).join("  •  ");
+          ankiPrefsInfo.setText(`Per-part surah order: ${entries} • file: ${this.plugin.vaultStore.root}/meta/anki-export.json`);
+        };
+        updateInfo();
+        const saveAnkiPrefs = async () => {
+          await this.plugin.vaultStore.saveAnkiExportPrefs(norm as any);
+          updateInfo();
+        };
+        ankiPartRows.empty();
+        (Object.keys(partLabels).map(Number).sort((a,b)=>b-a)).forEach((pid) => {
+          const row = new Setting(ankiPartRows)
+            .setName(partLabels[pid])
+            .setDesc(pid === 7 ? "67→114 vs 114→67 + verse groups" : `Surah order in part ${pid}`)
+            .addDropdown(drop => {
+              drop.addOption("asc", "asc — first → last");
+              drop.addOption("desc", "desc — last → first");
+              drop.setValue((norm.partSurahOrder as any)[pid] === 'desc' ? 'desc' : 'asc');
+              drop.onChange(async (v) => {
+                (norm.partSurahOrder as any)[pid] = v === 'desc' ? 'desc' : 'asc';
+                await saveAnkiPrefs();
+                new Notice(`Anki export: Part ${pid} → ${v}`);
+              });
+            });
+          // Compact card styling inside grid
+          (row as any).settingEl.style.border = "1px solid var(--background-modifier-border)";
+          (row as any).settingEl.style.borderRadius = "8px";
+          (row as any).settingEl.style.padding = "8px 10px";
+          (row as any).settingEl.style.background = "var(--background-secondary)";
+        });
+        const resetRow = new Setting(containerEl)
+          .setName("Reset Anki per-part order")
+          .setDesc("All parts → asc (default)")
+          .addButton(btn => btn.setButtonText("Reset to asc").onClick(async () => {
+            for (const k of Object.keys(norm.partSurahOrder)) (norm.partSurahOrder as any)[k] = 'asc';
+            await saveAnkiPrefs();
+            // re-render displays
+            void this.display().catch(()=>{});
+            new Notice("Anki export order reset to asc for all parts");
+          }));
+        (resetRow as any).settingEl.style.marginBottom = "8px";
+      } catch (e:any) {
+        if (myGen !== this.displayGeneration) return;
+        ankiPrefsInfo.setText(`Could not load Anki prefs: ${String(e?.message||e).slice(0,120)}`);
+      }
+    })();
+
     // ---------- Offline Audio — download selected part audio for offline use ----------
     containerEl.createEl("h2", { text: "Offline Audio" });
     const offlineDesc = containerEl.createEl("p", { cls: "setting-item-description" });

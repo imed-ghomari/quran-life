@@ -51,6 +51,8 @@ export const VAULT_PATHS = {
   nodesDir: (root: string) => normalizePath(`${root}/nodes`),
   // Theme — still in plugin data.json (loadData/saveData) or vault? Vault for Resilio.
   themeFile: (root: string) => normalizePath(`${root}/meta/theme.json`),
+  // Anki export prefs (per-part asc/desc for new-card due) — vault-synced
+  ankiExport: (root: string) => normalizePath(`${root}/meta/anki-export.json`),
 } as const;
 
 // ---------- low-level helpers ----------
@@ -377,6 +379,18 @@ export class VaultStore {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) await this.app.vault.modify(file, content);
     else await this.app.vault.create(path, content);
+  }
+
+  // Anki export prefs — per-part asc/desc
+  async loadAnkiExportPrefs(): Promise<import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs> {
+    const { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } = await import('@/lib/anki/ankiExportPrefs');
+    const raw = await readJson(this.app, VAULT_PATHS.ankiExport(this.dataRoot), null as any);
+    if (!raw) return { partSurahOrder: { ...DEFAULT_ANKI_EXPORT_PREFS.partSurahOrder } };
+    return normalizeAnkiExportPrefs(raw);
+  }
+  async saveAnkiExportPrefs(prefs: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs): Promise<void> {
+    const { normalizeAnkiExportPrefs } = await import('@/lib/anki/ankiExportPrefs');
+    await writeJsonAtomic(this.app, VAULT_PATHS.ankiExport(this.dataRoot), normalizeAnkiExportPrefs(prefs));
   }
 
   // Progress — per part
