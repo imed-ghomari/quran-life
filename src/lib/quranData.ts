@@ -182,6 +182,43 @@ export function parseQuranJson(data: Record<string, any>): Verse[] {
 }
 
 /**
+ * Standalone mushaf ornament tokens (rub el hizb ۞, sajda ۩, ayah end ۝).
+ * The QPC word-by-word source embeds these inside word tokens with a space
+ * (e.g. "۞ وَإِذَا", "يَسۡتَكۡبِرُونَ ۩"), so a naive text.split(' ') yields
+ * extra tokens that have no corresponding recitation segment. They must be
+ * excluded from word-timing indexing (but still rendered).
+ */
+export const VERSE_ORNAMENT_TOKENS: ReadonlySet<string> = new Set(['۞', '۩', '۝']);
+
+export function isVerseOrnamentToken(token: string): boolean {
+    return VERSE_ORNAMENT_TOKENS.has(token);
+}
+
+/** Display tokens: every whitespace-separated token, ornaments included. */
+export function splitVerseDisplayWords(text: string): string[] {
+    return (text ?? '').split(' ').filter(Boolean);
+}
+
+/** Highlight tokens: display tokens minus standalone ornaments (1:1 with segments). */
+export function splitVerseHighlightWords(text: string): string[] {
+    return splitVerseDisplayWords(text).filter((w) => !isVerseOrnamentToken(w));
+}
+
+/**
+ * Map each display-word index to its highlight-word index (-1 for ornaments).
+ * Used to render ornaments while highlighting only real words.
+ */
+export function mapDisplayToHighlightIndices(displayWords: string[]): number[] {
+    const out: number[] = new Array(displayWords.length);
+    let hi = 0;
+    for (let i = 0; i < displayWords.length; i++) {
+        if (isVerseOrnamentToken(displayWords[i])) out[i] = -1;
+        else out[i] = hi++;
+    }
+    return out;
+}
+
+/**
  * Get surah by ID
  */
 export function getSurah(surahId: number): Surah | undefined {

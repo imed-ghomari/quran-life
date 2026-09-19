@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { getQuranVerses, getSurah, getSurahsByPart, SURAHS } from '@/lib/quranData';
+import { getQuranVerses, getSurah, getSurahsByPart, SURAHS, splitVerseDisplayWords, splitVerseHighlightWords, mapDisplayToHighlightIndices } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import { Verse, ACTIVE_PART_OPTIONS, QuranPart, ALL_QURAN_PART } from '@/lib/types';
 import { CheckCircle, BookOpen, Check, RotateCcw, Headphones, Book } from 'lucide-react';
@@ -190,7 +190,11 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   }, [portionData]);
 
   const currentDailyVerse = todaysPortion[currentVerseIndex] ?? null;
-  const dailyPreviewWords = useMemo(() => (currentDailyVerse?.text ?? '').split(' ').filter(Boolean), [currentDailyVerse?.text]);
+  // Display words keep mushaf ornaments (۞/۩) for rendering; highlight words
+  // exclude them so segment indices line up 1:1 with recitation timings.
+  const dailyDisplayWords = useMemo(() => splitVerseDisplayWords(currentDailyVerse?.text ?? ''), [currentDailyVerse?.text]);
+  const dailyHighlightWordCount = useMemo(() => splitVerseHighlightWords(currentDailyVerse?.text ?? '').length, [currentDailyVerse?.text]);
+  const dailyDisplayToHighlight = useMemo(() => mapDisplayToHighlightIndices(dailyDisplayWords), [dailyDisplayWords]);
   const handleAudioWordIndexChange = useCallback((index: number) => {
     startTransition(() => setHighlightedWordIndex(index));
   }, []);
@@ -264,6 +268,12 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       return surahs.length > 0;
     });
   }, [settings.activePart, settings.skippedSurahs]);
+
+  // Reset stale word refs/highlight when the verse changes (refs are indexed
+  // by highlight-word position, so a longer previous verse must not linger).
+  useEffect(() => {
+    wordElementRefs.current = [];
+  }, [currentDailyVerse?.surahId, currentDailyVerse?.ayahId]);
 
   // Smooth scroll for audio word highlight
   useEffect(() => {
@@ -458,7 +468,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                     <AudioPlayerLocal
                       verses={todaysPortion}
                       currentVerseIndex={currentVerseIndex}
-                      currentVerseWordCount={dailyPreviewWords.length}
+                      currentVerseWordCount={dailyHighlightWordCount}
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
                       obsidianApp={(vaultStore as any)?.app}
@@ -493,25 +503,29 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                         </div>
                       ) : null}
                       <div style={{ fontFamily:'var(--font-text, serif)', fontSize:'1.20em', lineHeight:2, direction:'rtl', textAlign:'right', color:'var(--text-normal)' }}>
-                        {dailyPreviewWords.map((word, i) => (
+                        {dailyDisplayWords.map((word, i) => {
+                          const hi = dailyDisplayToHighlight[i] ?? -1;
+                          const isActive = hi !== -1 && hi === highlightedWordIndex;
+                          return (
                           <span
                             key={i}
-                            ref={el => { wordElementRefs.current[i] = el; }}
+                            ref={el => { if (hi !== -1) wordElementRefs.current[hi] = el; }}
                             style={{
                               display:'inline-block',
                               padding:'1px 3px',
                               margin:'1px',
                               borderRadius:6,
-                              background: i === highlightedWordIndex ? 'color-mix(in srgb, var(--interactive-accent) 18%, transparent)' : 'transparent',
-                              color: i === highlightedWordIndex ? 'var(--text-normal)' : 'inherit',
-                              boxShadow: i === highlightedWordIndex ? '0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent)' : 'none',
-                              border: i === highlightedWordIndex ? '1px solid color-mix(in srgb, var(--interactive-accent) 22%, var(--background-primary))' : '1px solid transparent',
+                              background: isActive ? 'color-mix(in srgb, var(--interactive-accent) 18%, transparent)' : 'transparent',
+                              color: isActive ? 'var(--text-normal)' : 'inherit',
+                              boxShadow: isActive ? '0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent)' : 'none',
+                              border: isActive ? '1px solid color-mix(in srgb, var(--interactive-accent) 22%, var(--background-primary))' : '1px solid transparent',
                               transition:'background 0.15s, color 0.15s',
                             }}
                           >
                             {word}
                           </span>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   ) : (

@@ -218,6 +218,28 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
       }
     }
   }
+  // The Basmala interstitial (Surah 1:1 slice) is bundled with every download.
+  // Count it so "Complete" is only reported when transitions can play offline.
+  try {
+    if (reciter.type === "surah-based") {
+      const p = getOfflineSurahAudioPath(reciter.id, 1);
+      totalFiles += 1;
+      if (await adapterExists(app, p)) {
+        existingFiles++;
+        const sz = await adapterStatSize(app, p);
+        if (sz) totalBytes += sz;
+      }
+    } else {
+      const p1 = getOfflineAyahAudioPath(reciter.id, 1, 1);
+      const p2 = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1);
+      totalFiles += 1;
+      if ((await adapterExists(app, p1)) || (await adapterExists(app, p2))) {
+        existingFiles++;
+        const sz = (await adapterStatSize(app, p1)) ?? (await adapterStatSize(app, p2));
+        if (sz) totalBytes += sz;
+      }
+    }
+  } catch { /* status stays best-effort */ }
   return {
     reciterId: reciter.id,
     partId,
@@ -374,6 +396,35 @@ export async function downloadPartAudio(
       }
     }
   }
+
+  // The player inserts a Basmala interstitial (Surah 1:1 slice) on every surah
+  // transition. Without it downloaded, Basmala is silently skipped whenever the
+  // portion plays from offline files. Always bundle it (1 extra file).
+  try {
+    if (reciter.type === "surah-based") {
+      const basmalaPath = getOfflineSurahAudioPath(reciter.id, 1);
+      const alreadyHave = skipExisting && (await adapterExists(app, basmalaPath));
+      const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
+      if (!alreadyHave && !alreadyQueued) {
+        const basmalaUrl = await getSurahAudioUrlForReciter(reciter, 1, app);
+        if (basmalaUrl) tasks.push({ type: "surah", surahId: 1, remoteUrl: basmalaUrl, offlinePath: basmalaPath, label: "Basmala (Surah 1)" });
+      }
+    } else {
+      const basmalaPath = getOfflineAyahAudioPath(reciter.id, 1, 1);
+      const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1);
+      const alreadyHave = skipExisting && ((await adapterExists(app, basmalaPath)) || (await adapterExists(app, legacyPath)));
+      const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
+      if (!alreadyHave && !alreadyQueued) {
+        // Reload the verses map (scoped to the branch above) to resolve 1:1.
+        let basmalaUrl: string | null = null;
+        try {
+          const basmalaData: any = await loadRecitationData(reciter, 1, app);
+          basmalaUrl = basmalaData?.verses?.["1:1"]?.audio_url ?? null;
+        } catch {}
+        if (basmalaUrl) tasks.push({ type: "ayah", surahId: 1, ayahId: 1, remoteUrl: basmalaUrl, offlinePath: basmalaPath, label: "Basmala (1:1)" });
+      }
+    }
+  } catch { /* basmala bundling is best-effort; never fail the download */ }
 
   const totalFiles = tasks.length;
   // If skipExisting and tasks empty, nothing to do
@@ -582,6 +633,23 @@ export function revokeOfflineBlobCacheForPath(path: string): void {
     try { URL.revokeObjectURL(url); } catch {}
     offlineBlobCache.delete(normalized);
   }
+}
+
+/**
+ * Synchronous cache peek (no vault I/O) for the player's hot path.
+ * After the first verse of a surah resolves its Blob URL, following verses in
+ * the same surah/file reuse it without another adapter round-trip — this
+ * removes the per-verse async gap during seamless surah-based playback.
+ */
+export function peekOfflineAudioUrlIfCached(reciter: Reciter, surahId: number, ayahId: number): string | null {
+  if (reciter.type === "surah-based") {
+    return offlineBlobCache.get(normalizePath(getOfflineSurahAudioPath(reciter.id, surahId))) ?? null;
+  }
+  for (const p of [getOfflineAyahAudioPath(reciter.id, surahId, ayahId), getOfflineAyahAudioPathLegacy(reciter.id, surahId, ayahId)]) {
+    const hit = offlineBlobCache.get(normalizePath(p));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: number, appOverride?: any): Promise<string | null> {

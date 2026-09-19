@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, startTransition } from 'react';
 import dynamic from 'next/dynamic';
-import { getQuranVerses, getSurah, getSurahsByPart, SURAHS } from '@/lib/quranData';
+import { getQuranVerses, getSurah, getSurahsByPart, SURAHS, splitVerseDisplayWords, splitVerseHighlightWords, mapDisplayToHighlightIndices } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import { Verse, ACTIVE_PART_OPTIONS, QuranPart, ALL_QURAN_PART } from '@/lib/types';
 import { CheckCircle, BookOpen, Settings, ChevronDown, X, Check, RotateCcw, Sliders, Headphones, Book } from 'lucide-react';
@@ -202,7 +202,11 @@ export default function DailyPortion() {
   }, [portionData]);
 
   const currentDailyVerse = todaysPortion[currentVerseIndex] ?? null;
-  const dailyPreviewWords = useMemo(() => (currentDailyVerse?.text ?? '').split(' ').filter(Boolean), [currentDailyVerse?.text]);
+  // Display words keep mushaf ornaments (۞/۩); highlight words exclude them
+  // so recitation segment indices line up 1:1 with the reciter's timing.
+  const dailyDisplayWords = useMemo(() => splitVerseDisplayWords(currentDailyVerse?.text ?? ''), [currentDailyVerse?.text]);
+  const dailyHighlightWordCount = useMemo(() => splitVerseHighlightWords(currentDailyVerse?.text ?? '').length, [currentDailyVerse?.text]);
+  const dailyDisplayToHighlight = useMemo(() => mapDisplayToHighlightIndices(dailyDisplayWords), [dailyDisplayWords]);
   const handleAudioWordIndexChange = useCallback((index: number) => {
     startTransition(() => setHighlightedWordIndex(index));
   }, []);
@@ -290,6 +294,12 @@ export default function DailyPortion() {
       return surahs.length > 0;
     });
   }, [settings.activePart, settings.skippedSurahs]);
+
+  // Reset stale word refs when the verse changes (refs are indexed by
+  // highlight-word position, so a longer previous verse must not linger).
+  useEffect(() => {
+    wordElementRefs.current = [];
+  }, [currentDailyVerse?.surahId, currentDailyVerse?.ayahId]);
 
   // Smooth scroll for audio word highlight
   useEffect(() => {
@@ -555,7 +565,7 @@ export default function DailyPortion() {
                     <AudioPlayerLocal
                       verses={todaysPortion}
                       currentVerseIndex={currentVerseIndex}
-                      currentVerseWordCount={dailyPreviewWords.length}
+                      currentVerseWordCount={dailyHighlightWordCount}
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
                     />
@@ -583,17 +593,21 @@ export default function DailyPortion() {
                           </div>
                         ) : null}
                         <div className="arabic-text" style={{ fontSize: '1.20rem', lineHeight: 1.95 }}>
-                          {dailyPreviewWords.map((word, i) => (
+                          {dailyDisplayWords.map((word, i) => {
+                            const hi = dailyDisplayToHighlight[i] ?? -1;
+                            const isActive = hi !== -1 && hi === highlightedWordIndex;
+                            return (
                             <span
                               key={i}
                               ref={el => {
-                                wordElementRefs.current[i] = el;
+                                if (hi !== -1) wordElementRefs.current[hi] = el;
                               }}
-                              className={`audio-word ${i === highlightedWordIndex ? 'audio-word--active' : ''}`}
+                              className={`audio-word ${isActive ? 'audio-word--active' : ''}`}
                             >
                               {word}{' '}
                             </span>
-                          ))}
+                            );
+                          })}
                         </div>
                         <div className="mt-3 flex items-center justify-between text-xs text-[var(--foreground-secondary)]">
                           <span>
