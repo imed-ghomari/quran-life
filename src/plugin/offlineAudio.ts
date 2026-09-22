@@ -1,6 +1,6 @@
 import { App, TFile, TFolder, normalizePath, Notice } from "obsidian";
 import { SURAHS, getSurahsByPart } from "@/lib/quranData";
-import { QuranPart } from "@/lib/types";
+import { ACTIVE_PART_OPTIONS, QuranPart } from "@/lib/types";
 import { Reciter, loadRecitationData, getAudioInfoForVerse, buildAyahAudioUrl } from "@/lib/audio";
 import { getObsidianApp } from "@/lib/obsidianApp";
 import { ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
@@ -165,6 +165,199 @@ async function listFilesRecursive(app: App, dir: string, out: string[] = []): Pr
 }
 
 // ---------- offline status ----------
+
+// ---------- library scan (one directory pass for the whole reciter) ----------
+
+/**
+ * The settings tab shows every Quran part at once, so probing each expected file
+ * with `adapter.exists` (thousands of native bridge round-trips on mobile) is not
+ * viable. A single recursive listing gives the same answer: filenames encode the
+ * surah/ayah, so counts can be derived in JS.
+ */
+export interface OfflinePartScan {
+  partId: QuranPart;
+  totalFiles: number;
+  existingFiles: number;
+  skippedFiles: number;
+  isComplete: boolean;
+  isPartial: boolean;
+}
+
+export interface OfflineReciterScan {
+  reciterId: string;
+  parts: OfflinePartScan[];
+  fileCount: number;
+  /** Downloaded files belonging to each part (used for lazy size accounting). */
+  filesByPart: Record<number, string[]>;
+  /** Every downloaded audio file for this reciter (unique). */
+  allFiles: string[];
+}
+
+const SUFFIX_RE = /\.mp3$/i;
+const SURAH_FILE_RE = /surah-(\d{1,3})\.mp3$/i;
+const AYAH_FILE_RE = /(\d{1,3})_(\d{1,3})\.mp3$/;
+const LEGACY_AYAH_FILE_RE = /(\d{1,3})\/(\d{1,3})\.mp3$/;
+
+export async function scanOfflineAudioForReciter(
+  reciter: Reciter,
+  appOverride?: any,
+  skippedSurahIds?: number[] | Set<number> | null
+): Promise<OfflineReciterScan> {
+  const skipped = toSkippedSet(skippedSurahIds);
+  const empty: OfflineReciterScan = { reciterId: reciter.id, parts: [], fileCount: 0, filesByPart: {}, allFiles: [] };
+  const app = getApp(appOverride);
+  if (!app) return empty;
+
+  const reciterDir = normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciter.id}`);
+  const listed = (await listFilesRecursive(app, reciterDir)).filter((f) => SUFFIX_RE.test(f));
+
+  // Index what actually exists on disk, keeping the path so sizes can be summed later.
+  const surahFiles = new Map<number, string>();
+  const ayahFiles = new Map<string, string>(); // "s:a" -> path
+  for (const path of listed) {
+    const base = path.split("/").pop() || path;
+    const surahMatch = base.match(SURAH_FILE_RE);
+    if (surahMatch) {
+      const sid = Number(surahMatch[1]);
+      if (Number.isFinite(sid) && !surahFiles.has(sid)) surahFiles.set(sid, path);
+      continue;
+    }
+    const ayahMatch = base.match(AYAH_FILE_RE) || path.match(LEGACY_AYAH_FILE_RE);
+    if (ayahMatch) {
+      const key = `${Number(ayahMatch[1])}:${Number(ayahMatch[2])}`;
+      if (key !== 'NaN:NaN' && !ayahFiles.has(key)) ayahFiles.set(key, path);
+    }
+  }
+
+  const basmalaPathForType = reciter.type === "surah-based"
+    ? getOfflineSurahAudioPath(reciter.id, 1)
+    : getOfflineAyahAudioPath(reciter.id, 1, 1);
+  const basmalaExists = reciter.type === "surah-based"
+    ? surahFiles.has(1)
+    : ayahFiles.has("1:1") || !!listed.find((f) => normalizePath(f) === normalizePath(getOfflineAyahAudioPathLegacy(reciter.id, 1, 1)));
+  const basmalaRealPath = reciter.type === "surah-based"
+    ? surahFiles.get(1)
+    : (ayahFiles.get("1:1") ?? listed.find((f) => normalizePath(f) === normalizePath(getOfflineAyahAudioPathLegacy(reciter.id, 1, 1))));
+  void basmalaPathForType;
+
+  const parts: OfflinePartScan[] = [];
+  const filesByPart: Record<number, string[]> = {};
+
+  for (const option of ACTIVE_PART_OPTIONS) {
+    const partId = option.id as QuranPart;
+    const allInPart = getSurahsByPart(partId);
+    const surahs = allInPart.filter((s) => !skipped.has(s.id));
+    const skippedCount = allInPart.length - surahs.length;
+    let totalFiles = 0;
+    let existingFiles = 0;
+    const partFiles: string[] = [];
+
+    for (const surah of surahs) {
+      if (reciter.type === "surah-based") {
+        totalFiles += 1;
+        const path = surahFiles.get(surah.id);
+        if (path) { existingFiles += 1; partFiles.push(path); }
+      } else {
+        for (let ayah = 1; ayah <= surah.verseCount; ayah++) {
+          totalFiles += 1;
+          const path = ayahFiles.get(`${surah.id}:${ayah}`);
+          if (path) { existingFiles += 1; partFiles.push(path); }
+        }
+      }
+    }
+
+    // The Basmala interstitial file is bundled with every download (mirrors
+    // getOfflinePartStatus so "Complete" also means transitions work offline).
+    totalFiles += 1;
+    if (basmalaExists) {
+      existingFiles += 1;
+      if (basmalaRealPath && !partFiles.includes(basmalaRealPath)) partFiles.push(basmalaRealPath);
+    }
+
+    parts.push({
+      partId,
+      totalFiles,
+      existingFiles,
+      skippedFiles: skippedCount > 0
+        ? (reciter.type === "surah-based"
+            ? skippedCount
+            : allInPart.filter((s) => skipped.has(s.id)).reduce((sum, s) => sum + s.verseCount, 0))
+        : 0,
+      isComplete: totalFiles > 0 && existingFiles >= totalFiles,
+      isPartial: existingFiles > 0 && existingFiles < totalFiles,
+    });
+    filesByPart[partId] = partFiles;
+  }
+
+  return {
+    reciterId: reciter.id,
+    parts,
+    fileCount: listed.length,
+    filesByPart,
+    allFiles: listed,
+  };
+}
+
+// ---------- size accounting (lazy + cached) ----------
+
+const offlineSizeCache = new Map<string, number>();
+
+/** Remember a size we already know (e.g. right after writing a download). */
+export function cacheOfflineFileSize(path: string, bytes: number): void {
+  if (Number.isFinite(bytes) && bytes >= 0) offlineSizeCache.set(normalizePath(path), bytes);
+}
+
+export function invalidateOfflineFileSize(path: string): void {
+  offlineSizeCache.delete(normalizePath(path));
+}
+
+export function invalidateAllOfflineSizes(): void {
+  offlineSizeCache.clear();
+}
+
+/**
+ * Sum file sizes with bounded concurrency; `onProgress` fires as bytes arrive so
+ * the UI can fill numbers in progressively instead of blocking on thousands of
+ * stats (mobile file bridges are slow).
+ */
+export async function sumOfflineSizes(
+  paths: string[],
+  appOverride?: any,
+  onProgress?: (bytes: number) => void
+): Promise<number> {
+  const app = getApp(appOverride);
+  if (!app || paths.length === 0) return 0;
+  let total = 0;
+  let next = 0;
+  let lastReport = 0;
+  let pending = 0;
+
+  const worker = async () => {
+    while (next < paths.length) {
+      const index = next++;
+      const path = normalizePath(paths[index]);
+      let size = offlineSizeCache.get(path);
+      if (size === undefined) {
+        size = (await adapterStatSize(app, path)) ?? 0;
+        offlineSizeCache.set(path, size);
+      }
+      pending += 1;
+      total += size;
+      if (pending >= 16 || total - lastReport > 25 * 1024 * 1024) {
+        pending = 0;
+        lastReport = total;
+        onProgress?.(total);
+      }
+    }
+  };
+
+  const workers: Promise<void>[] = [];
+  const concurrency = Math.min(24, Math.max(4, Math.ceil(paths.length / 64)));
+  for (let i = 0; i < concurrency; i++) workers.push(worker());
+  await Promise.all(workers);
+  onProgress?.(total);
+  return total;
+}
 
 export interface OfflinePartStatus {
   reciterId: string;
@@ -474,6 +667,7 @@ export async function downloadPartAudio(
       const buf = await fetchArrayBufferViaRequestUrl(task.remoteUrl, app);
       if (aborted || opts.signal?.aborted) return;
       await adapterWriteBinary(app, task.offlinePath, buf);
+      cacheOfflineFileSize(task.offlinePath, buf.byteLength);
       completedFiles++;
       downloadedBytes += buf.byteLength;
       report(task.label);
@@ -533,6 +727,7 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
       const sz = await adapterStatSize(app, surahPath);
       await adapterRemoveNoTrash(app, surahPath);
       revokeOfflineBlobCacheForPath(surahPath);
+      invalidateOfflineFileSize(surahPath);
       deletedFiles++;
       if (sz) freedBytes += sz;
       continue; // surah-based reciter will have surah file, no need to check ayah
@@ -546,6 +741,7 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
           const sz = await adapterStatSize(app, p);
           await adapterRemoveNoTrash(app, p);
           revokeOfflineBlobCacheForPath(p);
+          invalidateOfflineFileSize(p);
           deletedFiles++;
           if (sz) freedBytes += sz;
         }
@@ -578,6 +774,7 @@ export async function deleteAllOfflineAudioForReciter(reciterId: string, appOver
     const sz = await adapterStatSize(app, f);
     await adapterRemoveNoTrash(app, f);
     revokeOfflineBlobCacheForPath(f);
+    invalidateOfflineFileSize(f);
     deletedFiles++;
     if (sz) freedBytes += sz;
   }
