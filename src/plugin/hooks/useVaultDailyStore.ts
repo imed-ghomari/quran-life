@@ -24,6 +24,17 @@ export interface ListeningProgressEntryLocal {
   nextStartVerseKey?: string;
   cycles?: number;
   updatedAt?: string;
+  /**
+   * Local calendar day (YYYY-MM-DD) the portion was completed on, or null when
+   * the completion was undone. Optional/absent for progress written by older
+   * builds — those fall back to the `updatedAt` day comparison.
+   */
+  completedOnDay?: string | null;
+  /**
+   * Values from just before the last completion, so an accidental "Mark
+   * Complete" can be undone (even after a reload, since it is persisted).
+   */
+  undo?: { lastVerseIndex?: number; nextStartVerseKey?: string; cycles?: number; updatedAt?: string } | null;
 }
 
 const DEFAULT_SETTINGS: LocalDailySettings = {
@@ -65,9 +76,11 @@ function parseProgress(raw: any): ListeningProgressEntryLocal[] {
     return raw.filter((e: any) => Number.isFinite(Number(e.partId))).map((e: any) => ({
       partId: Number(e.partId),
       lastVerseIndex: Number.isFinite(Number(e.lastVerseIndex)) ? Math.max(0, Math.trunc(Number(e.lastVerseIndex))) : 0,
-      nextStartVerseKey: typeof e.nextStartVerseKey === 'string' ? e.nextStartVerseKey : undefined,
+      nextStartVerseKey: typeof e.nextStartVerseKey === 'string' ? e.nextStartVerseKey      : undefined,
       cycles: Number.isFinite(Number(e.cycles)) ? Number(e.cycles) : 0,
       updatedAt: typeof e.updatedAt === 'string' ? e.updatedAt : undefined,
+      ...(('completedOnDay' in e) ? { completedOnDay: typeof e.completedOnDay === 'string' ? e.completedOnDay : null } : {}),
+      ...(('undo' in e) ? { undo: (e.undo && typeof e.undo === 'object') ? e.undo : null } : {}),
     }));
   }
   // object map: { "1": {...}, "2": {...} }
@@ -82,6 +95,8 @@ function parseProgress(raw: any): ListeningProgressEntryLocal[] {
       nextStartVerseKey: typeof e.nextStartVerseKey === 'string' ? e.nextStartVerseKey : undefined,
       cycles: Number.isFinite(Number(e.cycles)) ? Number(e.cycles) : 0,
       updatedAt: typeof e.updatedAt === 'string' ? e.updatedAt : undefined,
+      ...(('completedOnDay' in e) ? { completedOnDay: typeof e.completedOnDay === 'string' ? e.completedOnDay : null } : {}),
+      ...(('undo' in e) ? { undo: (e.undo && typeof e.undo === 'object') ? e.undo : null } : {}),
     });
   }
   return entries;
@@ -178,6 +193,8 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
             nextStartVerseKey: data.nextStartVerseKey,
             cycles: Number(data.cycles) || 0,
             updatedAt: data.updatedAt,
+            ...(('completedOnDay' in data) ? { completedOnDay: typeof data.completedOnDay === 'string' ? data.completedOnDay : null } : {}),
+            ...(('undo' in data) ? { undo: (data.undo && typeof data.undo === 'object') ? data.undo : null } : {}),
           });
         }
       }
@@ -227,6 +244,14 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
         updatedAt: entry.updatedAt || now,
       };
       const existingIdx = prev.findIndex(p => p.partId === entry.partId);
+      const existing = existingIdx >= 0 ? prev[existingIdx] : undefined;
+      // Only carry the completion fields when the caller (or a previous write)
+      // set them: writing `completedOnDay: undefined` would hide today's
+      // completion for progress files created by older builds.
+      if ('completedOnDay' in entry) nextEntry.completedOnDay = entry.completedOnDay ?? null;
+      else if (existing && 'completedOnDay' in existing) nextEntry.completedOnDay = existing.completedOnDay ?? null;
+      if ('undo' in entry) nextEntry.undo = entry.undo ?? null;
+      else if (existing && 'undo' in existing) nextEntry.undo = existing.undo ?? null;
       let next: ListeningProgressEntryLocal[];
       if (existingIdx >= 0) {
         next = [...prev];

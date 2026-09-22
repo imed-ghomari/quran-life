@@ -4,7 +4,7 @@ import React from 'react';
 import { getQuranVerses, getSurah, getSurahsByPart, SURAHS, splitVerseDisplayWords, splitVerseHighlightWords, mapDisplayToHighlightIndices } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
 import { Verse, ACTIVE_PART_OPTIONS, QuranPart, ALL_QURAN_PART } from '@/lib/types';
-import { CheckCircle, BookOpen, Check, RotateCcw, Headphones, Book } from 'lucide-react';
+import { CheckCircle, BookOpen, Check, RotateCcw, Headphones, Book, Undo2 } from 'lucide-react';
 import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks/useVaultDailyStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
@@ -21,6 +21,12 @@ type DailyPortionSurahGroup = {
   surahId: number;
   verses: Verse[];
 };
+
+/** Local calendar day key (YYYY-MM-DD) — matches how completions are stored. */
+function currentDayKey(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
   const groups: DailyPortionSurahGroup[] = [];
@@ -144,20 +150,24 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     };
   }, [allVerses, averageSecondsPerWordBySurah, settings.dailyTargetMinutes, settings.dailyPortionMode, eligibleSurahs, activeProgress]);
 
-  // Initialize listeningComplete based on progress date
+  // Initialize listeningComplete based on progress date.
+  // Progress written by this build records `completedOnDay` explicitly, so
+  // undoing an accidental completion (which sets it to null) is respected even
+  // though `updatedAt` is still today. Older files keep the day comparison.
+  const hasCompletionFlag = !!activeProgress && Object.prototype.hasOwnProperty.call(activeProgress, 'completedOnDay');
   useEffect(() => {
+    if (hasCompletionFlag) {
+      setListeningComplete((activeProgress as any)?.completedOnDay === currentDayKey());
+      return;
+    }
     if (!portionData.lastUpdateAt) {
       setListeningComplete(false);
       return;
     }
     const lastUpdate = new Date(portionData.lastUpdateAt);
     const now = new Date();
-    if (lastUpdate.toDateString() === now.toDateString()) {
-      setListeningComplete(true);
-    } else {
-      setListeningComplete(false);
-    }
-  }, [portionData.lastUpdateAt]);
+    setListeningComplete(lastUpdate.toDateString() === now.toDateString());
+  }, [hasCompletionFlag, activeProgress?.completedOnDay, portionData.lastUpdateAt]);
 
   // Sync nextStartVerseKey if missing
   useEffect(() => {
@@ -237,12 +247,52 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
         nextStartVerseKey: portionData.nextStartVerseKey,
         cycles,
         updatedAt: afterUpdatedAt,
+        completedOnDay: currentDayKey(),
+        // Snapshot of the state right before completing, so an accidental tap
+        // can be undone (persisted → still undoable after a reload).
+        undo: {
+          lastVerseIndex: portionData.startVerseIndex,
+          nextStartVerseKey: portionData.startVerseKey,
+          cycles: activeProgress?.cycles || 0,
+          updatedAt: activeProgress?.updatedAt,
+        },
       });
       setListeningComplete(true);
       showToast(cycleCompleted ? 'Cycle completed! Restarting from beginning.' : 'Daily portion completed!');
     } catch (e) {
       console.error(e);
       showToast('Failed to save. Try again.');
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  // Undo today's completion: restores the portion that was open before "Mark
+  // Complete" was pressed (and clears the completion flag) so the user does not
+  // lose a day by tapping the button by mistake.
+  // Only today's completion is undoable — an older snapshot would otherwise
+  // rewind progress the user already moved on from.
+  const canUndoComplete = !!activeProgress?.undo && activeProgress?.completedOnDay === currentDayKey();
+  const handleUndoComplete = async () => {
+    if (isCompleting) return;
+    const undo = activeProgress?.undo;
+    if (!undo) { showToast('Nothing to undo'); return; }
+    setIsCompleting(true);
+    try {
+      await saveProgress({
+        partId: settings.activePart,
+        lastVerseIndex: undo.lastVerseIndex ?? 0,
+        nextStartVerseKey: undo.nextStartVerseKey,
+        cycles: undo.cycles ?? 0,
+        updatedAt: undo.updatedAt,
+        completedOnDay: null,
+        undo: null,
+      });
+      setListeningComplete(false);
+      showToast('Completion undone — today\u2019s portion is open again');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to undo. Try again.');
     } finally {
       setIsCompleting(false);
     }
@@ -335,10 +385,11 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
 
   // Inject Obsidian-friendly overrides for AudioPlayerLocal (which uses web CSS vars)
   const obsidianAudioCss = `
-    .quran-life-daily, .quran-life-daily * { box-sizing: border-box; }
     .quran-life-daily .audio-player { background: var(--background-secondary) !important; border: none !important; border-radius: 0 !important; padding: 10px 12px !important; }
-    @media (max-width: 640px) {
-      .quran-life-daily { padding: 10px !important; padding-bottom: calc(10px + 96px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
+    @media (max-width: 700px) {
+      /* Overflow safety is mobile-only; desktop keeps its exact spacing. */
+      .quran-life-daily, .quran-life-daily * { box-sizing: border-box; }
+      .quran-life-daily { width: 100%; padding: 10px !important; padding-bottom: calc(10px + 96px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
     }
     .quran-life-daily .reciter-select-container { margin-bottom: 8px; }
     .quran-life-daily .reciter-select { width: 100%; min-height: 40px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 16px; }
@@ -346,8 +397,9 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     .quran-life-daily .progress-bar { height: 100%; background: transparent; }
     .quran-life-daily .progress-fill { height: 100%; background: var(--interactive-accent); transition: width 0.2s; }
     .quran-life-daily .player-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
-    .quran-life-daily .time-display { font-size: 0.78em; color: var(--text-muted); font-weight: 500; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; min-width: 0; }
+    .quran-life-daily .time-display { font-size: 0.78em; color: var(--text-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
     .quran-life-daily .time-remaining { opacity: 0.7; }
+    .quran-life-daily .undo-complete-btn { border-color: var(--interactive-accent); color: var(--interactive-accent); }
     .quran-life-daily .control-buttons { display: flex; gap: 6px; align-items: center; }
     .quran-life-daily .control-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .quran-life-daily .play-btn { width: 44px; height: 44px; border-radius: 999px; border: none; background: var(--interactive-accent); color: var(--text-on-accent); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 700; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -356,9 +408,13 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     .quran-life-daily .speed-btn { padding: 4px 8px; min-height: 36px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); color: var(--text-normal); font-size: 0.78em; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .quran-life-daily .audio-word { padding: 1px 3px; border-radius: 6px; }
     .quran-life-daily .audio-word--active { background: color-mix(in srgb, var(--interactive-accent) 18%, transparent) !important; color: var(--text-normal) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent) !important; border: 1px solid color-mix(in srgb, var(--interactive-accent) 22%, var(--background-primary)) !important; }
-    /* Mobile: keep the elapsed/total/remaining readout visible on its own row
-       above the transport controls instead of squeezing it out of view. */
+    /* Mobile-only layout tweaks (desktop keeps the original spacing). */
+    @media (max-width: 700px) {
+      .quran-life-daily .time-display { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+    }
     @media (max-width: 480px) {
+      /* Keep the elapsed/total/remaining readout visible on its own row above the
+         transport controls instead of squeezing it out of view. */
       .quran-life-daily .player-controls { justify-content: space-between; }
       .quran-life-daily .time-display { flex: 1 0 100%; order: -1; justify-content: center; text-align: center; }
       .quran-life-daily .speed-btn { min-width: 52px; }
@@ -366,7 +422,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   `;
 
   return (
-    <div className="quran-life-daily" style={{ padding:'16px', paddingBottom:'calc(16px + 96px + env(safe-area-inset-bottom, 0px))', maxWidth:720, margin:'0 auto', width:'100%', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
+    <div className="quran-life-daily" style={{ padding:'16px', paddingBottom:'calc(16px + 96px + env(safe-area-inset-bottom, 0px))', maxWidth:720, margin:'0 auto', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
       <style>{obsidianAudioCss}</style>
       {/* Header — Obsidian native */}
       <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
@@ -431,6 +487,16 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                 <p style={{ fontWeight:700, fontSize:'1.05em', margin:0 }}>Completed</p>
                 <p style={{ fontSize:'0.86em', color:'var(--text-muted)', margin:0, maxWidth:380 }}>Come back tomorrow.</p>
                 <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:8, width:'100%', maxWidth:360, alignItems:'stretch' }}>
+                  {canUndoComplete && (
+                    <button
+                      onClick={handleUndoComplete}
+                      disabled={isCompleting}
+                      title="Undo today's completion and keep this portion open"
+                      style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--interactive-accent)', background:'color-mix(in srgb, var(--interactive-accent) 12%, transparent)', color:'var(--interactive-accent)', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, cursor:isCompleting?'not-allowed':'pointer', fontSize:'0.86em', fontWeight:600, opacity:isCompleting?0.7:1 }}
+                    >
+                      <Undo2 size={14} /> Undo completion (pressed by mistake?)
+                    </button>
+                  )}
                   <button onClick={handleResetCurrent} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer', fontSize:'0.86em' }}>
                     <RotateCcw size={14} /> Restart this part
                   </button>
@@ -483,6 +549,8 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
                       obsidianApp={(vaultStore as any)?.app}
+                      onUndoComplete={canUndoComplete ? handleUndoComplete : undefined}
+                      isUndoingComplete={isCompleting}
                     />
                   </div>
                 </div>

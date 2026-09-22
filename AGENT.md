@@ -23,6 +23,11 @@
 - `AnkiDeckObsidian.tsx`: split Save button removed (splits persist on every change); Deck Statistics + export read `loadAllSplits()` / new `loadAllDocs()` with key normalization (`surah-2` ↔ `surah-002`), so files added directly in the data folder are counted and exported.
 - Mobile layout pass: `box-sizing: border-box` + `width:100%` on view roots (the right-edge overflow), wrap/stack for setting rows, export row, split row, stats grid and tables, mobile CSS injected by `settings.ts` (`quran-life-settings` class).
 
+## Daily Portion Undo + Layout Scoping (2026-09-22, second pass)
+- `DailyPortionObsidian.tsx` + `useVaultDailyStore.ts`: completing a portion now writes `completedOnDay` (local `YYYY-MM-DD`) plus an `undo` snapshot of the pre-completion state. `listeningComplete` prefers `completedOnDay` when present (legacy files keep the `updatedAt` day check). "Undo completion" restores the snapshot and sets `completedOnDay: null`, so an accidental Mark Complete no longer burns the day. Button lives on the completed card and in the player transport row (AudioPlayerLocal `onUndoComplete`).
+- Layout pass is **mobile-only**: desktop inline styles in `AnkiDeckObsidian.tsx` / `DailyPortionObsidian.tsx` are back to their original values; every mobile tweak lives in `@media (max-width: 700px)` (and `min-width: 701px` for desktop-only rules). Do not put layout rules in the base CSS here — it silently changes desktop.
+- Splits editor/preview is pure CSS now: `.ql-splits-row` is a column on phones (preview below) and a row on desktop (preview beside, 70/30). The old inline `flex:'1 1 70%'` + `flexWrap:'wrap'` wrapped on desktop, which is why the preview ended up underneath there.
+
 ## Branch Constraint
 - ALWAYS work on `quran-anki-companion-obsidian-plugin` branch only (from `quran-anki-companion` on 2026-09-08). Do NOT update `main` or `quran-anki-companion` branch. All new plugin work is on `quran-anki-companion-obsidian-plugin`.
 

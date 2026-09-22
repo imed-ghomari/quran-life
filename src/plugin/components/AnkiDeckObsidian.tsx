@@ -430,7 +430,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }
 
   return (
-    <div className="quran-life-anki" style={{ position:'relative', padding:'16px', maxWidth:720, margin:'0 auto', width:'100%', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
+    <div className="quran-life-anki" style={{ position:'relative', padding:'16px', maxWidth:720, margin:'0 auto', width:'100%', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
       {/* Header */}
       <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -453,9 +453,9 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           </span>
           <span style={{ fontSize:'0.78em', color:'var(--text-faint)' }}>Generate .apkg for Anki</span>
         </div>
-        <div className="ql-export-row" style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', width:'100%', minWidth:0 }}>
-          <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:'1 1 160px', minWidth:0, maxWidth:'100%', boxSizing:'border-box', padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
-          <button onClick={handleExport} disabled={isExporting} style={{ flex:'0 0 auto', padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1, whiteSpace:'nowrap' }}>
+        <div className="ql-export-row" style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:1, minWidth:0, padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
+          <button onClick={handleExport} disabled={isExporting} style={{ padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1 }}>
             <Download size={16} /> {isExporting?'Exporting…':'Export to Anki'}
           </button>
         </div>
@@ -504,8 +504,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               <span style={{ marginLeft:'auto', fontSize:'0.74em', color:'var(--text-faint)' }}>{builderState.anchors.length} groups</span>
             </div>
 
-            <div className="ql-splits-row" style={{ display:'flex', gap:12, alignItems:'stretch', flexWrap:'wrap' }}>
-              <div style={{ flex: showPreview ? '1 1 70%' : '1 1 100%', display:'flex', flexDirection:'column', gap:8, minWidth:0 }}>
+            <div className={`ql-splits-row${showPreview ? '' : ' ql-no-preview'}`}>
+              <div className="ql-splits-editor">
                 <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'8px', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
                   {(showAllVerses ? Array.from({length:vc},(_,i)=>i+1) : Array.from({length:Math.min(vc,60)},(_,i)=>i+1)).map(v=>{
                     const isBreak = builderState.breaks.includes(v);
@@ -528,7 +528,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                 </div>
               </div>
               {showPreview && (
-                <div className="ql-splits-preview" style={{ flex:'1 1 30%', minWidth:0, maxHeight:260, overflow:'auto', border:'1px solid var(--background-modifier-border)', borderRadius:8, padding:'8px', background:'var(--background-primary)', display:'flex', flexDirection:'column', gap:6, alignSelf:'stretch', justifyContent:'flex-start' }}>
+                <div className="ql-splits-preview">
                   {builderState.anchors.length === 0 ? (
                     <div style={{ fontSize:'0.8em', color:'var(--text-faint)', textAlign:'center', padding:'8px 0' }}>No groups</div>
                   ) : builderState.anchors.map((a,i)=>(
@@ -716,21 +716,35 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
       {toast && <div style={{ position:'fixed', bottom:'calc(14px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50, maxWidth:'calc(100vw - 32px)' }}>{toast}</div>}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        /* Mobile layout: every child is border-box so padding never pushes the
-           view past the screen width (the export/split rows used to overflow to
-           the right), and the multi-column rows stack instead of squeezing. */
-        .quran-life-anki, .quran-life-anki * { box-sizing: border-box; }
-        .quran-life-anki input, .quran-life-anki select, .quran-life-anki textarea, .quran-life-anki button { max-width: 100%; }
-        .quran-life-anki .ql-table-wrap table { min-width: 420px; }
-        @media (max-width: 640px) {
-          .quran-life-anki { padding: 10px !important; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
+        /* Splits editor + preview layout. Mobile-first: the preview sits BELOW the
+           verse grid on phones (stacked, full width) and NEXT TO it on desktop.
+           Both columns are pure CSS so the two directions cannot get swapped by
+           an inline flex row that wraps. */
+        .quran-life-anki .ql-splits-row { display: flex; gap: 12px; align-items: stretch; flex-direction: column; }
+        .quran-life-anki .ql-splits-editor { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .quran-life-anki .ql-splits-preview {
+          display: flex; flex-direction: column; gap: 6px; justify-content: flex-start;
+          min-width: 0; width: 100%; max-height: 180px; overflow: auto;
+          border: 1px solid var(--background-modifier-border); border-radius: 8px;
+          padding: 8px; background: var(--background-primary);
+        }
+        @media (min-width: 701px) {
+          .quran-life-anki .ql-splits-row { flex-direction: row; }
+          .quran-life-anki .ql-splits-editor { flex: 1 1 70%; }
+          .quran-life-anki .ql-splits-row.ql-no-preview .ql-splits-editor { flex: 1 1 100%; }
+          .quran-life-anki .ql-splits-preview { flex: 0 0 30%; width: auto; max-height: none; overflow: visible; }
+        }
+        @media (max-width: 700px) {
+          /* Overlap safety only on phones/tablets; desktop layout is untouched. */
+          .quran-life-anki, .quran-life-anki * { box-sizing: border-box; }
+          .quran-life-anki { width: 100%; padding: 10px !important; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
+          .quran-life-anki input, .quran-life-anki select, .quran-life-anki textarea, .quran-life-anki button { max-width: 100%; }
           .quran-life-anki .ql-card { padding: 12px !important; border-radius: 10px !important; gap: 10px !important; }
-          .quran-life-anki .ql-export-row > button { flex: 1 1 100% !important; justify-content: center; }
-          .quran-life-anki .ql-splits-row { flex-direction: column !important; }
-          .quran-life-anki .ql-splits-row > div { flex: 1 1 100% !important; width: 100% !important; }
-          .quran-life-anki .ql-splits-preview { max-height: 180px !important; }
+          .quran-life-anki .ql-export-row { flex-wrap: wrap; }
+          .quran-life-anki .ql-export-row > button { flex: 1 1 100% !important; justify-content: center; white-space: nowrap; }
           .quran-life-anki .ql-stats-grid { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)) !important; }
           .quran-life-anki .ql-table-wrap { max-height: 240px !important; }
+          .quran-life-anki .ql-table-wrap table { min-width: 420px; }
           .quran-life-anki button { min-height: 36px; }
         }
       `}</style>

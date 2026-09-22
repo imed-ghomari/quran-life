@@ -5,7 +5,7 @@ import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl, resolveAudioUrlProxied, buildAyahAudioUrl } from '@/lib/audio';
 import { splitVerseHighlightWords } from '@/lib/quranData';
 import { getOfflineAudioUrlIfAvailable, peekOfflineAudioUrlIfCached } from '@/plugin/offlineAudio';
-import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
+import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw, Undo2 } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
 // Use React's default export for the Obsidian bundle. Some Obsidian Mobile
@@ -20,6 +20,13 @@ interface AudioPlayerLocalProps {
     onPlayStateChange?: (isPlaying: boolean) => void;
     onWordIndexChange?: (index: number) => void;
     obsidianApp?: any;
+    /**
+     * Rendered as an "undo" control when today's Daily Portion completion can be
+     * reversed (the user tapped Mark Complete by mistake). Omitted when there is
+     * nothing to undo.
+     */
+    onUndoComplete?: () => void;
+    isUndoingComplete?: boolean;
 }
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
@@ -81,6 +88,8 @@ export default function AudioPlayerLocal({
     onPlayStateChange,
     onWordIndexChange,
     obsidianApp,
+    onUndoComplete,
+    isUndoingComplete,
 }: AudioPlayerLocalProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -1267,6 +1276,17 @@ export default function AudioPlayerLocal({
                 <div className="speed-control">
                     <button className="speed-btn" onClick={changeSpeed}>{speed}x</button>
                     {isCompleted && <button className="control-btn" onClick={restartDailyPortion}><RotateCcw size={16} /></button>}
+                    {onUndoComplete && (
+                        <button
+                            className="control-btn undo-complete-btn"
+                            onClick={onUndoComplete}
+                            disabled={!!isUndoingComplete}
+                            title="Undo today's Daily Portion completion"
+                            aria-label="Undo today's Daily Portion completion"
+                        >
+                            <Undo2 size={16} />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

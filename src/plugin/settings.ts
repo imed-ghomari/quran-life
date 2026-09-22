@@ -42,20 +42,20 @@ function injectSettingsMobileStyles(): void {
     const style = document.createElement('style');
     style.id = SETTINGS_STYLE_ID;
     style.textContent = `
-.quran-life-settings, .quran-life-settings * { box-sizing: border-box; }
-.quran-life-settings .setting-item { flex-wrap: wrap; row-gap: 6px; }
+/* Desktop-neutral safety: never let a long unbroken path (folder names) push the
+   settings pane sideways. Layout rules live in the mobile query below so the
+   desktop settings layout is left exactly as Obsidian renders it. */
 .quran-life-settings .setting-item-info { min-width: 0; overflow-wrap: anywhere; }
-.quran-life-settings .setting-item-control { flex-wrap: wrap; gap: 6px; max-width: 100%; justify-content: flex-start; }
-.quran-life-settings .setting-item-control button { min-height: 32px; }
 .quran-life-settings .quran-life-settings-anki div { min-width: 0; }
 .quran-life-settings .quran-life-daily-surah-list { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)) !important; }
-.quran-life-settings .quran-life-offline-actions .setting-item-control { width: 100%; }
 .quran-life-settings .quran-life-nowrap-safe { overflow-wrap: anywhere; word-break: break-word; }
-@media (max-width: 640px) {
-  .quran-life-settings .setting-item { flex-direction: column; align-items: stretch; }
-  .quran-life-settings .setting-item-control { justify-content: flex-start; }
+@media (max-width: 700px) {
+  .quran-life-settings, .quran-life-settings * { box-sizing: border-box; }
+  .quran-life-settings .setting-item { flex-wrap: wrap; row-gap: 6px; flex-direction: column; align-items: stretch; }
+  .quran-life-settings .setting-item-control { flex-wrap: wrap; gap: 6px; max-width: 100%; justify-content: flex-start; }
   .quran-life-settings .setting-item-control > * { flex: 1 1 auto; }
-  .quran-life-settings .setting-item-control button { width: 100%; }
+  .quran-life-settings .setting-item-control button { width: 100%; min-height: 32px; }
+  .quran-life-settings .quran-life-offline-actions .setting-item-control { width: 100%; }
   .quran-life-settings .quran-life-daily-surah-list { grid-template-columns: 1fr !important; max-height: 340px !important; }
   .quran-life-settings .importer-progress-bar { height: 10px; }
 }
