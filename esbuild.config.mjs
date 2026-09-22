@@ -111,24 +111,7 @@ if (prod) {
   } catch (e) {
     console.warn("Could not copy quran JSON", e);
   }
-  // Copy premade data for Anki Deck fallback (plugin folder single Resilio sync)
-  try {
-    const srcPremade = path.join("public", "premade-anki-data.json");
-    const destPremade = path.join(".", "premade-anki-data.json");
-    if (fs.existsSync(srcPremade) && !fs.existsSync(destPremade)) {
-      fs.copyFileSync(srcPremade, destPremade);
-      console.log("✓ premade-anki-data.json copied to plugin root for Obsidian fallback");
-    } else if (fs.existsSync(srcPremade)) {
-      const srcStat = fs.statSync(srcPremade);
-      const destStat = fs.existsSync(destPremade) ? fs.statSync(destPremade) : null;
-      if (!destStat || srcStat.mtimeMs > destStat.mtimeMs) {
-        fs.copyFileSync(srcPremade, destPremade);
-        console.log("✓ premade-anki-data.json updated at plugin root");
-      }
-    }
-  } catch (e) {
-    console.warn("Could not copy premade JSON", e);
-  }
+  // No premade data: Anki Deck is vault-only (users share mindmaps/splits/docs directly).
   // Copy recitations JSONs to plugin folder for Obsidian offline fallback (audio player needs surah.json/segments.json)
   // The vault's public/recitations already exists, but plugin folder (.obsidian/plugins/quran-life) is what adapter reads via ".obsidian/plugins/quran-life/..." — ensure it's there
   try {

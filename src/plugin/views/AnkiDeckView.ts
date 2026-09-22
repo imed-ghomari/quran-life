@@ -29,6 +29,10 @@ export class AnkiDeckView extends ItemView {
     container.style.position = "relative";
     container.style.display = "flex";
     container.style.flexDirection = "column";
+    // No unused strip between the Obsidian tab bar and our content (esp. mindmap top bar)
+    (container.style as any).padding = "0";
+    (container.style as any).margin = "0";
+    (container.style as any).gap = "0";
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
     mountEl.style.height = "100%";
     mountEl.style.minHeight = "100%";
@@ -36,6 +40,9 @@ export class AnkiDeckView extends ItemView {
     mountEl.style.display = "flex";
     mountEl.style.flexDirection = "column";
     mountEl.style.flex = "1";
+    (mountEl.style as any).padding = "0";
+    (mountEl.style as any).margin = "0";
+    (mountEl.style as any).gap = "0";
     this.root = createRoot(mountEl);
     this.root.render(
       React.createElement(ThemeProvider, null,

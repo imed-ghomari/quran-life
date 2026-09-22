@@ -379,7 +379,7 @@ export class VaultStore {
       const file = this.app.vault.getAbstractFileByPath(path);
       if (file instanceof TFile) await this.app.vault.delete(file);
     }
-    // tombstone for Resilio: track deleted to not re-import premade
+    // tombstone for Resilio: track deleted keys so a delete syncs cleanly
     const deleted = await this.loadDeletedKeys();
     deleted.add(key);
     await this.saveDeletedKeys(deleted);
@@ -642,5 +642,5 @@ export class VaultStore {
 // Split files:
 //  - Only touched file syncs (<200KB), bandwidth efficient
 //  - Editing surah-2 and surah-50 concurrently on two devices → distinct files, no conflict
-//  - Deleted tombstones prevent premade re-import after Resilio merge
+//  - Deleted tombstones keep deletes stable across Resilio merges
 //  - Vault.process() prevents clobbering Resilio's background update

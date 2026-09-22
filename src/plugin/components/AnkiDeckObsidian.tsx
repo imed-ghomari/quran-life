@@ -305,12 +305,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       if (!fullSplits[selectedSurah] && localAnchors.length) fullSplits[selectedSurah] = localAnchors;
       pushLog(`Loaded splits for ${Object.keys(fullSplits).length} surahs`);
       updateProgress({ current: 32, status: 'Ensuring short surahs…' });
-      SURAHS.forEach(s => {
-        if (s.verseCount <= 10 && !fullSplits[s.id]) {
-          fullSplits[s.id] = [{ id: `auto-anchor-${s.id}-1-${s.verseCount}`, surahId: s.id, startVerse: 1, endVerse: s.verseCount, label: `Verses 1-${s.verseCount}` }];
-        }
-      });
       const mindmapKeys = new Set(Object.keys(allMindmaps).filter(k => (allMindmaps as any)[k]?.snapshot));
+      // Vault-only: every surah WITH a mindmap exports at least 1 verse group.
+      // Short surahs (<=10 verses) and mindmap-linked surahs without saved splits
+      // get a single auto group — the same fallback Deck Statistics uses, so both
+      // numbers always match. Splits without a mindmap are never exported.
       SURAHS.forEach(s => {
         const key = `surah-${s.id}`;
         if (mindmapKeys.has(key) && !fullSplits[s.id]) {
@@ -414,7 +413,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   // covered the entire Obsidian window including the tab bar.
   if (showMindmapEditor) {
     return (
-      <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '65vh', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--background-primary)', color: 'var(--text-normal)' }}>
+      <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '65vh', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--background-primary)', color: 'var(--text-normal)', margin: 0, padding: 0, gap: 0, alignSelf: 'stretch' }}>
         <MindmapEditor
           initialSnapshot={editorInitialSnapshot}
           surahId={isPartOrMeta ? undefined : selectedSurah}
@@ -424,7 +423,12 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           title={displayTitle}
           vaultStore={vaultStore}
         />
-        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+          /* Editor fills the leaf edge-to-edge: kill the inherited view padding/gap
+             so there is no unused strip between the Obsidian tab bar and our top bar. */
+          .view-content.quran-life-anki { padding: 0 !important; margin: 0 !important; gap: 0 !important; }
+          .view-content.quran-life-anki > .quran-life-react-root { padding: 0 !important; margin: 0 !important; gap: 0 !important; }
+        `}</style>
       </div>
     );
   }
@@ -557,13 +561,17 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       {(() => {
         const surahMindmapCount = Object.keys(allMindmaps).filter(k => k.startsWith('surah-') && (allMindmaps as any)[k]?.snapshot).length;
         const partMetaCount = Object.keys(allMindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (allMindmaps as any)[k]?.snapshot).length;
-        // Count every split set found on disk (not only surahs that also have a
-        // mindmap, and not only ones created from this view).
+        // Vault-only: verse groups that will actually be exported — one entry per
+        // surah WITH a mindmap (splits length, or 1 auto-group when the mindmap
+        // has no saved splits yet). Splits without a mindmap are not exported,
+        // so they must not inflate the count.
         const totalVerseGroups = SURAHS.reduce((acc, s) => {
+          const hasMM = !!(allMindmaps as any)[`surah-${s.id}`]?.snapshot;
+          if (!hasMM) return acc;
           const groups = (allSplitsForStats as any)[s.id]?.length ?? 0;
-          return acc + (groups > 0 ? groups : 0);
+          return acc + (groups > 0 ? groups : 1);
         }, 0);
-        const surahsWithSplits = SURAHS.reduce((acc, s) => acc + (((allSplitsForStats as any)[s.id]?.length ?? 0) > 0 ? 1 : 0), 0);
+        const surahsWithSplits = surahMindmapCount;
         const docsWithContent = Object.keys(allDocsForStats).filter(k => {
           const v = (allDocsForStats as any)[k];
           return typeof v === 'string' && v.trim().length > 0 && !v.includes('_Not added yet._');
@@ -600,15 +608,17 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                       {SURAHS.map(s=>{
                         const key=`surah-${s.id}`;
                         const hasMM=!!(allMindmaps as any)[key]?.snapshot;
-                        const groups=(allSplitsForStats as any)[s.id]?.length ?? 0;
+                        const rawGroups=(allSplitsForStats as any)[s.id]?.length ?? 0;
+                        // Effective export groups: mindmap without saved splits exports as 1 group.
+                        const groups=hasMM ? (rawGroups > 0 ? rawGroups : 1) : 0;
                         const doc=(allDocsForStats as any)[normalizeStoreKey(key)] as string | undefined;
                         const hasDoc=typeof doc==='string' && doc.trim().length>0;
                         const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
                         return (
-                          <tr key={s.id} style={{ borderTop:'1px solid var(--background-modifier-border)', background: (hasMM || groups > 0 || hasDoc) ? 'var(--background-primary)' : 'transparent' }}>
+                          <tr key={s.id} style={{ borderTop:'1px solid var(--background-modifier-border)', background: (hasMM || hasDoc) ? 'var(--background-primary)' : 'transparent' }}>
                             <td style={{ padding:'7px 8px' }}><b style={{ color:'var(--text-normal)' }}>{s.id}.</b> {s.arabicName} <span style={{ color:'var(--text-faint)', fontSize:'0.85em' }}>({s.name})</span></td>
                             <td style={{ padding:'7px 8px', textAlign:'center' }}>{hasMM ? <Check size={14} style={{ color:'var(--interactive-accent)', display:'inline' }} /> : <X size={14} style={{ display:'inline', opacity:0.3 }} />}</td>
-                            <td style={{ padding:'7px 8px', textAlign:'center' }}>{groups > 0 ? <span style={{ padding:'2px 7px', borderRadius:999, background:'var(--interactive-accent)', color:'var(--text-on-accent)', fontWeight:700, fontSize:'0.78em' }}>{groups}</span> : <span style={{ opacity:0.3 }}>—</span>}</td>
+                            <td style={{ padding:'7px 8px', textAlign:'center' }}>{hasMM ? <span style={{ padding:'2px 7px', borderRadius:999, background:'var(--interactive-accent)', color:'var(--text-on-accent)', fontWeight:700, fontSize:'0.78em' }}>{groups}</span> : <span style={{ opacity:0.3 }}>—</span>}</td>
                             <td style={{ padding:'7px 8px', textAlign:'center' }}>{!hasDoc ? <X size={14} style={{ display:'inline', opacity:0.3 }} /> : isPlaceholder ? <span style={{ color:'var(--text-warning)' }}><FileText size={12} style={{ display:'inline' }} />•</span> : <Check size={14} style={{ color:'var(--interactive-accent)', display:'inline' }} />}</td>
                           </tr>
                         );
@@ -648,7 +658,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                     </tbody>
                   </table>
                 </div>
-                <div style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups saved for that surah (from this view or added directly in the plugin data folder).</div>
+                <div style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups in the export (splits for that surah, or 1 when its mindmap has no saved splits yet).</div>
               </div>
             )}
           </div>

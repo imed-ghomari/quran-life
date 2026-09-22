@@ -1,10 +1,10 @@
 'use client';
 
 import React from 'react';
-import { getQuranVerses, getSurah, getSurahsByPart, SURAHS, splitVerseDisplayWords, splitVerseHighlightWords, mapDisplayToHighlightIndices } from '@/lib/quranData';
+import { getQuranVerses, getSurah, getSurahsByPart, splitVerseDisplayWords, splitVerseHighlightWords, mapDisplayToHighlightIndices } from '@/lib/quranData';
 import { getDailyPortion } from '@/lib/dailyPortions';
-import { Verse, ACTIVE_PART_OPTIONS, QuranPart, ALL_QURAN_PART } from '@/lib/types';
-import { CheckCircle, BookOpen, Check, RotateCcw, Headphones, Book, Undo2 } from 'lucide-react';
+import { Verse, ACTIVE_PART_OPTIONS } from '@/lib/types';
+import { CheckCircle, BookOpen, Check, Headphones, Book, Undo2 } from 'lucide-react';
 import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks/useVaultDailyStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
@@ -39,8 +39,8 @@ function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
 }
 
 export default function DailyPortionObsidian({ vaultStore }: { vaultStore: VaultStore }) {
-  const { settings, saveSettings, isLoading: settingsLoading } = useVaultDailySettings(vaultStore);
-  const { progress: listeningProgress, saveProgress, resetProgress, isLoading: progressLoading } = useVaultListeningProgress(vaultStore);
+  const { settings, isLoading: settingsLoading } = useVaultDailySettings(vaultStore);
+  const { progress: listeningProgress, saveProgress, isLoading: progressLoading } = useVaultListeningProgress(vaultStore);
   const { averageSecondsPerWordBySurah } = useDailyPortionTiming();
 
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
@@ -298,27 +298,6 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     }
   };
 
-  const handleResetCurrent = async () => {
-    try { if (typeof confirm === 'function' && !confirm('Reset progress for current part? This will restart daily portion from the beginning.')) return; } catch {}
-    await resetProgress(settings.activePart);
-    setListeningComplete(false);
-    showToast('Progress reset for this part.');
-  };
-
-  const handlePartChange = async (partId: QuranPart) => {
-    await saveSettings({ activePart: partId });
-    setListeningComplete(false);
-  };
-
-  const otherPartsWithContent = useMemo(() => {
-    const skipped = new Set(settings.skippedSurahs || []);
-    return ACTIVE_PART_OPTIONS.filter(opt => {
-      if (opt.id === settings.activePart) return false;
-      const surahs = getSurahsByPart(opt.id).filter(s => !skipped.has(s.id));
-      return surahs.length > 0;
-    });
-  }, [settings.activePart, settings.skippedSurahs]);
-
   // Reset stale word refs/highlight when the verse changes (refs are indexed
   // by highlight-word position, so a longer previous verse must not linger).
   useEffect(() => {
@@ -486,8 +465,8 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                 </span>
                 <p style={{ fontWeight:700, fontSize:'1.05em', margin:0 }}>Completed</p>
                 <p style={{ fontSize:'0.86em', color:'var(--text-muted)', margin:0, maxWidth:380 }}>Come back tomorrow.</p>
+                {canUndoComplete && (
                 <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:8, width:'100%', maxWidth:360, alignItems:'stretch' }}>
-                  {canUndoComplete && (
                     <button
                       onClick={handleUndoComplete}
                       disabled={isCompleting}
@@ -496,27 +475,8 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                     >
                       <Undo2 size={14} /> Undo completion (pressed by mistake?)
                     </button>
-                  )}
-                  <button onClick={handleResetCurrent} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer', fontSize:'0.86em' }}>
-                    <RotateCcw size={14} /> Restart this part
-                  </button>
-                  {otherPartsWithContent.length > 0 && (
-                    <div style={{ display:'flex', flexDirection:'column', gap:6, textAlign:'left', padding:10, border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-primary)' }}>
-                      <span style={{ fontSize:'0.8em', color:'var(--text-muted)', fontWeight:600 }}>Or switch part</span>
-                      <select
-                        className="dropdown"
-                        style={{ width:'100%', padding:'6px 8px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)' }}
-                        value=""
-                        onChange={e => handlePartChange(Number(e.target.value) as QuranPart)}
-                      >
-                        <option value="" disabled>Select a part…</option>
-                        {otherPartsWithContent.map(opt => (
-                          <option key={opt.id} value={opt.id}>{opt.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                 </div>
+                )}
               </>
             ) : (
               <>

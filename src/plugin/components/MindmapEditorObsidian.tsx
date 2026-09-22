@@ -1093,7 +1093,7 @@ function MindmapEditorContent({
         <div
             ref={containerRef}
             data-mindmap-swipe-guard="true"
-            style={{ position: 'relative', width: '100%', height: '100%', flex: 1, minHeight: '500px', background: 'var(--background-primary)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            style={{ position: 'relative', width: '100%', height: '100%', flex: 1, minHeight: '500px', background: 'var(--background-primary)', display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: 0, padding: 0, gap: 0 }}
         >
             <div
                 className="mindmap-editor-header"
@@ -1101,6 +1101,7 @@ function MindmapEditorContent({
                 height: '50px',
                 minHeight: '50px',
                 flexShrink: 0,
+                margin: 0,
                 borderBottom: '1px solid var(--background-modifier-border)',
                 background: 'var(--background-primary)',
                 color: 'var(--text-normal)',
