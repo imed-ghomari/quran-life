@@ -16,7 +16,7 @@ interface AudioPlayerProps {
     onWordIndexChange?: (index: number) => void;
 }
 
-const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2];
+const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
 const MEDIA_READY_STATE_FUTURE_DATA = 3;
 const SEEK_TOLERANCE_SEC = 0.08;

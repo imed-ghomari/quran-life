@@ -331,6 +331,36 @@ export class VaultStore {
     return out;
   }
 
+  /**
+   * Every doc file that exists in `docs/`, keyed by basename.
+   * The Deck Statistics panel used to enumerate docs from the mindmap list, so
+   * notes added directly to the data folder (or for a key without a mindmap)
+   * were invisible. Listing the folder reports what is actually on disk.
+   */
+  async loadAllDocs(): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    const dir = VAULT_PATHS.docsDir(this.dataRoot);
+    const files = await adapterListFiles(this.app, dir);
+    for (const filePath of files) {
+      if (!/\.(md|markdown)$/i.test(filePath)) continue;
+      const base = (filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "");
+      if (!base) continue;
+      const content = await readText(this.app, filePath, null);
+      if (typeof content === "string") out[base] = content;
+    }
+    if (Object.keys(out).length === 0 && !isHiddenPath(dir)) {
+      const folder = this.app.vault.getAbstractFileByPath(dir);
+      if (folder instanceof TFolder) {
+        for (const child of folder.children) {
+          if (!(child instanceof TFile) || !/\.(md|markdown)$/i.test(child.name)) continue;
+          const base = child.name.replace(/\.(md|markdown)$/i, "");
+          try { out[base] = await this.app.vault.read(child); } catch {}
+        }
+      }
+    }
+    return out;
+  }
+
   // Mindmaps — per key
   async loadMindmap(key: string): Promise<any | null> {
     return readJson(this.app, VAULT_PATHS.mindmapFile(this.dataRoot, key), null as any);

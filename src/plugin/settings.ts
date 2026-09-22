@@ -28,6 +28,43 @@ function getDefaultDataRootForPlatform(): string {
   return ".obsidian/plugins/quran-life/data";
 }
 
+// ---------- settings UI styles (mobile-first, overflow-proof) ----------
+// Obsidian settings rows are `display:flex` with the control pushed right; on a
+// phone the control block (4 offline-audio buttons, long storage paths, dropdowns)
+// runs past the screen edge. These rules wrap controls, stack rows on narrow
+// screens and let long unbroken paths (folder names) wrap.
+const SETTINGS_STYLE_ID = 'quran-life-settings-mobile-styles';
+let settingsStylesInjected = false;
+function injectSettingsMobileStyles(): void {
+  try {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById(SETTINGS_STYLE_ID)) { settingsStylesInjected = true; return; }
+    const style = document.createElement('style');
+    style.id = SETTINGS_STYLE_ID;
+    style.textContent = `
+.quran-life-settings, .quran-life-settings * { box-sizing: border-box; }
+.quran-life-settings .setting-item { flex-wrap: wrap; row-gap: 6px; }
+.quran-life-settings .setting-item-info { min-width: 0; overflow-wrap: anywhere; }
+.quran-life-settings .setting-item-control { flex-wrap: wrap; gap: 6px; max-width: 100%; justify-content: flex-start; }
+.quran-life-settings .setting-item-control button { min-height: 32px; }
+.quran-life-settings .quran-life-settings-anki div { min-width: 0; }
+.quran-life-settings .quran-life-daily-surah-list { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)) !important; }
+.quran-life-settings .quran-life-offline-actions .setting-item-control { width: 100%; }
+.quran-life-settings .quran-life-nowrap-safe { overflow-wrap: anywhere; word-break: break-word; }
+@media (max-width: 640px) {
+  .quran-life-settings .setting-item { flex-direction: column; align-items: stretch; }
+  .quran-life-settings .setting-item-control { justify-content: flex-start; }
+  .quran-life-settings .setting-item-control > * { flex: 1 1 auto; }
+  .quran-life-settings .setting-item-control button { width: 100%; }
+  .quran-life-settings .quran-life-daily-surah-list { grid-template-columns: 1fr !important; max-height: 340px !important; }
+  .quran-life-settings .importer-progress-bar { height: 10px; }
+}
+`;
+    document.head.appendChild(style);
+    settingsStylesInjected = true;
+  } catch { /* styles are cosmetic; never block settings rendering */ }
+}
+
 type DailyPortionMode = 'audio' | 'reading';
 type DailyReadingStyle = 'line_by_line' | 'paragraph';
 interface DailySettings {
@@ -82,6 +119,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const myGen = ++this.displayGeneration;
     const { containerEl } = this;
     containerEl.empty();
+    if (!settingsStylesInjected) injectSettingsMobileStyles();
+    containerEl.addClass("quran-life-settings");
 
     containerEl.createEl("h2", { text: "Storage & Sync" });
 
@@ -238,7 +277,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     listContainer.style.borderRadius = "8px";
     listContainer.style.padding = "8px";
     listContainer.style.display = "grid";
-    listContainer.style.gridTemplateColumns = "repeat(auto-fill, minmax(220px, 1fr))";
+    listContainer.style.gridTemplateColumns = "repeat(auto-fill, minmax(min(220px, 100%), 1fr))";
     listContainer.style.gap = "4px";
     listContainer.style.background = "var(--background-primary)";
 
@@ -339,10 +378,11 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const ankiPrefsInfo = ankiSection.createEl("p", { cls: "setting-item-description" });
     ankiPrefsInfo.style.fontSize = "0.78em";
     ankiPrefsInfo.style.color = "var(--text-faint)";
+    ankiPrefsInfo.style.overflowWrap = "anywhere";
     ankiPrefsInfo.setText("Loading Anki preferences…");
     const ankiRowsWrap = ankiSection.createDiv();
     ankiRowsWrap.style.display = "grid";
-    ankiRowsWrap.style.gridTemplateColumns = "repeat(auto-fill, minmax(280px, 1fr))";
+    ankiRowsWrap.style.gridTemplateColumns = "repeat(auto-fill, minmax(min(280px, 100%), 1fr))";
     ankiRowsWrap.style.gap = "8px";
     ankiRowsWrap.style.marginBottom = "10px";
     // Placeholder for Reset row inside the same section — created synchronously so it stays before Offline Audio even while prefs load async
@@ -420,12 +460,15 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const offlineDesc = containerEl.createEl("p", { cls: "setting-item-description" });
     offlineDesc.setText("Download Quran part audio for offline use. Stored in plugin folder (.obsidian/plugins/quran-life/offline-audio) — works on mobile. Player auto-uses offline files when available, fallback to online.");
     offlineDesc.style.marginBottom = "12px";
+    (offlineDesc as any).addClass?.("quran-life-nowrap-safe");
 
     // Storage overview
     const storageInfoEl = containerEl.createDiv();
     storageInfoEl.style.fontSize = "0.85em";
     storageInfoEl.style.color = "var(--text-muted)";
     storageInfoEl.style.marginBottom = "8px";
+    storageInfoEl.style.overflowWrap = "anywhere";
+    storageInfoEl.style.wordBreak = "break-word";
     storageInfoEl.setText("Calculating storage...");
     let totalStorageRefresh: () => Promise<void> = async () => {};
     const refreshTotalStorage = async () => {
@@ -571,6 +614,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const offlineActionsSetting = new Setting(containerEl)
       .setName("Offline audio actions")
       .setDesc("Download uses moderated concurrency (3 at a time, 250ms stagger) to avoid rate limits. Delete removes files permanently (no trash) to free storage.");
+    (offlineActionsSetting as any).settingEl.addClass("quran-life-offline-actions");
 
     let downloadBtn: any = null;
     let cancelBtn: any = null;
@@ -686,6 +730,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     offlineInfo.style.color = "var(--text-faint)";
     offlineInfo.style.marginTop = "8px";
     offlineInfo.style.lineHeight = "1.4";
+    offlineInfo.style.overflowWrap = "anywhere";
     offlineInfo.setText("Tip: Player auto-uses offline files when available. Check Daily Portion → Player reciter matches download reciter. Downloads are throttled (3 concurrent) to avoid blacklist.");
   }
 }

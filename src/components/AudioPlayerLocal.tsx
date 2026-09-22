@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { PlaybackSpeed, Verse } from '@/lib/types';
-import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl } from '@/lib/audio';
+import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl, resolveAudioUrlProxied, buildAyahAudioUrl } from '@/lib/audio';
+import { splitVerseHighlightWords } from '@/lib/quranData';
 import { getOfflineAudioUrlIfAvailable, peekOfflineAudioUrlIfCached } from '@/plugin/offlineAudio';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
@@ -21,7 +22,10 @@ interface AudioPlayerLocalProps {
     obsidianApp?: any;
 }
 
-const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2];
+const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+// Fallback recitation pace (highlight words per second) used only to estimate
+// durations when word timings are unavailable (offline, metadata not fetched).
+const DEFAULT_WORDS_PER_SECOND = 2.6;
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
 const RECITER_STORAGE_KEY = 'selected_reciter_id';
 const PLAYBACK_STATE_KEY = 'audio_playback_state_v1';
@@ -106,6 +110,9 @@ export default function AudioPlayerLocal({
     const configuredTrackKeyRef = useRef('');
     const remoteFallbackUrlRef = useRef<string | null>(null);
     const onlineFallbackTriedRef = useRef(false);
+    // Direct CDN streaming can be refused by a locked-down WebView/CSP; retry the
+    // same URL through requestUrl (Blob) once before declaring failure.
+    const proxiedRetryTriedRef = useRef(false);
     const lastStableTimeRef = useRef(0);
     const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
     const preloadedTrackKeyRef = useRef('');
@@ -179,21 +186,37 @@ export default function AudioPlayerLocal({
     }, [currentVerse, selectedReciterId, verseStartTime]);
 
     // --- Basmala interstitial for surah transitions (Obsidian) ---
-    const fetchBasmalaInfo = useCallback(async (): Promise<{ url: string; startTime?: number; endTime?: number; segments?: number[][] } | null> => {
+    // Resolves the slice to its FINAL playable URL (downloaded file first), so
+    // surah transitions keep their Basmala while offline. When the metadata map
+    // cannot be fetched, the URL is rebuilt from the reciter's per-ayah pattern
+    // instead of silently skipping the Basmala.
+    const resolveBasmalaSource = useCallback(async (): Promise<{ url: string; startTime: number; endTime: number | null; segments?: number[][] | null } | null> => {
         if (!selectedReciter) return null;
+        const reciterForLoad: Reciter = {
+            id: selectedReciter.id,
+            name: '',
+            type: selectedReciter.type,
+            relativePath: selectedReciter.relativePath,
+            ayahAudioBase: (selectedReciter as Reciter).ayahAudioBase,
+        };
+        let remoteUrl: string | null = null;
+        let startTime = 0;
+        let endTime: number | null = null;
+        let segments: number[][] | null | undefined;
         try {
             if (selectedReciter.type === 'ayah-based') {
-                const data = recitationData;
-                const verseData = (data as any)?.verses?.['1:1'];
-                if (verseData?.audio_url) return { url: verseData.audio_url, segments: verseData.segments };
-                const fresh = await loadRecitationData({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath }, 1, obsidianApp);
-                const v = (fresh as any)?.verses?.['1:1'];
-                if (v?.audio_url) return { url: v.audio_url, segments: v.segments };
-                return null;
+                const verseData = (recitationData as any)?.verses?.['1:1'];
+                if (verseData?.audio_url) { remoteUrl = verseData.audio_url; segments = verseData.segments; }
+                if (!remoteUrl) {
+                    const fresh = await loadRecitationData(reciterForLoad, 1, obsidianApp);
+                    const v = (fresh as any)?.verses?.['1:1'];
+                    if (v?.audio_url) { remoteUrl = v.audio_url; segments = v.segments; }
+                }
+                if (!remoteUrl) remoteUrl = buildAyahAudioUrl(reciterForLoad, 1, 1);
             } else {
                 let surahOneData: any = recitationDataMap[1] || (recitationData?.surahId === 1 ? recitationData : null);
                 if (!surahOneData) {
-                    const loaded = await loadRecitationData({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath }, 1, obsidianApp);
+                    const loaded = await loadRecitationData(reciterForLoad, 1, obsidianApp);
                     if (loaded) {
                         surahOneData = loaded;
                         // cache for next time without blocking render
@@ -201,10 +224,22 @@ export default function AudioPlayerLocal({
                     }
                 }
                 if (!surahOneData) return null;
-                const info = getAudioInfoForVerse({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath }, surahOneData, 1, 1);
-                return info;
+                const info = getAudioInfoForVerse(reciterForLoad, surahOneData, 1, 1);
+                if (!info?.url) return null;
+                remoteUrl = info.url;
+                startTime = info.startTime || 0;
+                endTime = info.endTime ?? null;
+                segments = info.segments;
             }
-        } catch { return null; }
+        } catch { /* fall through to offline/derived URL */ }
+        if (!remoteUrl) return null;
+        let url: string | null = null;
+        try { url = await getOfflineAudioUrlIfAvailable(reciterForLoad, 1, 1, obsidianApp); } catch {}
+        if (!url) {
+            try { url = await resolveAudioUrl(remoteUrl, obsidianApp); } catch { url = remoteUrl; }
+        }
+        if (!url) return null;
+        return { url, startTime, endTime, segments };
     }, [selectedReciter, recitationData, recitationDataMap, obsidianApp]);
 
     const cancelBasmala = useCallback(() => {
@@ -316,8 +351,11 @@ export default function AudioPlayerLocal({
         // Prefer the pre-warmed slice (resolved while the previous verse played).
         const pre = basmalaPrewarmRef.current;
         const preUsable = pre && selectedReciter && pre.reciterId === selectedReciter.id ? pre : null;
-        const basmalaInfo = preUsable ? { url: preUsable.url, startTime: preUsable.startTime, endTime: preUsable.endTime } : await fetchBasmalaInfo();
-        if (!basmalaInfo?.url) { onVerseChange(nextIdx); return; }
+        const resolved = preUsable
+            ? { url: preUsable.url, startTime: preUsable.startTime, endTime: preUsable.endTime }
+            : await resolveBasmalaSource();
+        if (!resolved?.url) { onVerseChange(nextIdx); return; }
+        const basmalaInfo = { url: resolved.url, startTime: resolved.startTime, endTime: resolved.endTime };
         wasPlayingBeforeBasmalaRef.current = isPlayingRef.current;
         if (audioRef.current && !audioRef.current.paused) try { audioRef.current.pause(); } catch {}
         isBasmalaPlayingRef.current = true;
@@ -326,14 +364,8 @@ export default function AudioPlayerLocal({
         const basmalaAudio = basmalaAudioRef.current;
         if (!basmalaAudio) { onVerseChange(nextIdx); isBasmalaPlayingRef.current = false; setIsBasmalaPlaying(false); return; }
         try {
-            let url: string | null = preUsable ? preUsable.url : null;
-            if (!url) {
-                try {
-                    const offlineBasmala = await getOfflineAudioUrlIfAvailable({ id: selectedReciter!.id, name: "", type: selectedReciter!.type, relativePath: selectedReciter!.relativePath } as Reciter, 1, 1, obsidianApp);
-                    if (offlineBasmala) url = offlineBasmala;
-                } catch {}
-                if (!url) url = await resolveAudioUrl(basmalaInfo.url, obsidianApp);
-            }
+            // resolveBasmalaSource already returns the final (offline-first) URL.
+            const url: string = resolved.url;
             const start = (basmalaInfo.startTime as number | undefined) || 0;
             const end = (basmalaInfo.endTime as number | null | undefined) ?? null;
             (basmalaAudio as any)._basmalaEndTime = end;
@@ -355,7 +387,7 @@ export default function AudioPlayerLocal({
             basmalaPendingNextIndexRef.current = null;
             onVerseChange(nextIdx);
         }
-    }, [verses, currentVerse, fetchBasmalaInfo, obsidianApp, onVerseChange, playBasmalaViaMain, selectedReciter, waitForBasmalaMetadata]);
+    }, [verses, currentVerse, resolveBasmalaSource, obsidianApp, onVerseChange, playBasmalaViaMain, selectedReciter, waitForBasmalaMetadata]);
 
     // Complete a main-element Basmala handoff: hand control to the next verse
     // with autoplay preserved.
@@ -387,25 +419,18 @@ export default function AudioPlayerLocal({
         const reciterId = selectedReciter.id;
         (async () => {
             try {
-                const info = await fetchBasmalaInfo();
-                if (cancelled || !info?.url) return;
-                let url: string | null = null;
-                try {
-                    const offline = await getOfflineAudioUrlIfAvailable({ id: selectedReciter.id, name: '', type: selectedReciter.type, relativePath: selectedReciter.relativePath } as Reciter, 1, 1, obsidianApp);
-                    if (offline) url = offline;
-                } catch {}
-                if (!url) url = await resolveAudioUrl(info.url, obsidianApp);
-                if (cancelled || !url) return;
-                basmalaPrewarmRef.current = { reciterId, url, startTime: info.startTime || 0, endTime: info.endTime ?? null };
+                const source = await resolveBasmalaSource();
+                if (cancelled || !source?.url) return;
+                basmalaPrewarmRef.current = { reciterId, url: source.url, startTime: source.startTime, endTime: source.endTime };
                 // Warm the dedicated element too so its first play() is instant.
                 const el = basmalaAudioRef.current;
-                if (el && el.getAttribute('src') !== url) {
-                    try { el.preload = 'auto'; el.src = url; el.load(); } catch {}
+                if (el && el.getAttribute('src') !== source.url) {
+                    try { el.preload = 'auto'; el.src = source.url; el.load(); } catch {}
                 }
             } catch {}
         })();
         return () => { cancelled = true; };
-    }, [currentVerseIndex, currentVerse?.surahId, selectedReciterId, selectedReciter, fetchBasmalaInfo, obsidianApp, verses]);
+    }, [currentVerseIndex, currentVerse?.surahId, selectedReciterId, selectedReciter, resolveBasmalaSource, obsidianApp, verses]);
 
     useEffect(() => {
         if (basmalaAudioRef.current) basmalaAudioRef.current.playbackRate = speed;
@@ -619,6 +644,7 @@ export default function AudioPlayerLocal({
                 if (metadataInfo && currentInfo?.url !== metadataInfo.url) return;
                 remoteFallbackUrlRef.current = offlineUrl ? metadataInfo?.url ?? null : null;
                 onlineFallbackTriedRef.current = false;
+                proxiedRetryTriedRef.current = false;
                 let usedSeamlessSurahAdvance = false;
                 const currentSrcPath = audioRef.current.src.split('?')[0];
                 const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
@@ -725,7 +751,11 @@ export default function AudioPlayerLocal({
     const getRecitationDataForVerse = useCallback((verse: Verse | undefined) => {
         if (!verse || !selectedReciterType) return null;
         if (selectedReciterType === 'surah-based') return recitationDataMap[verse.surahId] ?? (recitationData?.surahId === verse.surahId ? recitationData : null);
-        return recitationData;
+        // Ayah-based: `getAudioInfoForVerse` can derive the URL + look for cached
+        // segments without the big map, so hand it an empty object instead of null
+        // (otherwise the next-verse preload — and with it the gapless handoff — is
+        // skipped whenever the map has not loaded, e.g. offline on mobile).
+        return recitationData ?? {};
     }, [selectedReciterType, recitationDataMap, recitationData]);
 
     const getAudioInfoForVerseIndex = useCallback((verseIndex: number) => {
@@ -954,9 +984,39 @@ export default function AudioPlayerLocal({
             });
             return;
         }
+        // Direct CDN streaming refused (locked-down WebView, CSP, transient
+        // network error): retry the exact same URL through requestUrl once.
+        const failingSrc = audio?.src || '';
+        if (audio && !proxiedRetryTriedRef.current && /^https?:/i.test(failingSrc)) {
+            proxiedRetryTriedRef.current = true;
+            const targetTime = Number.isFinite(audio.currentTime) && audio.currentTime > 0 ? audio.currentTime : verseStartTime;
+            const shouldAutoplay = isPlayingRef.current;
+            void resolveAudioUrlProxied(failingSrc, obsidianApp).then((url) => {
+                if (!audioRef.current || audioRef.current !== audio) return;
+                if (!url || url === failingSrc) throw new Error('proxy unavailable');
+                configuredTrackKeyRef.current = '';
+                preparePendingTrack({ targetTime, shouldAutoplay });
+                audio.pause();
+                audio.src = url;
+                audio.playbackRate = speedRef.current;
+                audio.load();
+            }).catch(() => {
+                setIsPlaying(false);
+                setIsAudioPreparing(false);
+                setIsAudioReady(false);
+            });
+            return;
+        }
         setIsPlaying(false); setIsAudioPreparing(false); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; pendingSeekTimeRef.current = null; configuredTrackKeyRef.current = '';
     }, [obsidianApp, onWordIndexChange, preparePendingTrack, verseStartTime, finishBasmalaViaMain]);
-    const handleWaitingOrStalled = useCallback(() => { if (!isPlayingRef.current || !audioRef.current) return; freezePlaybackAt(audioRef.current.currentTime); }, [freezePlaybackAt]);
+    // Mid-verse buffering must NOT pause/reseek: pausing here is what turned the
+    // handoff between two per-ayah files into a silent gap on mobile. The stall
+    // watcher below still recovers genuinely stuck playback.
+    const handleWaitingOrStalled = useCallback(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        lastStableTimeRef.current = audio.currentTime;
+    }, []);
 
     const handleReciterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const id = e.target.value;
@@ -966,6 +1026,7 @@ export default function AudioPlayerLocal({
             basmalaPrewarmRef.current = null;
             remoteFallbackUrlRef.current = null;
             onlineFallbackTriedRef.current = false;
+            proxiedRetryTriedRef.current = false;
             audioRef.current?.pause(); seamlessSurahAdvanceKeyRef.current = ''; surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
             setRecitationData(null); setRecitationDataMap({}); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); setIsAudioPreparing(true); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; configuredTrackKeyRef.current = ''; setIsLoadingReciter(true);
             setSelectedReciter(reciter); localStorage.setItem(RECITER_STORAGE_KEY, id); setIsPlaying(false);
@@ -1061,28 +1122,49 @@ export default function AudioPlayerLocal({
         setSpeed(newSpeed); if (audioRef.current) audioRef.current.playbackRate = newSpeed; localStorage.setItem(SPEED_STORAGE_KEY, newSpeed.toString());
     };
 
+    const verseWordCounts = useMemo(
+        () => verses.map(v => splitVerseHighlightWords(v?.text ?? '').length),
+        [verses]
+    );
+
     const verseDurationsSec = useMemo(() => {
         if (!selectedReciter || verses.length === 0) return null;
+        let measured: (number | null)[];
         if (selectedReciter.type === 'ayah-based') {
             const versesMap = recitationData?.verses || {};
-            return verses.map(v => {
+            measured = verses.map(v => {
                 const key = `${v.surahId}:${v.ayahId}`; const info = versesMap[key];
                 if (!info) return null;
                 if (typeof info.duration === 'number' && Number.isFinite(info.duration)) return info.duration;
                 if (Array.isArray(info.segments) && info.segments.length > 0) return (info.segments[info.segments.length - 1]?.[2] || 0) / 1000;
                 return null;
             });
+        } else {
+            measured = verses.map(v => {
+                const data = recitationDataMap[v.surahId]; const timing = data?.timings?.[`${v.surahId}:${v.ayahId}`];
+                if (!timing) return null;
+                if (typeof timing.timestamp_from === 'number' && typeof timing.timestamp_to === 'number') return Math.max(0, (timing.timestamp_to - timing.timestamp_from) / 1000);
+                if (Array.isArray(timing.segments) && timing.segments.length > 0) return (timing.segments[timing.segments.length - 1]?.[2] || 0) / 1000;
+                return null;
+            });
         }
-        return verses.map(v => {
-            const data = recitationDataMap[v.surahId]; const timing = data?.timings?.[`${v.surahId}:${v.ayahId}`];
-            if (!timing) return null;
-            if (typeof timing.timestamp_from === 'number' && typeof timing.timestamp_to === 'number') return Math.max(0, (timing.timestamp_to - timing.timestamp_from) / 1000);
-            if (Array.isArray(timing.segments) && timing.segments.length > 0) return (timing.segments[timing.segments.length - 1]?.[2] || 0) / 1000;
-            return null;
+        // Offline playback often has no timings at all. Estimate the missing
+        // verses from the reciter's own measured pace (words/second) so elapsed /
+        // total / remaining time can still be shown instead of being hidden.
+        const measuredSecs = measured.reduce<number>((sum, d) => sum + (d ?? 0), 0);
+        const measuredWords = measured.reduce<number>((sum, d, i) => sum + (d !== null ? (verseWordCounts[i] || 0) : 0), 0);
+        const wordsPerSecond = measuredSecs > 0 && measuredWords > 0
+            ? measuredWords / measuredSecs
+            : DEFAULT_WORDS_PER_SECOND;
+        const safeWps = wordsPerSecond > 0.5 && wordsPerSecond < 12 ? wordsPerSecond : DEFAULT_WORDS_PER_SECOND;
+        return measured.map((d, i) => {
+            if (d !== null && d > 0.2) return d;
+            const words = verseWordCounts[i] || 0;
+            return Math.max(1.2, words / safeWps);
         });
-    }, [selectedReciter, verses, recitationData, recitationDataMap]);
+    }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts]);
 
-    const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; if (verseDurationsSec.some(d => d === null)) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); const s = speed || 1; return sum / s; }, [verseDurationsSec, speed]);
+    const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); if (!(sum > 0)) return null; const s = speed || 1; return sum / s; }, [verseDurationsSec, speed]);
     const elapsedTotalSec = useMemo(() => {
         if (!verseDurationsSec) return null;
         const prior = verseDurationsSec.slice(0, currentVerseIndex).reduce((sum, d) => sum + (d || 0), 0);
@@ -1091,6 +1173,10 @@ export default function AudioPlayerLocal({
         const s = speed || 1;
         return (prior + currentElapsed) / s;
     }, [verseDurationsSec, currentVerseIndex, elapsedTime, speed]);
+
+    const remainingTotalSec = totalDurationSec !== null && elapsedTotalSec !== null
+        ? Math.max(0, totalDurationSec - elapsedTotalSec)
+        : null;
 
     // Progress bar now fills during playback (time-based), fallback to verse count if durations unavailable
     const verseProgress = useMemo(() => {
@@ -1163,7 +1249,16 @@ export default function AudioPlayerLocal({
                 />
                 </div>
             <div className="player-controls">
-                <div className="time-display">{isBasmalaPlaying ? 'بِسْمِ ٱللَّهِ...' : elapsedTotalSec !== null && totalDurationSec !== null ? `${formatTime(elapsedTotalSec)} / ${formatTime(totalDurationSec)}` : `${currentVerseIndex + 1} / ${totalVerses}`}</div>
+                <div className="time-display">
+                    {isBasmalaPlaying ? 'بِسْمِ ٱللَّهِ...' : (
+                        elapsedTotalSec !== null && totalDurationSec !== null ? (
+                            <>
+                                <span className="time-elapsed-total">{formatTime(elapsedTotalSec)} / {formatTime(totalDurationSec)}</span>
+                                {remainingTotalSec !== null && <span className="time-remaining" title="Time remaining"> −{formatTime(remainingTotalSec)}</span>}
+                            </>
+                        ) : `${currentVerseIndex + 1} / ${totalVerses}`
+                    )}
+                </div>
                 <div className="control-buttons">
                     <button className="control-btn" onClick={() => { if (isBasmalaPlaying) cancelBasmala(); onVerseChange(Math.max(0, currentVerseIndex - 1)); }} disabled={currentVerseIndex === 0 && !isBasmalaPlaying}><SkipBack size={18} /></button>
                     <button className="play-btn" onClick={togglePlay} disabled={isPlayButtonDisabled && !isBasmalaPlaying}>{isPlayButtonLoading ? <Spinner size={16} /> : (isPlaying || isBasmalaPlaying) ? <Pause size={18} /> : <Play size={18} />}</button>

@@ -3,6 +3,8 @@ import { VaultStore, DEFAULT_DATA_ROOT, LEGACY_DATA_ROOT, DebouncedVaultWriter, 
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
+import { registerVaultRecitationCache } from "./recitationCache";
+import { setObsidianApp } from "@/lib/obsidianApp";
 export const VIEW_TYPE_MINDMAP = "quran-life-mindmap"; // deprecated alias, now merged into Anki Deck
 
 /**
@@ -28,6 +30,11 @@ export default class QuranLifePlugin extends Plugin {
     }
     this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || effectiveDefault);
     this.debouncedWriter = new DebouncedVaultWriter(this.app);
+    // Obsidian Mobile does not expose `window.app`; register the app so
+    // recitation metadata / Quran JSON / offline audio resolve on mobile exactly
+    // like on desktop (requestUrl without CORS, vault adapter reads).
+    setObsidianApp(this.app);
+    registerVaultRecitationCache(this.app, this.settings.dataRoot || effectiveDefault);
 
     // Ensure data root exists on layout ready (expensive init deferred) — wrap to avoid mobile crash blocking enable
     this.app.workspace.onLayoutReady(async () => {
@@ -94,6 +101,7 @@ export default class QuranLifePlugin extends Plugin {
     // recreate store if dataRoot changed
     const effectiveDefault = getMobileAwareDefaultRoot();
     this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || effectiveDefault);
+    registerVaultRecitationCache(this.app, this.settings.dataRoot || effectiveDefault);
   }
 
   private async ensureDataRoot(): Promise<void> {

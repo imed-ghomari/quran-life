@@ -16,6 +16,14 @@ Use this skill when working on the Today-page audio player, related verse-previe
 
 Trust the `type` field, not the id naming.
 
+Every ayah-based reciter also carries `ayahAudioBase`: its per-ayah files are always
+`<ayahAudioBase>/<SSS><AAA>.mp3` (3-digit surah + 3-digit ayah). Verified against all
+6236 verses of every ayah map in `public/recitations/`. This is what lets the plugin
+resolve playback and offline downloads without loading the ~2MB `verses` map
+(`buildAyahAudioUrl()` + the `getAudioInfoForVerse()` fallback) — the map is still
+preferred when it loads because it carries the word `segments`. When adding or
+retyping a reciter, set `ayahAudioBase` from its JSON's common URL prefix.
+
 ## Current Player Availability
 
 - The audio player currently uses `getAudioPlayerReciters()` from `src/lib/audio.ts`.
@@ -113,6 +121,17 @@ Trust the `type` field, not the id naming.
   - queued persistence state
   - preload audio
 - Word highlighting and preview scrolling should stay non-urgent where possible.
+
+## Obsidian (plugin) transport notes
+
+- `AudioPlayerLocal.tsx` is the plugin player; `AudioPlayer.tsx` is the web player.
+  Both share `SPEED_OPTIONS` semantics (`0.75 … 2, 2.5, 3`).
+- Never resolve the Obsidian `App` from `window.app` alone: mobile does not expose it.
+  Use `getObsidianApp()` from `src/lib/obsidianApp.ts` (registered in `main.ts`).
+- Keep audio on CORS-friendly hosts streaming directly (`resolveAudioUrl`); only fall
+  back to the `requestUrl` → Blob proxy (`resolveAudioUrlProxied`) on playback error.
+- Do not pause/reseek inside `onWaiting`/`onStalled`: that was the silent gap between
+  per-ayah files on mobile. The stall watcher owns recovery.
 
 ## Regression Patterns To Avoid
 

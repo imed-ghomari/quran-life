@@ -8,11 +8,27 @@ import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps, useVaultAnkiExportPrefs } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
-import { Save, Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 
 const { useEffect, useMemo, useState, useCallback } = React;
+
+/**
+ * Splits/docs written by hand (or by an older build) may use `surah-2` while
+ * this view writes `surah-002`. Normalize both to one stats key so files dropped
+ * directly into the plugin data folder are recognized like view-made entries.
+ */
+const normalizeStoreKey = (key: string): string => {
+  const k = String(key).trim();
+  const surah = k.match(/^surah-0*(\d+)$/i);
+  if (surah) return `surah-${Number(surah[1])}`;
+  const part = k.match(/^part-0*(\d+)$/i);
+  if (part) return `part-${Number(part[1])}`;
+  const meta = k.match(/^meta-0*(\d+)$/i);
+  if (meta) return `meta-${Number(meta[1])}`;
+  return k;
+};
 
 export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStore }) {
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
@@ -95,21 +111,47 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     };
   }, [selectedSurah, selectedMindmapKey, vaultStore]);
 
-  // Load all splits/docs for Deck Statistics
+  // Load all splits/docs for Deck Statistics.
+  // Folders are enumerated instead of probing one key at a time: that way files
+  // added directly in the plugin data folder (`splits/surah-2.json`,
+  // `docs/surah-2.md`, `surah-002.*`, part/meta keys…) or synced from another
+  // device count exactly like entries created in this view. Previously docs were
+  // only discovered through `allMindmaps`, so standalone notes were invisible.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const splits: Record<number, AnkiAnchor[]> = {};
-      for (let sid=1; sid<=114; sid++) {
-        const arr = await vaultStore.loadSplitsForSurah(sid);
-        if (arr && arr.length) splits[sid] = arr as AnkiAnchor[];
+      try {
+        const all = await vaultStore.loadAllSplits();
+        for (const [sidRaw, arr] of Object.entries(all || {})) {
+          const sid = Number(sidRaw);
+          if (!Number.isFinite(sid) || !Array.isArray(arr) || arr.length === 0) continue;
+          splits[sid] = arr as AnkiAnchor[];
+        }
+      } catch {}
+      if (Object.keys(splits).length === 0) {
+        // Fallback for platforms where folder listing returns nothing
+        for (let sid=1; sid<=114; sid++) {
+          const arr = await vaultStore.loadSplitsForSurah(sid);
+          if (arr && arr.length) splits[sid] = arr as AnkiAnchor[];
+        }
       }
       const docs: Record<string, string> = {};
+      try {
+        const stored = await vaultStore.loadAllDocs();
+        for (const [key, content] of Object.entries(stored || {})) {
+          if (typeof content === 'string' && content.trim()) docs[normalizeStoreKey(key)] = content;
+        }
+      } catch {}
+      // Keys edited in this view whose file may not be flushed yet
       for (const key of Object.keys(allMindmaps)) {
+        const normalized = normalizeStoreKey(key);
+        if (docs[normalized]) continue;
         const d = await vaultStore.loadDoc(key);
-        if (typeof d === 'string' && d.trim()) docs[key] = d;
+        if (typeof d === 'string' && d.trim()) docs[normalized] = d;
       }
-      if (editingDocText.trim() && !docs[selectedMindmapKey]) docs[selectedMindmapKey] = editingDocText;
+      const currentKey = normalizeStoreKey(selectedMindmapKey);
+      if (editingDocText.trim() && !docs[currentKey]) docs[currentKey] = editingDocText;
       if (!cancelled) {
         setAllSplitsForStats(splits);
         setAllDocsForStats(docs);
@@ -189,12 +231,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       catch { /* keep dirty so the switch-flush retries */ }
     })();
   };
-  const handleSaveSplits = async () => {
-    const snapshot = localAnchors;
-    await saveAnchors(snapshot);
-    if (localAnchorsRef.current === snapshot) splitsDirtyRef.current = false;
-    showToast(`Saved ${snapshot.length} groups for Surah ${selectedSurah}`);
-  };
+  // Splits persist on every change (see handleAddBreak/handleRemoveBreak plus the
+  // switch/unmount flush), so there is no explicit Save action any more.
 
   // Silent persist for autosave + pre-exit save. Must NOT close the editor,
   // must NOT toast/banner — the editor stays open until the user closes it manually.
@@ -241,15 +279,27 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       if (!versesForExport.length) { try { versesForExport = await getQuranVerses(); setAllVerses(versesForExport); pushLog(`Loaded ${versesForExport.length} verses`); } catch {} }
       else pushLog(`Verses cached: ${versesForExport.length}`);
 
-      updateProgress({ status: 'Loading splits (1/114)…', current: 5 });
+      updateProgress({ status: 'Loading splits…', current: 5 });
       const fullSplits: Record<number, AnkiAnchor[]> = {};
-      for (let sid=1; sid<=114; sid++) {
-        const arr = await vaultStore.loadSplitsForSurah(sid);
-        if (arr && arr.length) fullSplits[sid] = arr as AnkiAnchor[];
-        if (sid % 20 === 0 || sid === 114) {
-          updateProgress({ current: 5 + Math.round((sid/114)*25), status: `Loading splits ${sid}/114…` });
-          // allow UI to repaint
-          await new Promise(r => setTimeout(r, 0));
+      // Enumerate the splits folder first so files added directly in the plugin
+      // data folder (any `surah-N.json` padding) are exported too.
+      try {
+        const allSplits = await vaultStore.loadAllSplits();
+        for (const [sidRaw, arr] of Object.entries(allSplits || {})) {
+          const sid = Number(sidRaw);
+          if (!Number.isFinite(sid) || !Array.isArray(arr) || arr.length === 0) continue;
+          fullSplits[sid] = arr as AnkiAnchor[];
+        }
+      } catch {}
+      if (Object.keys(fullSplits).length === 0) {
+        for (let sid=1; sid<=114; sid++) {
+          const arr = await vaultStore.loadSplitsForSurah(sid);
+          if (arr && arr.length) fullSplits[sid] = arr as AnkiAnchor[];
+          if (sid % 20 === 0 || sid === 114) {
+            updateProgress({ current: 5 + Math.round((sid/114)*25), status: `Loading splits ${sid}/114…` });
+            // allow UI to repaint
+            await new Promise(r => setTimeout(r, 0));
+          }
         }
       }
       if (!fullSplits[selectedSurah] && localAnchors.length) fullSplits[selectedSurah] = localAnchors;
@@ -281,6 +331,14 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         if (i % 10 === 0) updateProgress({ current: 35 + Math.round(((i+1)/Math.max(1,docKeys.length))*10), status: `Loading notes ${i+1}/${docKeys.length}…` });
       }
       if (editingDocText.trim() && !docsMap[selectedMindmapKey]) docsMap[selectedMindmapKey] = editingDocText;
+      // Notes added directly in the data folder (any key padding) are exported too.
+      try {
+        const storedDocs = await vaultStore.loadAllDocs();
+        for (const [key, content] of Object.entries(storedDocs || {})) {
+          const normalized = normalizeStoreKey(key);
+          if (docsMap[normalized] === undefined) docsMap[normalized] = content;
+        }
+      } catch {}
       updateProgress({ current: 48, status: 'Building cards…' });
       const mindmapCards = buildMindmapCards(allMindmaps as any, docsMap);
       if (filteredAnchors.length===0 && mindmapCards.length===0) {
@@ -372,7 +430,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }
 
   return (
-    <div style={{ position:'relative', padding:'16px', maxWidth:720, margin:'0 auto', width:'100%', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
+    <div className="quran-life-anki" style={{ position:'relative', padding:'16px', maxWidth:720, margin:'0 auto', width:'100%', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
       {/* Header */}
       <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -388,16 +446,16 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       </div>
 
       {/* Export Card — matching Daily Portion accent */}
-      <div style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
+      <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
             <Download size={12} /> EXPORT
           </span>
           <span style={{ fontSize:'0.78em', color:'var(--text-faint)' }}>Generate .apkg for Anki</span>
         </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:1, padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
-          <button onClick={handleExport} disabled={isExporting} style={{ padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1 }}>
+        <div className="ql-export-row" style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', width:'100%', minWidth:0 }}>
+          <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:'1 1 160px', minWidth:0, maxWidth:'100%', boxSizing:'border-box', padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
+          <button onClick={handleExport} disabled={isExporting} style={{ flex:'0 0 auto', padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1, whiteSpace:'nowrap' }}>
             <Download size={16} /> {isExporting?'Exporting…':'Export to Anki'}
           </button>
         </div>
@@ -410,7 +468,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       </div>
 
       {/* Mindmap Selector & Actions — matching Daily tone */}
-      <div style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:14 }}>
+      <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:14 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
           <label style={{ fontSize:'0.78em', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.03em', textTransform:'uppercase' }}>Mindmap to edit</label>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
@@ -446,7 +504,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               <span style={{ marginLeft:'auto', fontSize:'0.74em', color:'var(--text-faint)' }}>{builderState.anchors.length} groups</span>
             </div>
 
-            <div style={{ display:'flex', gap:12, alignItems:'stretch' }}>
+            <div className="ql-splits-row" style={{ display:'flex', gap:12, alignItems:'stretch', flexWrap:'wrap' }}>
               <div style={{ flex: showPreview ? '1 1 70%' : '1 1 100%', display:'flex', flexDirection:'column', gap:8, minWidth:0 }}>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'8px', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
                   {(showAllVerses ? Array.from({length:vc},(_,i)=>i+1) : Array.from({length:Math.min(vc,60)},(_,i)=>i+1)).map(v=>{
@@ -462,13 +520,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                   {vc>60 && !showAllVerses && <button onClick={()=>setShowAllVerses(true)} style={{ padding:'4px 8px', borderRadius:6, border:'1px dashed var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-muted)', fontSize:'0.8em', cursor:'pointer' }}>+{vc-60} more</button>}
                   {showAllVerses && vc>60 && <button onClick={()=>setShowAllVerses(false)} style={{ padding:'4px 8px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', fontSize:'0.8em', cursor:'pointer' }}>Show less</button>}
                 </div>
-                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                  <button onClick={handleSaveSplits} style={{ padding:'7px 12px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em' }}><Save size={14}/>Save</button>
-                  <button onClick={()=>setShowPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-muted)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Eye size={14}/>{showPreview ? 'Hide' : 'Preview'}</button>
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:8, border:'1px dashed var(--background-modifier-border)', color:'var(--text-faint)', fontSize:'0.78em' }}>
+                    <Check size={12}/> Saved automatically on every change
+                  </span>
+                  <button onClick={()=>setShowPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-muted)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em', marginLeft:'auto' }}><Eye size={14}/>{showPreview ? 'Hide' : 'Preview'}</button>
                 </div>
               </div>
               {showPreview && (
-                <div style={{ flex:'0 0 30%', border:'1px solid var(--background-modifier-border)', borderRadius:8, padding:'8px', background:'var(--background-primary)', display:'flex', flexDirection:'column', gap:6, alignSelf:'stretch', justifyContent:'flex-start' }}>
+                <div className="ql-splits-preview" style={{ flex:'1 1 30%', minWidth:0, maxHeight:260, overflow:'auto', border:'1px solid var(--background-modifier-border)', borderRadius:8, padding:'8px', background:'var(--background-primary)', display:'flex', flexDirection:'column', gap:6, alignSelf:'stretch', justifyContent:'flex-start' }}>
                   {builderState.anchors.length === 0 ? (
                     <div style={{ fontSize:'0.8em', color:'var(--text-faint)', textAlign:'center', padding:'8px 0' }}>No groups</div>
                   ) : builderState.anchors.map((a,i)=>(
@@ -497,28 +557,29 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       {(() => {
         const surahMindmapCount = Object.keys(allMindmaps).filter(k => k.startsWith('surah-') && (allMindmaps as any)[k]?.snapshot).length;
         const partMetaCount = Object.keys(allMindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (allMindmaps as any)[k]?.snapshot).length;
+        // Count every split set found on disk (not only surahs that also have a
+        // mindmap, and not only ones created from this view).
         const totalVerseGroups = SURAHS.reduce((acc, s) => {
-          const hasMM = !!(allMindmaps as any)[`surah-${s.id}`]?.snapshot;
-          if (!hasMM) return acc;
-          const groups = (allSplitsForStats as any)[s.id]?.length;
-          return acc + (groups && groups > 0 ? groups : 1);
+          const groups = (allSplitsForStats as any)[s.id]?.length ?? 0;
+          return acc + (groups > 0 ? groups : 0);
         }, 0);
+        const surahsWithSplits = SURAHS.reduce((acc, s) => acc + (((allSplitsForStats as any)[s.id]?.length ?? 0) > 0 ? 1 : 0), 0);
         const docsWithContent = Object.keys(allDocsForStats).filter(k => {
           const v = (allDocsForStats as any)[k];
           return typeof v === 'string' && v.trim().length > 0 && !v.includes('_Not added yet._');
         }).length;
         const docsTotal = Object.keys(allDocsForStats).filter(k => typeof (allDocsForStats as any)[k] === 'string' && (allDocsForStats as any)[k].trim().length > 0).length;
         return (
-          <div style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
+          <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <span style={{ display:'inline-flex', gap:6, alignItems:'center', fontSize:'0.95em', fontWeight:700 }}><BarChart3 size={16} style={{ color:'var(--interactive-accent)' }} /> Deck Statistics</span>
               <button onClick={()=>setShowStatsDetails(v=>!v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>{showStatsDetails ? 'Hide details' : 'Show details'}</button>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8 }}>
+            <div className="ql-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8 }}>
               {[
                 { val: `${surahMindmapCount}/114`, label: 'Surahs with mindmap' },
                 { val: `${partMetaCount}/8`, label: 'Parts/Meta' },
-                { val: `${totalVerseGroups}`, label: 'Verse groups' },
+                { val: `${totalVerseGroups}`, label: `Verse groups (${surahsWithSplits} surahs)` },
                 { val: `${docsWithContent}/${docsTotal}`, label: 'Docs with notes' },
               ].map(card=>(
                 <div key={card.label} style={{ padding:'12px 8px', borderRadius:10, background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', textAlign:'center' }}>
@@ -530,7 +591,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             {showStatsDetails && (
               <div style={{ borderTop:'1px solid var(--background-modifier-border)', paddingTop:10, display:'flex', flexDirection:'column', gap:8 }}>
                 <div style={{ fontSize:'0.85em', fontWeight:700 }}>Surahs 1-114</div>
-                <div style={{ maxHeight:280, overflow:'auto', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
+                <div className="ql-table-wrap" style={{ maxHeight:280, overflow:'auto', WebkitOverflowScrolling:'touch', border:'1px solid var(--background-modifier-border)', borderRadius:8, background:'var(--background-secondary)' }}>
                   <table style={{ width:'100%', fontSize:'0.8em', borderCollapse:'collapse' }}>
                     <thead style={{ position:'sticky', top:0, background:'var(--background-secondary)', borderBottom:'1px solid var(--background-modifier-border)', zIndex:1 }}>
                       <tr><th style={{ textAlign:'left', padding:'8px', color:'var(--text-muted)', fontWeight:700 }}>Surah</th><th style={{ padding:'8px', color:'var(--text-muted)' }}>Mindmap</th><th style={{ padding:'8px', color:'var(--text-muted)' }}>Groups</th><th style={{ padding:'8px', color:'var(--text-muted)' }}>Docs</th></tr>
@@ -539,15 +600,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                       {SURAHS.map(s=>{
                         const key=`surah-${s.id}`;
                         const hasMM=!!(allMindmaps as any)[key]?.snapshot;
-                        const groups=hasMM ? ((allSplitsForStats as any)[s.id]?.length ?? 1) : 0;
-                        const doc=(allDocsForStats as any)[key] as string | undefined;
+                        const groups=(allSplitsForStats as any)[s.id]?.length ?? 0;
+                        const doc=(allDocsForStats as any)[normalizeStoreKey(key)] as string | undefined;
                         const hasDoc=typeof doc==='string' && doc.trim().length>0;
                         const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
                         return (
-                          <tr key={s.id} style={{ borderTop:'1px solid var(--background-modifier-border)', background: hasMM ? 'var(--background-primary)' : 'transparent' }}>
+                          <tr key={s.id} style={{ borderTop:'1px solid var(--background-modifier-border)', background: (hasMM || groups > 0 || hasDoc) ? 'var(--background-primary)' : 'transparent' }}>
                             <td style={{ padding:'7px 8px' }}><b style={{ color:'var(--text-normal)' }}>{s.id}.</b> {s.arabicName} <span style={{ color:'var(--text-faint)', fontSize:'0.85em' }}>({s.name})</span></td>
                             <td style={{ padding:'7px 8px', textAlign:'center' }}>{hasMM ? <Check size={14} style={{ color:'var(--interactive-accent)', display:'inline' }} /> : <X size={14} style={{ display:'inline', opacity:0.3 }} />}</td>
-                            <td style={{ padding:'7px 8px', textAlign:'center' }}>{hasMM ? <span style={{ padding:'2px 7px', borderRadius:999, background:'var(--interactive-accent)', color:'var(--text-on-accent)', fontWeight:700, fontSize:'0.78em' }}>{groups}</span> : <span style={{ opacity:0.3 }}>—</span>}</td>
+                            <td style={{ padding:'7px 8px', textAlign:'center' }}>{groups > 0 ? <span style={{ padding:'2px 7px', borderRadius:999, background:'var(--interactive-accent)', color:'var(--text-on-accent)', fontWeight:700, fontSize:'0.78em' }}>{groups}</span> : <span style={{ opacity:0.3 }}>—</span>}</td>
                             <td style={{ padding:'7px 8px', textAlign:'center' }}>{!hasDoc ? <X size={14} style={{ display:'inline', opacity:0.3 }} /> : isPlaceholder ? <span style={{ color:'var(--text-warning)' }}><FileText size={12} style={{ display:'inline' }} />•</span> : <Check size={14} style={{ color:'var(--interactive-accent)', display:'inline' }} />}</td>
                           </tr>
                         );
@@ -573,7 +634,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                         { key: 'part-7', label: 'Part 7 — Surah 67-114' },
                       ].map(row=>{
                         const hasMM=!!(allMindmaps as any)[row.key]?.snapshot;
-                        const doc=(allDocsForStats as any)[row.key] as string | undefined;
+                        const doc=(allDocsForStats as any)[normalizeStoreKey(row.key)] as string | undefined;
                         const hasDoc=typeof doc==='string' && doc.trim().length>0;
                         const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
                         return (
@@ -587,7 +648,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                     </tbody>
                   </table>
                 </div>
-                <div style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups for deck (1 if mindmap but no splits).</div>
+                <div style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups saved for that surah (from this view or added directly in the plugin data folder).</div>
               </div>
             )}
           </div>
@@ -653,8 +714,26 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
       )}
 
-      {toast && <div style={{ position:'fixed', bottom:14, left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50 }}>{toast}</div>}
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      {toast && <div style={{ position:'fixed', bottom:'calc(14px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50, maxWidth:'calc(100vw - 32px)' }}>{toast}</div>}
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        /* Mobile layout: every child is border-box so padding never pushes the
+           view past the screen width (the export/split rows used to overflow to
+           the right), and the multi-column rows stack instead of squeezing. */
+        .quran-life-anki, .quran-life-anki * { box-sizing: border-box; }
+        .quran-life-anki input, .quran-life-anki select, .quran-life-anki textarea, .quran-life-anki button { max-width: 100%; }
+        .quran-life-anki .ql-table-wrap table { min-width: 420px; }
+        @media (max-width: 640px) {
+          .quran-life-anki { padding: 10px !important; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
+          .quran-life-anki .ql-card { padding: 12px !important; border-radius: 10px !important; gap: 10px !important; }
+          .quran-life-anki .ql-export-row > button { flex: 1 1 100% !important; justify-content: center; }
+          .quran-life-anki .ql-splits-row { flex-direction: column !important; }
+          .quran-life-anki .ql-splits-row > div { flex: 1 1 100% !important; width: 100% !important; }
+          .quran-life-anki .ql-splits-preview { max-height: 180px !important; }
+          .quran-life-anki .ql-stats-grid { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)) !important; }
+          .quran-life-anki .ql-table-wrap { max-height: 240px !important; }
+          .quran-life-anki button { min-height: 36px; }
+        }
+      `}</style>
     </div>
   );
 }

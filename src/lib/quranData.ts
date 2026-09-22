@@ -3,6 +3,7 @@
 // ========================================
 
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
+import { getObsidianApp } from './obsidianApp';
 
 // Helper to determine part based on surah ID
 function getPart(surahId: number): CoreQuranPart {
@@ -271,8 +272,9 @@ export async function getQuranVerses(): Promise<Verse[]> {
 
         try {
             // Try Obsidian vault first (plugin context, no /public server)
-            // When running inside Obsidian, window.app.vault is available
-            const obsidianApp: any = typeof window !== 'undefined' ? (window as any).app : null;
+            // Uses the shared app registry so Obsidian Mobile works too — mobile
+            // does not expose `window.app`.
+            const obsidianApp: any = getObsidianApp();
             const isObsidian = !!obsidianApp?.vault?.adapter;
             const candidates = [
                 '.obsidian/plugins/quran-life/data/assets/qpc-hafs-word-by-word.json',
@@ -326,7 +328,7 @@ export async function getQuranVerses(): Promise<Verse[]> {
                 console.warn('[QuranLife] Quran JSON not found in vault candidates, checked:', candidates);
                 // Try one last vault read for legacy path without isObsidian check
                 try {
-                    const raw = await (window as any).app?.vault?.adapter?.read('QuranLife/assets/qpc-hafs-word-by-word.json');
+                    const raw = await obsidianApp?.vault?.adapter?.read('QuranLife/assets/qpc-hafs-word-by-word.json');
                     if (raw) {
                         const data = JSON.parse(raw);
                         cachedVerses = parseQuranJson(data as Record<string, any>);

@@ -1,7 +1,8 @@
 import { App, TFile, TFolder, normalizePath, Notice } from "obsidian";
 import { SURAHS, getSurahsByPart } from "@/lib/quranData";
 import { QuranPart } from "@/lib/types";
-import { Reciter, loadRecitationData, getAudioInfoForVerse } from "@/lib/audio";
+import { Reciter, loadRecitationData, getAudioInfoForVerse, buildAyahAudioUrl } from "@/lib/audio";
+import { getObsidianApp } from "@/lib/obsidianApp";
 import { ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
 
 // Offline audio is stored inside plugin folder (not vault root) so only one folder to sync.
@@ -11,8 +12,9 @@ export const OFFLINE_MANIFEST_PATH = normalizePath(`${OFFLINE_AUDIO_ROOT}/manife
 
 function getApp(appOverride?: any): App | null {
   try {
-    const app = appOverride ?? (typeof window !== 'undefined' ? (window as any).app : null);
-    return app?.vault?.adapter ? app : null;
+    // Shared registry — Obsidian Mobile has no `window.app`, so downloads used
+    // to lose `requestUrl` (CORS-free fetch) and the vault adapter entirely.
+    return (getObsidianApp(appOverride) as App | null) ?? null;
   } catch { return null; }
 }
 
@@ -378,19 +380,22 @@ export async function downloadPartAudio(
       if (status.isComplete) return { downloadedFiles: 0, failedFiles: 0, totalBytes: status.totalBytes };
     }
   } else {
-    // ayah-based: need the large verses map JSON locally
-    // Load once
+    // ayah-based: use the large `verses` map when it loads (it also carries the
+    // per-word segments), but never hard-fail on it — every ayah-based reciter
+    // publishes `<ayahAudioBase>/<SSS><AAA>.mp3`, so downloads still work when
+    // the map cannot be fetched (this is what used to throw
+    // "Failed to load ayah recitation map" on mobile).
     let ayahData: any = null;
     try { ayahData = await loadRecitationData(reciter, 1, app); } catch {}
-    if (!ayahData?.verses) throw new Error("Failed to load ayah recitation map");
+    const ayahMap: Record<string, any> | null = ayahData?.verses ?? null;
+    if (!ayahMap && !reciter.ayahAudioBase) throw new Error("Failed to load ayah recitation map");
     for (const sh of surahs) {
       for (let ay = 1; ay <= sh.verseCount; ay++) {
         const offlinePath = getOfflineAyahAudioPath(reciter.id, sh.id, ay);
         const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay);
         if (skipExisting && ((await adapterExists(app, offlinePath)) || (await adapterExists(app, legacyPath)))) continue;
         const key = `${sh.id}:${ay}`;
-        const entry = ayahData.verses[key];
-        const remoteUrl = entry?.audio_url;
+        const remoteUrl = ayahMap?.[key]?.audio_url ?? buildAyahAudioUrl(reciter, sh.id, ay);
         if (!remoteUrl) continue;
         tasks.push({ type: "ayah", surahId: sh.id, ayahId: ay, remoteUrl, offlinePath, label: `${sh.id}:${ay}` });
       }
@@ -415,12 +420,13 @@ export async function downloadPartAudio(
       const alreadyHave = skipExisting && ((await adapterExists(app, basmalaPath)) || (await adapterExists(app, legacyPath)));
       const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
       if (!alreadyHave && !alreadyQueued) {
-        // Reload the verses map (scoped to the branch above) to resolve 1:1.
+        // Resolve 1:1 from the map when available, else from the URL pattern.
         let basmalaUrl: string | null = null;
         try {
           const basmalaData: any = await loadRecitationData(reciter, 1, app);
           basmalaUrl = basmalaData?.verses?.["1:1"]?.audio_url ?? null;
         } catch {}
+        if (!basmalaUrl) basmalaUrl = buildAyahAudioUrl(reciter, 1, 1);
         if (basmalaUrl) tasks.push({ type: "ayah", surahId: 1, ayahId: 1, remoteUrl: basmalaUrl, offlinePath: basmalaPath, label: "Basmala (1:1)" });
       }
     }
