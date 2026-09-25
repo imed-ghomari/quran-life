@@ -2,6 +2,11 @@
 import React from 'react';
 import { Tldraw } from 'tldraw';
 import { useTheme } from '@/components/ThemeProvider';
+import {
+  attachMindmapSwipeGuard,
+  fitMindmapCameraTight,
+  observeTldrawWatermarkTitles,
+} from '@/plugin/lib/mindmapObsidianGuards';
 
 const { useCallback, useState, useEffect } = React;
 
@@ -13,7 +18,25 @@ interface Props {
 export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Props) {
   const [editor, setEditor] = useState<any>(null);
   const [showBackToContent, setShowBackToContent] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const { theme } = useTheme();
+
+  // Keep pan/zoom gestures inside the preview: stops Obsidian's sidebar
+  // reveal + back/forward handlers from seeing them (bubble-phase guard —
+  // tldraw handles the gesture first at target phase).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    return attachMindmapSwipeGuard(el);
+  }, []);
+
+  // Strip the tldraw watermark hover tooltip; watermark itself stays.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    return observeTldrawWatermarkTitles(el);
+  }, []);
+
   const handleMount = useCallback((ed: any) => {
     setEditor(ed);
     ed.updateInstanceState({ isReadonly: true });
@@ -32,12 +55,14 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
       resolved = mqDark ? 'dark' : 'light';
     } else resolved = theme as 'light' | 'dark';
     try { ed.user.updateUserPreferences({ colorScheme: resolved }); } catch {}
-    // Aggressive Zoom-to-Fit strategy — ported from web MindmapViewer.tsx:480
+    // Aggressive Zoom-to-Fit strategy — ported from web MindmapViewer.tsx:480.
+    // Uses a tight inset (default zoomToFit pads 128px, leaving the map
+    // floating in blank space) so the mindmap fills the viewer.
     const fit = () => {
       try {
         const shapes = ed.getCurrentPageShapes?.();
         if (Array.isArray(shapes) ? shapes.length > 0 : true) {
-          ed.zoomToFit({ duration: 0 });
+          fitMindmapCameraTight(ed);
         }
       } catch {}
     };
@@ -75,7 +100,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
 
   useEffect(() => {
     if (editor) {
-      try { editor.zoomToFit({ duration: 0 }); } catch {}
+      try { fitMindmapCameraTight(editor); } catch {}
       // also keep theme in sync when theme changes after mount
       const getObs = () => {
         if (typeof document === 'undefined') return null as 'light' | 'dark' | null;
@@ -95,11 +120,15 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
   }, [snapshot, editor, theme]);
   if (!snapshot) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6, border: '1px solid var(--background-modifier-border)', borderRadius: 8 }}>No snapshot</div>;
   return (
-    <div style={{ height, border: '1px solid var(--background-modifier-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--background-secondary)', position: 'relative' }}>
+    <div
+      ref={containerRef}
+      data-mindmap-swipe-guard="true"
+      style={{ height, border: '1px solid var(--background-modifier-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--background-secondary)', position: 'relative', overscrollBehavior: 'none' }}
+    >
       {showBackToContent && (
         <button
           onClick={() => {
-            try { (editor as any)?.zoomToFit({ duration: 200 }); } catch {}
+            try { fitMindmapCameraTight(editor as any); } catch {}
           }}
           style={{
             position: 'absolute',

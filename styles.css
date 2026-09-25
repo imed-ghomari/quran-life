@@ -2,6 +2,38 @@
 .quran-life-hint { color: var(--text-muted); font-size: 0.85em; }
 .quran-life-mindmap-bar select, .quran-life-mindmap-bar button { font-size: 0.9em; }
 
+/* ---- Mindmap gesture + mobile guards (Quran Life) ---- */
+/* Keep pan/zoom gestures from triggering Obsidian's sidebar / history swipes. */
+[data-mindmap-swipe-guard] {
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+}
+[data-mindmap-swipe-guard] .tl-canvas {
+  overscroll-behavior: none;
+}
+/* Editor chrome respects the OS safe-area so it is never under the notch. */
+.mindmap-editor-header {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+/* Obsidian phones float their own bottom bar over the WebView, which sat on
+   top of tldraw's toolbar. --ql-obsidian-bottom-offset is measured at
+   runtime and is 0 on tablets/desktop where no such bar exists, so no dead
+   gap appears there. */
+[data-mindmap-swipe-guard] .tlui-toolbar {
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px) + var(--ql-obsidian-bottom-offset, 0px)) !important;
+}
+[data-mindmap-swipe-guard] .tlui-navigation-panel {
+  bottom: var(--ql-obsidian-bottom-offset, 0px) !important;
+}
+body.is-mobile [data-mindmap-swipe-guard] .tlui-layout__top,
+body.is-phone [data-mindmap-swipe-guard] .tlui-layout__top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
+}
+body.is-mobile .mindmap-editor-header,
+body.is-phone .mindmap-editor-header {
+  min-height: calc(50px + env(safe-area-inset-top, 0px)) !important;
+}
+
 /* tldraw */
 /* THIS CSS FILE IS GENERATED! DO NOT EDIT. OR EDIT. I'M A COMMENT NOT A COP */ 
 /* This file is created by the copy-css-files.mjs script in packages/tldraw. */

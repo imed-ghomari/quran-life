@@ -42,6 +42,12 @@ import {
     STROKE_SIZES
 } from 'tldraw';
 import { getStrokePoints, getSvgPathFromStrokePoints } from '@/utils/tldrawStroke';
+import {
+    attachMindmapSwipeGuard,
+    fitMindmapCameraTight,
+    observeObsidianBottomBar,
+    observeTldrawWatermarkTitles,
+} from '@/plugin/lib/mindmapObsidianGuards';
 
 const { useCallback, useEffect, useState, useMemo, useRef } = React;
 
@@ -503,7 +509,7 @@ function MindmapEditorContent({
                 editorInstance.setCurrentTool('lasso-select');
 
                 setTimeout(() => {
-                    editorInstance.zoomToFit();
+                    fitMindmapCameraTight(editorInstance);
                 }, 100);
 
                 if (localDraftSnapshot) {
@@ -530,7 +536,7 @@ function MindmapEditorContent({
                 } else {
                     editorInst.store.loadSnapshot(sanitized);
                 }
-                setTimeout(() => editorInst.zoomToFit(), 100);
+                setTimeout(() => fitMindmapCameraTight(editorInst), 100);
             } catch (e) {
                 console.warn('Failed to load late snapshot', e);
             }
@@ -547,21 +553,32 @@ function MindmapEditorContent({
     }, []);
 
     useEffect(() => {
-        const handleWheel = (event: WheelEvent) => {
-            const container = containerRef.current;
-            if (!container) return;
+        // Keep pan/zoom gestures inside the canvas: bubble-phase guard on the
+        // container stops touch/wheel gestures from reaching Obsidian's
+        // sidebar-reveal and back/forward handlers (tldraw still gets them
+        // first at target phase). Replaces the old window-level wheel trap,
+        // which could not stop Obsidian's document-level listeners.
+        const container = containerRef.current;
+        if (!container) return;
+        return attachMindmapSwipeGuard(container);
+    }, []);
 
-            const target = event.target;
-            const targetNode = target instanceof Node ? target : null;
-            if (!targetNode || !container.contains(targetNode)) return;
+    useEffect(() => {
+        // Strip the tldraw watermark hover tooltip ("made with tldraw").
+        // The watermark itself stays visible (license); only the native
+        // title popup is removed.
+        const container = containerRef.current;
+        if (!container) return;
+        return observeTldrawWatermarkTitles(container);
+    }, []);
 
-            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-                event.preventDefault();
-            }
-        };
-
-        window.addEventListener('wheel', handleWheel, { capture: true, passive: false });
-        return () => window.removeEventListener('wheel', handleWheel, { capture: true });
+    useEffect(() => {
+        // Measure Obsidian's own bottom bar (phones) and lift tldraw's
+        // toolbar only by that amount. Tablets have no such bar, so the
+        // offset stays 0 there and no dead gap appears.
+        const container = containerRef.current;
+        if (!container) return;
+        return observeObsidianBottomBar(container);
     }, []);
 
     useEffect(() => {
@@ -1093,12 +1110,11 @@ function MindmapEditorContent({
         <div
             ref={containerRef}
             data-mindmap-swipe-guard="true"
-            style={{ position: 'relative', width: '100%', height: '100%', flex: 1, minHeight: '500px', background: 'var(--background-primary)', display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: 0, padding: 0, gap: 0 }}
+            style={{ position: 'relative', width: '100%', height: '100%', flex: 1, minHeight: '500px', background: 'var(--background-primary)', display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: 0, padding: 0, paddingBottom: 'env(safe-area-inset-bottom, 0px)', gap: 0 }}
         >
             <div
                 className="mindmap-editor-header"
                 style={{
-                height: '50px',
                 minHeight: '50px',
                 flexShrink: 0,
                 margin: 0,
@@ -1108,7 +1124,8 @@ function MindmapEditorContent({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '0 1rem'
+                padding: 'calc(env(safe-area-inset-top, 0px)) 1rem 0',
+                boxSizing: 'border-box'
             }}>
                 <div className="mindmap-editor-header-left mindmap-header-main" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', minWidth: 0 }}>
                     <span className="mindmap-editor-title" style={{ fontWeight: 600, color: 'var(--text-normal)' }}>Mindmap Editor</span>
@@ -1246,7 +1263,27 @@ function MindmapEditorContent({
                     components={components}
                 />
             </div>
-            <style>{`@keyframes mindmap-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+            <style>{`@keyframes mindmap-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+              /* Keep tldraw UI clear of Obsidian's own floating bottom bar.
+                 --ql-obsidian-bottom-offset is measured at runtime (phones);
+                 it is 0 on tablets/desktop where no such bar exists, so no
+                 dead gap appears there. tldraw already adds the OS safe-area
+                 itself via --sab. */
+              [data-mindmap-swipe-guard] .tlui-toolbar {
+                padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px) + var(--ql-obsidian-bottom-offset, 0px)) !important;
+              }
+              [data-mindmap-swipe-guard] .tlui-navigation-panel {
+                bottom: var(--ql-obsidian-bottom-offset, 0px) !important;
+              }
+              body.is-mobile [data-mindmap-swipe-guard] .tlui-layout__top,
+              body.is-phone [data-mindmap-swipe-guard] .tlui-layout__top {
+                padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
+              }
+              body.is-mobile .mindmap-editor-header,
+              body.is-phone .mindmap-editor-header {
+                min-height: calc(50px + env(safe-area-inset-top, 0px)) !important;
+              }
+            `}</style>
         </div>
     );
 }
