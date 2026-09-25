@@ -44,7 +44,6 @@ import {
 import { getStrokePoints, getSvgPathFromStrokePoints } from '@/utils/tldrawStroke';
 import {
     attachMindmapSwipeGuard,
-    fitMindmapCameraTight,
     observeObsidianBottomBar,
     observeTldrawWatermarkTitles,
 } from '@/plugin/lib/mindmapObsidianGuards';
@@ -509,7 +508,7 @@ function MindmapEditorContent({
                 editorInstance.setCurrentTool('lasso-select');
 
                 setTimeout(() => {
-                    fitMindmapCameraTight(editorInstance);
+                    editorInstance.zoomToFit();
                 }, 100);
 
                 if (localDraftSnapshot) {
@@ -536,7 +535,7 @@ function MindmapEditorContent({
                 } else {
                     editorInst.store.loadSnapshot(sanitized);
                 }
-                setTimeout(() => fitMindmapCameraTight(editorInst), 100);
+                setTimeout(() => editorInst.zoomToFit(), 100);
             } catch (e) {
                 console.warn('Failed to load late snapshot', e);
             }
