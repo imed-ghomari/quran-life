@@ -225,7 +225,12 @@ async function fetchViaObsidianRequestUrl(url: string, appOverride?: any): Promi
             req = (window as any).requestUrl;
         }
         if (!req) return null;
-        const res: any = await req({ url, method: 'GET', headers: { 'Accept': 'application/json' } });
+        // requestUrl has no abort support — race a timeout so a dead network
+        // can never leave the player hanging forever.
+        const res: any = await Promise.race([
+            req({ url, method: 'GET', headers: { 'Accept': 'application/json' } }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
+        ]);
         const status: number = typeof res.status === 'number' ? res.status : 0;
         if (status >= 200 && status < 300) {
             if (res.json !== undefined && res.json !== null) {
@@ -269,6 +274,23 @@ function recitationSiteBases(): string[] {
  * Previously the remote step ran only for Electron/desktop because
  * `isObsidianEnv` relied on `window.app`, which mobile does not provide.
  */
+
+// JSON fetch with a hard timeout: without this a stalled network leaves the
+// player spinner hanging forever (offline + no cached metadata). Timeouts
+// reject so callers fall through to the next source / graceful error.
+async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<any | null> {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+    try {
+        const res = await fetch(url, { signal: ctrl?.signal as any });
+        if (!res.ok) return null;
+        try { return await res.json(); } catch { return null; }
+    } catch {
+        return null;
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
 async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any): Promise<any | null> {
     const app = getObsidianApp(appOverride);
     const usesPublicOrigin = /^https?:\/\//i.test(urlPath);
@@ -300,8 +322,8 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any)
                     try {
                         const resourceUrl = adapter.getResourcePath(cand);
                         if (!resourceUrl) continue;
-                        const res = await fetch(resourceUrl);
-                        if (res.ok) return await res.json();
+                        const data = await fetchJsonWithTimeout(resourceUrl);
+                        if (data) return data;
                     } catch {}
                 }
             }
@@ -322,10 +344,12 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any)
     const fetchTargets = usesPublicOrigin ? [urlPath] : recitationSiteBases().map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
     fetchTargets.push(urlPath);
     for (const target of fetchTargets) {
-        try {
-            const res = await fetch(target);
-            if (res.ok) return await res.json();
-        } catch {}
+        // Skip cross-origin plain fetch inside Obsidian: without CORS it fails
+        // anyway, and on a dead network it is the slowest hang — requestUrl
+        // above is the supported path there.
+        if (app && /^https?:\/\//i.test(target)) continue;
+        const data = await fetchJsonWithTimeout(target);
+        if (data) return data;
     }
     return null;
 }
@@ -499,7 +523,12 @@ export async function resolveAudioUrlProxied(url: string, appOverride?: any): Pr
             req = (window as any).requestUrl;
         }
         if (!req) return url;
-        const res: any = await req({ url, method: 'GET' });
+        // Full-file download via requestUrl — generous timeout (slow networks
+        // are real) but never unbounded, so playback can't hang forever.
+        const res: any = await Promise.race([
+            req({ url, method: 'GET' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('audio download timeout')), 120000)),
+        ]);
         const responseBuffer = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
         const buf: ArrayBuffer | null = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
         if (!buf || buf.byteLength === 0) return url;

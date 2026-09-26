@@ -423,6 +423,32 @@ export class VaultStore {
     await writeJsonAtomic(this.app, VAULT_PATHS.ankiExport(this.dataRoot), normalizeAnkiExportPrefs(prefs));
   }
 
+  // Anki export — persist the generated .apkg into the vault so the file is
+  // never lost when the WebView blocks the browser download (Obsidian Mobile
+  // has no downloads folder; the anchor-click download silently does nothing).
+  // Saved at the vault root (visible) rather than the data root (often hidden).
+  async saveApkgFile(fileName: string, blob: Blob): Promise<string> {
+    const normalized = normalizePath(fileName);
+    const dir = normalized.split("/").slice(0, -1).join("/");
+    if (dir) await ensureFolder(this.app, dir);
+    const ab = await blob.arrayBuffer();
+    if (isHiddenPath(normalized)) {
+      const adapter: any = (this.app as any).vault?.adapter;
+      if (adapter?.writeBinary) {
+        await adapter.writeBinary(normalized, ab);
+        return normalized;
+      }
+      throw new Error("binary write not supported for hidden path");
+    }
+    const file = this.app.vault.getAbstractFileByPath(normalized);
+    if (file instanceof TFile) {
+      await this.app.vault.modifyBinary(file, ab);
+    } else {
+      await this.app.vault.createBinary(normalized, ab);
+    }
+    return normalized;
+  }
+
   // Progress — per part
   async loadProgress(partId: number): Promise<any | null> {
     const path = normalizePath(`${VAULT_PATHS.listeningProgressDir(this.dataRoot)}/part-${partId}.json`);

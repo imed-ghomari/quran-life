@@ -284,6 +284,120 @@ async function getJSZip() {
 let cachedWasmBinary: ArrayBuffer | null = null;
 let cachedInitSqlJs: any = null;
 
+// ---------- packaging helpers (web + Obsidian safe) ----------
+
+// Yield to the event loop so the export progress UI can repaint between
+// heavy synchronous chunks (db inserts, zip). Without this the view looks
+// frozen at "Packaging…" even though work is progressing.
+function yieldToUI(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 0));
+}
+
+function timeoutReject(ms: number, message: string): Promise<never> {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms));
+}
+
+// fetch() with a hard timeout. A plain `await fetch(...)` can hang forever
+// (no response, captive portal, CSP-blocked) which froze the Obsidian export
+// at the packaging step with no error and no completion. Every packaging
+// await must either resolve or reject — never hang.
+async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promise<ArrayBuffer> {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+  try {
+    const resp = await fetch(url, { cache: 'force-cache' as any, signal: ctrl?.signal as any });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
+    return await resp.arrayBuffer();
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error(`Timed out fetching ${url}`);
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// Resolve the Obsidian app when running inside the plugin (desktop + mobile).
+// apkgExport is shared with the web app and must not import 'obsidian' —
+// the registry module below is dependency-free and returns null on web.
+import { getObsidianApp } from '@/lib/obsidianApp';
+function getPluginApp(): any | null {
+  try {
+    const app = getObsidianApp();
+    if (app?.vault?.adapter) return app;
+  } catch {}
+  return null;
+}
+
+// Load the sql.js wasm binary, Obsidian-first when in the plugin:
+//  1. plugin-local file via vault adapter (works fully offline — the build
+//     copies public/sql-wasm.wasm to the plugin root, same as the Quran JSON)
+//  2. plugin resource URL (app://) via adapter.getResourcePath
+//  3. web / CDN fetches, each with a hard timeout so packaging can never hang
+async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
+  if (cachedWasmBinary) return cachedWasmBinary;
+  const app = getPluginApp();
+  if (app) {
+    const adapter: any = app.vault?.adapter;
+    const candidates = [
+      '.obsidian/plugins/quran-life/sql-wasm.wasm',
+      '.obsidian/plugins/quran-life/public/sql-wasm.wasm',
+    ];
+    if (adapter?.readBinary) {
+      for (const cand of candidates) {
+        try {
+          if (adapter.exists && !(await adapter.exists(cand))) continue;
+          const buf = await Promise.race([
+            adapter.readBinary(cand),
+            timeoutReject(8000, `Timed out reading ${cand}`),
+          ]);
+          const ab = buf instanceof ArrayBuffer ? buf : (buf?.buffer instanceof ArrayBuffer ? buf.buffer : null);
+          if (ab && ab.byteLength > 1000) {
+            cachedWasmBinary = ab;
+            return ab;
+          }
+        } catch {}
+      }
+    }
+    if (adapter?.getResourcePath) {
+      for (const cand of candidates) {
+        try {
+          const resourceUrl = adapter.getResourcePath(cand);
+          if (!resourceUrl) continue;
+          const ab = await fetchArrayBufferWithTimeout(resourceUrl, 8000);
+          if (ab && ab.byteLength > 1000) {
+            cachedWasmBinary = ab;
+            return ab;
+          }
+        } catch {}
+      }
+    }
+    // In Obsidian there is no web server serving `/sql-wasm.wasm` — skip it
+    // and go straight to CDN (timeouts apply).
+  } else {
+    try {
+      const ab = await fetchArrayBufferWithTimeout('/sql-wasm.wasm', 8000);
+      if (ab && ab.byteLength > 1000) {
+        cachedWasmBinary = ab;
+        return ab;
+      }
+    } catch {}
+  }
+  const cdnUrls = [
+    'https://sql.js.org/dist/sql-wasm.wasm',
+    'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm',
+  ];
+  for (const url of cdnUrls) {
+    try {
+      const ab = await fetchArrayBufferWithTimeout(url, 10000);
+      if (ab && ab.byteLength > 1000) {
+        cachedWasmBinary = ab;
+        return ab;
+      }
+    } catch {}
+  }
+  return cachedWasmBinary;
+}
+
 // Escape Anki field separator
 function escapeField(s: string): string {
   return s.replace(/\n/g, '<br>').replace(/\x1f/g, ' ');
@@ -631,53 +745,59 @@ export async function generateApkgBlob(
       console.warn('mindmap media generation failed, continuing without images', e);
     }
 
-    // Try dynamic sql.js - robust for Vercel (public/ at root, wasm via fetch, fallback to wasmBinary)
-    // Use Function() to avoid Webpack bundling node:crypto at build time (sql.js uses node:crypto in its Node entry)
-    // Robust sql.js loading for Vercel: avoid Webpack bundling node:crypto, use wasmBinary with CDN fallbacks
+    // sql.js engine loading. The JS is bundled with the app/plugin and the wasm
+    // resolves local-first (plugin folder / /sql-wasm.wasm) then CDN data —
+    // every fetch has a hard timeout so packaging can never hang silently.
+    // NOTE: no remote <script> injection by design — Obsidian review does not
+    // allow loading remote code; the wasm binary is data, not code.
     let SQL: any = null;
     try {
+      reportApkg(82);
+      await yieldToUI();
       let initSqlJs: any = cachedInitSqlJs;
       if (!initSqlJs) {
         try {
           const mod: any = await import(/* webpackIgnore: true */ 'sql.js');
           initSqlJs = mod.default || mod;
         } catch {
-          try {
-            const mod2: any = await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js');
-            initSqlJs = mod2.default || mod2;
-          } catch {
-            initSqlJs = await new Promise<any>((resolve, reject) => {
-              if ((window as any).initSqlJs) return resolve((window as any).initSqlJs);
-              const script = document.createElement('script');
-              script.src = 'https://sql.js.org/dist/sql-wasm.js';
-              script.async = true;
-              script.onload = () => resolve((window as any).initSqlJs);
-              script.onerror = () => reject(new Error('CDN sql.js load failed'));
-              document.head.appendChild(script);
-              setTimeout(() => reject(new Error('CDN timeout')), 8000);
-            });
-          }
+          const mod2: any = await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js');
+          initSqlJs = mod2.default || mod2;
         }
+        if (typeof initSqlJs !== 'function') throw new Error('Bundled sql.js failed to load');
         cachedInitSqlJs = initSqlJs;
       }
-      const wasmUrls = ['/sql-wasm.wasm', 'https://sql.js.org/dist/sql-wasm.wasm', 'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm'];
-      let wasmBinary: ArrayBuffer | null = cachedWasmBinary;
-      if (!wasmBinary) {
-        for (const url of wasmUrls) {
+      const wasmBinary = await loadSqlWasmBinary();
+      reportApkg(83);
+      await yieldToUI();
+      if (wasmBinary) {
+        // Guard the wasm instantiate itself: a corrupt binary must reject,
+        // never hang the export at "Packaging…".
+        SQL = await Promise.race([
+          initSqlJs({ wasmBinary }),
+          timeoutReject(20000, 'sql.js init timed out'),
+        ]);
+      } else {
+        // Last resort: let sql.js locate the wasm itself. In Obsidian prefer
+        // the plugin resource URL (app://) over `/file` (no web server there).
+        const pluginApp = getPluginApp();
+        const pluginWasmUrl: string | null = (() => {
           try {
-            const resp = await fetch(url, { cache: 'force-cache' as any });
-            if (resp.ok) {
-              wasmBinary = await resp.arrayBuffer();
-              break;
+            const adapter: any = pluginApp?.vault?.adapter;
+            if (adapter?.getResourcePath) {
+              for (const cand of ['.obsidian/plugins/quran-life/sql-wasm.wasm', '.obsidian/plugins/quran-life/public/sql-wasm.wasm']) {
+                try {
+                  const u = adapter.getResourcePath(cand);
+                  if (u) return u;
+                } catch {}
+              }
             }
           } catch {}
-        }
-        if (wasmBinary) cachedWasmBinary = wasmBinary;
-      }
-      if (wasmBinary) {
-        SQL = await initSqlJs({ wasmBinary });
-      } else {
-        SQL = await initSqlJs({ locateFile: (file: string) => `/${file}` });
+          return null;
+        })();
+        SQL = await Promise.race([
+          initSqlJs({ locateFile: (file: string) => pluginWasmUrl || `/${file}` }),
+          timeoutReject(20000, 'sql.js init timed out'),
+        ]);
       }
     } catch (e) {
       console.warn('sql.js not available', e);
@@ -825,6 +945,13 @@ export async function generateApkgBlob(
     const orderedEntries = buildOrderedExportEntries(cards, mindmapCards, exportPrefs ?? null);
     let nidSeq = now - orderedEntries.length * 1000 - 5000;
     for (let orderIdx = 0; orderIdx < orderedEntries.length; orderIdx++) {
+      // Keep the progress bar moving and the UI responsive during large
+      // decks: hundreds of synchronous db.run calls otherwise freeze the
+      // view at "Packaging…" with no feedback.
+      if (orderIdx % 20 === 0) {
+        reportApkg(83 + Math.round((orderIdx / Math.max(1, orderedEntries.length)) * 4));
+        await yieldToUI();
+      }
       const entry = orderedEntries[orderIdx];
       const duePos = orderIdx + 1; // 1-based new-card position
       nidSeq += 1;
@@ -940,20 +1067,38 @@ export async function generateApkgBlob(
       }
     }
 
-    reportApkg(85);
+    reportApkg(87);
+    await yieldToUI();
     const data = db.export();
     reportApkg(90);
+    await yieldToUI();
     const zip = new JSZip();
     zip.file('collection.anki2', data);
     zip.file('media', JSON.stringify(mediaMap));
     // Add each mindmap PNG as file named by its media key ("0", "1", ...)
-    for (const [key, blob] of Object.entries(mediaFiles)) {
+    const mediaEntries = Object.entries(mediaFiles);
+    for (let mi = 0; mi < mediaEntries.length; mi++) {
+      const [key, blob] = mediaEntries[mi];
       const ab = await (blob as Blob).arrayBuffer();
       zip.file(key, ab);
+      if (mi % 5 === 0) {
+        reportApkg(90 + Math.round(((mi + 1) / Math.max(1, mediaEntries.length)) * 5));
+        await yieldToUI();
+      }
     }
     reportApkg(95);
 
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    // onUpdate keeps the bar moving during DEFLATE compression of large
+    // decks (previously the UI sat at 95% with no feedback).
+    const blob = await zip.generateAsync(
+      { type: 'blob', compression: 'DEFLATE' },
+      (metadata: { percent?: number }) => {
+        try {
+          const pct = typeof metadata?.percent === 'number' ? metadata.percent : 0;
+          reportApkg(95 + Math.round((Math.min(100, Math.max(0, pct)) / 100) * 5));
+        } catch {}
+      }
+    );
     reportApkg(100);
     return blob;
   } catch (e) {

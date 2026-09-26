@@ -111,8 +111,24 @@ if (prod) {
   } catch (e) {
     console.warn("Could not copy quran JSON", e);
   }
-  // No premade data: Anki Deck is vault-only (users share mindmaps/splits/docs directly).
-  // Copy recitations JSONs to plugin folder for Obsidian offline fallback (audio player needs surah.json/segments.json)
+    // Copy sql.js wasm to plugin root for Obsidian offline packaging (the plugin
+  // has no /public server and may be offline, so the Anki export reads the
+  // wasm via the vault adapter instead of /sql-wasm.wasm or CDN)
+  try {
+    const srcWasm = path.join("public", "sql-wasm.wasm");
+    const destWasm = path.join(".", "sql-wasm.wasm");
+    if (fs.existsSync(srcWasm)) {
+      const srcStat = fs.statSync(srcWasm);
+      const destStat = fs.existsSync(destWasm) ? fs.statSync(destWasm) : null;
+      if (!destStat || srcStat.mtimeMs > destStat.mtimeMs || srcStat.size !== destStat.size) {
+        fs.copyFileSync(srcWasm, destWasm);
+        console.log("✓ sql-wasm.wasm copied to plugin root for Obsidian offline Anki packaging");
+      }
+    }
+  } catch (e) {
+    console.warn("Could not copy sql-wasm.wasm", e);
+  }
+  // No premade data: Anki Deck is vault-only (users share mindmaps/splits/docs directly).  // Copy recitations JSONs to plugin folder for Obsidian offline fallback (audio player needs surah.json/segments.json)
   // The vault's public/recitations already exists, but plugin folder (.obsidian/plugins/quran-life) is what adapter reads via ".obsidian/plugins/quran-life/..." — ensure it's there
   try {
     const srcRecitations = path.join("public", "recitations");

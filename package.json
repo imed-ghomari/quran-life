@@ -1,6 +1,6 @@
 {
   "name": "quran-reader",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -17,7 +17,8 @@
     "verify:paddle:instant": "node scripts/verify-paddle-instant.js",
     "test:fsrs:optimization": "node scripts/test-fsrs-optimization.js",
     "web:dev": "node scripts/generate-search-index.js && next dev --webpack",
-    "web:build": "node scripts/generate-search-index.js && next build --webpack"
+    "web:build": "node scripts/generate-search-index.js && next build --webpack",
+    "plugin:release": "npm run build && node scripts/build-plugin-release.mjs"
   },
   "engines": {
     "node": ">=18"
