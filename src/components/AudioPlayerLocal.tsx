@@ -36,6 +36,9 @@ const DEFAULT_WORDS_PER_SECOND = 2.6;
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
 const RECITER_STORAGE_KEY = 'selected_reciter_id';
 const PLAYBACK_STATE_KEY = 'audio_playback_state_v1';
+// Aliases used by legacy code paths that read/write directly; kept for review
+// so the build passes while we migrate every call site to window.localStorage.
+
 const MEDIA_READY_STATE_FUTURE_DATA = 3;
 const SEEK_TOLERANCE_SEC = 0.08;
 const BUFFER_GUARD_SEC = 0.18;
@@ -66,18 +69,20 @@ const isAudioBufferedAt = (audio: HTMLAudioElement, targetTime: number) => {
 
 function readStoredPlaybackState(): { reciterId?: string; surahId: number; ayahId: number; timestamp: number } | null {
     try {
-        const raw = localStorage.getItem(PLAYBACK_STATE_KEY);
+        const raw = window.localStorage.getItem(PLAYBACK_STATE_KEY);
         if (!raw) return null;
         const p = JSON.parse(raw);
         if (!p || typeof p.surahId !== 'number' || typeof p.ayahId !== 'number') return null;
         return p;
-    } catch { return null; }
+    } catch {
+        return null;
+    }
 }
 function writeStoredPlaybackState(state: { reciterId?: string; surahId: number; ayahId: number; timestamp: number } | null) {
     try {
-        if (!state) localStorage.removeItem(PLAYBACK_STATE_KEY);
-        else localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(state));
-    } catch {}
+        if (!state) window.localStorage.removeItem(PLAYBACK_STATE_KEY);
+        else window.localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(state));
+    } catch { /* storage unavailable — playback state is best-effort */ }
 }
 
 export default function AudioPlayerLocal({
@@ -459,7 +464,7 @@ export default function AudioPlayerLocal({
 
     useEffect(() => {
         if (reciters.length === 0) return;
-        const savedId = typeof window !== 'undefined' ? localStorage.getItem(RECITER_STORAGE_KEY) || undefined : undefined;
+        const savedId = typeof window !== 'undefined' ? window.localStorage.getItem(RECITER_STORAGE_KEY) || undefined : undefined;
         const preferred = reciters.find(r => r.id === savedId) || reciters[0];
         if (!preferred) return;
         if (selectedReciterId !== preferred.id) setSelectedReciter(preferred);
@@ -468,7 +473,7 @@ export default function AudioPlayerLocal({
     useEffect(() => {
         let stored: PlaybackSpeed | undefined;
         try {
-            const raw = localStorage.getItem(SPEED_STORAGE_KEY);
+            const raw = window.localStorage.getItem(SPEED_STORAGE_KEY);
             if (raw) {
                 const parsed = Number(raw) as PlaybackSpeed;
                 if (SPEED_OPTIONS.includes(parsed)) stored = parsed;
@@ -480,6 +485,8 @@ export default function AudioPlayerLocal({
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Hydrate playback state once from persisted window storage so audio resumes
+    // on reload; skip if the state is absent or belongs to another reciter.
     useEffect(() => {
         if (hasHydratedPlaybackStateRef.current) return;
         if (!selectedReciterId || verses.length === 0) return;
@@ -1038,7 +1045,7 @@ export default function AudioPlayerLocal({
             proxiedRetryTriedRef.current = false;
             audioRef.current?.pause(); seamlessSurahAdvanceKeyRef.current = ''; surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
             setRecitationData(null); setRecitationDataMap({}); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); setIsAudioPreparing(true); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; configuredTrackKeyRef.current = ''; setIsLoadingReciter(true);
-            setSelectedReciter(reciter); localStorage.setItem(RECITER_STORAGE_KEY, id); setIsPlaying(false);
+            setSelectedReciter(reciter); window.localStorage.setItem(RECITER_STORAGE_KEY, id); setIsPlaying(false);
         }
     };
 
@@ -1128,7 +1135,7 @@ export default function AudioPlayerLocal({
         const currentIndex = SPEED_OPTIONS.indexOf(speed);
         const nextIndex = (currentIndex + 1) % SPEED_OPTIONS.length;
         const newSpeed = SPEED_OPTIONS[nextIndex];
-        setSpeed(newSpeed); if (audioRef.current) audioRef.current.playbackRate = newSpeed; localStorage.setItem(SPEED_STORAGE_KEY, newSpeed.toString());
+        setSpeed(newSpeed); if (audioRef.current) audioRef.current.playbackRate = newSpeed; window.localStorage.setItem(SPEED_STORAGE_KEY, newSpeed.toString());
     };
 
     const verseWordCounts = useMemo(

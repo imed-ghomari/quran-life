@@ -13,23 +13,22 @@ const memory = new Map<string, string>();
 export function readStored(key: string): string | null {
   const app = getObsidianApp();
   if (!app) return memory.get(key) ?? null;
-  let value: unknown;
   try {
-    value = app.loadLocalStorage(key);
+    const value = app.loadLocalStorage(key);
+    if (typeof value === "string") return value;
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (typeof value === "object") {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return null;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
-  if (typeof value === "string") return value;
-  if (value === null || value === undefined) return null;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 export function readStoredJson<T>(key: string): T | null {

@@ -23,7 +23,7 @@ function makeKey(kind: string, id: number): string {
 export function loadAnkiMindmaps(): Stored {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(LS_MINDMAPS_KEY);
+    const raw = window.localStorage.getItem(LS_MINDMAPS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     const out: Stored = {};
@@ -70,7 +70,7 @@ export function saveAnkiMindmapByKey(key: string, data: Partial<AnkiMindmap>) {
   const next = { ...existing, ...data, key, updatedAt: new Date().toISOString() };
   all[key] = next;
   try {
-    localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all));
+    window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all));
   } catch {}
   try { removeDeletedMindmapKey(key); } catch {}
   return all;
@@ -86,6 +86,7 @@ export function saveAnkiPartMindmap(partId: number, kind: 'part' | 'meta' | 'clu
   return saveAnkiMindmapByKey(key, { ...data, partId, kind, key });
 }
 
+
 export function getAnkiMindmap(surahId: number): AnkiMindmap | undefined {
   return loadAnkiMindmaps()[makeKey('surah', surahId)];
 }
@@ -98,7 +99,7 @@ export function deleteAnkiMindmap(surahId: number) {
   const key = makeKey('surah', surahId);
   const all = loadAnkiMindmaps();
   delete all[key];
-  try { localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch {}
+  try { window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch {}
   try { addDeletedMindmapKey(key); } catch {}
   return all;
 }
@@ -106,31 +107,27 @@ export function deleteAnkiMindmap(surahId: number) {
 export function deleteAnkiMindmapByKey(key: string) {
   const all = loadAnkiMindmaps();
   delete all[key];
-  try { localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch {}
+  try { window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch {}
   try { addDeletedMindmapKey(key); } catch {}
   return all;
 }
 
-const LS_DELETED_KEY = 'quran-life:anki:deletedMindmaps:v1';
-
-export function loadDeletedMindmapKeys(): Set<string> {
+const LS_DELETED_KEY = 'quran-life:anki:deletedMindmaps:v1';export function loadDeletedMindmapKeys(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = localStorage.getItem(LS_DELETED_KEY);
+    const raw = window.localStorage.getItem(LS_DELETED_KEY);
     if (!raw) return new Set();
     const arr = JSON.parse(raw);
     return new Set(Array.isArray(arr) ? arr.map(String) : []);
   } catch { return new Set(); }
 }
-
 export function addDeletedMindmapKey(key: string) {
   const s = loadDeletedMindmapKeys();
   s.add(key);
-  try { localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch {}
+  try { window.localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch {}
 }
-
 export function removeDeletedMindmapKey(key: string) {
   const s = loadDeletedMindmapKeys();
   s.delete(key);
-  try { localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch {}
+  try { window.localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch {}
 }

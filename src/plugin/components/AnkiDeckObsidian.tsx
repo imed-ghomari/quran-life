@@ -412,8 +412,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       } catch (e) {
         pushLog(`Vault save skipped: ${String((e as any)?.message || e)}`);
       }
+      // Trigger browser download of the .apkg blob.
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href=url; a.download='quran-life-deck.apkg'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      const a = document.createElement('a'); // eslint-disable-line obsidianmd/prefer-create-el -- transient download element, not plugin UI
+      a.href = url;
+      a.download = 'quran-life-deck.apkg';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
       updateProgress({ current: 100, status: `Complete: ${cards.length} verse + ${mindmapCards.length} mindmap cards`, verseCards: cards.length, mindmapCards: mindmapCards.length });
       pushLog(`Download started: ${deckName}.apkg`);
       showToast(`Exported ${cards.length} verse cards + ${mindmapCards.length} mindmap cards`);

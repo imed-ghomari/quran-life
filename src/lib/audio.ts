@@ -227,9 +227,9 @@ async function fetchViaObsidianRequestUrl(url: string, appOverride?: any): Promi
         if (!req) return null;
         // requestUrl has no abort support — race a timeout so a dead network
         // can never leave the player hanging forever.
-        const res: any = await Promise.race([
+        const res = await Promise.race([
             req({ url, method: 'GET', headers: { 'Accept': 'application/json' } }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
+            new Promise((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
         ]);
         const status: number = typeof res.status === 'number' ? res.status : 0;
         if (status >= 200 && status < 300) {

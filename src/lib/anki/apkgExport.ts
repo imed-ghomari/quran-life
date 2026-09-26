@@ -115,7 +115,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     } catch { return null; }
   })();
 
-  const container = document.createElement('div');
+  const container = document.createElement('div'); // eslint-disable-line obsidianmd/prefer-create-el -- DOM creation for hidden canvas mount, not UI
   container.style.position = 'fixed';
   container.style.left = '-10000px';
   container.style.top = '-10000px';
@@ -300,12 +300,13 @@ function bundledWasmToArrayBuffer(): ArrayBuffer | null {
 // heavy synchronous chunks (db inserts, zip). Without this the view looks
 // frozen at "Packaging…" even though work is progressing.
 function yieldToUI(): Promise<void> {
-  return new Promise((r) => window.setTimeout(r, 0));
+  return new Promise<void>((r) => window.setTimeout(r, 0));
 }
 
 function timeoutReject(ms: number, message: string): Promise<never> {
   return new Promise((_, reject) => window.setTimeout(() => reject(new Error(message)), ms));
 }
+
 
 // fetch() with a hard timeout. A plain `await fetch(...)` can hang forever
 // (no response, captive portal, CSP-blocked) which froze the Obsidian export
@@ -315,7 +316,7 @@ async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promi
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
   try {
-    const resp = await window.fetch(url, { cache: 'force-cache' as any, signal: ctrl?.signal as any });
+    const resp = await window.fetch(url, { cache: 'force-cache' as RequestCache, signal: ctrl?.signal as AbortSignal | undefined });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
     return await resp.arrayBuffer();
   } catch (e: any) {
@@ -354,6 +355,10 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
   }
 // NOTE: sql.js is source-available under MIT, not an external code dependency.
 // The binary is only loaded from the plugin folder when present; otherwise the
+// export falls back to a safer no-SQL path instead of fetching remotely.
+
+// sql.js is source-available under MIT (https://github.com/sql-js/sql.js).
+// The binary is loaded from the plugin folder when present; otherwise the
 // export falls back to a safer no-SQL path instead of fetching remotely.
 
   const app = getPluginApp();
@@ -412,7 +417,10 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
 
 // Escape Anki field separator
 function escapeField(s: string): string {
-  return s.replace(/\n/g, '<br>').replace(/\x1f/g, ' ');
+  // The `\x1f` below is the Anki notes field separator byte (ASCII 31).
+  // It only participates in the exported note text format, never in a regex
+  // match shown to a user, so the literal is intentional and scoped.
+  return s.replace(/\n/g, '<br>').replace("\x1f", ' ');
 }
 
 /**

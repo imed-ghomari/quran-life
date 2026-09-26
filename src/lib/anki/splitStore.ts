@@ -26,7 +26,7 @@ function normalizeAnchor(surahId: number, a: any): AnkiAnchor | null {
 export function loadSplits(): SurahSplits {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(LS_SPLITS_KEY);
+    const raw = window.localStorage.getItem(LS_SPLITS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     const out: SurahSplits = {};
@@ -47,7 +47,7 @@ export function loadSplits(): SurahSplits {
 
 export function saveSplits(splits: SurahSplits) {
   try {
-    localStorage.setItem(LS_SPLITS_KEY, JSON.stringify(splits));
+    window.localStorage.setItem(LS_SPLITS_KEY, JSON.stringify(splits));
   } catch {}
 }
 
