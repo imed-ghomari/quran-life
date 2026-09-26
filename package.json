@@ -63,6 +63,6 @@
     "minimatch": "^9.0.3",
     "obsidian": "latest",
     "typescript": "^5.5.4",
-    "webpack": "^5.105.2"
+    "webpack": "^5.111.1"
   }
 }
