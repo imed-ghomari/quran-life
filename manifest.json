@@ -1,7 +1,7 @@
 {
   "id": "quran-life",
   "name": "Quran Life",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "minAppVersion": "1.8.7",
   "description": "Daily Qur'an review, mindmap memorization and Anki export — vault-synced via Resilio Sync.",
   "author": "imed-ghomari",
