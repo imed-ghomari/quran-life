@@ -1,3 +1,5 @@
+import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
+
 export type AnkiAnchor = {
   id: string;
   surahId: number;
@@ -37,6 +39,24 @@ export type AnkiMindmapCard = {
   mindmapDocs?: string;
   mindmapImage?: string;
 };
+
+/** A mindmap record as stored in `mindmaps/<key>.json` inside the vault data root. */
+export type MindmapKind = 'surah' | 'part' | 'meta' | 'cluster';
+
+export interface MindmapRecord {
+  key: string;
+  kind: MindmapKind;
+  /** tldraw store snapshot; absent for records that only carry metadata. */
+  snapshot?: MindmapSnapshot;
+  surahId?: number;
+  partId?: number;
+  isComplete?: boolean;
+  updatedAt?: string;
+  description?: string;
+  imageUrl?: string | null;
+  imageUrlDark?: string | null;
+  deletedAt?: string;
+}
 
 export type AnkiExportOptions = {
   deckName: string;

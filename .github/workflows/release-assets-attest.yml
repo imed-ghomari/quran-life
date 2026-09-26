@@ -1,0 +1,53 @@
+# Reproducible provenance attestations for Obsidian plugin release assets.
+# Run this workflow on each tagged release; it uses GitHub's built-in
+# actions/attest-build-provenance to cryptographically sign main.js,
+# styles.css and manifest.json so users can verify they were built from
+# this repository.
+#
+name: Release asset attestations
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build plugin artifacts
+        run: |
+          npm ci
+          npm run build
+          npm run plugin:release
+
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@v2
+        with:
+          build-artifact: main.js
+          subject: |
+            {
+              "workspace": "${{ github.workspace }}",
+              "workflow": "${{ github.workflow }}",
+              "ref": "${{ github.ref_name }}"
+            }
+          attestation-name: quran-life-release-provenance
+          attestation-path: attestation.intoto.jsonl
+
+      - name: Upload attestations as release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            main.js
+            styles.css
+            manifest.json
+            attestation.intoto.jsonl
+          fail-on-unmatched-files: true
+

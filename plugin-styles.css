@@ -1,0 +1,128 @@
+/* ==========================================================================
+   Quran Life — plugin styles (Obsidian loads styles.css automatically)
+   This file is the source of truth: the build concatenates it with tldraw's
+   stylesheet into `styles.css`. Never inject <style> elements at runtime.
+   ========================================================================== */
+
+/* ---------- generic helpers ---------- */
+.quran-life-hidden {
+  display: none !important;
+}
+
+.quran-life-desc-spaced {
+  margin-bottom: 10px;
+}
+
+/* Mindmap gestures: keep horizontal pans from moving the app shell
+   (applied to html/body by useMindmapBackGestureGuard). */
+body.ql-no-overscroll-x,
+html.ql-no-overscroll-x {
+  overscroll-behavior-x: none;
+}
+
+/* ---------- settings tab ---------- */
+/* Desktop-neutral safety: never let a long unbroken path (folder names) push the
+   settings pane sideways. Layout rules live in the mobile query below so the
+   desktop settings layout is left exactly as Obsidian renders it. */
+.quran-life-settings .setting-item-info { min-width: 0; overflow-wrap: anywhere; }
+.quran-life-settings .quran-life-settings-anki div { min-width: 0; }
+.quran-life-settings .quran-life-daily-surah-list { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)) !important; }
+.quran-life-settings .quran-life-nowrap-safe { overflow-wrap: anywhere; word-break: break-word; }
+
+/* Daily portion: surah picker grid */
+.quran-life-settings .quran-life-daily-surah-list {
+  display: grid;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--background-primary);
+}
+.quran-life-settings .quran-life-surah-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  opacity: 0.65;
+}
+.quran-life-settings .quran-life-surah-row.is-selected {
+  background: var(--background-secondary);
+  opacity: 1;
+}
+.quran-life-settings .quran-life-surah-row input[type="checkbox"] {
+  accent-color: var(--interactive-accent);
+}
+.quran-life-settings .quran-life-surah-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.quran-life-settings .quran-life-surah-name {
+  font-weight: 600;
+  font-size: 0.85em;
+}
+.quran-life-settings .quran-life-surah-sub {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.quran-life-settings .quran-life-surah-check {
+  color: var(--interactive-accent);
+  font-weight: 700;
+}
+
+/* Anki export section */
+.quran-life-settings .quran-life-prefs-info {
+  font-size: 0.78em;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+.quran-life-settings .quran-life-anki-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.quran-life-settings .quran-life-anki-row {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--background-secondary);
+}
+.quran-life-settings .quran-life-anki-reset-row {
+  margin-bottom: 8px;
+}
+
+/* Offline audio library: one row per Quran part, each with its own state + actions. */
+.quran-life-settings .quran-life-offline-rows { display: flex; flex-direction: column; margin-top: 4px; }
+.quran-life-settings .quran-life-offline-row { border-top: 1px solid var(--background-modifier-border); padding: 8px 4px; }
+.quran-life-settings .quran-life-offline-row .setting-item-name { overflow-wrap: anywhere; }
+.quran-life-settings .quran-life-offline-row-active { background: var(--background-secondary); border-radius: 6px; }
+.quran-life-settings .quran-life-offline-row-complete .setting-item-name::after { content: " ✓"; color: var(--text-success, var(--interactive-accent)); }
+.quran-life-settings .quran-life-offline-progress { display: block; }
+.quran-life-settings .quran-life-offline-bar { width: 100%; height: 8px; margin-top: 6px; background: var(--background-modifier-border); border-radius: 999px; overflow: hidden; }
+.quran-life-settings .quran-life-offline-bar-inner { width: 0; height: 100%; background: var(--interactive-accent); border-radius: 999px; transition: width 0.25s ease; }
+.quran-life-settings .quran-life-offline-progress-text,
+.quran-life-settings .quran-life-offline-hint { font-size: 0.78em; color: var(--text-muted); overflow-wrap: anywhere; }
+.quran-life-settings .quran-life-offline-footer { font-size: 0.75em; color: var(--text-faint); margin-top: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.quran-life-settings .quran-life-offline-active-hint { border: 1px solid var(--interactive-accent); border-radius: 8px; padding: 4px 10px; margin: 8px 0; }
+
+@media (max-width: 700px) {
+  .quran-life-settings, .quran-life-settings * { box-sizing: border-box; }
+  .quran-life-settings .setting-item { flex-wrap: wrap; row-gap: 6px; flex-direction: column; align-items: stretch; }
+  .quran-life-settings .setting-item-control { flex-wrap: wrap; gap: 6px; max-width: 100%; justify-content: flex-start; }
+  .quran-life-settings .setting-item-control > * { flex: 1 1 auto; }
+  .quran-life-settings .setting-item-control button { width: 100%; min-height: 32px; }
+  .quran-life-settings .quran-life-offline-row { padding: 10px 4px; }
+  .quran-life-settings .quran-life-offline-row .setting-item-name { font-weight: 600; }
+  .quran-life-settings .quran-life-offline-row .setting-item-control > button,
+  .quran-life-settings .quran-life-offline-library .setting-item-control > button,
+  .quran-life-settings .quran-life-offline-active-hint .setting-item-control > button { width: 100%; }
+  .quran-life-settings .quran-life-daily-surah-list { grid-template-columns: 1fr !important; max-height: 340px !important; }
+  .quran-life-settings .importer-progress-bar { height: 10px; }
+}

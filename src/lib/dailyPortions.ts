@@ -95,8 +95,8 @@ export function getDailyPortion(
     }
 
     const startIndex = resolveStartIndex(allVersesInPart, options);
-    const wordCounts: number[] = new Array(allVersesInPart.length);
-    const minuteEstimates: number[] = new Array(allVersesInPart.length);
+    const wordCounts: number[] = new Array<number>(allVersesInPart.length).fill(0);
+    const minuteEstimates: number[] = new Array<number>(allVersesInPart.length).fill(0);
     let totalWords = 0;
     let totalEstimatedMinutes = 0;
 

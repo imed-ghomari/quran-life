@@ -24,17 +24,18 @@ function parseDir(v: unknown, fallback: SortDir): SortDir {
   return fallback;
 }
 
-export function normalizeAnkiExportPrefs(raw: any): AnkiExportPrefs {
+export function normalizeAnkiExportPrefs(raw: unknown): AnkiExportPrefs {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_ANKI_EXPORT_PREFS };
+  const record = raw as Record<string, unknown>;
   // New shape: { partOrder, surahOrder }
-  if ('partOrder' in raw || 'surahOrder' in raw) {
+  if ('partOrder' in record || 'surahOrder' in record) {
     return {
-      partOrder: parseDir((raw as any).partOrder, DEFAULT_ANKI_EXPORT_PREFS.partOrder),
-      surahOrder: parseDir((raw as any).surahOrder, DEFAULT_ANKI_EXPORT_PREFS.surahOrder),
+      partOrder: parseDir(record.partOrder, DEFAULT_ANKI_EXPORT_PREFS.partOrder),
+      surahOrder: parseDir(record.surahOrder, DEFAULT_ANKI_EXPORT_PREFS.surahOrder),
     };
   }
   // Legacy per-part shape: { partSurahOrder: {1:'asc',...} } or { partSort } — migrate to global surahOrder
-  const legacy = (raw as any).partSurahOrder ?? (raw as any).partSort ?? raw;
+  const legacy = record.partSurahOrder ?? record.partSort ?? record;
   if (legacy && typeof legacy === 'object') {
     // If legacy had per-part dirs, use majority or any desc → global desc, else asc
     let anyDesc = false;
@@ -44,30 +45,9 @@ export function normalizeAnkiExportPrefs(raw: any): AnkiExportPrefs {
       if (v === 'asc') anyAsc = true;
     }
     // Prefer desc if any part was set to desc (preserves user's intent to reverse somewhere)
-    const inferredSurahOrder: SortDir = anyDesc && !anyAsc ? 'desc' : anyDesc ? 'desc' : 'asc';
+    const inferredSurahOrder: SortDir = anyDesc ? 'desc' : anyAsc ? 'asc' : 'asc';
     // Legacy had no partOrder, keep default desc for parts
     return { partOrder: DEFAULT_ANKI_EXPORT_PREFS.partOrder, surahOrder: inferredSurahOrder };
   }
   return { ...DEFAULT_ANKI_EXPORT_PREFS };
-}
-
-// LocalStorage fallback for web / tests (mirrors vault file)
-const LS_KEY = 'quran-life:anki:export-sort:v1';
-
-export function loadAnkiExportPrefsLocal(): AnkiExportPrefs {
-  if (typeof window === 'undefined') return { ...DEFAULT_ANKI_EXPORT_PREFS };
-  try {
-    const raw = window.localStorage.getItem(LS_KEY);
-    if (!raw) return { ...DEFAULT_ANKI_EXPORT_PREFS };
-    return normalizeAnkiExportPrefs(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_ANKI_EXPORT_PREFS };
-  }
-}
-
-export function saveAnkiExportPrefsLocal(prefs: AnkiExportPrefs): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LS_KEY, JSON.stringify(normalizeAnkiExportPrefs(prefs)));
-  } catch {}
 }

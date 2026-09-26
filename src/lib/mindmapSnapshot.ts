@@ -1,31 +1,36 @@
 const DISALLOWED_SHAPE_TYPES = new Set(['image', 'video', 'embed', 'bookmark']);
 
-type SnapshotLike = {
-  store?: Record<string, any>;
-  [key: string]: any;
+/**
+ * A tldraw store snapshot as persisted in the vault. The vault layer treats the
+ * payload as opaque JSON; tldraw's own types are applied where the snapshot is
+ * handed back to the editor.
+ */
+export type MindmapSnapshot = {
+  store?: Record<string, unknown>;
+  [key: string]: unknown;
 };
 
-const isRecordObject = (value: unknown): value is Record<string, any> =>
+const isRecordObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-export const sanitizeMindmapSnapshot = (snapshot: unknown): SnapshotLike | undefined => {
+export const sanitizeMindmapSnapshot = (snapshot: unknown): MindmapSnapshot | undefined => {
   if (!isRecordObject(snapshot)) return undefined;
 
-  const input = snapshot as SnapshotLike;
+  const input = snapshot;
   const inputStore = input.store;
 
   if (!isRecordObject(inputStore)) return { ...input };
 
   const removedShapeIds = new Set<string>();
-  const nextStore: Record<string, any> = {};
-  const bindingRecords: Array<[string, Record<string, any>]> = [];
+  const nextStore: Record<string, unknown> = {};
+  const bindingRecords: Array<[string, Record<string, unknown>]> = [];
 
   for (const [key, record] of Object.entries(inputStore)) {
     if (key.startsWith('shape:')) {
       if (!isRecordObject(record)) continue;
-      const shapeType = String(record.type || '');
+      const shapeType = typeof record.type === 'string' ? record.type : '';
       if (DISALLOWED_SHAPE_TYPES.has(shapeType)) {
-        removedShapeIds.add(String(record.id || key));
+        removedShapeIds.add(typeof record.id === 'string' ? record.id : key);
         continue;
       }
       nextStore[key] = record;
@@ -45,8 +50,8 @@ export const sanitizeMindmapSnapshot = (snapshot: unknown): SnapshotLike | undef
   }
 
   for (const [key, record] of bindingRecords) {
-    const fromId = record.fromId ? String(record.fromId) : '';
-    const toId = record.toId ? String(record.toId) : '';
+    const fromId = typeof record.fromId === 'string' ? record.fromId : '';
+    const toId = typeof record.toId === 'string' ? record.toId : '';
     if (removedShapeIds.has(fromId) || removedShapeIds.has(toId)) continue;
     nextStore[key] = record;
   }

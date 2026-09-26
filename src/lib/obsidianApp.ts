@@ -1,3 +1,5 @@
+import type { App } from "obsidian";
+
 /**
  * Shared Obsidian `App` accessor.
  *
@@ -13,38 +15,45 @@
  * on both platforms. When no window.app exists we also mirror it (harmless
  * convenience for other plugin code paths that still read window.app).
  *
- * This module must stay free of `obsidian` imports: it is bundled for the web
- * app as well as the plugin.
+ * This module must stay free of runtime `obsidian` imports (only `import type`):
+ * it is bundled for the web app as well as the plugin.
  */
-let registeredApp: any = null;
+interface WindowWithApp extends Window {
+  app?: App;
+}
 
-export function setObsidianApp(app: any): void {
-  if (!app || !app.vault || !app.vault.adapter) {
+let registeredApp: App | null = null;
+
+function isUsableApp(candidate: App | null | undefined): candidate is App {
+  try {
+    return !!candidate && !!candidate.vault && !!candidate.vault.adapter;
+  } catch {
+    return false;
+  }
+}
+
+export function setObsidianApp(app: App | null | undefined): void {
+  if (!isUsableApp(app)) {
     registeredApp = null;
     return;
   }
   registeredApp = app;
   try {
-    if (typeof window !== 'undefined' && !(window as any).app) {
-      (window as any).app = app;
+    if (typeof window !== "undefined") {
+      const win = window as WindowWithApp;
+      if (!win.app) win.app = app;
     }
-  } catch { /* sandboxed WebView — registry value is enough */ }
+  } catch { /* sandboxed WebView — the registry value is enough */ }
 }
 
-export function getObsidianApp(appOverride?: any): any | null {
-  const candidates = [
-    appOverride,
-    registeredApp,
-    typeof window !== 'undefined' ? (window as any).app : null,
-  ];
-  for (const candidate of candidates) {
-    try {
-      if (candidate && candidate.vault && candidate.vault.adapter) return candidate;
-    } catch { /* keep looking */ }
+export function getObsidianApp(appOverride?: App | null): App | null {
+  const fromWindow = typeof window !== "undefined" ? (window as WindowWithApp).app : undefined;
+  for (const candidate of [appOverride, registeredApp, fromWindow]) {
+    if (isUsableApp(candidate)) return candidate;
   }
   return null;
 }
 
-export function isObsidianEnv(appOverride?: any): boolean {
+export function isObsidianEnv(appOverride?: App | null): boolean {
   return getObsidianApp(appOverride) !== null;
 }

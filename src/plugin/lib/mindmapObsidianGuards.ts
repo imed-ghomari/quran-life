@@ -161,13 +161,13 @@ export function measureObsidianBottomOffset(container: HTMLElement): number {
 		if (!vw || !vh || !container.isConnected) return 0;
 		let stack: Element[];
 		try {
-			stack = document.elementsFromPoint(Math.round(vw / 2), vh - 2) as Element[];
+			stack = document.elementsFromPoint(Math.round(vw / 2), vh - 2);
 		} catch {
 			return 0;
 		}
 		if (!stack || !stack.length) return 0;
 		for (const el of stack) {
-			if (!(el instanceof HTMLElement)) continue;
+			if (!el.instanceOf(HTMLElement)) continue;
 			if (el === document.documentElement || el === document.body) continue;
 			// Our own UI (canvas, toasts, …) never counts.
 			if (container.contains(el)) continue;
@@ -215,12 +215,12 @@ export function observeObsidianBottomBar(container: HTMLElement): () => void {
 	let raf = 0;
 	const schedule = () => {
 		try {
-			cancelAnimationFrame(raf);
+			window.cancelAnimationFrame(raf);
 		} catch {
 			/* noop */
 		}
 		try {
-			raf = requestAnimationFrame(apply);
+			raf = window.requestAnimationFrame(apply);
 		} catch {
 			apply();
 		}
@@ -240,10 +240,10 @@ export function observeObsidianBottomBar(container: HTMLElement): () => void {
 	}
 
 	// Obsidian may finish its mobile layout a beat after our mount.
-	const timers: Array<ReturnType<typeof setTimeout>> = [];
+	const timers: number[] = [];
 	try {
-		timers.push(setTimeout(apply, 500));
-		timers.push(setTimeout(apply, 1500));
+		timers.push(window.setTimeout(apply, 500));
+		timers.push(window.setTimeout(apply, 1500));
 	} catch {
 		/* noop */
 	}
@@ -262,13 +262,13 @@ export function observeObsidianBottomBar(container: HTMLElement): () => void {
 		}
 		for (const t of timers) {
 			try {
-				clearTimeout(t);
+				window.clearTimeout(t);
 			} catch {
 				/* noop */
 			}
 		}
 		try {
-			cancelAnimationFrame(raf);
+			window.cancelAnimationFrame(raf);
 		} catch {
 			/* noop */
 		}
@@ -280,12 +280,17 @@ export function observeObsidianBottomBar(container: HTMLElement): () => void {
  * mindmap fills the viewer instead of floating in blank space.
  * Falls back to plain zoomToFit when the inset form is unavailable.
  */
-export function fitMindmapCameraTight(editor: any, inset: number = MINDMAP_VIEWER_FIT_INSET): void {
+/** Minimal structural view of the tldraw editor we need for camera fitting. */
+interface CameraFitEditor {
+	zoomToFit?: (opts?: { inset?: number; duration?: number }) => void;
+}
+
+export function fitMindmapCameraTight(editor: CameraFitEditor | null | undefined, inset: number = MINDMAP_VIEWER_FIT_INSET): void {
 	if (!editor) return;
 	try {
 		// zoomToFit forwards opts to zoomToBounds, which honours `inset`
 		// (default is 128px — far too loose for the inline preview).
-		editor.zoomToFit?.({ inset, duration: 0 } as any);
+		editor.zoomToFit?.({ inset, duration: 0 });
 	} catch {
 		try {
 			editor.zoomToFit?.({ duration: 0 });

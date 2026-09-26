@@ -333,15 +333,19 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any)
     // 3) remote — requestUrl bypasses CORS, which plain fetch cannot do from the
     // Obsidian WebView (mobile included).
     if (app) {
-        const targets = usesPublicOrigin ? [urlPath] : recitationSiteBases().map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
-        for (const target of targets) {
+        const remoteTargets = usesPublicOrigin
+            ? [urlPath]
+            : RECITATION_SITE_BASES.map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
+        for (const target of remoteTargets) {
             const viaRequest = await fetchViaObsidianRequestUrl(target, app);
             if (viaRequest) return viaRequest;
         }
     }
 
     // 4) plain fetch (web build / already-absolute same-origin paths)
-    const fetchTargets = usesPublicOrigin ? [urlPath] : recitationSiteBases().map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
+    const fetchTargets = usesPublicOrigin
+        ? [urlPath]
+        : RECITATION_SITE_BASES.map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
     fetchTargets.push(urlPath);
     for (const target of fetchTargets) {
         // Skip cross-origin plain fetch inside Obsidian: without CORS it fails

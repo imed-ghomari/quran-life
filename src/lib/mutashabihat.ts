@@ -1,5 +1,4 @@
 import phrasesRaw from '../../Mutashabihat ul Quran/phrases.json';
-import phraseVersesRaw from '../../Mutashabihat ul Quran/phrase_verses.json';
 import { SURAHS } from './quranData';
 import { CustomMutashabih } from './types';
 import { doWordRangesOverlap, ReviewChunkWordRange } from './reviewVerseChunks';
@@ -23,13 +22,21 @@ type FlatEntry = {
     totalCount: number;
 };
 
+export interface CustomSimilarityMeta {
+    isCustom: true;
+    customId: string;
+}
+
 export interface SimilarityEntry {
     phraseId: string;
     sources: number[];
     matches: number[];
-    meta: FlatEntry | { isCustom: true; customId: string };
+    meta: FlatEntry | CustomSimilarityMeta;
     isCustom?: boolean;
 }
+
+const isCustomMeta = (meta: FlatEntry | CustomSimilarityMeta): meta is CustomSimilarityMeta =>
+    'isCustom' in meta && meta.isCustom === true;
 
 const isValidWordRange = (range: unknown): range is ReviewChunkWordRange => (
     Array.isArray(range)
@@ -43,7 +50,6 @@ const phrases = phrasesRaw as unknown as Record<string, {
     ayah: Record<string, number[] | number[][]>;
     count: number;
 }>;
-const phraseVerses = phraseVersesRaw as Record<string, number[]>;
 
 const flatEntries: FlatEntry[] = [];
 const ayahSet = new Set<number>();
@@ -135,7 +141,7 @@ export function hasMutashabihForAbsolute(absoluteAyah: number): boolean {
 }
 
 export function isCustomSimilarityEntry(entry: SimilarityEntry): boolean {
-    return !!entry.isCustom || !!(entry.meta as any)?.isCustom;
+    return entry.isCustom === true || isCustomMeta(entry.meta);
 }
 
 export function getSimilarityEntryWordRangeForAbsolute(

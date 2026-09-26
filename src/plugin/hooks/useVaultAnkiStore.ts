@@ -1,12 +1,23 @@
 'use client';
 import React from 'react';
-import { AnkiAnchor } from '@/lib/anki/types';
+import { TFolder, TFile } from 'obsidian';
+import type { AnkiAnchor, MindmapKind, MindmapRecord } from '@/lib/anki/types';
 import { getSurah } from '@/lib/quranData';
 import { sanitizeAnchors, buildAnchorsFromBreaks } from '@/lib/anki/splitStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { VAULT_PATHS } from '@/plugin/storage/vaultAdapter';
+import type { AnkiExportPrefs, SortDir } from '@/lib/anki/ankiExportPrefs';
 
 const { useCallback, useEffect, useState } = React;
+
+export type VaultMindmap = MindmapRecord;
+
+function kindFromKey(key: string): MindmapKind {
+  if (key.startsWith('part-')) return 'part';
+  if (key.startsWith('meta-')) return 'meta';
+  if (key.startsWith('cluster-')) return 'cluster';
+  return 'surah';
+}
 
 // Vault-backed replacement for src/lib/anki/splitStore.ts localStorage
 // Vault-only: no premade data. Stats/export count exactly what is on disk
@@ -21,17 +32,23 @@ export function useVaultSplits(vaultStore: VaultStore, surahId: number) {
     // while the new surah is loading (prevents stale sync + wrong-surah flash).
     setAnchors([]);
     setIsLoading(true);
-    (async () => {
+    void (async () => {
       const raw = await vaultStore.loadSplitsForSurah(surahId);
       if (cancelled) return;
       const surah = getSurah(surahId);
-      const normalized = (Array.isArray(raw) ? raw : []).map((a: any) => {
+      const normalized = raw.map((a): AnkiAnchor | null => {
         const sv = Number(a?.startVerse); const ev = Number(a?.endVerse);
         if (!Number.isFinite(sv) || !Number.isFinite(ev)) return null;
         if (sv <= 0 || ev < sv) return null;
         if (surah && (ev > surah.verseCount || sv > surah.verseCount)) return null;
-        return { id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${surahId}-${sv}-${ev}`, surahId, startVerse: sv, endVerse: ev, label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}` } as AnkiAnchor;
-      }).filter(Boolean) as AnkiAnchor[];
+        return {
+          id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${surahId}-${sv}-${ev}`,
+          surahId,
+          startVerse: sv,
+          endVerse: ev,
+          label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}`,
+        };
+      }).filter((a): a is AnkiAnchor => a !== null);
       const sanitized = sanitizeAnchors(surahId, normalized);
       const finalAnchors = sanitized.length ? sanitized : normalized;
       setAnchors(finalAnchors);
@@ -46,17 +63,17 @@ export function useVaultSplits(vaultStore: VaultStore, surahId: number) {
   }, [vaultStore, surahId]);
 
   const addBreak = useCallback(async (breakVerse: number, verseCount: number) => {
-    const currentBreaks = [...anchors].sort((a,b)=>a.startVerse-b.startVerse).slice(0,-1).map(a=>a.endVerse);
+    const currentBreaks = [...anchors].sort((a, b) => a.startVerse - b.startVerse).slice(0, -1).map(a => a.endVerse);
     if (currentBreaks.includes(breakVerse)) return;
-    const nextBreaks = [...currentBreaks, breakVerse].sort((a,b)=>a-b);
+    const nextBreaks = [...currentBreaks, breakVerse].sort((a, b) => a - b);
     const next = buildAnchorsFromBreaks(surahId, nextBreaks, verseCount);
     await saveAnchors(next.length ? next : []);
   }, [anchors, surahId, saveAnchors]);
 
   const removeBreak = useCallback(async (breakVerse: number, verseCount: number) => {
-    const currentBreaks = [...anchors].sort((a,b)=>a.startVerse-b.startVerse).slice(0,-1).map(a=>a.endVerse);
+    const currentBreaks = [...anchors].sort((a, b) => a.startVerse - b.startVerse).slice(0, -1).map(a => a.endVerse);
     if (!currentBreaks.includes(breakVerse)) return;
-    const nextBreaks = currentBreaks.filter(b=>b!==breakVerse);
+    const nextBreaks = currentBreaks.filter(b => b !== breakVerse);
     const next = buildAnchorsFromBreaks(surahId, nextBreaks, verseCount);
     await saveAnchors(next.length ? next : []);
   }, [anchors, surahId, saveAnchors]);
@@ -65,18 +82,6 @@ export function useVaultSplits(vaultStore: VaultStore, surahId: number) {
 }
 
 // Vault-backed mindmaps (replaces src/lib/anki/mindmapStore.ts)
-export interface VaultMindmap {
-  key: string; // surah-2, part-1, meta-0
-  kind: 'surah' | 'part' | 'meta' | 'cluster';
-  surahId?: number;
-  partId?: number;
-  snapshot?: any;
-  imageUrl?: string | null;
-  imageUrlDark?: string | null;
-  isComplete?: boolean;
-  updatedAt?: string;
-}
-
 export function useVaultMindmap(vaultStore: VaultStore, key: string) {
   const [mindmap, setMindmap] = useState<VaultMindmap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +90,7 @@ export function useVaultMindmap(vaultStore: VaultStore, key: string) {
     setIsLoading(true);
     const data = await vaultStore.loadMindmap(key);
     if (data && typeof data === 'object') {
-      setMindmap({ key, kind: (data.kind as any) || (key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : 'surah'), ...data });
+      setMindmap({ ...data, key, kind: data.kind || kindFromKey(key) });
     } else {
       setMindmap(null);
     }
@@ -95,7 +100,12 @@ export function useVaultMindmap(vaultStore: VaultStore, key: string) {
   useEffect(() => { void load(); }, [load]);
 
   const save = useCallback(async (patch: Partial<VaultMindmap>) => {
-    const next = { ...(mindmap || { key }), ...patch, key, updatedAt: new Date().toISOString() } as VaultMindmap;
+    const next: VaultMindmap = {
+      ...(mindmap ?? { key, kind: kindFromKey(key) }),
+      ...patch,
+      key,
+      updatedAt: new Date().toISOString(),
+    };
     setMindmap(next);
     await vaultStore.saveMindmap(key, next);
     return next;
@@ -109,15 +119,12 @@ export function useVaultMindmap(vaultStore: VaultStore, key: string) {
   // Subscribe to external Resilio changes: vault.on('modify') for this key
   // For hidden plugin folder, vault.on won't fire, so also poll via adapter
   useEffect(() => {
-    const app: any = (vaultStore as any).app;
-    const expectedPath = `${(vaultStore as any).root || VAULT_PATHS.mindmapsDir((vaultStore as any).root || ".obsidian/plugins/quran-life/data")}/${key}.json`.replace(/\/\//g, "/");
-    // Normalize to actual VAULT_PATHS
-    const correctPath = VAULT_PATHS.mindmapFile((vaultStore as any).root || ".obsidian/plugins/quran-life/data", key);
-    if (!app?.vault?.on) return;
-    const ref = app.vault.on('modify', (file: any) => {
-      if (file?.path === correctPath || file?.path === expectedPath) void load();
+    const { vault } = vaultStore.app;
+    const mindmapPath = VAULT_PATHS.mindmapFile(vaultStore.root, key);
+    const ref = vault.on('modify', (file) => {
+      if (file.path === mindmapPath) void load();
     });
-    return () => app.vault.offref?.(ref);
+    return () => vault.offref(ref);
   }, [vaultStore, key, load]);
 
   return { mindmap, save, remove, isLoading, reload: load };
@@ -128,28 +135,26 @@ export function useVaultMindmaps(vaultStore: VaultStore) {
   const [isLoading, setIsLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    const app: any = (vaultStore as any).app;
-    const dirPath = VAULT_PATHS.mindmapsDir((vaultStore as any).root || ".obsidian/plugins/quran-life/data");
+    const { vault } = vaultStore.app;
+    const dirPath = VAULT_PATHS.mindmapsDir(vaultStore.root);
     let files: string[] = [];
-    // Try hidden-aware list via VaultStore's adapter
-    if ((vaultStore as any).app?.vault?.adapter?.list) {
-      try {
-        const listed = await (vaultStore as any).app.vault.adapter.list(dirPath);
-        if (Array.isArray(listed?.files)) files = listed.files;
-      } catch {}
-    }
+    // Hidden folders are invisible to the vault API, so list them through the adapter first
+    try {
+      const listed = await vault.adapter.list(dirPath);
+      files = listed.files;
+    } catch { /* folder not created yet */ }
     if (files.length === 0) {
-      const dir = app?.vault?.getAbstractFileByPath?.(dirPath);
-      if (dir?.children) {
-        files = dir.children.filter((c: any) => c.extension === 'json').map((c: any) => c.path);
+      const dir = vault.getAbstractFileByPath(dirPath);
+      if (dir instanceof TFolder) {
+        files = dir.children.filter((c): c is TFile => c instanceof TFile && c.extension === 'json').map(c => c.path);
       }
     }
     const out: Record<string, VaultMindmap> = {};
     for (const filePath of files) {
-      const base = filePath.split("/").pop()!.replace(/\.json$/, "");
-      const key = base;
-      const data = await vaultStore.loadMindmap(key);
-      if (data) out[key] = { key, ...data } as VaultMindmap;
+      const base = (filePath.split('/').pop() ?? '').replace(/\.json$/, '');
+      if (!base) continue;
+      const data = await vaultStore.loadMindmap(base);
+      if (data) out[base] = { ...data, key: base, kind: data.kind || kindFromKey(base) };
     }
     setAll(out);
     setIsLoading(false);
@@ -162,7 +167,7 @@ export function useVaultMindmaps(vaultStore: VaultStore) {
 
 // Anki export prefs (partOrder + surahOrder)
 export function useVaultAnkiExportPrefs(vaultStore: VaultStore) {
-  const [prefs, setPrefs] = useState<import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs | null>(null);
+  const [prefs, setPrefs] = useState<AnkiExportPrefs | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -173,20 +178,20 @@ export function useVaultAnkiExportPrefs(vaultStore: VaultStore) {
     setIsLoading(false);
   }, [vaultStore]);
   useEffect(() => { void load(); }, [load]);
-  const save = useCallback(async (next: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs) => {
+  const save = useCallback(async (next: AnkiExportPrefs) => {
     setPrefs(next);
     await vaultStore.saveAnkiExportPrefs(next);
   }, [vaultStore]);
-  const setPartOrder = useCallback(async (dir: import('@/lib/anki/ankiExportPrefs').SortDir) => {
+  const setPartOrder = useCallback(async (dir: SortDir) => {
     const cur = prefs ?? await vaultStore.loadAnkiExportPrefs();
-    const updated: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs = { ...cur as any, partOrder: dir };
+    const updated: AnkiExportPrefs = { ...cur, partOrder: dir };
     setPrefs(updated);
     await vaultStore.saveAnkiExportPrefs(updated);
     return updated;
   }, [vaultStore, prefs]);
-  const setSurahOrder = useCallback(async (dir: import('@/lib/anki/ankiExportPrefs').SortDir) => {
+  const setSurahOrder = useCallback(async (dir: SortDir) => {
     const cur = prefs ?? await vaultStore.loadAnkiExportPrefs();
-    const updated: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs = { ...cur as any, surahOrder: dir };
+    const updated: AnkiExportPrefs = { ...cur, surahOrder: dir };
     setPrefs(updated);
     await vaultStore.saveAnkiExportPrefs(updated);
     return updated;
@@ -214,13 +219,12 @@ export function useVaultDoc(vaultStore: VaultStore, key: string) {
   }, [vaultStore, key]);
 
   useEffect(() => {
-    const app: any = (vaultStore as any).app;
-    const correctPath = VAULT_PATHS.docFile((vaultStore as any).root || ".obsidian/plugins/quran-life/data", key);
-    if (!app?.vault?.on) return;
-    const ref = app.vault.on('modify', (file: any) => {
-      if (file?.path === correctPath) void load();
+    const { vault } = vaultStore.app;
+    const docPath = VAULT_PATHS.docFile(vaultStore.root, key);
+    const ref = vault.on('modify', (file) => {
+      if (file.path === docPath) void load();
     });
-    return () => app.vault.offref?.(ref);
+    return () => vault.offref(ref);
   }, [vaultStore, key, load]);
 
   return { content, save, isLoading, reload: load };

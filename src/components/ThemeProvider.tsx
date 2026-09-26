@@ -1,11 +1,22 @@
 'use client';
 
 import React from 'react';
+import { readStored, writeStored } from '@/lib/pluginStorage';
 
 const { createContext, useContext, useEffect, useState } = React;
 
 export type Theme = 'light' | 'dark' | 'system';
 export type AccentTheme = 'default' | 'dracula' | 'nord' | 'catppuccin' | 'solarized' | 'tokyo-night';
+
+const ACCENT_THEMES: AccentTheme[] = ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'];
+
+function isTheme(value: string | null): value is Theme {
+    return value === 'light' || value === 'dark' || value === 'system';
+}
+
+function isAccentTheme(value: string | null): value is AccentTheme {
+    return !!value && (ACCENT_THEMES as string[]).includes(value);
+}
 
 interface ThemeContextType {
     theme: Theme;
@@ -45,13 +56,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             setObsidianTheme(obs);
             setThemeState(obs);
         } else {
-            const stored = localStorage.getItem(APP_THEME_KEY) as Theme | null;
-            if (stored && ['light', 'dark', 'system'].includes(stored)) {
+            const stored = readStored(APP_THEME_KEY);
+            if (isTheme(stored)) {
                 setThemeState(stored);
             }
         }
-        const storedAccent = localStorage.getItem(APP_ACCENT_THEME_KEY) as AccentTheme | null;
-        if (storedAccent && ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'].includes(storedAccent)) {
+        const storedAccent = readStored(APP_ACCENT_THEME_KEY);
+        if (isAccentTheme(storedAccent)) {
             setAccentThemeState(storedAccent);
         }
     }, []);
@@ -84,27 +95,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             const obs = obsidianTheme ?? getObsidianTheme();
             let resolved: 'light' | 'dark';
             if (obs) resolved = obs;
-            else resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme as 'light' | 'dark';
+            else resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
             root.setAttribute('data-theme', resolved);
             // Only persist when not controlled by Obsidian
-            if (!obs) localStorage.setItem(APP_THEME_KEY, theme);
+            if (!obs) writeStored(APP_THEME_KEY, theme);
         };
         applyTheme();
         const handler = () => { if (!obsidianTheme && theme === 'system') applyTheme(); };
-        if (mq.addEventListener) {
-            mq.addEventListener('change', handler);
-            return () => mq.removeEventListener('change', handler);
-        }
-        // @ts-ignore legacy
-        mq.addListener(handler);
-        return () => mq.removeListener(handler);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
     }, [theme, hydrated, obsidianTheme]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !hydrated) return;
         const root = window.document.documentElement;
         root.setAttribute('data-accent-theme', accentTheme);
-        localStorage.setItem(APP_ACCENT_THEME_KEY, accentTheme);
+        writeStored(APP_ACCENT_THEME_KEY, accentTheme);
     }, [accentTheme, hydrated]);
 
     return (
@@ -114,7 +120,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
-export function useTheme() {
+export function useTheme(): ThemeContextType {
     const context = useContext(ThemeContext);
     if (context === undefined) {
         // Obsidian fallback: derive from Obsidian's body class or system preference
@@ -124,10 +130,10 @@ export function useTheme() {
         const resolved: Theme = obs ?? (mqDark ? 'dark' : 'light');
         return {
             theme: resolved,
-            setTheme: () => {},
-            accentTheme: 'default' as AccentTheme,
-            setAccentTheme: () => {},
-        } as ThemeContextType;
+            setTheme: () => { /* no provider mounted */ },
+            accentTheme: 'default',
+            setAccentTheme: () => { /* no provider mounted */ },
+        };
     }
     return context;
 }

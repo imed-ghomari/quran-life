@@ -13,7 +13,7 @@
  */
 import { App, TFile, normalizePath } from "obsidian";
 import { registerRecitationCacheStore } from "@/lib/audio";
-import { ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
+import { asRecord, ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
 
 const CACHE_FOLDER = "recitation-cache";
 
@@ -28,11 +28,10 @@ function cacheFilePath(root: string, reciterId: string): string {
 
 async function readTextFile(app: App, path: string): Promise<string | null> {
   const normalized = normalizePath(path);
-  if (isHiddenPath(normalized)) {
-    const adapter: any = (app as any).vault?.adapter;
+  if (isHiddenPath(app, normalized)) {
     try {
-      if (adapter?.exists && !(await adapter.exists(normalized))) return null;
-      return (await adapter.read(normalized)) as string;
+      if (!(await app.vault.adapter.exists(normalized))) return null;
+      return await app.vault.adapter.read(normalized);
     } catch { return null; }
   }
   const file = app.vault.getAbstractFileByPath(normalized);
@@ -42,12 +41,9 @@ async function readTextFile(app: App, path: string): Promise<string | null> {
 
 async function writeTextFile(app: App, path: string, text: string): Promise<void> {
   const normalized = normalizePath(path);
-  if (isHiddenPath(normalized)) {
-    const adapter: any = (app as any).vault?.adapter;
-    if (adapter?.write) {
-      await adapter.write(normalized, text);
-      return;
-    }
+  if (isHiddenPath(app, normalized)) {
+    await app.vault.adapter.write(normalized, text);
+    return;
   }
   const file = app.vault.getAbstractFileByPath(normalized);
   if (file instanceof TFile) await app.vault.modify(file, text);
@@ -60,9 +56,10 @@ export function registerVaultRecitationCache(app: App, dataRoot: string): void {
       const raw = await readTextFile(app, cacheFilePath(dataRoot, reciterId));
       if (!raw) return null;
       try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || typeof parsed.segments !== "object") return null;
-        return parsed as { segments: Record<string, number[][]> };
+        const parsed: unknown = JSON.parse(raw);
+        const record = asRecord(parsed);
+        if (!record || typeof record.segments !== "object") return null;
+        return { segments: asRecord(record.segments) as Record<string, number[][]> };
       } catch { return null; }
     },
     write: async (reciterId: string, data: { segments: Record<string, number[][]> }) => {

@@ -3,13 +3,13 @@ import React from 'react';
 const { useEffect, useLayoutEffect } = React;
 
 let guardCount = 0;
-let originalBodyOverscrollX: string | null = null;
-let originalHtmlOverscrollX: string | null = null;
 let listenersAttached = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
 const EDGE_GUARD_PX = 24;
+/** CSS class (see plugin-styles.css) that disables horizontal overscroll on html/body. */
+const OVERSCROLL_GUARD_CLASS = 'ql-no-overscroll-x';
 
 const handleTouchStart = (event: TouchEvent) => {
     const touch = event.touches[0];
@@ -54,11 +54,8 @@ const applyGuard = () => {
     guardCount += 1;
     if (guardCount !== 1) return;
 
-    originalBodyOverscrollX = document.body.style.overscrollBehaviorX;
-    originalHtmlOverscrollX = document.documentElement.style.overscrollBehaviorX;
-
-    document.body.style.overscrollBehaviorX = 'none';
-    document.documentElement.style.overscrollBehaviorX = 'none';
+    document.body.addClass(OVERSCROLL_GUARD_CLASS);
+    document.documentElement.addClass(OVERSCROLL_GUARD_CLASS);
 
     attachListeners();
 };
@@ -68,15 +65,8 @@ const releaseGuard = () => {
     guardCount -= 1;
     if (guardCount !== 0) return;
 
-    if (originalBodyOverscrollX !== null) {
-        document.body.style.overscrollBehaviorX = originalBodyOverscrollX;
-    }
-    if (originalHtmlOverscrollX !== null) {
-        document.documentElement.style.overscrollBehaviorX = originalHtmlOverscrollX;
-    }
-
-    originalBodyOverscrollX = null;
-    originalHtmlOverscrollX = null;
+    document.body.removeClass(OVERSCROLL_GUARD_CLASS);
+    document.documentElement.removeClass(OVERSCROLL_GUARD_CLASS);
     detachListeners();
 };
 
