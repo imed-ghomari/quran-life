@@ -117,7 +117,7 @@ export async function ensureFolder(app: App, folderPath: string): Promise<void> 
 async function writeJsonAtomic(app: App, filePath: string, data: unknown): Promise<void> {
   const normalized = normalizePath(filePath);
   const text = JSON.stringify(data, null, 2);
-  const parent = normalized.split("/").slice(0, -1).join("/");
+  const parent = (() => { const i = normalized.lastIndexOf("/"); return i < 0 ? "" : normalized.slice(0, i); })();
   await ensureFolder(app, parent || "/");
   if (isHiddenPath(app, normalized)) {
     try {
@@ -292,7 +292,7 @@ export class VaultStore {
     const files = await adapterListFiles(this.app, VAULT_PATHS.splitsDir(this.dataRoot));
     for (const filePath of files) {
       if (!filePath.endsWith(".json")) continue;
-      const base = filePath.split("/").pop() || "";
+      const base = filePath.slice(filePath.lastIndexOf("/") + 1) || "";
       const m = base.match(/surah-(\d+)\.json/);
       if (!m) continue;
       const sid = Number(m[1]);
@@ -326,7 +326,7 @@ export class VaultStore {
     const files = await adapterListFiles(this.app, dir);
     for (const filePath of files) {
       if (!/\.(md|markdown)$/i.test(filePath)) continue;
-      const base = (filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "");
+      const base = (filePath.slice(filePath.lastIndexOf("/") + 1) || "").replace(/\.(md|markdown)$/i, "");
       if (!base) continue;
       const content = await readText(this.app, filePath, null);
       if (typeof content === "string") out[base] = content;
@@ -414,7 +414,7 @@ export class VaultStore {
   // Saved at the vault root (visible) rather than the data root (often hidden).
   async saveApkgFile(fileName: string, blob: Blob): Promise<string> {
     const normalized = normalizePath(fileName);
-    const dir = normalized.split("/").slice(0, -1).join("/");
+    const dir = (() => { const i = normalized.lastIndexOf("/"); return i < 0 ? "" : normalized.slice(0, i); })();
     if (dir) await ensureFolder(this.app, dir);
     const ab = await blob.arrayBuffer();
     if (isHiddenPath(this.app, normalized)) {

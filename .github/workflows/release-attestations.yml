@@ -2,7 +2,9 @@ name: Release attestations
 
 on:
   push:
+    # Same version tags as the release workflow (no 'v' prefix: `1.0.5`).
     tags:
+      - '[0-9]*'
       - 'v*'
 
 jobs:

@@ -14,7 +14,7 @@ function getApp(appOverride?: any): App | null {
   try {
     // Shared registry — Obsidian Mobile has no `window.app`, so downloads used
     // to lose `requestUrl` (CORS-free fetch) and the vault adapter entirely.
-    return (getObsidianApp(appOverride) as App | null) ?? null;
+    return getObsidianApp(appOverride) ?? null;
   } catch { return null; }
 }
 
@@ -94,7 +94,7 @@ async function adapterRemoveNoTrash(app: App, path: string): Promise<void> {
 
 async function adapterWriteBinary(app: App, path: string, data: ArrayBuffer): Promise<void> {
   const normalized = normalizePath(path);
-  await ensureFolder(app, normalized.split("/").slice(0, -1).join("/") || "/");
+  await ensureFolder(app, (() => { const i = normalized.lastIndexOf("/"); return i < 0 ? "" : normalized.slice(0, i); })() || "/");
   const adapter: any = (app as any).vault?.adapter;
   if (adapter?.writeBinary) {
     try { await adapter.writeBinary(normalized, data); return; } catch { /* best-effort only; ignore */ }
@@ -194,7 +194,7 @@ export async function scanOfflineAudioForReciter(
   const surahFiles = new Map<number, string>();
   const ayahFiles = new Map<string, string>(); // "s:a" -> path
   for (const path of listed) {
-    const base = path.split("/").pop() || path;
+    const base = path.slice(path.lastIndexOf("/") + 1) || path;
     const surahMatch = base.match(SURAH_FILE_RE);
     if (surahMatch) {
       const sid = Number(surahMatch[1]);
@@ -223,7 +223,7 @@ export async function scanOfflineAudioForReciter(
   const filesByPart: Record<number, string[]> = {};
 
   for (const option of ACTIVE_PART_OPTIONS) {
-    const partId = option.id as QuranPart;
+    const partId = option.id;
     const allInPart = getSurahsByPart(partId);
     const surahs = allInPart.filter((s) => !skipped.has(s.id));
     const skippedCount = allInPart.length - surahs.length;
@@ -772,7 +772,7 @@ const offlineBlobCache = new Map<string, string>();
 function toArrayBuffer(value: unknown): ArrayBuffer | null {
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
-    const view = value as ArrayBufferView;
+    const view = value;
     return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
   }
   return null;

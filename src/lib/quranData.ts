@@ -3,7 +3,7 @@
 // ========================================
 
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
-import { getObsidianApp } from './obsidianApp';
+import { getObsidianApp, pluginPublishDir } from './obsidianApp';
 
 // Progress callback for the one-time Quran corpus download. Called ONLY when
 // an actual network download happens (vault/session reads are silent).
@@ -92,7 +92,7 @@ async function downloadTextWithProgress(
 async function persistTextToVault(app: any, filePath: string, text: string): Promise<void> {
     const adapter: any = app?.vault?.adapter;
     if (!adapter) throw new Error('No vault adapter');
-    const dir = filePath.split('/').slice(0, -1).join('/');
+    const dir = (() => { const i = filePath.lastIndexOf("/"); return i < 0 ? "" : filePath.slice(0, i); })();
     if (dir && adapter.mkdir) {
         const parts = dir.split('/');
         let cur = '';
@@ -363,35 +363,27 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
     if (versesLoadingPromise) return versesLoadingPromise;
 
     versesLoadingPromise = (async () => {
-        // Try sessionStorage first (Client side only)
-        if (typeof window !== 'undefined') {
-             try {
-                const cached = sessionStorage.getItem('quran_verses_cache_v2');
-                if (cached) {
-                    cachedVerses = JSON.parse(cached);
-                    return cachedVerses!;
-                }
-            } catch (e) {
-                console.warn('Failed to load verses from sessionStorage', e);
-            }
-        }
-
         try {
             // Try Obsidian vault first (plugin context, no /public server)
             // Uses the shared app registry so Obsidian Mobile works too — mobile
             // does not expose `window.app`.
             const obsidianApp: any = getObsidianApp();
             const isObsidian = !!obsidianApp?.vault?.adapter;
-            const candidates = [
+            const publishDir = pluginPublishDir(obsidianApp);
+            const candidates = [...new Set([
+                `${publishDir}/data/assets/qpc-hafs-word-by-word.json`,
                 '.obsidian/plugins/quran-life/data/assets/qpc-hafs-word-by-word.json',
                 'QuranLife/assets/qpc-hafs-word-by-word.json',
                 'QuranLife/qpc-hafs-word-by-word.json',
+                `${publishDir}/qpc-hafs-word-by-word.json`,
                 '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
+                `${publishDir}/public/qpc-hafs-word-by-word.json`,
                 '.obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json',
+                `${publishDir}/data/qpc-hafs-word-by-word.json`,
                 '.obsidian/plugins/quran-life/data/qpc-hafs-word-by-word.json',
                 'qpc-hafs-word-by-word.json',
                 'public/qpc-hafs-word-by-word.json',
-            ];
+            ])];
             if (isObsidian) {
                 try {
                     // Try plugin-bundled asset via vault adapter resource path, or vault file QuranLife/assets/...
@@ -401,9 +393,6 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                             if (raw) {
                                 const data = JSON.parse(raw);
                                 cachedVerses = parseQuranJson(data as Record<string, any>);
-                                if (typeof window !== 'undefined') {
-                                    try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch { /* best-effort only; ignore */ }
-                                }
                                 return cachedVerses;
                             }
                         } catch { /* best-effort only; ignore */ }
@@ -418,9 +407,6 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                                 if (r.ok) {
                                     const data = await r.json();
                                     cachedVerses = parseQuranJson(data as Record<string, any>);
-                                    if (typeof window !== 'undefined') {
-                                        try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch { /* best-effort only; ignore */ }
-                                    }
                                     return cachedVerses;
                                 }
                             } catch { /* best-effort only; ignore */ }
@@ -447,9 +433,6 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                     if (raw && raw.trim().startsWith('{')) {
                         const data = JSON.parse(raw);
                         cachedVerses = parseQuranJson(data as Record<string, any>);
-                        if (typeof window !== 'undefined') {
-                            try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch { /* best-effort only; ignore */ }
-                        }
                         // Persist best-effort so this download happens exactly once
                         void persistTextToVault(obsidianApp, 'QuranLife/assets/qpc-hafs-word-by-word.json', raw).catch(() => {});
                         return cachedVerses;
@@ -474,15 +457,6 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
             if (!res.ok) throw new Error(`Failed to load quran JSON: ${res.status}`);
             const data = await res.json();
             cachedVerses = parseQuranJson(data as Record<string, any>);
-            
-            // Save to sessionStorage
-            if (typeof window !== 'undefined') {
-                 try {
-                    sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses));
-                } catch (e) {
-                    console.warn('Failed to cache verses in sessionStorage', e);
-                }
-            }
             return cachedVerses;
         } catch (err) {
              console.error('Failed to load verses', err);

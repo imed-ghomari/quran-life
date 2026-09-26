@@ -1,6 +1,6 @@
 {
   "name": "quran-reader",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -24,7 +24,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/sql.js": "^1.4.11",
-    "builtin-modules": "^4.0.0",
     "esbuild": "^0.23.1",
     "obsidian": "latest",
     "typescript": "^5.5.4"

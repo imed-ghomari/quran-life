@@ -5,6 +5,7 @@ import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl, resolveAudioUrlProxied, buildAyahAudioUrl } from '@/lib/audio';
 import { splitVerseHighlightWords } from '@/lib/quranData';
 import { getOfflineAudioUrlIfAvailable, peekOfflineAudioUrlIfCached } from '@/plugin/offlineAudio';
+import { readStored, writeStored, readStoredJson, writeStoredJson, removeStored } from '@/lib/pluginStorage';
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, Undo2 } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 
@@ -36,8 +37,6 @@ const DEFAULT_WORDS_PER_SECOND = 2.6;
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
 const RECITER_STORAGE_KEY = 'selected_reciter_id';
 const PLAYBACK_STATE_KEY = 'audio_playback_state_v1';
-// Aliases used by legacy code paths that read/write directly; kept for review
-// so the build passes while we migrate every call site to window.localStorage.
 
 const MEDIA_READY_STATE_FUTURE_DATA = 3;
 const SEEK_TOLERANCE_SEC = 0.08;
@@ -69,19 +68,17 @@ const isAudioBufferedAt = (audio: HTMLAudioElement, targetTime: number) => {
 
 function readStoredPlaybackState(): { reciterId?: string; surahId: number; ayahId: number; timestamp: number } | null {
     try {
-        const raw = window.localStorage.getItem(PLAYBACK_STATE_KEY);
-        if (!raw) return null;
-        const p = JSON.parse(raw);
+        const p = readStoredJson<{ reciterId?: string; surahId?: number; ayahId?: number }>(PLAYBACK_STATE_KEY);
         if (!p || typeof p.surahId !== 'number' || typeof p.ayahId !== 'number') return null;
-        return p;
+        return { reciterId: p.reciterId, surahId: p.surahId, ayahId: p.ayahId, timestamp: typeof (p as { timestamp?: unknown }).timestamp === 'number' ? (p as { timestamp: number }).timestamp : 0 };
     } catch {
         return null;
     }
 }
 function writeStoredPlaybackState(state: { reciterId?: string; surahId: number; ayahId: number; timestamp: number } | null) {
     try {
-        if (!state) window.localStorage.removeItem(PLAYBACK_STATE_KEY);
-        else window.localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(state));
+        if (!state) removeStored(PLAYBACK_STATE_KEY);
+        else writeStoredJson(PLAYBACK_STATE_KEY, state);
     } catch { /* storage unavailable — playback state is best-effort */ }
 }
 
@@ -459,12 +456,12 @@ export default function AudioPlayerLocal({
     }, [currentVerseIndex]);
 
     useEffect(() => {
-        getAudioPlayerReciters().then(list => setReciters(list));
+        void getAudioPlayerReciters().then(list => setReciters(list));
     }, []);
 
     useEffect(() => {
         if (reciters.length === 0) return;
-        const savedId = typeof window !== 'undefined' ? window.localStorage.getItem(RECITER_STORAGE_KEY) || undefined : undefined;
+        const savedId = readStored(RECITER_STORAGE_KEY) || undefined;
         const preferred = reciters.find(r => r.id === savedId) || reciters[0];
         if (!preferred) return;
         if (selectedReciterId !== preferred.id) setSelectedReciter(preferred);
@@ -473,7 +470,7 @@ export default function AudioPlayerLocal({
     useEffect(() => {
         let stored: PlaybackSpeed | undefined;
         try {
-            const raw = window.localStorage.getItem(SPEED_STORAGE_KEY);
+            const raw = readStored(SPEED_STORAGE_KEY);
             if (raw) {
                 const parsed = Number(raw) as PlaybackSpeed;
                 if (SPEED_OPTIONS.includes(parsed)) stored = parsed;
@@ -519,7 +516,7 @@ export default function AudioPlayerLocal({
             setRecitationData(data);
             setIsLoadingReciter(false);
         };
-        load();
+        void load();
         return () => { isActive = false; };
     }, [selectedReciterId, selectedReciterType, selectedReciterPath, currentSurahId, obsidianApp]);
 
@@ -538,7 +535,7 @@ export default function AudioPlayerLocal({
             setRecitationDataMap(nextMap);
             setIsLoadingReciter(false);
         };
-        loadAll();
+        void loadAll();
         return () => { isActive = false; };
     }, [selectedReciterId, selectedReciterType, selectedReciterPath, versesSurahIdsKey, verses.length, obsidianApp]);
 
@@ -1045,7 +1042,7 @@ export default function AudioPlayerLocal({
             proxiedRetryTriedRef.current = false;
             audioRef.current?.pause(); seamlessSurahAdvanceKeyRef.current = ''; surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
             setRecitationData(null); setRecitationDataMap({}); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); setIsAudioPreparing(true); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; configuredTrackKeyRef.current = ''; setIsLoadingReciter(true);
-            setSelectedReciter(reciter); window.localStorage.setItem(RECITER_STORAGE_KEY, id); setIsPlaying(false);
+            setSelectedReciter(reciter); writeStored(RECITER_STORAGE_KEY, id); setIsPlaying(false);
         }
     };
 
@@ -1135,7 +1132,7 @@ export default function AudioPlayerLocal({
         const currentIndex = SPEED_OPTIONS.indexOf(speed);
         const nextIndex = (currentIndex + 1) % SPEED_OPTIONS.length;
         const newSpeed = SPEED_OPTIONS[nextIndex];
-        setSpeed(newSpeed); if (audioRef.current) audioRef.current.playbackRate = newSpeed; window.localStorage.setItem(SPEED_STORAGE_KEY, newSpeed.toString());
+        setSpeed(newSpeed); if (audioRef.current) audioRef.current.playbackRate = newSpeed; writeStored(SPEED_STORAGE_KEY, newSpeed.toString());
     };
 
     const verseWordCounts = useMemo(

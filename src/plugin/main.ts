@@ -139,7 +139,7 @@ export default class QuranLifePlugin extends Plugin {
                 const listed = await this.app.vault.adapter.list(src);
                 for (const file of listed.files) {
                   try {
-                    const rel = file.startsWith(src) ? file.slice(src.length + 1) : file.split("/").pop() || "";
+                    const rel = file.startsWith(src) ? file.slice(src.length + 1) : file.slice(file.lastIndexOf("/") + 1) || "";
                     const destPath = normalizePath(`${dest}/${rel}`);
                     const data = await this.app.vault.adapter.read(file);
                     await ensureFolder(this.app, dest);
@@ -147,7 +147,7 @@ export default class QuranLifePlugin extends Plugin {
                   } catch { /* skip unreadable legacy file */ }
                 }
                 for (const folder of listed.folders) {
-                  const rel = folder.startsWith(src) ? folder.slice(src.length + 1) : folder.split("/").pop() || "";
+                  const rel = folder.startsWith(src) ? folder.slice(src.length + 1) : folder.slice(folder.lastIndexOf("/") + 1) || "";
                   await copyDir(folder, normalizePath(`${dest}/${rel}`));
                 }
               } catch { /* nothing to copy */ }

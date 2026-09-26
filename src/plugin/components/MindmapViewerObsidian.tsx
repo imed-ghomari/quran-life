@@ -53,7 +53,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
     else if (theme === 'system') {
       const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
       resolved = mqDark ? 'dark' : 'light';
-    } else resolved = theme as 'light' | 'dark';
+    } else resolved = theme;
     try { ed.user.updateUserPreferences({ colorScheme: resolved }); } catch { /* theme sync is best-effort; ignore */ }
     // Aggressive Zoom-to-Fit strategy — ported from web MindmapViewer.tsx:480.
     // Uses a tight inset (default zoomToFit pads 128px, leaving the map
@@ -114,7 +114,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
       else if (theme === 'system') {
         const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
         resolved = mqDark ? 'dark' : 'light';
-      } else resolved = theme as 'light' | 'dark';
+      } else resolved = theme;
       try { editor.user.updateUserPreferences({ colorScheme: resolved }); } catch { /* theme sync is best-effort; ignore */ }
     }
   }, [snapshot, editor, theme]);

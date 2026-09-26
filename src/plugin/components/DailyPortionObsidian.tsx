@@ -549,7 +549,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
                       obsidianApp={(vaultStore as any)?.app}
-                      onUndoComplete={canUndoComplete ? handleUndoComplete : undefined}
+                      onUndoComplete={canUndoComplete ? () => void handleUndoComplete() : undefined}
                       isUndoingComplete={isCompleting}
                     />
                   </div>

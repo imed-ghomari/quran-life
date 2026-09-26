@@ -270,7 +270,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<any
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
     try {
-        const res = await fetch(url, { signal: ctrl?.signal as any });
+        const res = await fetch(url, { signal: ctrl?.signal });
         if (!res.ok) return null;
         try { return await res.json(); } catch { return null; }
     } catch {
@@ -367,7 +367,7 @@ const segmentsMemoryCache: Record<string, Record<string, number[][]> | null> = {
 function extractSegmentsMap(json: Record<string, any>): Record<string, number[][]> {
     const out: Record<string, number[][]> = {};
     for (const [key, value] of Object.entries(json || {})) {
-        const segments = (value as any)?.segments;
+        const segments = (value)?.segments;
         if (Array.isArray(segments) && segments.length) out[key] = segments as number[][];
     }
     return out;
@@ -475,7 +475,7 @@ const audioBlobUrlCache = new Map<string, string>();
 function toArrayBuffer(value: unknown): ArrayBuffer | null {
     if (value instanceof ArrayBuffer) return value;
     if (ArrayBuffer.isView(value)) {
-        const view = value as ArrayBufferView;
+        const view = value;
         return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
     }
     return null;

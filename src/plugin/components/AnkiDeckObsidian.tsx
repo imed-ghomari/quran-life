@@ -126,14 +126,14 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         for (const [sidRaw, arr] of Object.entries(all || {})) {
           const sid = Number(sidRaw);
           if (!Number.isFinite(sid) || !Array.isArray(arr) || arr.length === 0) continue;
-          splits[sid] = arr as AnkiAnchor[];
+          splits[sid] = arr;
         }
       } catch { /* best-effort only; ignore */ }
       if (Object.keys(splits).length === 0) {
         // Fallback for platforms where folder listing returns nothing
         for (let sid=1; sid<=114; sid++) {
           const arr = await vaultStore.loadSplitsForSurah(sid);
-          if (arr && arr.length) splits[sid] = arr as AnkiAnchor[];
+          if (arr && arr.length) splits[sid] = arr;
         }
       }
       const docs: Record<string, string> = {};
@@ -318,13 +318,13 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         for (const [sidRaw, arr] of Object.entries(allSplits || {})) {
           const sid = Number(sidRaw);
           if (!Number.isFinite(sid) || !Array.isArray(arr) || arr.length === 0) continue;
-          fullSplits[sid] = arr as AnkiAnchor[];
+          fullSplits[sid] = arr;
         }
       } catch { /* best-effort only; ignore */ }
       if (Object.keys(fullSplits).length === 0) {
         for (let sid=1; sid<=114; sid++) {
           const arr = await vaultStore.loadSplitsForSurah(sid);
-          if (arr && arr.length) fullSplits[sid] = arr as AnkiAnchor[];
+          if (arr && arr.length) fullSplits[sid] = arr;
           if (sid % 20 === 0 || sid === 114) {
             updateProgress({ current: 5 + Math.round((sid/114)*25), status: `Loading splits ${sid}/114…` });
             // allow UI to repaint
@@ -758,7 +758,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
               </div>
               <div className="setting-item-description" style={{ fontSize:'0.85em', color:'var(--text-muted)', fontWeight:500 }}>{exportProgress.status}</div>
               {/* progress bar — same structure as importer: .importer-progress-bar + .importer-progress-bar-inner with --importer-progress */}
-              <div className="importer-progress-bar" style={{ width:'100%', height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' } as React.CSSProperties & Record<string,string>}>
+              <div className="importer-progress-bar" style={{ width:'100%', height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' }}>
                 <div className="importer-progress-bar-inner" style={{ width: `${exportProgress.current}%`, height:'100%', background:'var(--interactive-accent)', transition:'width 0.25s ease', borderRadius:999 }} />
               </div>
               {/* stats — only live numbers: verse total once built, mindmaps rendered x/y while rendering */}

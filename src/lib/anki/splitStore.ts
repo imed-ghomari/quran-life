@@ -2,6 +2,7 @@
 
 import { AnkiAnchor } from './types';
 import { getSurah } from '@/lib/quranData';
+import { readStored, writeStored } from '@/lib/pluginStorage';
 
 const LS_SPLITS_KEY = 'quran-life:anki:splits:v1';
 
@@ -26,7 +27,7 @@ function normalizeAnchor(surahId: number, a: any): AnkiAnchor | null {
 export function loadSplits(): SurahSplits {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = window.localStorage.getItem(LS_SPLITS_KEY);
+    const raw = readStored(LS_SPLITS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     const out: SurahSplits = {};
@@ -34,7 +35,7 @@ export function loadSplits(): SurahSplits {
       const surahId = Number(k);
       if (!Number.isFinite(surahId)) return;
       if (!Array.isArray(arr)) return;
-      const anchors = (arr as any[]).map(a => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
+      const anchors = (arr).map(a => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
       const sanitized = sanitizeAnchors(surahId, anchors);
       if (sanitized.length) out[surahId] = sanitized;
       else if (anchors.length) out[surahId] = anchors; // fallback keep original if sanitize empties but original had data
@@ -47,7 +48,7 @@ export function loadSplits(): SurahSplits {
 
 export function saveSplits(splits: SurahSplits) {
   try {
-    window.localStorage.setItem(LS_SPLITS_KEY, JSON.stringify(splits));
+    writeStored(LS_SPLITS_KEY, JSON.stringify(splits));
   } catch { /* best-effort only; ignore */ }
 }
 
@@ -146,7 +147,7 @@ export function importSplitsFromBackup(json: any): SurahSplits {
         Object.entries(source).forEach(([k, arr]) => {
           const surahId = Number(k);
           if (!Number.isFinite(surahId) || !Array.isArray(arr)) return;
-          const normalized = (arr as any[]).map(a => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
+          const normalized = (arr).map(a => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
           const sanitized = sanitizeAnchors(surahId, normalized);
           if (sanitized.length) out[surahId] = sanitized;
           else if (normalized.length) out[surahId] = normalized;

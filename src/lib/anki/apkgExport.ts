@@ -108,8 +108,8 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
 
   const firstSanitized = (() => {
     try {
-      const s = sanitize((entries[0][1] as any).snapshot) || (entries[0][1] as any).snapshot;
-      const store = (s as any)?.store;
+      const s = sanitize((entries[0][1]).snapshot) || (entries[0][1]).snapshot;
+      const store = (s)?.store;
       if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) return null;
       return s;
     } catch { return null; }
@@ -134,12 +134,12 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
       const timer = window.setTimeout(() => resolve(null), 8000);
       try {
         const onMount = (ed: any) => { window.clearTimeout(timer); resolve(ed); };
-        const element = (React as any).createElement(Tldraw, {
+        const element = (React).createElement(Tldraw, {
           snapshot: firstSanitized || undefined,
           onMount,
           hideUi: true,
         });
-        const root = (ReactDOMClient as any).createRoot(container);
+        const root = (ReactDOMClient).createRoot(container);
         (container as any)._reactRoot = root;
         root.render(element);
       } catch {
@@ -196,7 +196,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
   } catch { /* best-effort only; ignore */ }
   for (let i = 0; i < entries.length; i++) {
     const [key, val] = entries[i];
-    const snapshot = (val as any).snapshot;
+    const snapshot = (val).snapshot;
     if (!snapshot) {
       reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
       continue;
@@ -206,14 +206,14 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     const filename = `mindmap-${safeKey}.png`;
     try {
       const sanitized = i === 0 && firstSanitized ? firstSanitized : (sanitize(snapshot) || snapshot);
-      const store = (sanitized as any)?.store;
+      const store = (sanitized)?.store;
       if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) {
         fieldMap[key] = '';
       } else {
         // Hash-skip: unchanged snapshots reuse last export's blob (no re-render)
         let hash: string | null = null;
         try {
-          hash = hashSnapshotString(JSON.stringify((sanitized as any).store ?? sanitized));
+          hash = hashSnapshotString(JSON.stringify((sanitized).store ?? sanitized));
         } catch { hash = null; }
         const cached = mindmapRenderCache.get(key);
         let blob: Blob | null = null;
@@ -319,7 +319,7 @@ async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promi
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
   try {
-    const resp = await window.fetch(url, { cache: 'force-cache' as RequestCache, signal: ctrl?.signal as AbortSignal | undefined });
+    const resp = await window.fetch(url, { cache: 'force-cache' as RequestCache, signal: ctrl?.signal });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
     return await resp.arrayBuffer();
   } catch (e: any) {

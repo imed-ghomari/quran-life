@@ -95,7 +95,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
   // Listen for external changes from Settings tab (hidden file not triggering vault.on)
   useEffect(() => {
     const handler = () => { void reload(); };
-    window.addEventListener('quran-life:daily-settings-changed', handler as any);
+    window.addEventListener('quran-life:daily-settings-changed', handler);
     // Also poll on visibility change (user switches back from Settings)
     const visHandler = () => { if (document.visibilityState === 'visible') void reload(); };
     document.addEventListener('visibilitychange', visHandler);
@@ -108,7 +108,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
       });
     }
     return () => {
-      window.removeEventListener('quran-life:daily-settings-changed', handler as any);
+      window.removeEventListener('quran-life:daily-settings-changed', handler);
       document.removeEventListener('visibilitychange', visHandler);
       if (ref && app?.vault?.offref) try { app.vault.offref(ref); } catch { /* best-effort only; ignore */ }
     };
@@ -116,7 +116,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
 
   const saveSettings = useCallback(async (patch: Partial<LocalDailySettings>) => {
     setSettingsState(prev => {
-      const next: LocalDailySettings = { ...prev, ...patch } as LocalDailySettings;
+      const next: LocalDailySettings = { ...prev, ...patch };
       if (patch.skippedSurahs !== undefined) next.skippedSurahs = normalizeSkippedSurahs(patch.skippedSurahs);
       if (patch.dailyTargetMinutes !== undefined) next.dailyTargetMinutes = clampDailyTargetMinutes(Number(patch.dailyTargetMinutes));
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) next.activePart = prev.activePart;
@@ -152,7 +152,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
         const entry = await vaultStore.loadProgress(partId);
         if (entry) {
           if (Array.isArray(entry)) perPart.push(...entry);
-          else if (typeof entry === 'object' && (entry as any).partId !== undefined) perPart.push(entry as any);
+          else if (typeof entry === 'object' && (entry as any).partId !== undefined) perPart.push(entry);
           else if (typeof entry === 'object' && (entry as any).lastVerseIndex !== undefined) perPart.push({ partId, ...(entry as any) });
         }
       }
@@ -201,7 +201,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
   const deleteProgress = useCallback(async (partId: number) => {
     setProgress(prev => {
       const next = prev.filter(p => p.partId !== partId);
-      void vaultStore.saveProgress(partId, null as any); // delete file handled via save with empty?
+      void vaultStore.saveProgress(partId, null); // delete file handled via save with empty?
       // Actually vaultStore.saveProgress will create file; to delete we need to delete file via vault
       // Do direct vault delete via app
       const app: any = (vaultStore as any).app;
