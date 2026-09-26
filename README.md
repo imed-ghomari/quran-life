@@ -229,4 +229,4 @@ Daily Qur'an review, mindmap memorization and Anki export, vault-synced (Resilio
 
 - Bump `manifest.json` + `package.json` version, add it to `versions.json`.
 - `npm run plugin:release` builds and zips `dist/quran-life-<version>.zip` (validates exactly the 5 release files).
-- Tag `v<version>` and push — `.github/workflows/plugin-release.yml` attaches the zip to the GitHub Release.
+- Tag the version **without** a `v` prefix (`1.0.0`, not `v1.0.0`) and push — Obsidian matches releases to `manifest.json` by exact version, and `.github/workflows/plugin-release.yml` attaches `main.js`/`manifest.json`/`styles.css` (what Obsidian installs) plus the data files and zip.

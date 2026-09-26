@@ -1,7 +1,7 @@
 # Agent Instructions - Persistent Memory
 
 ## Plugin Build (Obsidian)
-- This repo is now an **Obsidian plugin** (branch `quran-anki-companion-obsidian-plugin`). DO NOT use Next dev server.
+- This repo is now an **Obsidian plugin** (branch `main`). DO NOT use Next dev server.
 - On **every code change** run the plugin build: `npm run dev` (esbuild watch → `main.js`) OR `npm run build` for production.
 - `npm run dev` keeps running and rebuilds on save — check `main.js` timestamp / `npm run dev` log. Do not kill/restart unless dead.
 - DO NOT run `next dev` / `next build`. Use only `npm run dev` / `npm run build` (esbuild).
@@ -35,11 +35,11 @@
 - Row/list CSS is injected from `settings.ts` under `.quran-life-settings` — desktop rows stay side-by-side (name left, buttons right) and phones stack them with full-width buttons; both verified at 390/700/1200 px with zero horizontal overflow.
 
 ## Branch Constraint
-- ALWAYS work on `quran-anki-companion-obsidian-plugin` branch only (from `quran-anki-companion` on 2026-09-08). Do NOT update `main` or `quran-anki-companion` branch. All new plugin work is on `quran-anki-companion-obsidian-plugin`.
+- ALWAYS work on `main` branch only. Do NOT update `quran-anki-companion` or `quran-anki-companion-obsidian-plugin` branches. All new plugin work is on `main`.
 
 ## Git Workflow - Push After Each Prompt
 - After finishing **every** user prompt (feature, fix, or docs), push to GitHub immediately in the same turn.
-- Use **one long command** to save time: `git add <files> && git commit -m "..." && git push origin quran-anki-companion-obsidian-plugin` (combine add/commit/push, don't run them as separate tool calls).
+- Use **one long command** to save time: `git add <files> && git commit -m "..." && git push origin main` (combine add/commit/push, don't run them as separate tool calls).
 - Never leave unpushed commits locally after a prompt is done.
 
 ## User Preferences

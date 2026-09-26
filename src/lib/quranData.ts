@@ -5,6 +5,81 @@
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
 import { getObsidianApp } from './obsidianApp';
 
+// Download a text asset with a hard timeout. Prefers Obsidian `requestUrl`
+// (CORS-free, works from the app:// origin) with plain fetch as fallback.
+async function downloadTextWithTimeout(url: string, app: any, timeoutMs: number): Promise<string> {
+    const viaRequestUrl = (async (): Promise<string | null> => {
+        try {
+            let req: any = null;
+            try {
+                const obs: any = await import('obsidian');
+                req = obs.requestUrl;
+            } catch {
+                req = (typeof window !== 'undefined' && (window as any).requestUrl) || null;
+            }
+            if (!req) return null;
+            const res: any = await req({ url, method: 'GET' });
+            if (typeof res.text === 'string' && res.text) return res.text;
+            if (res.arrayBuffer) {
+                const buf = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
+                if (buf) return new TextDecoder().decode(buf instanceof ArrayBuffer ? buf : buf.buffer ?? buf);
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    })();
+    const viaFetch = (async (): Promise<string | null> => {
+        try {
+            const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+            try {
+                const res = await fetch(url, { signal: ctrl?.signal as any });
+                if (!res.ok) return null;
+                return await res.text();
+            } finally {
+                if (timer) clearTimeout(timer);
+            }
+        } catch {
+            return null;
+        }
+    })();
+    const winner = await Promise.race([
+        (async () => {
+            const t = await viaRequestUrl;
+            if (t) return t;
+            return viaFetch;
+        })(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (typeof winner === 'string' && winner) return winner;
+    throw new Error(`Timed out downloading ${url}`);
+}
+
+// Persist text into the vault best-effort (creates parent folders). Used to
+// cache release-asset downloads so they happen exactly once.
+async function persistTextToVault(app: any, filePath: string, text: string): Promise<void> {
+    const adapter: any = app?.vault?.adapter;
+    if (!adapter) throw new Error('No vault adapter');
+    const dir = filePath.split('/').slice(0, -1).join('/');
+    if (dir && adapter.mkdir) {
+        const parts = dir.split('/');
+        let cur = '';
+        for (const part of parts) {
+            cur = cur ? `${cur}/${part}` : part;
+            try {
+                if (adapter.exists && (await adapter.exists(cur))) continue;
+                await adapter.mkdir(cur);
+            } catch {}
+        }
+    }
+    if (adapter.write) {
+        await adapter.write(filePath, text);
+        return;
+    }
+    throw new Error('Vault adapter cannot write');
+}
+
 // Helper to determine part based on surah ID
 function getPart(surahId: number): CoreQuranPart {
     if (surahId >= 1 && surahId <= 5) return 1;
@@ -325,6 +400,29 @@ export async function getQuranVerses(): Promise<Verse[]> {
 
             // In Obsidian, don't try web fetch to /public (no dev server) — it will always fail and log Failed to fetch
             if (isObsidian) {
+                // Community-store installs only ship main.js/manifest.json/
+                // styles.css, so the 8.8MB corpus may be missing entirely.
+                // Download it once from the GitHub release assets and persist
+                // it into the vault — every later launch is fully offline.
+                try {
+                    const raw = await downloadTextWithTimeout(
+                        'https://github.com/imed-ghomari/quran-life/releases/latest/download/qpc-hafs-word-by-word.json',
+                        obsidianApp,
+                        120000
+                    );
+                    if (raw && raw.trim().startsWith('{')) {
+                        const data = JSON.parse(raw);
+                        cachedVerses = parseQuranJson(data as Record<string, any>);
+                        if (typeof window !== 'undefined') {
+                            try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                        }
+                        // Persist best-effort so this download happens exactly once
+                        void persistTextToVault(obsidianApp, 'QuranLife/assets/qpc-hafs-word-by-word.json', raw).catch(() => {});
+                        return cachedVerses;
+                    }
+                } catch (e) {
+                    console.warn('[QuranLife] Quran JSON download from release failed', e);
+                }
                 console.warn('[QuranLife] Quran JSON not found in vault candidates, checked:', candidates);
                 // Try one last vault read for legacy path without isObsidian check
                 try {

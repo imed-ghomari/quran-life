@@ -2,7 +2,9 @@ name: Plugin release
 
 on:
   push:
+    # Obsidian matches releases WITHOUT a 'v' prefix (tag `1.0.0`, not `v1.0.0`)
     tags:
+      - "[0-9]*"
       - "v*"
   workflow_dispatch:
 
@@ -23,5 +25,13 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/quran-life-*.zip
+          # Obsidian installs main.js + manifest.json + styles.css by exact
+          # filename; the data files + zip are for first-run download / manual install.
+          files: |
+            dist/quran-life-*.zip
+            main.js
+            manifest.json
+            styles.css
+            qpc-hafs-word-by-word.json
+            sql-wasm.wasm
           generate_release_notes: true

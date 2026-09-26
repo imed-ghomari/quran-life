@@ -61,4 +61,4 @@ for (const f of required) {
     process.exit(1);
   }
 }
-console.log(`✓ dist/${zipName} ready — upload to the GitHub Release for v${version}.`);
+console.log(`✓ dist/${zipName} ready — tag ${version} (no 'v' prefix) and push so the release workflow publishes it.`);

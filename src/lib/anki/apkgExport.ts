@@ -341,6 +341,10 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
     const candidates = [
       '.obsidian/plugins/quran-life/sql-wasm.wasm',
       '.obsidian/plugins/quran-life/public/sql-wasm.wasm',
+      // Cached from a previous release-asset download (community-store
+      // installs only ship main.js/manifest.json/styles.css)
+      '.obsidian/plugins/quran-life/data/assets/sql-wasm.wasm',
+      'QuranLife/assets/sql-wasm.wasm',
     ];
     if (adapter?.readBinary) {
       for (const cand of candidates) {
@@ -371,17 +375,34 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
         } catch {}
       }
     }
-    // In Obsidian there is no web server serving `/sql-wasm.wasm` — skip it
-    // and go straight to CDN (timeouts apply).
-  } else {
-    try {
-      const ab = await fetchArrayBufferWithTimeout('/sql-wasm.wasm', 8000);
-      if (ab && ab.byteLength > 1000) {
-        cachedWasmBinary = ab;
-        return ab;
-      }
-    } catch {}
+    // In Obsidian there is no web server serving `/sql-wasm.wasm` — try our
+    // own release asset first (pinned, no third-party CDN), then public CDNs
+    // (timeouts apply). A network-fetched binary is cached into the vault so
+    // the next export works fully offline.
+    const obsidianUrls = [
+      'https://github.com/imed-ghomari/quran-life/releases/latest/download/sql-wasm.wasm',
+      'https://sql.js.org/dist/sql-wasm.wasm',
+      'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm',
+    ];
+    for (const url of obsidianUrls) {
+      try {
+        const ab = await fetchArrayBufferWithTimeout(url, 15000);
+        if (ab && ab.byteLength > 1000) {
+          cachedWasmBinary = ab;
+          void persistWasmToVault(adapter, ab).catch(() => {});
+          return ab;
+        }
+      } catch {}
+    }
+    return cachedWasmBinary;
   }
+  try {
+    const ab = await fetchArrayBufferWithTimeout('/sql-wasm.wasm', 8000);
+    if (ab && ab.byteLength > 1000) {
+      cachedWasmBinary = ab;
+      return ab;
+    }
+  } catch {}
   const cdnUrls = [
     'https://sql.js.org/dist/sql-wasm.wasm',
     'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm',
@@ -396,6 +417,25 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
     } catch {}
   }
   return cachedWasmBinary;
+}
+
+// Cache a downloaded wasm binary in the vault so repeat exports work offline.
+async function persistWasmToVault(adapter: any, ab: ArrayBuffer): Promise<void> {
+  if (!adapter?.writeBinary) return;
+  const dest = '.obsidian/plugins/quran-life/data/assets/sql-wasm.wasm';
+  const dir = dest.split('/').slice(0, -1).join('/');
+  if (adapter.mkdir) {
+    const parts = dir.split('/');
+    let cur = '';
+    for (const part of parts) {
+      cur = cur ? `${cur}/${part}` : part;
+      try {
+        if (adapter.exists && (await adapter.exists(cur))) continue;
+        await adapter.mkdir(cur);
+      } catch {}
+    }
+  }
+  await adapter.writeBinary(dest, ab);
 }
 
 // Escape Anki field separator
