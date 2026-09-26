@@ -1,6 +1,6 @@
 # Agent Instructions - Persistent Memory
 
-## Plugin Build (Obsidian)
+## Plugin Build (Obsidian) 
 - This repo is now an **Obsidian plugin** (branch `main`). DO NOT use Next dev server.
 - On **every code change** run the plugin build: `npm run dev` (esbuild watch → `main.js`) OR `npm run build` for production.
 - `npm run dev` keeps running and rebuilds on save — check `main.js` timestamp / `npm run dev` log. Do not kill/restart unless dead.
