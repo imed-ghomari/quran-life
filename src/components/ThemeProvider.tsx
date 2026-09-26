@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React from 'react';
+
+const { createContext, useContext, useEffect, useState } = React;
 
 export type Theme = 'light' | 'dark' | 'system';
 export type AccentTheme = 'default' | 'dracula' | 'nord' | 'catppuccin' | 'solarized' | 'tokyo-night';
@@ -15,107 +16,96 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function getObsidianTheme(): 'light' | 'dark' | null {
+    if (typeof document === 'undefined') return null;
+    if (document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')) return 'dark';
+    if (document.body.classList.contains('theme-light') || document.documentElement.classList.contains('theme-light')) return 'light';
+    // also check parent for obsidian workspace class
+    if (document.body.classList.contains('is-mobile')) {
+        // mobile may still have theme classes
+        if (document.body.classList.contains('theme-dark')) return 'dark';
+        if (document.body.classList.contains('theme-light')) return 'light';
+    }
+    return null;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const APP_THEME_KEY = 'theme';
     const APP_ACCENT_THEME_KEY = 'accent-theme';
-    const PUBLIC_THEME_KEY = 'public-theme';
     const [theme, setThemeState] = useState<Theme>('system');
     const [accentTheme, setAccentThemeState] = useState<AccentTheme>('default');
     const [hydrated, setHydrated] = useState(false);
-    const pathname = usePathname();
-    const isPostAuthRoute = Boolean(
-        pathname
-        && (
-            pathname.startsWith('/dashboard')
-            || pathname.startsWith('/todo')
-            || pathname.startsWith('/settings')
-            || pathname.startsWith('/statistics')
-            || pathname.startsWith('/docs')
-        )
-    );
+    const [obsidianTheme, setObsidianTheme] = useState<'light' | 'dark' | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
         setHydrated(true);
+        const obs = getObsidianTheme();
+        if (obs) {
+            setObsidianTheme(obs);
+            setThemeState(obs);
+        } else {
+            const stored = localStorage.getItem(APP_THEME_KEY) as Theme | null;
+            if (stored && ['light', 'dark', 'system'].includes(stored)) {
+                setThemeState(stored);
+            }
+        }
+        const storedAccent = localStorage.getItem(APP_ACCENT_THEME_KEY) as AccentTheme | null;
+        if (storedAccent && ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'].includes(storedAccent)) {
+            setAccentThemeState(storedAccent);
+        }
     }, []);
 
+    // Watch Obsidian theme changes (body class mutation)
     useEffect(() => {
-        if (typeof window === 'undefined' || !hydrated) return;
-
-        if (!isPostAuthRoute) {
-            const storedPublicTheme = localStorage.getItem(PUBLIC_THEME_KEY) as Theme | null;
-            if (storedPublicTheme && ['light', 'dark', 'system'].includes(storedPublicTheme)) {
-                setThemeState(storedPublicTheme);
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        const check = () => {
+            const obs = getObsidianTheme();
+            if (obs) {
+                setObsidianTheme(obs);
+                setThemeState(prev => (prev === obs ? prev : obs));
             } else {
-                setThemeState('system');
+                setObsidianTheme(null);
             }
-            setAccentThemeState('default');
-            return;
-        }
-
-        const stored = localStorage.getItem(APP_THEME_KEY) as Theme | null;
-        if (stored && ['light', 'dark', 'system'].includes(stored)) {
-            setThemeState(stored);
-        } else {
-            setThemeState('system');
-        }
-
-        const storedAccentTheme = localStorage.getItem(APP_ACCENT_THEME_KEY) as AccentTheme | null;
-        if (storedAccentTheme && ['default', 'dracula', 'nord', 'catppuccin', 'solarized', 'tokyo-night'].includes(storedAccentTheme)) {
-            setAccentThemeState(storedAccentTheme);
-        } else {
-            setAccentThemeState('default');
-        }
-    }, [hydrated, isPostAuthRoute]);
+        };
+        check();
+        const observer = new MutationObserver(check);
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        // also listen to Obsidian's theme change via matchMedia when not in Obsidian
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !hydrated) return;
         const root = window.document.documentElement;
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
-        const subscribeToSystemTheme = (handler: (event: MediaQueryListEvent) => void) => {
-            if (mq.addEventListener) {
-                mq.addEventListener('change', handler);
-                return () => mq.removeEventListener('change', handler);
-            }
-
-            mq.addListener(handler);
-            return () => mq.removeListener(handler);
-        };
-
-        if (!isPostAuthRoute) {
-            const applyPublicTheme = () => {
-                const resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
-                root.setAttribute('data-theme', resolved);
-            };
-            applyPublicTheme();
-            root.setAttribute('data-accent-theme', 'default');
-            localStorage.setItem(PUBLIC_THEME_KEY, theme);
-            if (theme === 'system') {
-                return subscribeToSystemTheme(applyPublicTheme);
-            }
-            return;
-        }
-
         const applyTheme = () => {
-            const resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
+            const obs = obsidianTheme ?? getObsidianTheme();
+            let resolved: 'light' | 'dark';
+            if (obs) resolved = obs;
+            else resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme as 'light' | 'dark';
             root.setAttribute('data-theme', resolved);
-            localStorage.setItem(APP_THEME_KEY, theme);
+            // Only persist when not controlled by Obsidian
+            if (!obs) localStorage.setItem(APP_THEME_KEY, theme);
         };
-
         applyTheme();
-        const handleChange = () => {
-            if (theme === 'system') applyTheme();
-        };
-        return subscribeToSystemTheme(handleChange);
-    }, [theme, hydrated, isPostAuthRoute]);
+        const handler = () => { if (!obsidianTheme && theme === 'system') applyTheme(); };
+        if (mq.addEventListener) {
+            mq.addEventListener('change', handler);
+            return () => mq.removeEventListener('change', handler);
+        }
+        // @ts-ignore legacy
+        mq.addListener(handler);
+        return () => mq.removeListener(handler);
+    }, [theme, hydrated, obsidianTheme]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !hydrated) return;
-        if (!isPostAuthRoute) return;
         const root = window.document.documentElement;
         root.setAttribute('data-accent-theme', accentTheme);
         localStorage.setItem(APP_ACCENT_THEME_KEY, accentTheme);
-    }, [accentTheme, hydrated, isPostAuthRoute]);
+    }, [accentTheme, hydrated]);
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme: setThemeState, accentTheme, setAccentTheme: setAccentThemeState }}>
@@ -127,7 +117,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme() {
     const context = useContext(ThemeContext);
     if (context === undefined) {
-        throw new Error('useTheme must be used within a ThemeProvider');
+        // Obsidian fallback: derive from Obsidian's body class or system preference
+        // This makes MindmapEditor and DailyPortion work inside Obsidian ItemView without requiring explicit ThemeProvider wrapper
+        const obs = getObsidianTheme();
+        const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+        const resolved: Theme = obs ?? (mqDark ? 'dark' : 'light');
+        return {
+            theme: resolved,
+            setTheme: () => {},
+            accentTheme: 'default' as AccentTheme,
+            setAccentTheme: () => {},
+        } as ThemeContextType;
     }
     return context;
 }

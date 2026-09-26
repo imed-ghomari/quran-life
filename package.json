@@ -1,10 +1,10 @@
 {
   "name": "quran-reader",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/generate-search-index.js && next dev --webpack",
-    "build": "node scripts/generate-search-index.js && next build --webpack",
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "docs:sync:legend": "node scripts/generate-mindmap-legend.js",
     "start": "next start",
     "lint": "next lint",
@@ -15,7 +15,10 @@
     "mcp:paddle:read-only": "sh -c 'ENV=${PADDLE_ENV:-sandbox}; if [ \"$ENV\" = \"production\" ]; then KEY=${PADDLE_SECRET_KEY_PRODUCTION:-$PADDLE_SECRET_KEY}; else KEY=${PADDLE_SECRET_KEY_SANDBOX:-$PADDLE_SECRET_KEY}; fi; npx @paddle/paddle-mcp --api-key=\"$KEY\" --environment=\"$ENV\" --tools=read-only'",
     "ensure:paddle:webhook-domain": "node scripts/ensure-paddle-webhook-domain.js",
     "verify:paddle:instant": "node scripts/verify-paddle-instant.js",
-    "test:fsrs:optimization": "node scripts/test-fsrs-optimization.js"
+    "test:fsrs:optimization": "node scripts/test-fsrs-optimization.js",
+    "web:dev": "node scripts/generate-search-index.js && next dev --webpack",
+    "web:build": "node scripts/generate-search-index.js && next build --webpack",
+    "plugin:release": "npm run build && node scripts/build-plugin-release.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -39,12 +42,15 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "idb-keyval": "^6.2.2",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.562.0",
+    "marked": "^18.0.11",
     "next": "^16.1.2",
     "next-mdx-remote": "^6.0.0",
     "postcss": "^8.5.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "sql.js": "^1.14.2",
     "tailwind-merge": "^2.0.0",
     "tailwindcss": "^4.1.18",
     "tldraw": "3.15.5",
@@ -63,9 +69,13 @@
     "@types/node": "^20.14.12",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/sql.js": "^1.4.11",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.23.1",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.0.0",
     "minimatch": "^9.0.3",
+    "obsidian": "latest",
     "typescript": "^5.5.4",
     "webpack": "^5.105.2"
   }

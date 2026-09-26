@@ -1,39 +1,33 @@
-# Managing Similar Verses (Mutashabihat)
+# Similar Verses (Mutashabihat) — Manual Check
 
-**Similar Verses** (known technically as *Mutashabihat*) are verses that look or sound almost identical. They are one of the most common challenges in Quran memorization. Quran Life helps you tackle them head-on.
+Similar verses (mutashabihat) are verses that look/sound almost identical — the #1 source of “I knew it but said the other one.”
 
-## Awareness During Review
+## How the App Marks Them (Export-time)
 
-To help during review, the app automatically identifies these verses and provide extra context—automatically showing more of the verse or giving hints—until the point where the similarity ends.
+- For each verse in a group, `src/lib/anki/cardBuilder.ts:43` calls `getMutashabihatForAbsolute(abs)` `src/lib/mutashabihat.ts:172`. If any verse has a match, `relatedGroups: ["2:23 ~ 11:45", ...]` (cap 8) `src/lib/anki/cardBuilder.ts:68` and `tags.push('mutashabihat')` `src/lib/anki/cardBuilder.ts:73`.
+- `ContextFront` is baked with **5** verses before `startVerse` `src/lib/anki/cardBuilder.ts:60`, but the template shows **2** normally and **5** (`2` + `3 extra` `class="extra"` `src/lib/anki/apkgExport.ts:214`) only when `hasMutashabihat` and all chunks are revealed `src/lib/anki/apkgExport.ts:284`. That extra context is the disambiguator.
+- Back shows `RelatedGroups` field. Front neverauto-hints until you’ve revealed the group.
 
-## How to Approach Similarities
+## How to Check — In Anki Browser (no Settings list)
 
-You can handle similar verses in two main ways:
+- **All with similarities:** `Browse → tag:mutashabihat` or search `tag:mutashabihat` → `≈ 30%` of your deck.
+- **Due + similar (priority):** `tag:mutashabihat is:due` or `tag:mutashabihat prop:due<7`
+- **By Surah:** `tag:mutashabihat tag:surah::2` — see which groups in `2. Al-Baqarah` are confusable.
+- **On the card:** Back field `RelatedGroups` lists `2:23 ~ 11:45` etc. Clicking it does not navigate — use `Browse` search `2:23` to open the other group.
 
-1. **Reactive (Errors during Review)**: This is the most efficient way. The app automatically flags similar verses in the **Practice** remediation queue only when you make a mistake on a verse with a known similarity during a review. This ensures you only solve problems when they actually arise or become relevant.
+## How to Deal — Logic, Not Tricks
 
-2. **Proactive Study**: If you want to be thorough, you can find a complete list of all similarities for your active part in the [Settings](/docs/philosophy/settings) tab.
+1. **Reactive (when you fail):** You pressed `Again` because you said `11:45` instead of `2:23`. Immediately `Flag Red` (`Flag:1` or `Ctrl+1`) or `Add Tag → error::similar`. Do **not** just bury — flag so you can filter later `flag:1` or `tag:error::similar`.
 
-## What the Similarity Count Means
+2. **Fix the map (visual separation):**
+   - Open `Anki Deck → Surah 2` → `View` (now inline above notes) → `Edit Mindmap`.
+   - Place `2:23` and `11:45` on **different main branches**, far apart. Add a thematic cue: e.g., `2:23` is in “Challenge to produce a surah” (Makkan challenge), `11:45` is in “Nuh’s son” story — draw that distinction.
+   - `Save` → `Export Full Deck` → re-import. The `leech`/`flag` card keeps its `Due` until you `Forget`/`Reschedule`.
 
-When you see a similarity card in **Practice**, the number is meant to answer a simple question:
-
-**How many comparison verses still need my attention right now?**
-
-That is why the app does **not** count every raw match in the dataset. Instead, it focuses on the ones that are actually actionable for you at the moment:
-
-- **Ready now**: If the matching verse belongs to a Surah you already learned well enough, it can appear in the count.
-- **Not ready yet**: If that matching verse belongs to a Surah you have not reached yet, it stays out of the count for now.
-- **Still open**: If you have not solved that distinction yet, it stays in the count.
-- **Already handled**: If you marked it resolved or chose to ignore it, it drops out of the count.
-
-So in practice, the Practice repair number reflects **only the unlocked comparison verses that are still unresolved**. This keeps the card focused on what you can meaningfully work on now, instead of overwhelming you with every theoretical similarity.
-
-## The Best Way to Distinguish
-
-When two verses are similar, it's tempting to use "tricks" (like remembering which letter comes first). However, we highly recommend using **logic**:
-- **Thematic Flow**: Understand *why* a specific word is used based on the theme of the Surah. Logic is much harder to forget than a simple trick.
-- **Visual Separation**: Place similar verses in different locations on your [Mindmap](/docs/philosophy/mindmap-strategy) to create a clear distinction in your mind.
+3. **Proactive (weekly):** Pick one `tag:mutashabihat` Surah, explain its groups aloud using the map, and for each `RelatedGroups` entry, recite *both* verses and state the thematic difference.
 
 ## Why This Matters
-By addressing similar verses explicitly, you remove the "second-guessing" that often happens during recitation. Instead of being unsure, you make a conscious decision on how to tell them apart.
+
+Tricks (`first letter Alif before Ya`) fade. Thematic flow + spatial separation on the mindmap gives a **retrieval cue** that survives spaced repetition. The app’s `5`-verse context (`2` → `5` when `mutashabihat`) is your verification tool after recall, not a hint before.
+
+**Filters to keep:** `tag:mutashabihat`, `tag:leech`, `flag:1`, `deck:QuranLife is:due`

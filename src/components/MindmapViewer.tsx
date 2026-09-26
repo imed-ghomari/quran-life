@@ -41,7 +41,7 @@ interface MindmapViewerProps {
     templateUrl?: string | null;
     imageUrl?: string | null;
     imageUrlDark?: string | null;
-    isDark: boolean;
+    isDark?: boolean;
     officialOnly?: boolean;
     title?: string;
     contextLabel?: string;

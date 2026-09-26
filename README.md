@@ -208,3 +208,25 @@ Unified web app for daily Qur'an review, listening/reading, progress tracking, a
   - Mohamed Al Tablawi Murattal
   - Saad Al Ghamdi Murattal
 # quran-life
+
+## Obsidian plugin
+
+Daily Qur'an review, mindmap memorization and Anki export, vault-synced (Resilio-friendly, one file per surah — no cloud account needed).
+
+### Install
+
+- **Community store** (once listed): search "Quran Life" in Settings → Community plugins.
+- **BRAT (beta)**: add this repo (`imed-ghomari/quran-life`) — BRAT installs from the latest GitHub Release.
+- **Manual**: download `quran-life-<version>.zip` from the latest GitHub Release, extract all 5 files into `<vault>/.obsidian/plugins/quran-life/`, then enable the plugin. The zip contains `manifest.json`, `main.js`, `styles.css` plus two offline data files (`qpc-hafs-word-by-word.json`, `sql-wasm.wasm`) — extract everything, not just the first three.
+
+### Offline behavior
+
+- **Fully offline from first run**: Daily Portion, mindmaps, splits/notes and Anki export work with no connection. Quran text and the Anki packaging engine ship inside the release zip and are copied into the vault on first launch.
+- **Audio needs internet**: all reciters stream on demand (recitation metadata is fetched when online and cached in the vault afterwards). No audio files ship with the plugin.
+- **Offline audio is opt-in**: Settings → Quran Life → Offline Audio → pick a reciter and part, then download. Files stay inside the plugin folder so one synced folder covers every device; the player prefers a downloaded file and streams only as fallback.
+
+### Release process (maintainers)
+
+- Bump `manifest.json` + `package.json` version, add it to `versions.json`.
+- `npm run plugin:release` builds and zips `dist/quran-life-<version>.zip` (validates exactly the 5 release files).
+- Tag `v<version>` and push — `.github/workflows/plugin-release.yml` attaches the zip to the GitHub Release.

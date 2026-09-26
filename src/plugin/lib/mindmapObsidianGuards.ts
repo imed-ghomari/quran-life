@@ -1,0 +1,296 @@
+/**
+ * Shared Obsidian guards for the tldraw-based mindmap editor + viewer.
+ *
+ * 1. Swipe / history guard — Obsidian (especially mobile) listens for
+ *    horizontal swipes at the document level to reveal the left/right
+ *    sidebars, and for two-finger / horizontal trackpad swipes to navigate
+ *    back/forward. When the user pans the mindmap canvas with the hand tool
+ *    those document-level handlers must never see the gesture, while tldraw
+ *    itself must still receive it. So we listen in the *bubble* phase on the
+ *    mindmap container (tldraw's own canvas handlers run first at target
+ *    phase) and stop the event from propagating further out to Obsidian.
+ * 2. Watermark tooltip strip — the tldraw watermark button carries
+ *    `title="made with tldraw"`, which shows a native hover tooltip over the
+ *    canvas. The watermark itself stays (license), but the tooltip is noise,
+ *    so we strip the title attribute (observed, since tldraw re-renders it).
+ * 3. Tight camera fit — `zoomToFit()` defaults to a 128px screen-space inset
+ *    which leaves large blank margins in the small inline viewer. Fitting
+ *    with a small inset makes the mindmap fill the viewer.
+ */
+
+const WATERMARK_TITLE = 'made with tldraw';
+
+/** Tight inset (screen px) used when fitting the viewer camera. */
+export const MINDMAP_VIEWER_FIT_INSET = 24;
+
+/**
+ * Attach bubble-phase listeners on `el` that keep pan/zoom gestures inside
+ * the mindmap from reaching Obsidian's global swipe / history handlers.
+ * Returns a cleanup function.
+ */
+export function attachMindmapSwipeGuard(el: HTMLElement): () => void {
+	const onTouch = (e: Event) => {
+		// Single-finger pan AND multi-finger (pinch / two-finger history swipe)
+		// must both stay inside the canvas. Never preventDefault here — tldraw
+		// needs the events — just stop them bubbling to Obsidian.
+		e.stopPropagation();
+	};
+
+	const onWheel = (e: WheelEvent) => {
+		// Horizontal trackpad swipes are what Obsidian turns into pane /
+		// back-forward navigation. tldraw already handled the pan at target
+		// phase; block the browser/Obsidian default + further propagation.
+		e.stopPropagation();
+		try {
+			// stopImmediatePropagation also shields against other document-level
+			// listeners registered on the same target phase ordering.
+			e.stopImmediatePropagation?.();
+		} catch {
+			/* noop */
+		}
+		if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+			try {
+				if (e.cancelable) e.preventDefault();
+			} catch {
+				/* noop */
+			}
+		}
+	};
+
+	const onGesture = (e: Event) => {
+		// iOS Safari pinch gesture events — keep them local too.
+		e.stopPropagation();
+	};
+
+	const opts: AddEventListenerOptions = { capture: false, passive: true };
+	const wheelOpts: AddEventListenerOptions = { capture: false, passive: false };
+	el.addEventListener('touchstart', onTouch, opts);
+	el.addEventListener('touchmove', onTouch, opts);
+	el.addEventListener('touchend', onTouch, opts);
+	el.addEventListener('touchcancel', onTouch, opts);
+	el.addEventListener('wheel', onWheel as EventListener, wheelOpts);
+	el.addEventListener('gesturestart', onGesture, opts);
+	el.addEventListener('gesturechange', onGesture, opts);
+	el.addEventListener('gestureend', onGesture, opts);
+
+	return () => {
+		el.removeEventListener('touchstart', onTouch, opts);
+		el.removeEventListener('touchmove', onTouch, opts);
+		el.removeEventListener('touchend', onTouch, opts);
+		el.removeEventListener('touchcancel', onTouch, opts);
+		el.removeEventListener('wheel', onWheel as EventListener, wheelOpts);
+		el.removeEventListener('gesturestart', onGesture, opts);
+		el.removeEventListener('gesturechange', onGesture, opts);
+		el.removeEventListener('gestureend', onGesture, opts);
+	};
+}
+
+/** Remove the watermark hover tooltip inside `root` (watermark stays). */
+export function stripTldrawWatermarkTitles(root: ParentNode = document): void {
+	try {
+		const nodes = root.querySelectorAll?.(
+			`[title="${WATERMARK_TITLE}"]`
+		);
+		nodes?.forEach((n) => {
+			try {
+				n.removeAttribute('title');
+			} catch {
+				/* noop */
+			}
+		});
+	} catch {
+		/* noop */
+	}
+}
+
+/**
+ * Observe `root` and strip the watermark title whenever tldraw re-renders it.
+ * Returns a cleanup function.
+ */
+export function observeTldrawWatermarkTitles(root: HTMLElement): () => void {
+	stripTldrawWatermarkTitles(root);
+	try {
+		const observer = new MutationObserver(() => stripTldrawWatermarkTitles(root));
+		observer.observe(root, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ['title'],
+		});
+		return () => observer.disconnect();
+	} catch {
+		return () => {};
+	}
+}
+
+/**
+ * Bottom-bar offset handling — Obsidian phones float their own bottom bar
+ * over the WebView, which used to sit on top of tldraw's toolbar. But
+ * tablets (and desktop) have no such bar, so a hardcoded lift leaves a dead
+ * gap there. Instead we *measure* whether an Obsidian-owned bar actually
+ * overlays the bottom of the viewport and expose its height as
+ * `--ql-obsidian-bottom-offset` on the mindmap container (0 when absent).
+ *
+ * Detection is geometric (no hardcoded Obsidian class names to go stale):
+ * whatever is hit-testable at the viewport's bottom-center pixel that is NOT
+ * part of our container and looks like a wide bottom-anchored chrome bar
+ * counts. Ancestors are walked up so `pointer-events: none` wrappers or
+ * small inner buttons still resolve to their bar.
+ */
+export const OBSIDIAN_BOTTOM_OFFSET_VAR = '--ql-obsidian-bottom-offset';
+
+function isBottomBarRect(rect: DOMRect, vw: number, vh: number): boolean {
+	if (!rect || rect.height <= 0) return false;
+	// Must be anchored at the very bottom…
+	if (rect.bottom < vh - 2) return false;
+	// …a full-width chrome strip, not a small floating button…
+	if (rect.width < vw * 0.5) return false;
+	// …and not some giant overlay.
+	if (rect.height > vh * 0.4) return false;
+	return true;
+}
+
+/**
+ * Measure the height of an Obsidian-owned bottom bar overlaying the viewport,
+ * or 0 when there is none (tablet / desktop / hidden bar).
+ */
+export function measureObsidianBottomOffset(container: HTMLElement): number {
+	try {
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		if (!vw || !vh || !container.isConnected) return 0;
+		let stack: Element[];
+		try {
+			stack = document.elementsFromPoint(Math.round(vw / 2), vh - 2) as Element[];
+		} catch {
+			return 0;
+		}
+		if (!stack || !stack.length) return 0;
+		for (const el of stack) {
+			if (!(el instanceof HTMLElement)) continue;
+			if (el === document.documentElement || el === document.body) continue;
+			// Our own UI (canvas, toasts, …) never counts.
+			if (container.contains(el)) continue;
+			// Walk up: the hit element may be a small button inside the bar.
+			let node: HTMLElement | null = el;
+			let depth = 0;
+			while (node && node !== document.body && depth < 5) {
+				let rect: DOMRect | null = null;
+				try {
+					rect = node.getBoundingClientRect();
+				} catch {
+					break;
+				}
+				if (rect && isBottomBarRect(rect, vw, vh)) {
+					return Math.round(Math.min(rect.height, vh * 0.4));
+				}
+				node = node.parentElement;
+				depth += 1;
+			}
+		}
+	} catch {
+		/* noop */
+	}
+	return 0;
+}
+
+/**
+ * Keep `--ql-obsidian-bottom-offset` on `container` in sync with the actual
+ * Obsidian bottom bar (re-checked on resize/orientation/DOM changes, since
+ * Obsidian can show or hide its chrome at any time). Returns a cleanup fn.
+ */
+export function observeObsidianBottomBar(container: HTMLElement): () => void {
+	const apply = () => {
+		try {
+			const height = measureObsidianBottomOffset(container);
+			container.style.setProperty(OBSIDIAN_BOTTOM_OFFSET_VAR, `${height}px`);
+			container.classList.toggle('ql-has-obsidian-bottom-bar', height > 0);
+		} catch {
+			/* noop */
+		}
+	};
+
+	apply();
+
+	let raf = 0;
+	const schedule = () => {
+		try {
+			cancelAnimationFrame(raf);
+		} catch {
+			/* noop */
+		}
+		try {
+			raf = requestAnimationFrame(apply);
+		} catch {
+			apply();
+		}
+	};
+
+	window.addEventListener('resize', schedule);
+	window.addEventListener('orientationchange', schedule);
+
+	let bodyObserver: MutationObserver | null = null;
+	try {
+		// Direct children only: enough for Obsidian chrome appearing /
+		// disappearing, without firing for every tldraw canvas mutation.
+		bodyObserver = new MutationObserver(schedule);
+		bodyObserver.observe(document.body, { childList: true, subtree: false });
+	} catch {
+		bodyObserver = null;
+	}
+
+	// Obsidian may finish its mobile layout a beat after our mount.
+	const timers: Array<ReturnType<typeof setTimeout>> = [];
+	try {
+		timers.push(setTimeout(apply, 500));
+		timers.push(setTimeout(apply, 1500));
+	} catch {
+		/* noop */
+	}
+
+	return () => {
+		try {
+			window.removeEventListener('resize', schedule);
+			window.removeEventListener('orientationchange', schedule);
+		} catch {
+			/* noop */
+		}
+		try {
+			bodyObserver?.disconnect();
+		} catch {
+			/* noop */
+		}
+		for (const t of timers) {
+			try {
+				clearTimeout(t);
+			} catch {
+				/* noop */
+			}
+		}
+		try {
+			cancelAnimationFrame(raf);
+		} catch {
+			/* noop */
+		}
+	};
+}
+
+/**
+ * Fit the camera tightly around page content with a small inset so the
+ * mindmap fills the viewer instead of floating in blank space.
+ * Falls back to plain zoomToFit when the inset form is unavailable.
+ */
+export function fitMindmapCameraTight(editor: any, inset: number = MINDMAP_VIEWER_FIT_INSET): void {
+	if (!editor) return;
+	try {
+		// zoomToFit forwards opts to zoomToBounds, which honours `inset`
+		// (default is 128px — far too loose for the inline preview).
+		editor.zoomToFit?.({ inset, duration: 0 } as any);
+	} catch {
+		try {
+			editor.zoomToFit?.({ duration: 0 });
+		} catch {
+			/* noop */
+		}
+	}
+}

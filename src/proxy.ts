@@ -12,18 +12,7 @@ const BLOCKED_BOT_PATTERNS = [
   /anthropic/i,
 ]
 
-const SENSITIVE_PATH_PREFIXES = [
-  '/dashboard',
-  '/docs',
-  '/settings',
-  '/statistics',
-  '/todo',
-  '/api/access-state',
-  '/api/account/delete-request',
-  '/api/paddle',
-  '/api/teacher',
-  '/api/premade-mindmaps',
-]
+const SENSITIVE_PATH_PREFIXES: string[] = []
 
 function isSensitivePath(pathname: string) {
   return SENSITIVE_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))

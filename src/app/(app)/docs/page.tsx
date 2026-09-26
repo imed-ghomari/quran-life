@@ -4,6 +4,8 @@ import { MDXRemote } from 'next-mdx-remote/rsc';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from './mdx-components';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DocsIndexPage() {
     const contentDir = path.join(process.cwd(), 'content');
     const filePath = path.join(contentDir, 'index.mdx');

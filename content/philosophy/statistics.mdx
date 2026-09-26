@@ -1,27 +1,33 @@
-# Tracking Your Progress (Statistics)
+# Tracking Your Progress — Two Places
 
-The **Statistics** tab gives you a bird's-eye view of your memorization journey. It's designed to show you not just *how much* you've learned, but *how well* you know it.
+Your progress is now split: **daily reading** in the app, **reviews** in `Anki`.
 
-## Understanding Memory Strength (Maturity)
+## Understanding Memory Strength (Anki FSRS)
 
-We use **Maturity Levels** to show the strength of your memory for each verse chunk. The more times you successfully remember a verse, the "more mature" it becomes:
-- **New**: Recently started or recently forgotten (reviewed every 1-14 days).
-- **Medium**: Starting to stick in your long-term memory (reviewed every 14-30 days).
-- **Strong**: Very solid retention (reviewed every 30-90 days).
-- **Mastered**: Deeply encoded; you likely only need to see these once every few months.
+Anki's `FSRS` maps to the old `New/Medium/Strong/Mastered`:
 
-The legend under each chart shows you exactly how many items fall into each of these buckets.
+- **New** (red): `Again` recently or `Forget` — `Due` = `New #`, `Ivl` = `0`.
+- **Learning / Medium** (orange/green): `Ivl` `14–30` days — `prop:ivl>14 prop:ivl<30` in `Browse`.
+- **Strong** (blue): `Ivl` `30–90` days.
+- **Mastered** (deep): `Ivl` `>90` days, eventually months.
+
+Check `Anki → Stats` (click deck → `Stats`) for `Retention`, `Due`, `Retention` vs `Desired Retention 0.90`.
 
 ## What You Can Track
 
-- **Verse Progress**: See the maturity of the verses. You can toggle between viewing by "Chunks" (detailed) or "Surahs" (aggregated).
-- **Surah Mindmaps**: Track which Surahs have completed mindmaps and how mature those visual memories are.
-- **Part Mindmaps**: A high-level view of your "Global" maps for entire Parts (Juz).
-- **Daily Portion**: Shows your progress through your listening/reading cycles (how many Surahs completed vs. remaining in the current cycle).
-- **Similar Verses (Mutashabihat)**: Tracks how many "Similar Verse" confusion points you have resolved (via Notes or Mindmaps) versus those still pending.
-- **Review Plan**: Forecasts your review load over time and includes a **Daily Load** reference line to help you see whether upcoming days are above or below your target pace.
-- **Daily Reviews**: A 180-day heatmap showing review consistency by day. It includes **Avg/Day** as a summary of your recent review rhythm.
-- **Weak Surahs**: Highlights Surahs with the highest **mistake counts** in the selected range. It counts both **mindmap** and **verse-group** review errors for each Surah.
+- **Daily Portion (in-app):** `Anki Deck → Deck Statistics` `src/components/AnkiDeckTab.tsx:781` — see [Anki Deck & Reviews](/docs/philosophy/practice-hub) for the breakdown.
+- **Reviews (in Anki):** For `is:due`, `tag:leech` (3-strike), `tag:mutashabihat`, `flag:1`, and per-Surah filters, see:
+  - **[Fixing Mistakes](/docs/philosophy/re-learning)** for `leech`/`flag`
+  - **[Similar Verses](/docs/philosophy/mutashabihat)** for `mutashabihat` checks
+  - **[How Reviews Work](/docs/philosophy/spaced-repetition)** for `is:due`/`prop:ivl` and maturity
 
-## Accuracy & Filters
-To give you the most accurate picture, the statistics are filtered by your **Active Part** and automatically exclude any Surahs you've marked as **Skipped** in the Settings.
+  In `Anki → Stats` you get `Retention`, `Due`, and `Calendar` heatmap (replaces old in-app heatmap).
+
+## Filters (Daily Portion)
+
+Your daily progress still respects `Active Part` and `Skipped Surahs` checked in `Daily Portion → Settings`. Changing `Active Part` does **not** affect Anki `Due`; Anki is global. Use `Suspend`/`Unsuspend` in `Browse` to hide/show Surahs for reviews.
+
+## When to Reset
+
+- **Daily reading:** `Daily Portion → Settings → Reset This Part / Reset All`.
+- **Reviews:** `Browse → Select cards → Forget` (makes `New`) or `Reschedule` (sets new `Due`). Do this after you `Delete` obsolete `Range` cards when you changed splits (see [How Reviews Work](/docs/philosophy/spaced-repetition)).

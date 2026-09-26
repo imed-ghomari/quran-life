@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
     showCancel?: boolean;
     isDestructive?: boolean;
     isProcessing?: boolean;
+    progress?: number; // 0-100 for exporting
     disabled?: boolean;
     children?: React.ReactNode;
     onConfirm: () => void;
@@ -26,6 +27,7 @@ export default function ConfirmationModal({
     showCancel = true,
     isDestructive = false,
     isProcessing = false,
+    progress,
     disabled = false,
     children,
     onConfirm,
@@ -129,11 +131,27 @@ export default function ConfirmationModal({
                         onClick={onConfirm}
                         disabled={disabled || isProcessing}
                         className={`
-                            btn std-normal-btn
+                            btn std-normal-btn relative overflow-hidden
                             ${isDestructive ? 'std-normal-danger' : 'btn-primary'}
                         `}
+                        style={isProcessing && typeof progress === 'number' ? { position: 'relative' } : undefined}
                     >
-                        {isProcessing ? 'Processing...' : confirmLabel}
+                        {isProcessing && typeof progress === 'number' ? (
+                            <>
+                                <span
+                                    className="absolute inset-0 bg-white/20 transition-all duration-300 ease-out"
+                                    style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                                    aria-hidden
+                                />
+                                <span className="relative z-10">
+                                    {progress < 100 ? `Exporting ${Math.round(progress)}%` : 'Finalizing...'}
+                                </span>
+                            </>
+                        ) : isProcessing ? (
+                            'Processing...'
+                        ) : (
+                            confirmLabel
+                        )}
                     </button>
                 </div>
             </div>

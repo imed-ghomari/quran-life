@@ -17,7 +17,7 @@ export function usePaddle() {
     const successUrl = `${window.location.origin}/settings`;
 
     initializePaddle({
-      environment: clientEnv.NEXT_PUBLIC_PADDLE_ENV ?? 'sandbox',
+      environment: (clientEnv.NEXT_PUBLIC_PADDLE_ENV as any) ?? 'sandbox',
       token: clientEnv.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN,
       eventCallback: (event) => {
         if (event?.name === CheckoutEventNames.CHECKOUT_COMPLETED) {

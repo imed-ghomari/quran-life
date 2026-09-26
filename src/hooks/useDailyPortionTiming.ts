@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { getReciters, Reciter } from '@/lib/audio';
 import { buildAverageSecondsPerWordBySurah } from '@/lib/dailyPortionUtils';
+
+const { useEffect, useMemo, useState } = React;
 
 let averageSurahDurationsCache: Record<number, number> | null = null;
 let averageSurahDurationsPromise: Promise<Record<number, number>> | null = null;

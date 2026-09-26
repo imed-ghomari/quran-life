@@ -1,6 +1,6 @@
 {
-  "name": "Quran Life",
-  "short_name": "Quran Life",
+  "name": "Quran Anki Companion",
+  "short_name": "Quran Anki Companion",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

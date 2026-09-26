@@ -1,6 +1,7 @@
 
 import { Verse } from './types';
 import { clientEnv } from './env/client';
+import { getObsidianApp, isObsidianEnv } from './obsidianApp';
 
 export interface Reciter {
     id: string;
@@ -8,6 +9,24 @@ export interface Reciter {
     type: 'surah-based' | 'ayah-based';
     relativePath: string;
     hasSegments?: boolean;
+    /**
+     * Ayah-based reciters publish one file per ayah named `<SSS><AAA>.mp3`
+     * (3-digit zero-padded surah + 3-digit zero-padded ayah). Keeping the base
+     * URL on the reciter lets us resolve a playable/downloadable URL without
+     * loading the ~2-6MB `verses` map first — which is what made downloads fail
+     * on mobile ("Failed to load ayah recitation map") and delayed every verse
+     * handoff by a full metadata fetch.
+     * Verified against every entry in `public/recitations/*.json` (6236/6236).
+     */
+    ayahAudioBase?: string;
+}
+
+/** Build the canonical per-ayah audio URL for an ayah-based reciter. */
+export function buildAyahAudioUrl(reciter: Reciter | null | undefined, surahId: number, ayahId: number): string | null {
+    const base = reciter?.ayahAudioBase;
+    if (!base) return null;
+    const file = `${String(surahId).padStart(3, '0')}${String(ayahId).padStart(3, '0')}.mp3`;
+    return `${base.replace(/\/$/, '')}/${file}`;
 }
 
 export interface RecitationTiming {
@@ -24,7 +43,7 @@ export interface AyahRecitationData {
 
 const AUDIO_PLAYER_RECITER_MODE = clientEnv.NEXT_PUBLIC_AUDIO_PLAYER_RECITER_MODE;
 
-const ALLOWED_RECITERS: Reciter[] = [
+export const ALLOWED_RECITERS: Reciter[] = [
     {
         id: 'ayah-recitation-abdul-basit-abdul-samad-mujawwad-hafs-949',
         name: 'Abdul Basit Abdul Samad Mujawwad',
@@ -37,7 +56,8 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Abdul Basit Abdul Samad Murattal',
         type: 'ayah-based',
         relativePath: '/recitations/ayah-recitation-abdul-basit-abdul-samad-murattal-hafs-950.json',
-        hasSegments: true
+        hasSegments: true,
+        ayahAudioBase: 'https://audio-cdn.tarteel.ai/quran/abdulBasitMurattal'
     },
     {
         id: 'ayah-recitation-abdul-rahman-al-sudais-murattal-hafs-951',
@@ -51,7 +71,8 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Abdur Rahman As Sudais',
         type: 'ayah-based',
         relativePath: '/recitations/ayah-recitation-abdur-rahman-as-sudais-recitation.json',
-        hasSegments: true
+        hasSegments: true,
+        ayahAudioBase: 'https://audio.qurancdn.com/Sudais/mp3'
     },
     {
         id: 'ayah-recitation-abu-bakr-al-shatri-murattal-hafs-952',
@@ -79,7 +100,8 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Hani Ar Rifai Murattal',
         type: 'ayah-based',
         relativePath: '/recitations/ayah-recitation-hani-ar-rifai-recitation-murattal-hafs-68.json',
-        hasSegments: true
+        hasSegments: true,
+        ayahAudioBase: 'https://audio.qurancdn.com/Rifai/mp3'
     },
     {
         id: 'surah-recitation-khalid-al-jalil',
@@ -114,7 +136,8 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Mahmoud Khalil Al Husary Murattal',
         type: 'ayah-based',
         relativePath: '/recitations/ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957.json',
-        hasSegments: true
+        hasSegments: true,
+        ayahAudioBase: 'https://audio-cdn.tarteel.ai/quran/husary'
     },
     {
         id: 'surah-recitation-mahmoud-husary-muallim',
@@ -135,7 +158,8 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Mohamed Al Tablawi Murattal',
         type: 'ayah-based',
         relativePath: '/recitations/ayah-recitation-mohamed-al-tablawi-recitation-murattal-hafs-73.json',
-        hasSegments: true
+        hasSegments: true,
+        ayahAudioBase: 'https://mirrors.quranicaudio.com/everyayah/Mohammad_al_Tablaway_128kbps'
     },
     {
         id: 'surah-recitation-muhammad-jibreel',
@@ -156,7 +180,8 @@ const ALLOWED_RECITERS: Reciter[] = [
         name: 'Saad Al Ghamdi Murattal',
         type: 'ayah-based',
         relativePath: '/recitations/ayah-recitation-saad-al-ghamdi-murattal-hafs-954.json',
-        hasSegments: true
+        hasSegments: true,
+        ayahAudioBase: 'https://audio-cdn.tarteel.ai/quran/ghamadi'
     },
     {
         id: 'ayah-recitation-saud-al-shuraim-murattal-hafs-960',
@@ -188,7 +213,212 @@ export async function getAudioPlayerReciters(): Promise<Reciter[]> {
     return ALLOWED_RECITERS;
 }
 
-export async function loadRecitationData(reciter: Reciter, surahId: number) {
+
+async function fetchViaObsidianRequestUrl(url: string, appOverride?: any): Promise<any | null> {
+    if (!isObsidianEnv(appOverride)) return null;
+    try {
+        let req: any = null;
+        try {
+            const obs: any = await import('obsidian');
+            req = obs.requestUrl;
+        } catch {
+            req = (window as any).requestUrl;
+        }
+        if (!req) return null;
+        // requestUrl has no abort support — race a timeout so a dead network
+        // can never leave the player hanging forever.
+        const res: any = await Promise.race([
+            req({ url, method: 'GET', headers: { 'Accept': 'application/json' } }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
+        ]);
+        const status: number = typeof res.status === 'number' ? res.status : 0;
+        if (status >= 200 && status < 300) {
+            if (res.json !== undefined && res.json !== null) {
+                // Obsidian requestUrl returns parsed json if content-type is json
+                if (typeof res.json === 'object') return res.json;
+                try { return JSON.parse(res.json); } catch {}
+            }
+            if (typeof res.text === 'string' && res.text.trim()) {
+                try { return JSON.parse(res.text); } catch {}
+            }
+            if (res.arrayBuffer) {
+                try {
+                    const txt = new TextDecoder().decode(res.arrayBuffer);
+                    if (txt.trim()) return JSON.parse(txt);
+                } catch {}
+            }
+        }
+    } catch {}
+    return null;
+}
+
+const RECITATION_SITE_BASES = ['https://quran-life.org'];
+
+function recitationSiteBases(): string[] {
+    const bases = [...RECITATION_SITE_BASES];
+    try {
+        const origin = typeof window !== 'undefined' ? (window as any)?.location?.origin : '';
+        if (origin && !origin.startsWith('app://') && !origin.startsWith('capacitor://') && !origin.startsWith('file://')) {
+            bases.unshift(origin);
+        }
+    } catch {}
+    return bases;
+}
+
+/**
+ * Resolve a bundled/public JSON (recitations, segments…) from whichever source
+ * the current platform can actually reach:
+ *   1. vault files (desktop bundle + Resilio-synced copies) — works offline,
+ *   2. remote site via Obsidian `requestUrl` — the only CORS-free path on mobile,
+ *   3. plain `fetch` — web build and same-origin cases.
+ * Previously the remote step ran only for Electron/desktop because
+ * `isObsidianEnv` relied on `window.app`, which mobile does not provide.
+ */
+
+// JSON fetch with a hard timeout: without this a stalled network leaves the
+// player spinner hanging forever (offline + no cached metadata). Timeouts
+// reject so callers fall through to the next source / graceful error.
+async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<any | null> {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+    try {
+        const res = await fetch(url, { signal: ctrl?.signal as any });
+        if (!res.ok) return null;
+        try { return await res.json(); } catch { return null; }
+    } catch {
+        return null;
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any): Promise<any | null> {
+    const app = getObsidianApp(appOverride);
+    const usesPublicOrigin = /^https?:\/\//i.test(urlPath);
+
+    if (app) {
+        const adapter: any = app?.vault?.adapter;
+        if (adapter) {
+            const normalized = urlPath.replace(/^https?:\/\/[^/]+/i, '').replace(/^\//, '');
+            const candidates = [
+                normalized, // e.g. recitations/.../surah.json
+                `public/${normalized}`,
+                `.obsidian/plugins/quran-life/${normalized}`,
+                `.obsidian/plugins/quran-life/public/${normalized}`,
+                `QuranLife/${normalized}`,
+            ];
+            // 1) direct vault adapter read (hidden-aware)
+            for (const cand of candidates) {
+                try {
+                    if (adapter.exists && !(await adapter.exists(cand))) continue;
+                    const raw = await adapter.read(cand);
+                    if (raw && raw.trim()) {
+                        try { return JSON.parse(raw); } catch {}
+                    }
+                } catch {}
+            }
+            // 2) via getResourcePath -> app:// URL
+            if (adapter.getResourcePath) {
+                for (const cand of candidates) {
+                    try {
+                        const resourceUrl = adapter.getResourcePath(cand);
+                        if (!resourceUrl) continue;
+                        const data = await fetchJsonWithTimeout(resourceUrl);
+                        if (data) return data;
+                    } catch {}
+                }
+            }
+        }
+    }
+
+    // 3) remote — requestUrl bypasses CORS, which plain fetch cannot do from the
+    // Obsidian WebView (mobile included).
+    if (app) {
+        const targets = usesPublicOrigin ? [urlPath] : recitationSiteBases().map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
+        for (const target of targets) {
+            const viaRequest = await fetchViaObsidianRequestUrl(target, app);
+            if (viaRequest) return viaRequest;
+        }
+    }
+
+    // 4) plain fetch (web build / already-absolute same-origin paths)
+    const fetchTargets = usesPublicOrigin ? [urlPath] : recitationSiteBases().map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
+    fetchTargets.push(urlPath);
+    for (const target of fetchTargets) {
+        // Skip cross-origin plain fetch inside Obsidian: without CORS it fails
+        // anyway, and on a dead network it is the slowest hang — requestUrl
+        // above is the supported path there.
+        if (app && /^https?:\/\//i.test(target)) continue;
+        const data = await fetchJsonWithTimeout(target);
+        if (data) return data;
+    }
+    return null;
+}
+
+// ---------- recitation metadata cache (plugin-provided, vault-backed) ----------
+// Ayah-based metadata is a ~2MB map whose `segments` tables are what drive word
+// highlighting. Mobile cannot always fetch it (offline / CORS / big download),
+// so the plugin registers a small store here and we persist a compact
+// `{ "s: a": segments }` slice once it has been fetched. Offline playback can
+// then still highlight the exact words the reciter is reciting.
+export interface RecitationCacheStore {
+    read: (reciterId: string) => Promise<{ segments?: Record<string, number[][]> } | null>;
+    write: (reciterId: string, data: { segments: Record<string, number[][]> }) => Promise<void>;
+}
+
+let recitationCacheStore: RecitationCacheStore | null = null;
+export function registerRecitationCacheStore(store: RecitationCacheStore | null): void {
+    recitationCacheStore = store;
+}
+
+const segmentsMemoryCache: Record<string, Record<string, number[][]> | null> = {};
+
+function extractSegmentsMap(json: Record<string, any>): Record<string, number[][]> {
+    const out: Record<string, number[][]> = {};
+    for (const [key, value] of Object.entries(json || {})) {
+        const segments = (value as any)?.segments;
+        if (Array.isArray(segments) && segments.length) out[key] = segments as number[][];
+    }
+    return out;
+}
+
+async function loadCachedSegments(reciterId: string): Promise<Record<string, number[][]> | null> {
+    if (reciterId in segmentsMemoryCache) return segmentsMemoryCache[reciterId];
+    if (!recitationCacheStore) return null;
+    try {
+        const stored = await recitationCacheStore.read(reciterId);
+        const segments = stored?.segments && typeof stored.segments === 'object' ? stored.segments : null;
+        segmentsMemoryCache[reciterId] = segments;
+        return segments;
+    } catch {
+        segmentsMemoryCache[reciterId] = null;
+        return null;
+    }
+}
+
+function persistSegments(reciterId: string, json: Record<string, any>): void {
+    if (!recitationCacheStore || segmentsMemoryCache[reciterId]) return;
+    const segments = extractSegmentsMap(json);
+    if (!Object.keys(segments).length) return;
+    segmentsMemoryCache[reciterId] = segments;
+    void Promise.resolve(recitationCacheStore.write(reciterId, { segments })).catch(() => {
+        segmentsMemoryCache[reciterId] = null;
+    });
+}
+
+/** Build ayah `verses` entries from cached segments + the reciter's URL pattern. */
+function buildVersesFromSegments(reciter: Reciter, segments: Record<string, number[][]>): Record<string, { audio_url: string; segments?: number[][] }> {
+    const verses: Record<string, { audio_url: string; segments?: number[][] }> = {};
+    for (const [key, segs] of Object.entries(segments)) {
+        const [surahId, ayahId] = key.split(':').map(Number);
+        if (!Number.isFinite(surahId) || !Number.isFinite(ayahId)) continue;
+        const url = buildAyahAudioUrl(reciter, surahId, ayahId);
+        if (!url) continue;
+        verses[key] = { audio_url: url, segments: segs };
+    }
+    return verses;
+}
+
+export async function loadRecitationData(reciter: Reciter, surahId: number, appOverride?: any) {
     const cacheKey = reciter.type === 'surah-based'
         ? `${reciter.id}-${surahId}`
         : reciter.id;
@@ -198,35 +428,43 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
 
     try {
         if (reciter.type === 'surah-based') {
-            const [surahRes, segmentsRes] = await Promise.all([
-                fetch(`${reciter.relativePath}/surah.json`),
-                fetch(`${reciter.relativePath}/segments.json`)
-            ]);
-
             const [surahData, segmentsData] = await Promise.all([
-                surahRes.json(),
-                segmentsRes.json(),
+                fetchJsonWithObsidianFallback(`${reciter.relativePath}/surah.json`, appOverride),
+                fetchJsonWithObsidianFallback(`${reciter.relativePath}/segments.json`, appOverride)
             ]);
 
-            // Normalize
+            if (!surahData) throw new Error(`surah.json not found for ${reciter.id}`);
+
+            // Normalize — segments may be null in Obsidian if file missing, but allow playback without word timing
             data = {
                 surahId,
-                surahNumber: surahData[surahId]?.surah_number,
+                surahNumber: surahData[surahId]?.surah_number ?? surahId,
                 audioUrl: surahData[surahId]?.audio_url,
-                timings: segmentsData // Keyed by "Surah:Ayah"
+                timings: segmentsData || {} // Keyed by "Surah:Ayah" — may be empty, getAudioInfo will fallback
             };
+            if (!data.audioUrl) {
+                // Some reciters use different structure — try alternative
+                const alt = surahData[surahId] || surahData[String(surahId)];
+                if (alt?.audio_url) data.audioUrl = alt.audio_url;
+            }
         } else {
-            // Ayah based - single large file for all Quran or per surah?
-            // The file structure seen is "ayah-recitation-NAME.json" which likely contains ALL verses?
-            // Let's assume it contains all verses based on file size/naming.
-            // If it's huge, we might need to be careful. But we fetch it once.
-            // Wait, "ayah-recitation-....json" - does it contain 6236 keys?
-            // I should check the size of one of these files.
-            
-            const res = await fetch(reciter.relativePath);
-            const json = await res.json();
-            
+            const json = await fetchJsonWithObsidianFallback(reciter.relativePath, appOverride);
+            if (!json) {
+                // Offline / failed fetch: fall back to cached segments + URL pattern
+                // so playback, surah transitions and word highlighting keep working.
+                const cached = await loadCachedSegments(reciter.id);
+                if (cached) {
+                    data = { verses: buildVersesFromSegments(reciter, cached), fromSegmentsCache: true };
+                    recitationCache[cacheKey] = data;
+                    return data;
+                }
+                throw new Error(`recitation json not found for ${reciter.id}`);
+            }
+
             // This is a huge map "1:1" -> { audio_url ... }
+            // Persist the segments slice (best-effort, off the hot path) so the
+            // next offline session can still follow the reciter word by word.
+            persistSegments(reciter.id, json);
             data = {
                 verses: json
             };
@@ -240,20 +478,101 @@ export async function loadRecitationData(reciter: Reciter, surahId: number) {
     }
 }
 
+const audioBlobUrlCache = new Map<string, string>();
+
+function toArrayBuffer(value: unknown): ArrayBuffer | null {
+    if (value instanceof ArrayBuffer) return value;
+    if (ArrayBuffer.isView(value)) {
+        const view = value as ArrayBufferView;
+        return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+    }
+    return null;
+}
+
+/**
+ * Hosts verified to serve audio with `access-control-allow-origin: *` AND
+ * `accept-ranges: bytes` (tarteel CDN, quran.qurancdn.com, quranicaudio mirrors).
+ * These stream directly: playback starts on the first bytes instead of waiting
+ * for `requestUrl` to download the whole file into a Blob, which is what added a
+ * multi-hundred-millisecond gap between every verse on mobile.
+ */
+const DIRECT_AUDIO_HOSTS = [
+    'audio-cdn.tarteel.ai',
+    'audio.qurancdn.com',
+    'mirrors.quranicaudio.com',
+    'download.quranicaudio.com',
+    'everyayah.com',
+    'verses.quran.com',
+];
+
+export function audioHostAllowsDirectPlayback(url: string): boolean {
+    return DIRECT_AUDIO_HOSTS.some((host) => url.includes(host));
+}
+
+/** Force the CORS-free `requestUrl` → Blob path (used as an error fallback). */
+export async function resolveAudioUrlProxied(url: string, appOverride?: any): Promise<string> {
+    if (!url) return url;
+    if (!isObsidianEnv(appOverride)) return url;
+    if (audioBlobUrlCache.has(url)) return audioBlobUrlCache.get(url)!;
+    try {
+        let req: any = null;
+        try {
+            const obs: any = await import('obsidian');
+            req = obs.requestUrl;
+        } catch {
+            req = (window as any).requestUrl;
+        }
+        if (!req) return url;
+        // Full-file download via requestUrl — generous timeout (slow networks
+        // are real) but never unbounded, so playback can't hang forever.
+        const res: any = await Promise.race([
+            req({ url, method: 'GET' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('audio download timeout')), 120000)),
+        ]);
+        const responseBuffer = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
+        const buf: ArrayBuffer | null = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
+        if (!buf || buf.byteLength === 0) return url;
+        const blob = new Blob([buf], { type: 'audio/mpeg' });
+        const blobUrl = URL.createObjectURL(blob);
+        audioBlobUrlCache.set(url, blobUrl);
+        return blobUrl;
+    } catch (e) {
+        console.warn('resolveAudioUrlProxied failed, falling back to direct url', url, e);
+        return url;
+    }
+}
+
+export async function resolveAudioUrl(url: string, appOverride?: any): Promise<string> {
+    if (!url) return url;
+    if (!isObsidianEnv(appOverride)) return url;
+    // Media elements load cross-origin without a CORS check, and these hosts
+    // support range requests — play them straight from the CDN.
+    if (audioHostAllowsDirectPlayback(url)) return url;
+    // Unknown host: proxy through requestUrl so playback never depends on CORS.
+    return resolveAudioUrlProxied(url, appOverride);
+}
+
 export function getAudioInfoForVerse(
     reciter: Reciter, 
     data: any, 
     surahId: number, 
     ayahId: number
 ): { url: string; startTime?: number; endTime?: number; segments?: number[][] } | null {
-    if (!data) return null;
-
     if (reciter.type === 'ayah-based') {
         const key = `${surahId}:${ayahId}`;
-        const verseData = data.verses?.[key];
-        if (!verseData?.audio_url) return null;
-        return { url: verseData.audio_url, segments: verseData.segments };
-    } else {
+        const verseData = data?.verses?.[key];
+        if (verseData?.audio_url) return { url: verseData.audio_url, segments: verseData.segments };
+        // Metadata (the large `verses` map) may be unavailable — offline, or the
+        // mobile fetch has not resolved yet. The per-ayah URL is deterministic,
+        // so resolve it directly instead of declaring the verse unplayable.
+        const derived = buildAyahAudioUrl(reciter, surahId, ayahId);
+        if (derived) return { url: derived, segments: undefined };
+        return null;
+    }
+
+    if (!data) return null;
+
+    {
         // Surah based
         if (!data.audioUrl) return null;
         if (
@@ -269,7 +588,11 @@ export function getAudioInfoForVerse(
         const timing = data.timings?.[key];
         
         if (!timing) {
-            // Fallback: play from start if no timing? No, that's bad.
+            // Obsidian fallback: if segments.json missing or timing not found, still allow playback of whole surah file.
+            // This keeps play button enabled; word highlight will be disabled (no segments) but audio will work.
+            if (data.audioUrl) {
+                return { url: data.audioUrl, segments: null as any };
+            }
             return null;
         }
 

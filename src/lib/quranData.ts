@@ -3,6 +3,7 @@
 // ========================================
 
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
+import { getObsidianApp } from './obsidianApp';
 
 // Helper to determine part based on surah ID
 function getPart(surahId: number): CoreQuranPart {
@@ -182,6 +183,43 @@ export function parseQuranJson(data: Record<string, any>): Verse[] {
 }
 
 /**
+ * Standalone mushaf ornament tokens (rub el hizb ۞, sajda ۩, ayah end ۝).
+ * The QPC word-by-word source embeds these inside word tokens with a space
+ * (e.g. "۞ وَإِذَا", "يَسۡتَكۡبِرُونَ ۩"), so a naive text.split(' ') yields
+ * extra tokens that have no corresponding recitation segment. They must be
+ * excluded from word-timing indexing (but still rendered).
+ */
+export const VERSE_ORNAMENT_TOKENS: ReadonlySet<string> = new Set(['۞', '۩', '۝']);
+
+export function isVerseOrnamentToken(token: string): boolean {
+    return VERSE_ORNAMENT_TOKENS.has(token);
+}
+
+/** Display tokens: every whitespace-separated token, ornaments included. */
+export function splitVerseDisplayWords(text: string): string[] {
+    return (text ?? '').split(' ').filter(Boolean);
+}
+
+/** Highlight tokens: display tokens minus standalone ornaments (1:1 with segments). */
+export function splitVerseHighlightWords(text: string): string[] {
+    return splitVerseDisplayWords(text).filter((w) => !isVerseOrnamentToken(w));
+}
+
+/**
+ * Map each display-word index to its highlight-word index (-1 for ornaments).
+ * Used to render ornaments while highlighting only real words.
+ */
+export function mapDisplayToHighlightIndices(displayWords: string[]): number[] {
+    const out: number[] = new Array(displayWords.length);
+    let hi = 0;
+    for (let i = 0; i < displayWords.length; i++) {
+        if (isVerseOrnamentToken(displayWords[i])) out[i] = -1;
+        else out[i] = hi++;
+    }
+    return out;
+}
+
+/**
  * Get surah by ID
  */
 export function getSurah(surahId: number): Surah | undefined {
@@ -233,6 +271,73 @@ export async function getQuranVerses(): Promise<Verse[]> {
         }
 
         try {
+            // Try Obsidian vault first (plugin context, no /public server)
+            // Uses the shared app registry so Obsidian Mobile works too — mobile
+            // does not expose `window.app`.
+            const obsidianApp: any = getObsidianApp();
+            const isObsidian = !!obsidianApp?.vault?.adapter;
+            const candidates = [
+                '.obsidian/plugins/quran-life/data/assets/qpc-hafs-word-by-word.json',
+                'QuranLife/assets/qpc-hafs-word-by-word.json',
+                'QuranLife/qpc-hafs-word-by-word.json',
+                '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
+                '.obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json',
+                '.obsidian/plugins/quran-life/data/qpc-hafs-word-by-word.json',
+                'qpc-hafs-word-by-word.json',
+                'public/qpc-hafs-word-by-word.json',
+            ];
+            if (isObsidian) {
+                try {
+                    // Try plugin-bundled asset via vault adapter resource path, or vault file QuranLife/assets/...
+                    for (const cand of candidates) {
+                        try {
+                            const raw = await obsidianApp.vault.adapter.read(cand);
+                            if (raw) {
+                                const data = JSON.parse(raw);
+                                cachedVerses = parseQuranJson(data as Record<string, any>);
+                                if (typeof window !== 'undefined') {
+                                    try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                                }
+                                return cachedVerses;
+                            }
+                        } catch {}
+                    }
+                    // Try via getResourcePath (app:// URL for plugin asset)
+                    if (obsidianApp.vault.adapter.getResourcePath) {
+                        for (const cand of candidates) {
+                            try {
+                                const resourceUrl = obsidianApp.vault.adapter.getResourcePath(cand);
+                                if (!resourceUrl) continue;
+                                const r = await fetch(resourceUrl);
+                                if (r.ok) {
+                                    const data = await r.json();
+                                    cachedVerses = parseQuranJson(data as Record<string, any>);
+                                    if (typeof window !== 'undefined') {
+                                        try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                                    }
+                                    return cachedVerses;
+                                }
+                            } catch {}
+                        }
+                    }
+                } catch {}
+            }
+
+            // In Obsidian, don't try web fetch to /public (no dev server) — it will always fail and log Failed to fetch
+            if (isObsidian) {
+                console.warn('[QuranLife] Quran JSON not found in vault candidates, checked:', candidates);
+                // Try one last vault read for legacy path without isObsidian check
+                try {
+                    const raw = await obsidianApp?.vault?.adapter?.read('QuranLife/assets/qpc-hafs-word-by-word.json');
+                    if (raw) {
+                        const data = JSON.parse(raw);
+                        cachedVerses = parseQuranJson(data as Record<string, any>);
+                        return cachedVerses;
+                    }
+                } catch {}
+                throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in plugin folder or QuranLife/assets/. Plugin will copy it on next restart from .obsidian/plugins/quran-life/qpc-hafs-word-by-word.json if present.');
+            }
+
             const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
             if (!res.ok) throw new Error(`Failed to load quran JSON: ${res.status}`);
             const data = await res.json();

@@ -1,56 +1,41 @@
 # Welcome to Quran Life
 
-Quran Life is more than just a tracking app—it's a complete system for memorizing the Quran using visual memory and smart scheduling. This guide will take you from your first day to mastery.
+Quran Life helps you memorize the Quran using visual maps and steady daily reading, with reviews in Anki.
 
-## Phase 1: Setting Up Your Territory
+This app now has **3 tabs** at the top — **Daily Portion** (passive), **Anki Deck** (active), **Documentation** (you are here). Reviews that were previously inside the app now live in **Anki**; you control maturity, leeches and splits via Anki's native Browser.
 
-When you first launch the app, you'll go through an **Onboarding** process to set your initial preferences. If you ever need to adjust them, you can do so in the [Settings](/docs/philosophy/settings) tab:
+## 1. Daily Portion (Passive — no Anki yet)
 
-1.  **Set Your Active Part**: Choose the Part (Juz) you are working on. This focuses your Daily Portion and overall progression on your current goal, while Practice focuses the active preparation and repair queues on the same daily workflow. Quran Life currently uses a [7-part system](/docs/mindmaps/part-0) for active focus.
-2.  **Skipping Surahs**: You can mark Surahs you have already fully mastered (like Surah Al-Fatiha or Al-Ikhlas) as **Skipped**. This removes them from your daily portion, preparation queue, and reviews to prevent cluttering your workflow with things you already know perfectly.
-3. **Setting surah maturity**: You can change the maturity of a surah in the [settings](/docs/philosophy/settings), if you already know that it is strongly embeded in your memory. This will change the behavior of the relevant review items that are talked about in phase 4 below.
+Open **Daily Portion** every day.
 
-## Phase 2: The Passive memorization (Daily portion)
+- **What you get:** a short set of verses for your current Part (see `Active Part` in settings). Listen or read to get familiar with sound and flow. The app keeps your daily minutes steady (`Daily Target`) and tells you how many days to finish the Part.
+- **Skip:** In `Daily Portion → Settings → Surahs in Portion` uncheck surahs you already know. To skip for reviews, you will later *Suspend* them in Anki (`Browse → tag:surah::1 → Suspend`), not here.
+- **When to move on:** After 2–3 cycles the verses feel familiar, you are ready to create a mindmap for that Surah. You can still memorize by rote, but always create a mindmap afterwards — it's your memory anchor.
 
-Every day, open the **Practice** tab. Your first goal is **Passive Exposure**. This ensures that you maintain a constant relationship with the entire text you are memorizing.
+## 2. Create Your Mindmap + Splits (Anki Deck tab)
 
--   **Listen/Read Your Portion**: This is a specific set of verses the app gives you daily. Listen to it to subconsciously absorb the verses.
--   **How it's Calculated**: Daily portion only includes surahs in your active part that are still in passive exposure. Skipped surahs are excluded, and a surah also leaves daily portion as soon as any of its verse groups has entered review. If you later reset that surah's verse-group memory nodes back to fresh/new state in [Settings](/docs/philosophy/settings), it can appear in daily portion again. After eligibility is decided, the app sizes the portion around your chosen **daily minutes** and then derives the cycle length from whatever content is still eligible.
--   **Goal**: The intent is to keep your daily time steady while the number of cycle days adjusts to the amount of material still in passive exposure.
--   **Hafs Mushaf Standard**: We use the official **Hafs Mushaf** text to ensure your memorization matches the most widely used standard.
--   **The Dot**: A small dot on the "Practice" icon will remind you if you haven't finished your daily portion yet.
+Open **Anki Deck**, choose a Surah from the dropdown.
 
-It is recommended to move on to the **active learning phase** (marking it as complete for reviews) once you have completed enough Daily Portion **cycles** to feel the "sound" and general flow of the verses. Once you meet this criteria, you might need a tiny amount of rote repetition at the very end to bridge any final gaps before marking a Surah as fully learned. This should be quick and targeted. 
+- **Use a pre-made map** if available (50,67–114 have one), or **Create** with the full `tldraw` editor. Keep groups to 2–4 items per branch (see [Mindmap Strategy](/docs/philosophy/mindmap-strategy)).
+- **Split the Surah** into verse groups that match the map: use the inline `Define Splits` ( `+` / `×` per verse, `Save Splits`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits immediately replace it.
+- **Preview:** `View` toggles the mindmap image *under* the selector (hidden by default to keep the tab fast) — it sits above splits so you can see the map while you split. For `part/meta` the same View shows the preview above the notes.
+- **Notes:** Write in the `Notes for this mindmap` textarea. It is saved on blur (or when you switch surah) `src/components/AnkiDeckTab.tsx:733` and exported as `MindmapDocs` field. This is where you add theme, story, or logic for similar verses.
 
-However, if you are in a rush, you can bypass the passive learning phase and use rote memorization to "cram" the verses into your short-term memory. Once you know the words, you **must still create or use pre-made mindmap** to lock them in.
+## 3. Export and Review in Anki
 
-## Phase 3: Active Memorization (Visual Mindmaps)
+In **Anki Deck** `Deck name` → `Export Full Deck to Anki` → import the `.apkg` into Anki (desktop or AnkiDroid/AnkiMobile).
 
-This is where the real work happens in the **Practice** tab preparation queue. Instead of just repeating verses, you will associate them with a visual "map."
+- **Card layout:** Front shows `ContextFront` (2 prev verses, or `Surah — name` for `1:1` `src/lib/anki/apkgExport.ts:582`) + `VerseChunksFront` blurred (`src/lib/reviewVerseChunks.ts` splits by `ۘۙۚ` or max 10 words). `Reveal next` unblurs one chunk at a time. Back shows `VerseFullBack` (all revealed verses condensed inline, for grading), `RelatedGroups` (mutashabihat), and `AnchorLabel • Range — Surah`. Surah-level `MindmapDocs` live on the dedicated mindmap cards, not on verse backs.
+- **Grading:** After all chunks revealed, `Show Answer` → `Again` (Not Remembered), `Good` (Remembered), `Bury` (Postpone). Space reveals next, then grades.
+- **Scheduling:** The export already sets `Deck Options → FSRS Enabled, Desired Retention 0.90, Leech threshold 3 Tag Only` `src/lib/anki/apkgExport.ts:522`. After import, verify `Deck Options → FSRS` is on — no other setup.
 
-1.  **Choose Your Path**: For every Surah, you have two options:
-    -   **Use a Pre-Made Map**: Start with the official mindmap for speed and reference (as of now only part 7 mindmaps are available).
-    -   **Edit/Create Your Own**: Use the built-in drawing tools to edit the pre-made mindmap or build your own mindmap from scratch. This usually gives stronger memory because you make the structural decisions yourself.
-2.  **Setup Your Verse Groups**: If you're creating your own mindmaps, use the **Splits configuration modal** to split the Surah into visual segments (we call these "chunks").
-3.  **Mark as Complete**: Once your map is ready and you feel familiar with the verses through your **Daily Portion** cycles, mark the Surah as complete to begin your **Smart Review** cycle. Only now does the verse appear in the review queue. This is necessary because without a visual map, your brain has no "place" to store the verses, leading to weak, isolated memories that fade quickly. The map provides the structure that holds the verses together.
+## 4. Staying on Track — Manual Anki Workflow
 
-> Preparation cards keep the item name visible and place mindmap, split, and documentation actions directly on the card so you do not have to open a separate Kanban board.
+Unlike the old in-app `Practice` queue, you now manage maturity, leeches and splits **manually in Anki Browser** (`Browse`):
 
-*Deep Dive: [How to create effective Mindmaps](/docs/philosophy/mindmap-strategy)*
+- **Set maturity:** Select verse-group cards → Right-click → `Reschedule` → `Set Due Date` (e.g., `7` days for new, `30` for medium, `90` for strong) or `Reposition` to make them `New` again. Or use `Flag` / `Suspend` to hide. See [Settings](/docs/philosophy/settings).
+- **3-strike / Leech:** `Deck Options → Leech threshold 3 Tag Only` tags `leech` after 3× `Again`. In `Browse` search `tag:leech` or `flag:1` (if you used `Flag Red` for similarity errors) → open its mindmap in `Anki Deck` → mend the map (add detail, separate similar branches) → re-export. Do **not** just bury and retry — fix the map. See [Fixing Gaps](/docs/philosophy/re-learning).
+- **Mutashabihat:** `Browse → tag:mutashabihat` lists all groups with similar verses. Back field `RelatedGroups` shows `2:23 ~ 11:45` etc. When you confuse `2:23` with `11:45`, flag the card `Flag Red` and place them far apart on the mindmap. See [Similar Verses](/docs/philosophy/mutashabihat).
+- **Split changed? Delete old group:** If you change `1-5` to `1-3` + `4-5`, the old `ql-67-1-5` card is now obsolete (different `anchorId`). In `Browse` search `deck:QuranLife tag:surah::67` (change number), select the old `1-5` card → `Delete` (or `Suspend` if you want history), then re-import the new `.apkg` (Anki updates existing `ql-67-1-3` etc. and keeps due dates for unchanged groups). See [How Reviews Work](/docs/philosophy/spaced-repetition).
 
-## Phase 4: Long-Term Mastery (Smart Reviews)
-
-Once you've "learned" a Surah, the app will ask you to review it periodically.
-
--   **When to Review**: The app uses a [Smart Review System](/docs/philosophy/spaced-repetition) to show you verses groups or mindmaps just as you're about to forget them.
--   **Practice Counter**: The counter on the "Practice" tab shows the number of reviews that are due or overdue.
-
-## Maintenance: Managing Your Tasks
-
-As you progress, the **Practice** tab remediation queue becomes your hub for maintenance. Watch the Repair pill and queue summary for structural tasks that need attention:
-
--   **Memory Gaps (Suspended Verse Groups)**: If you fail a review 3 times, the app [Suspends the related review item](/docs/philosophy/re-learning). This forces you to stop and fix your mindmap before moving on.
--   **Similar Verses (Mutashabihat)**: The app will alert you to [Similar Verses](/docs/philosophy/mutashabihat). Use logic and thematic flow to distinguish them, rather than simple tricks.
-
-
-> You can track Your Growth by checking the [Statistics](/docs/philosophy/statistics) tab to see your "Memory Maturity" grow over time.
+Track daily reading in the app, review history and maturity in `Anki → Stats` / `Browse`. Next: [Mindmap Strategy](/docs/philosophy/mindmap-strategy) → [How Reviews Work](/docs/philosophy/spaced-repetition).

@@ -1,12 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { ReactNode, Suspense } from 'react';
+
+export const dynamic = 'force-dynamic';
 import MobileDocsNav from './MobileDocsNav';
 import SidebarNav, { SidebarItem } from './SidebarNav';
 import TableOfContents from './TableOfContents';
-import DocsSearch from './DocsSearch';
 import DocsBreadcrumbs from './DocsBreadcrumbs';
-import SearchHighlight from './SearchHighlight';
 import { ScrollOnNavigate } from './ScrollOnNavigate';
 import { DocsNavigationProvider } from './DocsNavigationState';
 import DocsContentShell from './DocsContentShell';
@@ -64,7 +64,6 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                     <MobileDocsNav items={sidebarItems} />
                     <DocsBreadcrumbs />
                 </div>
-                <DocsSearch />
             </div>
             <div className="md:hidden" style={{ height: '16px' }} />
 
@@ -106,9 +105,6 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
     borderRadius: '16px'
 }}>
                     <article className="docs-content p-5 pt-6 md:p-6 md:pt-6">
-                        <Suspense fallback={null}>
-                            <SearchHighlight />
-                        </Suspense>
                         <DocsContentShell>{children}</DocsContentShell>
                     </article>
                     </main>
@@ -116,7 +112,6 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
 
                 {/* Desktop Table of Contents */}
                 <aside className="hidden lg:flex flex-col gap-4 h-full" style={{ width: '260px', flex: '0 0 260px' }}>
-                    <DocsSearch className="!w-full !max-w-none !justify-start px-4 py-2 !h-10 !bg-[var(--background-secondary)] !border-[var(--border)] !rounded-[16px] hover:!shadow-none transition-all flex-shrink-0" />
                     <div className="card modern-card custom-scrollbar !mb-0" style={{
                         border: '1px solid var(--border)',
                         flex: 1,

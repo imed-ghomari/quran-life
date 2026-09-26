@@ -1,24 +1,36 @@
-# Managing Your Journey (Settings)
+# Settings & Daily Portion — Where to Set What (Anki-native)
 
-The **Settings** tab is the control center for your memorization plan. Here, you tell the app what you want to achieve and what you already know.
+This branch split settings: **Daily reading** stays in the app (`Daily Portion` tab), **maturity / splits / mindmaps** moved to `Anki` (`Browse`) + `Anki Deck` tab.
 
-## Define Your Scope
+## Daily Portion (in-app)
 
-- **Active Part (Juz)**: This is your current focus area. The app uses it to shape your **Daily Portion** and overall progression, while the **Practice** tab uses that scope for preparation and daily work. Quran Life currently uses a [7-part structure](/docs/mindmaps/part-0), and you can change your active part at any time as you progress.
-- **Daily Portion Time**: How many minutes do you want to spend on your daily portion each day? Quran Life keeps that time target steady, then derives the cycle length from the currently eligible surahs in your Active Part. You can also reset your daily portion progress here if needed.
+You set these in `Daily Portion → Settings` (gear icon):
 
-## Skipped Surah
+- **Active Part:** `1–7` + `All Quran` (`QuranPart` `src/lib/types.ts`). Decides which Surahs appear in `getSurahsByPart` and `eligibleSurahs` for your daily cycle.
+- **Daily Target:** `5–180` min (`DEFAULT_DAILY_TARGET_MINUTES` `src/lib/dailyPortionUtils.ts`). App keeps minutes steady and derives `derivedCompletionDays`.
+- **Mode:** `Listening` (`AudioPlayerLocal`) vs `Reading` (`paragraph` / `line_by_line`). Reading style is `paragraph` (grouped by Surah) or `line_by_line`.
+- **Surahs in Portion:** Check/uncheck per Surah in `Active Part`. `Select All` / `Clear All` are `btn btn-secondary`. Unchecking removes them from *daily reading only* — for reviews, `Suspend` in Anki instead (see below).
 
-This section allows you to manage Surahs you want to exclude from your daily cycle and review section. You can unskip them at any time to add them back to your review queue.
+## Skipped / Maturity for Reviews (in Anki Browser)
 
-## Knowledge Tracking
+There is **no** `Settings → Knowledge Tracking` anymore. For how to `Suspend`/`Unsuspend`, `Reschedule` (`Set Due Date`/`Set Interval`), `Forget`, `Flag`, and bulk operations, see:
 
-This section allows you to quickly check or update the maturity of Surahs or mindmaps, individually or in bulk. You can also filter by their state for quick navigation.
+**→ [How Reviews Work](/docs/philosophy/spaced-repetition)**
 
-## Similar Coverage
+The same `Browse` workflow (`tag:surah::67`, `is:due`, `prop:ivl>21`) is detailed there.
 
-This section helps you identify Surahs that contain many "Similar Verses" (Mutashabihat). You can see which ones are causing confusion and prioritize them.
+## Mindmaps and Splits (Anki Deck tab)
 
-## Advanced options
+Not in `Settings`. For `Create/Edit Mindmap`, `View` preview, `Define Splits`, and `Notes` handling, see:
 
-In this section, you can change some default behaviors of the app, such as review queue sorting, the default daily portion mode, and how completed mindmaps and verse groups participate in review.
+**→ [Anki Deck & Reviews — Preparing](/docs/philosophy/practice-hub#preparing-in-the-anki-deck-tab)**
+
+Default splits come from `private-assets/premade-mindmaps/*.chunks.txt` → `public/premade-anki-data.json` `splits`.
+
+## What Anki Already Sets for You (first import)
+
+`public/premade-anki-data.json` export contains stable `DeckId/ModelId` `src/lib/anki/apkgExport.ts:436`, `FSRS` `Desired Retention 0.90`, `Leech 3 Tag Only`, and card template `src/lib/anki/apkgExport.ts:209` (`VerseChunksFront` blurred, `ContextFront` 2→5 when `mutashabihat`). After first import just verify `Deck Options → FSRS`.
+
+## Global Backup (includes Daily Portion)
+
+Use the **top bar** `Export` / `Import` next to tabs `src/components/AppTabs.tsx:186` — it backs up `anki` (`splits/mindmaps/docs/deleted`) + `daily` (`settings/progress`) + `theme` in one `version:2` JSON and reloads on import. This replaces the old buried buttons.
