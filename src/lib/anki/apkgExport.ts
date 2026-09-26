@@ -80,7 +80,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
   } else {
     try {
       mindmaps = loadAnkiMindmaps() as any;
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
   }
 
   const entries = Object.entries(mindmaps).filter(([k, v]: any) => v?.snapshot);
@@ -115,15 +115,18 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     } catch { return null; }
   })();
 
-  const container = document.createElement('div'); // eslint-disable-line obsidianmd/prefer-create-el -- DOM creation for hidden canvas mount, not UI
-  container.style.position = 'fixed';
-  container.style.left = '-10000px';
-  container.style.top = '-10000px';
-  container.style.width = '1000px';
-  container.style.height = '700px';
-  container.style.overflow = 'hidden';
-  container.style.background = 'white';
-  document.body.appendChild(container);
+  // createDiv appends to document.body by itself; the canvas stays
+  // off-screen via the fixed negative offset above.
+  const container = document.body.createDiv();
+  container.setCssStyles({
+    position: 'fixed',
+    left: '-10000px',
+    top: '-10000px',
+    width: '1000px',
+    height: '700px',
+    overflow: 'hidden',
+    background: 'white',
+  });
 
   let editor: any = null;
   try {
@@ -151,7 +154,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     try {
       const root: any = (container as any)._reactRoot;
       if (root) root.unmount();
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
     if (container.parentNode) container.parentNode.removeChild(container);
     for (const [key] of entries) fieldMap[key] = '';
     return { mediaMap, mediaFiles, fieldMap };
@@ -161,14 +164,14 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     try {
       const shapeIds = Array.from(editor.getCurrentPageShapeIds() as Set<string>);
       if (shapeIds.length === 0) return null;
-      try { editor.zoomToFit({ duration: 0 }); } catch {}
+      try { editor.zoomToFit({ duration: 0 }); } catch { /* best-effort only; ignore */ }
       // Let layout/fonts settle: readiness signals instead of fixed 600+300ms
       try {
         await Promise.race([
           (document as any).fonts?.ready ?? Promise.resolve(),
           new Promise((r) => window.setTimeout(r, 800)),
         ]);
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
       await waitForFrames(2);
       await new Promise((r) => window.setTimeout(r, 80));
       const result = await editor.toImage([...(editor.getCurrentPageShapeIds() as Set<string>)], TO_IMAGE_OPTS as any);
@@ -190,7 +193,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
       (document as any).fonts?.ready ?? Promise.resolve(),
       new Promise((r) => window.setTimeout(r, 1000)),
     ]);
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
   for (let i = 0; i < entries.length; i++) {
     const [key, val] = entries[i];
     const snapshot = (val as any).snapshot;
@@ -259,7 +262,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
   try {
     const root: any = (container as any)._reactRoot;
     if (root) root.unmount();
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
   if (container.parentNode) container.parentNode.removeChild(container);
   reportMedia(80, total);
 
@@ -314,7 +317,7 @@ function timeoutReject(ms: number, message: string): Promise<never> {
 // await must either resolve or reject — never hang.
 async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promise<ArrayBuffer> {
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+  const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
   try {
     const resp = await window.fetch(url, { cache: 'force-cache' as RequestCache, signal: ctrl?.signal as AbortSignal | undefined });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
@@ -335,7 +338,7 @@ function getPluginApp(): any | null {
   try {
     const app = getObsidianApp();
     if (app?.vault?.adapter) return app;
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
   return null;
 }
 
@@ -385,7 +388,7 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
             cachedWasmBinary = ab;
             return ab;
           }
-        } catch {}
+        } catch { /* best-effort only; ignore */ }
       }
     }
     if (adapter?.getResourcePath) {
@@ -398,7 +401,7 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
             cachedWasmBinary = ab;
             return ab;
           }
-        } catch {}
+        } catch { /* best-effort only; ignore */ }
       }
     }
     // In Obsidian there is no web server serving `/sql-wasm.wasm` — the
@@ -412,7 +415,7 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
       cachedWasmBinary = ab;
       return ab;
     }
-  } catch {}    return cachedWasmBinary;
+  } catch { /* best-effort only; ignore */ }    return cachedWasmBinary;
 }
 
 // Escape Anki field separator
@@ -816,10 +819,10 @@ export async function generateApkgBlob(
                 try {
                   const u = adapter.getResourcePath(cand);
                   if (u) return u;
-                } catch {}
+                } catch { /* best-effort only; ignore */ }
               }
             }
-          } catch {}
+          } catch { /* best-effort only; ignore */ }
           return null;
         })();
         SQL = await Promise.race([
@@ -1107,7 +1110,7 @@ export async function generateApkgBlob(
     const mediaEntries = Object.entries(mediaFiles);
     for (let mi = 0; mi < mediaEntries.length; mi++) {
       const [key, blob] = mediaEntries[mi];
-      const ab = await (blob as Blob).arrayBuffer();
+      const ab = await blob.arrayBuffer();
       zip.file(key, ab);
       if (mi % 5 === 0) {
         reportApkg(90 + Math.round(((mi + 1) / Math.max(1, mediaEntries.length)) * 5));
@@ -1124,7 +1127,7 @@ export async function generateApkgBlob(
         try {
           const pct = typeof metadata?.percent === 'number' ? metadata.percent : 0;
           reportApkg(95 + Math.round((Math.min(100, Math.max(0, pct)) / 100) * 5));
-        } catch {}
+        } catch { /* best-effort only; ignore */ }
       }
     );
     reportApkg(100);
@@ -1133,11 +1136,4 @@ export async function generateApkgBlob(
     console.error('apkg gen failed', e);
     throw e;
   }
-}
-
-function generateTsvBlob(cards: AnkiCard[]): Blob {
-  const tsv = cards
-    .map(c => [c.surahId, c.startVerse, c.endVerse, c.anchorLabel, c.verseTexts.join(' '), c.tags.join(' ')].join('\t'))
-    .join('\n');
-  return new Blob([tsv], { type: 'text/tab-separated-values' });
 }

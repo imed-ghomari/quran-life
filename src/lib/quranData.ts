@@ -31,7 +31,7 @@ async function downloadTextWithProgress(
       onProgress?.(0, null);
       const res: any = await Promise.race([
         req({ url, method: 'GET' }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('requestUrl timeout')), timeoutMs)),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), timeoutMs)),
       ]);
       if (typeof res.text === 'string' && res.text) {
         onProgress?.(res.text.length, res.text.length);
@@ -51,7 +51,7 @@ async function downloadTextWithProgress(
     // fall through to fetch
   }
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+  const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
   try {
     const res = await fetch(url, { signal: ctrl?.signal as any });
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
@@ -74,7 +74,7 @@ async function downloadTextWithProgress(
         onProgress?.(loaded, total);
       }
     }
-    try { reader.releaseLock(); } catch {}
+    try { reader.releaseLock(); } catch { /* best-effort only; ignore */ }
     const merged = new Uint8Array(loaded);
     let off = 0;
     for (const c of chunks) {
@@ -83,7 +83,7 @@ async function downloadTextWithProgress(
     }
     return new TextDecoder().decode(merged);
   } finally {
-    if (timer) clearTimeout(timer);
+    if (timer) window.clearTimeout(timer);
   }
 }
 
@@ -101,7 +101,7 @@ async function persistTextToVault(app: any, filePath: string, text: string): Pro
             try {
                 if (adapter.exists && (await adapter.exists(cur))) continue;
                 await adapter.mkdir(cur);
-            } catch {}
+            } catch { /* best-effort only; ignore */ }
         }
     }
     if (adapter.write) {
@@ -402,11 +402,11 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                                 const data = JSON.parse(raw);
                                 cachedVerses = parseQuranJson(data as Record<string, any>);
                                 if (typeof window !== 'undefined') {
-                                    try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                                    try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch { /* best-effort only; ignore */ }
                                 }
                                 return cachedVerses;
                             }
-                        } catch {}
+                        } catch { /* best-effort only; ignore */ }
                     }
                     // Try via getResourcePath (app:// URL for plugin asset)
                     if (obsidianApp.vault.adapter.getResourcePath) {
@@ -419,14 +419,14 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                                     const data = await r.json();
                                     cachedVerses = parseQuranJson(data as Record<string, any>);
                                     if (typeof window !== 'undefined') {
-                                        try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                                        try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch { /* best-effort only; ignore */ }
                                     }
                                     return cachedVerses;
                                 }
-                            } catch {}
+                            } catch { /* best-effort only; ignore */ }
                         }
                     }
-                } catch {}
+                } catch { /* best-effort only; ignore */ }
             }
 
             // In Obsidian, don't try web fetch to /public (no dev server) — it will always fail and log Failed to fetch
@@ -448,7 +448,7 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                         const data = JSON.parse(raw);
                         cachedVerses = parseQuranJson(data as Record<string, any>);
                         if (typeof window !== 'undefined') {
-                            try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch {}
+                            try { sessionStorage.setItem('quran_verses_cache_v2', JSON.stringify(cachedVerses)); } catch { /* best-effort only; ignore */ }
                         }
                         // Persist best-effort so this download happens exactly once
                         void persistTextToVault(obsidianApp, 'QuranLife/assets/qpc-hafs-word-by-word.json', raw).catch(() => {});
@@ -466,7 +466,7 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                         cachedVerses = parseQuranJson(data as Record<string, any>);
                         return cachedVerses;
                     }
-                } catch {}
+                } catch { /* best-effort only; ignore */ }
                 throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in plugin folder or QuranLife/assets/. Plugin will copy it on next restart from .obsidian/plugins/quran-life/qpc-hafs-word-by-word.json if present.');
             }
 

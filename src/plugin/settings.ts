@@ -506,7 +506,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       if (!row) return;
       row.progressWrap.toggleClass("quran-life-hidden", false);
       const pct = progress ? Math.max(0, Math.min(100, progress.percent)) : 0;
-      row.progressFill.style.width = `${pct}%`;
+      row.progressFill.setCssStyles({ width: `${pct}%` });
       const detail = progress
         ? `${pct}% • ${progress.completedFiles}/${progress.totalFiles} files • ${formatBytes(progress.downloadedBytes)}${progress.failedFiles ? ` • ${progress.failedFiles} failed` : ""}`
         : text;

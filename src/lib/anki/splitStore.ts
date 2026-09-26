@@ -48,7 +48,7 @@ export function loadSplits(): SurahSplits {
 export function saveSplits(splits: SurahSplits) {
   try {
     window.localStorage.setItem(LS_SPLITS_KEY, JSON.stringify(splits));
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
 }
 
 export function sanitizeAnchors(surahId: number, anchors: AnkiAnchor[]): AnkiAnchor[] {
@@ -153,7 +153,7 @@ export function importSplitsFromBackup(json: any): SurahSplits {
         });
       }
     }
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
   return out;
 }
 

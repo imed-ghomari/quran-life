@@ -7,6 +7,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { getSurah } from '@/lib/quranData';
 import { useMindmapBackGestureGuard } from '@/hooks/useMindmapBackGestureGuard';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
+import { readStoredJson, writeStoredJson, removeStored } from '@/lib/pluginStorage';
 import {
     clipboardHasBlockedMedia,
     dataTransferHasBlockedMedia,
@@ -22,7 +23,6 @@ import {
     polygonsIntersect,
     StateNode,
     TLPointerEventInfo,
-    TLShape,
     VecModel,
     DefaultToolbar,
     TldrawUiMenuGroup,
@@ -41,7 +41,6 @@ import {
     useValue,
     STROKE_SIZES
 } from 'tldraw';
-import { getStrokePoints, getSvgPathFromStrokePoints } from '@/utils/tldrawStroke';
 import {
     attachMindmapSwipeGuard,
     observeObsidianBottomBar,
@@ -297,7 +296,7 @@ function MindmapEditorContent({
     useEffect(() => {
         if (!vaultStore || initialSnapshot) { setIsVaultLoading(false); return; }
         let cancelled = false;
-        (async () => {
+        void (async () => {
             setIsVaultLoading(true);
             const key = surahId ? `surah-${surahId}` : partId !== undefined ? (partId === 0 ? 'meta-0' : `part-${partId}`) : null;
             if (!key) { if (!cancelled) setIsVaultLoading(false); return; }
@@ -322,14 +321,14 @@ function MindmapEditorContent({
     const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const pendingShapeTimestampUpdatesRef = useRef<Map<string, any>>(new Map());
-    const timestampFlushTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const localDraftTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const timestampFlushTimerRef = useRef<number | null>(null);
+    const localDraftTimerRef = useRef<number | null>(null);
     const isDirty = useRef<boolean>(false);
     const isSavingRef = useRef<boolean>(false);
     const queuedSaveRef = useRef<boolean>(false);
     const queuedSaveWithImagesRef = useRef<boolean>(false);
-    const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
-    const maxWaitTimer = useRef<NodeJS.Timeout | null>(null);
+    const autoSaveTimer = useRef<number | null>(null);
+    const maxWaitTimer = useRef<number | null>(null);
     const isMountedRef = useRef(true);
     const isExitActionInProgressRef = useRef(false);
     const isRestoringHistoryRef = useRef(false);
@@ -385,7 +384,8 @@ function MindmapEditorContent({
 
     const clearLocalDraft = useCallback(() => {
         try {
-            localStorage.removeItem(localDraftKey);
+            // Vault-scoped storage (preferred over window.localStorage).
+            removeStored(localDraftKey);
         } catch (error) {
             console.warn('Failed to clear local mindmap draft', error);
         }
@@ -398,14 +398,14 @@ function MindmapEditorContent({
             const storeSize = Object.keys(sanitizedSnapshot?.store || {}).length;
 
             if (!storeSize) {
-                localStorage.removeItem(localDraftKey);
+                removeStored(localDraftKey);
                 return;
             }
 
-            localStorage.setItem(localDraftKey, JSON.stringify({
+            writeStoredJson(localDraftKey, {
                 updatedAt: new Date().toISOString(),
                 snapshot: sanitizedSnapshot,
-            }));
+            });
         } catch (error) {
             console.warn('Failed to persist local mindmap draft', error);
         }
@@ -413,9 +413,9 @@ function MindmapEditorContent({
 
     const scheduleLocalDraftPersist = useCallback(() => {
         if (localDraftTimerRef.current) {
-            clearTimeout(localDraftTimerRef.current);
+            window.clearTimeout(localDraftTimerRef.current);
         }
-        localDraftTimerRef.current = setTimeout(() => {
+        localDraftTimerRef.current = window.setTimeout(() => {
             localDraftTimerRef.current = null;
             persistLocalDraft();
         }, 400);
@@ -423,9 +423,7 @@ function MindmapEditorContent({
 
     const loadLocalDraftSnapshot = useCallback(() => {
         try {
-            const raw = localStorage.getItem(localDraftKey);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
+            const parsed = readStoredJson<{ snapshot?: unknown }>(localDraftKey);
             if (!parsed || typeof parsed !== 'object' || !parsed.snapshot) return null;
             return normalizeSnapshot(parsed.snapshot);
         } catch (error) {
@@ -436,7 +434,7 @@ function MindmapEditorContent({
 
     const flushPendingShapeTimestampUpdates = useCallback(() => {
         if (timestampFlushTimerRef.current) {
-            clearTimeout(timestampFlushTimerRef.current);
+            window.clearTimeout(timestampFlushTimerRef.current);
             timestampFlushTimerRef.current = null;
         }
 
@@ -507,7 +505,7 @@ function MindmapEditorContent({
                 // Set initial tool if desired
                 editorInstance.setCurrentTool('lasso-select');
 
-                setTimeout(() => {
+                window.setTimeout(() => {
                     editorInstance.zoomToFit();
                 }, 100);
 
@@ -535,7 +533,7 @@ function MindmapEditorContent({
                 } else {
                     editorInst.store.loadSnapshot(sanitized);
                 }
-                setTimeout(() => editorInst.zoomToFit(), 100);
+                window.setTimeout(() => editorInst.zoomToFit(), 100);
             } catch (e) {
                 console.warn('Failed to load late snapshot', e);
             }
@@ -608,14 +606,12 @@ function MindmapEditorContent({
         if (!getObsidianTheme() && theme === 'system' && typeof window !== 'undefined' && window.matchMedia) {
             mq = window.matchMedia('(prefers-color-scheme: dark)');
             mqHandler = () => apply();
-            if (mq.addEventListener) mq.addEventListener('change', mqHandler);
-            else mq.addListener(mqHandler);
+            mq.addEventListener('change', mqHandler);
         }
         return () => {
             observer.disconnect();
             if (mq && mqHandler) {
-                if (mq.removeEventListener) mq.removeEventListener('change', mqHandler);
-                else mq.removeListener(mqHandler);
+                mq.removeEventListener('change', mqHandler);
             }
         };
     }, [editor, theme]);
@@ -689,7 +685,7 @@ function MindmapEditorContent({
         const scheduleShapeTimestampFlush = () => {
             if (timestampFlushTimerRef.current) return;
             // Batch frequent pointer updates to avoid write amplification while drawing.
-            timestampFlushTimerRef.current = setTimeout(flushPendingShapeTimestampUpdates, 700);
+            timestampFlushTimerRef.current = window.setTimeout(flushPendingShapeTimestampUpdates, 700);
         };
 
         // --- Change Listener for Sync Timestamps ---
@@ -732,7 +728,7 @@ function MindmapEditorContent({
         return () => {
             cleanupListener();
             if (timestampFlushTimerRef.current) {
-                clearTimeout(timestampFlushTimerRef.current);
+                window.clearTimeout(timestampFlushTimerRef.current);
                 timestampFlushTimerRef.current = null;
             }
             pendingShapeTimestampUpdatesRef.current.clear();
@@ -745,11 +741,11 @@ function MindmapEditorContent({
     const saveContent = useCallback(async (withImages: boolean = false) => {
         // Clear timers to prevent double save
         if (autoSaveTimer.current) {
-            clearTimeout(autoSaveTimer.current);
+            window.clearTimeout(autoSaveTimer.current);
             autoSaveTimer.current = null;
         }
         if (maxWaitTimer.current) {
-            clearTimeout(maxWaitTimer.current);
+            window.clearTimeout(maxWaitTimer.current);
             maxWaitTimer.current = null;
         }
 
@@ -789,40 +785,6 @@ function MindmapEditorContent({
                 // Export images only if requested (currently disabled to save storage)
         let lightBlob: Blob | undefined;
         let darkBlob: Blob | undefined;
-        
-        if (withImages && false) { // Force disabled
-            try {
-                        const shapeIds = Array.from(editorInst.getCurrentPageShapeIds() as Set<string>);
-                        if (shapeIds.length > 0) {
-                            // Use lower pixelRatio and potentially smaller format to save space
-                            // Light mode version
-                            const lightResult = await editorInst.toImage(shapeIds, {
-                                format: 'png',
-                                quality: 0.8, // Slightly lower quality
-                                pixelRatio: 1, // Reduced from 2 to save 4x space
-                                padding: 10,
-                                theme: 'light'
-                            });
-                            if (lightResult && lightResult.blob) {
-                                lightBlob = lightResult.blob;
-                            }
-
-                            // Dark mode version
-                            const darkResult = await editorInst.toImage(shapeIds, {
-                                format: 'png',
-                                quality: 0.8,
-                                pixelRatio: 1,
-                                padding: 10,
-                                theme: 'dark'
-                            });
-                            if (darkResult && darkResult.blob) {
-                                darkBlob = darkResult.blob;
-                            }
-                        }
-                    } catch (imgError) {
-                        console.warn("Failed to generate preview images", imgError);
-                    }
-                }
 
                 // Keep the persisted snapshot text-only and strip any media/file-backed records.
                 const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
@@ -860,17 +822,17 @@ function MindmapEditorContent({
             if (Date.now() - startedAt >= SAVE_DRAIN_TIMEOUT_MS) {
                 break;
             }
-            await new Promise(resolve => setTimeout(resolve, SAVE_DRAIN_POLL_MS));
+            await new Promise(resolve => window.setTimeout(resolve, SAVE_DRAIN_POLL_MS));
         }
     }, []);
 
     const ensureSavedBeforeExit = useCallback(async () => {
         if (autoSaveTimer.current) {
-            clearTimeout(autoSaveTimer.current);
+            window.clearTimeout(autoSaveTimer.current);
             autoSaveTimer.current = null;
         }
         if (maxWaitTimer.current) {
-            clearTimeout(maxWaitTimer.current);
+            window.clearTimeout(maxWaitTimer.current);
             maxWaitTimer.current = null;
         }
 
@@ -944,21 +906,21 @@ function MindmapEditorContent({
             
             // Clear existing debounce timer
             if (autoSaveTimer.current) {
-                clearTimeout(autoSaveTimer.current);
+                window.clearTimeout(autoSaveTimer.current);
             }
 
             // Set new debounce timer (2s)
-            autoSaveTimer.current = setTimeout(() => {
+            autoSaveTimer.current = window.setTimeout(() => {
                 if (isDirty.current) {
-                    saveContent(false); // Auto-save without images
+                    void saveContent(false); // Auto-save without images
                 }
             }, 2000);
 
             // Throttle: Ensure we save at least every 10 seconds if continuously editing
             if (!maxWaitTimer.current) {
-                maxWaitTimer.current = setTimeout(() => {
+                maxWaitTimer.current = window.setTimeout(() => {
                     if (isDirty.current) {
-                        saveContent(false);
+                        void saveContent(false);
                     }
                 }, 10000);
             }
@@ -974,13 +936,13 @@ function MindmapEditorContent({
         return () => {
             cleanup();
             if (autoSaveTimer.current) {
-                clearTimeout(autoSaveTimer.current);
+                window.clearTimeout(autoSaveTimer.current);
             }
             if (maxWaitTimer.current) {
-                clearTimeout(maxWaitTimer.current);
+                window.clearTimeout(maxWaitTimer.current);
             }
             if (localDraftTimerRef.current) {
-                clearTimeout(localDraftTimerRef.current);
+                window.clearTimeout(localDraftTimerRef.current);
                 localDraftTimerRef.current = null;
             }
         };
@@ -1038,7 +1000,7 @@ function MindmapEditorContent({
 
             isRestoringHistoryRef.current = true;
             window.history.go(1);
-            setTimeout(() => {
+            window.setTimeout(() => {
                 isRestoringHistoryRef.current = false;
             }, 0);
 
@@ -1239,8 +1201,6 @@ function MindmapEditorContent({
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--background-secondary)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                 >
                     <X size={20} />
                 </button>
@@ -1263,6 +1223,7 @@ function MindmapEditorContent({
                 />
             </div>
             <style>{`@keyframes mindmap-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+              .mindmap-header-close:hover { background: var(--background-secondary); }
               /* Keep tldraw UI clear of Obsidian's own floating bottom bar.
                  --ql-obsidian-bottom-offset is measured at runtime (phones);
                  it is 0 on tablets/desktop where no such bar exists, so no

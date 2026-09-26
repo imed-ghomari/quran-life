@@ -24,13 +24,12 @@ export class DailyPortionView extends ItemView {
     const container = this.contentEl;
     container.empty();
     container.addClass("quran-life-daily");
-    container.style.height = "100%";
-    container.style.overflow = "auto";
+    container.setCssStyles({ height: "100%", overflow: "auto" });
 
     // Native mount — no iframe, React root in containerEl with ThemeProvider + error boundary
     // ThemeProvider fallback now handles Obsidian's body theme (theme-light/theme-dark) if not wrapped, but we wrap explicitly
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
-    mountEl.style.height = "100%";
+    mountEl.setCssStyles({ height: "100%" });
     this.root = createRoot(mountEl);
     this.root.render(
       React.createElement(ThemeProvider, null,
@@ -67,7 +66,7 @@ export class DailyPortionView extends ItemView {
   async onClose(): Promise<void> {
     this.openGeneration++;
     if (this.root) {
-      try { this.root.unmount(); } catch {}
+      try { this.root.unmount(); } catch { /* best-effort only; ignore */ }
       this.root = null;
     }
     this.contentEl.empty();

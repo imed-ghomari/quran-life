@@ -5,8 +5,10 @@
    ========================================================================== */
 
 /* ---------- generic helpers ---------- */
-.quran-life-hidden {
-  display: none !important;
+/* Doubled class (0,2,0) beats Obsidian/theme single-class display rules
+   without !important. Toggled on Setting rows, buttons and progress wraps. */
+.quran-life-hidden.quran-life-hidden {
+  display: none;
 }
 
 .quran-life-desc-spaced {
@@ -26,7 +28,7 @@ html.ql-no-overscroll-x {
    desktop settings layout is left exactly as Obsidian renders it. */
 .quran-life-settings .setting-item-info { min-width: 0; overflow-wrap: anywhere; }
 .quran-life-settings .quran-life-settings-anki div { min-width: 0; }
-.quran-life-settings .quran-life-daily-surah-list { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)) !important; }
+.quran-life-settings .quran-life-daily-surah-list.quran-life-daily-surah-list { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); }
 .quran-life-settings .quran-life-nowrap-safe { overflow-wrap: anywhere; word-break: break-word; }
 
 /* Daily portion: surah picker grid */
@@ -123,6 +125,6 @@ html.ql-no-overscroll-x {
   .quran-life-settings .quran-life-offline-row .setting-item-control > button,
   .quran-life-settings .quran-life-offline-library .setting-item-control > button,
   .quran-life-settings .quran-life-offline-active-hint .setting-item-control > button { width: 100%; }
-  .quran-life-settings .quran-life-daily-surah-list { grid-template-columns: 1fr !important; max-height: 340px !important; }
+  .quran-life-settings .quran-life-daily-surah-list.quran-life-daily-surah-list { grid-template-columns: 1fr; max-height: 340px; }
   .quran-life-settings .importer-progress-bar { height: 10px; }
 }

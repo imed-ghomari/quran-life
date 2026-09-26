@@ -24,25 +24,10 @@ export class AnkiDeckView extends ItemView {
     const container = this.contentEl;
     container.empty();
     container.addClass("quran-life-anki");
-    container.style.height = "100%";
-    container.style.overflow = "auto";
-    container.style.position = "relative";
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
     // No unused strip between the Obsidian tab bar and our content (esp. mindmap top bar)
-    (container.style as any).padding = "0";
-    (container.style as any).margin = "0";
-    (container.style as any).gap = "0";
+    container.setCssStyles({ height: "100%", overflow: "auto", position: "relative", display: "flex", flexDirection: "column", padding: "0", margin: "0", gap: "0" });
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
-    mountEl.style.height = "100%";
-    mountEl.style.minHeight = "100%";
-    mountEl.style.position = "relative";
-    mountEl.style.display = "flex";
-    mountEl.style.flexDirection = "column";
-    mountEl.style.flex = "1";
-    (mountEl.style as any).padding = "0";
-    (mountEl.style as any).margin = "0";
-    (mountEl.style as any).gap = "0";
+    mountEl.setCssStyles({ height: "100%", minHeight: "100%", position: "relative", display: "flex", flexDirection: "column", flex: "1", padding: "0", margin: "0", gap: "0" });
     this.root = createRoot(mountEl);
     this.root.render(
       React.createElement(ThemeProvider, null,
@@ -78,7 +63,7 @@ export class AnkiDeckView extends ItemView {
 
   async onClose(): Promise<void> {
     this.openGeneration++;
-    if (this.root) { try { this.root.unmount(); } catch {} this.root = null; }
+    if (this.root) { try { this.root.unmount(); } catch { /* best-effort only; ignore */ } this.root = null; }
     this.contentEl.empty();
   }
 }

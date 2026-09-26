@@ -63,7 +63,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   // Load verses
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       let ok = false;
       try {
         const verses = await getQuranVerses((downloaded, total) => {
@@ -246,7 +246,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const showToast = useCallback((msg: string) => {
     const id = Math.random().toString(36).substring(2, 9);
     setToast({ id, msg });
-    setTimeout(() => setToast(prev => (prev?.id === id ? null : prev)), 3000);
+    window.setTimeout(() => setToast(prev => (prev?.id === id ? null : prev)), 3000);
   }, []);
 
   const handleComplete = async () => {
@@ -345,8 +345,8 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       if (app?.setting?.open) {
         app.setting.open();
         // try to open Quran Life tab
-        setTimeout(() => {
-          try { app.setting.openTabById?.('quran-life'); } catch {}
+        window.setTimeout(() => {
+          try { app.setting.openTabById?.('quran-life'); } catch { /* best-effort only; ignore */ }
         }, 150);
       } else {
         showToast('Open Settings → Quran Life → Daily Portion');
@@ -508,7 +508,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                 {canUndoComplete && (
                 <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:8, width:'100%', maxWidth:360, alignItems:'stretch' }}>
                     <button
-                      onClick={handleUndoComplete}
+                      onClick={() => void handleUndoComplete()}
                       disabled={isCompleting}
                       title="Undo today's completion and keep this portion open"
                       style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--interactive-accent)', background:'color-mix(in srgb, var(--interactive-accent) 12%, transparent)', color:'var(--interactive-accent)', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, cursor:isCompleting?'not-allowed':'pointer', fontSize:'0.86em', fontWeight:600, opacity:isCompleting?0.7:1 }}
@@ -683,7 +683,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
 
             <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)', marginBottom:'env(safe-area-inset-bottom, 0px)' }}>
               <button
-                onClick={handleComplete}
+                onClick={() => void handleComplete()}
                 disabled={isCompleting}
                 style={{
                   width:'100%',

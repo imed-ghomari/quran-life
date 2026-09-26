@@ -7,8 +7,8 @@ import { AnkiAnchor } from '@/lib/anki/types';
 import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps, useVaultAnkiExportPrefs } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
-import { sanitizeAnchors, buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
-import { Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
+import { Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 
@@ -50,7 +50,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Progress popup inspired by obsidian-importer/src/progress-ui.ts (cloned at ./obsidian-importer) — shows status, bar (via --importer-progress), stats and log
   const [exportProgress, setExportProgress] = useState<null | { status: string; current: number; total: number; logs: string[]; verseCards?: number; mindmapCards?: number; mindmapDone?: number; mindmapTotal?: number }>(null);
-  const { mindmap: currentMindmap, save: saveMindmap, remove: deleteMindmap, isLoading: isMindmapLoading } = useVaultMindmap(vaultStore, selectedMindmapKey);
+  const { mindmap: currentMindmap, save: saveMindmap, remove: deleteMindmap } = useVaultMindmap(vaultStore, selectedMindmapKey);
   const { mindmaps: allMindmaps } = useVaultMindmaps(vaultStore);
   const { anchors: vaultAnchors, saveAnchors, isLoading: isSplitsLoading } = useVaultSplits(vaultStore, selectedSurah);
   const { content: docContent, save: saveDoc } = useVaultDoc(vaultStore, selectedMindmapKey);
@@ -95,19 +95,19 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       try {
         if (splitsDirtyRef.current) {
           const pending = localAnchorsRef.current;
-          if (Array.isArray(pending) && pending.length && pending.every(a => a && (a as AnkiAnchor).surahId === surahAtMount)) {
+          if (Array.isArray(pending) && pending.length && pending.every(a => a && a.surahId === surahAtMount)) {
             splitsDirtyRef.current = false;
             void vaultStore.saveSplitsForSurah(surahAtMount, pending).catch(() => { splitsDirtyRef.current = true; });
           }
         }
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
       try {
         const pendingDoc = editingDocTextRef.current;
         if (typeof pendingDoc === 'string' && pendingDoc !== docSavedRef.current) {
           docSavedRef.current = pendingDoc;
-          void vaultStore.saveDoc(keyAtMount, pendingDoc).catch(() => {});
+          void vaultStore.saveDoc(keyAtMount, pendingDoc).catch(() => { /* best-effort only; ignore */ });
         }
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
     };
   }, [selectedSurah, selectedMindmapKey, vaultStore]);
 
@@ -119,7 +119,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   // only discovered through `allMindmaps`, so standalone notes were invisible.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       const splits: Record<number, AnkiAnchor[]> = {};
       try {
         const all = await vaultStore.loadAllSplits();
@@ -128,7 +128,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           if (!Number.isFinite(sid) || !Array.isArray(arr) || arr.length === 0) continue;
           splits[sid] = arr as AnkiAnchor[];
         }
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
       if (Object.keys(splits).length === 0) {
         // Fallback for platforms where folder listing returns nothing
         for (let sid=1; sid<=114; sid++) {
@@ -142,7 +142,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         for (const [key, content] of Object.entries(stored || {})) {
           if (typeof content === 'string' && content.trim()) docs[normalizeStoreKey(key)] = content;
         }
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
       // Keys edited in this view whose file may not be flushed yet
       for (const key of Object.keys(allMindmaps)) {
         const normalized = normalizeStoreKey(key);
@@ -161,7 +161,6 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [vaultStore, allMindmaps, editingDocText, selectedMindmapKey]);
 
   const surah = getSurah(selectedSurah);
-  const [surahVerses, setSurahVerses] = useState<Verse[]>([]);
   // One-time Quran corpus download (fresh installs only): byte progress for
   // the loading gate, plus an error state with retry instead of a dead view.
   const [quranDownload, setQuranDownload] = useState<null | { downloaded: number; total: number | null }>(null);
@@ -169,11 +168,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [quranAttempt, setQuranAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       let ok = false;
       try {
         if (allVerses.length) {
-          if (!cancelled) { setSurahVerses(allVerses.filter(v=>v.surahId===selectedSurah)); setIsVersesLoaded(true); }
+          if (!cancelled) { setIsVersesLoaded(true); }
           return;
         }
         const verses = await getQuranVerses((downloaded, total) => {
@@ -183,12 +182,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         if (!verses.length) throw new Error('Quran data came back empty — check your connection and retry.');
         setQuranError(null);
         setAllVerses(verses);
-        setSurahVerses(verses.filter(v=>v.surahId===selectedSurah));
         ok = true;
       } catch (e) {
         if (!cancelled) {
           setAllVerses([]);
-          setSurahVerses([]);
           setQuranError(String((e as Error)?.message || e || 'Could not load Quran data.'));
         }
       }
@@ -210,7 +207,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     return { breaks, anchors: sorted };
   }, [localAnchors]);
 
-  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(()=>setToast(null),3000); }, []);
+  const showToast = useCallback((msg: string) => { setToast(msg); window.setTimeout(()=>setToast(null),3000); }, []);
 
   const mindmapOrder = useMemo(() => [...SURAHS.map(s => `surah-${s.id}`), 'meta-0', 'part-1', 'part-2', 'part-3', 'part-4', 'part-5', 'part-6', 'part-7'], []);
   const stepMindmap = useCallback((dir: 1 | -1) => {
@@ -308,7 +305,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           });
           setAllVerses(versesForExport);
           pushLog(`Loaded ${versesForExport.length} verses`);
-        } catch {}
+        } catch { /* best-effort only; ignore */ }
       }
       else pushLog(`Verses cached: ${versesForExport.length}`);
 
@@ -323,7 +320,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           if (!Number.isFinite(sid) || !Array.isArray(arr) || arr.length === 0) continue;
           fullSplits[sid] = arr as AnkiAnchor[];
         }
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
       if (Object.keys(fullSplits).length === 0) {
         for (let sid=1; sid<=114; sid++) {
           const arr = await vaultStore.loadSplitsForSurah(sid);
@@ -331,7 +328,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           if (sid % 20 === 0 || sid === 114) {
             updateProgress({ current: 5 + Math.round((sid/114)*25), status: `Loading splits ${sid}/114…` });
             // allow UI to repaint
-            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => window.setTimeout(r, 0));
           }
         }
       }
@@ -370,7 +367,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           const normalized = normalizeStoreKey(key);
           if (docsMap[normalized] === undefined) docsMap[normalized] = content;
         }
-      } catch {}
+      } catch { /* best-effort only; ignore */ }
       updateProgress({ current: 48, status: 'Building cards…' });
       const mindmapCards = buildMindmapCards(allMindmaps as any, docsMap);
       if (filteredAnchors.length===0 && mindmapCards.length===0) {
@@ -384,7 +381,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       updateProgress({ current: 60, status: `Rendering mindmaps & packaging…`, verseCards: cards.length, mindmapCards: mindmapCards.length });
       // Global partOrder + surahOrder from Obsidian settings → vault file meta/anki-export.json
       let exportPrefs: import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs | null = null;
-      try { exportPrefs = ankiExportPrefs ?? await vaultStore.loadAnkiExportPrefs(); } catch {}
+      try { exportPrefs = ankiExportPrefs ?? await vaultStore.loadAnkiExportPrefs(); } catch { /* best-effort only; ignore */ }
       const prefsSummary = exportPrefs ? `partOrder=${exportPrefs.partOrder} surahOrder=${exportPrefs.surahOrder}` : 'default partOrder=desc surahOrder=asc';
       pushLog(`Anki sort prefs: ${prefsSummary}`);
       // generateApkgBlob reports 0-100 for its internal phases (mindmap media 5-80), map to 60-96
@@ -414,10 +411,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       }
       // Trigger browser download of the .apkg blob.
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); // eslint-disable-line obsidianmd/prefer-create-el -- transient download element, not plugin UI
-      a.href = url;
+      const a = document.body.createEl('a', { href: url });
       a.download = 'quran-life-deck.apkg';
-      document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
@@ -425,15 +420,15 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       pushLog(`Download started: ${deckName}.apkg`);
       showToast(`Exported ${cards.length} verse cards + ${mindmapCards.length} mindmap cards`);
       // keep progress visible briefly then auto-close if user doesn't click Done
-      setTimeout(() => {
+      window.setTimeout(() => {
         setExportProgress(prev => prev && prev.current === 100 ? null : prev);
         setIsExporting(false);
       }, 2200);
       return;
-    } catch (e) { console.error(e); showToast('Export failed'); setExportProgress(prev => prev ? { ...prev, status: 'Failed — see console', logs: [...prev.logs, String((e as any)?.message || e)] } : null); setTimeout(()=>{ setExportProgress(null); }, 2500); }
+    } catch (e) { console.error(e); showToast('Export failed'); setExportProgress(prev => prev ? { ...prev, status: 'Failed — see console', logs: [...prev.logs, String((e as any)?.message || e)] } : null); window.setTimeout(()=>{ setExportProgress(null); }, 2500); }
     finally {
       // if already set to 100, let timeout close; otherwise ensure closed
-      setTimeout(()=>{ setExportProgress(prev => (prev && prev.current < 100 ? null : prev)); }, 3000);
+      window.setTimeout(()=>{ setExportProgress(prev => (prev && prev.current < 100 ? null : prev)); }, 3000);
       setIsExporting(false);
     }
   };
@@ -532,7 +527,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
         <div className="ql-export-row" style={{ display:'flex', gap:8, alignItems:'center' }}>
           <input value={deckName} onChange={e=>setDeckName(e.target.value)} placeholder="QuranLife::Review" style={{ flex:1, minWidth:0, padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }} />
-          <button onClick={handleExport} disabled={isExporting} style={{ padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1 }}>
+          <button onClick={() => void handleExport()} disabled={isExporting} style={{ padding:'8px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.9em', opacity:isExporting?0.7:1 }}>
             <Download size={16} /> {isExporting?'Exporting…':'Export to Anki'}
           </button>
         </div>
@@ -626,7 +621,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                 <FileText size={12}/> NOTES
               </span>
             </div>
-            <textarea value={editingDocText} onChange={e=>setEditingDocText(e.target.value)} onBlur={handleDocSave} placeholder="Notes…" style={{ width:'100%', minHeight:90, padding:'10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', lineHeight:1.5, resize:'vertical' }} />
+            <textarea value={editingDocText} onChange={e=>setEditingDocText(e.target.value)} onBlur={() => void handleDocSave()} placeholder="Notes…" style={{ width:'100%', minHeight:90, padding:'10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em', lineHeight:1.5, resize:'vertical' }} />
           </div>
       </div>
 
@@ -745,7 +740,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:0 }}>Removes <code style={{ background:'var(--background-secondary)', padding:'1px 4px', borderRadius:4, border:'1px solid var(--background-modifier-border)' }}>mindmaps/{selectedMindmapKey}.json</code> and keeps tombstone.</p>
             <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
               <button onClick={()=>setShowDeleteConfirm(false)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', cursor:'pointer' }}>Cancel</button>
-              <button onClick={handleDeleteMindmap} style={{ padding:'7px 14px', borderRadius:8, background:'var(--text-error)', color:'white', border:'none', cursor:'pointer', fontWeight:600 }}>Delete</button>
+              <button onClick={() => void handleDeleteMindmap()} style={{ padding:'7px 14px', borderRadius:8, background:'var(--text-error)', color:'white', border:'none', cursor:'pointer', fontWeight:600 }}>Delete</button>
             </div>
           </div>
         </div>

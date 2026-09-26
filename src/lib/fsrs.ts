@@ -9,9 +9,7 @@ import {
     State,
     generatorParameters,
     Card,
-    ReviewLog as FSRSReviewLog,
-    FSRS,
-    FSRSParameters
+    FSRS
 } from 'ts-fsrs';
 
 // ========================================
@@ -198,7 +196,7 @@ export function reviewCard(
 
     // Create log entry (snapshot of state BEFORE review)
     const log: ReviewLogEntry = {
-        id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         nodeId,
         timestamp: now.toISOString(),
         rating: remembered ? 'Good' : 'Again',

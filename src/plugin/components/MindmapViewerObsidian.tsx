@@ -42,7 +42,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
     ed.updateInstanceState({ isReadonly: true });
     ed.setCurrentTool('hand');
     const getObs = () => {
-      if (typeof document === 'undefined') return null as 'light' | 'dark' | null;
+      if (typeof document === 'undefined') return null;
       if (document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')) return 'dark';
       if (document.body.classList.contains('theme-light') || document.documentElement.classList.contains('theme-light')) return 'light';
       return null;
@@ -54,7 +54,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
       const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
       resolved = mqDark ? 'dark' : 'light';
     } else resolved = theme as 'light' | 'dark';
-    try { ed.user.updateUserPreferences({ colorScheme: resolved }); } catch {}
+    try { ed.user.updateUserPreferences({ colorScheme: resolved }); } catch { /* theme sync is best-effort; ignore */ }
     // Aggressive Zoom-to-Fit strategy — ported from web MindmapViewer.tsx:480.
     // Uses a tight inset (default zoomToFit pads 128px, leaving the map
     // floating in blank space) so the mindmap fills the viewer.
@@ -64,12 +64,12 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
         if (Array.isArray(shapes) ? shapes.length > 0 : true) {
           fitMindmapCameraTight(ed);
         }
-      } catch {}
+      } catch { /* zoom-to-fit is best-effort; ignore */ }
     };
     fit();
-    setTimeout(fit, 100);
-    setTimeout(fit, 300);
-    setTimeout(fit, 600);
+    window.setTimeout(fit, 100);
+    window.setTimeout(fit, 300);
+    window.setTimeout(fit, 600);
   }, [theme]);
 
   // Ported from web src/components/MindmapViewer.tsx:314 — show "Back to content" when canvas is panned to blank area
@@ -80,10 +80,10 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
     }
     const updateVisibility = () => {
       try {
-        const shapeIds = (editor as any).getCurrentPageShapeIds?.();
-        const culledShapes = (editor as any).getCulledShapes?.();
-        const total = (shapeIds as any)?.size ?? 0;
-        const culled = (culledShapes as any)?.size ?? 0;
+        const shapeIds = editor.getCurrentPageShapeIds?.();
+        const culledShapes = editor.getCulledShapes?.();
+        const total = shapeIds?.size ?? 0;
+        const culled = culledShapes?.size ?? 0;
         setShowBackToContent(total > 0 && total === culled);
       } catch {
         setShowBackToContent(false);
@@ -100,10 +100,10 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
 
   useEffect(() => {
     if (editor) {
-      try { fitMindmapCameraTight(editor); } catch {}
+      try { fitMindmapCameraTight(editor); } catch { /* zoom-to-fit is best-effort; ignore */ }
       // also keep theme in sync when theme changes after mount
       const getObs = () => {
-        if (typeof document === 'undefined') return null as 'light' | 'dark' | null;
+        if (typeof document === 'undefined') return null;
         if (document.body.classList.contains('theme-dark') || document.documentElement.classList.contains('theme-dark')) return 'dark';
         if (document.body.classList.contains('theme-light') || document.documentElement.classList.contains('theme-light')) return 'light';
         return null;
@@ -115,7 +115,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
         const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
         resolved = mqDark ? 'dark' : 'light';
       } else resolved = theme as 'light' | 'dark';
-      try { editor.user.updateUserPreferences({ colorScheme: resolved }); } catch {}
+      try { editor.user.updateUserPreferences({ colorScheme: resolved }); } catch { /* theme sync is best-effort; ignore */ }
     }
   }, [snapshot, editor, theme]);
   if (!snapshot) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6, border: '1px solid var(--background-modifier-border)', borderRadius: 8 }}>No snapshot</div>;
@@ -128,7 +128,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
       {showBackToContent && (
         <button
           onClick={() => {
-            try { fitMindmapCameraTight(editor as any); } catch {}
+            try { fitMindmapCameraTight(editor); } catch { /* zoom-to-fit is best-effort; ignore */ }
           }}
           style={{
             position: 'absolute',

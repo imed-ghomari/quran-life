@@ -44,7 +44,7 @@ export function loadAnkiMindmaps(): Stored {
         };
       } else {
         const key = String(v?.key || k);
-        const kind = (v?.kind as any) || (key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : key.startsWith('cluster-') ? 'cluster' : 'surah');
+        const kind = v?.kind || (key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : key.startsWith('cluster-') ? 'cluster' : 'surah');
         out[key] = {
           key,
           kind,
@@ -71,8 +71,8 @@ export function saveAnkiMindmapByKey(key: string, data: Partial<AnkiMindmap>) {
   all[key] = next;
   try {
     window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all));
-  } catch {}
-  try { removeDeletedMindmapKey(key); } catch {}
+  } catch { /* best-effort only; ignore */ }
+  try { removeDeletedMindmapKey(key); } catch { /* best-effort only; ignore */ }
   return all;
 }
 
@@ -99,16 +99,16 @@ export function deleteAnkiMindmap(surahId: number) {
   const key = makeKey('surah', surahId);
   const all = loadAnkiMindmaps();
   delete all[key];
-  try { window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch {}
-  try { addDeletedMindmapKey(key); } catch {}
+  try { window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch { /* best-effort only; ignore */ }
+  try { addDeletedMindmapKey(key); } catch { /* best-effort only; ignore */ }
   return all;
 }
 
 export function deleteAnkiMindmapByKey(key: string) {
   const all = loadAnkiMindmaps();
   delete all[key];
-  try { window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch {}
-  try { addDeletedMindmapKey(key); } catch {}
+  try { window.localStorage.setItem(LS_MINDMAPS_KEY, JSON.stringify(all)); } catch { /* best-effort only; ignore */ }
+  try { addDeletedMindmapKey(key); } catch { /* best-effort only; ignore */ }
   return all;
 }
 
@@ -124,10 +124,10 @@ const LS_DELETED_KEY = 'quran-life:anki:deletedMindmaps:v1';export function load
 export function addDeletedMindmapKey(key: string) {
   const s = loadDeletedMindmapKeys();
   s.add(key);
-  try { window.localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch {}
+  try { window.localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch { /* best-effort only; ignore */ }
 }
 export function removeDeletedMindmapKey(key: string) {
   const s = loadDeletedMindmapKeys();
   s.delete(key);
-  try { window.localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch {}
+  try { window.localStorage.setItem(LS_DELETED_KEY, JSON.stringify([...s])); } catch { /* best-effort only; ignore */ }
 }

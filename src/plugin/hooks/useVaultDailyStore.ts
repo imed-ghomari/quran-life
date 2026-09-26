@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { DEFAULT_DAILY_TARGET_MINUTES, clampDailyTargetMinutes } from '@/lib/dailyPortionUtils';
-import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from '@/lib/types';
+import { ALL_QURAN_PART, QuranPart } from '@/lib/types';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 
 const { useCallback, useEffect, useMemo, useState } = React;
@@ -69,38 +69,6 @@ function parseSettings(raw: any): LocalDailySettings {
   const skippedSurahs = normalizeSkippedSurahs(raw.skippedSurahs);
   return { activePart, dailyTargetMinutes, dailyPortionMode, dailyReadingStyle, skippedSurahs, updatedAt: raw.updatedAt };
 }
-function parseProgress(raw: any): ListeningProgressEntryLocal[] {
-  if (!raw || typeof raw !== 'object') return [];
-  // vault stores progress as { [partId]: entry } or array? support both
-  if (Array.isArray(raw)) {
-    return raw.filter((e: any) => Number.isFinite(Number(e.partId))).map((e: any) => ({
-      partId: Number(e.partId),
-      lastVerseIndex: Number.isFinite(Number(e.lastVerseIndex)) ? Math.max(0, Math.trunc(Number(e.lastVerseIndex))) : 0,
-      nextStartVerseKey: typeof e.nextStartVerseKey === 'string' ? e.nextStartVerseKey      : undefined,
-      cycles: Number.isFinite(Number(e.cycles)) ? Number(e.cycles) : 0,
-      updatedAt: typeof e.updatedAt === 'string' ? e.updatedAt : undefined,
-      ...(('completedOnDay' in e) ? { completedOnDay: typeof e.completedOnDay === 'string' ? e.completedOnDay : null } : {}),
-      ...(('undo' in e) ? { undo: (e.undo && typeof e.undo === 'object') ? e.undo : null } : {}),
-    }));
-  }
-  // object map: { "1": {...}, "2": {...} }
-  const entries: ListeningProgressEntryLocal[] = [];
-  for (const [k, v] of Object.entries(raw)) {
-    const partId = Number(k);
-    if (!Number.isFinite(partId)) continue;
-    const e: any = v;
-    entries.push({
-      partId,
-      lastVerseIndex: Number.isFinite(Number(e.lastVerseIndex)) ? Math.max(0, Math.trunc(Number(e.lastVerseIndex))) : 0,
-      nextStartVerseKey: typeof e.nextStartVerseKey === 'string' ? e.nextStartVerseKey : undefined,
-      cycles: Number.isFinite(Number(e.cycles)) ? Number(e.cycles) : 0,
-      updatedAt: typeof e.updatedAt === 'string' ? e.updatedAt : undefined,
-      ...(('completedOnDay' in e) ? { completedOnDay: typeof e.completedOnDay === 'string' ? e.completedOnDay : null } : {}),
-      ...(('undo' in e) ? { undo: (e.undo && typeof e.undo === 'object') ? e.undo : null } : {}),
-    });
-  }
-  return entries;
-}
 
 // Hook that mirrors useLocalDailySettings but backed by VaultStore (Resilio-synced)
 export function useVaultDailySettings(vaultStore: VaultStore) {
@@ -115,7 +83,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       const raw = await vaultStore.loadSettings<any>(null as any);
       if (cancelled) return;
       setSettingsState(raw ? parseSettings(raw) : { ...DEFAULT_SETTINGS });
@@ -142,7 +110,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
     return () => {
       window.removeEventListener('quran-life:daily-settings-changed', handler as any);
       document.removeEventListener('visibilitychange', visHandler);
-      if (ref && app?.vault?.offref) try { app.vault.offref(ref); } catch {}
+      if (ref && app?.vault?.offref) try { app.vault.offref(ref); } catch { /* best-effort only; ignore */ }
     };
   }, [vaultStore, reload]);
 
@@ -154,7 +122,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) next.activePart = prev.activePart;
       const payload = { ...next, updatedAt: new Date().toISOString() };
       void vaultStore.saveSettings(payload).then(() => {
-        try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch {}
+        try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch { /* best-effort only; ignore */ }
       });
       return payload;
     });
@@ -164,7 +132,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
     const next = { ...DEFAULT_SETTINGS, updatedAt: new Date().toISOString() };
     setSettingsState(next);
     await vaultStore.saveSettings(next);
-    try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch {}
+    try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch { /* best-effort only; ignore */ }
   }, [vaultStore]);
 
   return useMemo(() => ({ settings, saveSettings, resetSettings, isLoading, reload }), [settings, saveSettings, resetSettings, isLoading, reload]);
@@ -174,41 +142,9 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
   const [progress, setProgress] = useState<ListeningProgressEntryLocal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const reload = useCallback(async () => {
-    // Load from split files: daily/progress/part-*.json + legacy daily/progress.json
-    // For now load legacy single file first, then per-part
-    const legacy = await vaultStore.loadSettings<any>(null as any); // settings.json not progress
-    // Try to load progress via vaultStore.loadProgress for each part 1..8
-    const entries: ListeningProgressEntryLocal[] = [];
-    for (let partId = 1; partId <= 8; partId++) {
-      const data = await vaultStore.loadProgress(partId);
-      if (data && typeof data === 'object') {
-        // data is single entry object { partId, lastVerseIndex, ... } or array
-        if (Array.isArray(data)) {
-          for (const e of data) if (Number(e.partId) === partId) entries.push(e);
-        } else if (Number(data.partId) === partId || data.lastVerseIndex !== undefined) {
-          entries.push({
-            partId,
-            lastVerseIndex: Number(data.lastVerseIndex) || 0,
-            nextStartVerseKey: data.nextStartVerseKey,
-            cycles: Number(data.cycles) || 0,
-            updatedAt: data.updatedAt,
-            ...(('completedOnDay' in data) ? { completedOnDay: typeof data.completedOnDay === 'string' ? data.completedOnDay : null } : {}),
-            ...(('undo' in data) ? { undo: (data.undo && typeof data.undo === 'object') ? data.undo : null } : {}),
-          });
-        }
-      }
-    }
-    // Fallback: try legacy dailyProgress path if exists (single json array)
-    if (entries.length === 0) {
-      const rawLegacy = await (vaultStore as any).app?.vault?.getAbstractFileByPath ? null : null;
-    }
-    return entries;
-  }, [vaultStore]);
-
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       // Try to read QuranLife/daily/progress.json if exists (backward compat)
       // and also per-part files
       const perPart: ListeningProgressEntryLocal[] = [];
@@ -220,8 +156,6 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
           else if (typeof entry === 'object' && (entry as any).lastVerseIndex !== undefined) perPart.push({ partId, ...(entry as any) });
         }
       }
-      // Also try legacy combined file at daily/progress.json (old vaultAdapter used single file)
-      const legacyCombined = await vaultStore.loadSettings<any>(null as any); // not needed
       if (!cancelled) {
         setProgress(perPart.length ? perPart : []);
         setIsLoading(false);
@@ -285,7 +219,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
         const app: any = (vaultStore as any).app;
         const path = `QuranLife/daily/progress/part-${pid}.json`;
         const file = app?.vault?.getAbstractFileByPath?.(path);
-        if (file) try { await app.vault.delete(file); } catch {}
+        if (file) try { await app.vault.delete(file); } catch { /* best-effort only; ignore */ }
       }
       return;
     }

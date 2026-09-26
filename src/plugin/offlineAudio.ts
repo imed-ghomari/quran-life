@@ -1,9 +1,9 @@
-import { App, TFile, TFolder, normalizePath, Notice } from "obsidian";
-import { SURAHS, getSurahsByPart } from "@/lib/quranData";
+import { App, TFile, TFolder, normalizePath } from "obsidian";
+import { getSurahsByPart } from "@/lib/quranData";
 import { ACTIVE_PART_OPTIONS, QuranPart } from "@/lib/types";
-import { Reciter, loadRecitationData, getAudioInfoForVerse, buildAyahAudioUrl } from "@/lib/audio";
+import { Reciter, loadRecitationData, buildAyahAudioUrl } from "@/lib/audio";
 import { getObsidianApp } from "@/lib/obsidianApp";
-import { ensureFolder, isHiddenPath } from "./storage/vaultAdapter";
+import { ensureFolder } from "./storage/vaultAdapter";
 
 // Offline audio is stored inside plugin folder (not vault root) so only one folder to sync.
 // Works on mobile as well because we use adapter directly for hidden paths.
@@ -61,7 +61,7 @@ async function adapterStatSize(app: App, path: string): Promise<number | null> {
       const st = await adapter.stat(normalized);
       if (st && typeof st.size === "number") return st.size;
       if (st && typeof st.stat?.size === "number") return st.stat.size;
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
   }
   // fallback: readBinary length
   if (adapter?.readBinary) {
@@ -69,7 +69,7 @@ async function adapterStatSize(app: App, path: string): Promise<number | null> {
       const buf = await adapter.readBinary(normalized);
       if (buf instanceof ArrayBuffer) return buf.byteLength;
       if (buf?.byteLength) return buf.byteLength;
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
   }
   return null;
 }
@@ -83,13 +83,13 @@ async function adapterRemoveNoTrash(app: App, path: string): Promise<void> {
       if (adapter.exists && !(await adapter.exists(normalized))) return;
       await adapter.remove(normalized);
       return;
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
   }
   // Fallback: try vault.delete with force? but avoid trash – use adapter if possible
   try {
     const file: any = app.vault.getAbstractFileByPath(normalized);
     if (file) await app.vault.delete(file, true);
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
 }
 
 async function adapterWriteBinary(app: App, path: string, data: ArrayBuffer): Promise<void> {
@@ -97,7 +97,7 @@ async function adapterWriteBinary(app: App, path: string, data: ArrayBuffer): Pr
   await ensureFolder(app, normalized.split("/").slice(0, -1).join("/") || "/");
   const adapter: any = (app as any).vault?.adapter;
   if (adapter?.writeBinary) {
-    try { await adapter.writeBinary(normalized, data); return; } catch {}
+    try { await adapter.writeBinary(normalized, data); return; } catch { /* best-effort only; ignore */ }
   }
   if (adapter?.write) {
     // fallback: write as binary via write (may corrupt, but try)
@@ -110,33 +110,12 @@ async function adapterWriteBinary(app: App, path: string, data: ArrayBuffer): Pr
       // @ts-ignore
       await adapter.write(normalized, binary);
       return;
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
   }
   // last resort: use vault binary if supported
-  try {
-    // @ts-ignore
-    if (app.vault.createBinary) await (app.vault as any).createBinary(normalized, data);
-    else throw new Error("no binary write");
-  } catch (e) {
-    throw e;
-  }
-}
-
-async function adapterListFiles(app: App, dirPath: string): Promise<string[]> {
-  const normalized = normalizePath(dirPath);
-  const adapter: any = (app as any).vault?.adapter;
-  if (adapter?.list) {
-    try {
-      const listed = await adapter.list(normalized);
-      if (Array.isArray(listed?.files)) return listed.files;
-      if (Array.isArray(listed)) return listed;
-    } catch {}
-  }
-  const folder: any = app.vault.getAbstractFileByPath(normalized);
-  if (folder && folder.children) {
-    return folder.children.filter((c: any) => c instanceof TFile).map((c: any) => c.path);
-  }
-  return [];
+  // @ts-ignore
+  if (app.vault.createBinary) await (app.vault as any).createBinary(normalized, data);
+  else throw new Error("no binary write");
 }
 
 async function listFilesRecursive(app: App, dir: string, out: string[] = []): Promise<string[]> {
@@ -144,7 +123,7 @@ async function listFilesRecursive(app: App, dir: string, out: string[] = []): Pr
   const adapter: any = (app as any).vault?.adapter;
   let entries: { files: string[]; folders: string[] } | null = null;
   if (adapter?.list) {
-    try { entries = await adapter.list(normalized); } catch {}
+    try { entries = await adapter.list(normalized); } catch { /* best-effort only; ignore */ }
   }
   if (entries && Array.isArray(entries.files)) {
     for (const f of entries.files) out.push(f);
@@ -579,7 +558,7 @@ export async function downloadPartAudio(
     // the map cannot be fetched (this is what used to throw
     // "Failed to load ayah recitation map" on mobile).
     let ayahData: any = null;
-    try { ayahData = await loadRecitationData(reciter, 1, app); } catch {}
+    try { ayahData = await loadRecitationData(reciter, 1, app); } catch { /* best-effort only; ignore */ }
     const ayahMap: Record<string, any> | null = ayahData?.verses ?? null;
     if (!ayahMap && !reciter.ayahAudioBase) throw new Error("Failed to load ayah recitation map");
     for (const sh of surahs) {
@@ -618,7 +597,7 @@ export async function downloadPartAudio(
         try {
           const basmalaData: any = await loadRecitationData(reciter, 1, app);
           basmalaUrl = basmalaData?.verses?.["1:1"]?.audio_url ?? null;
-        } catch {}
+        } catch { /* best-effort only; ignore */ }
         if (!basmalaUrl) basmalaUrl = buildAyahAudioUrl(reciter, 1, 1);
         if (basmalaUrl) tasks.push({ type: "ayah", surahId: 1, ayahId: 1, remoteUrl: basmalaUrl, offlinePath: basmalaPath, label: "Basmala (1:1)" });
       }
@@ -675,7 +654,7 @@ export async function downloadPartAudio(
       if (String((e as any)?.message || "").includes("aborted")) throw e;
       if (attempt < 3) {
         // exponential backoff 1s, 2s
-        await new Promise(r => setTimeout(r, attempt * 1000));
+        await new Promise(r => window.setTimeout(r, attempt * 1000));
         if (aborted || opts.signal?.aborted) return;
         return downloadOne(task, attempt + 1);
       }
@@ -692,7 +671,7 @@ export async function downloadPartAudio(
       if (idx >= tasks.length) break;
       const task = tasks[idx];
       // stagger start
-      if (idx !== 0 && delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+      if (idx !== 0 && delayMs > 0) await new Promise(r => window.setTimeout(r, delayMs));
       if (aborted || opts.signal?.aborted) break;
       await downloadOne(task);
     }
@@ -755,9 +734,9 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
     if (remaining.length === 0) {
       // remove empty dir via adapter
       const adapter: any = (app as any).vault?.adapter;
-      if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, false); } catch {}
+      if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, false); } catch { /* best-effort only; ignore */ }
     }
-  } catch {}
+  } catch { /* best-effort only; ignore */ }
 
   return { deletedFiles, freedBytes };
 }
@@ -781,8 +760,8 @@ export async function deleteAllOfflineAudioForReciter(reciterId: string, appOver
   // try rmdir
   try {
     const adapter: any = (app as any).vault?.adapter;
-    if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, true); } catch {}
-  } catch {}
+    if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, true); } catch { /* best-effort only; ignore */ }
+  } catch { /* best-effort only; ignore */ }
   return { deletedFiles, freedBytes };
 }
 
@@ -806,7 +785,7 @@ async function getOfflineBlobUrl(app: App, path: string): Promise<string | null>
   try {
     let buf: ArrayBuffer | null = null;
     if (adapter?.readBinary) {
-      try { buf = toArrayBuffer(await adapter.readBinary(normalized)); } catch {}
+      try { buf = toArrayBuffer(await adapter.readBinary(normalized)); } catch { /* best-effort only; ignore */ }
     }
     if (!buf || !(buf instanceof ArrayBuffer) || buf.byteLength === 0) {
       // fallback: try adapter.read as binary string -> convert
@@ -818,7 +797,7 @@ async function getOfflineBlobUrl(app: App, path: string): Promise<string | null>
             for (let i = 0; i < txt.length; i++) arr[i] = txt.charCodeAt(i) & 0xff;
             buf = arr.buffer;
           }
-        } catch {}
+        } catch { /* best-effort only; ignore */ }
       }
     }
     if (!buf || !(buf instanceof ArrayBuffer) || buf.byteLength === 0) return null;
@@ -833,7 +812,7 @@ export function revokeOfflineBlobCacheForPath(path: string): void {
   const normalized = normalizePath(path);
   const url = offlineBlobCache.get(normalized);
   if (url) {
-    try { URL.revokeObjectURL(url); } catch {}
+    try { URL.revokeObjectURL(url); } catch { /* best-effort only; ignore */ }
     offlineBlobCache.delete(normalized);
   }
 }
@@ -865,7 +844,7 @@ export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: num
   if (blobUrl) return blobUrl;
   const adapter: any = (app as any).vault?.adapter;
   if (adapter?.getResourcePath) {
-    try { return adapter.getResourcePath(p); } catch {}
+    try { return adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
   }
   try { return (app.vault as any).adapter.getResourcePath(p); } catch { return null; }
 }
@@ -881,9 +860,9 @@ export async function getOfflineAudioUrlForAyah(reciterId: string, surahId: numb
       if (blobUrl) return blobUrl;
       const adapter: any = (app as any).vault?.adapter;
       if (adapter?.getResourcePath) {
-        try { return adapter.getResourcePath(p); } catch {}
+        try { return adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
       }
-      try { return (app.vault as any).adapter.getResourcePath(p); } catch {}
+      try { return (app.vault as any).adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
     }
   }
   return null;

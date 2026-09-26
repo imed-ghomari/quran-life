@@ -110,7 +110,7 @@ export function buildMindmapCards(
   for (const [key, val] of Object.entries(mindmaps)) {
     if (!val?.snapshot) continue;
     // Only include surah/part/meta that have a mindmap (snapshot)
-    const kind = (val.kind as any) || (key.startsWith('surah-') ? 'surah' : key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : 'surah');
+    const kind = val.kind || (key.startsWith('surah-') ? 'surah' : key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : 'surah');
     if (!['surah', 'part', 'meta'].includes(kind)) continue;
 
     let title = '';
@@ -150,7 +150,7 @@ export function buildMindmapCards(
     cards.push({
       id: `ql-mindmap-${key}`,
       key,
-      kind: kind as any,
+      kind,
       surahId,
       partId,
       title,

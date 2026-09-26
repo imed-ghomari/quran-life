@@ -1,5 +1,4 @@
 
-import { Verse } from './types';
 import { clientEnv } from './env/client';
 import { getObsidianApp, isObsidianEnv } from './obsidianApp';
 
@@ -236,34 +235,23 @@ async function fetchViaObsidianRequestUrl(url: string, appOverride?: any): Promi
             if (res.json !== undefined && res.json !== null) {
                 // Obsidian requestUrl returns parsed json if content-type is json
                 if (typeof res.json === 'object') return res.json;
-                try { return JSON.parse(res.json); } catch {}
+                try { return JSON.parse(res.json); } catch { /* best-effort only; ignore */ }
             }
             if (typeof res.text === 'string' && res.text.trim()) {
-                try { return JSON.parse(res.text); } catch {}
+                try { return JSON.parse(res.text); } catch { /* best-effort only; ignore */ }
             }
             if (res.arrayBuffer) {
                 try {
                     const txt = new TextDecoder().decode(res.arrayBuffer);
                     if (txt.trim()) return JSON.parse(txt);
-                } catch {}
+                } catch { /* best-effort only; ignore */ }
             }
         }
-    } catch {}
+    } catch { /* best-effort only; ignore */ }
     return null;
 }
 
 const RECITATION_SITE_BASES = ['https://quran-life.org'];
-
-function recitationSiteBases(): string[] {
-    const bases = [...RECITATION_SITE_BASES];
-    try {
-        const origin = typeof window !== 'undefined' ? (window as any)?.location?.origin : '';
-        if (origin && !origin.startsWith('app://') && !origin.startsWith('capacitor://') && !origin.startsWith('file://')) {
-            bases.unshift(origin);
-        }
-    } catch {}
-    return bases;
-}
 
 /**
  * Resolve a bundled/public JSON (recitations, segments…) from whichever source
@@ -280,7 +268,7 @@ function recitationSiteBases(): string[] {
 // reject so callers fall through to the next source / graceful error.
 async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<any | null> {
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+    const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
     try {
         const res = await fetch(url, { signal: ctrl?.signal as any });
         if (!res.ok) return null;
@@ -288,7 +276,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<any
     } catch {
         return null;
     } finally {
-        if (timer) clearTimeout(timer);
+        if (timer) window.clearTimeout(timer);
     }
 }
 async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any): Promise<any | null> {
@@ -312,9 +300,9 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any)
                     if (adapter.exists && !(await adapter.exists(cand))) continue;
                     const raw = await adapter.read(cand);
                     if (raw && raw.trim()) {
-                        try { return JSON.parse(raw); } catch {}
+                        try { return JSON.parse(raw); } catch { /* best-effort only; ignore */ }
                     }
-                } catch {}
+                } catch { /* best-effort only; ignore */ }
             }
             // 2) via getResourcePath -> app:// URL
             if (adapter.getResourcePath) {
@@ -324,7 +312,7 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any)
                         if (!resourceUrl) continue;
                         const data = await fetchJsonWithTimeout(resourceUrl);
                         if (data) return data;
-                    } catch {}
+                    } catch { /* best-effort only; ignore */ }
                 }
             }
         }
@@ -531,7 +519,7 @@ export async function resolveAudioUrlProxied(url: string, appOverride?: any): Pr
         // are real) but never unbounded, so playback can't hang forever.
         const res: any = await Promise.race([
             req({ url, method: 'GET' }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('audio download timeout')), 120000)),
+            new Promise((_, reject) => window.setTimeout(() => reject(new Error('audio download timeout')), 120000)),
         ]);
         const responseBuffer = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
         const buf: ArrayBuffer | null = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
