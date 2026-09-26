@@ -1,4 +1,0 @@
-interface:
-  display_name: "UI Design System"
-  short_description: "Generate tokens and UI system specs"
-  default_prompt: "Use $ui-design-system to generate design tokens, spacing scales, component system rules, and developer handoff artifacts."

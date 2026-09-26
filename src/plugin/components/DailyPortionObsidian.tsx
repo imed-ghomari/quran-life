@@ -45,6 +45,10 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
 
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
   const [isVersesLoaded, setIsVersesLoaded] = useState(false);
+  // One-time Quran corpus download (fresh installs only): progress + retry.
+  const [quranDownload, setQuranDownload] = useState<null | { downloaded: number; total: number | null }>(null);
+  const [quranError, setQuranError] = useState<string | null>(null);
+  const [quranAttempt, setQuranAttempt] = useState(0);
   const [todaysPortion, setTodaysPortion] = useState<Verse[]>([]);
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [highlightedWordIndex, setHighlightedWordIndex] = useState<number>(-1);
@@ -60,18 +64,30 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let ok = false;
       try {
-        const verses = await getQuranVerses();
+        const verses = await getQuranVerses((downloaded, total) => {
+          if (!cancelled) setQuranDownload({ downloaded, total });
+        });
         if (cancelled) return;
+        if (!verses.length) throw new Error('Quran data came back empty — check your connection and retry.');
+        setQuranError(null);
         setAllVerses(verses);
-      } catch {
-        if (!cancelled) setAllVerses([]);
+        ok = true;
+      } catch (e) {
+        if (!cancelled) {
+          setAllVerses([]);
+          setQuranError(String((e as Error)?.message || e || 'Could not load Quran data.'));
+        }
       } finally {
-        if (!cancelled) setIsVersesLoaded(true);
+        if (!cancelled) {
+          setQuranDownload(null);
+          if (ok) setIsVersesLoaded(true);
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [quranAttempt]);
 
   const activeProgress = useMemo(() => {
     return listeningProgress.find(p => p.partId === settings.activePart);
@@ -338,18 +354,42 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
     } catch { showToast('Open Settings → Quran Life → Daily Portion'); }
   }, [vaultStore, showToast]);
 
-  if (!isLoaded) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', flexDirection:'column', gap:10, padding:24 }}>
-      <div style={{ width:28, height:28, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
-      <span style={{ fontSize:'0.9em', color:'var(--text-muted)' }}>Loading…</span>
-    </div>
-  );
+  if (!isLoaded) {
+    const pct = quranDownload && quranDownload.total
+      ? Math.min(99, Math.round((quranDownload.downloaded / quranDownload.total) * 100))
+      : null;
+    // Verses failed and nothing else is still working: show the error with
+    // retry instead of a stuck spinner.
+    if (quranError && !quranDownload) return (
+      <div style={{ padding:24, textAlign:'center', maxWidth:520, margin:'0 auto' }}>
+        <div style={{ padding:'20px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)' }}>
+          <p style={{ fontWeight:600, margin:'0 0 6px 0', color:'var(--text-normal)' }}>Quran data couldn't load</p>
+          <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:'0 0 12px 0' }}>{quranError} First launch needs internet once to fetch the Quran text — afterwards everything works offline.</p>
+          <button onClick={() => { setQuranError(null); setQuranAttempt(a => a + 1); }} style={{ marginTop:14, padding:'6px 14px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--interactive-accent)', color:'var(--text-on-accent)', cursor:'pointer', fontWeight:600 }}>Retry</button>
+        </div>
+      </div>
+    );
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'40vh', flexDirection:'column', gap:10, padding:24 }}>
+        <div style={{ width:28, height:28, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+        <span style={{ fontSize:'0.9em', color:'var(--text-muted)' }}>
+          {quranDownload
+            ? `Downloading Quran data (one-time)${pct !== null ? ` — ${pct}%` : quranDownload.downloaded > 0 ? ` — ${(quranDownload.downloaded / 1024 / 1024).toFixed(1)} MB` : '…'}` : 'Loading…'}
+        </span>
+        {quranDownload && (
+          <div style={{ width:'100%', maxWidth:320, height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' }}>
+            <div style={{ width: pct !== null ? `${pct}%` : '30%', height:'100%', background:'var(--interactive-accent)', borderRadius:999, transition:'width 0.3s ease' }} />
+          </div>
+        )}
+      </div>
+    );
+  }
   if (allVerses.length === 0) return (
     <div style={{ padding:24, textAlign:'center', maxWidth:520, margin:'0 auto' }}>
       <div style={{ padding:'20px', border:'1px solid var(--background-modifier-border)', borderRadius:12, background:'var(--background-secondary)' }}>
         <p style={{ fontWeight:600, margin:'0 0 6px 0', color:'var(--text-normal)' }}>Quran data not found</p>
-        <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:'0 0 12px 0' }}>Missing <code>qpc-hafs-word-by-word.json</code></p>
-        <button onClick={()=>window.location.reload()} style={{ marginTop:14, padding:'6px 14px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--interactive-accent)', color:'var(--text-on-accent)', cursor:'pointer', fontWeight:600 }}>Reload</button>
+        <p style={{ fontSize:'0.85em', color:'var(--text-muted)', margin:'0 0 12px 0' }}>{quranError || 'Missing qpc-hafs-word-by-word.json'} First launch needs internet once to fetch the Quran text — afterwards everything works offline.</p>
+        <button onClick={() => { setQuranError(null); setQuranAttempt(a => a + 1); }} style={{ marginTop:14, padding:'6px 14px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--interactive-accent)', color:'var(--text-on-accent)', cursor:'pointer', fontWeight:600 }}>Retry</button>
       </div>
     </div>
   );

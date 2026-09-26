@@ -42,6 +42,11 @@ const context = await esbuild.context({
   ],
   format: "cjs",
   target: "es2018",
+  // Bare specifier so tsc (which can't load .wasm) falls back to the
+  // `declare module '*.wasm'` wildcard while esbuild resolves + inlines it.
+  alias: {
+    "quranlife-sql-wasm.wasm": "./public/sql-wasm.wasm",
+  },
   // Obsidian Mobile's WebView can load React itself, but its bundled module
   // loader does not reliably preserve the lazy react/jsx-runtime bindings.
   // Use the classic transform for plugin-owned TSX so views call the already

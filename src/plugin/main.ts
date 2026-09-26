@@ -5,6 +5,7 @@ import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
 import { registerVaultRecitationCache } from "./recitationCache";
 import { setObsidianApp } from "@/lib/obsidianApp";
+import "./sqlWasmBundle"; // inlines sql-wasm.wasm into main.js for offline Anki export
 export const VIEW_TYPE_MINDMAP = "quran-life-mindmap"; // deprecated alias, now merged into Anki Deck
 
 /**

@@ -5,55 +5,86 @@
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
 import { getObsidianApp } from './obsidianApp';
 
-// Download a text asset with a hard timeout. Prefers Obsidian `requestUrl`
-// (CORS-free, works from the app:// origin) with plain fetch as fallback.
-async function downloadTextWithTimeout(url: string, app: any, timeoutMs: number): Promise<string> {
-    const viaRequestUrl = (async (): Promise<string | null> => {
-        try {
-            let req: any = null;
-            try {
-                const obs: any = await import('obsidian');
-                req = obs.requestUrl;
-            } catch {
-                req = (typeof window !== 'undefined' && (window as any).requestUrl) || null;
-            }
-            if (!req) return null;
-            const res: any = await req({ url, method: 'GET' });
-            if (typeof res.text === 'string' && res.text) return res.text;
-            if (res.arrayBuffer) {
-                const buf = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
-                if (buf) return new TextDecoder().decode(buf instanceof ArrayBuffer ? buf : buf.buffer ?? buf);
-            }
-            return null;
-        } catch {
-            return null;
+// Progress callback for the one-time Quran corpus download. Called ONLY when
+// an actual network download happens (vault/session reads are silent).
+// `totalBytes` is null when the transport can't report length.
+export type QuranDownloadProgress = (downloadedBytes: number, totalBytes: number | null) => void;
+
+// Download a text asset with streamed byte progress + hard timeout. Prefers
+// Obsidian `requestUrl` (CORS-free from the app:// origin, no progress
+// available → reports indeterminate) with progress-reporting fetch fallback.
+async function downloadTextWithProgress(
+  url: string,
+  app: any,
+  timeoutMs: number,
+  onProgress?: QuranDownloadProgress
+): Promise<string> {
+  try {
+    let req: any = null;
+    try {
+      const obs: any = await import('obsidian');
+      req = obs.requestUrl;
+    } catch {
+      req = (typeof window !== 'undefined' && (window as any).requestUrl) || null;
+    }
+    if (req) {
+      onProgress?.(0, null);
+      const res: any = await Promise.race([
+        req({ url, method: 'GET' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('requestUrl timeout')), timeoutMs)),
+      ]);
+      if (typeof res.text === 'string' && res.text) {
+        onProgress?.(res.text.length, res.text.length);
+        return res.text;
+      }
+      if (res.arrayBuffer) {
+        const buf = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
+        if (buf) {
+          const ab = buf instanceof ArrayBuffer ? buf : (buf.buffer ?? buf);
+          const text = new TextDecoder().decode(ab);
+          onProgress?.(text.length, text.length);
+          return text;
         }
-    })();
-    const viaFetch = (async (): Promise<string | null> => {
-        try {
-            const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-            const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
-            try {
-                const res = await fetch(url, { signal: ctrl?.signal as any });
-                if (!res.ok) return null;
-                return await res.text();
-            } finally {
-                if (timer) clearTimeout(timer);
-            }
-        } catch {
-            return null;
-        }
-    })();
-    const winner = await Promise.race([
-        (async () => {
-            const t = await viaRequestUrl;
-            if (t) return t;
-            return viaFetch;
-        })(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
-    ]);
-    if (typeof winner === 'string' && winner) return winner;
-    throw new Error(`Timed out downloading ${url}`);
+      }
+    }
+  } catch {
+    // fall through to fetch
+  }
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch {} }, timeoutMs) : null;
+  try {
+    const res = await fetch(url, { signal: ctrl?.signal as any });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    const total = Number(res.headers.get('content-length')) || null;
+    if (!res.body || typeof (res.body as any).getReader !== 'function') {
+      const text = await res.text();
+      onProgress?.(text.length, total ?? text.length);
+      return text;
+    }
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+    onProgress?.(0, total);
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        loaded += value.byteLength;
+        onProgress?.(loaded, total);
+      }
+    }
+    try { reader.releaseLock(); } catch {}
+    const merged = new Uint8Array(loaded);
+    let off = 0;
+    for (const c of chunks) {
+      merged.set(c, off);
+      off += c.byteLength;
+    }
+    return new TextDecoder().decode(merged);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 // Persist text into the vault best-effort (creates parent folders). Used to
@@ -327,7 +358,7 @@ async function readQuranResponseFromCache(): Promise<Response | null> {
 /**
  * Get all verses, caching the result to avoid repeated parsing
  */
-export async function getQuranVerses(): Promise<Verse[]> {
+export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promise<Verse[]> {
     if (cachedVerses) return cachedVerses;
     if (versesLoadingPromise) return versesLoadingPromise;
 
@@ -402,13 +433,16 @@ export async function getQuranVerses(): Promise<Verse[]> {
             if (isObsidian) {
                 // Community-store installs only ship main.js/manifest.json/
                 // styles.css, so the 8.8MB corpus may be missing entirely.
-                // Download it once from the GitHub release assets and persist
-                // it into the vault — every later launch is fully offline.
+                // Download it once from the public repo and persist it into
+                // the vault — every later launch is fully offline.
+                // `onProgress` fires only here, so the UI can show a real
+                // one-time download bar instead of a stuck spinner.
                 try {
-                    const raw = await downloadTextWithTimeout(
-                        'https://github.com/imed-ghomari/quran-life/releases/latest/download/qpc-hafs-word-by-word.json',
+                    const raw = await downloadTextWithProgress(
+                        'https://raw.githubusercontent.com/imed-ghomari/quran-life/main/public/qpc-hafs-word-by-word.json',
                         obsidianApp,
-                        120000
+                        120000,
+                        onProgress
                     );
                     if (raw && raw.trim().startsWith('{')) {
                         const data = JSON.parse(raw);

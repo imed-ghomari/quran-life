@@ -1,4 +1,0 @@
-interface:
-  display_name: "UI Redesign Guardrails"
-  short_description: "Design safely with deploy and device parity checks"
-  default_prompt: "Use $ui-redesign-guardrails to implement this UI redesign and verify localhost/deployed parity on desktop and mobile."

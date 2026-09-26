@@ -25,13 +25,12 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # Obsidian installs main.js + manifest.json + styles.css by exact
-          # filename; the data files + zip are for first-run download / manual install.
+          # Exactly the files Obsidian installs — anything else triggers an
+          # "extra unsupported files" review note. Runtime data (Quran text)
+          # is downloaded once on first launch; the sqlite wasm is inlined
+          # in main.js.
           files: |
-            dist/quran-life-*.zip
             main.js
             manifest.json
             styles.css
-            qpc-hafs-word-by-word.json
-            sql-wasm.wasm
           generate_release_notes: true

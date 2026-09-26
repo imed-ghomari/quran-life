@@ -284,6 +284,39 @@ async function getJSZip() {
 let cachedWasmBinary: ArrayBuffer | null = null;
 let cachedInitSqlJs: any = null;
 
+// Bundled wasm data URL (registered by src/plugin/sqlWasmBundle.ts — plugin
+// builds only). Decoded lazily so the ~860KB base64 cost is paid once.
+let bundledWasmDataUrl: string | null = null;
+export function setBundledWasmDataUrl(url: string | null): void {
+  bundledWasmDataUrl = url;
+}
+
+function bundledWasmToArrayBuffer(): ArrayBuffer | null {
+  try {
+    if (!bundledWasmDataUrl) return null;
+    const comma = bundledWasmDataUrl.indexOf(',');
+    if (comma < 0) return null;
+    const meta = bundledWasmDataUrl.slice(0, comma);
+    const payload = bundledWasmDataUrl.slice(comma + 1);
+    let bytes: Uint8Array;
+    if (/;base64/i.test(meta)) {
+      const bin = atob(payload);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else {
+      const bin = decodeURIComponent(payload);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    }
+    if (bytes.byteLength < 1000) return null;
+    const ab = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(ab).set(bytes);
+    return ab;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- packaging helpers (web + Obsidian safe) ----------
 
 // Yield to the event loop so the export progress UI can repaint between
@@ -335,6 +368,13 @@ function getPluginApp(): any | null {
 //  3. web / CDN fetches, each with a hard timeout so packaging can never hang
 async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
   if (cachedWasmBinary) return cachedWasmBinary;
+  // Bundled wasm (Obsidian plugin: inlined into main.js) — fully offline,
+  // no download, always preferred when present.
+  const bundled = bundledWasmToArrayBuffer();
+  if (bundled) {
+    cachedWasmBinary = bundled;
+    return bundled;
+  }
   const app = getPluginApp();
   if (app) {
     const adapter: any = app.vault?.adapter;
@@ -375,12 +415,10 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
         } catch {}
       }
     }
-    // In Obsidian there is no web server serving `/sql-wasm.wasm` — try our
-    // own release asset first (pinned, no third-party CDN), then public CDNs
-    // (timeouts apply). A network-fetched binary is cached into the vault so
-    // the next export works fully offline.
+    // In Obsidian there is no web server serving `/sql-wasm.wasm` — the
+    // bundled binary above is the offline path; CDNs below are last resort
+    // (timeouts apply).
     const obsidianUrls = [
-      'https://github.com/imed-ghomari/quran-life/releases/latest/download/sql-wasm.wasm',
       'https://sql.js.org/dist/sql-wasm.wasm',
       'https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.wasm',
     ];
@@ -389,7 +427,6 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
         const ab = await fetchArrayBufferWithTimeout(url, 15000);
         if (ab && ab.byteLength > 1000) {
           cachedWasmBinary = ab;
-          void persistWasmToVault(adapter, ab).catch(() => {});
           return ab;
         }
       } catch {}
@@ -417,25 +454,6 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
     } catch {}
   }
   return cachedWasmBinary;
-}
-
-// Cache a downloaded wasm binary in the vault so repeat exports work offline.
-async function persistWasmToVault(adapter: any, ab: ArrayBuffer): Promise<void> {
-  if (!adapter?.writeBinary) return;
-  const dest = '.obsidian/plugins/quran-life/data/assets/sql-wasm.wasm';
-  const dir = dest.split('/').slice(0, -1).join('/');
-  if (adapter.mkdir) {
-    const parts = dir.split('/');
-    let cur = '';
-    for (const part of parts) {
-      cur = cur ? `${cur}/${part}` : part;
-      try {
-        if (adapter.exists && (await adapter.exists(cur))) continue;
-        await adapter.mkdir(cur);
-      } catch {}
-    }
-  }
-  await adapter.writeBinary(dest, ab);
 }
 
 // Escape Anki field separator

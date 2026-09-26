@@ -1,2 +1,0 @@
-ALTER TABLE user_fairies
-ADD COLUMN "weeklyLimit" INTEGER DEFAULT 25;

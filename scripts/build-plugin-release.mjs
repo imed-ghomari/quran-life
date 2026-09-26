@@ -1,15 +1,14 @@
 /**
- * Build the Obsidian plugin release zip.
+ * Validate the Obsidian plugin release files.
  *
- * The community store / BRAT install from a GitHub Release asset. The zip
- * contains the standard files (manifest.json, main.js, styles.css) PLUS the
- * offline data the plugin needs on first run (Quran text + sql.js wasm), so a
- * fresh install works fully offline — audio stays stream-on-demand and is
- * downloaded only via the user-triggered Settings action.
+ * The GitHub Release must contain EXACTLY manifest.json, main.js and
+ * styles.css — anything else triggers an "extra unsupported files" review
+ * note and is ignored by Obsidian anyway. Runtime data is handled inside the
+ * plugin: the Quran corpus downloads once on first launch (then cached in the
+ * vault) and the sqlite wasm is inlined into main.js.
  *
  * Usage: npm run plugin:release  (runs the production build first)
  */
-import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -23,42 +22,15 @@ if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
   process.exit(1);
 }
 
-const required = [
-  "manifest.json",
-  "main.js",
-  "styles.css",
-  // Offline-first-run data (see README "Obsidian plugin" section)
-  "qpc-hafs-word-by-word.json",
-  "sql-wasm.wasm",
-];
+const required = ["manifest.json", "main.js", "styles.css"];
 const missing = required.filter((f) => !fs.existsSync(path.join(root, f)));
 if (missing.length) {
   console.error(`Refusing to release: missing files: ${missing.join(", ")}\nRun "npm run build" first.`);
   process.exit(1);
 }
 
-const sizes = required.map((f) => {
-  const st = fs.statSync(path.join(root, f));
-  return `  ${f} (${(st.size / 1024 / 1024).toFixed(2)} MB)`;
-});
-console.log(`Packaging quran-life ${version}:\n${sizes.join("\n")}`);
-
-const distDir = path.join(root, "dist");
-fs.mkdirSync(distDir, { recursive: true });
-const zipName = `quran-life-${version}.zip`;
-const zipPath = path.join(distDir, zipName);
-try {
-  fs.unlinkSync(zipPath);
-} catch {}
-execSync(`zip -j "${zipPath}" ${required.map((f) => `"${path.join(root, f)}"`).join(" ")}`, { stdio: "inherit" });
-
-// Sanity-check the archive contents: exactly the files above, nothing else.
-const listed = execSync(`unzip -l "${zipPath}"`, { encoding: "utf-8" });
-console.log(listed);
 for (const f of required) {
-  if (!listed.includes(f)) {
-    console.error(`Release zip is missing ${f}`);
-    process.exit(1);
-  }
+  const st = fs.statSync(path.join(root, f));
+  console.log(`  ${f} (${(st.size / 1024 / 1024).toFixed(2)} MB)`);
 }
-console.log(`✓ dist/${zipName} ready — tag ${version} (no 'v' prefix) and push so the release workflow publishes it.`);
+console.log(`✓ quran-life ${version} release files ready — tag ${version} (no 'v' prefix) and push so the release workflow publishes them.`);

@@ -1,23 +1,10 @@
 {
   "name": "quran-reader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "docs:sync:legend": "node scripts/generate-mindmap-legend.js",
-    "start": "next start",
-    "lint": "next lint",
-    "e2e:auth:url": "node scripts/e2e-auth-url.js",
-    "instant:cleanup:duplicates": "node scripts/cleanup-instant-duplicates.js",
-    "instant:cleanup:duplicates:apply": "node scripts/cleanup-instant-duplicates.js --apply",
-    "verify:quran": "node scripts/verify-quran-integrity.js",
-    "mcp:paddle:read-only": "sh -c 'ENV=${PADDLE_ENV:-sandbox}; if [ \"$ENV\" = \"production\" ]; then KEY=${PADDLE_SECRET_KEY_PRODUCTION:-$PADDLE_SECRET_KEY}; else KEY=${PADDLE_SECRET_KEY_SANDBOX:-$PADDLE_SECRET_KEY}; fi; npx @paddle/paddle-mcp --api-key=\"$KEY\" --environment=\"$ENV\" --tools=read-only'",
-    "ensure:paddle:webhook-domain": "node scripts/ensure-paddle-webhook-domain.js",
-    "verify:paddle:instant": "node scripts/verify-paddle-instant.js",
-    "test:fsrs:optimization": "node scripts/test-fsrs-optimization.js",
-    "web:dev": "node scripts/generate-search-index.js && next dev --webpack",
-    "web:build": "node scripts/generate-search-index.js && next build --webpack",
     "plugin:release": "npm run build && node scripts/build-plugin-release.mjs"
   },
   "engines": {

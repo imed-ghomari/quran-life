@@ -162,23 +162,47 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
   const surah = getSurah(selectedSurah);
   const [surahVerses, setSurahVerses] = useState<Verse[]>([]);
+  // One-time Quran corpus download (fresh installs only): byte progress for
+  // the loading gate, plus an error state with retry instead of a dead view.
+  const [quranDownload, setQuranDownload] = useState<null | { downloaded: number; total: number | null }>(null);
+  const [quranError, setQuranError] = useState<string | null>(null);
+  const [quranAttempt, setQuranAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let ok = false;
       try {
         if (allVerses.length) {
           if (!cancelled) { setSurahVerses(allVerses.filter(v=>v.surahId===selectedSurah)); setIsVersesLoaded(true); }
           return;
         }
-        const verses = await getQuranVerses();
+        const verses = await getQuranVerses((downloaded, total) => {
+          if (!cancelled) setQuranDownload({ downloaded, total });
+        });
         if (cancelled) return;
+        if (!verses.length) throw new Error('Quran data came back empty — check your connection and retry.');
+        setQuranError(null);
         setAllVerses(verses);
         setSurahVerses(verses.filter(v=>v.surahId===selectedSurah));
-      } catch { if (!cancelled) { setAllVerses([]); setSurahVerses([]); } }
-      finally { if (!cancelled) setIsVersesLoaded(true); }
+        ok = true;
+      } catch (e) {
+        if (!cancelled) {
+          setAllVerses([]);
+          setSurahVerses([]);
+          setQuranError(String((e as Error)?.message || e || 'Could not load Quran data.'));
+        }
+      }
+      finally {
+        // Only mark loaded when verses exist — on failure the error card
+        // (with retry) shows instead of an empty view.
+        if (!cancelled) {
+          setQuranDownload(null);
+          if (ok) setIsVersesLoaded(true);
+        }
+      }
     })();
     return () => { cancelled = true; };
-  }, [selectedSurah, allVerses.length]);
+  }, [selectedSurah, allVerses.length, quranAttempt]);
 
   const builderState = useMemo(() => {
     const sorted = [...localAnchors].sort((a,b)=>a.startVerse-b.startVerse);
@@ -276,7 +300,16 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     try {
       updateProgress({ status: 'Loading verses…', current: 3 });
       let versesForExport = allVerses;
-      if (!versesForExport.length) { try { versesForExport = await getQuranVerses(); setAllVerses(versesForExport); pushLog(`Loaded ${versesForExport.length} verses`); } catch {} }
+      if (!versesForExport.length) {
+        try {
+          versesForExport = await getQuranVerses((downloaded, total) => {
+            const pct = total ? ` ${Math.min(99, Math.round((downloaded / total) * 100))}%` : '';
+            updateProgress({ status: `Downloading Quran data (one-time)${pct}…`, current: 3 });
+          });
+          setAllVerses(versesForExport);
+          pushLog(`Loaded ${versesForExport.length} verses`);
+        } catch {}
+      }
       else pushLog(`Verses cached: ${versesForExport.length}`);
 
       updateProgress({ status: 'Loading splits…', current: 5 });
@@ -398,12 +431,37 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     }
   };
 
-  if (!isVersesLoaded) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'30vh', flexDirection:'column', gap:10, padding:24 }}>
-      <div style={{ width:24, height:24, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
-      <span style={{ fontSize:'0.85em', color:'var(--text-muted)' }}>Loading verses…</span>
-    </div>
-  );
+  if (!isVersesLoaded) {
+    const fmtMB = (n: number) => `${(n / 1024 / 1024).toFixed(1)} MB`;
+    const pct = quranDownload && quranDownload.total
+      ? Math.min(99, Math.round((quranDownload.downloaded / quranDownload.total) * 100))
+      : null;
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'30vh', flexDirection:'column', gap:10, padding:24 }}>
+        {quranError && !quranDownload ? (
+          <>
+            <span style={{ fontSize:'2em' }}>⚠️</span>
+            <span style={{ fontSize:'0.9em', fontWeight:700, color:'var(--text-normal)', textAlign:'center' }}>Quran data couldn't load</span>
+            <span style={{ fontSize:'0.8em', color:'var(--text-muted)', textAlign:'center', maxWidth:380 }}>{quranError} First launch needs internet once to fetch the Quran text — afterwards everything works offline.</span>
+            <button onClick={() => { setQuranError(null); setQuranAttempt(a => a + 1); }} style={{ padding:'8px 18px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor:'pointer', fontWeight:600, fontSize:'0.9em' }}>Retry</button>
+          </>
+        ) : (
+          <>
+            <div style={{ width:24, height:24, border:'3px solid var(--background-modifier-border)', borderTopColor:'var(--interactive-accent)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+            <span style={{ fontSize:'0.85em', color:'var(--text-muted)' }}>
+              {quranDownload
+                ? `Downloading Quran data (one-time)${pct !== null ? ` — ${pct}%` : quranDownload.downloaded > 0 ? ` — ${fmtMB(quranDownload.downloaded)}` : '…'}` : 'Loading verses…'}
+            </span>
+            {quranDownload && (
+              <div style={{ width:'100%', maxWidth:320, height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' }}>
+                <div style={{ width: pct !== null ? `${pct}%` : '30%', height:'100%', background:'var(--interactive-accent)', borderRadius:999, transition:'width 0.3s ease' }} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
 
   const displayTitle = isPartOrMeta ? (selectedMindmapKey==='meta-0' ? 'Meta Overview' : `Part ${selectedMindmapKey.replace('part-','')}`) : `${surah?.arabicName} • Surah ${selectedSurah}`;
   const vc = surah?.verseCount || 0;

@@ -1,3 +1,0 @@
-display_name: First-Load UI Stale Fix
-short_description: Diagnose and fix old UI on first load caused by CSS leakage.
-default_prompt: Investigate first-load old UI behavior, isolate landing CSS from authenticated app routes, and apply a minimal deterministic fix.
