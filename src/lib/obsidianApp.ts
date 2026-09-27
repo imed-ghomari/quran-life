@@ -110,5 +110,5 @@ export function getVaultFiles(appOverride?: unknown): VaultFilesAdapter | null {
   // BRIDGE (documented, sole cast in this module): the stock DataAdapter type
   // lacks the FileSystemAdapter methods (mkdir/remove/getResourcePath) that
   // exist at runtime on both desktop and mobile.
-  return app.vault.adapter as unknown as VaultFilesAdapter;
+  return app.vault.adapter;
 }

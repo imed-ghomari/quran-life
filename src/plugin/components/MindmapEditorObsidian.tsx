@@ -34,6 +34,7 @@ import {
     TextToolbarItem,
     HighlightToolbarItem,
     EraserToolbarItem,
+    loadSnapshot,
     useTools,
     useIsToolSelected,
     useEditor,
@@ -497,12 +498,9 @@ function MindmapEditorContent({
             try {
                 const sanitizedInitialSnapshot = (sanitizeMindmapSnapshot(snapshotToLoad) || snapshotToLoad) as unknown as TLStoreSnapshot;
                 // Determine if we're loading a v4 snapshot or v3
-                // Standard Tldraw (v2+) uses getSnapshot/loadSnapshot
-                if (typeof editorInstance.loadSnapshot === 'function') {
-                    editorInstance.loadSnapshot(sanitizedInitialSnapshot);
-                } else {
-                    editorInstance.store.loadSnapshot(sanitizedInitialSnapshot);
-                }
+                // Package-level loadSnapshot (store-level API; Editor.loadSnapshot
+                // is a thin deprecated wrapper around exactly this call).
+                loadSnapshot(editorInstance.store, sanitizedInitialSnapshot);
 
                 // Set initial tool if desired
                 editorInstance.setCurrentTool('lasso-select');
@@ -530,11 +528,7 @@ function MindmapEditorContent({
         if (editorInst && activeInitialSnapshot && !editorInst.getCurrentPageRenderingShapesSorted().length) {
             try {
                 const sanitized = (sanitizeMindmapSnapshot(activeInitialSnapshot) || activeInitialSnapshot) as unknown as TLStoreSnapshot;
-                if (typeof editorInst.loadSnapshot === 'function') {
-                    editorInst.loadSnapshot(sanitized);
-                } else {
-                    editorInst.store.loadSnapshot(sanitized);
-                }
+                loadSnapshot(editorInst.store, sanitized);
                 window.setTimeout(() => editorInst.zoomToFit(), 100);
             } catch (e) {
                 console.warn('Failed to load late snapshot', e);
@@ -647,7 +641,7 @@ function MindmapEditorContent({
 
                         // tldraw's external-content handler reads `content`
                         // (TLContent), which is what makes the paste land.
-                        editor.putExternalContent({
+                        void editor.putExternalContent({
                             type: 'tldraw',
                             content: sanitizedData as unknown as TLContent,
                             point: editor.inputs.currentPagePoint,

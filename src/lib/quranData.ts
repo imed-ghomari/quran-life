@@ -477,7 +477,7 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                         }
                     }
                 } catch { /* best-effort only; ignore */ }
-                throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in plugin folder or QuranLife/assets/. Plugin will copy it on next restart from .obsidian/plugins/quran-life/qpc-hafs-word-by-word.json if present.');
+                throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in the plugin folder or QuranLife/assets/. Plugin will copy it on next restart from the plugin folder if present.');
             }
 
             const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });

@@ -29,6 +29,7 @@ type TldrawModules = {
   Tldraw: typeof import('tldraw').Tldraw;
   React: typeof import('react');
   ReactDOMClient: typeof import('react-dom/client');
+  loadSnapshot: typeof import('tldraw').loadSnapshot;
   sanitize: (snapshot: unknown) => MindmapSnapshot | undefined;
 };
 let cachedTldrawModules: Promise<TldrawModules | null> | null = null;
@@ -36,13 +37,13 @@ function getTldrawModules() {
   if (!cachedTldrawModules) {
     cachedTldrawModules = (async () => {
       try {
-        const [{ Tldraw }, React, ReactDOMClient, snapMod] = await Promise.all([
+        const [{ Tldraw, loadSnapshot }, React, ReactDOMClient, snapMod] = await Promise.all([
           import('tldraw'),
           import('react'),
           import('react-dom/client'),
           import('@/lib/mindmapSnapshot'),
         ]);
-        return { Tldraw, React, ReactDOMClient, sanitize: snapMod.sanitizeMindmapSnapshot };
+        return { Tldraw, React, ReactDOMClient, loadSnapshot, sanitize: snapMod.sanitizeMindmapSnapshot };
       } catch {
         return null;
       }
@@ -124,7 +125,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     for (const [key] of entries) fieldMap[key] = '';
     return { mediaMap, mediaFiles, fieldMap };
   }
-  const { Tldraw, React, ReactDOMClient, sanitize } = mods;
+  const { Tldraw, React, ReactDOMClient, loadSnapshot: loadStoreSnapshot, sanitize } = mods;
 
   // Mount ONE hidden Tldraw and reuse its editor for every snapshot.
   // Previously this mounted/unmounted a new React root per mindmap with
@@ -193,8 +194,6 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     return { mediaMap, mediaFiles, fieldMap };
   }
   const activeEditor: Editor = editor;
-  // Structural view of the editor store for the optional snapshot loader.
-  const storeApi: { loadSnapshot?: (snapshot: TLStoreSnapshot) => void } = activeEditor.store;
 
   const renderWithSharedEditor = async (key: string, sanitized: TLStoreSnapshot | undefined): Promise<Blob | null> => {
     try {
@@ -263,8 +262,9 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
           } else {
             if (!(i === 0 && firstSanitized)) {
               try {
-                if (typeof activeEditor.loadSnapshot === 'function') activeEditor.loadSnapshot(sanitized);
-                else if (storeApi && typeof storeApi.loadSnapshot === 'function') storeApi.loadSnapshot(sanitized);
+                // Package-level API (Editor.loadSnapshot is a thin deprecated
+                // wrapper around exactly this call).
+                loadStoreSnapshot(activeEditor.store, sanitized);
               } catch (e) {
                 console.warn('loadSnapshot failed', key, e);
                 fieldMap[key] = '';

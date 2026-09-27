@@ -27,9 +27,10 @@ export function loadAnkiMindmaps(): Stored {
   try {
     const raw = readStored(LS_MINDMAPS_KEY);
     if (!raw) return {};
-    const parsed: Record<string, Partial<AnkiMindmap>> = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return {};
     const out: Stored = {};
-    Object.entries(parsed).forEach(([k, v]) => {
+    Object.entries(parsed as Record<string, Partial<AnkiMindmap>>).forEach(([k, v]) => {
       // Support old format where key was numeric surahId
       if (!isNaN(Number(k)) && v && !v.key) {
         const surahId = Number(k);
@@ -122,7 +123,7 @@ const LS_DELETED_KEY = 'quran-life:anki:deletedMindmaps:v1';export function load
   try {
     const raw = readStored(LS_DELETED_KEY);
     if (!raw) return new Set();
-    const arr = JSON.parse(raw);
+    const arr: unknown = JSON.parse(raw);
     return new Set(Array.isArray(arr) ? arr.map(String) : []);
   } catch { return new Set(); }
 }

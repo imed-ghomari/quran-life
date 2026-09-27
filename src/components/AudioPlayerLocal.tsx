@@ -38,9 +38,9 @@ type LoadedRecitationData = Awaited<ReturnType<typeof loadRecitationData>>;
 type LoadedRecitationMap = Record<number, NonNullable<LoadedRecitationData>>;
 
 const asVerseEntry = (value: unknown): RecitationVerseEntry | null =>
-    typeof value === 'object' && value !== null ? (value as RecitationVerseEntry) : null;
+    typeof value === 'object' && value !== null ? (value) : null;
 const asTimingEntry = (value: unknown): RecitationTimingEntry | null =>
-    typeof value === 'object' && value !== null ? (value as RecitationTimingEntry) : null;
+    typeof value === 'object' && value !== null ? (value) : null;
 
 /** HTMLAudioElement with the Basmala slice bounds attached at runtime. */
 interface BasmalaAudioElement extends HTMLAudioElement {
@@ -580,7 +580,7 @@ export default function AudioPlayerLocal({
 
     const safePlay = useCallback(() => {
         if (!audioRef.current) return;
-        audioRef.current.play().catch((err) => { if (err?.name !== 'AbortError') console.error(err); });
+        audioRef.current.play().catch((err: unknown) => { const errName: unknown = typeof err === 'object' && err !== null && 'name' in err ? err.name : undefined; if (errName !== 'AbortError') console.error(err); });
     }, []);
 
     const finalizePendingPlayback = useCallback(() => {
@@ -1136,8 +1136,9 @@ export default function AudioPlayerLocal({
         // rejected as autoplay even though the user just pressed Play.
         setIsPlaying(true);
         if (audio && isAudioReady) {
-            audio.play().catch((error) => {
-                if (error?.name !== 'AbortError') setIsPlaying(false);
+            audio.play().catch((error: unknown) => {
+                const errorName: unknown = typeof error === 'object' && error !== null && 'name' in error ? error.name : undefined;
+                if (errorName !== 'AbortError') setIsPlaying(false);
             });
         }
     };

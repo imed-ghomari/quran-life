@@ -14,7 +14,7 @@ export function readStored(key: string): string | null {
   const app = getObsidianApp();
   if (!app) return memory.get(key) ?? null;
   try {
-    const value = app.loadLocalStorage(key);
+    const value: unknown = app.loadLocalStorage(key);
     if (typeof value === "string") return value;
     if (value === null || value === undefined) return null;
     if (typeof value === "number" || typeof value === "boolean") return String(value);

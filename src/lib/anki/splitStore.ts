@@ -34,9 +34,10 @@ export function loadSplits(): SurahSplits {
   try {
     const raw = readStored(LS_SPLITS_KEY);
     if (!raw) return {};
-    const parsed: Record<string, unknown> = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return {};
     const out: SurahSplits = {};
-    Object.entries(parsed).forEach(([k, arr]) => {
+    Object.entries(parsed as Record<string, unknown>).forEach(([k, arr]) => {
       const surahId = Number(k);
       if (!Number.isFinite(surahId)) return;
       if (!Array.isArray(arr)) return;
