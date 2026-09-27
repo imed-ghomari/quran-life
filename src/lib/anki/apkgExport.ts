@@ -395,7 +395,7 @@ async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promi
 // Resolve the Obsidian app when running inside the plugin (desktop + mobile).
 // apkgExport is shared with the web app and must not import 'obsidian' —
 // the registry module below is dependency-free and returns null on web.
-import { getObsidianApp } from '@/lib/obsidianApp';
+import { getObsidianApp, getVaultConfigDir } from '@/lib/obsidianApp';
 function getPluginApp(): App | null {
   try {
     const app = getObsidianApp();
@@ -429,14 +429,15 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
   const app = getPluginApp();
   if (app) {
     const adapter = app.vault?.adapter;
+    const configDir = getVaultConfigDir(app);
     const candidates = [
-      '.obsidian/plugins/quran-life/sql-wasm.wasm',
-      '.obsidian/plugins/quran-life/public/sql-wasm.wasm',
+      configDir ? `${configDir}/plugins/quran-life/sql-wasm.wasm` : null,
+      configDir ? `${configDir}/plugins/quran-life/public/sql-wasm.wasm` : null,
       // Cached from a previous release-asset download (community-store
       // installs only ship main.js/manifest.json/styles.css)
-      '.obsidian/plugins/quran-life/data/assets/sql-wasm.wasm',
+      configDir ? `${configDir}/plugins/quran-life/data/assets/sql-wasm.wasm` : null,
       'QuranLife/assets/sql-wasm.wasm',
-    ];
+    ].filter((x): x is string => !!x);
     if (adapter?.readBinary) {
       for (const cand of candidates) {
         try {
@@ -877,7 +878,12 @@ export async function generateApkgBlob(
           try {
             const adapter = pluginApp?.vault?.adapter;
             if (adapter?.getResourcePath) {
-              for (const cand of ['.obsidian/plugins/quran-life/sql-wasm.wasm', '.obsidian/plugins/quran-life/public/sql-wasm.wasm']) {
+              const pluginConfigDir = getVaultConfigDir(pluginApp);
+              const wasmCands = [
+                pluginConfigDir ? `${pluginConfigDir}/plugins/quran-life/sql-wasm.wasm` : null,
+                pluginConfigDir ? `${pluginConfigDir}/plugins/quran-life/public/sql-wasm.wasm` : null,
+              ].filter((x): x is string => !!x);
+              for (const cand of wasmCands) {
                 try {
                   const u = adapter.getResourcePath(cand);
                   if (u) return u;

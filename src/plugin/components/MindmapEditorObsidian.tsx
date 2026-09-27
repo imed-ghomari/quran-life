@@ -176,7 +176,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
                     <p>{this.state.error?.message}</p>
                     <button
                         onClick={() => {
-                            localStorage.clear();
+                            if (lastDraftKeyForReset) removeStored(lastDraftKeyForReset);
                             window.location.reload();
                         }}
                         style={{ padding: '8px 16px', background: '#ff4444', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
@@ -231,6 +231,7 @@ const extractContextFromDocLink = (value?: string | null): string | null => {
 
 const isInternalPath = (href: string) => href.startsWith('/') && !href.startsWith('//');
 const MINDMAP_DRAFT_STORAGE_PREFIX = 'mindmap-editor-draft:v1:';
+let lastDraftKeyForReset: string | null = null;
 const SAVE_DRAIN_TIMEOUT_MS = 15000;
 const SAVE_DRAIN_POLL_MS = 50;
 
@@ -354,6 +355,7 @@ function MindmapEditorContent({
             .replace(/^-|-$/g, '');
         return `${MINDMAP_DRAFT_STORAGE_PREFIX}${draftScope || 'default'}`;
     }, [surahId, partId, docLink, contextLabel, title]);
+    useEffect(() => { lastDraftKeyForReset = localDraftKey; }, [localDraftKey]);
     const currentContextLabel = useMemo(() => {
         const trimmedContext = contextLabel?.trim();
         if (trimmedContext) return trimmedContext;
@@ -593,7 +595,7 @@ function MindmapEditorContent({
             else if (theme === 'system') {
                 const mqDark = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
                 resolved = mqDark ? 'dark' : 'light';
-            } else resolved = theme as 'light' | 'dark';
+            } else resolved = theme;
             // Always force explicit light/dark, not system, when Obsidian theme is known
             editor.user.updateUserPreferences({ colorScheme: resolved });
         };

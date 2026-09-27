@@ -52,11 +52,6 @@ interface WindowWithRequestUrl {
   requestUrl?: ObsidianRequestFn;
 }
 
-/** A single recitation `verses` entry (`"<surah>:<ayah>" -> { audio_url }`). */
-interface AyahVerseEntry {
-  audio_url?: unknown;
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)

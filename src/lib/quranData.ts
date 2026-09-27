@@ -3,7 +3,7 @@
 // ========================================
 
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
-import { getObsidianApp, pluginPublishDir } from './obsidianApp';
+import { getObsidianApp, getVaultConfigDir, pluginPublishDir } from './obsidianApp';
 import type { App } from 'obsidian';
 
 /**
@@ -422,20 +422,22 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
             // vault adapter in this scope; every adapter call below is typed.
             const adapter = obsidianApp?.vault?.adapter as unknown as VaultFiles | undefined;
             const publishDir = pluginPublishDir(obsidianApp);
+            const configDir = getVaultConfigDir(obsidianApp);
+            const pluginDir = configDir ? `${configDir}/plugins/quran-life` : null;
             const candidates = [...new Set([
-                `${publishDir}/data/assets/qpc-hafs-word-by-word.json`,
-                '.obsidian/plugins/quran-life/data/assets/qpc-hafs-word-by-word.json',
+                publishDir ? `${publishDir}/data/assets/qpc-hafs-word-by-word.json` : null,
+                pluginDir ? `${pluginDir}/data/assets/qpc-hafs-word-by-word.json` : null,
                 'QuranLife/assets/qpc-hafs-word-by-word.json',
                 'QuranLife/qpc-hafs-word-by-word.json',
-                `${publishDir}/qpc-hafs-word-by-word.json`,
-                '.obsidian/plugins/quran-life/qpc-hafs-word-by-word.json',
-                `${publishDir}/public/qpc-hafs-word-by-word.json`,
-                '.obsidian/plugins/quran-life/public/qpc-hafs-word-by-word.json',
-                `${publishDir}/data/qpc-hafs-word-by-word.json`,
-                '.obsidian/plugins/quran-life/data/qpc-hafs-word-by-word.json',
+                publishDir ? `${publishDir}/qpc-hafs-word-by-word.json` : null,
+                pluginDir ? `${pluginDir}/qpc-hafs-word-by-word.json` : null,
+                publishDir ? `${publishDir}/public/qpc-hafs-word-by-word.json` : null,
+                pluginDir ? `${pluginDir}/public/qpc-hafs-word-by-word.json` : null,
+                publishDir ? `${publishDir}/data/qpc-hafs-word-by-word.json` : null,
+                pluginDir ? `${pluginDir}/data/qpc-hafs-word-by-word.json` : null,
                 'qpc-hafs-word-by-word.json',
                 'public/qpc-hafs-word-by-word.json',
-            ])];
+            ].filter((c): c is string => typeof c === 'string' && c.length > 0))];
             if (isObsidian) {
                 try {
                     // Try plugin-bundled asset via vault adapter resource path, or vault file QuranLife/assets/...
@@ -460,7 +462,7 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                                 if (!resourceUrl) continue;
                                 const r = await fetch(resourceUrl);
                                 if (r.ok) {
-                                    const parsed: unknown = await r.json();
+                                    const parsed: unknown = (await r.json()) as unknown;
                                     const rec = asRecord(parsed);
                                     if (rec) {
                                         cachedVerses = parseQuranJson(rec);
@@ -519,7 +521,7 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
 
             const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
             if (!res.ok) throw new Error(`Failed to load quran JSON: ${res.status}`);
-            const parsed: unknown = await res.json();
+            const parsed: unknown = (await res.json()) as unknown;
             const rec = asRecord(parsed);
             if (!rec) throw new Error('Failed to parse quran JSON');
             cachedVerses = parseQuranJson(rec);
@@ -531,7 +533,7 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
             try {
                 const cachedRes = await readQuranResponseFromCache();
                 if (cachedRes) {
-                    const parsed: unknown = await cachedRes.json();
+                    const parsed: unknown = (await cachedRes.json()) as unknown;
                     const rec = asRecord(parsed);
                     if (rec) {
                         cachedVerses = parseQuranJson(rec);

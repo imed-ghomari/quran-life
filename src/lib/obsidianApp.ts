@@ -63,16 +63,18 @@ export function isObsidianEnv(appOverride?: App | null): boolean {
   return getObsidianApp(appOverride) !== null;
 }
 
-export function getVaultConfigDir(appOverride?: App | null): string {
+export function getVaultConfigDir(appOverride?: App | null): string | null {
   try {
     const app = getObsidianApp(appOverride);
     const dir = app?.vault?.configDir;
     if (typeof dir === 'string' && dir) return dir.replace(/\/$/, '');
   } catch { /* fall through */ }
-  return '.obsidian';
+  return null;
 }
-export function pluginPublishDir(appOverride?: App | null): string {
-  return `${getVaultConfigDir(appOverride)}/plugins/quran-life`;
+export function pluginPublishDir(appOverride?: App | null): string | null {
+  const configDir = getVaultConfigDir(appOverride);
+  if (!configDir) return null;
+  return `${configDir}/plugins/quran-life`;
 }
 
 /**

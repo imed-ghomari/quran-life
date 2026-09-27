@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { getReciters, Reciter } from '@/lib/audio';
+import { getReciters } from '@/lib/audio';
 import { buildAverageSecondsPerWordBySurah } from '@/lib/dailyPortionUtils';
 
 const { useEffect, useMemo, useState } = React;
@@ -27,7 +27,7 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
     averageSurahDurationsPromise = (async () => {
         try {
             const reciters = await getReciters();
-            const surahBasedReciters = reciters.filter((reciter: Reciter) => reciter.type === 'surah-based');
+            const surahBasedReciters = reciters.filter((reciter) => reciter.type === 'surah-based');
             if (surahBasedReciters.length === 0) {
                 averageSurahDurationsCache = {};
                 return averageSurahDurationsCache;
@@ -38,7 +38,7 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
                     try {
                         const response = await fetch(`${reciter.relativePath}/surah.json`);
                         if (!response.ok) return null;
-                        const parsed: unknown = await response.json();
+                        const parsed: unknown = (await response.json()) as unknown;
                         const rec = asRecord(parsed);
                         return rec ?? null;
                     } catch {
@@ -70,11 +70,14 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
                 });
             }
 
-            averageSurahDurationsCache = Object.fromEntries(
-                Object.entries(totalsBySurah)
-                    .filter(([, value]) => value.count > 0)
-                    .map(([surahKey, value]) => [Number(surahKey), value.totalSeconds / value.count]),
-            );
+            const averaged: Record<number, number> = {};
+            for (const [surahKey, value] of Object.entries(totalsBySurah)) {
+                if (value.count <= 0) continue;
+                const surahId = Number(surahKey);
+                if (!Number.isFinite(surahId)) continue;
+                averaged[surahId] = value.totalSeconds / value.count;
+            }
+            averageSurahDurationsCache = averaged;
 
             return averageSurahDurationsCache;
         } catch (error) {

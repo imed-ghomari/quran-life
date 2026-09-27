@@ -1,6 +1,6 @@
 
 import { clientEnv } from './env/client';
-import { getObsidianApp, isObsidianEnv } from './obsidianApp';
+import { getObsidianApp, getVaultConfigDir, isObsidianEnv } from './obsidianApp';
 import type { App } from 'obsidian';
 
 /**
@@ -363,7 +363,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<Rec
         const res = await fetch(url, { signal: ctrl?.signal });
         if (!res.ok) return null;
         try {
-            const parsed: unknown = await res.json();
+            const parsed: unknown = (await res.json()) as unknown;
             return asRecord(parsed);
         } catch { return null; }
     } catch {
@@ -382,13 +382,15 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: App 
         const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
         if (adapter) {
             const normalized = urlPath.replace(/^https?:\/\/[^/]+/i, '').replace(/^\//, '');
+            const configDir = getVaultConfigDir(app);
+            const pluginDir = configDir ? `${configDir}/plugins/quran-life` : null;
             const candidates = [
                 normalized, // e.g. recitations/.../surah.json
                 `public/${normalized}`,
-                `.obsidian/plugins/quran-life/${normalized}`,
-                `.obsidian/plugins/quran-life/public/${normalized}`,
+                pluginDir ? `${pluginDir}/${normalized}` : null,
+                pluginDir ? `${pluginDir}/public/${normalized}` : null,
                 `QuranLife/${normalized}`,
-            ];
+            ].filter((c): c is string => typeof c === 'string' && c.length > 0);
             // 1) direct vault adapter read (hidden-aware)
             for (const cand of candidates) {
                 try {

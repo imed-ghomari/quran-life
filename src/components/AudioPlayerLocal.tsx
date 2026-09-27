@@ -227,7 +227,8 @@ export default function AudioPlayerLocal({
         const reciterId = opts?.reciterId ?? (selectedReciterId || undefined);
         if (!verse || !reciterId) return;
         const fallbackTimestamp = audioRef.current?.currentTime ?? verseStartTime;
-        const timestamp = Number.isFinite(opts?.timestamp ?? NaN) ? Math.max(0, opts?.timestamp as number) : Math.max(0, fallbackTimestamp);
+        const rawTimestamp = opts?.timestamp;
+        const timestamp = typeof rawTimestamp === 'number' && Number.isFinite(rawTimestamp) ? Math.max(0, rawTimestamp) : Math.max(0, fallbackTimestamp);
         writeStoredPlaybackState({ reciterId, surahId: verse.surahId, ayahId: verse.ayahId, timestamp });
     }, [currentVerse, selectedReciterId, verseStartTime]);
 
