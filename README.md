@@ -1,5 +1,11 @@
 # Quran Life — Obsidian Plugin
 
+> **🚧 Under development — will be fully operational soon.**
+>
+> Quran Life is still being built and is not finished yet. Expect rough edges,
+> breaking changes and one-time data migrations between versions. Feel free to try
+> it and report issues, but please don't rely on it as your only review tool just yet.
+
 Daily Qur'an review, mindmap memorization and Anki export, vault-synced via Resilio Sync.
 
 ## Installation
@@ -35,7 +41,34 @@ Daily Qur'an review, mindmap memorization and Anki export, vault-synced via Resi
 
 ## Storage
 
-All plugin data lives in a single vault folder (`QuranLife/` by default, or the plugin's own data folder on desktop), which Resilio Sync can keep in sync across devices.
+Everything the plugin stores lives in **one** folder — the plugin's own data folder
+inside Obsidian's configuration directory (`<configDir>` is `.obsidian` unless you
+renamed it):
+
+```
+<configDir>/plugins/quran-life/data/
+├── assets/               # the Qur'an corpus, downloaded once on first run
+├── splits/               # Anki split anchors, one file per surah
+├── mindmaps/             # tldraw mindmaps: surah-, part- and meta-<n>.json
+├── docs/                 # the markdown note belonging to each mindmap
+├── daily/                # daily portion settings + per-part listening progress
+├── recitation-cache/     # word-timing slices for offline playback
+├── deleted-mindmaps.json # delete tombstones (stable deletes across syncs)
+└── anki-export.json      # Anki export order preferences
+```
+
+Point Resilio Sync (or any file sync) at that single folder to keep your data in sync
+across devices. Offline recitation audio downloaded from the settings tab lives one
+level up, in `<configDir>/plugins/quran-life/offline-audio/` — syncing the whole
+`plugins/quran-life` folder covers both. The location is fixed — there is deliberately no setting to move it —
+so every vault and every device syncs exactly one predictable directory.
+
+Two notes:
+
+- `QuranLife/` at the vault root is only read for the one-time migration from older
+  builds; the plugin never writes there anymore, so you can move or delete it after a
+  release that no longer needs it.
+- Review scheduling lives in Anki, not in the plugin, so no review/`nodes` files are kept.
 
 ## Development
 

@@ -1,5 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
+import { scriptElementGuard } from "./scripts/esbuild-script-element-guard.mjs";
 
 // Manual built-in module list instead of 'builtin-modules' (deprecated package).
 // Updated 2024-02-01.
@@ -57,6 +58,9 @@ const context = await esbuild.context({
   // automatic JSX transform via the plugin-only tsconfig.
   tsconfig: "tsconfig.plugin.json",
   logLevel: "info",
+  // Strips third-party runtime script-element creation (react-dom preload
+  // helpers, jszip setImmediate fallbacks) and fails the build if any remains.
+  plugins: [scriptElementGuard()],
   sourcemap: prod ? false : "inline",
   treeShaking: true,
   outfile: "main.js",

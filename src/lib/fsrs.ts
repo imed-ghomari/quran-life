@@ -83,6 +83,29 @@ export function createFSRS(customWeights?: number[] | null): FSRS {
 // ========================================
 
 /**
+ * Whole days between two dates at UTC day boundaries — mirrors ts-fsrs's own
+ * `dateDiffInDays` so our scheduling math matches the library exactly.
+ */
+function elapsedDaysBetween(last: Date, current: Date): number {
+    const utc1 = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate());
+    const utc2 = Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate());
+    return Math.floor((utc2 - utc1) / 86_400_000);
+}
+
+/**
+ * Days since a card's last review, as FSRS counts them (0 for unseen cards).
+ * `Card.elapsed_days` is deprecated (removed in v6), so the value is derived
+ * here instead of read back from the library.
+ */
+function elapsedDaysForState(state: FSRSState, now: Date): number {
+    if (state.state === 'New' || !state.last_review) return 0;
+    const last = new Date(state.last_review);
+    if (isNaN(last.getTime())) return 0;
+    const days = elapsedDaysBetween(last, now);
+    return Number.isFinite(days) && days > 0 ? days : 0;
+}
+
+/**
  * Convert ts-fsrs State enum to our string state
  */
 function stateToString(state: State): FSRSCardState {
@@ -127,11 +150,10 @@ function stateToCard(fsrsState: FSRSState): Card {
         }
     }
 
-    return {
+    const card = {
         due,
         stability: fsrsState.stability,
         difficulty: fsrsState.difficulty,
-        elapsed_days: fsrsState.elapsed_days,
         scheduled_days: fsrsState.scheduled_days,
         reps: fsrsState.reps,
         lapses: fsrsState.lapses,
@@ -139,17 +161,22 @@ function stateToCard(fsrsState: FSRSState): Card {
         last_review,
         learning_steps: 0,  // Not used with enable_short_term: false
     };
+    // `Card.elapsed_days` is deprecated (removed in v6) and ignored on input —
+    // ts-fsrs re-derives it from `last_review` in AbstractScheduler.init(). The
+    // cast keeps the library's required-field type happy without touching it.
+    return card as Card;
 }
 
 /**
- * Convert ts-fsrs Card to FSRSState
+ * Convert ts-fsrs Card to FSRSState. `elapsedDays` is captured by the caller
+ * while the pre-review dates are still known (ts-fsrs no longer exposes it).
  */
-function cardToState(card: Card): FSRSState {
+function cardToState(card: Card, elapsedDays = 0): FSRSState {
     return {
         due: card.due.toISOString(),
         stability: card.stability,
         difficulty: card.difficulty,
-        elapsed_days: card.elapsed_days,
+        elapsed_days: elapsedDays,
         scheduled_days: card.scheduled_days,
         reps: card.reps,
         lapses: card.lapses,
@@ -187,6 +214,8 @@ export function reviewCard(
     const f = createFSRS(customWeights);
     const card = stateToCard(state);
     const now = new Date();
+    // Interval FSRS schedules with, captured before `next()` replaces last_review.
+    const elapsedDays = elapsedDaysForState(state, now);
 
     // Map binary rating: Remembered → Good (3), Forgot → Again (1)
     const rating = remembered ? Rating.Good : Rating.Again;
@@ -203,12 +232,12 @@ export function reviewCard(
         state: state.state,
         stability: state.stability,
         difficulty: state.difficulty,
-        elapsed_days: state.elapsed_days,
+        elapsed_days: elapsedDays,
         scheduled_days: state.scheduled_days,
     };
 
     return {
-        newState: cardToState(result.card),
+        newState: cardToState(result.card, elapsedDays),
         log,
     };
 }

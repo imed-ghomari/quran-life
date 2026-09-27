@@ -353,8 +353,21 @@ export function setBundledWasmDataUrl(url: string | null): void {
   bundledWasmDataUrl = url;
 }
 
+/** Decode the inlined `data:application/wasm;base64,...` payload into bytes. */
 function bundledWasmToArrayBuffer(): ArrayBuffer | null {
-  return null;
+  const dataUrl = bundledWasmDataUrl;
+  if (!dataUrl) return null;
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0 || !/;base64/i.test(dataUrl.slice(0, comma))) return null;
+  if (typeof atob !== 'function') return null;
+  try {
+    const binary = atob(dataUrl.slice(comma + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  } catch {
+    return null;
+  }
 }
 
 

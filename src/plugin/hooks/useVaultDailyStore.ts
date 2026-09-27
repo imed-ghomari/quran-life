@@ -252,11 +252,10 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
   const deleteProgress = useCallback(async (partId: number) => {
     setProgress(prev => {
       const next = prev.filter(p => p.partId !== partId);
-      void vaultStore.saveProgress(partId, null); // delete file handled via save with empty?
-      // Actually vaultStore.saveProgress will create file; to delete we need to delete file via vault
-      // Do direct vault delete via app
+      void vaultStore.saveProgress(partId, null);
+      // Direct vault delete via app (paths follow the current data root).
       const app: App = vaultStore.app;
-      const path = `QuranLife/daily/progress/part-${partId}.json`;
+      const path = `${vaultStore.root}/daily/progress/part-${partId}.json`;
       const file = app?.vault?.getAbstractFileByPath?.(path);
       if (file) void app.vault.delete(file);
       return next;
@@ -268,7 +267,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
       setProgress([]);
       for (let pid = 1; pid <= 8; pid++) {
         const app: App = vaultStore.app;
-        const path = `QuranLife/daily/progress/part-${pid}.json`;
+        const path = `${vaultStore.root}/daily/progress/part-${pid}.json`;
         const file = app?.vault?.getAbstractFileByPath?.(path);
         if (file) try { await app.vault.delete(file); } catch { /* best-effort only; ignore */ }
       }
@@ -277,7 +276,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
     setProgress(prev => {
       const next = prev.filter(p => p.partId !== partId);
       const app: App = vaultStore.app;
-      const path = `QuranLife/daily/progress/part-${partId}.json`;
+      const path = `${vaultStore.root}/daily/progress/part-${partId}.json`;
       const file = app?.vault?.getAbstractFileByPath?.(path);
       if (file) void app.vault.delete(file);
       return next;

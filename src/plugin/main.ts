@@ -1,5 +1,5 @@
-import { Notice, Platform, Plugin, TFile, normalizePath, requestUrl } from "obsidian";
-import { VaultStore, LEGACY_DATA_ROOT, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, getMobileAwareDefaultRoot, isHiddenPath, asRecord } from "./storage/vaultAdapter";
+import { Notice, Plugin, TFile, normalizePath, requestUrl } from "obsidian";
+import { VaultStore, LEGACY_DATA_ROOT, LEGACY_PATHS, VAULT_PATHS, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, isHiddenPath, asRecord } from "./storage/vaultAdapter";
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
@@ -30,27 +30,24 @@ export default class QuranLifePlugin extends Plugin {
     return normalizePath(`${this.app.vault.configDir}/plugins/quran-life`);
   }
 
-  /** Effective data root: the user's setting, or the platform default. */
+  /**
+   * The plugin's one and only data root: `<configDir>/plugins/quran-life/data`.
+   * Not configurable on purpose — one predictable folder per vault.
+   */
   dataRootPath(): string {
-    return normalizePath(this.settings.dataRoot || getMobileAwareDefaultRoot(this.app));
+    return getDefaultDataRoot(this.app);
   }
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    // Mobile: prefer visible folder if hidden not supported — getMobileAwareDefaultRoot handles Platform.isMobile
-    const effectiveDefault = getMobileAwareDefaultRoot(this.app);
-    // Migrate hidden default to visible on mobile if user hasn't customized
-    if (Platform.isMobile && this.settings.dataRoot === getDefaultDataRoot(this.app)) {
-      this.settings.dataRoot = effectiveDefault;
-      await this.saveData(this.settings);
-    }
-    this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || effectiveDefault);
+    const dataRoot = this.dataRootPath();
+    this.vaultStore = new VaultStore(this.app, dataRoot);
     this.debouncedWriter = new DebouncedVaultWriter(this.app);
     // Obsidian Mobile does not expose `window.app`; register the app so
     // recitation metadata / Quran JSON / offline audio resolve on mobile exactly
     // like on desktop (requestUrl without CORS, vault adapter reads).
     setObsidianApp(this.app);
-    registerVaultRecitationCache(this.app, this.settings.dataRoot || effectiveDefault);
+    registerVaultRecitationCache(this.app, dataRoot);
 
     // Ensure data root exists on layout ready (expensive init deferred) — wrap to avoid mobile crash blocking enable
     this.app.workspace.onLayoutReady(() => {
@@ -93,7 +90,7 @@ export default class QuranLifePlugin extends Plugin {
     // Status bar for sync feedback (Resilio is external, show last write time) — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
     const statusEl = this.addStatusBarItem();
     statusEl.setText("Quran Life ✓");
-    statusEl.title = `Data root: ${this.settings.dataRoot} (Resilio Sync)`;
+    statusEl.title = `Data folder: ${this.dataRootPath()} (Resilio Sync)`;
   }
 
   onunload(): void {
@@ -106,18 +103,17 @@ export default class QuranLifePlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
+    // The data root is fixed, so nothing but data.json needs writing here.
     await this.saveData(this.settings);
-    // recreate store if dataRoot changed
-    const effectiveDefault = getMobileAwareDefaultRoot(this.app);
-    this.vaultStore = new VaultStore(this.app, this.settings.dataRoot || effectiveDefault);
-    registerVaultRecitationCache(this.app, this.settings.dataRoot || effectiveDefault);
   }
 
   private async ensureDataRoot(): Promise<void> {
     const root = this.dataRootPath();
-    // Create root and subfolders using hidden-aware ensureFolder
+    // Create root and subfolders using hidden-aware ensureFolder.
+    // No `nodes/` (review state lives in Anki) and no `meta/` (tombstones and
+    // Anki export prefs sit at the data root, next to docs/ and mindmaps/).
     await ensureFolder(this.app, root);
-    for (const sub of ["splits", "mindmaps", "docs", "daily/progress", "meta", "nodes", "assets"]) {
+    for (const sub of ["splits", "mindmaps", "docs", "daily/progress", "assets"]) {
       await ensureFolder(this.app, normalizePath(`${root}/${sub}`));
     }
     // Migrate from legacy QuranLife folder if new root is empty and legacy exists
@@ -158,6 +154,7 @@ export default class QuranLifePlugin extends Plugin {
         } catch { /* migration is best effort */ }
       }
     }
+    await this.pruneRemovedFolders(root);
     // Ensure settings.json exists (hidden-aware)
     const settingsPath = normalizePath(`${root}/settings.json`);
     if (!(await this.pathExists(settingsPath))) {
@@ -187,7 +184,13 @@ export default class QuranLifePlugin extends Plugin {
           const raw = await this.app.vault.adapter.read(cand);
           if (raw && raw.trim().startsWith("{")) {
             await this.writeVaultText(vaultQuranPath, raw);
-            new Notice(`Quran data copied to ${vaultQuranPath} for offline use`);
+            // Move, don't copy: the corpus is 8.8MB and older builds dropped it
+            // into `QuranLife/` at the vault root, which is exactly the stray
+            // copy this migration exists to remove.
+            if (cand.startsWith(`${LEGACY_DATA_ROOT}/`)) {
+              try { await this.app.vault.adapter.remove(cand); } catch { /* keep the old copy rather than lose the corpus */ }
+            }
+            new Notice(`Quran data stored in ${vaultQuranPath} for offline use`);
             break;
           }
         } catch { /* candidate not present */ }
@@ -215,6 +218,47 @@ export default class QuranLifePlugin extends Plugin {
         }
       }
     }
+  }
+
+  /**
+   * Clean the two folders older builds created inside the data root:
+   * - `nodes/` — FSRS review state. Anki owns scheduling now, so the whole
+   *   folder is removed (nothing in the codebase reads it).
+   * - `meta/` — move its two known files (mindmap tombstones, Anki export
+   *   prefs) up to the data root, next to `docs/` and `mindmaps/`, then remove
+   *   the folder. Anything else found in there is left untouched (and the
+   *   folder kept) rather than deleted.
+   * Both folders live under the hidden config dir, so the adapter does the work.
+   */
+  private async pruneRemovedFolders(root: string): Promise<void> {
+    const moves: Array<[string, string]> = [
+      [LEGACY_PATHS.deletedMindmaps(root), VAULT_PATHS.deletedMindmaps(root)],
+      [LEGACY_PATHS.ankiExport(root), VAULT_PATHS.ankiExport(root)],
+    ];
+    for (const [from, to] of moves) {
+      try {
+        if (await this.pathExists(to)) continue;
+        if (!(await this.pathExists(from))) continue;
+        const raw = await this.app.vault.adapter.read(from);
+        await this.writeVaultText(to, raw);
+        // Move, don't copy: the old file must leave `meta/` so the folder can go.
+        try { await this.app.vault.adapter.remove(from); } catch { /* read is already served from the root copy */ }
+      } catch { /* keep the legacy file when it cannot be copied */ }
+    }
+    // `nodes/` held FSRS review state that nothing reads anymore (and nothing
+    // else in the plugin ever wrote there), so it goes wholesale.
+    try {
+      await this.app.vault.adapter.rmdir(normalizePath(`${root}/nodes`), true);
+    } catch { /* absent or sandboxed — nothing to prune */ }
+    // `meta/` only goes once it is empty, so anything we did not recognise
+    // (an ancient theme.json, a file you dropped in by hand) is never deleted.
+    try {
+      const metaDir = normalizePath(`${root}/meta`);
+      const listed = await this.app.vault.adapter.list(metaDir);
+      if (listed.files.length === 0 && listed.folders.length === 0) {
+        await this.app.vault.adapter.rmdir(metaDir, false);
+      }
+    } catch { /* folder absent or sandboxed — nothing to prune */ }
   }
 
   /** Write text to a vault path, going through the adapter when the path is hidden. */

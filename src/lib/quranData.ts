@@ -4,7 +4,17 @@
 
 import { Surah, Verse, QuranPart, CoreQuranPart, ALL_QURAN_PART } from './types';
 import { getObsidianApp, getVaultConfigDir, pluginPublishDir } from './obsidianApp';
+import { requestJson } from './obsidianRequest';
 import type { App } from 'obsidian';
+
+/**
+ * The 8.8MB corpus has exactly one home: the plugin's own data folder
+ * (`<configDir>/plugins/quran-life/data/assets/`, downloaded there on first use).
+ * `QuranLife/` at the vault root is a previous location — still read so
+ * pre-migration installs keep working, never written.
+ */
+const QURAN_FILE = 'qpc-hafs-word-by-word.json';
+const LEGACY_QURAN_ASSET = `QuranLife/assets/${QURAN_FILE}`;
 
 /**
  * Typed subset of the Obsidian vault adapter surface consumed in this file.
@@ -326,7 +336,7 @@ export function splitVerseHighlightWords(text: string): string[] {
  * Used to render ornaments while highlighting only real words.
  */
 export function mapDisplayToHighlightIndices(displayWords: string[]): number[] {
-    const out: number[] = new Array(displayWords.length);
+    const out = new Array<number>(displayWords.length);
     let hi = 0;
     for (let i = 0; i < displayWords.length; i++) {
         if (isVerseOrnamentToken(displayWords[i])) out[i] = -1;
@@ -385,19 +395,21 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
             const publishDir = pluginPublishDir(obsidianApp);
             const configDir = getVaultConfigDir(obsidianApp);
             const pluginDir = configDir ? `${configDir}/plugins/quran-life` : null;
+            // Canonical home of the downloaded corpus (plugin data folder).
+            const dataAssetPath = publishDir ? `${publishDir}/data/assets/${QURAN_FILE}` : null;
             const candidates = [...new Set([
-                publishDir ? `${publishDir}/data/assets/qpc-hafs-word-by-word.json` : null,
-                pluginDir ? `${pluginDir}/data/assets/qpc-hafs-word-by-word.json` : null,
-                'QuranLife/assets/qpc-hafs-word-by-word.json',
-                'QuranLife/qpc-hafs-word-by-word.json',
-                publishDir ? `${publishDir}/qpc-hafs-word-by-word.json` : null,
-                pluginDir ? `${pluginDir}/qpc-hafs-word-by-word.json` : null,
-                publishDir ? `${publishDir}/public/qpc-hafs-word-by-word.json` : null,
-                pluginDir ? `${pluginDir}/public/qpc-hafs-word-by-word.json` : null,
-                publishDir ? `${publishDir}/data/qpc-hafs-word-by-word.json` : null,
-                pluginDir ? `${pluginDir}/data/qpc-hafs-word-by-word.json` : null,
-                'qpc-hafs-word-by-word.json',
-                'public/qpc-hafs-word-by-word.json',
+                dataAssetPath,
+                publishDir ? `${publishDir}/data/${QURAN_FILE}` : null,
+                publishDir ? `${publishDir}/${QURAN_FILE}` : null,
+                publishDir ? `${publishDir}/public/${QURAN_FILE}` : null,
+                pluginDir ? `${pluginDir}/data/assets/${QURAN_FILE}` : null,
+                pluginDir ? `${pluginDir}/data/${QURAN_FILE}` : null,
+                pluginDir ? `${pluginDir}/${QURAN_FILE}` : null,
+                pluginDir ? `${pluginDir}/public/${QURAN_FILE}` : null,
+                LEGACY_QURAN_ASSET,
+                `QuranLife/${QURAN_FILE}`,
+                QURAN_FILE,
+                `public/${QURAN_FILE}`,
             ].filter((c): c is string => typeof c === 'string' && c.length > 0))];
             if (isObsidian) {
                 try {
@@ -421,14 +433,11 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                             try {
                                 const resourceUrl = adapter.getResourcePath(cand);
                                 if (!resourceUrl) continue;
-                                const r = await fetch(resourceUrl);
-                                if (r.ok) {
-                                    const parsed: unknown = (await r.json()) as unknown;
-                                    const rec = asRecord(parsed);
-                                    if (rec) {
-                                        cachedVerses = parseQuranJson(rec);
-                                        return cachedVerses;
-                                    }
+                                const parsed: unknown = await requestJson(resourceUrl);
+                                const rec = asRecord(parsed);
+                                if (rec) {
+                                    cachedVerses = parseQuranJson(rec);
+                                    return cachedVerses;
                                 }
                             } catch { /* best-effort only; ignore */ }
                         }
@@ -456,8 +465,9 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                         const rec = asRecord(parsed);
                         if (rec) {
                             cachedVerses = parseQuranJson(rec);
-                            // Persist best-effort so this download happens exactly once
-                            void persistTextToVault(obsidianApp, 'QuranLife/assets/qpc-hafs-word-by-word.json', raw).catch(() => {});
+                            // Persist into the plugin's own data folder so this download
+                            // happens exactly once and never lands at the vault root.
+                            void persistTextToVault(obsidianApp, dataAssetPath ?? LEGACY_QURAN_ASSET, raw).catch(() => {});
                             return cachedVerses;
                         }
                     }
@@ -465,9 +475,9 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                     console.warn('[QuranLife] Quran JSON download from release failed', e);
                 }
                 console.warn('[QuranLife] Quran JSON not found in vault candidates, checked:', candidates);
-                // Try one last vault read for legacy path without isObsidian check
+                // Try one last vault read for the legacy location without isObsidian check
                 try {
-                    const raw = await adapter?.read('QuranLife/assets/qpc-hafs-word-by-word.json');
+                    const raw = await adapter?.read(LEGACY_QURAN_ASSET);
                     if (raw) {
                         const parsed: unknown = JSON.parse(raw);
                         const rec = asRecord(parsed);
@@ -477,14 +487,12 @@ export async function getQuranVerses(onProgress?: QuranDownloadProgress): Promis
                         }
                     }
                 } catch { /* best-effort only; ignore */ }
-                throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in the plugin folder or QuranLife/assets/. Plugin will copy it on next restart from the plugin folder if present.');
+                throw new Error('Quran data not found in vault. Ensure qpc-hafs-word-by-word.json is in the plugin data folder (<configDir>/plugins/quran-life/data/assets/) — the plugin downloads it there on first run.');
             }
 
-            const res = await fetch('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
-            if (!res.ok) throw new Error(`Failed to load quran JSON: ${res.status}`);
-            const parsed: unknown = (await res.json()) as unknown;
+            const parsed: unknown = await requestJson('/qpc-hafs-word-by-word.json', { cache: 'force-cache' });
             const rec = asRecord(parsed);
-            if (!rec) throw new Error('Failed to parse quran JSON');
+            if (!rec) throw new Error('Failed to load quran JSON');
             cachedVerses = parseQuranJson(rec);
             return cachedVerses;
         } catch (err) {

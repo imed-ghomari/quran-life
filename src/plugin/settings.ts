@@ -1,4 +1,5 @@
-import { App, ButtonComponent, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, ButtonComponent, Notice, PluginSettingTab, Setting } from "obsidian";
+import type { SettingDefinition, SettingDefinitionItem, SettingGroup } from "obsidian";
 import QuranLifePlugin from "./main";
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
 import { getSurahsByPart } from "@/lib/quranData";
@@ -13,10 +14,11 @@ import {
   scanOfflineAudioForReciter,
   sumOfflineSizes,
   formatBytes,
-  OFFLINE_AUDIO_ROOT,
+  getOfflineAudioRoot,
 } from "./offlineAudio";
 import type { OfflineDownloadProgress, OfflinePartScan, OfflineReciterScan } from "./offlineAudio";
-import { LEGACY_DATA_ROOT, asRecord, getMobileAwareDefaultRoot } from "./storage/vaultAdapter";
+import { LEGACY_DATA_ROOT, VAULT_PATHS, asRecord } from "./storage/vaultAdapter";
+import { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } from "@/lib/anki/ankiExportPrefs";
 import type { AnkiExportPrefs } from "@/lib/anki/ankiExportPrefs";
 import { confirmAction } from "./lib/confirm";
 
@@ -26,27 +28,27 @@ const PLAYER_RECITER_STORAGE_KEY = "selected_reciter_id";
 const DOWNLOAD_RECITER_STORAGE_KEY = "offline_download_reciter_id";
 const PLAYER_RECITER_EVENT = "quran-life:player-reciter-changed";
 
-// One offline download at a time, tracked at module scope: `display()` re-runs
-// whenever any related setting changes, and the re-rendered tabs must still see the
+// One offline download at a time, tracked at module scope: the tab re-renders
+// whenever any related setting changes, and the re-rendered rows must still see the
 // running download (to show its state, block a second one and offer Cancel).
 let offlineDownloadInFlight: QuranPart | null = null;
 let offlineDownloadAbort: AbortController | null = null;
 let offlineDownloadSettled: (() => void) | null = null;
 
 export interface QuranLifePluginSettings {
-  dataRoot: string;
   autoSyncDebounceMs: number;
 }
 
+// The data folder is not configurable: everything lives in the plugin's own data
+// folder (`<configDir>/plugins/quran-life/data`, resolved at runtime because the
+// configuration folder itself is user-configurable). A leftover `dataRoot` key
+// in an old data.json is ignored on load.
 export const DEFAULT_SETTINGS: QuranLifePluginSettings = {
-  // Empty means "platform default" — resolved through the vault's config dir at
-  // runtime, because Obsidian's configuration folder is user-configurable.
-  dataRoot: "",
   autoSyncDebounceMs: 700,
 };
 
 function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : typeof e === "string" ? e : "unknown error";
+  return e instanceof Error ? e.message : typeof e === 'string' ? e : "unknown error";
 }
 
 type DailyPortionMode = 'audio' | 'reading';
@@ -91,78 +93,90 @@ function parseDaily(raw: unknown): DailySettings {
   };
 }
 
+/**
+ * Settings tab built on Obsidian's declarative settings API (1.13+),
+ * `getSettingDefinitions()`.
+ *
+ * Every row is a `render` definition carrying a real name + description, so all
+ * settings are indexed by Obsidian's settings search while the row contents stay
+ * the exact imperative components this tab always used (sliders, dynamic
+ * descriptions, the offline-audio library manager, …).
+ *
+ * `display()` is only the fallback for Obsidian < 1.13: it renders the very same
+ * definitions imperatively, so both paths stay in sync by construction.
+ */
 export class QuranLifeSettingTab extends PluginSettingTab {
   plugin: QuranLifePlugin;
   private displayGeneration = 0;
+  /** Async-loaded values the (synchronous) definition builder reads from. */
+  private dailyCache: DailySettings | null = null;
+  private ankiPrefsCache: AnkiExportPrefs | null = null;
+  private recitersCache: Reciter[] | null = null;
+  private cachesRequested = false;
+
   constructor(app: App, plugin: QuranLifePlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    // Mobile CSS is scoped under this class; the declarative renderer keeps the
+    // container element, so setting the class once here covers both paths.
+    try { this.containerEl.addClass("quran-life-settings"); } catch { /* container not ready */ }
   }
 
+  /** Obsidian < 1.13 fallback (on 1.13+ the tab renders from the definitions). */
   display(): void {
-    const myGen = ++this.displayGeneration;
-    void this.renderSettings(myGen);
+    this.containerEl.empty();
+    this.containerEl.addClass("quran-life-settings");
+    this.renderDefinitionItems(this.containerEl, this.getSettingDefinitions());
   }
 
-  private async renderSettings(myGen: number): Promise<void> {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.addClass("quran-life-settings");
+  /**
+   * Declarative settings (Obsidian 1.13+): the same rows as `display()`, each
+   * with a name/description so they appear in settings search.
+   */
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    const myGen = ++this.displayGeneration;
+    this.requestCaches(myGen);
 
-    new Setting(containerEl).setName("Storage & sync").setHeading();
+    const offlineRoot = getOfflineAudioRoot(this.app);
+    const dataRoot = this.plugin.dataRootPath();
+    const offlineReciters: Reciter[] = this.recitersCache ?? ALLOWED_RECITERS;
+    const ankiPrefs: AnkiExportPrefs = this.ankiPrefsCache ?? { ...DEFAULT_ANKI_EXPORT_PREFS };
+    let daily: DailySettings = this.dailyCache ? { ...this.dailyCache } : { ...DEFAULT_DAILY };
 
-    const platformDefault = getMobileAwareDefaultRoot(this.app);
-    const isMobile = Platform.isMobile;
-    new Setting(containerEl)
-      .setName("Data folder")
-      .setDesc(isMobile ? "Resilio-synced folder. On mobile defaults to QuranLife (visible); desktop keeps everything in the plugin's own data folder (one folder sync)" : "Resilio-synced folder. Default: the plugin's data folder (one folder sync)")
-      .addText((text) =>
-        text
-          .setPlaceholder(platformDefault)
-          .setValue(this.plugin.settings.dataRoot)
-          .onChange(async (value) => {
-            const normalized = value.trim().replace(/^\/+|\/+$/g, "");
-            this.plugin.settings.dataRoot = normalized;
-            await this.plugin.saveSettings();
-          })
-      );
+    // Rows that change when the daily settings change; each row's render callback
+    // registers the refresher that belongs to it (all optional).
+    const refreshers: {
+      minutesDesc?: () => void;
+      surahList?: () => void;
+      surahCount?: () => void;
+      offline?: () => void;
+    } = {};
 
-    new Setting(containerEl)
-      .setName("Autobackup")
-      .setDesc("Keep on for instant saves.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoSyncDebounceMs > 0)
-          .onChange(async (value) => {
-            this.plugin.settings.autoSyncDebounceMs = value ? 700 : 0;
-            await this.plugin.saveSettings();
-          })
-      );
+    /** A declarative row whose contents are built imperatively. */
+    const row = (name: string, desc: string | undefined, build: (setting: Setting) => void): SettingDefinition =>
+      ({
+        name,
+        ...(desc ? { desc } : {}),
+        render: (setting: Setting) => {
+          // Keep label/description identical on both render paths (the
+          // declarative framework may or may not pre-fill them).
+          setting.setName(name);
+          if (desc) setting.setDesc(desc);
+          build(setting);
+        },
+      });
 
-    new Setting(containerEl)
-      .setName("Migrate legacy backup")
-      .setDesc("Import legacy JSON backup.")
-      .addButton((btn) =>
-        btn.setButtonText("Migrate").onClick(() => { void this.plugin.promptLegacyMigration(); })
-      );
-
-    // Daily Portion — guard against async race that appends duplicate UI on rapid re-display (mobile/settings navigation)
-    let daily: DailySettings = { ...DEFAULT_DAILY };
-    try {
-      const raw = await this.plugin.vaultStore.loadSettings<unknown>(null);
-      // If a newer display() started while we were awaiting, abort — the newer one will render alone
-      if (myGen !== this.displayGeneration) return;
-      daily = parseDaily(raw);
-    } catch {
-      if (myGen !== this.displayGeneration) return;
-    }
-    if (myGen !== this.displayGeneration) return;
-
-    new Setting(containerEl).setName("Daily portion").setHeading();
-    let updateMinutesDesc: () => void = () => {};
-    let renderSurahList: () => void = () => {};
-    let updateExtraDesc: () => void = () => {};
-    let refreshOfflineStatus: () => void = () => {};
+    /** A custom block: replaces the row chrome and draws its own content. */
+    const block = (name: string, build: (el: HTMLElement) => void): SettingDefinition =>
+      ({
+        name,
+        render: (setting: Setting) => {
+          setting.settingEl.empty();
+          setting.settingEl.removeClass("setting-item");
+          setting.settingEl.addClass("quran-life-block");
+          build(setting.settingEl);
+        },
+      });
 
     const saveDaily = async (patch: Partial<DailySettings>): Promise<void> => {
       daily = { ...daily, ...patch };
@@ -171,243 +185,276 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) {
         daily.activePart = parseDaily(await this.plugin.vaultStore.loadSettings<unknown>(null)).activePart;
       }
+      this.dailyCache = { ...daily };
       const payload = { ...daily, updatedAt: new Date().toISOString() };
       await this.plugin.vaultStore.saveSettings(payload);
       try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch { /* no listeners */ }
-      try { renderSurahList(); } catch { /* list not rendered yet */ }
-      try { updateExtraDesc(); } catch { /* heading not rendered yet */ }
-      try { updateMinutesDesc(); } catch { /* slider not rendered yet */ }
-      try { refreshOfflineStatus(); } catch { /* offline section not rendered yet */ }
+      try { refreshers.surahList?.(); } catch { /* list not rendered yet */ }
+      try { refreshers.surahCount?.(); } catch { /* heading not rendered yet */ }
+      try { refreshers.minutesDesc?.(); } catch { /* slider not rendered yet */ }
+      try { refreshers.offline?.(); } catch { /* offline section not rendered yet */ }
     };
 
-    new Setting(containerEl)
-      .setName("Part")
-      .setDesc("Qur'an part")
-      .addDropdown(drop => {
-        for (const opt of ACTIVE_PART_OPTIONS) drop.addOption(String(opt.id), opt.name);
-        drop.setValue(String(daily.activePart));
-        drop.onChange(v => {
-          void (async () => {
-            const part = Number(v);
-            await saveDaily({ activePart: isValidQuranPart(part) ? part : DEFAULT_DAILY.activePart });
-            updateMinutesDesc();
-          })();
+    // ---------- Storage & sync ----------
+    const storageGroup: SettingDefinitionItem = {
+      type: "group",
+      heading: "Storage & sync",
+      items: [
+        // Read-only on purpose: a fixed folder means every vault (and every
+        // device using it) syncs exactly one predictable directory.
+        row("Data folder", `Always the plugin's own data folder: ${dataRoot}`, () => {}),
+        row("Autobackup", "Keep on for instant saves.", (setting) => {
+          setting.addToggle((toggle) =>
+            toggle
+              .setValue(this.plugin.settings.autoSyncDebounceMs > 0)
+              .onChange(async (value) => {
+                this.plugin.settings.autoSyncDebounceMs = value ? 700 : 0;
+                await this.plugin.saveSettings();
+              })
+          );
+        }),
+        row("Migrate legacy backup", "Import legacy JSON backup.", (setting) => {
+          setting.addButton((btn) =>
+            btn.setButtonText("Migrate").onClick(() => { void this.plugin.promptLegacyMigration(); })
+          );
+        }),
+      ],
+    };
+
+    // ---------- Daily portion ----------
+    let updateMinutesDesc: () => void = () => {};
+    let renderSurahList: () => void = () => {};
+    let updateSurahCount: () => void = () => {};
+    let readingStyleEl: HTMLElement | null = null;
+    const syncReadingStyleVisibility = (mode: DailyPortionMode): void => {
+      readingStyleEl?.toggleClass("quran-life-hidden", mode !== 'reading');
+    };
+
+    const minutesRow: SettingDefinitionItem = row("Daily target", `${daily.dailyTargetMinutes} min`, (setting) => {
+      updateMinutesDesc = () => {
+        const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
+        const totalVerses = getEligibleVerseCount(eligible);
+        const days = estimateEligibleCycleDays(eligible, daily.dailyTargetMinutes, daily.dailyPortionMode);
+        const versesPerDay = totalVerses && days ? Math.ceil(totalVerses / days) : 0;
+        if (eligible.length === 0) {
+          setting.setDesc(`${daily.dailyTargetMinutes} min • no surahs selected`);
+        } else {
+          setting.setDesc(`${daily.dailyTargetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${daily.dailyPortionMode === 'audio' ? 'Listening' : 'Reading'}`);
+        }
+      };
+      refreshers.minutesDesc = updateMinutesDesc;
+      updateMinutesDesc();
+      setting.addSlider((slider) => {
+        slider.setLimits(5, 180, 5);
+        slider.setValue(daily.dailyTargetMinutes);
+        slider.onChange(async (v) => {
+          daily.dailyTargetMinutes = clampDailyTargetMinutes(v);
+          updateMinutesDesc();
+          await saveDaily({ dailyTargetMinutes: v });
+          updateMinutesDesc();
         });
-      });
-
-    const minutesSetting = new Setting(containerEl)
-      .setName("Daily target");
-    updateMinutesDesc = () => {
-      const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
-      const totalVerses = getEligibleVerseCount(eligible);
-      const days = estimateEligibleCycleDays(eligible, daily.dailyTargetMinutes, daily.dailyPortionMode);
-      const versesPerDay = totalVerses && days ? Math.ceil(totalVerses / days) : 0;
-      if (eligible.length === 0) {
-        minutesSetting.setDesc(`${daily.dailyTargetMinutes} min • no surahs selected`);
-      } else {
-        minutesSetting.setDesc(`${daily.dailyTargetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${daily.dailyPortionMode === 'audio' ? 'Listening' : 'Reading'}`);
-      }
-    };
-    updateMinutesDesc();
-    minutesSetting.addSlider(slider => {
-      slider.setLimits(5, 180, 5);
-      slider.setValue(daily.dailyTargetMinutes);
-      slider.onChange(async v => {
-        daily.dailyTargetMinutes = clampDailyTargetMinutes(v);
-        updateMinutesDesc();
-        await saveDaily({ dailyTargetMinutes: v });
-        updateMinutesDesc();
       });
     });
 
-    const readingStyleSetting = new Setting(containerEl)
-      .setName("Reading style")
-      .addDropdown(drop => {
-        drop.addOption("paragraph", "Paragraph");
-        drop.addOption("line_by_line", "Line by line");
-        drop.setValue(daily.dailyReadingStyle);
-        drop.onChange(async v => { await saveDaily({ dailyReadingStyle: v === 'line_by_line' ? 'line_by_line' : 'paragraph' }); });
-      });
-    const syncReadingStyleVisibility = (mode: DailyPortionMode): void => {
-      readingStyleSetting.settingEl.toggleClass("quran-life-hidden", mode !== 'reading');
+    const dailyGroup: SettingDefinitionItem = {
+      type: "group",
+      heading: "Daily portion",
+      items: [
+        row("Part", "Qur'an part", (setting) => {
+          setting.addDropdown((drop) => {
+            for (const opt of ACTIVE_PART_OPTIONS) drop.addOption(String(opt.id), opt.name);
+            drop.setValue(String(daily.activePart));
+            drop.onChange((v) => {
+              void (async () => {
+                const part = Number(v);
+                await saveDaily({ activePart: isValidQuranPart(part) ? part : DEFAULT_DAILY.activePart });
+                updateMinutesDesc();
+              })();
+            });
+          });
+        }),
+        minutesRow,
+        row("Reading style", undefined, (setting) => {
+          readingStyleEl = setting.settingEl;
+          setting.addDropdown((drop) => {
+            drop.addOption("paragraph", "Paragraph");
+            drop.addOption("line_by_line", "Line by line");
+            drop.setValue(daily.dailyReadingStyle);
+            drop.onChange(async (v) => { await saveDaily({ dailyReadingStyle: v === 'line_by_line' ? 'line_by_line' : 'paragraph' }); });
+          });
+          syncReadingStyleVisibility(daily.dailyPortionMode);
+        }),
+        row("Mode", undefined, (setting) => {
+          setting.addDropdown((drop) => {
+            drop.addOption("audio", "Listening");
+            drop.addOption("reading", "Reading");
+            drop.setValue(daily.dailyPortionMode);
+            drop.onChange(async (v) => {
+              const mode: DailyPortionMode = v === 'reading' ? 'reading' : 'audio';
+              syncReadingStyleVisibility(mode);
+              await saveDaily({ dailyPortionMode: mode });
+            });
+          });
+          syncReadingStyleVisibility(daily.dailyPortionMode);
+        }),
+      ],
     };
-    syncReadingStyleVisibility(daily.dailyPortionMode);
 
-    new Setting(containerEl)
-      .setName("Mode")
-      .addDropdown(drop => {
-        drop.addOption("audio", "Listening");
-        drop.addOption("reading", "Reading");
-        drop.setValue(daily.dailyPortionMode);
-        drop.onChange(async v => {
-          const mode: DailyPortionMode = v === 'reading' ? 'reading' : 'audio';
-          syncReadingStyleVisibility(mode);
-          await saveDaily({ dailyPortionMode: mode });
-        });
-      });
-    syncReadingStyleVisibility(daily.dailyPortionMode);
-
-    new Setting(containerEl).setName("Surahs").setHeading();
-    const skippedDesc = containerEl.createEl("p", { cls: "setting-item-description" });
-    updateExtraDesc = () => {
-      const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
-      skippedDesc.setText(`${eligible.length}/${getSurahsByPart(daily.activePart).length} selected`);
+    // ---------- Surahs ----------
+    const surahsGroup: SettingDefinitionItem = {
+      type: "group",
+      heading: "Surahs",
+      items: [
+        block("Selection summary", (el) => {
+          const skippedDesc = el.createEl("p", { cls: "setting-item-description" });
+          updateSurahCount = () => {
+            const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
+            skippedDesc.setText(`${eligible.length}/${getSurahsByPart(daily.activePart).length} selected`);
+          };
+          refreshers.surahCount = updateSurahCount;
+          updateSurahCount();
+        }),
+        row("Filter", undefined, (setting) => {
+          setting
+            .addButton((btn) => btn.setButtonText("All").onClick(async () => { await saveDaily({ skippedSurahs: [] }); }))
+            .addButton((btn) => btn.setButtonText("None").onClick(async () => {
+              await saveDaily({ skippedSurahs: getSurahsByPart(daily.activePart).map(s => s.id) });
+            }));
+        }),
+        block("Surah selection", (el) => {
+          const listContainer = el.createDiv({ cls: "quran-life-daily-surah-list" });
+          renderSurahList = () => {
+            listContainer.empty();
+            const surahs = getSurahsByPart(daily.activePart);
+            for (const surah of surahs) {
+              const isSelected = !daily.skippedSurahs.includes(surah.id);
+              const surahRow = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
+              surahRow.toggleClass("is-selected", isSelected);
+              const cb = surahRow.createEl("input", { type: "checkbox" });
+              cb.checked = isSelected;
+              cb.addEventListener("change", () => {
+                void (async () => {
+                  const set = new Set(daily.skippedSurahs);
+                  if (cb.checked) set.delete(surah.id);
+                  else set.add(surah.id);
+                  await saveDaily({ skippedSurahs: Array.from(set) });
+                })();
+              });
+              const label = surahRow.createDiv({ cls: "quran-life-surah-main" });
+              label.addEventListener("click", () => cb.click());
+              label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
+              label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
+              if (isSelected) {
+                surahRow.createSpan({ cls: "quran-life-surah-check", text: "✓" });
+              }
+            }
+          };
+          refreshers.surahList = renderSurahList;
+          renderSurahList();
+        }),
+      ],
     };
-    updateExtraDesc();
 
-    new Setting(containerEl)
-      .setName("Filter")
-      .addButton(btn => btn.setButtonText("All").onClick(async () => { await saveDaily({ skippedSurahs: [] }); }))
-      .addButton(btn => btn.setButtonText("None").onClick(async () => {
-        await saveDaily({ skippedSurahs: getSurahsByPart(daily.activePart).map(s => s.id) });
-      }));
-
-    const listContainer = containerEl.createDiv({ cls: "quran-life-daily-surah-list" });
-
-    renderSurahList = () => {
-      listContainer.empty();
-      const surahs = getSurahsByPart(daily.activePart);
-      for (const surah of surahs) {
-        const isSelected = !daily.skippedSurahs.includes(surah.id);
-        const row = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
-        row.toggleClass("is-selected", isSelected);
-        const cb = row.createEl("input", { type: "checkbox" });
-        cb.checked = isSelected;
-        cb.addEventListener("change", () => {
-          void (async () => {
-            const set = new Set(daily.skippedSurahs);
-            if (cb.checked) set.delete(surah.id);
-            else set.add(surah.id);
-            await saveDaily({ skippedSurahs: Array.from(set) });
-          })();
-        });
-        const label = row.createDiv({ cls: "quran-life-surah-main" });
-        label.addEventListener("click", () => cb.click());
-        label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
-        label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
-        if (isSelected) {
-          row.createSpan({ cls: "quran-life-surah-check", text: "✓" });
-        }
-      }
+    // ---------- Reset ----------
+    const resetGroup: SettingDefinitionItem = {
+      type: "group",
+      heading: "Reset",
+      items: [
+        row("Current part", undefined, (setting) => {
+          setting.addButton((btn) => btn.setButtonText("Reset").onClick(async () => {
+            const confirmed = await confirmAction(this.app, `Reset part ${daily.activePart}?`, "Reset");
+            if (!confirmed) return;
+            try {
+              for (const p of this.progressPathsForPart(daily.activePart)) {
+                await this.deleteVaultPath(p);
+              }
+              new Notice(`Reset part ${daily.activePart}`);
+            } catch (e) { new Notice(`Reset failed: ${errorText(e)}`); }
+          }));
+        }),
+        row("All parts", undefined, (setting) => {
+          setting.addButton((btn) => btn.setButtonText("Reset all").onClick(async () => {
+            btn.buttonEl.addClass("mod-warning");
+            const confirmed = await confirmAction(this.app, "Reset all progress?", "Reset all");
+            if (!confirmed) return;
+            for (let pid = 1; pid <= 8; pid++) {
+              for (const p of this.progressPathsForPart(pid)) {
+                await this.deleteVaultPath(p);
+              }
+            }
+            new Notice("All reset");
+          }));
+        }),
+      ],
     };
-    renderSurahList();
-
-    new Setting(containerEl).setName("Reset").setHeading();
-    new Setting(containerEl)
-      .setName("Current part")
-      .addButton(btn => btn.setButtonText("Reset").onClick(async () => {
-        const confirmed = await confirmAction(this.app, `Reset part ${daily.activePart}?`, "Reset");
-        if (!confirmed) return;
-        try {
-          for (const p of this.progressPathsForPart(daily.activePart)) {
-            await this.deleteVaultPath(p);
-          }
-          new Notice(`Reset part ${daily.activePart}`);
-        } catch (e) { new Notice(`Reset failed: ${errorText(e)}`); }
-      }));
-    new Setting(containerEl)
-      .setName("All parts")
-      .addButton(btn => btn.setButtonText("Reset all").onClick(async () => {
-        btn.buttonEl.addClass("mod-warning");
-        const confirmed = await confirmAction(this.app, "Reset all progress?", "Reset all");
-        if (!confirmed) return;
-        for (let pid = 1; pid <= 8; pid++) {
-          for (const p of this.progressPathsForPart(pid)) {
-            await this.deleteVaultPath(p);
-          }
-        }
-        new Notice("All reset");
-      }));
 
     // ---------- Anki Export — part order + surah-within-part order ----------
-    // Wrap in a dedicated section so async-added rows (including Reset) stay under this heading and not under Offline Audio
-    const ankiSection = containerEl.createDiv({ cls: "quran-life-settings-anki" });
-    new Setting(ankiSection).setName("Anki export").setHeading();
-    const ankiExportDesc = ankiSection.createEl("p", { cls: "setting-item-description quran-life-desc-spaced" });
-    ankiExportDesc.setText("New-card `due` order: Meta mindmap first, then parts, then per part: part mindmap (always first) → surah mindmaps → each surah's verse groups chronological (startVerse asc). Only part order and surah-within-part order are configurable. Applies to next Export → .apkg.");
-    const ankiPrefsInfo = ankiSection.createEl("p", { cls: "setting-item-description quran-life-prefs-info" });
-    ankiPrefsInfo.setText("Loading Anki preferences…");
-    const ankiRowsWrap = ankiSection.createDiv({ cls: "quran-life-anki-rows" });
-    // Placeholder for Reset row inside the same section — created synchronously so it stays before Offline Audio even while prefs load async
-    const ankiResetWrap = ankiSection.createDiv();
-    void (async () => {
-      try {
-        const { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } = await import('@/lib/anki/ankiExportPrefs');
-        let prefs: AnkiExportPrefs | null = null;
-        try { prefs = await this.plugin.vaultStore.loadAnkiExportPrefs(); } catch { prefs = null; }
-        if (myGen !== this.displayGeneration) return;
-        const norm: AnkiExportPrefs = normalizeAnkiExportPrefs(prefs ?? DEFAULT_ANKI_EXPORT_PREFS);
-        const updateInfo = () => {
-          ankiPrefsInfo.setText(`partOrder=${norm.partOrder} (${norm.partOrder === 'asc' ? '1→7' : '7→1'}) • surahOrder=${norm.surahOrder} (${norm.surahOrder === 'asc' ? 'first→last' : 'last→first'}) • file: ${this.plugin.vaultStore.root}/meta/anki-export.json`);
-        };
-        updateInfo();
-        const saveAnkiPrefs = async (): Promise<void> => {
-          await this.plugin.vaultStore.saveAnkiExportPrefs(norm);
-          updateInfo();
-        };
-        ankiRowsWrap.empty();
-        const partRow = new Setting(ankiRowsWrap)
-          .setName("Part order")
-          .setDesc("1→7 vs 7→1 — which Quran part appears first after Meta")
-          .addDropdown(drop => {
+    let updateAnkiInfo: () => void = () => {};
+    const ankiGroup: SettingDefinitionItem = {
+      type: "group",
+      heading: "Anki export",
+      items: [
+        block("Anki export order", (el) => {
+          const ankiExportDesc = el.createEl("p", { cls: "setting-item-description quran-life-desc-spaced" });
+          ankiExportDesc.setText("New-card `due` order: Meta mindmap first, then parts, then per part: part mindmap (always first) → surah mindmaps → each surah's verse groups chronological (startVerse asc). Only part order and surah-within-part order are configurable. Applies to next Export → .apkg.");
+          const ankiPrefsInfo = el.createEl("p", { cls: "setting-item-description quran-life-prefs-info" });
+          updateAnkiInfo = () => {
+            if (!this.ankiPrefsCache) {
+              ankiPrefsInfo.setText("Loading Anki preferences…");
+              return;
+            }
+            ankiPrefsInfo.setText(`partOrder=${ankiPrefs.partOrder} (${ankiPrefs.partOrder === 'asc' ? '1→7' : '7→1'}) • surahOrder=${ankiPrefs.surahOrder} (${ankiPrefs.surahOrder === 'asc' ? 'first→last' : 'last→first'}) • file: ${VAULT_PATHS.ankiExport(this.plugin.vaultStore.root)}`);
+          };
+          updateAnkiInfo();
+        }),
+        row("Part order", "1→7 vs 7→1 — which Quran part appears first after Meta", (setting) => {
+          setting.addDropdown((drop) => {
             drop.addOption("asc", "asc — Part 1 → Part 7");
             drop.addOption("desc", "desc — Part 7 → Part 1 (default)");
-            drop.setValue(norm.partOrder);
+            drop.setValue(ankiPrefs.partOrder);
             drop.onChange(async (v) => {
-              norm.partOrder = v === 'asc' ? 'asc' : 'desc';
-              await saveAnkiPrefs();
-              new Notice(`Anki export: Part order → ${norm.partOrder}`);
+              ankiPrefs.partOrder = v === 'asc' ? 'asc' : 'desc';
+              this.ankiPrefsCache = { ...ankiPrefs };
+              await this.plugin.vaultStore.saveAnkiExportPrefs(ankiPrefs);
+              updateAnkiInfo();
+              new Notice(`Anki export: Part order → ${ankiPrefs.partOrder}`);
             });
           });
-        partRow.settingEl.addClass("quran-life-anki-row");
-        const surahRow = new Setting(ankiRowsWrap)
-          .setName("Surah within part order")
-          .setDesc("first→last vs last→first — controls surah mindmaps order inside each part")
-          .addDropdown(drop => {
+          setting.settingEl.addClass("quran-life-anki-row");
+        }),
+        row("Surah within part order", "first→last vs last→first — controls surah mindmaps order inside each part", (setting) => {
+          setting.addDropdown((drop) => {
             drop.addOption("asc", "asc — first surah → last (default)");
             drop.addOption("desc", "desc — last surah → first");
-            drop.setValue(norm.surahOrder);
+            drop.setValue(ankiPrefs.surahOrder);
             drop.onChange(async (v) => {
-              norm.surahOrder = v === 'asc' ? 'asc' : 'desc';
-              await saveAnkiPrefs();
-              new Notice(`Anki export: Surah within part → ${norm.surahOrder}`);
+              ankiPrefs.surahOrder = v === 'asc' ? 'asc' : 'desc';
+              this.ankiPrefsCache = { ...ankiPrefs };
+              await this.plugin.vaultStore.saveAnkiExportPrefs(ankiPrefs);
+              updateAnkiInfo();
+              new Notice(`Anki export: Surah within part → ${ankiPrefs.surahOrder}`);
             });
           });
-        surahRow.settingEl.addClass("quran-life-anki-row");
-        ankiResetWrap.empty();
-        const resetRow = new Setting(ankiResetWrap)
-          .setName("Reset Anki export order")
-          .setDesc("Default: parts desc (7→1), surahs asc (first→last)")
-          .addButton(btn => btn.setButtonText("Reset to default").onClick(async () => {
-            norm.partOrder = DEFAULT_ANKI_EXPORT_PREFS.partOrder;
-            norm.surahOrder = DEFAULT_ANKI_EXPORT_PREFS.surahOrder;
-            await saveAnkiPrefs();
-            const nextGen = ++this.displayGeneration;
-            void this.renderSettings(nextGen);
+          setting.settingEl.addClass("quran-life-anki-row");
+        }),
+        row("Reset Anki export order", "Default: parts desc (7→1), surahs asc (first→last)", (setting) => {
+          setting.addButton((btn) => btn.setButtonText("Reset to default").onClick(async () => {
+            ankiPrefs.partOrder = DEFAULT_ANKI_EXPORT_PREFS.partOrder;
+            ankiPrefs.surahOrder = DEFAULT_ANKI_EXPORT_PREFS.surahOrder;
+            this.ankiPrefsCache = { ...ankiPrefs };
+            await this.plugin.vaultStore.saveAnkiExportPrefs(ankiPrefs);
+            this.rerender();
             new Notice("Anki export order reset to default");
           }));
-        resetRow.settingEl.addClass("quran-life-anki-reset-row");
-      } catch (e) {
-        if (myGen !== this.displayGeneration) return;
-        ankiPrefsInfo.setText(`Could not load Anki prefs: ${errorText(e).slice(0, 120)}`);
-      }
-    })();
+          setting.settingEl.addClass("quran-life-anki-reset-row");
+        }),
+      ],
+    };
 
     // ---------- Offline Audio — library manager (one row per Quran part) ----------
     // The old flow was: pick a reciter → pick a part → wait for an async probe → then
     // press a button and hope it acted on that exact pair. The whole library is now laid
     // out as rows (state and actions together), so what a button will do is always visible.
-    const offlineSection = containerEl.createDiv({ cls: "quran-life-offline" });
-    new Setting(offlineSection).setName("Offline audio").setHeading();
-    const offlineDesc = offlineSection.createEl("p", { cls: "setting-item-description quran-life-desc-spaced quran-life-nowrap-safe" });
-    offlineDesc.setText("Downloaded audio plays without a connection. Files stay inside the plugin folder, so one synced folder (Resilio) covers every device — the player prefers a downloaded file and only streams as a fallback.");
-
-    // Storage summary across all reciters — sizes are measured lazily and cached.
-    const storageSetting = new Setting(offlineSection).setName("Storage used");
-    storageSetting.setDesc(`Scanning ${OFFLINE_AUDIO_ROOT}…`);
-    let refreshStorageInfo: () => void = () => {};
-    storageSetting.addButton(btn => btn.setButtonText("Refresh").onClick(() => refreshStorageInfo()));
-
     type OfflineRowRefs = {
       settingEl: HTMLElement;
       descEl: HTMLElement;
@@ -418,12 +465,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       cancelBtn: ButtonComponent;
       deleteBtn: ButtonComponent;
     };
-
-    let offlineReciters: Reciter[] = ALLOWED_RECITERS;
-    try {
-      const recs = await getAudioPlayerReciters();
-      if (recs.length) offlineReciters = recs;
-    } catch { /* keep the static list */ }
 
     let offlineReciter: Reciter | null = offlineReciters[0] ?? null;
     let playerReciterId = readStored(PLAYER_RECITER_STORAGE_KEY) ?? "";
@@ -449,6 +490,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     let sizeTaskToken = 0;
     const sizesByPart = new Map<number, number>();
     const rows = new Map<number, OfflineRowRefs>();
+    let storageSetting: Setting | null = null;
     let reciterHintEl: HTMLElement | null = null;
     let activeHintSetting: Setting | null = null;
     let libraryHeader: Setting | null = null;
@@ -478,40 +520,40 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     };
 
     const updateRow = (partId: QuranPart) => {
-      const row = rows.get(partId);
-      if (!row) return;
+      const rowRefs = rows.get(partId);
+      if (!rowRefs) return;
       const p = partScan(partId);
       const downloadingHere = activeDownloadPart === partId;
       if (!downloadingHere) {
-        row.progressWrap.toggleClass("quran-life-hidden", true);
-        row.descEl.setText(describePart(partId));
+        rowRefs.progressWrap.toggleClass("quran-life-hidden", true);
+        rowRefs.descEl.setText(describePart(partId));
       }
       const canDownload = !!offlineReciter && eligibleSurahCount(partId) > 0 && !downloadingHere
         && !busyElsewhere(partId) && !isScanning && !(p?.isComplete ?? false);
-      row.downloadBtn.setDisabled(!canDownload);
-      if (downloadingHere) row.downloadBtn.setButtonText("Downloading…");
-      else if (!p || p.existingFiles === 0) row.downloadBtn.setButtonText("Download");
-      else if (p.isComplete) row.downloadBtn.setButtonText("Downloaded ✓");
-      else row.downloadBtn.setButtonText(`Download ${p.totalFiles - p.existingFiles} missing`);
-      row.deleteBtn.setDisabled(!(p && p.existingFiles > 0) || downloadingHere || busyElsewhere(partId));
-      row.cancelBtn.buttonEl.toggleClass("quran-life-hidden", !downloadingHere);
-      row.cancelBtn.setDisabled(!downloadingHere);
-      row.settingEl.toggleClass("quran-life-offline-row-active", downloadingHere);
-      row.settingEl.toggleClass("quran-life-offline-row-complete", !!p?.isComplete);
+      rowRefs.downloadBtn.setDisabled(!canDownload);
+      if (downloadingHere) rowRefs.downloadBtn.setButtonText("Downloading…");
+      else if (!p || p.existingFiles === 0) rowRefs.downloadBtn.setButtonText("Download");
+      else if (p.isComplete) rowRefs.downloadBtn.setButtonText("Downloaded ✓");
+      else rowRefs.downloadBtn.setButtonText(`Download ${p.totalFiles - p.existingFiles} missing`);
+      rowRefs.deleteBtn.setDisabled(!(p && p.existingFiles > 0) || downloadingHere || busyElsewhere(partId));
+      rowRefs.cancelBtn.buttonEl.toggleClass("quran-life-hidden", !downloadingHere);
+      rowRefs.cancelBtn.setDisabled(!downloadingHere);
+      rowRefs.settingEl.toggleClass("quran-life-offline-row-active", downloadingHere);
+      rowRefs.settingEl.toggleClass("quran-life-offline-row-complete", !!p?.isComplete);
     };
     const updateAllRows = () => { rows.forEach((_row, partId) => updateRow(partId as QuranPart)); };
 
     const showRowProgress = (partId: QuranPart, text: string, progress: OfflineDownloadProgress | null = null) => {
-      const row = rows.get(partId);
-      if (!row) return;
-      row.progressWrap.toggleClass("quran-life-hidden", false);
+      const rowRefs = rows.get(partId);
+      if (!rowRefs) return;
+      rowRefs.progressWrap.toggleClass("quran-life-hidden", false);
       const pct = progress ? Math.max(0, Math.min(100, progress.percent)) : 0;
-      row.progressFill.setCssStyles({ width: `${pct}%` });
+      rowRefs.progressFill.setCssStyles({ width: `${pct}%` });
       const detail = progress
         ? `${pct}% • ${progress.completedFiles}/${progress.totalFiles} files • ${formatBytes(progress.downloadedBytes)}${progress.failedFiles ? ` • ${progress.failedFiles} failed` : ""}`
         : text;
-      row.progressText.setText(detail);
-      row.descEl.setText(detail);
+      rowRefs.progressText.setText(detail);
+      rowRefs.descEl.setText(detail);
     };
 
     const updateReciterHint = () => {
@@ -544,14 +586,17 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       activeHintSetting.setDesc(`${missing} of ${p.totalFiles} files missing${p.existingFiles > 0 ? ` • ${formatBytes(sizesByPart.get(partId) || 0)} already downloaded` : ""}. Download it so today's listening works without a connection.`);
     };
 
+    let refreshStorageInfo: () => void = () => {};
     refreshStorageInfo = () => {
-      storageSetting.setDesc(`Scanning ${OFFLINE_AUDIO_ROOT}…`);
+      const setting = storageSetting;
+      if (!setting) return;
+      setting.setDesc(`Scanning ${offlineRoot}…`);
       void (async () => {
         try {
           const usage = await getTotalOfflineStorageUsage(this.app);
-          if (usage.fileCount === 0) storageSetting.setDesc(`No downloads yet • files go to ${OFFLINE_AUDIO_ROOT}`);
-          else storageSetting.setDesc(`${usage.fileCount} files • ${formatBytes(usage.totalBytes)} across all reciters • stored in ${OFFLINE_AUDIO_ROOT}`);
-        } catch { storageSetting.setDesc(`Could not read storage usage • files live in ${OFFLINE_AUDIO_ROOT}`); }
+          if (usage.fileCount === 0) setting.setDesc(`No downloads yet • files go to ${offlineRoot}`);
+          else setting.setDesc(`${usage.fileCount} files • ${formatBytes(usage.totalBytes)} across all reciters • stored in ${offlineRoot}`);
+        } catch { setting.setDesc(`Could not read storage usage • files live in ${offlineRoot}`); }
       })();
     };
 
@@ -608,10 +653,11 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     };
     // Daily-portion edits call this on every keystroke/drag, so debounce the rescan.
     let rescanTimer: number | null = null;
-    refreshOfflineStatus = () => {
+    const refreshOfflineStatus = () => {
       if (rescanTimer !== null) window.clearTimeout(rescanTimer);
       rescanTimer = window.setTimeout(() => { rescanTimer = null; void rescan(); }, 400);
     };
+    refreshers.offline = refreshOfflineStatus;
 
     const startDownload = async (partId: QuranPart): Promise<void> => {
       const reciter = offlineReciter;
@@ -679,116 +725,142 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       } catch (e) { new Notice(`Delete failed: ${errorText(e)}`); }
     };
 
-    // ---- reciter + active-part shortcut + per-part library ----
-    const reciterSetting = new Setting(offlineSection)
-      .setName("Reciter")
-      .setDesc("The voice these downloads use.");
-    reciterSetting.addDropdown(drop => {
-      for (const r of offlineReciters) drop.addOption(r.id, r.name);
-      if (offlineReciter) drop.setValue(offlineReciter.id);
-      drop.onChange(v => {
-        void (async () => {
-          const found = offlineReciters.find(r => r.id === v);
-          if (!found || found.id === offlineReciter?.id) return;
-          offlineReciter = found;
-          writeStored(DOWNLOAD_RECITER_STORAGE_KEY, found.id);
-          updateReciterHint();
-          if (activeDownloadPart !== null) { new Notice("Switching reciter after the running download finishes"); return; }
-          await rescan();
-        })();
-      });
-    });
-    reciterSetting.addButton(btn => btn
-      .setButtonText("Use in player")
-      .setTooltip("Make the Daily Portion player use this reciter")
-      .onClick(() => {
-        const selected = offlineReciter;
-        if (!selected) return;
-        playerReciterId = selected.id;
-        writeStored(PLAYER_RECITER_STORAGE_KEY, selected.id);
-        window.dispatchEvent(new CustomEvent(PLAYER_RECITER_EVENT, { detail: { id: selected.id } }));
-        updateReciterHint();
-        new Notice(`Player reciter set to ${selected.name}`);
-      }));
+    // Deferred offline bootstrap: only runs once a row is actually on screen, so
+    // building the definitions for search indexing never kicks off vault scans.
+    let offlineInitScheduled = false;
+    const scheduleOfflineInit = () => {
+      if (offlineInitScheduled) return;
+      offlineInitScheduled = true;
+      window.setTimeout(() => {
+        if (myGen !== this.displayGeneration) return;
+        updateAllRows();
+        updateLibraryHeader();
+        updateActiveHint();
+        refreshStorageInfo();
+        void rescan();
+      }, 0);
+    };
 
-    reciterHintEl = offlineSection.createEl("p", { cls: "setting-item-description quran-life-offline-hint" });
-    updateReciterHint();
-
-    // One-click shortcut when the part the Daily Portion plays isn't downloaded yet.
-    activeHintSetting = new Setting(offlineSection)
-      .setName("Daily Portion part")
-      .setDesc("Checking…");
-    activeHintSetting.settingEl.addClass("quran-life-offline-active-hint");
-    activeHintSetting.settingEl.addClass("quran-life-hidden");
-    activeHintSetting.addButton(btn => btn
-      .setButtonText("Download now")
-      .setCta()
-      .onClick(() => { void startDownload(daily.activePart); }));
-
-    libraryHeader = new Setting(offlineSection)
-      .setName("Library")
-      .setDesc("Scanning downloaded files…");
-    libraryHeader.settingEl.addClass("quran-life-offline-library");
-    libraryHeader.addButton(btn => {
-      btn.setButtonText("Delete all (reciter)")
-        .onClick(() => { void deleteReciterAll(); });
-      btn.buttonEl.addClass("mod-warning");
-    });
-
-    const rowsContainer = offlineSection.createDiv({ cls: "quran-life-offline-rows" });
-    for (const option of ACTIVE_PART_OPTIONS) {
-      const partId = option.id;
-      const rowSetting = new Setting(rowsContainer).setName(partLabel(partId)).setDesc("Scanning…");
-      rowSetting.settingEl.addClass("quran-life-offline-row");
-
-      const progressWrap = rowSetting.infoEl.createDiv({ cls: "quran-life-offline-progress quran-life-hidden" });
-      const barOuter = progressWrap.createDiv({ cls: "quran-life-offline-bar" });
-      const progressFill = barOuter.createDiv({ cls: "quran-life-offline-bar-inner" });
-      const progressText = progressWrap.createDiv({ cls: "quran-life-offline-progress-text" });
-      progressText.setText("");
-
-      let downloadBtn: ButtonComponent | null = null;
-      let cancelBtn: ButtonComponent | null = null;
-      let deleteBtn: ButtonComponent | null = null;
-      rowSetting.addButton(btn => { downloadBtn = btn; btn.setButtonText("Download").onClick(() => { void startDownload(partId); }); });
-      rowSetting.addButton(btn => { deleteBtn = btn; btn.setButtonText("Delete").onClick(() => { void deleteRowPart(partId); }); });
-      rowSetting.addButton(btn => {
-        cancelBtn = btn;
-        btn.setButtonText("Cancel").onClick(() => { (abortController ?? offlineDownloadAbort)?.abort(); new Notice("Cancelling…"); });
-        btn.buttonEl.addClass("mod-warning");
-      });
-
-      if (downloadBtn && cancelBtn && deleteBtn) {
-        rows.set(partId, {
-          settingEl: rowSetting.settingEl,
-          descEl: rowSetting.descEl,
-          progressWrap,
-          progressFill,
-          progressText,
-          downloadBtn,
-          cancelBtn,
-          deleteBtn,
+    const offlineItems: SettingDefinition[] = [
+      block("Offline audio details", (el) => {
+        const desc = el.createEl("p", { cls: "setting-item-description quran-life-desc-spaced quran-life-nowrap-safe" });
+        desc.setText("Downloaded audio plays without a connection. Files stay inside the plugin folder, so one synced folder (Resilio) covers every device — the player prefers a downloaded file and only streams as a fallback.");
+      }),
+      row("Storage used", `Scanning ${offlineRoot}…`, (setting) => {
+        storageSetting = setting;
+        setting.addButton((btn) => btn.setButtonText("Refresh").onClick(() => refreshStorageInfo()));
+        scheduleOfflineInit();
+      }),
+      row("Reciter", "The voice these downloads use.", (setting) => {
+        setting.addDropdown((drop) => {
+          for (const r of offlineReciters) drop.addOption(r.id, r.name);
+          if (offlineReciter) drop.setValue(offlineReciter.id);
+          drop.onChange((v) => {
+            void (async () => {
+              const found = offlineReciters.find(r => r.id === v);
+              if (!found || found.id === offlineReciter?.id) return;
+              offlineReciter = found;
+              writeStored(DOWNLOAD_RECITER_STORAGE_KEY, found.id);
+              updateReciterHint();
+              if (activeDownloadPart !== null) { new Notice("Switching reciter after the running download finishes"); return; }
+              await rescan();
+            })();
+          });
         });
-      }
-    }
+        setting.addButton((btn) => btn
+          .setButtonText("Use in player")
+          .setTooltip("Make the Daily Portion player use this reciter")
+          .onClick(() => {
+            const selected = offlineReciter;
+            if (!selected) return;
+            playerReciterId = selected.id;
+            writeStored(PLAYER_RECITER_STORAGE_KEY, selected.id);
+            window.dispatchEvent(new CustomEvent(PLAYER_RECITER_EVENT, { detail: { id: selected.id } }));
+            updateReciterHint();
+            new Notice(`Player reciter set to ${selected.name}`);
+          }));
+      }),
+      block("Playback note", (el) => {
+        reciterHintEl = el.createEl("p", { cls: "setting-item-description quran-life-offline-hint" });
+        updateReciterHint();
+      }),
+      row("Daily Portion part", "Checking…", (setting) => {
+        // One-click shortcut when the part the Daily Portion plays isn't downloaded yet.
+        activeHintSetting = setting;
+        setting.settingEl.addClass("quran-life-offline-active-hint");
+        setting.settingEl.addClass("quran-life-hidden");
+        setting.addButton((btn) => btn
+          .setButtonText("Download now")
+          .setCta()
+          .onClick(() => { void startDownload(daily.activePart); }));
+      }),
+      row("Library", "Scanning downloaded files…", (setting) => {
+        libraryHeader = setting;
+        setting.settingEl.addClass("quran-life-offline-library");
+        setting.addButton((btn) => {
+          btn.setButtonText("Delete all (reciter)")
+            .onClick(() => { void deleteReciterAll(); });
+          btn.buttonEl.addClass("mod-warning");
+        });
+      }),
+      ...ACTIVE_PART_OPTIONS.map((option): SettingDefinition => {
+        const partId = option.id;
+        return row(partLabel(partId), "Scanning…", (setting) => {
+          setting.settingEl.addClass("quran-life-offline-row");
 
-    updateAllRows();
-    updateLibraryHeader();
-    refreshStorageInfo();
-    void rescan();
+          const progressWrap = setting.infoEl.createDiv({ cls: "quran-life-offline-progress quran-life-hidden" });
+          const barOuter = progressWrap.createDiv({ cls: "quran-life-offline-bar" });
+          const progressFill = barOuter.createDiv({ cls: "quran-life-offline-bar-inner" });
+          const progressText = progressWrap.createDiv({ cls: "quran-life-offline-progress-text" });
+          progressText.setText("");
 
-    // Info footer
-    const offlineInfo = offlineSection.createDiv({ cls: "quran-life-offline-footer" });
-    offlineInfo.setText(`Downloads are throttled (3 at a time, 250 ms apart) to stay under the host's rate limits. Files live in ${OFFLINE_AUDIO_ROOT}/<reciter>/ — one synced folder covers every device.`);
+          let downloadBtn: ButtonComponent | null = null;
+          let cancelBtn: ButtonComponent | null = null;
+          let deleteBtn: ButtonComponent | null = null;
+          setting.addButton((btn) => { downloadBtn = btn; btn.setButtonText("Download").onClick(() => { void startDownload(partId); }); });
+          setting.addButton((btn) => { deleteBtn = btn; btn.setButtonText("Delete").onClick(() => { void deleteRowPart(partId); }); });
+          setting.addButton((btn) => {
+            cancelBtn = btn;
+            btn.setButtonText("Cancel").onClick(() => { (abortController ?? offlineDownloadAbort)?.abort(); new Notice("Cancelling…"); });
+            btn.buttonEl.addClass("mod-warning");
+          });
+
+          if (downloadBtn && cancelBtn && deleteBtn) {
+            rows.set(partId, {
+              settingEl: setting.settingEl,
+              descEl: setting.descEl,
+              progressWrap,
+              progressFill,
+              progressText,
+              downloadBtn,
+              cancelBtn,
+              deleteBtn,
+            });
+            updateRow(partId);
+          }
+        });
+      }),
+      block("Offline audio notes", (el) => {
+        const info = el.createDiv({ cls: "quran-life-offline-footer" });
+        info.setText(`Downloads are throttled (3 at a time, 250 ms apart) to stay under the host's rate limits. Files live in ${offlineRoot}/<reciter>/ — one synced folder covers every device.`);
+      }),
+    ];
+
+    const offlineGroup: SettingDefinitionItem = {
+      type: "group",
+      heading: "Offline audio",
+      items: offlineItems,
+    };
+
+    return [storageGroup, dailyGroup, surahsGroup, resetGroup, ankiGroup, offlineGroup];
   }
 
   /** Candidate locations of a part's progress file, from the current and legacy data roots. */
   private progressPathsForPart(partId: number): string[] {
     const fileName = `daily/progress/part-${partId}.json`;
     return [
-      `${this.app.vault.configDir}/plugins/quran-life/data/${fileName}`,
-      `${LEGACY_DATA_ROOT}/${fileName}`,
       `${this.plugin.vaultStore.root}/${fileName}`,
+      `${LEGACY_DATA_ROOT}/${fileName}`,
     ];
   }
 
@@ -803,5 +875,70 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       if (await this.app.vault.adapter.exists(path)) await this.app.vault.adapter.remove(path);
     } catch { /* nothing to delete */ }
   }
-}
 
+  /** Re-render the tab after async state (daily settings, Anki prefs) changed. */
+  private rerender(): void {
+    const updateFn = (this as unknown as { update?: () => void }).update;
+    if (typeof updateFn === "function") {
+      try { updateFn.call(this); return; } catch { /* tab not registered yet */ }
+    }
+    try { this.display(); } catch { /* tab not open */ }
+  }
+
+  /**
+   * Load the async settings the declarative definitions need synchronously, then
+   * re-render once they are in. Runs at most once per outstanding request.
+   */
+  private requestCaches(myGen: number): void {
+    if ((this.dailyCache && this.ankiPrefsCache && this.recitersCache) || this.cachesRequested) return;
+    this.cachesRequested = true;
+    void (async () => {
+      try {
+        const [dailyRaw, prefsRaw, reciters] = await Promise.all([
+          this.plugin.vaultStore.loadSettings<unknown>(null).catch(() => null),
+          this.plugin.vaultStore.loadAnkiExportPrefs().catch(() => null),
+          getAudioPlayerReciters().catch(() => ALLOWED_RECITERS),
+        ]);
+        if (myGen !== this.displayGeneration) { this.cachesRequested = false; return; }
+        this.dailyCache = parseDaily(dailyRaw);
+        this.ankiPrefsCache = normalizeAnkiExportPrefs(prefsRaw ?? DEFAULT_ANKI_EXPORT_PREFS);
+        this.recitersCache = reciters.length ? reciters : ALLOWED_RECITERS;
+        this.cachesRequested = false;
+        this.rerender();
+      } catch {
+        this.cachesRequested = false;
+      }
+    })();
+  }
+
+  /**
+   * Imperative renderer for Obsidian < 1.13: renders the same definitions so the
+   * legacy tab and the declarative tab can never drift apart.
+   */
+  private renderDefinitionItems(container: HTMLElement, items: SettingDefinitionItem[]): void {
+    const groupStub = { listEl: container } as unknown as SettingGroup;
+    for (const item of items) {
+      if ("type" in item) {
+        if (item.type === "group" || item.type === "list") {
+          if (item.heading) new Setting(container).setName(item.heading).setHeading();
+          if (item.items?.length) this.renderDefinitionItems(container, item.items);
+        }
+        // Pages (and any future typed item) are only rendered by Obsidian 1.13+.
+        continue;
+      }
+      const setting = new Setting(container);
+      setting.setName(item.name);
+      if (typeof item.desc === "string") setting.setDesc(item.desc);
+      if ("render" in item && typeof item.render === "function") {
+        item.render(setting, groupStub);
+        continue;
+      }
+      if ("action" in item && typeof item.action === "function") {
+        setting.addButton((btn) => btn
+          .setButtonText(item.name)
+          .onClick(() => { item.action(setting.settingEl, 0); }));
+      }
+      // `control` definitions are rendered natively by Obsidian 1.13+; nothing to do here.
+    }
+  }
+}

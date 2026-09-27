@@ -1,6 +1,7 @@
 
 import { clientEnv } from './env/client';
 import { getObsidianApp, getVaultConfigDir, isObsidianEnv } from './obsidianApp';
+import { requestJson } from './obsidianRequest';
 import type { App } from 'obsidian';
 
 /**
@@ -286,59 +287,9 @@ export async function getAudioPlayerReciters(): Promise<Reciter[]> {
 
 async function fetchViaObsidianRequestUrl(url: string, appOverride?: App | null): Promise<Record<string, unknown> | null> {
     if (!isObsidianEnv(appOverride)) return null;
-    try {
-        let req: ObsidianRequestFn | null = null;
-        try {
-            const obs = (await import('obsidian')) as unknown as ObsidianRequestModule;
-            req = obs.requestUrl ?? null;
-        } catch {
-            req = (window as unknown as WindowWithRequestUrl).requestUrl ?? null;
-        }
-        if (!req) return null;
-        // requestUrl has no abort support — race a timeout so a dead network
-        // can never leave the player hanging forever.
-        const res = await Promise.race([
-            req({ url, method: 'GET', headers: { 'Accept': 'application/json' } }),
-            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
-        ]);
-        const status: number = typeof res.status === 'number' ? res.status : 0;
-        if (status >= 200 && status < 300) {
-            if (res.json !== undefined && res.json !== null) {
-                // Obsidian requestUrl returns parsed json if content-type is json
-                if (typeof res.json === 'object') {
-                    const rec = asRecord(res.json);
-                    if (rec) return rec;
-                } else if (typeof res.json === 'string' && res.json.trim()) {
-                    try {
-                        const parsed: unknown = JSON.parse(res.json);
-                        const rec = asRecord(parsed);
-                        if (rec) return rec;
-                    } catch { /* best-effort only; ignore */ }
-                }
-            }
-            if (typeof res.text === 'string' && res.text.trim()) {
-                try {
-                    const parsed: unknown = JSON.parse(res.text);
-                    const rec = asRecord(parsed);
-                    if (rec) return rec;
-                } catch { /* best-effort only; ignore */ }
-            }
-            if (res.arrayBuffer) {
-                try {
-                    const raw = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
-                    if (raw instanceof ArrayBuffer || raw instanceof Uint8Array) {
-                        const txt = new TextDecoder().decode(raw);
-                        if (txt.trim()) {
-                            const parsed: unknown = JSON.parse(txt);
-                            const rec = asRecord(parsed);
-                            if (rec) return rec;
-                        }
-                    }
-                } catch { /* best-effort only; ignore */ }
-            }
-        }
-    } catch { /* best-effort only; ignore */ }
-    return null;
+    // Shared helper: Obsidian `requestUrl` (CORS-free on desktop + mobile) with
+    // a hard timeout, so a dead network can never leave the player hanging.
+    return asRecord(await requestJson(url, { timeoutMs: 15000 }));
 }
 
 const RECITATION_SITE_BASES = ['https://quran-life.org'];
@@ -348,29 +299,18 @@ const RECITATION_SITE_BASES = ['https://quran-life.org'];
  * the current platform can actually reach:
  *   1. vault files (desktop bundle + Resilio-synced copies) — works offline,
  *   2. remote site via Obsidian `requestUrl` — the only CORS-free path on mobile,
- *   3. plain `fetch` — web build and same-origin cases.
+ *   3. same-origin assets — web build only.
  * Previously the remote step ran only for Electron/desktop because
  * `isObsidianEnv` relied on `window.app`, which mobile does not provide.
  */
 
 // JSON fetch with a hard timeout: without this a stalled network leaves the
 // player spinner hanging forever (offline + no cached metadata). Timeouts
-// reject so callers fall through to the next source / graceful error.
+// return null so callers fall through to the next source / graceful error.
+// Inside Obsidian this always goes through `requestUrl`; the platform fetch is
+// only used by the web build where Obsidian's module does not exist.
 async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<Record<string, unknown> | null> {
-    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
-    try {
-        const res = await fetch(url, { signal: ctrl?.signal });
-        if (!res.ok) return null;
-        try {
-            const parsed: unknown = (await res.json()) as unknown;
-            return asRecord(parsed);
-        } catch { return null; }
-    } catch {
-        return null;
-    } finally {
-        if (timer) window.clearTimeout(timer);
-    }
+    return asRecord(await requestJson(url, { timeoutMs }));
 }
 export async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: App | null): Promise<Record<string, unknown> | null> {
     const app = getObsidianApp(appOverride);
@@ -419,8 +359,8 @@ export async function fetchJsonWithObsidianFallback(urlPath: string, appOverride
         }
     }
 
-    // 3) remote — requestUrl bypasses CORS, which plain fetch cannot do from the
-    // Obsidian WebView (mobile included).
+    // 3) remote — requestUrl bypasses CORS, which a same-origin fetch cannot do
+    // from the Obsidian WebView (mobile included).
     if (app) {
         const remoteTargets = usesPublicOrigin
             ? [urlPath]
@@ -431,14 +371,14 @@ export async function fetchJsonWithObsidianFallback(urlPath: string, appOverride
         }
     }
 
-    // 4) plain fetch (web build / already-absolute same-origin paths)
+    // 4) last resort (web build / already-absolute same-origin paths)
     const fetchTargets = usesPublicOrigin
         ? [urlPath]
         : RECITATION_SITE_BASES.map((base) => `${base.replace(/\/$/, '')}${urlPath}`);
     fetchTargets.push(urlPath);
     for (const target of fetchTargets) {
-        // Skip cross-origin plain fetch inside Obsidian: without CORS it fails
-        // anyway, and on a dead network it is the slowest hang — requestUrl
+        // Skip cross-origin requests inside Obsidian: without CORS they fail
+        // anyway, and on a dead network they are the slowest hang — requestUrl
         // above is the supported path there.
         if (app && /^https?:\/\//i.test(target)) continue;
         const data = await fetchJsonWithTimeout(target);

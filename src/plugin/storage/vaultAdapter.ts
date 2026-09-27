@@ -3,34 +3,32 @@
  * Replaces localStorage + InstantDB with vault files synced via Resilio Sync.
  * Strategy: one file per entity (not one giant JSON) to avoid Resilio file-level conflicts.
  *
- * Data folder: `QuranLife/` at vault root (configurable in settings).
+ * Data folder: the plugin's own data folder (`<configDir>/plugins/quran-life/data`),
+ * always — there is no user-facing data path setting, so every vault keeps one
+ * predictable folder. `QuranLife/` at vault root is only read for legacy migration.
  * Use `Vault.process()` for atomic read-modify-write, debounced writes for tldraw.
  *
  * See: obsidian-developer-docs/en/Plugins/Vault.md, src/lib/anki/* legacy stores
  */
 
-import { App, Platform, TFile, TFolder, normalizePath } from "obsidian";
+import { App, TFile, TFolder, normalizePath } from "obsidian";
 import type { AnkiAnchor, MindmapRecord } from "@/lib/anki/types";
 import type { ListeningProgressEntry } from "@/lib/types";
 import { asArray, asNonEmptyString, asNumber, asRecord } from "@/lib/json";
 
-// Vault layout (all paths relative to vault root)
-// User requested: store everything in plugin folder so only one folder needs Resilio Sync
+// Vault layout — every path lives under the data root, which is always the
+// plugin's data folder so only one folder ever needs Resilio Sync.
 // This is hidden but accessible via adapter (vault API hides the config folder, the adapter can read it)
-// On mobile, hidden config paths use the adapter and may be sandboxed — keep API but guard gracefully and allow fallback to visible folder
+// On mobile, hidden config paths use the adapter and may be sandboxed — guard gracefully, never throw
 
 /** Data folder inside the vault's configuration folder (i.e. `<configDir>/plugins/quran-life/data`). */
 const PLUGIN_DATA_SUBPATH = "plugins/quran-life/data";
 
-export const LEGACY_DATA_ROOT = "QuranLife"; // previous location, for migration + mobile fallback
+export const LEGACY_DATA_ROOT = "QuranLife"; // previous location, read only (migration)
 
-/** Default data root for the current vault (`<configDir>/plugins/quran-life/data`). */
+/** The one and only data root for the current vault (`<configDir>/plugins/quran-life/data`). */
 export function getDefaultDataRoot(app: App): string {
   return normalizePath(`${app.vault.configDir}/${PLUGIN_DATA_SUBPATH}`);
-}
-
-export function getMobileAwareDefaultRoot(app: App): string {
-  return Platform.isMobile ? LEGACY_DATA_ROOT : getDefaultDataRoot(app);
 }
 
 export const VAULT_PATHS = {
@@ -54,14 +52,19 @@ export const VAULT_PATHS = {
   // Docs: one markdown per mindmap — user-editable in Obsidian, Resilio merges per-file
   docsDir: (root: string) => normalizePath(`${root}/docs`),
   docFile: (root: string, key: string) => normalizePath(`${root}/docs/${key}.md`),
-  // Anki deleted keys (tombstones) — small set, single file
-  deletedMindmaps: (root: string) => normalizePath(`${root}/meta/deleted-mindmaps.json`),
-  // FSRS nodes, review logs — per-node files would be thousands; use sharded by surah/part
-  // nodes/surah-002.json → MemoryNode[] for that surah; nodes/part-1.json
-  nodesDir: (root: string) => normalizePath(`${root}/nodes`),
-  // Theme — still in plugin data.json (loadData/saveData) or vault? Vault for Resilio.
-  themeFile: (root: string) => normalizePath(`${root}/meta/theme.json`),
+  // Anki deleted keys (tombstones) — small set, single file at the data root
+  deletedMindmaps: (root: string) => normalizePath(`${root}/deleted-mindmaps.json`),
   // Anki export prefs (partOrder + surahOrder) — vault-synced
+  ankiExport: (root: string) => normalizePath(`${root}/anki-export.json`),
+} as const;
+
+/**
+ * Paths older builds wrote. They are read (and folded into {@link VAULT_PATHS})
+ * on load so existing installs keep their tombstones and export prefs; nothing
+ * writes here anymore. Review state (`nodes/`) is gone for good — Anki owns it.
+ */
+export const LEGACY_PATHS = {
+  deletedMindmaps: (root: string) => normalizePath(`${root}/meta/deleted-mindmaps.json`),
   ankiExport: (root: string) => normalizePath(`${root}/meta/anki-export.json`),
 } as const;
 
@@ -235,7 +238,6 @@ export class DebouncedVaultWriter {
 // ---------- high-level API mirroring legacy stores ----------
 
 export interface QuranLifeSettings {
-  dataRoot: string; // default: <configDir>/plugins/quran-life/data (QuranLife on mobile)
   dailyTargetMinutes?: number;
   activePart?: number;
   dailyPortionMode?: "audio" | "reading";
@@ -369,7 +371,16 @@ export class VaultStore {
     await this.saveDeletedKeys(deleted);
   }
   async loadDeletedKeys(): Promise<Set<string>> {
-    const arr = await readJson<unknown>(this.app, VAULT_PATHS.deletedMindmaps(this.dataRoot), []);
+    const filePath = VAULT_PATHS.deletedMindmaps(this.dataRoot);
+    let arr = await readJson<unknown>(this.app, filePath, []);
+    if (asArray(arr).length === 0) {
+      // Pre-`meta/`-removal install: fold the old tombstones file into place.
+      const legacy = await readJson<unknown>(this.app, LEGACY_PATHS.deletedMindmaps(this.dataRoot), []);
+      if (asArray(legacy).length > 0) {
+        arr = legacy;
+        await writeJsonAtomic(this.app, filePath, legacy);
+      }
+    }
     return new Set(asArray(arr).filter((k): k is string => typeof k === "string"));
   }
   async saveDeletedKeys(set: Set<string>): Promise<void> {
@@ -399,7 +410,16 @@ export class VaultStore {
   // Anki export prefs — partOrder + surahOrder
   async loadAnkiExportPrefs(): Promise<import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs> {
     const { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } = await import('@/lib/anki/ankiExportPrefs');
-    const raw = await readJson<unknown>(this.app, VAULT_PATHS.ankiExport(this.dataRoot), null);
+    const filePath = VAULT_PATHS.ankiExport(this.dataRoot);
+    let raw = await readJson<unknown>(this.app, filePath, null);
+    if (!raw) {
+      // Pre-`meta/`-removal install: fold the old prefs file into place.
+      const legacy = await readJson<unknown>(this.app, LEGACY_PATHS.ankiExport(this.dataRoot), null);
+      if (legacy) {
+        raw = legacy;
+        await writeJsonAtomic(this.app, filePath, normalizeAnkiExportPrefs(legacy));
+      }
+    }
     if (!raw) return { ...DEFAULT_ANKI_EXPORT_PREFS };
     return normalizeAnkiExportPrefs(raw);
   }

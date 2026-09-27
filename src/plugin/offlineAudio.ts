@@ -2,13 +2,23 @@ import { App, TFile, TFolder, normalizePath } from "obsidian";
 import { getSurahsByPart } from "@/lib/quranData";
 import { ACTIVE_PART_OPTIONS, QuranPart } from "@/lib/types";
 import { Reciter, loadRecitationData, buildAyahAudioUrl } from "@/lib/audio";
-import { getObsidianApp } from "@/lib/obsidianApp";
+import { getObsidianApp, getVaultConfigDir } from "@/lib/obsidianApp";
+import { requestArrayBuffer } from "@/lib/obsidianRequest";
 import { ensureFolder } from "./storage/vaultAdapter";
 
-// Offline audio is stored inside plugin folder (not vault root) so only one folder to sync.
-// Works on mobile as well because we use adapter directly for hidden paths.
-export const OFFLINE_AUDIO_ROOT = ".obsidian/plugins/quran-life/offline-audio";
-export const OFFLINE_MANIFEST_PATH = normalizePath(`${OFFLINE_AUDIO_ROOT}/manifest.json`);
+// Offline audio is stored inside the plugin folder (not vault root) so only one
+// folder to sync. Works on mobile as well because we use the adapter directly for
+// hidden paths. The vault config dir is user-configurable, so the root is always
+// resolved through `Vault#configDir` at call time.
+export function getOfflineAudioRoot(appOverride?: App | null): string {
+  // `Vault#configDir` is user-configurable. Without a registered app (web
+  // build) the offline library does not exist at all, so a config-dir-less path
+  // is used purely as a stable cache key.
+  const configDir = getVaultConfigDir(appOverride);
+  return configDir
+    ? normalizePath(`${configDir}/plugins/quran-life/offline-audio`)
+    : normalizePath("plugins/quran-life/offline-audio");
+}
 
 /**
  * Typed subset of the Obsidian vault adapter surface consumed in this file.
@@ -29,29 +39,6 @@ interface VaultFiles {
   stat(path: string): Promise<{ size?: number; stat?: { size?: number } } | null>;
 }
 
-/** Shape of Obsidian `requestUrl` binary responses as consumed in this file. */
-interface ObsidianBinaryResponse {
-  status?: number;
-  text?: unknown;
-  arrayBuffer?: ArrayBuffer | (() => Promise<ArrayBuffer>) | Uint8Array;
-  body?: unknown;
-}
-
-interface ObsidianRequestOptions {
-  url: string;
-  method?: string;
-}
-
-type ObsidianRequestFn = (opts: ObsidianRequestOptions) => Promise<ObsidianBinaryResponse>;
-
-interface ObsidianRequestModule {
-  requestUrl?: ObsidianRequestFn;
-}
-
-interface WindowWithRequestUrl {
-  requestUrl?: ObsidianRequestFn;
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -70,15 +57,15 @@ function pad3(n: number): string {
   return String(n).padStart(3, "0");
 }
 
-export function getOfflineSurahAudioPath(reciterId: string, surahId: number): string {
-  return normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciterId}/surah-${pad3(surahId)}.mp3`);
+export function getOfflineSurahAudioPath(reciterId: string, surahId: number, appOverride?: App | null): string {
+  return normalizePath(`${getOfflineAudioRoot(appOverride)}/${reciterId}/surah-${pad3(surahId)}.mp3`);
 }
-export function getOfflineAyahAudioPath(reciterId: string, surahId: number, ayahId: number): string {
-  return normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciterId}/ayah/${pad3(surahId)}_${String(ayahId).padStart(3, "0")}.mp3`);
+export function getOfflineAyahAudioPath(reciterId: string, surahId: number, ayahId: number, appOverride?: App | null): string {
+  return normalizePath(`${getOfflineAudioRoot(appOverride)}/${reciterId}/ayah/${pad3(surahId)}_${String(ayahId).padStart(3, "0")}.mp3`);
 }
 // Legacy helper for per-ayah subfolder variant
-export function getOfflineAyahAudioPathLegacy(reciterId: string, surahId: number, ayahId: number): string {
-  return normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciterId}/ayah/${surahId}/${ayahId}.mp3`);
+export function getOfflineAyahAudioPathLegacy(reciterId: string, surahId: number, ayahId: number, appOverride?: App | null): string {
+  return normalizePath(`${getOfflineAudioRoot(appOverride)}/${reciterId}/ayah/${surahId}/${ayahId}.mp3`);
 }
 
 export function formatBytes(bytes: number): string {
@@ -243,7 +230,7 @@ export async function scanOfflineAudioForReciter(
   const app = getApp(appOverride);
   if (!app) return empty;
 
-  const reciterDir = normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciter.id}`);
+  const reciterDir = normalizePath(`${getOfflineAudioRoot(app)}/${reciter.id}`);
   const listed = (await listFilesRecursive(app, reciterDir)).filter((f) => SUFFIX_RE.test(f));
 
   // Index what actually exists on disk, keeping the path so sizes can be summed later.
@@ -265,14 +252,14 @@ export async function scanOfflineAudioForReciter(
   }
 
   const basmalaPathForType = reciter.type === "surah-based"
-    ? getOfflineSurahAudioPath(reciter.id, 1)
-    : getOfflineAyahAudioPath(reciter.id, 1, 1);
+    ? getOfflineSurahAudioPath(reciter.id, 1, app)
+    : getOfflineAyahAudioPath(reciter.id, 1, 1, app);
   const basmalaExists = reciter.type === "surah-based"
     ? surahFiles.has(1)
-    : ayahFiles.has("1:1") || !!listed.find((f) => normalizePath(f) === normalizePath(getOfflineAyahAudioPathLegacy(reciter.id, 1, 1)));
+    : ayahFiles.has("1:1") || !!listed.find((f) => normalizePath(f) === normalizePath(getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app)));
   const basmalaRealPath = reciter.type === "surah-based"
     ? surahFiles.get(1)
-    : (ayahFiles.get("1:1") ?? listed.find((f) => normalizePath(f) === normalizePath(getOfflineAyahAudioPathLegacy(reciter.id, 1, 1))));
+    : (ayahFiles.get("1:1") ?? listed.find((f) => normalizePath(f) === normalizePath(getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app))));
   void basmalaPathForType;
 
   const parts: OfflinePartScan[] = [];
@@ -429,7 +416,7 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
   let totalBytes = 0;
   for (const sh of surahs) {
     if (reciter.type === "surah-based") {
-      const p = getOfflineSurahAudioPath(reciter.id, sh.id);
+      const p = getOfflineSurahAudioPath(reciter.id, sh.id, app);
       if (await adapterExists(app, p)) {
         existingFiles++;
         const sz = await adapterStatSize(app, p);
@@ -437,8 +424,8 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
       }
     } else {
       for (let ay = 1; ay <= sh.verseCount; ay++) {
-        const p1 = getOfflineAyahAudioPath(reciter.id, sh.id, ay);
-        const p2 = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay);
+        const p1 = getOfflineAyahAudioPath(reciter.id, sh.id, ay, app);
+        const p2 = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay, app);
         const exists = (await adapterExists(app, p1)) || (await adapterExists(app, p2));
         if (exists) {
           existingFiles++;
@@ -452,7 +439,7 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
   // Count it so "Complete" is only reported when transitions can play offline.
   try {
     if (reciter.type === "surah-based") {
-      const p = getOfflineSurahAudioPath(reciter.id, 1);
+      const p = getOfflineSurahAudioPath(reciter.id, 1, app);
       totalFiles += 1;
       if (await adapterExists(app, p)) {
         existingFiles++;
@@ -460,8 +447,8 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
         if (sz) totalBytes += sz;
       }
     } else {
-      const p1 = getOfflineAyahAudioPath(reciter.id, 1, 1);
-      const p2 = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1);
+      const p1 = getOfflineAyahAudioPath(reciter.id, 1, 1, app);
+      const p2 = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app);
       totalFiles += 1;
       if ((await adapterExists(app, p1)) || (await adapterExists(app, p2))) {
         existingFiles++;
@@ -489,7 +476,7 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
 export async function getTotalOfflineStorageUsage(appOverride?: App | null): Promise<{ totalBytes: number; fileCount: number; byReciter: Record<string, { bytes: number; files: number }> }> {
   const app = getApp(appOverride);
   if (!app) return { totalBytes: 0, fileCount: 0, byReciter: {} };
-  const files = await listFilesRecursive(app, OFFLINE_AUDIO_ROOT);
+  const files = await listFilesRecursive(app, getOfflineAudioRoot(app));
   // Filter only mp3
   const mp3s = files.filter(f => f.toLowerCase().endsWith(".mp3"));
   let totalBytes = 0;
@@ -500,7 +487,7 @@ export async function getTotalOfflineStorageUsage(appOverride?: App | null): Pro
     totalBytes += b;
     // reciterId is segment after offline-audio/
     const parts = f.split("/");
-    // OFFLINE_AUDIO_ROOT = ".obsidian/plugins/quran-life/offline-audio"
+    // path layout: <configDir>/plugins/quran-life/offline-audio/<reciterId>/...
     const idx = parts.indexOf("offline-audio");
     const reciterId = idx >= 0 && parts[idx + 1] ? parts[idx + 1] : "unknown";
     if (!byReciter[reciterId]) byReciter[reciterId] = { bytes: 0, files: 0 };
@@ -530,35 +517,13 @@ export interface OfflineDownloadOptions {
   skippedSurahIds?: number[] | Set<number> | null; // surahs unselected in Daily Portion — excluded from download
 }
 
-async function fetchArrayBufferViaRequestUrl(url: string, app: App): Promise<ArrayBuffer> {
-  // Use Obsidian requestUrl to bypass CORS for tarteel CDN
-  let req: ObsidianRequestFn | null = null;
-  try {
-    const obs = (await import("obsidian")) as unknown as ObsidianRequestModule;
-    req = obs.requestUrl ?? null;
-  } catch { req = (window as unknown as WindowWithRequestUrl).requestUrl ?? null; }
-  if (!req) {
-    // fallback fetch
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.arrayBuffer();
-  }
-  const res: ObsidianBinaryResponse = await req({ url, method: "GET" });
-  // Obsidian requestUrl returns arrayBuffer for binary
-  const responseBuffer = typeof res.arrayBuffer === "function" ? await res.arrayBuffer() : res.arrayBuffer;
-  const arrayBuffer = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
-  if (arrayBuffer && arrayBuffer.byteLength) return arrayBuffer;
-  // Some versions return text for mp3? try fallback fetch
-  if (typeof res.text === "string" && res.text) {
-    // try fetch again via fetch (may fail CORS)
-    const r2 = await fetch(url);
-    if (r2.ok) return await r2.arrayBuffer();
-    throw new Error("Empty response");
-  }
-  // fallback to fetch
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return await r.arrayBuffer();
+async function fetchArrayBufferViaRequestUrl(url: string): Promise<ArrayBuffer> {
+  // Shared helper: Obsidian `requestUrl` (CORS-free for the tarteel CDN and the
+  // only workable transport on mobile) with a hard timeout; the platform fetch
+  // is used only outside Obsidian (web build).
+  const buf = await requestArrayBuffer(url, { timeoutMs: 120000 });
+  if (buf && buf.byteLength) return buf;
+  throw new Error(`Empty response downloading ${url}`);
 }
 
 async function getSurahAudioUrlForReciter(reciter: Reciter, surahId: number, app: App): Promise<string | null> {
@@ -594,7 +559,7 @@ export async function downloadPartAudio(
   if (reciter.type === "surah-based") {
     // Build tasks: one per surah
     for (const sh of surahs) {
-      const offlinePath = getOfflineSurahAudioPath(reciter.id, sh.id);
+      const offlinePath = getOfflineSurahAudioPath(reciter.id, sh.id, app);
       if (skipExisting && (await adapterExists(app, offlinePath))) continue;
       // Need remote URL via recitation data (local JSON, no extra network)
       const remoteUrl = await getSurahAudioUrlForReciter(reciter, sh.id, app);
@@ -619,8 +584,8 @@ export async function downloadPartAudio(
     if (!ayahMap && !reciter.ayahAudioBase) throw new Error("Failed to load ayah recitation map");
     for (const sh of surahs) {
       for (let ay = 1; ay <= sh.verseCount; ay++) {
-        const offlinePath = getOfflineAyahAudioPath(reciter.id, sh.id, ay);
-        const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay);
+        const offlinePath = getOfflineAyahAudioPath(reciter.id, sh.id, ay, app);
+        const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay, app);
         if (skipExisting && ((await adapterExists(app, offlinePath)) || (await adapterExists(app, legacyPath)))) continue;
         const key = `${sh.id}:${ay}`;
         const mapAudioUrl: unknown = asRecord(ayahMap?.[key])?.audio_url;
@@ -636,7 +601,7 @@ export async function downloadPartAudio(
   // portion plays from offline files. Always bundle it (1 extra file).
   try {
     if (reciter.type === "surah-based") {
-      const basmalaPath = getOfflineSurahAudioPath(reciter.id, 1);
+      const basmalaPath = getOfflineSurahAudioPath(reciter.id, 1, app);
       const alreadyHave = skipExisting && (await adapterExists(app, basmalaPath));
       const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
       if (!alreadyHave && !alreadyQueued) {
@@ -644,8 +609,8 @@ export async function downloadPartAudio(
         if (basmalaUrl) tasks.push({ type: "surah", surahId: 1, remoteUrl: basmalaUrl, offlinePath: basmalaPath, label: "Basmala (Surah 1)" });
       }
     } else {
-      const basmalaPath = getOfflineAyahAudioPath(reciter.id, 1, 1);
-      const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1);
+      const basmalaPath = getOfflineAyahAudioPath(reciter.id, 1, 1, app);
+      const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app);
       const alreadyHave = skipExisting && ((await adapterExists(app, basmalaPath)) || (await adapterExists(app, legacyPath)));
       const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
       if (!alreadyHave && !alreadyQueued) {
@@ -701,7 +666,7 @@ export async function downloadPartAudio(
   const downloadOne = async (task: Task, attempt = 1): Promise<void> => {
     if (aborted || opts.signal?.aborted) throw new Error("aborted");
     try {
-      const buf = await fetchArrayBufferViaRequestUrl(task.remoteUrl, app);
+      const buf = await fetchArrayBufferViaRequestUrl(task.remoteUrl);
       if (aborted || opts.signal?.aborted) return;
       await adapterWriteBinary(app, task.offlinePath, buf);
       cacheOfflineFileSize(task.offlinePath, buf.byteLength);
@@ -760,7 +725,7 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
   // We try both surah and ayah paths; whichever exists we delete.
   for (const sh of surahs) {
     // Try surah path first
-    const surahPath = getOfflineSurahAudioPath(reciterId, sh.id);
+    const surahPath = getOfflineSurahAudioPath(reciterId, sh.id, app);
     if (await adapterExists(app, surahPath)) {
       const sz = await adapterStatSize(app, surahPath);
       await adapterRemoveNoTrash(app, surahPath);
@@ -772,8 +737,8 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
     }
     // Try ayah paths
     for (let ay = 1; ay <= sh.verseCount; ay++) {
-      const p1 = getOfflineAyahAudioPath(reciterId, sh.id, ay);
-      const p2 = getOfflineAyahAudioPathLegacy(reciterId, sh.id, ay);
+      const p1 = getOfflineAyahAudioPath(reciterId, sh.id, ay, app);
+      const p2 = getOfflineAyahAudioPathLegacy(reciterId, sh.id, ay, app);
       for (const p of [p1, p2]) {
         if (await adapterExists(app, p)) {
           const sz = await adapterStatSize(app, p);
@@ -788,7 +753,7 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
   }
   // Also try to clean empty reciter folder if no files left
   try {
-    const reciterDir = normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciterId}`);
+    const reciterDir = normalizePath(`${getOfflineAudioRoot(app)}/${reciterId}`);
     const remaining = await listFilesRecursive(app, reciterDir);
     if (remaining.length === 0) {
       // remove empty dir via adapter
@@ -805,7 +770,7 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
 export async function deleteAllOfflineAudioForReciter(reciterId: string, appOverride?: App | null): Promise<{ deletedFiles: number; freedBytes: number }> {
   const app = getApp(appOverride);
   if (!app) throw new Error("Obsidian app not available");
-  const reciterDir = normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciterId}`);
+  const reciterDir = normalizePath(`${getOfflineAudioRoot(app)}/${reciterId}`);
   const files = await listFilesRecursive(app, reciterDir);
   let deletedFiles = 0;
   let freedBytes = 0;
@@ -902,7 +867,7 @@ export function peekOfflineAudioUrlIfCached(reciter: Reciter, surahId: number, a
 export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: number, appOverride?: App | null): Promise<string | null> {
   const app = getApp(appOverride);
   if (!app) return null;
-  const p = getOfflineSurahAudioPath(reciterId, surahId);
+  const p = getOfflineSurahAudioPath(reciterId, surahId, app);
   if (!(await adapterExists(app, p))) return null;
   // Prefer blob URL for reliable playback on mobile (hidden .obsidian paths may not be served via getResourcePath on Capacitor)
   const blobUrl = await getOfflineBlobUrl(app, p);
@@ -919,8 +884,8 @@ export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: num
 export async function getOfflineAudioUrlForAyah(reciterId: string, surahId: number, ayahId: number, appOverride?: App | null): Promise<string | null> {
   const app = getApp(appOverride);
   if (!app) return null;
-  const p1 = getOfflineAyahAudioPath(reciterId, surahId, ayahId);
-  const p2 = getOfflineAyahAudioPathLegacy(reciterId, surahId, ayahId);
+  const p1 = getOfflineAyahAudioPath(reciterId, surahId, ayahId, app);
+  const p2 = getOfflineAyahAudioPathLegacy(reciterId, surahId, ayahId, app);
   for (const p of [p1, p2]) {
     if (await adapterExists(app, p)) {
       const blobUrl = await getOfflineBlobUrl(app, p);

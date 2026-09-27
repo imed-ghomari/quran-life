@@ -6,7 +6,8 @@
 - `npm run dev` keeps running and rebuilds on save — check `main.js` timestamp / `npm run dev` log. Do not kill/restart unless dead.
 - DO NOT run `next dev` / `next build`. Use only `npm run dev` / `npm run build` (esbuild).
 - After build, reload plugin in Obsidian: Command Palette → "Reload app without saving" or disable/enable plugin, or use Hot Reload plugin.
-- Vault data lives in `QuranLife/` folder (see `src/plugin/storage/vaultAdapter.ts`), synced via Resilio Sync — never touch `.obsidian/` directly for user data.
+- Vault data lives in the plugin's **own data folder** — `<configDir>/plugins/quran-life/data` (see `src/plugin/storage/vaultAdapter.ts`), synced via Resilio Sync. It is hidden from the vault API (use `app.vault.adapter`), resolved through `Vault#configDir` (never hardcode `.obsidian`), and **not configurable** — no data-path setting. `QuranLife/` at the vault root is read-only, kept solely for legacy migration.
+- The data folder holds only: `assets/` (Quran corpus), `splits/`, `mindmaps/`, `docs/`, `daily/`, `recitation-cache/`, `deleted-mindmaps.json`, `anki-export.json`. No `nodes/` (Anki owns review state) and no `meta/` — an empty leftover of either is pruned at load.
 
 ## Anki Deck Tab - Completed Fixes
 - `src/components/AnkiDeckTab.tsx:323`: Deck name + Export button on same line via `flex gap-3 items-end` (input flex-1, button shrink-0 whitespace-nowrap).
@@ -33,6 +34,16 @@
 - `src/plugin/offlineAudio.ts`: `scanOfflineAudioForReciter()` returns one `OfflinePartScan` per part from a **single recursive listing** (`filesByPart` + `allFiles`), so all 8 rows render from one pass instead of per-file `adapter.exists` probes (thousands of native round-trips on mobile). `sumOfflineSizes()` sums sizes lazily and progressively; `formatBytes`/size cache reused.
 - A download is tracked at **module scope** (`offlineDownloadInFlight` / `offlineDownloadAbort` / `offlineDownloadSettled`), because `display()` re-runs on every related setting change: a re-rendered tab adopts the running download, blocks a second one, offers Cancel and rescans when it settles. `refreshOfflineStatus` (called by `saveDaily`) is debounced 400 ms.
 - Row/list CSS is injected from `settings.ts` under `.quran-life-settings` — desktop rows stay side-by-side (name left, buttons right) and phones stack them with full-width buttons; both verified at 390/700/1200 px with zero horizontal overflow.
+
+## Obsidian Community Review Fixes (2026-09-27)
+- `src/lib/obsidianRequest.ts` (NEW): shared `requestUrl`-first HTTP helpers (`requestJson` / `requestText` / `requestArrayBuffer`) with raced timeouts. The review rejects bare `fetch` calls; `window.fetch` stays only as the non-Obsidian (web) fallback. `lib/audio.ts`, `lib/quranData.ts` and `plugin/offlineAudio.ts` now route through it.
+- `src/plugin/offlineAudio.ts`: the hard-coded `OFFLINE_AUDIO_ROOT` constant is gone — `getOfflineAudioRoot(app)` reads `Vault#configDir`; path helpers take an optional app and `fetchArrayBufferViaRequestUrl` uses the shared helper.
+- `scripts/esbuild-script-element-guard.mjs` (NEW): esbuild plugin that rewrites third-party runtime script-element creation (react-dom preload helpers, jszip setImmediate fallbacks) to an inert `<template>` and fails the build if any remains in `main.js`. Wired into `esbuild.config.mjs`; do not remove without re-checking the review's obfuscation scan.
+- `src/lib/fsrs.ts`: never touches the deprecated `Card.elapsed_days` (removed in ts-fsrs v6) — elapsed days are derived from `last_review` and passed into `cardToState`.
+- `src/lib/anki/apkgExport.ts`: `bundledWasmDataUrl` is now decoded (`bundledWasmToArrayBuffer`), so the inlined sql.js wasm actually powers offline Anki export.
+- `src/plugin/components/MindmapEditorObsidian.tsx`: package-level tldraw `getSnapshot(store).document` (fallback `getStoreSnapshot`); deprecated `beforeunload` `returnValue` removed.
+- `src/plugin/settings.ts`: implements `getSettingDefinitions()` (declarative API, Obsidian 1.13+). Every row is a `render` definition with name/desc so settings search finds them; `display()` renders the *same* definitions imperatively for older versions. Async values (daily settings, Anki prefs, reciters) load once into tab caches and re-render.
+- Intentionally NOT fixed (user request): the `Vault.delete()` → `FileManager.trashFile()` warnings in `useVaultDailyStore.ts` / `offlineAudio.ts`.
 
 ## Branch Constraint
 - ALWAYS work on `main` branch only. Do NOT update `quran-anki-companion` or `quran-anki-companion-obsidian-plugin` branches. All new plugin work is on `main`.

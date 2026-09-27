@@ -35,6 +35,7 @@ import {
     HighlightToolbarItem,
     EraserToolbarItem,
     loadSnapshot,
+    getSnapshot,
     useTools,
     useIsToolSelected,
     useEditor,
@@ -46,10 +47,32 @@ import {
     observeObsidianBottomBar,
     observeTldrawWatermarkTitles,
 } from '@/plugin/lib/mindmapObsidianGuards';
-import type { Editor, TLContent, TLRecord, TLShape, TLStoreEventInfo, TLStoreSnapshot, TLUiOverrides } from 'tldraw';
+import type { Editor, TLContent, TLRecord, TLShape, TLStore, TLStoreEventInfo, TLStoreSnapshot, TLUiOverrides } from 'tldraw';
 import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 
 const { useCallback, useEffect, useState, useMemo, useRef } = React;
+
+/**
+ * Document snapshot for persistence/autosave.
+ *
+ * `store.getSnapshot()` is deprecated; the package-level `getSnapshot` returns
+ * `{ document, session }`, where `document` is exactly the `{ schema, store }`
+ * payload this component has always persisted. `getSnapshot` throws until the
+ * session-state signal is ready, so the store's document-only accessor is kept
+ * as a fallback — autosave must never silently lose a snapshot.
+ */
+function readStoreDocumentSnapshot(store: TLStore | null | undefined): MindmapSnapshot | null {
+    if (!store) return null;
+    try {
+        return getSnapshot(store).document as unknown as MindmapSnapshot;
+    } catch {
+        try {
+            return store.getStoreSnapshot() as unknown as MindmapSnapshot;
+        } catch {
+            return null;
+        }
+    }
+}
 
 // Mutation of stroke sizes as requested
 STROKE_SIZES.s = 0.1;
@@ -397,7 +420,7 @@ function MindmapEditorContent({
 
     const persistLocalDraft = useCallback((snapshotOverride?: MindmapSnapshot | null) => {
         try {
-            const snapshot: unknown = snapshotOverride || editorRef.current?.store?.getSnapshot?.();
+            const snapshot: unknown = snapshotOverride || readStoreDocumentSnapshot(editorRef.current?.store);
             const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || (snapshot as MindmapSnapshot | undefined);
             const storeSize = Object.keys(sanitizedSnapshot?.store || {}).length;
 
@@ -770,7 +793,7 @@ function MindmapEditorContent({
                 flushPendingShapeTimestampUpdates();
 
                 // Force store snapshot to ensure we get schema and full store
-                const snapshot = editorInst.store.getSnapshot();
+                const snapshot = readStoreDocumentSnapshot(editorInst.store);
 
                 // Debug: Check snapshot content size
                 const storeKeys = Object.keys(snapshot?.store || {});
@@ -961,8 +984,6 @@ function MindmapEditorContent({
             persistDraftOnLifecycleExit();
             void saveContent(false);
             e.preventDefault();
-            e.returnValue = '';
-            return '';
         };
 
         const handlePageHide = () => {
