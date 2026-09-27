@@ -58,80 +58,41 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 // `totalBytes` is null when the transport can't report length.
 export type QuranDownloadProgress = (downloadedBytes: number, totalBytes: number | null) => void;
 
-// Download a text asset with streamed byte progress + hard timeout. Prefers
-// Obsidian `requestUrl` (CORS-free from the app:// origin, no progress
-// available → reports indeterminate) with progress-reporting fetch fallback.
+// Download a text asset via Obsidian `requestUrl` (CORS-free from the app://
+// origin) with a hard timeout. No `fetch` fallback by design: every caller is
+// plugin code where `requestUrl` always exists.
 async function downloadTextWithProgress(
   url: string,
   app: App | null,
   timeoutMs: number,
   onProgress?: QuranDownloadProgress
 ): Promise<string> {
+  let req: ObsidianRequestFn | null = null;
   try {
-    let req: ObsidianRequestFn | null = null;
-    try {
-      const obs = (await import('obsidian')) as unknown as ObsidianRequestModule;
-      req = obs.requestUrl ?? null;
-    } catch {
-      req = (typeof window !== 'undefined' && (window as unknown as WindowWithRequestUrl).requestUrl) || null;
-    }
-    if (req) {
-      onProgress?.(0, null);
-      const res: ObsidianTextResponse = await Promise.race([
-        req({ url, method: 'GET' }),
-        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), timeoutMs)),
-      ]);
-      if (typeof res.text === 'string' && res.text) {
-        onProgress?.(res.text.length, res.text.length);
-        return res.text;
-      }
-      if (res.arrayBuffer) {
-        const rawBuf: unknown = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
-        if (rawBuf instanceof ArrayBuffer || rawBuf instanceof Uint8Array) {
-          const text = new TextDecoder().decode(rawBuf);
-          onProgress?.(text.length, text.length);
-          return text;
-        }
-      }
-    }
+    const obs = (await import('obsidian')) as unknown as ObsidianRequestModule;
+    req = obs.requestUrl ?? null;
   } catch {
-    // fall through to fetch
+    req = (typeof window !== 'undefined' && (window as unknown as WindowWithRequestUrl).requestUrl) || null;
   }
-  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
-  try {
-    const res = await fetch(url, { signal: ctrl?.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    const total = Number(res.headers.get('content-length')) || null;
-    if (!res.body || typeof res.body.getReader !== 'function') {
-      const text = await res.text();
-      onProgress?.(text.length, total ?? text.length);
+  if (!req) throw new Error(`Cannot download ${url}: Obsidian requestUrl is unavailable`);
+  onProgress?.(0, null);
+  const res: ObsidianTextResponse = await Promise.race([
+    req({ url, method: 'GET' }),
+    new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), timeoutMs)),
+  ]);
+  if (typeof res.text === 'string' && res.text) {
+    onProgress?.(res.text.length, res.text.length);
+    return res.text;
+  }
+  if (res.arrayBuffer) {
+    const rawBuf: unknown = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
+    if (rawBuf instanceof ArrayBuffer || rawBuf instanceof Uint8Array) {
+      const text = new TextDecoder().decode(rawBuf);
+      onProgress?.(text.length, text.length);
       return text;
     }
-    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
-    const chunks: Uint8Array[] = [];
-    let loaded = 0;
-    onProgress?.(0, total);
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        loaded += value.byteLength;
-        onProgress?.(loaded, total);
-      }
-    }
-    try { reader.releaseLock(); } catch { /* best-effort only; ignore */ }
-    const merged = new Uint8Array(loaded);
-    let off = 0;
-    for (const c of chunks) {
-      merged.set(c, off);
-      off += c.byteLength;
-    }
-    return new TextDecoder().decode(merged);
-  } finally {
-    if (timer) window.clearTimeout(timer);
   }
+  throw new Error(`Empty response downloading ${url}`);
 }
 
 // Persist text into the vault best-effort (creates parent folders). Used to

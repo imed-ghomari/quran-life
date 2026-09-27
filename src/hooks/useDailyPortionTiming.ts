@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { getReciters } from '@/lib/audio';
+import { getReciters, fetchJsonWithObsidianFallback } from '@/lib/audio';
 import { buildAverageSecondsPerWordBySurah } from '@/lib/dailyPortionUtils';
 
 const { useEffect, useMemo, useState } = React;
@@ -36,10 +36,10 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
             const surahDurationMaps = await Promise.all(
                 surahBasedReciters.map(async (reciter): Promise<SurahDurationMap | null> => {
                     try {
-                        const response = await fetch(`${reciter.relativePath}/surah.json`);
-                        if (!response.ok) return null;
-                        const parsed: unknown = (await response.json()) as unknown;
-                        const rec = asRecord(parsed);
+                        // Vault → requestUrl → CDN chain (a bare relative fetch
+                        // cannot resolve inside Obsidian, so it always failed
+                        // here and durations silently stayed empty).
+                        const rec = asRecord(await fetchJsonWithObsidianFallback(`${reciter.relativePath}/surah.json`));
                         return rec ?? null;
                     } catch {
                         return null;

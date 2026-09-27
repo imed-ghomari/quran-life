@@ -372,7 +372,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<Rec
         if (timer) window.clearTimeout(timer);
     }
 }
-async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: App | null): Promise<Record<string, unknown> | null> {
+export async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: App | null): Promise<Record<string, unknown> | null> {
     const app = getObsidianApp(appOverride);
     const usesPublicOrigin = /^https?:\/\//i.test(urlPath);
 

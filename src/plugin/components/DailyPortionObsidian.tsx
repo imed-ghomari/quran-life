@@ -487,7 +487,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
               </span>
             </span>
           </div>
-          <div style={{ width:'100%', height:8, background:'var(--background-modifier-border)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' } as React.CSSProperties}>
+          <div style={{ width:'100%', height:8, background:'var(--background-modifier-border)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' }}>
             <div style={{ width: `${Math.max(0, Math.min(100, cycleProgressPercent))}%`, height:'100%', background:'var(--interactive-accent)', transition:'width 0.25s ease', borderRadius:999 }} />
           </div>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72em', color:'var(--text-faint)' }}>
