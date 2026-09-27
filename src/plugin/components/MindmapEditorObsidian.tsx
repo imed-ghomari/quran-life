@@ -15,7 +15,6 @@ import {
 } from '@/lib/mindmapSnapshot';
 import {
     Tldraw,
-    Editor,
     DefaultDashStyle,
     DefaultSizeStyle,
     atom,
@@ -46,6 +45,8 @@ import {
     observeObsidianBottomBar,
     observeTldrawWatermarkTitles,
 } from '@/plugin/lib/mindmapObsidianGuards';
+import type { Editor, TLContent, TLRecord, TLShape, TLStoreEventInfo, TLStoreSnapshot, TLUiOverrides } from 'tldraw';
+import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 
 const { useCallback, useEffect, useState, useMemo, useRef } = React;
 
@@ -157,14 +158,14 @@ const LassoOverlay = () => {
 // ============================================
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
-    constructor(props: any) {
+    constructor(props: { children: React.ReactNode }) {
         super(props);
         this.state = { hasError: false, error: null };
     }
-    static getDerivedStateFromError(error: any) {
+    static getDerivedStateFromError(error: Error) {
         return { hasError: true, error };
     }
-    componentDidCatch(error: any, errorInfo: any) {
+    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         console.error('ErrorBoundary caught error:', error, errorInfo);
     }
     render() {
@@ -190,10 +191,10 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 interface MindmapEditorProps {
-    initialSnapshot?: any;
+    initialSnapshot?: MindmapSnapshot | null;
     surahId?: number;
     partId?: number;
-    onSave?: (snapshot: any, images?: { light?: Blob, dark?: Blob }, shouldClose?: boolean) => Promise<void>;
+    onSave?: (snapshot: MindmapSnapshot, images?: { light?: Blob, dark?: Blob }, shouldClose?: boolean) => Promise<void>;
     onClose: () => void;
     title?: string;
     docLink?: string | null;
@@ -233,17 +234,17 @@ const MINDMAP_DRAFT_STORAGE_PREFIX = 'mindmap-editor-draft:v1:';
 const SAVE_DRAIN_TIMEOUT_MS = 15000;
 const SAVE_DRAIN_POLL_MS = 50;
 
-const normalizeSnapshot = (value: unknown): any | null => {
+const normalizeSnapshot = (value: unknown): MindmapSnapshot | null => {
     if (!value) return null;
     if (typeof value === 'string') {
         try {
-            const parsed = JSON.parse(value);
-            return parsed && typeof parsed === 'object' ? parsed : null;
+            const parsed: unknown = JSON.parse(value);
+            return parsed && typeof parsed === 'object' ? (parsed as MindmapSnapshot) : null;
         } catch {
             return null;
         }
     }
-    if (typeof value === 'object') return value;
+    if (typeof value === 'object') return value as MindmapSnapshot;
     return null;
 };
 
@@ -291,7 +292,7 @@ function MindmapEditorContent({
     // editor is always opened with a vault-backed store.
     const fetchedDbSnapshot = null;
     const isLoadingDb = false;
-    const [vaultSnapshot, setVaultSnapshot] = useState<any>(null);
+    const [vaultSnapshot, setVaultSnapshot] = useState<MindmapSnapshot | null>(null);
     const [isVaultLoading, setIsVaultLoading] = useState(!!vaultStore && !initialSnapshot);
     useEffect(() => {
         if (!vaultStore || initialSnapshot) { setIsVaultLoading(false); return; }
@@ -315,12 +316,12 @@ function MindmapEditorContent({
     );
     const isActuallyLoading = !activeInitialSnapshot && (isLoadingDb || isVaultLoading);
 
-    const router = { push: (href: string) => { window.location.hash = href; } } as any;
-    const [editor, setEditor] = useState<any>(null);
+    const router: { push: (href: string) => void } = { push: (href: string) => { window.location.hash = href; } };
+    const [editor, setEditor] = useState<Editor | null>(null);
     const [isExitActionPending, setIsExitActionPending] = useState(false);
-    const editorRef = useRef<any>(null);
+    const editorRef = useRef<Editor | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const pendingShapeTimestampUpdatesRef = useRef<Map<string, any>>(new Map());
+    const pendingShapeTimestampUpdatesRef = useRef<Map<string, TLShape>>(new Map());
     const timestampFlushTimerRef = useRef<number | null>(null);
     const localDraftTimerRef = useRef<number | null>(null);
     const isDirty = useRef<boolean>(false);
@@ -391,10 +392,10 @@ function MindmapEditorContent({
         }
     }, [localDraftKey]);
 
-    const persistLocalDraft = useCallback((snapshotOverride?: any) => {
+    const persistLocalDraft = useCallback((snapshotOverride?: MindmapSnapshot | null) => {
         try {
-            const snapshot = snapshotOverride || editorRef.current?.store?.getSnapshot?.();
-            const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
+            const snapshot: unknown = snapshotOverride || editorRef.current?.store?.getSnapshot?.();
+            const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || (snapshot as MindmapSnapshot | undefined);
             const storeSize = Object.keys(sanitizedSnapshot?.store || {}).length;
 
             if (!storeSize) {
@@ -465,18 +466,17 @@ function MindmapEditorContent({
 
     usePenModeUnstick(editor);
 
-    const handleMount = useCallback((editorInstance: any) => {
+    const handleMount = useCallback((editorInstance: Editor) => {
         setEditor(editorInstance);
         editorRef.current = editorInstance;
 
         // --- Obsidian-style switching logic ---
         const pointingCanvasState = editorInstance.getStateDescendant('select.pointing_canvas') as {
-            onEnter?: (...args: any[]) => void;
+            onEnter?: (info: TLPointerEventInfo, from: string) => void;
         } | null;
         if (pointingCanvasState) {
             const originalOnEnter = pointingCanvasState.onEnter;
-            pointingCanvasState.onEnter = function (...args: any[]) {
-                const info = args[0];
+            pointingCanvasState.onEnter = function (info, from) {
                 const selectedShapeIds = editorInstance.getSelectedShapeIds();
                 const selectionBounds = editorInstance.getSelectionPageBounds();
 
@@ -484,7 +484,7 @@ function MindmapEditorContent({
                     editorInstance.setCurrentTool('lasso-select');
                     return;
                 }
-                originalOnEnter?.apply(this, args);
+                originalOnEnter?.call(this, info, from);
             };
         }
 
@@ -493,7 +493,7 @@ function MindmapEditorContent({
 
         if (snapshotToLoad) {
             try {
-                const sanitizedInitialSnapshot = sanitizeMindmapSnapshot(snapshotToLoad) || snapshotToLoad;
+                const sanitizedInitialSnapshot = (sanitizeMindmapSnapshot(snapshotToLoad) || snapshotToLoad) as unknown as TLStoreSnapshot;
                 // Determine if we're loading a v4 snapshot or v3
                 // Standard Tldraw (v2+) uses getSnapshot/loadSnapshot
                 if (typeof editorInstance.loadSnapshot === 'function') {
@@ -527,7 +527,7 @@ function MindmapEditorContent({
         const editorInst = editorRef.current;
         if (editorInst && activeInitialSnapshot && !editorInst.getCurrentPageRenderingShapesSorted().length) {
             try {
-                const sanitized = sanitizeMindmapSnapshot(activeInitialSnapshot) || activeInitialSnapshot;
+                const sanitized = (sanitizeMindmapSnapshot(activeInitialSnapshot) || activeInitialSnapshot) as unknown as TLStoreSnapshot;
                 if (typeof editorInst.loadSnapshot === 'function') {
                     editorInst.loadSnapshot(sanitized);
                 } else {
@@ -629,22 +629,25 @@ function MindmapEditorContent({
             const tldrawContent = e.clipboardData?.getData('application/tldraw');
             if (tldrawContent) {
                 try {
-                    const parsed = JSON.parse(tldrawContent);
+                    const parsed: unknown = JSON.parse(tldrawContent);
+                    const parsedData = (parsed as { data?: Record<string, unknown> } | null)?.data;
                     // If it has a schema, it might be from a newer version (like Obsidian)
                     // We strip the schema to force tldraw to use the current environment's schema
-                    if (parsed.data?.schema) {
+                    if (parsedData?.schema) {
                         e.preventDefault();
                         e.stopPropagation();
 
                         const sanitizedData = sanitizeMindmapSnapshot({
-                            ...parsed.data,
+                            ...parsedData,
                             schema: undefined,
-                        }) || { ...parsed.data };
+                        }) || { ...parsedData };
                         delete sanitizedData.schema;
 
+                        // tldraw's external-content handler reads `content`
+                        // (TLContent), which is what makes the paste land.
                         editor.putExternalContent({
                             type: 'tldraw',
-                            data: sanitizedData,
+                            content: sanitizedData as unknown as TLContent,
                             point: editor.inputs.currentPagePoint,
                         });
                     }
@@ -680,7 +683,7 @@ function MindmapEditorContent({
         window.addEventListener('dragover', handleDragOver, true);
         window.addEventListener('drop', handleDrop, true);
 
-        const isShapeRecord = (rec: any) => rec?.typeName === 'shape' && typeof rec?.id === 'string';
+        const isShapeRecord = (rec: TLRecord | null | undefined): rec is TLShape => rec?.typeName === 'shape' && typeof rec?.id === 'string';
 
         const scheduleShapeTimestampFlush = () => {
             if (timestampFlushTimerRef.current) return;
@@ -691,13 +694,14 @@ function MindmapEditorContent({
         // --- Change Listener for Sync Timestamps ---
         // Tag shape records with updatedAt, but batch writes to keep drawing responsive.
         const cleanupListener = editor.store.listen(
-            (event: any) => {
+            (event: TLStoreEventInfo) => {
                 if (event.source !== 'user') return;
 
                 const changes = event.changes;
+                const { added = {}, updated = {}, removed = {} } = changes;
 
                 // Handle updates
-                Object.values(changes.updated || {}).forEach((update: any) => {
+                Object.values(updated).forEach((update) => {
                     const [, to] = update;
                     if (isShapeRecord(to)) {
                         pendingShapeTimestampUpdatesRef.current.set(to.id, to);
@@ -705,14 +709,14 @@ function MindmapEditorContent({
                 });
 
                 // Handle additions
-                Object.values(changes.added || {}).forEach((record: any) => {
+                Object.values(added).forEach((record) => {
                     if (isShapeRecord(record)) {
                         pendingShapeTimestampUpdatesRef.current.set(record.id, record);
                     }
                 });
 
-                // If a shape was removed before batch flush, drop any pending write for it.
-                Object.values(changes.removed || {}).forEach((record: any) => {
+                // If a shape was removed before batch flush, drop its pending write.
+                Object.values(removed).forEach((record) => {
                     if (isShapeRecord(record)) {
                         pendingShapeTimestampUpdatesRef.current.delete(record.id);
                     }
@@ -786,8 +790,8 @@ function MindmapEditorContent({
         let lightBlob: Blob | undefined;
         let darkBlob: Blob | undefined;
 
-                // Keep the persisted snapshot text-only and strip any media/file-backed records.
-                const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || snapshot;
+                // Keep the persisted snapshot text-only and strip all media/file-backed records.
+                const sanitizedSnapshot = sanitizeMindmapSnapshot(snapshot) || (snapshot as unknown as MindmapSnapshot);
                 persistLocalDraft(sanitizedSnapshot);
 
                 // NOTE: onSave is a silent vault persist only. It must never close
@@ -927,7 +931,7 @@ function MindmapEditorContent({
         };
 
         // Listen to store changes
-        const cleanup = editor.store.listen((entry: any) => {
+        const cleanup = editor.store.listen((entry: TLStoreEventInfo) => {
             if (entry.source === 'user') {
                 handleChange();
             }
@@ -1014,8 +1018,8 @@ function MindmapEditorContent({
         return () => window.removeEventListener('popstate', handlePopState);
     }, [runExitAction]);
 
-    const uiOverrides = useMemo(() => ({
-        tools(editorInst: any, tools: any) {
+    const uiOverrides: TLUiOverrides = useMemo(() => ({
+        tools(editorInst, tools) {
             tools['lasso-select'] = {
                 id: 'lasso-select',
                 icon: 'color',

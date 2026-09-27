@@ -165,7 +165,7 @@ export interface MindMap {
     imageUrlDark?: string | null; // Dark mode screenshot
     anchors: Anchor[]; // Assuming VerseAnchor is a typo and should be Anchor based on existing Anchor interface
     isComplete: boolean;
-    tldrawSnapshot?: any; // JSON snapshot of the whiteboard state
+    tldrawSnapshot?: unknown; // JSON snapshot of the whiteboard state
     updatedAt?: string;
     storagePath?: string;
     _isRemote?: boolean;
@@ -182,7 +182,7 @@ export interface PartMindMap {
     imageUrlDark?: string | null;
     description: string;
     isComplete: boolean;
-    tldrawSnapshot?: any;
+    tldrawSnapshot?: unknown;
     updatedAt?: string;
     storagePath?: string;
     _isRemote?: boolean;
@@ -271,6 +271,28 @@ export function getAudioPath(surahId: number, ayahId: number): string {
 }
 
 // MemoryNode Utility Helpers
+/**
+ * Schedulers persist under several historical shapes (SM-2, FSRS, plus legacy
+ * alternate key names such as scheduledDays/review_count). Read the known
+ * slots structurally instead of assuming one concrete shape.
+ */
+interface SchedulerShape {
+    stability?: unknown;
+    scheduled_days?: unknown;
+    scheduledDays?: unknown;
+    difficulty?: unknown;
+    difficultyScore?: unknown;
+    reps?: unknown;
+    repetition?: unknown;
+    reviewCount?: unknown;
+    review_count?: unknown;
+    due?: unknown;
+    dueDate?: unknown;
+    nextDueAt?: unknown;
+    state?: unknown;
+    last_review?: unknown;
+    lastReview?: unknown;
+}
 const readFiniteSchedulerNumber = (...values: unknown[]): number => {
     for (const value of values) {
         const parsed = Number(value);
@@ -290,7 +312,7 @@ const readSchedulerString = (...values: unknown[]): string | null => {
 
 export function getNodeStability(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    const scheduler = node.scheduler as any;
+    const scheduler: SchedulerShape = node.scheduler;
     return readFiniteSchedulerNumber(
         scheduler.stability,
         scheduler.scheduled_days,
@@ -300,7 +322,7 @@ export function getNodeStability(node: MemoryNode): number {
 
 export function getNodeDifficulty(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    const scheduler = node.scheduler as any;
+    const scheduler: SchedulerShape = node.scheduler;
     return readFiniteSchedulerNumber(
         scheduler.difficulty,
         scheduler.difficultyScore,
@@ -309,7 +331,7 @@ export function getNodeDifficulty(node: MemoryNode): number {
 
 export function getNodeReps(node: MemoryNode): number {
     if (!node.scheduler) return 0;
-    const scheduler = node.scheduler as any;
+    const scheduler: SchedulerShape = node.scheduler;
     return readFiniteSchedulerNumber(
         scheduler.reps,
         scheduler.repetition,
@@ -320,7 +342,7 @@ export function getNodeReps(node: MemoryNode): number {
 
 export function getNodeDueDate(node: MemoryNode): string | null {
     if (!node.scheduler) return null;
-    const scheduler = node.scheduler as any;
+    const scheduler: SchedulerShape = node.scheduler;
     return readSchedulerString(
         scheduler.due,
         scheduler.dueDate,
@@ -328,22 +350,24 @@ export function getNodeDueDate(node: MemoryNode): string | null {
     );
 }
 
-export function hasNodeBeenReviewed(scheduler: any): boolean {
+export function hasNodeBeenReviewed(scheduler: unknown): boolean {
     if (!scheduler) return false;
+    if (typeof scheduler !== 'object') return false;
+    const shape = scheduler as SchedulerShape;
     const reps = readFiniteSchedulerNumber(
-        scheduler.reps,
-        scheduler.repetition,
-        scheduler.reviewCount,
-        scheduler.review_count,
+        shape.reps,
+        shape.repetition,
+        shape.reviewCount,
+        shape.review_count,
     );
     if (reps > 0) {
         return true;
     }
-    const state = readSchedulerString(scheduler.state)?.toLowerCase();
+    const state = readSchedulerString(shape.state)?.toLowerCase();
     if (reps <= 0 && state === 'new') {
         return false;
     }
-    return !!readSchedulerString(scheduler.last_review, scheduler.lastReview);
+    return !!readSchedulerString(shape.last_review, shape.lastReview);
 }
 
 export function surahHasReviewedVerseGroup(nodes: MemoryNode[], surahId: number): boolean {

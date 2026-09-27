@@ -1,6 +1,77 @@
 
 import { clientEnv } from './env/client';
 import { getObsidianApp, isObsidianEnv } from './obsidianApp';
+import type { App } from 'obsidian';
+
+/**
+ * Typed subset of the Obsidian vault adapter surface consumed in this file.
+ * Extracted once via `as unknown as VaultFiles | undefined` at each use site
+ * (documented cast) so all adapter calls below are fully typed.
+ */
+interface VaultFiles {
+  exists(path: string): Promise<boolean>;
+  read(path: string): Promise<string>;
+  readBinary(path: string): Promise<ArrayBuffer>;
+  write(path: string, data: string): Promise<void>;
+  writeBinary(path: string, data: ArrayBuffer): Promise<void>;
+  mkdir(path: string): Promise<void>;
+  remove(path: string): Promise<void>;
+  list(path: string): Promise<{ files: string[]; folders: string[] }>;
+  getResourcePath(path: string): string;
+  stat(path: string): Promise<{ size?: number } | null>;
+}
+
+/** Shape of Obsidian `requestUrl` JSON responses as consumed in this file. */
+interface ObsidianJsonResponse {
+  status?: number;
+  json?: unknown;
+  text?: string;
+  arrayBuffer?: ArrayBuffer | (() => Promise<ArrayBuffer>) | Uint8Array;
+  body?: unknown;
+}
+
+interface ObsidianRequestOptions {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+}
+
+type ObsidianRequestFn = (opts: ObsidianRequestOptions) => Promise<ObsidianJsonResponse>;
+
+interface ObsidianRequestModule {
+  requestUrl?: ObsidianRequestFn;
+}
+
+interface WindowWithRequestUrl {
+  requestUrl?: ObsidianRequestFn;
+}
+
+/** Normalized recitation payload cached per reciter (and per surah for surah-based). */
+interface RecitationData {
+  surahId?: number;
+  surahNumber?: number;
+  audioUrl?: string;
+  timings?: Record<string, unknown>;
+  verses?: Record<string, unknown>;
+  fromSegmentsCache?: boolean;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isNumberMatrix(value: unknown): value is number[][] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (row): row is number[] =>
+        Array.isArray(row) && row.every((n) => typeof n === 'number' && Number.isFinite(n)),
+    )
+  );
+}
 
 export interface Reciter {
     id: string;
@@ -199,7 +270,7 @@ export const ALLOWED_RECITERS: Reciter[] = [
 ];
 
 // Cache for loaded recitation data
-const recitationCache: Record<string, any> = {};
+const recitationCache: Record<string, RecitationData> = {};
 
 export async function getReciters(): Promise<Reciter[]> {
     return ALLOWED_RECITERS;
@@ -213,37 +284,56 @@ export async function getAudioPlayerReciters(): Promise<Reciter[]> {
 }
 
 
-async function fetchViaObsidianRequestUrl(url: string, appOverride?: any): Promise<any | null> {
+async function fetchViaObsidianRequestUrl(url: string, appOverride?: App | null): Promise<Record<string, unknown> | null> {
     if (!isObsidianEnv(appOverride)) return null;
     try {
-        let req: any = null;
+        let req: ObsidianRequestFn | null = null;
         try {
-            const obs: any = await import('obsidian');
-            req = obs.requestUrl;
+            const obs = (await import('obsidian')) as unknown as ObsidianRequestModule;
+            req = obs.requestUrl ?? null;
         } catch {
-            req = (window as any).requestUrl;
+            req = (window as unknown as WindowWithRequestUrl).requestUrl ?? null;
         }
         if (!req) return null;
         // requestUrl has no abort support — race a timeout so a dead network
         // can never leave the player hanging forever.
         const res = await Promise.race([
             req({ url, method: 'GET', headers: { 'Accept': 'application/json' } }),
-            new Promise((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('requestUrl timeout')), 15000)),
         ]);
         const status: number = typeof res.status === 'number' ? res.status : 0;
         if (status >= 200 && status < 300) {
             if (res.json !== undefined && res.json !== null) {
                 // Obsidian requestUrl returns parsed json if content-type is json
-                if (typeof res.json === 'object') return res.json;
-                try { return JSON.parse(res.json); } catch { /* best-effort only; ignore */ }
+                if (typeof res.json === 'object') {
+                    const rec = asRecord(res.json);
+                    if (rec) return rec;
+                } else if (typeof res.json === 'string' && res.json.trim()) {
+                    try {
+                        const parsed: unknown = JSON.parse(res.json);
+                        const rec = asRecord(parsed);
+                        if (rec) return rec;
+                    } catch { /* best-effort only; ignore */ }
+                }
             }
             if (typeof res.text === 'string' && res.text.trim()) {
-                try { return JSON.parse(res.text); } catch { /* best-effort only; ignore */ }
+                try {
+                    const parsed: unknown = JSON.parse(res.text);
+                    const rec = asRecord(parsed);
+                    if (rec) return rec;
+                } catch { /* best-effort only; ignore */ }
             }
             if (res.arrayBuffer) {
                 try {
-                    const txt = new TextDecoder().decode(res.arrayBuffer);
-                    if (txt.trim()) return JSON.parse(txt);
+                    const raw = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
+                    if (raw instanceof ArrayBuffer || raw instanceof Uint8Array) {
+                        const txt = new TextDecoder().decode(raw);
+                        if (txt.trim()) {
+                            const parsed: unknown = JSON.parse(txt);
+                            const rec = asRecord(parsed);
+                            if (rec) return rec;
+                        }
+                    }
                 } catch { /* best-effort only; ignore */ }
             }
         }
@@ -266,25 +356,30 @@ const RECITATION_SITE_BASES = ['https://quran-life.org'];
 // JSON fetch with a hard timeout: without this a stalled network leaves the
 // player spinner hanging forever (offline + no cached metadata). Timeouts
 // reject so callers fall through to the next source / graceful error.
-async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<any | null> {
+async function fetchJsonWithTimeout(url: string, timeoutMs = 12000): Promise<Record<string, unknown> | null> {
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch { /* best-effort only; ignore */ } }, timeoutMs) : null;
     try {
         const res = await fetch(url, { signal: ctrl?.signal });
         if (!res.ok) return null;
-        try { return await res.json(); } catch { return null; }
+        try {
+            const parsed: unknown = await res.json();
+            return asRecord(parsed);
+        } catch { return null; }
     } catch {
         return null;
     } finally {
         if (timer) window.clearTimeout(timer);
     }
 }
-async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any): Promise<any | null> {
+async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: App | null): Promise<Record<string, unknown> | null> {
     const app = getObsidianApp(appOverride);
     const usesPublicOrigin = /^https?:\/\//i.test(urlPath);
 
     if (app) {
-        const adapter: any = app?.vault?.adapter;
+        // Documented cast: the only `unknown -> typed` boundary for the vault
+        // adapter in this scope; every adapter call below is typed.
+        const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
         if (adapter) {
             const normalized = urlPath.replace(/^https?:\/\/[^/]+/i, '').replace(/^\//, '');
             const candidates = [
@@ -300,7 +395,11 @@ async function fetchJsonWithObsidianFallback(urlPath: string, appOverride?: any)
                     if (adapter.exists && !(await adapter.exists(cand))) continue;
                     const raw = await adapter.read(cand);
                     if (raw && raw.trim()) {
-                        try { return JSON.parse(raw); } catch { /* best-effort only; ignore */ }
+                        try {
+                            const parsed: unknown = JSON.parse(raw);
+                            const rec = asRecord(parsed);
+                            if (rec) return rec;
+                        } catch { /* best-effort only; ignore */ }
                     }
                 } catch { /* best-effort only; ignore */ }
             }
@@ -364,11 +463,12 @@ export function registerRecitationCacheStore(store: RecitationCacheStore | null)
 
 const segmentsMemoryCache: Record<string, Record<string, number[][]> | null> = {};
 
-function extractSegmentsMap(json: Record<string, any>): Record<string, number[][]> {
+function extractSegmentsMap(json: Record<string, unknown>): Record<string, number[][]> {
     const out: Record<string, number[][]> = {};
     for (const [key, value] of Object.entries(json || {})) {
-        const segments = (value)?.segments;
-        if (Array.isArray(segments) && segments.length) out[key] = segments as number[][];
+        const rec = asRecord(value);
+        const segments: unknown = rec?.segments;
+        if (isNumberMatrix(segments)) out[key] = segments;
     }
     return out;
 }
@@ -387,7 +487,7 @@ async function loadCachedSegments(reciterId: string): Promise<Record<string, num
     }
 }
 
-function persistSegments(reciterId: string, json: Record<string, any>): void {
+function persistSegments(reciterId: string, json: Record<string, unknown>): void {
     if (!recitationCacheStore || segmentsMemoryCache[reciterId]) return;
     const segments = extractSegmentsMap(json);
     if (!Object.keys(segments).length) return;
@@ -410,13 +510,13 @@ function buildVersesFromSegments(reciter: Reciter, segments: Record<string, numb
     return verses;
 }
 
-export async function loadRecitationData(reciter: Reciter, surahId: number, appOverride?: any) {
+export async function loadRecitationData(reciter: Reciter, surahId: number, appOverride?: App | null): Promise<RecitationData | null> {
     const cacheKey = reciter.type === 'surah-based'
         ? `${reciter.id}-${surahId}`
         : reciter.id;
     if (recitationCache[cacheKey]) return recitationCache[cacheKey];
 
-    let data: any = {};
+    let data: RecitationData = {};
 
     try {
         if (reciter.type === 'surah-based') {
@@ -427,17 +527,19 @@ export async function loadRecitationData(reciter: Reciter, surahId: number, appO
 
             if (!surahData) throw new Error(`surah.json not found for ${reciter.id}`);
 
+            const surahEntry = asRecord(surahData[surahId] ?? surahData[String(surahId)]);
+            const surahNumberRaw: unknown = surahEntry?.surah_number;
             // Normalize — segments may be null in Obsidian if file missing, but allow playback without word timing
             data = {
                 surahId,
-                surahNumber: surahData[surahId]?.surah_number ?? surahId,
-                audioUrl: surahData[surahId]?.audio_url,
+                surahNumber: typeof surahNumberRaw === 'number' && Number.isFinite(surahNumberRaw) ? surahNumberRaw : surahId,
+                audioUrl: typeof surahEntry?.audio_url === 'string' ? surahEntry.audio_url : undefined,
                 timings: segmentsData || {} // Keyed by "Surah:Ayah" — may be empty, getAudioInfo will fallback
             };
             if (!data.audioUrl) {
                 // Some reciters use different structure — try alternative
-                const alt = surahData[surahId] || surahData[String(surahId)];
-                if (alt?.audio_url) data.audioUrl = alt.audio_url;
+                const alt = asRecord(surahData[surahId] ?? surahData[String(surahId)]);
+                if (typeof alt?.audio_url === 'string') data.audioUrl = alt.audio_url;
             }
         } else {
             const json = await fetchJsonWithObsidianFallback(reciter.relativePath, appOverride);
@@ -502,24 +604,24 @@ export function audioHostAllowsDirectPlayback(url: string): boolean {
 }
 
 /** Force the CORS-free `requestUrl` → Blob path (used as an error fallback). */
-export async function resolveAudioUrlProxied(url: string, appOverride?: any): Promise<string> {
+export async function resolveAudioUrlProxied(url: string, appOverride?: App | null): Promise<string> {
     if (!url) return url;
     if (!isObsidianEnv(appOverride)) return url;
     if (audioBlobUrlCache.has(url)) return audioBlobUrlCache.get(url)!;
     try {
-        let req: any = null;
+        let req: ObsidianRequestFn | null = null;
         try {
-            const obs: any = await import('obsidian');
-            req = obs.requestUrl;
+            const obs = (await import('obsidian')) as unknown as ObsidianRequestModule;
+            req = obs.requestUrl ?? null;
         } catch {
-            req = (window as any).requestUrl;
+            req = (window as unknown as WindowWithRequestUrl).requestUrl ?? null;
         }
         if (!req) return url;
         // Full-file download via requestUrl — generous timeout (slow networks
         // are real) but never unbounded, so playback can't hang forever.
-        const res: any = await Promise.race([
+        const res: ObsidianJsonResponse = await Promise.race([
             req({ url, method: 'GET' }),
-            new Promise((_, reject) => window.setTimeout(() => reject(new Error('audio download timeout')), 120000)),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('audio download timeout')), 120000)),
         ]);
         const responseBuffer = typeof res.arrayBuffer === 'function' ? await res.arrayBuffer() : res.arrayBuffer;
         const buf: ArrayBuffer | null = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
@@ -534,7 +636,7 @@ export async function resolveAudioUrlProxied(url: string, appOverride?: any): Pr
     }
 }
 
-export async function resolveAudioUrl(url: string, appOverride?: any): Promise<string> {
+export async function resolveAudioUrl(url: string, appOverride?: App | null): Promise<string> {
     if (!url) return url;
     if (!isObsidianEnv(appOverride)) return url;
     // Media elements load cross-origin without a CORS check, and these hosts
@@ -545,15 +647,22 @@ export async function resolveAudioUrl(url: string, appOverride?: any): Promise<s
 }
 
 export function getAudioInfoForVerse(
-    reciter: Reciter, 
-    data: any, 
-    surahId: number, 
+    reciter: Reciter,
+    data: RecitationData | null | undefined,
+    surahId: number,
     ayahId: number
-): { url: string; startTime?: number; endTime?: number; segments?: number[][] } | null {
+): { url: string; startTime?: number; endTime?: number; segments?: number[][] | null } | null {
     if (reciter.type === 'ayah-based') {
         const key = `${surahId}:${ayahId}`;
-        const verseData = data?.verses?.[key];
-        if (verseData?.audio_url) return { url: verseData.audio_url, segments: verseData.segments };
+        const verseData = asRecord(data?.verses?.[key]);
+        const verseAudioUrl: unknown = verseData?.audio_url;
+        const verseSegments: unknown = verseData?.segments;
+        if (typeof verseAudioUrl === 'string' && verseAudioUrl) {
+            return {
+                url: verseAudioUrl,
+                segments: isNumberMatrix(verseSegments) ? verseSegments : undefined,
+            };
+        }
         // Metadata (the large `verses` map) may be unavailable — offline, or the
         // mobile fetch has not resolved yet. The per-ayah URL is deterministic,
         // so resolve it directly instead of declaring the verse unplayable.
@@ -583,7 +692,7 @@ export function getAudioInfoForVerse(
             // Obsidian fallback: if segments.json missing or timing not found, still allow playback of whole surah file.
             // This keeps play button enabled; word highlight will be disabled (no segments) but audio will work.
             if (data.audioUrl) {
-                return { url: data.audioUrl, segments: null as any };
+                return { url: data.audioUrl, segments: null };
             }
             return null;
         }
@@ -613,9 +722,10 @@ export function getAudioInfoForVerse(
             return { start: minStart, end: maxEnd };
         };
 
-        const getTimingStart = (candidate: any): number | null => {
-            const timestampFrom = toFiniteNumber(candidate?.timestamp_from);
-            const segmentBounds = getSegmentBounds(candidate?.segments);
+        const getTimingStart = (candidate: unknown): number | null => {
+            const candidateRec = asRecord(candidate);
+            const timestampFrom = toFiniteNumber(candidateRec?.timestamp_from);
+            const segmentBounds = getSegmentBounds(candidateRec?.segments);
             const segmentStart = segmentBounds?.start ?? null;
 
             if (timestampFrom === null) return segmentStart;
@@ -638,10 +748,11 @@ export function getAudioInfoForVerse(
             return timestampFrom;
         };
 
-        const getTimingEnd = (candidate: any): number | null => {
-            const timestampTo = toFiniteNumber(candidate?.timestamp_to);
+        const getTimingEnd = (candidate: unknown): number | null => {
+            const candidateRec = asRecord(candidate);
+            const timestampTo = toFiniteNumber(candidateRec?.timestamp_to);
             if (timestampTo !== null) return timestampTo;
-            const segmentBounds = getSegmentBounds(candidate?.segments);
+            const segmentBounds = getSegmentBounds(candidateRec?.segments);
             return segmentBounds?.end ?? null;
         };
 
@@ -684,11 +795,12 @@ export function getAudioInfoForVerse(
             }
         }
 
+        const timingSegments: unknown = asRecord(timing)?.segments;
         return {
             url: data.audioUrl,
             startTime: startMs / 1000,
             endTime: endMs / 1000,
-            segments: timing.segments
+            segments: isNumberMatrix(timingSegments) ? timingSegments : undefined
         };
     }
 }

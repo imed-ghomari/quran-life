@@ -9,6 +9,17 @@ const { useEffect, useMemo, useState } = React;
 let averageSurahDurationsCache: Record<number, number> | null = null;
 let averageSurahDurationsPromise: Promise<Record<number, number>> | null = null;
 
+/** One reciter's `surah.json`: surah id -> entry carrying a `duration` in seconds. */
+interface SurahDurationMap {
+  [surahId: string]: unknown;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 export async function loadAverageSurahDurations(): Promise<Record<number, number>> {
     if (averageSurahDurationsCache) return averageSurahDurationsCache;
     if (averageSurahDurationsPromise) return averageSurahDurationsPromise;
@@ -23,11 +34,13 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
             }
 
             const surahDurationMaps = await Promise.all(
-                surahBasedReciters.map(async (reciter) => {
+                surahBasedReciters.map(async (reciter): Promise<SurahDurationMap | null> => {
                     try {
                         const response = await fetch(`${reciter.relativePath}/surah.json`);
                         if (!response.ok) return null;
-                        return await response.json();
+                        const parsed: unknown = await response.json();
+                        const rec = asRecord(parsed);
+                        return rec ?? null;
                     } catch {
                         return null;
                     }
@@ -39,9 +52,9 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
             for (const durationMap of surahDurationMaps) {
                 if (!durationMap) continue;
 
-                Object.entries(durationMap as Record<string, unknown>).forEach(([surahKey, rawValue]) => {
+                Object.entries(durationMap).forEach(([surahKey, rawValue]) => {
                     const surahId = Number(surahKey);
-                    const durationValue = rawValue as { duration?: unknown };
+                    const durationValue = asRecord(rawValue);
                     const durationSeconds = Number(durationValue?.duration);
 
                     if (!Number.isFinite(surahId) || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
@@ -76,7 +89,11 @@ export async function loadAverageSurahDurations(): Promise<Record<number, number
     return averageSurahDurationsPromise;
 }
 
-export function useDailyPortionTiming() {
+export function useDailyPortionTiming(): {
+    averageSurahDurations: Record<number, number> | null;
+    averageSecondsPerWordBySurah: Record<number, number>;
+    isReady: boolean;
+} {
     const [averageSurahDurations, setAverageSurahDurations] = useState<Record<number, number> | null>(
         averageSurahDurationsCache,
     );

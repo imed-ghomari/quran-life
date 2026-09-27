@@ -24,9 +24,14 @@ interface WindowWithApp extends Window {
 
 let registeredApp: App | null = null;
 
-function isUsableApp(candidate: App | null | undefined): candidate is App {
+function isUsableApp(candidate: unknown): candidate is App {
   try {
-    return !!candidate && !!candidate.vault && !!candidate.vault.adapter;
+    if (!candidate || typeof candidate !== "object") return false;
+    if (!("vault" in candidate)) return false;
+    const vault: unknown = candidate.vault;
+    if (!vault || typeof vault !== "object") return false;
+    if (!("adapter" in vault)) return false;
+    return !!vault.adapter;
   } catch {
     return false;
   }
@@ -58,14 +63,50 @@ export function isObsidianEnv(appOverride?: App | null): boolean {
   return getObsidianApp(appOverride) !== null;
 }
 
-export function getVaultConfigDir(appOverride?: any): string {
+export function getVaultConfigDir(appOverride?: App | null): string {
   try {
     const app = getObsidianApp(appOverride);
-    const dir = (app as any)?.vault?.configDir;
+    const dir = app?.vault?.configDir;
     if (typeof dir === 'string' && dir) return dir.replace(/\/$/, '');
   } catch { /* fall through */ }
   return '.obsidian';
 }
-export function pluginPublishDir(appOverride?: any): string {
+export function pluginPublishDir(appOverride?: App | null): string {
   return `${getVaultConfigDir(appOverride)}/plugins/quran-life`;
+}
+
+/**
+ * File-system view of the vault adapter, shared by plugin storage code.
+ *
+ * `App#vault#adapter` is typed as the minimal `DataAdapter`, but at runtime it
+ * is a `FileSystemAdapter` (desktop) / `CapacitorAdapter` (mobile) that also
+ * exposes `mkdir` / `remove` / `getResourcePath`. Use {@link getVaultFiles}
+ * instead of casting locally.
+ */
+export interface VaultFilesAdapter {
+  exists(path: string): Promise<boolean>;
+  read(path: string): Promise<string>;
+  readBinary(path: string): Promise<ArrayBuffer>;
+  write(path: string, data: string): Promise<void>;
+  writeBinary(path: string, data: ArrayBuffer): Promise<void>;
+  mkdir(path: string): Promise<void>;
+  remove(path: string): Promise<void>;
+  list(path: string): Promise<{ files: string[]; folders: string[] }>;
+  getResourcePath(path: string): string;
+  stat(path: string): Promise<{ size?: number } | null>;
+}
+
+/**
+ * Typed accessor for the vault's file-system adapter (`null` when no usable
+ * app is registered). The override is `unknown` so untrusted callers cannot
+ * smuggle an unvalidated app through; it is narrowed with a real structural
+ * check before use.
+ */
+export function getVaultFiles(appOverride?: unknown): VaultFilesAdapter | null {
+  const app = getObsidianApp(isUsableApp(appOverride) ? appOverride : undefined);
+  if (!app) return null;
+  // BRIDGE (documented, sole cast in this module): the stock DataAdapter type
+  // lacks the FileSystemAdapter methods (mkdir/remove/getResourcePath) that
+  // exist at runtime on both desktop and mobile.
+  return app.vault.adapter as unknown as VaultFilesAdapter;
 }

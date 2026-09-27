@@ -9,7 +9,7 @@ export type AnkiMindmap = {
   partId?: number;
   kind: 'surah' | 'part' | 'meta' | 'cluster';
   key: string; // e.g. "surah-2", "part-3", "meta-0", "cluster-1"
-  snapshot?: any;
+  snapshot?: unknown;
   imageUrl?: string | null;
   imageUrlDark?: string | null;
   isComplete?: boolean;
@@ -27,9 +27,9 @@ export function loadAnkiMindmaps(): Stored {
   try {
     const raw = readStored(LS_MINDMAPS_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
+    const parsed: Record<string, Partial<AnkiMindmap>> = JSON.parse(raw);
     const out: Stored = {};
-    Object.entries(parsed).forEach(([k, v]: any) => {
+    Object.entries(parsed).forEach(([k, v]) => {
       // Support old format where key was numeric surahId
       if (!isNaN(Number(k)) && v && !v.key) {
         const surahId = Number(k);
@@ -68,7 +68,10 @@ export function loadAnkiMindmaps(): Stored {
 
 export function saveAnkiMindmapByKey(key: string, data: Partial<AnkiMindmap>) {
   const all = loadAnkiMindmaps();
-  const existing = all[key] || { key, kind: (key.split('-')[0] as any) || 'surah' };
+  const prefix = key.split('-')[0];
+  const fallbackKind: AnkiMindmap['kind'] =
+    prefix === 'part' || prefix === 'meta' || prefix === 'cluster' || prefix === 'surah' ? prefix : 'surah';
+  const existing: AnkiMindmap = all[key] || { key, kind: fallbackKind };
   const next = { ...existing, ...data, key, updatedAt: new Date().toISOString() };
   all[key] = next;
   try {

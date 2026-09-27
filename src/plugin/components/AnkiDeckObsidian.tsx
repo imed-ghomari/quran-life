@@ -4,6 +4,7 @@ import { getQuranVerses, getSurah, SURAHS } from '@/lib/quranData';
 import { buildAnkiCards, buildMindmapCards } from '@/lib/anki/cardBuilder';
 import { generateApkgBlob } from '@/lib/anki/apkgExport';
 import { AnkiAnchor } from '@/lib/anki/types';
+import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps, useVaultAnkiExportPrefs } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
@@ -43,7 +44,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
-  const [editorInitialSnapshot, setEditorInitialSnapshot] = useState<any>(null);
+  const [editorInitialSnapshot, setEditorInitialSnapshot] = useState<MindmapSnapshot | null>(null);
   const [showAllVerses, setShowAllVerses] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [showMindmapPreview, setShowMindmapPreview] = useState(false);
@@ -253,12 +254,12 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     })();
   };
   // Splits persist on every change (see handleAddBreak/handleRemoveBreak plus the
-  // switch/unmount flush), so there is no explicit Save action any more.
+  // switch/unmount flush), so there is no explicit Save action anymore.
 
   // Silent persist for autosave + pre-exit save. Must NOT close the editor,
   // must NOT toast/banner — the editor stays open until the user closes it manually.
   // Save-state feedback lives in the editor top-bar indicator.
-  const handleSaveMindmap = useCallback(async (snapshot: any) => {
+  const handleSaveMindmap = useCallback(async (snapshot: MindmapSnapshot) => {
     await saveMindmap({ snapshot, isComplete: true });
   }, [saveMindmap]);
 
@@ -312,7 +313,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       updateProgress({ status: 'Loading splits…', current: 5 });
       const fullSplits: Record<number, AnkiAnchor[]> = {};
       // Enumerate the splits folder first so files added directly in the plugin
-      // data folder (any `surah-N.json` padding) are exported too.
+      // data folder (regardless of `surah-N.json` zero-padding) are exported too.
       try {
         const allSplits = await vaultStore.loadAllSplits();
         for (const [sidRaw, arr] of Object.entries(allSplits || {})) {
@@ -335,7 +336,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       if (!fullSplits[selectedSurah] && localAnchors.length) fullSplits[selectedSurah] = localAnchors;
       pushLog(`Loaded splits for ${Object.keys(fullSplits).length} surahs`);
       updateProgress({ current: 32, status: 'Ensuring short surahs…' });
-      const mindmapKeys = new Set(Object.keys(allMindmaps).filter(k => (allMindmaps as any)[k]?.snapshot));
+      const mindmapKeys = new Set(Object.keys(allMindmaps).filter(k => allMindmaps[k]?.snapshot));
       // Vault-only: every surah WITH a mindmap exports at least 1 verse group.
       // Short surahs (<=10 verses) and mindmap-linked surahs without saved splits
       // get a single auto group — the same fallback Deck Statistics uses, so both
@@ -360,7 +361,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         if (i % 10 === 0) updateProgress({ current: 35 + Math.round(((i+1)/Math.max(1,docKeys.length))*10), status: `Loading notes ${i+1}/${docKeys.length}…` });
       }
       if (editingDocText.trim() && !docsMap[selectedMindmapKey]) docsMap[selectedMindmapKey] = editingDocText;
-      // Notes added directly in the data folder (any key padding) are exported too.
+      // Notes added directly in the data folder (regardless of key zero-padding) are exported too.
       try {
         const storedDocs = await vaultStore.loadAllDocs();
         for (const [key, content] of Object.entries(storedDocs || {})) {
@@ -369,7 +370,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         }
       } catch { /* best-effort only; ignore */ }
       updateProgress({ current: 48, status: 'Building cards…' });
-      const mindmapCards = buildMindmapCards(allMindmaps as any, docsMap);
+      const mindmapCards = buildMindmapCards(allMindmaps, docsMap);
       if (filteredAnchors.length===0 && mindmapCards.length===0) {
         showToast('No mindmap-linked surah to export — create a mindmap first');
         setExportProgress(null);
@@ -407,7 +408,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         const savedPath = await vaultStore.saveApkgFile('quran-life-deck.apkg', blob);
         pushLog(`Saved to vault: ${savedPath}`);
       } catch (e) {
-        pushLog(`Vault save skipped: ${String((e as any)?.message || e)}`);
+        pushLog(`Vault save skipped: ${String((e as Error)?.message || e)}`);
       }
       // Trigger browser download of the .apkg blob.
       const url = URL.createObjectURL(blob);
@@ -425,7 +426,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         setIsExporting(false);
       }, 2200);
       return;
-    } catch (e) { console.error(e); showToast('Export failed'); setExportProgress(prev => prev ? { ...prev, status: 'Failed — see console', logs: [...prev.logs, String((e as any)?.message || e)] } : null); window.setTimeout(()=>{ setExportProgress(null); }, 2500); }
+    } catch (e) { console.error(e); showToast('Export failed'); setExportProgress(prev => prev ? { ...prev, status: 'Failed — see console', logs: [...prev.logs, String((e as Error)?.message || e)] } : null); window.setTimeout(()=>{ setExportProgress(null); }, 2500); }
     finally {
       // if already set to 100, let timeout close; otherwise ensure closed
       window.setTimeout(()=>{ setExportProgress(prev => (prev && prev.current < 100 ? null : prev)); }, 3000);
@@ -627,24 +628,24 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
       {/* Deck Statistics — matching Daily tone */}
       {(() => {
-        const surahMindmapCount = Object.keys(allMindmaps).filter(k => k.startsWith('surah-') && (allMindmaps as any)[k]?.snapshot).length;
-        const partMetaCount = Object.keys(allMindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && (allMindmaps as any)[k]?.snapshot).length;
+        const surahMindmapCount = Object.keys(allMindmaps).filter(k => k.startsWith('surah-') && allMindmaps[k]?.snapshot).length;
+        const partMetaCount = Object.keys(allMindmaps).filter(k => (k.startsWith('part-') || k.startsWith('meta-')) && allMindmaps[k]?.snapshot).length;
         // Vault-only: verse groups that will actually be exported — one entry per
         // surah WITH a mindmap (splits length, or 1 auto-group when the mindmap
         // has no saved splits yet). Splits without a mindmap are not exported,
         // so they must not inflate the count.
         const totalVerseGroups = SURAHS.reduce((acc, s) => {
-          const hasMM = !!(allMindmaps as any)[`surah-${s.id}`]?.snapshot;
+          const hasMM = !!allMindmaps[`surah-${s.id}`]?.snapshot;
           if (!hasMM) return acc;
-          const groups = (allSplitsForStats as any)[s.id]?.length ?? 0;
+          const groups = allSplitsForStats[s.id]?.length ?? 0;
           return acc + (groups > 0 ? groups : 1);
         }, 0);
         const surahsWithSplits = surahMindmapCount;
         const docsWithContent = Object.keys(allDocsForStats).filter(k => {
-          const v = (allDocsForStats as any)[k];
+          const v = allDocsForStats[k];
           return typeof v === 'string' && v.trim().length > 0 && !v.includes('_Not added yet._');
         }).length;
-        const docsTotal = Object.keys(allDocsForStats).filter(k => typeof (allDocsForStats as any)[k] === 'string' && (allDocsForStats as any)[k].trim().length > 0).length;
+        const docsTotal = Object.keys(allDocsForStats).filter(k => typeof allDocsForStats[k] === 'string' && allDocsForStats[k].trim().length > 0).length;
         return (
           <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -675,11 +676,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                     <tbody>
                       {SURAHS.map(s=>{
                         const key=`surah-${s.id}`;
-                        const hasMM=!!(allMindmaps as any)[key]?.snapshot;
-                        const rawGroups=(allSplitsForStats as any)[s.id]?.length ?? 0;
+                        const hasMM=!!allMindmaps[key]?.snapshot;
+                        const rawGroups=allSplitsForStats[s.id]?.length ?? 0;
                         // Effective export groups: mindmap without saved splits exports as 1 group.
                         const groups=hasMM ? (rawGroups > 0 ? rawGroups : 1) : 0;
-                        const doc=(allDocsForStats as any)[normalizeStoreKey(key)] as string | undefined;
+                        const doc: string | undefined = allDocsForStats[normalizeStoreKey(key)];
                         const hasDoc=typeof doc==='string' && doc.trim().length>0;
                         const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
                         return (
@@ -711,8 +712,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                         { key: 'part-6', label: 'Part 6 — Surah 50-66' },
                         { key: 'part-7', label: 'Part 7 — Surah 67-114' },
                       ].map(row=>{
-                        const hasMM=!!(allMindmaps as any)[row.key]?.snapshot;
-                        const doc=(allDocsForStats as any)[normalizeStoreKey(row.key)] as string | undefined;
+                        const hasMM=!!allMindmaps[row.key]?.snapshot;
+                        const doc: string | undefined = allDocsForStats[normalizeStoreKey(row.key)];
                         const hasDoc=typeof doc==='string' && doc.trim().length>0;
                         const isPlaceholder=hasDoc && doc.includes('_Not added yet._');
                         return (

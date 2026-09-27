@@ -6,6 +6,15 @@ on:
     tags:
       - '[0-9]*'
       - 'v*'
+  # Manual backfill for releases whose attest run failed: run with the release
+  # tag checked out; the build is reproducible so attested digests match the
+  # published assets byte-for-byte.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit to attest (default: main)'
+        required: false
+        default: 'main'
 
 jobs:
   attest:
@@ -13,6 +22,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { DEFAULT_DAILY_TARGET_MINUTES, clampDailyTargetMinutes } from '@/lib/dailyPortionUtils';
 import { ALL_QURAN_PART, QuranPart } from '@/lib/types';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
+import type { App, EventRef, TAbstractFile } from 'obsidian';
 
 const { useCallback, useEffect, useMemo, useState } = React;
 
@@ -49,6 +50,43 @@ function isValidQuranPart(value: unknown): value is QuranPart {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= ALL_QURAN_PART;
 }
+/** Narrow an unknown JSON value to a string-keyed object (never launders to a final type). */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+/** True when a stored value carries at least a numeric partId (persisted progress shape). */
+function isStoredProgressEntry(value: unknown): value is ListeningProgressEntryLocal {
+  const rec = asRecord(value);
+  return !!rec && typeof rec.partId === 'number';
+}
+/**
+ * Rebuild a progress entry from a stored record, copying only known fields so
+ * the `in`-checks in `saveProgress` keep their absent-vs-null meaning.
+ */
+function fromStoredProgress(partId: number, rec: Record<string, unknown>): ListeningProgressEntryLocal {
+  const next: ListeningProgressEntryLocal = {
+    partId: typeof rec.partId === 'number' ? rec.partId : partId,
+  };
+  if (typeof rec.lastVerseIndex === 'number') next.lastVerseIndex = rec.lastVerseIndex;
+  if (typeof rec.nextStartVerseKey === 'string') next.nextStartVerseKey = rec.nextStartVerseKey;
+  if (typeof rec.cycles === 'number') next.cycles = rec.cycles;
+  if (typeof rec.updatedAt === 'string') next.updatedAt = rec.updatedAt;
+  if ('completedOnDay' in rec) next.completedOnDay = typeof rec.completedOnDay === 'string' ? rec.completedOnDay : null;
+  if ('undo' in rec) {
+    const undoRec = asRecord(rec.undo);
+    next.undo = undoRec
+      ? {
+          ...(typeof undoRec.lastVerseIndex === 'number' ? { lastVerseIndex: undoRec.lastVerseIndex } : {}),
+          ...(typeof undoRec.nextStartVerseKey === 'string' ? { nextStartVerseKey: undoRec.nextStartVerseKey } : {}),
+          ...(typeof undoRec.cycles === 'number' ? { cycles: undoRec.cycles } : {}),
+          ...(typeof undoRec.updatedAt === 'string' ? { updatedAt: undoRec.updatedAt } : {}),
+        }
+      : null;
+  }
+  return next;
+}
 function normalizeSkippedSurahs(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   const s = new Set<number>();
@@ -58,16 +96,24 @@ function normalizeSkippedSurahs(value: unknown): number[] {
   });
   return Array.from(s).sort((a, b) => a - b);
 }
-function parseSettings(raw: any): LocalDailySettings {
-  if (!raw || typeof raw !== 'object') return { ...DEFAULT_SETTINGS };
-  const activePart = isValidQuranPart(raw.activePart) ? raw.activePart as QuranPart : DEFAULT_SETTINGS.activePart;
-  const dailyTargetMinutes = Number.isFinite(Number(raw.dailyTargetMinutes))
-    ? clampDailyTargetMinutes(Number(raw.dailyTargetMinutes))
+function parseSettings(raw: unknown): LocalDailySettings {
+  const rec = asRecord(raw);
+  if (!rec) return { ...DEFAULT_SETTINGS };
+  const activePart = isValidQuranPart(rec.activePart) ? rec.activePart : DEFAULT_SETTINGS.activePart;
+  const dailyTargetMinutes = Number.isFinite(Number(rec.dailyTargetMinutes))
+    ? clampDailyTargetMinutes(Number(rec.dailyTargetMinutes))
     : DEFAULT_SETTINGS.dailyTargetMinutes;
-  const dailyPortionMode = raw.dailyPortionMode === 'reading' ? 'reading' : 'audio';
-  const dailyReadingStyle = raw.dailyReadingStyle === 'line_by_line' ? 'line_by_line' : 'paragraph';
-  const skippedSurahs = normalizeSkippedSurahs(raw.skippedSurahs);
-  return { activePart, dailyTargetMinutes, dailyPortionMode, dailyReadingStyle, skippedSurahs, updatedAt: raw.updatedAt };
+  const dailyPortionMode = rec.dailyPortionMode === 'reading' ? 'reading' : 'audio';
+  const dailyReadingStyle = rec.dailyReadingStyle === 'line_by_line' ? 'line_by_line' : 'paragraph';
+  const skippedSurahs = normalizeSkippedSurahs(rec.skippedSurahs);
+  return {
+    activePart,
+    dailyTargetMinutes,
+    dailyPortionMode,
+    dailyReadingStyle,
+    skippedSurahs,
+    updatedAt: typeof rec.updatedAt === 'string' ? rec.updatedAt : undefined,
+  };
 }
 
 // Hook that mirrors useLocalDailySettings but backed by VaultStore (Resilio-synced)
@@ -76,7 +122,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
   const [isLoading, setIsLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    const raw = await vaultStore.loadSettings<any>(null as any);
+    const raw = await vaultStore.loadSettings<Record<string, unknown> | null>(null);
     setSettingsState(raw ? parseSettings(raw) : { ...DEFAULT_SETTINGS });
     setIsLoading(false);
   }, [vaultStore]);
@@ -84,7 +130,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const raw = await vaultStore.loadSettings<any>(null as any);
+      const raw = await vaultStore.loadSettings<Record<string, unknown> | null>(null);
       if (cancelled) return;
       setSettingsState(raw ? parseSettings(raw) : { ...DEFAULT_SETTINGS });
       setIsLoading(false);
@@ -100,17 +146,17 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
     const visHandler = () => { if (document.visibilityState === 'visible') void reload(); };
     document.addEventListener('visibilitychange', visHandler);
     // Listen to Obsidian vault modify for visible path fallback
-    const app: any = (vaultStore as any)?.app;
-    let ref: any = null;
+    const app: App = vaultStore.app;
+    let ref: EventRef | null = null;
     if (app?.vault?.on) {
-      ref = app.vault.on('modify', (file: any) => {
+      ref = app.vault.on('modify', (file: TAbstractFile) => {
         if (file?.path && file.path.endsWith('settings.json')) void reload();
       });
     }
     return () => {
       window.removeEventListener('quran-life:daily-settings-changed', handler);
       document.removeEventListener('visibilitychange', visHandler);
-      if (ref && app?.vault?.offref) try { app.vault.offref(ref); } catch { /* best-effort only; ignore */ }
+      if (ref) try { app.vault.offref(ref); } catch { /* best-effort only; ignore */ }
     };
   }, [vaultStore, reload]);
 
@@ -149,11 +195,16 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
       // and also per-part files
       const perPart: ListeningProgressEntryLocal[] = [];
       for (let partId = 1; partId <= 8; partId++) {
-        const entry = await vaultStore.loadProgress(partId);
-        if (entry) {
-          if (Array.isArray(entry)) perPart.push(...entry);
-          else if (typeof entry === 'object' && (entry as any).partId !== undefined) perPart.push(entry);
-          else if (typeof entry === 'object' && (entry as any).lastVerseIndex !== undefined) perPart.push({ partId, ...(entry as any) });
+        const entry: unknown = await vaultStore.loadProgress(partId);
+        if (Array.isArray(entry)) {
+          for (const item of entry) {
+            if (isStoredProgressEntry(item)) perPart.push(item);
+          }
+        } else {
+          const rec = asRecord(entry);
+          if (rec && (typeof rec.partId === 'number' || 'lastVerseIndex' in rec)) {
+            perPart.push(fromStoredProgress(partId, rec));
+          }
         }
       }
       if (!cancelled) {
@@ -204,7 +255,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
       void vaultStore.saveProgress(partId, null); // delete file handled via save with empty?
       // Actually vaultStore.saveProgress will create file; to delete we need to delete file via vault
       // Do direct vault delete via app
-      const app: any = (vaultStore as any).app;
+      const app: App = vaultStore.app;
       const path = `QuranLife/daily/progress/part-${partId}.json`;
       const file = app?.vault?.getAbstractFileByPath?.(path);
       if (file) void app.vault.delete(file);
@@ -216,7 +267,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
     if (partId === undefined) {
       setProgress([]);
       for (let pid = 1; pid <= 8; pid++) {
-        const app: any = (vaultStore as any).app;
+        const app: App = vaultStore.app;
         const path = `QuranLife/daily/progress/part-${pid}.json`;
         const file = app?.vault?.getAbstractFileByPath?.(path);
         if (file) try { await app.vault.delete(file); } catch { /* best-effort only; ignore */ }
@@ -225,7 +276,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
     }
     setProgress(prev => {
       const next = prev.filter(p => p.partId !== partId);
-      const app: any = (vaultStore as any).app;
+      const app: App = vaultStore.app;
       const path = `QuranLife/daily/progress/part-${partId}.json`;
       const file = app?.vault?.getAbstractFileByPath?.(path);
       if (file) void app.vault.delete(file);

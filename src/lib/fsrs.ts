@@ -447,6 +447,11 @@ export function migrateSM2ToFSRS(sm2: SM2State): FSRSState {
 /**
  * Check if a scheduler state is SM-2 format (needs migration)
  */
-export function isSM2State(scheduler: any): boolean {
-    return 'interval' in scheduler && !('stability' in scheduler);
+export function isSM2State(scheduler: unknown): boolean {
+    return (
+        typeof scheduler === 'object' &&
+        scheduler !== null &&
+        'interval' in scheduler &&
+        !('stability' in scheduler)
+    );
 }

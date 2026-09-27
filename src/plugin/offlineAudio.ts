@@ -10,7 +10,60 @@ import { ensureFolder } from "./storage/vaultAdapter";
 export const OFFLINE_AUDIO_ROOT = ".obsidian/plugins/quran-life/offline-audio";
 export const OFFLINE_MANIFEST_PATH = normalizePath(`${OFFLINE_AUDIO_ROOT}/manifest.json`);
 
-function getApp(appOverride?: any): App | null {
+/**
+ * Typed subset of the Obsidian vault adapter surface consumed in this file.
+ * Extracted once per helper via `as unknown as VaultFiles | undefined`
+ * (documented cast) so all adapter calls below are fully typed.
+ */
+interface VaultFiles {
+  exists(path: string): Promise<boolean>;
+  read(path: string): Promise<string>;
+  readBinary(path: string): Promise<ArrayBuffer>;
+  write(path: string, data: string): Promise<void>;
+  writeBinary(path: string, data: ArrayBuffer): Promise<void>;
+  mkdir(path: string): Promise<void>;
+  remove(path: string): Promise<void>;
+  rmdir?(path: string, recursive?: boolean): Promise<void>;
+  list(path: string): Promise<{ files: string[]; folders: string[] }>;
+  getResourcePath(path: string): string;
+  stat(path: string): Promise<{ size?: number; stat?: { size?: number } } | null>;
+}
+
+/** Shape of Obsidian `requestUrl` binary responses as consumed in this file. */
+interface ObsidianBinaryResponse {
+  status?: number;
+  text?: unknown;
+  arrayBuffer?: ArrayBuffer | (() => Promise<ArrayBuffer>) | Uint8Array;
+  body?: unknown;
+}
+
+interface ObsidianRequestOptions {
+  url: string;
+  method?: string;
+}
+
+type ObsidianRequestFn = (opts: ObsidianRequestOptions) => Promise<ObsidianBinaryResponse>;
+
+interface ObsidianRequestModule {
+  requestUrl?: ObsidianRequestFn;
+}
+
+interface WindowWithRequestUrl {
+  requestUrl?: ObsidianRequestFn;
+}
+
+/** A single recitation `verses` entry (`"<surah>:<ayah>" -> { audio_url }`). */
+interface AyahVerseEntry {
+  audio_url?: unknown;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getApp(appOverride?: App | null): App | null {
   try {
     // Shared registry — Obsidian Mobile has no `window.app`, so downloads used
     // to lose `requestUrl` (CORS-free fetch) and the vault adapter entirely.
@@ -46,7 +99,9 @@ export function formatBytes(bytes: number): string {
 
 async function adapterExists(app: App, path: string): Promise<boolean> {
   const normalized = normalizePath(path);
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   if (adapter?.exists) {
     try { return await adapter.exists(normalized); } catch { return false; }
   }
@@ -55,7 +110,9 @@ async function adapterExists(app: App, path: string): Promise<boolean> {
 
 async function adapterStatSize(app: App, path: string): Promise<number | null> {
   const normalized = normalizePath(path);
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   if (adapter?.stat) {
     try {
       const st = await adapter.stat(normalized);
@@ -67,8 +124,7 @@ async function adapterStatSize(app: App, path: string): Promise<number | null> {
   if (adapter?.readBinary) {
     try {
       const buf = await adapter.readBinary(normalized);
-      if (buf instanceof ArrayBuffer) return buf.byteLength;
-      if (buf?.byteLength) return buf.byteLength;
+      return buf.byteLength;
     } catch { /* best-effort only; ignore */ }
   }
   return null;
@@ -76,7 +132,9 @@ async function adapterStatSize(app: App, path: string): Promise<number | null> {
 
 async function adapterRemoveNoTrash(app: App, path: string): Promise<void> {
   const normalized = normalizePath(path);
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   // Always use adapter.remove to avoid Obsidian trash (which would duplicate storage)
   if (adapter?.remove) {
     try {
@@ -87,7 +145,7 @@ async function adapterRemoveNoTrash(app: App, path: string): Promise<void> {
   }
   // Fallback: try vault.delete with force? but avoid trash – use adapter if possible
   try {
-    const file: any = app.vault.getAbstractFileByPath(normalized);
+    const file = app.vault.getAbstractFileByPath(normalized);
     if (file) await app.vault.delete(file, true);
   } catch { /* best-effort only; ignore */ }
 }
@@ -95,7 +153,9 @@ async function adapterRemoveNoTrash(app: App, path: string): Promise<void> {
 async function adapterWriteBinary(app: App, path: string, data: ArrayBuffer): Promise<void> {
   const normalized = normalizePath(path);
   await ensureFolder(app, (() => { const i = normalized.lastIndexOf("/"); return i < 0 ? "" : normalized.slice(0, i); })() || "/");
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   if (adapter?.writeBinary) {
     try { await adapter.writeBinary(normalized, data); return; } catch { /* best-effort only; ignore */ }
   }
@@ -107,20 +167,21 @@ async function adapterWriteBinary(app: App, path: string, data: ArrayBuffer): Pr
       const u8 = new Uint8Array(data);
       let binary = "";
       for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
-      // @ts-ignore
       await adapter.write(normalized, binary);
       return;
     } catch { /* best-effort only; ignore */ }
   }
   // last resort: use vault binary if supported
-  // @ts-ignore
-  if (app.vault.createBinary) await (app.vault as any).createBinary(normalized, data);
+  const vaultWithBinary = app.vault as App['vault'] & { createBinary?: (path: string, data: ArrayBuffer) => Promise<unknown> };
+  if (vaultWithBinary.createBinary) await vaultWithBinary.createBinary(normalized, data);
   else throw new Error("no binary write");
 }
 
 async function listFilesRecursive(app: App, dir: string, out: string[] = []): Promise<string[]> {
   const normalized = normalizePath(dir);
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   let entries: { files: string[]; folders: string[] } | null = null;
   if (adapter?.list) {
     try { entries = await adapter.list(normalized); } catch { /* best-effort only; ignore */ }
@@ -133,8 +194,8 @@ async function listFilesRecursive(app: App, dir: string, out: string[] = []): Pr
     return out;
   }
   // fallback via vault
-  const folder: any = app.vault.getAbstractFileByPath(normalized);
-  if (folder && folder.children) {
+  const folder = app.vault.getAbstractFileByPath(normalized);
+  if (folder instanceof TFolder) {
     for (const child of folder.children) {
       if (child instanceof TFile) out.push(child.path);
       else if (child instanceof TFolder) await listFilesRecursive(app, child.path, out);
@@ -179,7 +240,7 @@ const LEGACY_AYAH_FILE_RE = /(\d{1,3})\/(\d{1,3})\.mp3$/;
 
 export async function scanOfflineAudioForReciter(
   reciter: Reciter,
-  appOverride?: any,
+  appOverride?: App | null,
   skippedSurahIds?: number[] | Set<number> | null
 ): Promise<OfflineReciterScan> {
   const skipped = toSkippedSet(skippedSurahIds);
@@ -301,7 +362,7 @@ export function invalidateAllOfflineSizes(): void {
  */
 export async function sumOfflineSizes(
   paths: string[],
-  appOverride?: any,
+  appOverride?: App | null,
   onProgress?: (bytes: number) => void
 ): Promise<number> {
   const app = getApp(appOverride);
@@ -360,7 +421,7 @@ function toSkippedSet(v?: number[] | Set<number> | null): Set<number> {
   return out;
 }
 
-export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, appOverride?: any, skippedSurahIds?: number[] | Set<number> | null): Promise<OfflinePartStatus> {
+export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, appOverride?: App | null, skippedSurahIds?: number[] | Set<number> | null): Promise<OfflinePartStatus> {
   const app = getApp(appOverride);
   if (!app) return { reciterId: reciter.id, partId, totalFiles: 0, existingFiles: 0, totalBytes: 0, isComplete: false, isPartial: false };
   const skipped = toSkippedSet(skippedSurahIds);
@@ -430,7 +491,7 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
   };
 }
 
-export async function getTotalOfflineStorageUsage(appOverride?: any): Promise<{ totalBytes: number; fileCount: number; byReciter: Record<string, { bytes: number; files: number }> }> {
+export async function getTotalOfflineStorageUsage(appOverride?: App | null): Promise<{ totalBytes: number; fileCount: number; byReciter: Record<string, { bytes: number; files: number }> }> {
   const app = getApp(appOverride);
   if (!app) return { totalBytes: 0, fileCount: 0, byReciter: {} };
   const files = await listFilesRecursive(app, OFFLINE_AUDIO_ROOT);
@@ -476,18 +537,18 @@ export interface OfflineDownloadOptions {
 
 async function fetchArrayBufferViaRequestUrl(url: string, app: App): Promise<ArrayBuffer> {
   // Use Obsidian requestUrl to bypass CORS for tarteel CDN
-  let req: any = null;
+  let req: ObsidianRequestFn | null = null;
   try {
-    const obs: any = await import("obsidian");
-    req = obs.requestUrl;
-  } catch { req = (window as any).requestUrl; }
+    const obs = (await import("obsidian")) as unknown as ObsidianRequestModule;
+    req = obs.requestUrl ?? null;
+  } catch { req = (window as unknown as WindowWithRequestUrl).requestUrl ?? null; }
   if (!req) {
     // fallback fetch
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.arrayBuffer();
   }
-  const res: any = await req({ url, method: "GET" });
+  const res: ObsidianBinaryResponse = await req({ url, method: "GET" });
   // Obsidian requestUrl returns arrayBuffer for binary
   const responseBuffer = typeof res.arrayBuffer === "function" ? await res.arrayBuffer() : res.arrayBuffer;
   const arrayBuffer = toArrayBuffer(responseBuffer) ?? toArrayBuffer(res.body);
@@ -521,7 +582,7 @@ async function getSurahAudioUrlForReciter(reciter: Reciter, surahId: number, app
 export async function downloadPartAudio(
   reciter: Reciter,
   partId: QuranPart,
-  appOverride?: any,
+  appOverride?: App | null,
   opts: OfflineDownloadOptions = {}
 ): Promise<{ downloadedFiles: number; failedFiles: number; totalBytes: number }> {
   const app = getApp(appOverride);
@@ -557,9 +618,9 @@ export async function downloadPartAudio(
     // publishes `<ayahAudioBase>/<SSS><AAA>.mp3`, so downloads still work when
     // the map cannot be fetched (this is what used to throw
     // "Failed to load ayah recitation map" on mobile).
-    let ayahData: any = null;
+    let ayahData: Awaited<ReturnType<typeof loadRecitationData>> = null;
     try { ayahData = await loadRecitationData(reciter, 1, app); } catch { /* best-effort only; ignore */ }
-    const ayahMap: Record<string, any> | null = ayahData?.verses ?? null;
+    const ayahMap: Record<string, unknown> | null = ayahData?.verses ?? null;
     if (!ayahMap && !reciter.ayahAudioBase) throw new Error("Failed to load ayah recitation map");
     for (const sh of surahs) {
       for (let ay = 1; ay <= sh.verseCount; ay++) {
@@ -567,7 +628,8 @@ export async function downloadPartAudio(
         const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay);
         if (skipExisting && ((await adapterExists(app, offlinePath)) || (await adapterExists(app, legacyPath)))) continue;
         const key = `${sh.id}:${ay}`;
-        const remoteUrl = ayahMap?.[key]?.audio_url ?? buildAyahAudioUrl(reciter, sh.id, ay);
+        const mapAudioUrl: unknown = asRecord(ayahMap?.[key])?.audio_url;
+        const remoteUrl = (typeof mapAudioUrl === 'string' && mapAudioUrl ? mapAudioUrl : null) ?? buildAyahAudioUrl(reciter, sh.id, ay);
         if (!remoteUrl) continue;
         tasks.push({ type: "ayah", surahId: sh.id, ayahId: ay, remoteUrl, offlinePath, label: `${sh.id}:${ay}` });
       }
@@ -595,8 +657,9 @@ export async function downloadPartAudio(
         // Resolve 1:1 from the map when available, else from the URL pattern.
         let basmalaUrl: string | null = null;
         try {
-          const basmalaData: any = await loadRecitationData(reciter, 1, app);
-          basmalaUrl = basmalaData?.verses?.["1:1"]?.audio_url ?? null;
+          const basmalaData: Awaited<ReturnType<typeof loadRecitationData>> = await loadRecitationData(reciter, 1, app);
+          const basmalaAudioUrl: unknown = asRecord(basmalaData?.verses?.["1:1"])?.audio_url;
+          basmalaUrl = typeof basmalaAudioUrl === 'string' ? basmalaAudioUrl : null;
         } catch { /* best-effort only; ignore */ }
         if (!basmalaUrl) basmalaUrl = buildAyahAudioUrl(reciter, 1, 1);
         if (basmalaUrl) tasks.push({ type: "ayah", surahId: 1, ayahId: 1, remoteUrl: basmalaUrl, offlinePath: basmalaPath, label: "Basmala (1:1)" });
@@ -651,7 +714,8 @@ export async function downloadPartAudio(
       downloadedBytes += buf.byteLength;
       report(task.label);
     } catch (e) {
-      if (String((e as any)?.message || "").includes("aborted")) throw e;
+      const message: unknown = typeof e === 'object' && e !== null ? (e as Record<string, unknown>).message : undefined;
+      if (typeof message === 'string' && message.includes("aborted")) throw e;
       if (attempt < 3) {
         // exponential backoff 1s, 2s
         await new Promise(r => window.setTimeout(r, attempt * 1000));
@@ -691,7 +755,7 @@ export async function downloadPartAudio(
   return { downloadedFiles: completedFiles - alreadyExisting, failedFiles, totalBytes: finalStatus.totalBytes };
 }
 
-export async function deletePartAudio(reciterId: string, partId: QuranPart, appOverride?: any): Promise<{ deletedFiles: number; freedBytes: number }> {
+export async function deletePartAudio(reciterId: string, partId: QuranPart, appOverride?: App | null): Promise<{ deletedFiles: number; freedBytes: number }> {
   const app = getApp(appOverride);
   if (!app) throw new Error("Obsidian app not available");
   const surahs = getSurahsByPart(partId);
@@ -733,7 +797,9 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
     const remaining = await listFilesRecursive(app, reciterDir);
     if (remaining.length === 0) {
       // remove empty dir via adapter
-      const adapter: any = (app as any).vault?.adapter;
+      // Documented cast: the only `unknown` -> typed boundary for the vault
+      // adapter in this scope; every adapter call below is typed.
+      const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
       if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, false); } catch { /* best-effort only; ignore */ }
     }
   } catch { /* best-effort only; ignore */ }
@@ -741,7 +807,7 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
   return { deletedFiles, freedBytes };
 }
 
-export async function deleteAllOfflineAudioForReciter(reciterId: string, appOverride?: any): Promise<{ deletedFiles: number; freedBytes: number }> {
+export async function deleteAllOfflineAudioForReciter(reciterId: string, appOverride?: App | null): Promise<{ deletedFiles: number; freedBytes: number }> {
   const app = getApp(appOverride);
   if (!app) throw new Error("Obsidian app not available");
   const reciterDir = normalizePath(`${OFFLINE_AUDIO_ROOT}/${reciterId}`);
@@ -759,7 +825,9 @@ export async function deleteAllOfflineAudioForReciter(reciterId: string, appOver
   }
   // try rmdir
   try {
-    const adapter: any = (app as any).vault?.adapter;
+    // Documented cast: the only `unknown` -> typed boundary for the vault
+    // adapter in this scope; every adapter call below is typed.
+    const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
     if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, true); } catch { /* best-effort only; ignore */ }
   } catch { /* best-effort only; ignore */ }
   return { deletedFiles, freedBytes };
@@ -781,7 +849,9 @@ function toArrayBuffer(value: unknown): ArrayBuffer | null {
 async function getOfflineBlobUrl(app: App, path: string): Promise<string | null> {
   const normalized = normalizePath(path);
   if (offlineBlobCache.has(normalized)) return offlineBlobCache.get(normalized)!;
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   try {
     let buf: ArrayBuffer | null = null;
     if (adapter?.readBinary) {
@@ -834,7 +904,7 @@ export function peekOfflineAudioUrlIfCached(reciter: Reciter, surahId: number, a
   return null;
 }
 
-export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: number, appOverride?: any): Promise<string | null> {
+export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: number, appOverride?: App | null): Promise<string | null> {
   const app = getApp(appOverride);
   if (!app) return null;
   const p = getOfflineSurahAudioPath(reciterId, surahId);
@@ -842,14 +912,16 @@ export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: num
   // Prefer blob URL for reliable playback on mobile (hidden .obsidian paths may not be served via getResourcePath on Capacitor)
   const blobUrl = await getOfflineBlobUrl(app, p);
   if (blobUrl) return blobUrl;
-  const adapter: any = (app as any).vault?.adapter;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this scope; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   if (adapter?.getResourcePath) {
     try { return adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
   }
-  try { return (app.vault as any).adapter.getResourcePath(p); } catch { return null; }
+  return null;
 }
 
-export async function getOfflineAudioUrlForAyah(reciterId: string, surahId: number, ayahId: number, appOverride?: any): Promise<string | null> {
+export async function getOfflineAudioUrlForAyah(reciterId: string, surahId: number, ayahId: number, appOverride?: App | null): Promise<string | null> {
   const app = getApp(appOverride);
   if (!app) return null;
   const p1 = getOfflineAyahAudioPath(reciterId, surahId, ayahId);
@@ -858,17 +930,18 @@ export async function getOfflineAudioUrlForAyah(reciterId: string, surahId: numb
     if (await adapterExists(app, p)) {
       const blobUrl = await getOfflineBlobUrl(app, p);
       if (blobUrl) return blobUrl;
-      const adapter: any = (app as any).vault?.adapter;
+      // Documented cast: the only `unknown` -> typed boundary for the vault
+      // adapter in this scope; every adapter call below is typed.
+      const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
       if (adapter?.getResourcePath) {
         try { return adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
       }
-      try { return (app.vault as any).adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
     }
   }
   return null;
 }
 
-export async function getOfflineAudioUrlIfAvailable(reciter: Reciter, surahId: number, ayahId: number, appOverride?: any): Promise<string | null> {
+export async function getOfflineAudioUrlIfAvailable(reciter: Reciter, surahId: number, ayahId: number, appOverride?: App | null): Promise<string | null> {
   if (reciter.type === "surah-based") {
     return getOfflineAudioUrlForSurah(reciter.id, surahId, appOverride);
   } else {
@@ -877,7 +950,7 @@ export async function getOfflineAudioUrlIfAvailable(reciter: Reciter, surahId: n
 }
 
 // Helper to check existence without generating URL (for UI status)
-export async function isOfflineAvailable(reciter: Reciter, surahId: number, ayahId: number, appOverride?: any): Promise<boolean> {
+export async function isOfflineAvailable(reciter: Reciter, surahId: number, ayahId: number, appOverride?: App | null): Promise<boolean> {
   const url = await getOfflineAudioUrlIfAvailable(reciter, surahId, ayahId, appOverride);
   return !!url;
 }

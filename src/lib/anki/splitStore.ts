@@ -8,19 +8,24 @@ const LS_SPLITS_KEY = 'quran-life:anki:splits:v1';
 
 export type SurahSplits = Record<number, AnkiAnchor[]>; // key surahId
 
-function normalizeAnchor(surahId: number, a: any): AnkiAnchor | null {
-  const startVerse = Number(a?.startVerse);
-  const endVerse = Number(a?.endVerse);
+/** Narrow an unknown JSON value to a traversable record. */
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+function normalizeAnchor(surahId: number, a: unknown): AnkiAnchor | null {
+  const rec = asRecord(a);
+  const startVerse = Number(rec.startVerse);
+  const endVerse = Number(rec.endVerse);
   if (!Number.isFinite(startVerse) || !Number.isFinite(endVerse)) return null;
   if (startVerse <= 0 || endVerse < startVerse) return null;
   const surah = getSurah(surahId);
   if (surah && (endVerse > surah.verseCount || startVerse > surah.verseCount)) return null;
   return {
-    id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${surahId}-${startVerse}-${endVerse}`,
+    id: typeof rec.id === 'string' && rec.id.trim() ? rec.id : `anchor-${surahId}-${startVerse}-${endVerse}`,
     surahId,
     startVerse,
     endVerse,
-    label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${startVerse}-${endVerse}`,
+    label: typeof rec.label === 'string' && rec.label.trim() ? rec.label : `Verses ${startVerse}-${endVerse}`,
   };
 }
 
@@ -29,13 +34,13 @@ export function loadSplits(): SurahSplits {
   try {
     const raw = readStored(LS_SPLITS_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
+    const parsed: Record<string, unknown> = JSON.parse(raw);
     const out: SurahSplits = {};
     Object.entries(parsed).forEach(([k, arr]) => {
       const surahId = Number(k);
       if (!Number.isFinite(surahId)) return;
       if (!Array.isArray(arr)) return;
-      const anchors = (arr).map(a => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
+      const anchors = arr.map((a: unknown) => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
       const sanitized = sanitizeAnchors(surahId, anchors);
       if (sanitized.length) out[surahId] = sanitized;
       else if (anchors.length) out[surahId] = anchors; // fallback keep original if sanitize empties but original had data
@@ -116,38 +121,44 @@ export function setSplitsForSurah(surahId: number, anchors: AnkiAnchor[], all: S
   return next;
 }
 
-export function importSplitsFromBackup(json: any): SurahSplits {
+export function importSplitsFromBackup(json: unknown): SurahSplits {
   const out: SurahSplits = {};
   // Try to parse mindmaps style: [{ surahId, anchors }] or object
   try {
     if (Array.isArray(json)) {
-      json.forEach((entry: any) => {
-        const surahId = Number(entry?.surahId ?? entry?.surah_id);
-        const anchors = entry?.anchors;
+      const list: unknown[] = json;
+      list.forEach((entry: unknown) => {
+        const rec = asRecord(entry);
+        const surahId = Number(rec.surahId ?? rec.surah_id);
+        const anchors: unknown = rec.anchors;
         if (!Number.isFinite(surahId) || !Array.isArray(anchors)) return;
-        const normalized = anchors.map((a: any) => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
+        const normalized = anchors.map((a: unknown) => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
         const sanitized = sanitizeAnchors(surahId, normalized);
         if (sanitized.length) out[surahId] = sanitized;
         else if (normalized.length) out[surahId] = normalized;
       });
     } else if (json && typeof json === 'object') {
       // { "5": [{startVerse,endVerse,label}], ... } or { mindmaps: [...] }
-      const source = json.mindmaps || json.splits || json;
+      const rec = asRecord(json);
+      const source: unknown = rec.mindmaps || rec.splits || json;
       if (Array.isArray(source)) {
-        source.forEach((entry: any) => {
-          const surahId = Number(entry?.surahId);
-          const anchors = entry?.anchors;
+        const list: unknown[] = source;
+        list.forEach((entry: unknown) => {
+          const entryRec = asRecord(entry);
+          const surahId = Number(entryRec.surahId);
+          const anchors: unknown = entryRec.anchors;
           if (!Number.isFinite(surahId) || !Array.isArray(anchors)) return;
-          const normalized = anchors.map((a: any) => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
+          const normalized = anchors.map((a: unknown) => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
           const sanitized = sanitizeAnchors(surahId, normalized);
           if (sanitized.length) out[surahId] = sanitized;
           else if (normalized.length) out[surahId] = normalized;
         });
       } else {
-        Object.entries(source).forEach(([k, arr]) => {
+        const sourceRec = asRecord(source);
+        Object.entries(sourceRec).forEach(([k, arr]) => {
           const surahId = Number(k);
           if (!Number.isFinite(surahId) || !Array.isArray(arr)) return;
-          const normalized = (arr).map(a => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
+          const normalized = arr.map((a: unknown) => normalizeAnchor(surahId, a)).filter(Boolean) as AnkiAnchor[];
           const sanitized = sanitizeAnchors(surahId, normalized);
           if (sanitized.length) out[surahId] = sanitized;
           else if (normalized.length) out[surahId] = normalized;

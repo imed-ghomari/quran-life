@@ -8,10 +8,45 @@ import { getOfflineAudioUrlIfAvailable, peekOfflineAudioUrlIfCached } from '@/pl
 import { readStored, writeStored, readStoredJson, writeStoredJson, removeStored } from '@/lib/pluginStorage';
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, Undo2 } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
+import type { App } from 'obsidian';
 
 // Use React's default export for the Obsidian bundle. Some Obsidian Mobile
 // WebViews do not expose CommonJS named React imports consistently.
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+/** One entry of an ayah-based reciter's `verses` map (`"<surah>:<ayah>"` key). */
+interface RecitationVerseEntry {
+    audio_url?: string;
+    segments?: number[][];
+    duration?: number;
+}
+
+/** One entry of a surah-based reciter's per-ayah `timings` map. */
+interface RecitationTimingEntry {
+    timestamp_from?: number;
+    timestamp_to?: number;
+    duration_ms?: number;
+    segments?: number[][];
+}
+
+/**
+ * Recitation metadata payload as loaded by `loadRecitationData`
+ * (`src/lib/audio.ts` keeps the maps as `Record<string, unknown>`; the
+ * helpers below narrow individual entries where they are read).
+ */
+type LoadedRecitationData = Awaited<ReturnType<typeof loadRecitationData>>;
+type LoadedRecitationMap = Record<number, NonNullable<LoadedRecitationData>>;
+
+const asVerseEntry = (value: unknown): RecitationVerseEntry | null =>
+    typeof value === 'object' && value !== null ? (value as RecitationVerseEntry) : null;
+const asTimingEntry = (value: unknown): RecitationTimingEntry | null =>
+    typeof value === 'object' && value !== null ? (value as RecitationTimingEntry) : null;
+
+/** HTMLAudioElement with the Basmala slice bounds attached at runtime. */
+interface BasmalaAudioElement extends HTMLAudioElement {
+    _basmalaEndTime?: number | null;
+    _basmalaStartTime?: number;
+}
 
 interface AudioPlayerLocalProps {
     verses: Verse[];
@@ -20,7 +55,7 @@ interface AudioPlayerLocalProps {
     onVerseChange: (index: number) => void;
     onPlayStateChange?: (isPlaying: boolean) => void;
     onWordIndexChange?: (index: number) => void;
-    obsidianApp?: any;
+    obsidianApp?: App;
     /**
      * Rendered as an "undo" control when today's Daily Portion completion can be
      * reversed (the user tapped Mark Complete by mistake). Omitted when there is
@@ -99,8 +134,8 @@ export default function AudioPlayerLocal({
     const speedRef = useRef<PlaybackSpeed>(1);
     const [reciters, setReciters] = useState<Reciter[]>([]);
     const [selectedReciter, setSelectedReciter] = useState<Reciter | null>(null);
-    const [recitationData, setRecitationData] = useState<any>(null);
-    const [recitationDataMap, setRecitationDataMap] = useState<Record<number, any>>({});
+    const [recitationData, setRecitationData] = useState<LoadedRecitationData>(null);
+    const [recitationDataMap, setRecitationDataMap] = useState<LoadedRecitationMap>({});
     const [isLoadingReciter, setIsLoadingReciter] = useState(false);
     const [isAudioPreparing, setIsAudioPreparing] = useState(true);
     const [isAudioReady, setIsAudioReady] = useState(false);
@@ -174,7 +209,7 @@ export default function AudioPlayerLocal({
         autoAdvanceStateRef.current = { key: '', at: 0, attempts: 0 };
         stallCheckRef.current = { t: 0, wall: 0 };
         lastHighlightTimeRef.current = 0;
-        // A verse change cancels any main-element Basmala handoff for another index.
+        // A verse change cancels a pending main-element Basmala handoff for another index.
         if (basmalaViaMainNextIndexRef.current !== null && basmalaViaMainNextIndexRef.current !== currentVerseIndex) {
             basmalaViaMainNextIndexRef.current = null;
             basmalaViaMainEndRef.current = null;
@@ -216,18 +251,18 @@ export default function AudioPlayerLocal({
         let segments: number[][] | null | undefined;
         try {
             if (selectedReciter.type === 'ayah-based') {
-                const verseData = recitationData?.verses?.['1:1'];
+                const verseData = asVerseEntry(recitationData?.verses?.['1:1']);
                 if (verseData?.audio_url) { remoteUrl = verseData.audio_url; segments = verseData.segments; }
                 if (!remoteUrl) {
-                    const fresh = await loadRecitationData(reciterForLoad, 1, obsidianApp);
-                    const v = (fresh as any)?.verses?.['1:1'];
+                    const fresh: LoadedRecitationData = await loadRecitationData(reciterForLoad, 1, obsidianApp);
+                    const v = asVerseEntry(fresh?.verses?.['1:1']);
                     if (v?.audio_url) { remoteUrl = v.audio_url; segments = v.segments; }
                 }
                 if (!remoteUrl) remoteUrl = buildAyahAudioUrl(reciterForLoad, 1, 1);
             } else {
-                let surahOneData: any = recitationDataMap[1] || (recitationData?.surahId === 1 ? recitationData : null);
+                let surahOneData: LoadedRecitationData = recitationDataMap[1] || (recitationData?.surahId === 1 ? recitationData : null);
                 if (!surahOneData) {
-                    const loaded = await loadRecitationData(reciterForLoad, 1, obsidianApp);
+                    const loaded: LoadedRecitationData = await loadRecitationData(reciterForLoad, 1, obsidianApp);
                     if (loaded) {
                         surahOneData = loaded;
                         // cache for next time without blocking render
@@ -284,7 +319,7 @@ export default function AudioPlayerLocal({
     const handleBasmalaTimeUpdate = useCallback(() => {
         const a = basmalaAudioRef.current;
         if (!a || !isBasmalaPlayingRef.current) return;
-        const end = (a as any)._basmalaEndTime as number | null;
+        const end = (a as BasmalaAudioElement)._basmalaEndTime as number | null;
         if (end !== null && end !== undefined && Number.isFinite(end) && a.currentTime >= end - 0.05) {
             handleBasmalaEnded();
         }
@@ -379,8 +414,8 @@ export default function AudioPlayerLocal({
             const url: string = resolved.url;
             const start = (basmalaInfo.startTime as number | undefined) || 0;
             const end = (basmalaInfo.endTime as number | null | undefined) ?? null;
-            (basmalaAudio as any)._basmalaEndTime = end;
-            (basmalaAudio as any)._basmalaStartTime = start;
+            (basmalaAudio as BasmalaAudioElement)._basmalaEndTime = end;
+            (basmalaAudio as BasmalaAudioElement)._basmalaStartTime = start;
             basmalaAudio.src = url;
             basmalaAudio.load();
             await waitForBasmalaMetadata(basmalaAudio);
@@ -530,7 +565,7 @@ export default function AudioPlayerLocal({
             setIsLoadingReciter(true);
             const entries = await Promise.all(surahIds.map(async (surahId) => [surahId, await loadRecitationData(reciterForLoad, surahId, obsidianApp)] as const));
             if (!isActive) return;
-            const nextMap: Record<number, any> = {};
+            const nextMap: LoadedRecitationMap = {};
             entries.forEach(([sid, data]) => { if (data) nextMap[sid] = data; });
             setRecitationDataMap(nextMap);
             setIsLoadingReciter(false);
@@ -761,7 +796,7 @@ export default function AudioPlayerLocal({
         return () => { window.removeEventListener('beforeunload', persistOnHide); document.removeEventListener('visibilitychange', handleVisibility); };
     }, [persistPlaybackState]);
 
-    const getRecitationDataForVerse = useCallback((verse: Verse | undefined) => {
+    const getRecitationDataForVerse = useCallback((verse: Verse | undefined): LoadedRecitationData => {
         if (!verse || !selectedReciterType) return null;
         if (selectedReciterType === 'surah-based') return recitationDataMap[verse.surahId] ?? (recitationData?.surahId === verse.surahId ? recitationData : null);
         // Ayah-based: `getAudioInfoForVerse` can derive the URL + look for cached
@@ -1146,7 +1181,7 @@ export default function AudioPlayerLocal({
         if (selectedReciter.type === 'ayah-based') {
             const versesMap = recitationData?.verses || {};
             measured = verses.map(v => {
-                const key = `${v.surahId}:${v.ayahId}`; const info = versesMap[key];
+                const key = `${v.surahId}:${v.ayahId}`; const info = asVerseEntry(versesMap[key]);
                 if (!info) return null;
                 if (typeof info.duration === 'number' && Number.isFinite(info.duration)) return info.duration;
                 if (Array.isArray(info.segments) && info.segments.length > 0) return (info.segments[info.segments.length - 1]?.[2] || 0) / 1000;
@@ -1154,7 +1189,7 @@ export default function AudioPlayerLocal({
             });
         } else {
             measured = verses.map(v => {
-                const data = recitationDataMap[v.surahId]; const timing = data?.timings?.[`${v.surahId}:${v.ayahId}`];
+                const data = recitationDataMap[v.surahId]; const timing = asTimingEntry(data?.timings?.[`${v.surahId}:${v.ayahId}`]);
                 if (!timing) return null;
                 if (typeof timing.timestamp_from === 'number' && typeof timing.timestamp_to === 'number') return Math.max(0, (timing.timestamp_to - timing.timestamp_from) / 1000);
                 if (Array.isArray(timing.segments) && timing.segments.length > 0) return (timing.segments[timing.segments.length - 1]?.[2] || 0) / 1000;

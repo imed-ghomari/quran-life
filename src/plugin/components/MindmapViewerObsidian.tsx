@@ -1,6 +1,8 @@
 'use client';
 import React from 'react';
 import { Tldraw } from 'tldraw';
+import type { Editor, TLEditorSnapshot, TLStoreSnapshot } from 'tldraw';
+import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   attachMindmapSwipeGuard,
@@ -11,12 +13,12 @@ import {
 const { useCallback, useState, useEffect } = React;
 
 interface Props {
-  snapshot?: any;
+  snapshot?: MindmapSnapshot | TLEditorSnapshot | TLStoreSnapshot;
   height?: string | number;
 }
 
 export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Props) {
-  const [editor, setEditor] = useState<any>(null);
+  const [editor, setEditor] = useState<Editor | null>(null);
   const [showBackToContent, setShowBackToContent] = useState(false);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const { theme } = useTheme();
@@ -37,7 +39,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
     return observeTldrawWatermarkTitles(el);
   }, []);
 
-  const handleMount = useCallback((ed: any) => {
+  const handleMount = useCallback((ed: Editor) => {
     setEditor(ed);
     ed.updateInstanceState({ isReadonly: true });
     ed.setCurrentTool('hand');
@@ -62,7 +64,9 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
       try {
         const shapes = ed.getCurrentPageShapes?.();
         if (Array.isArray(shapes) ? shapes.length > 0 : true) {
-          fitMindmapCameraTight(ed);
+          // CameraFitEditor predates this tldraw's zoomToFit signature; the
+          // mounted editor satisfies it at runtime (duck-typed zoomToFit).
+          fitMindmapCameraTight(ed as unknown as Parameters<typeof fitMindmapCameraTight>[0]);
         }
       } catch { /* zoom-to-fit is best-effort; ignore */ }
     };
@@ -100,7 +104,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
 
   useEffect(() => {
     if (editor) {
-      try { fitMindmapCameraTight(editor); } catch { /* zoom-to-fit is best-effort; ignore */ }
+      try { fitMindmapCameraTight(editor as unknown as Parameters<typeof fitMindmapCameraTight>[0]); } catch { /* zoom-to-fit is best-effort; ignore */ }
       // also keep theme in sync when theme changes after mount
       const getObs = () => {
         if (typeof document === 'undefined') return null;
@@ -128,7 +132,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
       {showBackToContent && (
         <button
           onClick={() => {
-            try { fitMindmapCameraTight(editor); } catch { /* zoom-to-fit is best-effort; ignore */ }
+            try { fitMindmapCameraTight(editor as unknown as Parameters<typeof fitMindmapCameraTight>[0]); } catch { /* zoom-to-fit is best-effort; ignore */ }
           }}
           style={{
             position: 'absolute',
@@ -150,7 +154,7 @@ export default function MindmapViewerObsidian({ snapshot, height = '400px' }: Pr
         </button>
       )}
       <div style={{ position: 'absolute', inset: 0 }}>
-        <Tldraw snapshot={snapshot} onMount={handleMount} hideUi />
+        <Tldraw snapshot={snapshot as TLEditorSnapshot | TLStoreSnapshot} onMount={handleMount} hideUi />
       </div>
     </div>
   );

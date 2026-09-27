@@ -7,6 +7,7 @@ import { Verse, ACTIVE_PART_OPTIONS } from '@/lib/types';
 import { CheckCircle, BookOpen, Check, Headphones, Book, Undo2 } from 'lucide-react';
 import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks/useVaultDailyStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
+import type { App } from 'obsidian';
 import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
 import {
   DEFAULT_DAILY_TARGET_MINUTES,
@@ -173,7 +174,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const hasCompletionFlag = !!activeProgress && Object.prototype.hasOwnProperty.call(activeProgress, 'completedOnDay');
   useEffect(() => {
     if (hasCompletionFlag) {
-      setListeningComplete((activeProgress as any)?.completedOnDay === currentDayKey());
+      setListeningComplete(activeProgress?.completedOnDay === currentDayKey());
       return;
     }
     if (!portionData.lastUpdateAt) {
@@ -341,12 +342,14 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
 
   const openPluginSettings = useCallback(() => {
     try {
-      const app: any = (vaultStore as any)?.app ?? (window as any).app;
-      if (app?.setting?.open) {
-        app.setting.open();
+      type ObsidianAppWithSettings = App & { setting?: { open: () => void; openTabById?: (id: string) => void } };
+      const app = (vaultStore?.app ?? (window as unknown as { app?: App }).app) as ObsidianAppWithSettings | undefined;
+      const settingsUI = app?.setting;
+      if (settingsUI?.open) {
+        settingsUI.open();
         // try to open Quran Life tab
         window.setTimeout(() => {
-          try { app.setting.openTabById?.('quran-life'); } catch { /* best-effort only; ignore */ }
+          try { settingsUI.openTabById?.('quran-life'); } catch { /* best-effort only; ignore */ }
         }, 150);
       } else {
         showToast('Open Settings → Quran Life → Daily Portion');
@@ -548,7 +551,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       currentVerseWordCount={dailyHighlightWordCount}
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
-                      obsidianApp={(vaultStore as any)?.app}
+                      obsidianApp={vaultStore?.app}
                       onUndoComplete={canUndoComplete ? () => void handleUndoComplete() : undefined}
                       isUndoingComplete={isCompleting}
                     />

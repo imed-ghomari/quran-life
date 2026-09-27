@@ -2,6 +2,7 @@ import { SURAHS } from '@/lib/quranData';
 import { getReviewVerseChunkDescriptors } from '@/lib/reviewVerseChunks';
 import { surahAyahToAbsolute, getMutashabihatForAbsolute } from '@/lib/mutashabihat';
 import { AnkiAnchor, AnkiCard } from './types';
+import type { AnkiMindmap } from './mindmapStore';
 import type { Verse } from '@/lib/types';
 
 function absoluteToKey(absolute: number): string {
@@ -103,7 +104,7 @@ export function getVerseCountForSurah(surahId: number): number {
 }
 
 export function buildMindmapCards(
-  mindmaps: Record<string, any>,
+  mindmaps: Record<string, AnkiMindmap>,
   mindmapDocsMap: Record<string, string> = {}
 ): import('./types').AnkiMindmapCard[] {
   const cards: import('./types').AnkiMindmapCard[] = [];
@@ -111,7 +112,7 @@ export function buildMindmapCards(
     if (!val?.snapshot) continue;
     // Only include surah/part/meta that have a mindmap (snapshot)
     const kind = val.kind || (key.startsWith('surah-') ? 'surah' : key.startsWith('part-') ? 'part' : key.startsWith('meta-') ? 'meta' : 'surah');
-    if (!['surah', 'part', 'meta'].includes(kind)) continue;
+    if (kind !== 'surah' && kind !== 'part' && kind !== 'meta') continue;
 
     let title = '';
     let surahId: number | undefined;

@@ -4,6 +4,12 @@
 
 import { AnkiCard, AnkiMindmapCard } from './types';
 import { loadAnkiMindmaps } from './mindmapStore';
+import type { AnkiMindmap } from './mindmapStore';
+import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
+import type { Database, SqlJsStatic, SqlValue } from 'sql.js';
+import type { Editor, TLCameraMoveOptions, TLImageExportOptions, TLStoreSnapshot } from 'tldraw';
+import type { Root } from 'react-dom/client';
+import type { App } from 'obsidian';
 
 // Strip any media references from docs to avoid Anki "file not found" when docs contain <img> HTML
 function stripMediaRefs(s: string): string {
@@ -19,7 +25,13 @@ function stripMediaRefs(s: string): string {
 
 // Module-level caches: survive re-exports in the same session so unchanged
 // mindmaps are not re-rendered and heavy modules/wasm are fetched only once.
-let cachedTldrawModules: Promise<{ Tldraw: any; React: any; ReactDOMClient: any; sanitize: (s: any) => any } | null> | null = null;
+type TldrawModules = {
+  Tldraw: typeof import('tldraw').Tldraw;
+  React: typeof import('react');
+  ReactDOMClient: typeof import('react-dom/client');
+  sanitize: (snapshot: unknown) => MindmapSnapshot | undefined;
+};
+let cachedTldrawModules: Promise<TldrawModules | null> | null = null;
 function getTldrawModules() {
   if (!cachedTldrawModules) {
     cachedTldrawModules = (async () => {
@@ -68,22 +80,42 @@ function waitForFrames(n: number): Promise<void> {
 // Returns map from surah key (e.g. "surah-50") to { filename, blob, fieldHtml }
 // Output contract (unchanged): filename `mindmap-<safeKey>.png`, fieldMap HTML,
 // mediaMap/mediaFiles keyed by sequential index, same toImage params.
-async function generateMindmapMedia(onProgress?: (p: number, done?: number, total?: number) => void, overrideMindmaps?: Record<string, any>): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
+
+/** Narrow an unknown JSON value to a traversable record. */
+const isRecordObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Bridge a persisted snapshot to the shape tldraw accepts. Snapshots are
+ * produced by tldraw itself and sanitize only strips media records, so the
+ * store shape is preserved; the check below only filters out non-records.
+ */
+const toStoreSnapshot = (value: unknown): TLStoreSnapshot | undefined => {
+  if (!isRecordObject(value)) return undefined;
+  const candidate = value as { store?: unknown; schema?: unknown };
+  if (!isRecordObject(candidate.store)) return undefined;
+  return candidate as TLStoreSnapshot;
+};
+
+/** Host element for the hidden shared export editor (carries its React root). */
+type ExportContainer = HTMLDivElement & { _reactRoot?: Root };
+
+async function generateMindmapMedia(onProgress?: (p: number, done?: number, total?: number) => void, overrideMindmaps?: Record<string, AnkiMindmap>): Promise<{ mediaMap: Record<string, string>; mediaFiles: Record<string, Blob>; fieldMap: Record<string, string> }> {
   const mediaMap: Record<string, string> = {};
   const mediaFiles: Record<string, Blob> = {};
   const fieldMap: Record<string, string> = {};
   if (typeof window === 'undefined' || typeof document === 'undefined') return { mediaMap, mediaFiles, fieldMap };
 
-  let mindmaps: Record<string, any> = {};
+  let mindmaps: Record<string, AnkiMindmap> = {};
   if (overrideMindmaps) {
     mindmaps = overrideMindmaps;
   } else {
     try {
-      mindmaps = loadAnkiMindmaps() as any;
+      mindmaps = loadAnkiMindmaps();
     } catch { /* best-effort only; ignore */ }
   }
 
-  const entries = Object.entries(mindmaps).filter(([k, v]: any) => v?.snapshot);
+  const entries = Object.entries(mindmaps).filter(([, v]) => v?.snapshot);
   if (entries.length === 0) return { mediaMap, mediaFiles, fieldMap };
 
   // Load tldraw modules once (cached across exports in the same session)
@@ -98,26 +130,27 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
   // Previously this mounted/unmounted a new React root per mindmap with
   // 600ms + 300ms fixed sleeps + 150ms gap — the main export bottleneck.
   // toImage params below are intentionally identical to before (same PNG output).
-  const TO_IMAGE_OPTS = {
+  const TO_IMAGE_OPTS: TLImageExportOptions = {
     format: 'png',
     quality: 0.92,
     pixelRatio: 1.4,
     padding: 16,
     background: true,
-  } as const;
+  };
 
-  const firstSanitized = (() => {
+  const firstSanitized: TLStoreSnapshot | undefined = (() => {
     try {
-      const s = sanitize((entries[0][1]).snapshot) || (entries[0][1]).snapshot;
-      const store = (s)?.store;
-      if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) return null;
-      return s;
-    } catch { return null; }
+      const raw: unknown = entries[0][1].snapshot;
+      const s: unknown = sanitize(raw) || raw;
+      const store: unknown = isRecordObject(s) ? s.store : undefined;
+      if (!isRecordObject(store) || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) return undefined;
+      return toStoreSnapshot(s);
+    } catch { return undefined; }
   })();
 
   // createDiv appends to document.body by itself; the canvas stays
   // off-screen via the fixed negative offset above.
-  const container = document.body.createDiv();
+  const container: ExportContainer = document.body.createDiv();
   container.setCssStyles({
     position: 'fixed',
     left: '-10000px',
@@ -128,19 +161,19 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     background: 'white',
   });
 
-  let editor: any = null;
+  let editor: Editor | null = null;
   try {
-    editor = await new Promise<any>((resolve) => {
+    editor = await new Promise<Editor | null>((resolve) => {
       const timer = window.setTimeout(() => resolve(null), 8000);
       try {
-        const onMount = (ed: any) => { window.clearTimeout(timer); resolve(ed); };
-        const element = (React).createElement(Tldraw, {
+        const onMount = (ed: Editor) => { window.clearTimeout(timer); resolve(ed); };
+        const element = React.createElement(Tldraw, {
           snapshot: firstSanitized || undefined,
           onMount,
           hideUi: true,
         });
-        const root = (ReactDOMClient).createRoot(container);
-        (container as any)._reactRoot = root;
+        const root = ReactDOMClient.createRoot(container);
+        container._reactRoot = root;
         root.render(element);
       } catch {
         window.clearTimeout(timer);
@@ -152,30 +185,35 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
   if (!editor) {
     console.warn('mindmap shared editor failed to mount, continuing without images');
     try {
-      const root: any = (container as any)._reactRoot;
+      const root: Root | undefined = container._reactRoot;
       if (root) root.unmount();
     } catch { /* best-effort only; ignore */ }
     if (container.parentNode) container.parentNode.removeChild(container);
     for (const [key] of entries) fieldMap[key] = '';
     return { mediaMap, mediaFiles, fieldMap };
   }
+  const activeEditor: Editor = editor;
+  // Structural view of the editor store for the optional snapshot loader.
+  const storeApi: { loadSnapshot?: (snapshot: TLStoreSnapshot) => void } = activeEditor.store;
 
-  const renderWithSharedEditor = async (key: string, sanitized: any): Promise<Blob | null> => {
+  const renderWithSharedEditor = async (key: string, sanitized: TLStoreSnapshot | undefined): Promise<Blob | null> => {
     try {
-      const shapeIds = Array.from(editor.getCurrentPageShapeIds() as Set<string>);
+      const shapeIds = Array.from(activeEditor.getCurrentPageShapeIds());
       if (shapeIds.length === 0) return null;
-      try { editor.zoomToFit({ duration: 0 }); } catch { /* best-effort only; ignore */ }
+      // Legacy call shape kept verbatim (tldraw ignores the unknown key);
+      // the assertion only satisfies the options type.
+      try { activeEditor.zoomToFit({ duration: 0 } as TLCameraMoveOptions); } catch { /* best-effort only; ignore */ }
       // Let layout/fonts settle: readiness signals instead of fixed 600+300ms
       try {
         await Promise.race([
-          (document as any).fonts?.ready ?? Promise.resolve(),
+          document.fonts?.ready ?? Promise.resolve(),
           new Promise((r) => window.setTimeout(r, 800)),
         ]);
       } catch { /* best-effort only; ignore */ }
       await waitForFrames(2);
       await new Promise((r) => window.setTimeout(r, 80));
-      const result = await editor.toImage([...(editor.getCurrentPageShapeIds() as Set<string>)], TO_IMAGE_OPTS as any);
-      return result?.blob ? (result.blob as Blob) : null;
+      const result = await activeEditor.toImage([...activeEditor.getCurrentPageShapeIds()], TO_IMAGE_OPTS);
+      return result?.blob ? result.blob : null;
     } catch (e) {
       console.warn('mindmap toImage failed', key, e);
       return null;
@@ -190,13 +228,13 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
   // Warm fonts fetch once so per-map waits are short
   try {
     await Promise.race([
-      (document as any).fonts?.ready ?? Promise.resolve(),
+      document.fonts?.ready ?? Promise.resolve(),
       new Promise((r) => window.setTimeout(r, 1000)),
     ]);
   } catch { /* best-effort only; ignore */ }
   for (let i = 0; i < entries.length; i++) {
     const [key, val] = entries[i];
-    const snapshot = (val).snapshot;
+    const snapshot: unknown = val.snapshot;
     if (!snapshot) {
       reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
       continue;
@@ -205,50 +243,54 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     const safeKey = key.replace(/[^a-z0-9_-]/gi, '_');
     const filename = `mindmap-${safeKey}.png`;
     try {
-      const sanitized = i === 0 && firstSanitized ? firstSanitized : (sanitize(snapshot) || snapshot);
-      const store = (sanitized)?.store;
-      if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) {
+      const sanitized: TLStoreSnapshot | undefined = i === 0 && firstSanitized ? firstSanitized : toStoreSnapshot(sanitize(snapshot) || snapshot);
+      if (!sanitized) {
         fieldMap[key] = '';
       } else {
-        // Hash-skip: unchanged snapshots reuse last export's blob (no re-render)
-        let hash: string | null = null;
-        try {
-          hash = hashSnapshotString(JSON.stringify((sanitized).store ?? sanitized));
-        } catch { hash = null; }
-        const cached = mindmapRenderCache.get(key);
-        let blob: Blob | null = null;
-        if (hash && cached && cached.hash === hash && cached.blob) {
-          blob = cached.blob;
-        } else {
-          if (!(i === 0 && firstSanitized)) {
-            try {
-              if (typeof editor.loadSnapshot === 'function') editor.loadSnapshot(sanitized);
-              else if (editor.store && typeof editor.store.loadSnapshot === 'function') editor.store.loadSnapshot(sanitized);
-            } catch (e) {
-              console.warn('loadSnapshot failed', key, e);
-              fieldMap[key] = '';
-              reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
-              continue;
-            }
-          }
-          blob = await renderWithSharedEditor(key, sanitized);
-          if (blob && hash) {
-            mindmapRenderCache.set(key, { hash, blob });
-            // Bound cache to latest ~120 entries
-            if (mindmapRenderCache.size > 120) {
-              const oldest = mindmapRenderCache.keys().next().value;
-              if (oldest) mindmapRenderCache.delete(oldest);
-            }
-          }
-        }
-        if (blob) {
-          const mediaKey = String(idx);
-          mediaMap[mediaKey] = filename;
-          mediaFiles[mediaKey] = blob;
-          fieldMap[key] = `<img src="${filename}" style="max-width:100%; border:1px solid #ddd; border-radius:8px;" />`;
-          idx += 1;
-        } else {
+        const store = sanitized.store;
+        if (!store || Object.keys(store).filter((k) => k.startsWith('shape:')).length === 0) {
           fieldMap[key] = '';
+        } else {
+          // Hash-skip: unchanged snapshots reuse last export's blob (no re-render)
+          let hash: string | null = null;
+          try {
+            hash = hashSnapshotString(JSON.stringify(sanitized.store ?? sanitized));
+          } catch { hash = null; }
+          const cached = mindmapRenderCache.get(key);
+          let blob: Blob | null = null;
+          if (hash && cached && cached.hash === hash && cached.blob) {
+            blob = cached.blob;
+          } else {
+            if (!(i === 0 && firstSanitized)) {
+              try {
+                if (typeof activeEditor.loadSnapshot === 'function') activeEditor.loadSnapshot(sanitized);
+                else if (storeApi && typeof storeApi.loadSnapshot === 'function') storeApi.loadSnapshot(sanitized);
+              } catch (e) {
+                console.warn('loadSnapshot failed', key, e);
+                fieldMap[key] = '';
+                reportMedia(5 + Math.round(((i + 1) / total) * 70), i + 1);
+                continue;
+              }
+            }
+            blob = await renderWithSharedEditor(key, sanitized);
+            if (blob && hash) {
+              mindmapRenderCache.set(key, { hash, blob });
+              // Bound cache to latest ~120 entries
+              if (mindmapRenderCache.size > 120) {
+                const oldest = mindmapRenderCache.keys().next().value;
+                if (oldest) mindmapRenderCache.delete(oldest);
+              }
+            }
+          }
+          if (blob) {
+            const mediaKey = String(idx);
+            mediaMap[mediaKey] = filename;
+            mediaFiles[mediaKey] = blob;
+            fieldMap[key] = `<img src="${filename}" style="max-width:100%; border:1px solid #ddd; border-radius:8px;" />`;
+            idx += 1;
+          } else {
+            fieldMap[key] = '';
+          }
         }
       }
     } catch (e) {
@@ -260,7 +302,7 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
     await new Promise((r) => window.setTimeout(r, 0));
   }
   try {
-    const root: any = (container as any)._reactRoot;
+    const root: Root | undefined = container._reactRoot;
     if (root) root.unmount();
   } catch { /* best-effort only; ignore */ }
   if (container.parentNode) container.parentNode.removeChild(container);
@@ -270,20 +312,39 @@ async function generateMindmapMedia(onProgress?: (p: number, done?: number, tota
 }
 
 // Lazily load jszip
-let cachedJSZip: any = null;
-async function getJSZip() {
+type JSZipModule = typeof import('jszip');
+let cachedJSZip: JSZipModule | null = null;
+async function getJSZip(): Promise<JSZipModule | null> {
   if (cachedJSZip) return cachedJSZip;
   try {
     // dynamic import to avoid SSR issues
-    const mod = await import('jszip');
-    cachedJSZip = (mod as any).default || mod;
+    const mod: unknown = await import('jszip');
+    const candidate: unknown =
+      (typeof mod === 'object' || typeof mod === 'function') &&
+      mod !== null &&
+      'default' in mod &&
+      mod.default
+        ? mod.default
+        : mod;
+    if (typeof candidate !== 'function') return null;
+    cachedJSZip = candidate as JSZipModule;
     return cachedJSZip;
   } catch {
     return null;
   }
 }// sql.js wasm fetched once per session (was re-fetched from network/CDN on every export)
+type InitSqlJsFn = (config?: { wasmBinary?: ArrayBuffer; locateFile?: (file: string) => string }) => Promise<SqlJsStatic>;
 let cachedWasmBinary: ArrayBuffer | null = null;
-let cachedInitSqlJs: (() => Promise<any>) | null = null;
+let cachedInitSqlJs: InitSqlJsFn | null = null;
+
+/** Resolve the sql.js initializer from a dynamically imported module shape. */
+const resolveInitSqlJs = (mod: unknown): InitSqlJsFn | null => {
+  if (typeof mod === 'function') return mod as InitSqlJsFn;
+  if (typeof mod === 'object' && mod !== null && 'default' in mod && typeof mod.default === 'function') {
+    return mod.default as InitSqlJsFn;
+  }
+  return null;
+};
 
 // Bundled wasm data URL (registered by src/plugin/sqlWasmBundle.ts — plugin
 // builds only). Decoded lazily so the ~860KB base64 cost is paid once.
@@ -322,8 +383,9 @@ async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promi
     const resp = await window.fetch(url, { cache: 'force-cache' as RequestCache, signal: ctrl?.signal });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
     return await resp.arrayBuffer();
-  } catch (e: any) {
-    if (e?.name === 'AbortError') throw new Error(`Timed out fetching ${url}`);
+  } catch (e: unknown) {
+    const errName = e instanceof Error || e instanceof DOMException ? e.name : undefined;
+    if (errName === 'AbortError') throw new Error(`Timed out fetching ${url}`);
     throw e;
   } finally {
     if (timer) window.clearTimeout(timer);
@@ -334,7 +396,7 @@ async function fetchArrayBufferWithTimeout(url: string, timeoutMs = 8000): Promi
 // apkgExport is shared with the web app and must not import 'obsidian' —
 // the registry module below is dependency-free and returns null on web.
 import { getObsidianApp } from '@/lib/obsidianApp';
-function getPluginApp(): any | null {
+function getPluginApp(): App | null {
   try {
     const app = getObsidianApp();
     if (app?.vault?.adapter) return app;
@@ -366,7 +428,7 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
 
   const app = getPluginApp();
   if (app) {
-    const adapter: any = app.vault?.adapter;
+    const adapter = app.vault?.adapter;
     const candidates = [
       '.obsidian/plugins/quran-life/sql-wasm.wasm',
       '.obsidian/plugins/quran-life/public/sql-wasm.wasm',
@@ -379,11 +441,12 @@ async function loadSqlWasmBinary(): Promise<ArrayBuffer | null> {
       for (const cand of candidates) {
         try {
           if (adapter.exists && !(await adapter.exists(cand))) continue;
-          const buf = await Promise.race([
+          const buf: unknown = await Promise.race([
             adapter.readBinary(cand),
             timeoutReject(8000, `Timed out reading ${cand}`),
           ]);
-          const ab = buf instanceof ArrayBuffer ? buf : (buf?.buffer instanceof ArrayBuffer ? buf.buffer : null);
+          const buffered: unknown = typeof buf === 'object' && buf !== null && 'buffer' in buf ? buf.buffer : undefined;
+          const ab: ArrayBuffer | null = buf instanceof ArrayBuffer ? buf : buffered instanceof ArrayBuffer ? buffered : null;
           if (ab && ab.byteLength > 1000) {
             cachedWasmBinary = ab;
             return ab;
@@ -656,7 +719,7 @@ export function buildOrderedExportEntries(
 ): OrderedExportEntry[] {
   const verseBySurah = new Map<number, AnkiCard[]>();
   for (const c of cards) {
-    const sid = (c as any)?.surahId;
+    const sid = c?.surahId;
     if (typeof sid !== 'number' || !Number.isFinite(sid)) continue;
     const arr = verseBySurah.get(sid) || [];
     arr.push(c);
@@ -666,14 +729,15 @@ export function buildOrderedExportEntries(
     arr.sort((a, b) => (a.startVerse - b.startVerse) || (a.endVerse - b.endVerse) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
   // Verse cards with missing/invalid surahId (shouldn't happen) — keep at end in input order
-  const orphanVerses = cards.filter((c) => typeof (c as any)?.surahId !== 'number' || !Number.isFinite((c as any)?.surahId));
+  const orphanVerses = cards.filter((c) => typeof c?.surahId !== 'number' || !Number.isFinite(c?.surahId));
 
   const metaMms: AnkiMindmapCard[] = [];
   const partMmByPart = new Map<number, AnkiMindmapCard[]>();
   const surahMmBySurah = new Map<number, AnkiMindmapCard[]>();
   const otherMms: AnkiMindmapCard[] = [];
   for (const m of mindmapCards) {
-    const kind = (m as any)?.kind || (m.key?.startsWith('part-') ? 'part' : m.key?.startsWith('meta-') ? 'meta' : m.key?.startsWith('surah-') ? 'surah' : 'other');
+    const rawKind: unknown = m.kind;
+    const kind: string = typeof rawKind === 'string' && rawKind ? rawKind : (m.key?.startsWith('part-') ? 'part' : m.key?.startsWith('meta-') ? 'meta' : m.key?.startsWith('surah-') ? 'surah' : 'other');
     if (kind === 'meta') {
       metaMms.push(m);
     } else if (kind === 'part') {
@@ -710,8 +774,8 @@ export function buildOrderedExportEntries(
     const pid = getPartIdForSurah(sid);
     if (pid !== undefined) partIdSet.add(pid);
   }
-  const partOrder: 'asc' | 'desc' = (prefs as any)?.partOrder === 'asc' ? 'asc' : 'desc';
-  const surahOrder: 'asc' | 'desc' = (prefs as any)?.surahOrder === 'desc' ? 'desc' : 'asc';
+  const partOrder: 'asc' | 'desc' = prefs?.partOrder === 'asc' ? 'asc' : 'desc';
+  const surahOrder: 'asc' | 'desc' = prefs?.surahOrder === 'desc' ? 'desc' : 'asc';
   const partIdsSorted = [...partIdSet].sort((a, b) => (partOrder === 'asc' ? a - b : b - a));
 
   const ordered: OrderedExportEntry[] = [];
@@ -741,7 +805,7 @@ export async function generateApkgBlob(
   deckName: string,
   onProgress?: (p: number, mindmapsDone?: number, mindmapsTotal?: number) => void,
   mindmapCards: AnkiMindmapCard[] = [],
-  fullMindmapsOverride?: Record<string, any>,
+  fullMindmapsOverride?: Record<string, AnkiMindmap>,
   exportPrefs?: import('./ankiExportPrefs').AnkiExportPrefs | null
 ): Promise<Blob> {
   const JSZip = await getJSZip();
@@ -781,20 +845,18 @@ export async function generateApkgBlob(
     // every fetch has a hard timeout so packaging can never hang silently.
     // NOTE: no remote <script> injection by design — Obsidian review does not
     // allow loading remote code; the wasm binary is data, not code.
-    let SQL: any = null;
+    let SQL: SqlJsStatic | null = null;
     try {
       reportApkg(82);
       await yieldToUI();
-      let initSqlJs: any = cachedInitSqlJs;
+      let initSqlJs: InitSqlJsFn | null = cachedInitSqlJs;
       if (!initSqlJs) {
         try {
-          const mod: any = await import(/* webpackIgnore: true */ 'sql.js');
-          initSqlJs = mod.default || mod;
+          initSqlJs = resolveInitSqlJs(await import(/* webpackIgnore: true */ 'sql.js'));
         } catch {
-          const mod2: any = await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js');
-          initSqlJs = mod2.default || mod2;
+          initSqlJs = resolveInitSqlJs(await import(/* webpackIgnore: true */ 'sql.js/dist/sql-wasm.js'));
         }
-        if (typeof initSqlJs !== 'function') throw new Error('Bundled sql.js failed to load');
+        if (!initSqlJs) throw new Error('Bundled sql.js failed to load');
         cachedInitSqlJs = initSqlJs;
       }
       const wasmBinary = await loadSqlWasmBinary();
@@ -813,7 +875,7 @@ export async function generateApkgBlob(
         const pluginApp = getPluginApp();
         const pluginWasmUrl: string | null = (() => {
           try {
-            const adapter: any = pluginApp?.vault?.adapter;
+            const adapter = pluginApp?.vault?.adapter;
             if (adapter?.getResourcePath) {
               for (const cand of ['.obsidian/plugins/quran-life/sql-wasm.wasm', '.obsidian/plugins/quran-life/public/sql-wasm.wasm']) {
                 try {
@@ -837,7 +899,7 @@ export async function generateApkgBlob(
 
     if (!SQL) throw new Error('sql.js failed to init');
 
-    const db = new SQL.Database();
+    const db: Database = new SQL.Database();
     // Create minimal Anki schema (simplified, compatible with Anki 2.1)
     db.run(`
       CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER NOT NULL, mod INTEGER NOT NULL, scm INTEGER NOT NULL, ver INTEGER NOT NULL, dty INTEGER NOT NULL, usn INTEGER NOT NULL, ls INTEGER NOT NULL, conf TEXT NOT NULL, models TEXT NOT NULL, decks TEXT NOT NULL, dconf TEXT NOT NULL, tags TEXT NOT NULL);
@@ -964,9 +1026,10 @@ export async function generateApkgBlob(
       },
     };
 
+    const colParams: SqlValue[] = [crt, now, now, JSON.stringify({}), JSON.stringify(model), JSON.stringify(decks), JSON.stringify(dconf), JSON.stringify({})];
     db.run(
       'INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, ?, ?, ?, 11, 0, 0, 0, ?, ?, ?, ?, ?)',
-      [crt, now, now, JSON.stringify({}), JSON.stringify(model), JSON.stringify(decks), JSON.stringify(dconf), JSON.stringify({})]
+      colParams
     );
 
     // Insert notes/cards in new-card display order.
@@ -1015,7 +1078,7 @@ export async function generateApkgBlob(
         contextFront = `<span class="surah-context"><span class="verse-badge">Surah</span> ${escapeField(card.arabicName)} — ${escapeField(card.surahName)} (${card.surahId})</span>`;
       }
       const related = card.relatedGroups.join(', ');
-      const rawDocs = (card as any).mindmapDocs ? String((card as any).mindmapDocs) : '';
+      const rawDocs = card.mindmapDocs ? String(card.mindmapDocs) : '';
       const docs = rawDocs ? escapeField(stripMediaRefs(rawDocs)) : '';
       // Condensed full verses for the back: inline (not line-by-line) so the
       // user can scan what was revealed and grade honestly (Again/Hard/Good/Easy)
