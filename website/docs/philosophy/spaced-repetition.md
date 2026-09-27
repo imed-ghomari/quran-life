@@ -1,0 +1,70 @@
+---
+title: How Reviews Work
+sidebar_position: 4
+---
+
+# How Reviews Work — FSRS in Anki (Manual)
+
+Reviews are now **entirely in Anki** using `FSRS` `src/lib/anki/apkgExport.ts:542` (`Desired Retention 0.90`, `Leech 3 Tag Only`). The app only *prepares* cards; Anki *schedules* them. Each verse-group card has **custom reveal logic** on the front — you don't just flip and read.
+
+## What a Verse-Group Card Looks Like (Front)
+
+When a card appears, you see `src/lib/anki/apkgExport.ts:209` `modelJson` `front`:
+
+- **Top — Context `{{ContextFront}}`:** `2` verses *before* the group (`src/lib/anki/cardBuilder.ts:60` bakes `5`, shows `2` normally `src/lib/anki/apkgExport.ts:576`). For `1:1` (no previous verses) it shows `Surah — الفاتحة — Al-Fatiha (1)` `src/lib/anki/apkgExport.ts:582` `surah-context` so you know which Surah to recall. If the group is a `mutashabihat` group (`tag:mutashabihat`), after you reveal all chunks the hidden `3 extra` (`class="extra"`) are revealed `src/lib/anki/apkgExport.ts:284` — so you see **5** verses of context to verify which similar you recalled.
+- **Middle — VerseContainer `{{VerseChunksFront}}`:** Each verse `src/lib/anki/apkgExport.ts:565` is `verse-badge` (`ayahId`) + `span.chunk` per `getReviewVerseChunkDescriptors` `src/lib/reviewVerseChunks.ts` (split by `ۘۙۚ` or max 10 words). Initially `blurred` (`filter: blur(8px) opacity 0.45`), the *next* chunk is `next` (`blur 5px` + dashed `outline`).
+- **Bottom — Controls:** `Reveal next` button `src/lib/anki/apkgExport.ts:242`, `counter` (`3 / 7 chunks`), and `doneHint` (`✓ All revealed — press Show Answer`) hidden until done. The whole `#verseContainer` is `max-height: 62vh` scrollable — `scrollToEl(next)` `src/lib/anki/apkgExport.ts:258` keeps the next chunk centered.
+
+## How to Go Through a Card — Step by Step (Custom Buttons)
+
+**Do not press `Show Answer` immediately.** The front is *interactive*:
+
+1. **Read context, recall the *next* chunk:** Look at `ContextFront` (e.g., `2: 282` `ءامن الرسول`...) and the `next` chunk's badge (`3`). Try to say the whole chunk from memory *before* revealing.
+2. **Reveal one chunk:** Click `Reveal next` or press `Space` `src/lib/anki/apkgExport.ts:296`. The `next` chunk becomes `revealed` (`filter:none`), the following becomes `next`, counter updates (`4 / 7`), and it scrolls. Repeat — `Space` reveals next while `revealed < total`.
+3. **All chunks revealed:** `Reveal next` hides, `doneHint` shows and scrolls into view, and if `hasMutashabihat` the `extra` context (`3` more verses) appears (`ctx.classList.add('show-all')`). Now you can self-check the full group plus its 5-verse window.
+4. **Grade with Anki — *now* press `Show Answer`:** Press `Space` again — this time `revealed == total`, so the JS *does not* `preventDefault()` `src/lib/anki/apkgExport.ts:298`, and Anki handles `Space` as `Show Answer` / `Good`. Anki's bottom bar appears: `1 Again` (Not Remembered), `2 Good` (Remembered), `3 Bury` (Postpone). Be honest — `FSRS` uses this to set the next interval (days → weeks → months).
+5. **Back side:** You see `RelatedGroups` (`2:23 ~ 11:45` if `mutashabihat`), `MindmapDocs` (your notes from `Anki Deck → Notes`), and `AnchorLabel • Range — Surah`. No `MindmapImage` on verse cards (only on `QuranLife Mindmap` cards) and no `VerseFull` (removed) — the chunked front *is* the verse.
+
+**Keyboard:** `Space` = reveal next (until done) → `Show Answer`; `1`/`Down` = `Again`, `2`/`Enter` = `Good`, `B` = `Bury`. On mobile, tap `Reveal next`.
+
+## What the Export Sets Up (first import)
+
+The `.apkg` already contains `collection.anki2` with:
+- `DeckId 1600000000000` `QuranLife::Review` and `ModelId 1600000000001 QuranLife Verse` `src/lib/anki/apkgExport.ts:436` (stable `guid` `ql-{surah}-{start}-{end}` `src/lib/anki/apkgExport.ts:199` keeps due dates on re-import).
+- `FSRS` `Desired Retention 0.90`, `Leech threshold 3 Tag Only` `src/lib/anki/apkgExport.ts:534`.
+
+After first import, open `Anki → Deck Options` and verify `FSRS Enabled` and `Desired Retention 0.90`; leave `Leech action Tag Only`.
+
+## Setting Surah Maturity via Anki Browser (replaces old Settings → Knowledge Tracking)
+
+There is **no in-app maturity slider** anymore. Use Anki's native `Browser`:
+
+- **Make a Surah more mature (already known):** `Browse → deck:QuranLife tag:surah::2` → select its verse-group cards → Right-click → `Reschedule` → `Set Due Date` → `30` (or `90`) days, or `Set Interval` → `30 days`. They will be due later, appearing as `Medium`/`Strong`.
+- **Make it New again (reset):** `Browse → deck:QuranLife tag:surah::2` → `Cards → Forget` (or `Reschedule → Forget`) → they become `New` (red) with `Due` = `New #`.
+- **Hide a Surah for now:** `Browse → tag:surah::1` → `Suspend` (`Ctrl+J`). Unhide via `Unsuspend`. This replaces `Settings → Skipped Surahs` for reviews; `Daily Portion → Skipped` still controls daily reading.
+- **Bulk:** Select many Surahs `tag:surah::67 OR tag:surah::68` → same `Reschedule`.
+
+Tip: Use `is:due`, `prop:ivl>21`, `tag:leech` to filter by maturity.
+
+## Why Reviews Sometimes Reset (and How to Delete Old Groups)
+
+Reviews reset when the underlying `anchor` changes — this is intentional, not a bug:
+
+1. **You changed splits:** `Anki Deck → Surah 67 → Define Splits 1-5|6-14...` → `Save Splits` → `Export Full Deck`. The old notes `ql-67-1-30` (whole) vs new `ql-67-1-5` have different `guid`s. Anki will **update** matching `guid`s (keep `Ivl`/`Due`) and **add** new `1-5` etc. as `New`. The old `1-30` card (if it was whole before) is now obsolete — **delete it manually**:
+   - In `Browse` search `deck:QuranLife tag:surah::67` → sort by `Created` → select the old `1-30` (or `1-50` if it was `77`) → `Delete` (or `Suspend` if you want history). Do this **before** or **after** re-import; re-import will not auto-delete obsolete `guid`s.
+
+2. **You edited the mindmap only:** No `guid` change — re-import updates `MindmapDocs` (and `MindmapImage` on mindmap cards) but keeps `Due`.
+
+3. **3× `Again` (Leech):** Not a reset, but tagged `leech` for manual fix (see [Fixing Gaps](./re-learning)).
+
+**Rule:** If `Define Splits` changes the `start-end` for a group, treat the old group as **obsolete** — search `deck:QuranLife tag:surah::X` and delete the old `Range` card, then grade the new groups as `New`.
+
+## Keyboard Shortcuts (Anki Desktop)
+
+- `Space` → Reveal next chunk while `chunks` remain; once all revealed, `Space` → `Show Answer` → `Good`.
+- `1` / `Down` → `Again` (Not Remembered)
+- `2` / `Enter` → `Good` (Remembered)
+- `B` or `Ctrl+J` → `Bury` / `Suspend`
+
+**Mindmap cards** (`QuranLife Mindmap` model) are separate: Front shows `Title` (“Tap Show Answer to reveal”), Back shows `MindmapImage` + `MindmapDocs` — grade them like any Anki card.
+

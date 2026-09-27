@@ -1,0 +1,42 @@
+---
+title: Settings & Daily Portion
+sidebar_position: 7
+---
+
+# Settings & Daily Portion — Where to Set What (Anki-native)
+
+This branch split settings: **Daily reading** stays in the app (`Daily Portion` tab), **maturity / splits / mindmaps** moved to `Anki` (`Browse`) + `Anki Deck` tab.
+
+## Daily Portion (in-app)
+
+You set these in `Daily Portion → Settings` (gear icon):
+
+- **Active Part:** `1–7` + `All Quran` (`QuranPart` `src/lib/types.ts`). Decides which Surahs appear in `getSurahsByPart` and `eligibleSurahs` for your daily cycle.
+- **Daily Target:** `5–180` min (`DEFAULT_DAILY_TARGET_MINUTES` `src/lib/dailyPortionUtils.ts`). App keeps minutes steady and derives `derivedCompletionDays`.
+- **Mode:** `Listening` (`AudioPlayerLocal`) vs `Reading` (`paragraph` / `line_by_line`). Reading style is `paragraph` (grouped by Surah) or `line_by_line`.
+- **Surahs in Portion:** Check/uncheck per Surah in `Active Part`. `Select All` / `Clear All` are `btn btn-secondary`. Unchecking removes them from *daily reading only* — for reviews, `Suspend` in Anki instead (see below).
+
+## Skipped / Maturity for Reviews (in Anki Browser)
+
+There is **no** `Settings → Knowledge Tracking` anymore. For how to `Suspend`/`Unsuspend`, `Reschedule` (`Set Due Date`/`Set Interval`), `Forget`, `Flag`, and bulk operations, see:
+
+**→ [How Reviews Work](./spaced-repetition)**
+
+The same `Browse` workflow (`tag:surah::67`, `is:due`, `prop:ivl>21`) is detailed there.
+
+## Mindmaps and Splits (Anki Deck tab)
+
+Not in `Settings`. For `Create/Edit Mindmap`, `View` preview, `Define Splits`, and `Notes` handling, see:
+
+**→ [Anki Deck & Reviews — Preparing](./practice-hub#preparing-in-the-anki-deck-tab)**
+
+Default splits come from `private-assets/premade-mindmaps/*.chunks.txt` → `public/premade-anki-data.json` `splits`.
+
+## What Anki Already Sets for You (first import)
+
+`public/premade-anki-data.json` export contains stable `DeckId/ModelId` `src/lib/anki/apkgExport.ts:436`, `FSRS` `Desired Retention 0.90`, `Leech 3 Tag Only`, and card template `src/lib/anki/apkgExport.ts:209` (`VerseChunksFront` blurred, `ContextFront` 2→5 when `mutashabihat`). After first import just verify `Deck Options → FSRS`.
+
+## Global Backup (includes Daily Portion)
+
+Use the **top bar** `Export` / `Import` next to tabs `src/components/AppTabs.tsx:186` — it backs up `anki` (`splits/mindmaps/docs/deleted`) + `daily` (`settings/progress`) + `theme` in one `version:2` JSON and reloads on import. This replaces the old buried buttons.
+

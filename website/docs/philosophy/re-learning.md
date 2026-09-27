@@ -1,0 +1,42 @@
+---
+title: Fixing Mistakes
+sidebar_position: 6
+---
+
+# Fixing Memory Gaps — 3-Strike / Leech (Manual)
+
+Even with a perfect mindmap, some verse groups will be harder. On this branch there is **no automatic suspension** — you handle the `3-strike` (Anki `Leech`) manually and fix the *mindmap*, not just the verses.
+
+## How it Works Now (Anki-native)
+
+1. **Deck Options already set by export** `src/lib/anki/apkgExport.ts:534`:
+   - `Leech threshold: 3` `Leech action: Tag Only` (not suspend). After 3× `Again` on the same card, Anki adds `tag:leech` (and `leech` in `Browse`).
+   - You can also manually `Flag Red` (`Flag:1`) when you *feel* stuck, even before 3.
+
+2. **Find leeches manually — no auto queue:**
+   - In Anki: `Browse` → Left sidebar `Tags → leech` or search `tag:leech` or `flag:1`.
+   - Filter further: `tag:leech tag:surah::67` or `deck:QuranLife tag:leech`.
+   - Sort by `Card Created` or `Due` to see most urgent.
+
+3. **Do NOT just `Again` again — mend the mindmap:**
+   - Open `Anki Deck` tab → select that Surah (e.g., `67. Al-Mulk`).
+   - `View` to see the map *above* splits, `Edit Mindmap` — ask: *Why did I confuse `15-24`?* Add a visual landmark, separate the branch, add a story for that chunk. Keep groups to 2–4 items per branch `src/lib/anki/cardBuilder.ts:105`.
+   - If the group is too long, `Define Splits` → `+` to split `15-24` into `15-18` + `19-24` → `Save Splits`.
+
+4. **Re-export the fix:**
+   - `Export Full Deck to Anki` → re-import `.apkg` into Anki. Because `note guid` is stable `ql-{surah}-{start}-{end}` `src/lib/anki/apkgExport.ts:199`, Anki **updates** the existing note (keeps `Due`/`Ivl` for unchanged groups) and adds the new split groups as `New` cards. The old `15-24` card (now obsolete) stays as `leech`; you can `Delete` it or `Suspend` it manually.
+   - For the `leech` card itself: after you fixed the map, in `Browse` select it → `Cards → Forget` (resets to `New`) or `Reschedule → 7 days` to give it a short interval, and remove `tag:leech` (`Right-click → Remove Tag`).
+
+## Why “Mend Map, Not Just Repeat”
+
+Blindly pressing `Again` on the same verse group builds a weak trace. Moving the similar verses far apart on the map and adding a logic bridge (thematic cause→effect) creates a distinct retrieval cue — the next recall uses the *map*, not rote sound.
+
+## Quick Filters to Use Weekly
+
+- `deck:QuranLife tag:leech` — your 3-strike list
+- `deck:QuranLife flag:1` — your manual red flags (similarity errors)
+- `deck:QuranLife tag:mutashabihat is:due` — due similar verses to prioritize
+- `deck:QuranLife tag:surah::67` — all cards for a Surah you just edited
+
+Tip: After fixing 2–3 leeches in one Surah, do a 5-min “teach method” — explain the map `Big Picture → Concept → Big Picture` out loud before the next Anki session.
+

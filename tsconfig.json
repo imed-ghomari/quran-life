@@ -40,6 +40,7 @@
   ],
   "exclude": [
     "node_modules",
+    "website",
     "tldraw-main",
     "tldraw-in-obsidian-main (customized)",
     "obsidian-importer"

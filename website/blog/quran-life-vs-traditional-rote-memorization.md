@@ -1,0 +1,19 @@
+---
+title: "Quran Life vs traditional rote memorization"
+description: "Why Quran Life does not reject repetition, but refuses to treat repetition as the whole method."
+date: 2026-03-31
+authors: quran-life
+tags: [philosophy]
+slug: quran-life-vs-traditional-rote-memorization
+---
+
+# Quran Life vs traditional rote memorization
+
+Quran Life is not anti-repetition. It is against relying on repetition alone when structure and distinction are missing.
+
+Traditional rote memorization can push verses into short-term familiarity very quickly. But when the structure of the surah, the transitions, and the mutashabihat are weak, that familiarity can stay fragile.
+
+Quran Life treats repetition as one tool inside a larger system. The map gives place. The review schedule gives timing. The mutashabihat work gives distinction.
+
+So the real contrast is not repetition versus no repetition. It is repetition alone versus repetition supported by structure.
+
