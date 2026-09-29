@@ -3,8 +3,8 @@
 > **🚧 Under development — will be fully operational soon.**
 >
 > Quran Life is still being built and is not finished yet. Expect rough edges,
-> breaking changes and one-time data migrations between versions. Feel free to try
-> it and report issues, but please don't rely on it as your only review tool just yet.
+> breaking changes and one-time data migrations between versions. Feel free to try it.
+> I'm working on the pre-made quran mindmaps that can be imported directly, and will share them shortly when they are all ready.
 
 Daily Qur'an review, mindmap memorization and Anki export, vault-synced via Resilio Sync.
 
