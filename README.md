@@ -4,7 +4,7 @@
 >
 > Quran Life is still being built and is not finished yet. Expect rough edges,
 > breaking changes and one-time data migrations between versions. Feel free to try it.
-> I'm working on the pre-made quran mindmaps that can be imported directly, and will share them shortly when they are all ready.
+> I'm working on the quran mindmaps. I'll add a way to import them directly to the plugin shortly. After that the plugin will be ready for use.
 
 Daily Qur'an review, mindmap memorization and Anki export, vault-synced via Resilio Sync.
 
