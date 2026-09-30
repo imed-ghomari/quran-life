@@ -1,4 +1,4 @@
-import { App, ButtonComponent, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, ButtonComponent, DropdownComponent, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { SettingDefinition, SettingDefinitionItem, SettingGroup } from "obsidian";
 import QuranLifePlugin from "./main";
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
@@ -18,7 +18,7 @@ import {
   getOfflineAudioRoot,
 } from "./offlineAudio";
 import type { OfflineDownloadProgress, OfflinePartScan, OfflineReciterScan } from "./offlineAudio";
-import { LEGACY_DATA_ROOT, VAULT_PATHS, asRecord, describeBackupCounts } from "./storage/vaultAdapter";
+import { LEGACY_DATA_ROOT, VAULT_PATHS, asRecord } from "./storage/vaultAdapter";
 import { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } from "@/lib/anki/ankiExportPrefs";
 import type { AnkiExportPrefs } from "@/lib/anki/ankiExportPrefs";
 import { confirmAction } from "./lib/confirm";
@@ -79,25 +79,6 @@ export const DEFAULT_SETTINGS: QuranLifePluginSettings = {
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : typeof e === 'string' ? e : "unknown error";
-}
-
-/**
- * Trigger a browser download so the user gets a native save picker instead of
- * a silent write. No-op where downloads don't exist (Obsidian mobile) — the
- * vault copy saved alongside is the fallback there.
- */
-function downloadBlobFile(fileName: string, blob: Blob): void {
-  try {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    window.setTimeout(() => {
-      try { URL.revokeObjectURL(url); a.remove(); } catch { /* already cleaned up */ }
-    }, 1000);
-  } catch { /* vault copy already saved — download is best-effort */ }
 }
 
 type DailyPortionMode = 'audio' | 'reading';
@@ -287,61 +268,10 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       try { refreshers.offline?.(); } catch { /* offline section not rendered yet */ }
     };
 
-    // ---------- Backup & restore (top-right, no section) ----------
-    // Saves are automatic — every change is written to the vault straight away.
-    // These two buttons are the only manual controls, so they sit at the top
-    // right of the tab instead of in their own section.
-    const backupActions: SettingDefinitionItem = block("Backup and restore", (el) => {
-      el.addClass("quran-life-backup-actions");
-      el.setCssStyles({ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "4px 0 8px" });
-      const backupBtn = el.createEl("button", { text: "Backup now", cls: "mod-cta" });
-      const restoreBtn = el.createEl("button", { text: "Restore backup" });
-      const fileInput = el.createEl("input", { type: "file" });
-      fileInput.accept = ".zip,.json,application/zip,application/json";
-      fileInput.addClass("quran-life-hidden");
-      fileInput.setCssStyles({ display: "none" });
-      backupBtn.addEventListener("click", () => {
-        void (async () => {
-          backupBtn.disabled = true;
-          try {
-            const { path, fileName, blob, counts } = await this.plugin.createBackup();
-            // Native save picker on desktop; the vault copy is the mobile fallback.
-            downloadBlobFile(fileName, blob);
-            if (counts.splits === 0 && counts.mindmaps === 0 && counts.docs === 0 && counts.progress === 0) {
-              new Notice(`Backup is empty — no data found in ${this.plugin.vaultStore.root}. Saved anyway: ${path}`);
-            } else {
-              new Notice(`Backup downloaded + saved: ${path} (${describeBackupCounts(counts)})`);
-            }
-          } catch (e) {
-            new Notice(`Backup failed: ${errorText(e)}`);
-          } finally {
-            backupBtn.disabled = false;
-          }
-        })();
-      });
-      restoreBtn.addEventListener("click", () => fileInput.click());
-      fileInput.addEventListener("change", () => {
-        const file = fileInput.files?.[0];
-        if (!file) return;
-        void (async () => {
-          restoreBtn.disabled = true;
-          try {
-            const buf = await file.arrayBuffer();
-            const counts = await this.plugin.restoreBackupFile(file.name, buf);
-            this.dailyCache = null;
-            this.ankiPrefsCache = null;
-            this.cachesRequested = false;
-            this.rerender();
-            new Notice(`Restored ${describeBackupCounts(counts)}`);
-          } catch (e) {
-            new Notice(`Restore failed: ${errorText(e)}`);
-          } finally {
-            restoreBtn.disabled = false;
-            fileInput.value = "";
-          }
-        })();
-      });
-    });
+    // Saves are automatic — every change is written to the vault straight away,
+    // so there are no manual backup controls. To move to another vault, copy
+    // the whole `plugins/quran-life` folder (data, settings files and
+    // `offline-audio`) into the new vault's config folder.
 
     // ---------- Daily portion (part + target + mode + surahs + reset) ----------
     let updateMinutesDesc: () => void = () => {};
@@ -533,8 +463,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       heading: "Anki export",
       items: [
         block("Anki export order", (el) => {
-          const ankiExportDesc = el.createEl("p", { cls: "setting-item-description quran-life-desc-spaced" });
-          ankiExportDesc.setText("New-card `due` order: Meta mindmap first, then parts, then per part: part mindmap (always first) → surah mindmaps → each surah's verse groups chronological (startVerse asc). Only part order and surah-within-part order are configurable. Applies to next Export → .apkg.");
           const ankiPrefsInfo = el.createEl("p", { cls: "setting-item-description quran-life-prefs-info" });
           updateAnkiInfo = () => {
             if (!this.ankiPrefsCache) {
@@ -629,9 +557,14 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const sizesByPart = new Map<number, number>();
     const rows = new Map<number, OfflineRowRefs>();
     let storageSetting: Setting | null = null;
-    let reciterHintEl: HTMLElement | null = null;
     let activeHintSetting: Setting | null = null;
     let libraryHeader: Setting | null = null;
+    let reciterDropdown: DropdownComponent | null = null;
+    // Auto-pick runs once per render: if the saved reciter has nothing but
+    // another reciter holds downloaded files (e.g. folders moved from another
+    // vault, where the per-vault reciter choice was lost), switch to it.
+    let didAutoPickReciter = false;
+    let userPickedReciter = false;
 
     // ---- helpers ----
     const partLabel = (partId: QuranPart): string => {
@@ -692,16 +625,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         : text;
       rowRefs.progressText.setText(detail);
       rowRefs.descEl.setText(detail);
-    };
-
-    const updateReciterHint = () => {
-      if (!reciterHintEl) return;
-      const selected = offlineReciter;
-      if (!selected) { reciterHintEl.setText("No reciter available for offline download."); return; }
-      const player = offlineReciters.find(r => r.id === playerReciterId) || null;
-      if (player && player.id === selected.id) reciterHintEl.setText(`✓ Playback uses ${selected.name}, so these downloads play offline straight away.`);
-      else if (player) reciterHintEl.setText(`⚠ Playback currently uses ${player.name}. The downloads below are for ${selected.name} — press “Use in player” to switch, otherwise the player keeps streaming.`);
-      else reciterHintEl.setText(`The downloads below are for ${selected.name}. Press “Use in player” so playback uses the same voice offline.`);
     };
 
     const updateLibraryHeader = () => {
@@ -781,6 +704,29 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       const result = await scanOfflineAudioForReciter(reciter, this.app, daily.skippedSurahs);
       if (myGen !== this.displayGeneration || offlineReciter?.id !== reciter.id) return;
       isScanning = false;
+      // Empty library for the saved reciter, but files exist elsewhere:
+      // point at the reciter that actually has the downloads.
+      if (result.fileCount === 0 && !didAutoPickReciter && !userPickedReciter && activeDownloadPart === null) {
+        didAutoPickReciter = true;
+        try {
+          const usage = await getTotalOfflineStorageUsage(this.app);
+          if (myGen !== this.displayGeneration) return;
+          let bestId: string | null = null;
+          let bestFiles = 0;
+          for (const [id, u] of Object.entries(usage.byReciter ?? {})) {
+            if (u.files > bestFiles) { bestFiles = u.files; bestId = id; }
+          }
+          const best = bestId ? offlineReciters.find(r => r.id === bestId) : null;
+          if (best && best.id !== reciter.id) {
+            offlineReciter = best;
+            try { writeStored(DOWNLOAD_RECITER_STORAGE_KEY, best.id); } catch { /* best-effort */ }
+            try { reciterDropdown?.setValue(best.id); } catch { /* dropdown not rendered yet */ }
+            new Notice(`Found offline audio for ${best.name} — switched to it`);
+            await rescan();
+            return;
+          }
+        } catch { /* keep the empty scan */ }
+      }
       scan = result;
       updateAllRows();
       updateActiveHint();
@@ -880,10 +826,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     };
 
     const offlineItems: SettingDefinition[] = [
-      block("Offline audio details", (el) => {
-        const desc = el.createEl("p", { cls: "setting-item-description quran-life-desc-spaced quran-life-nowrap-safe" });
-        desc.setText("Downloaded audio plays without a connection. Files stay inside the plugin folder, so your synced vault covers every device — the player prefers a downloaded file and only streams as a fallback.");
-      }),
       row("Storage used", `Scanning ${offlineRoot}…`, (setting) => {
         storageSetting = setting;
         setting.addButton((btn) => btn.setButtonText("Refresh").onClick(() => refreshStorageInfo()));
@@ -891,15 +833,16 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       }),
       row("Reciter", "The voice these downloads use.", (setting) => {
         setting.addDropdown((drop) => {
+          reciterDropdown = drop;
           for (const r of offlineReciters) drop.addOption(r.id, r.name);
           if (offlineReciter) drop.setValue(offlineReciter.id);
           drop.onChange((v) => {
             void (async () => {
               const found = offlineReciters.find(r => r.id === v);
               if (!found || found.id === offlineReciter?.id) return;
+              userPickedReciter = true;
               offlineReciter = found;
               writeStored(DOWNLOAD_RECITER_STORAGE_KEY, found.id);
-              updateReciterHint();
               if (activeDownloadPart !== null) { new Notice("Switching reciter after the running download finishes"); return; }
               await rescan();
             })();
@@ -914,13 +857,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
             playerReciterId = selected.id;
             writeStored(PLAYER_RECITER_STORAGE_KEY, selected.id);
             window.dispatchEvent(new CustomEvent(PLAYER_RECITER_EVENT, { detail: { id: selected.id } }));
-            updateReciterHint();
             new Notice(`Player reciter set to ${selected.name}`);
           }));
-      }),
-      block("Playback note", (el) => {
-        reciterHintEl = el.createEl("p", { cls: "setting-item-description quran-life-offline-hint" });
-        updateReciterHint();
       }),
       row("Daily Portion part", "Checking…", (setting) => {
         // One-click shortcut when the part the Daily Portion plays isn't downloaded yet.
@@ -978,10 +916,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
           }
         });
       }),
-      block("Offline audio notes", (el) => {
-        const info = el.createDiv({ cls: "quran-life-offline-footer" });
-        info.setText(`Downloads are throttled (3 at a time, 250 ms apart) to stay under the host's rate limits. Files live in ${offlineRoot}/<reciter>/ — your synced vault covers every device.`);
-      }),
     ];
 
     const offlineGroup: SettingDefinitionItem = {
@@ -990,7 +924,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       items: offlineItems,
     };
 
-    return [backupActions, ankiGroup, dailyGroup, offlineGroup];
+    return [ankiGroup, dailyGroup, offlineGroup];
   }
 
   /** Candidate locations of a part's progress file, from the current and legacy data roots. */

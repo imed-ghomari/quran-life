@@ -11,10 +11,6 @@
   display: none;
 }
 
-.quran-life-desc-spaced {
-  margin-bottom: 10px;
-}
-
 /* Mindmap gestures: keep horizontal pans from moving the app shell
    (applied to html/body by useMindmapBackGestureGuard). */
 body.ql-no-overscroll-x,
@@ -109,9 +105,7 @@ html.ql-no-overscroll-x {
 .quran-life-settings .quran-life-offline-progress { display: block; }
 .quran-life-settings .quran-life-offline-bar { width: 100%; height: 8px; margin-top: 6px; background: var(--background-modifier-border); border-radius: 999px; overflow: hidden; }
 .quran-life-settings .quran-life-offline-bar-inner { width: 0; height: 100%; background: var(--interactive-accent); border-radius: 999px; transition: width 0.25s ease; }
-.quran-life-settings .quran-life-offline-progress-text,
-.quran-life-settings .quran-life-offline-hint { font-size: 0.78em; color: var(--text-muted); overflow-wrap: anywhere; }
-.quran-life-settings .quran-life-offline-footer { font-size: 0.75em; color: var(--text-faint); margin-top: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.quran-life-settings .quran-life-offline-progress-text { font-size: 0.78em; color: var(--text-muted); overflow-wrap: anywhere; }
 .quran-life-settings .quran-life-offline-active-hint { border: 1px solid var(--interactive-accent); border-radius: 8px; padding: 4px 10px; margin: 8px 0; }
 
 @media (max-width: 700px) {

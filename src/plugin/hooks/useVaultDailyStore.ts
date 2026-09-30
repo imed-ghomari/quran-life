@@ -202,32 +202,45 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
   const [progress, setProgress] = useState<ListeningProgressEntryLocal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Re-read from disk on demand — files copied in from another vault (or
+  // written externally) are picked up without requiring a restart.
+  const reload = useCallback(async () => {
+    // Try to read QuranLife/daily/progress.json if exists (backward compat)
+    // and also per-part files
+    const perPart: ListeningProgressEntryLocal[] = [];
+    for (let partId = 1; partId <= 8; partId++) {
+      const entry: unknown = await vaultStore.loadProgress(partId);
+      if (Array.isArray(entry)) {
+        for (const item of entry) {
+          if (isStoredProgressEntry(item)) perPart.push(item);
+        }
+      } else {
+        const rec = asRecord(entry);
+        if (rec && (typeof rec.partId === 'number' || 'lastVerseIndex' in rec)) {
+          perPart.push(fromStoredProgress(partId, rec));
+        }
+      }
+    }
+    setProgress(perPart.length ? perPart : []);
+    setIsLoading(false);
+  }, [vaultStore]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // Try to read QuranLife/daily/progress.json if exists (backward compat)
-      // and also per-part files
-      const perPart: ListeningProgressEntryLocal[] = [];
-      for (let partId = 1; partId <= 8; partId++) {
-        const entry: unknown = await vaultStore.loadProgress(partId);
-        if (Array.isArray(entry)) {
-          for (const item of entry) {
-            if (isStoredProgressEntry(item)) perPart.push(item);
-          }
-        } else {
-          const rec = asRecord(entry);
-          if (rec && (typeof rec.partId === 'number' || 'lastVerseIndex' in rec)) {
-            perPart.push(fromStoredProgress(partId, rec));
-          }
-        }
-      }
-      if (!cancelled) {
-        setProgress(perPart.length ? perPart : []);
-        setIsLoading(false);
-      }
+      if (cancelled) return;
+      await reload();
     })();
     return () => { cancelled = true; };
-  }, [vaultStore]);
+  }, [vaultStore, reload]);
+
+  // Hidden data files don't fire vault events, so re-read when the user comes
+  // back (e.g. after copying progress files in from another vault).
+  useEffect(() => {
+    const visHandler = () => { if (document.visibilityState === 'visible') void reload(); };
+    document.addEventListener('visibilitychange', visHandler);
+    return () => document.removeEventListener('visibilitychange', visHandler);
+  }, [reload]);
 
   const saveProgress = useCallback(async (entry: ListeningProgressEntryLocal) => {
     setProgress(prev => {
@@ -297,7 +310,7 @@ export function useVaultListeningProgress(vaultStore: VaultStore) {
     });
   }, [vaultStore]);
 
-  return useMemo(() => ({ progress, saveProgress, deleteProgress, resetProgress, isLoading }), [progress, saveProgress, deleteProgress, resetProgress, isLoading]);
+  return useMemo(() => ({ progress, saveProgress, deleteProgress, resetProgress, isLoading, reload }), [progress, saveProgress, deleteProgress, resetProgress, isLoading, reload]);
 }
 
 export function useVaultDailyStore(vaultStore: VaultStore) {

@@ -1,6 +1,5 @@
 import { Notice, Plugin, TFile, normalizePath, requestUrl } from "obsidian";
-import { VaultStore, LEGACY_DATA_ROOT, LEGACY_PATHS, VAULT_PATHS, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, isHiddenPath, asRecord, describeBackupCounts } from "./storage/vaultAdapter";
-import type { BackupCounts } from "./storage/vaultAdapter";
+import { VaultStore, LEGACY_DATA_ROOT, LEGACY_PATHS, VAULT_PATHS, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, isHiddenPath, asRecord } from "./storage/vaultAdapter";
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
@@ -86,19 +85,6 @@ export default class QuranLifePlugin extends Plugin {
       id: "migrate-legacy-backup",
       name: "Migrate legacy backup (localStorage JSON) to vault files",
       callback: () => { void this.promptLegacyMigration(); },
-    });
-
-    this.addCommand({
-      id: "create-backup",
-      name: "Create backup (export vault data to a .zip file)",
-      callback: () => {
-        void (async () => {
-          try {
-            const { path, counts } = await this.createBackup();
-            new Notice(`Backup saved: ${path} (${describeBackupCounts(counts)})`);
-          } catch (e) { new Notice(`Backup failed: ${errorText(e)}`); }
-        })();
-      },
     });
 
     // Status bar — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
@@ -299,32 +285,6 @@ export default class QuranLifePlugin extends Plugin {
    * browser context should also trigger a download so the user gets a native
    * save picker instead of a silent write somewhere.
    */
-  /**
-   * Manual backup: zip the actual data files. A copy is saved at the vault
-   * root (the mobile fallback); callers in a browser context should also
-   * trigger a download so the user gets a native save picker.
-   */
-  async createBackup(): Promise<{ path: string; fileName: string; blob: Blob; counts: BackupCounts }> {
-    const { blob, fileName, counts } = await this.vaultStore.exportBackupZip();
-    const path = await this.vaultStore.saveApkgFile(fileName, blob);
-    return { path, fileName, blob, counts };
-  }
-
-  /**
-   * Manual restore from a picked file: `.zip` backups unzip back into place;
-   * `.json` keeps working for 1.0.11 backups and legacy formats.
-   */
-  async restoreBackupFile(fileName: string, data: ArrayBuffer): Promise<BackupCounts> {
-    if (/\.zip$/i.test(fileName.trim())) {
-      return this.vaultStore.importBackupZip(data);
-    }
-    const text = new TextDecoder().decode(data);
-    const json: unknown = JSON.parse(text);
-    const res = await this.vaultStore.importBackup(json);
-    const progress = Array.isArray(asRecord(json)?.progress) ? (asRecord(json)?.progress as unknown[]).length : 0;
-    return { splits: res.splits, mindmaps: res.mindmaps, docs: res.docs, progress };
-  }
-
   private registerVaultWatchers(): void {
     // React to external sync changes — vault 'modify' fires for both local and synced edits
     this.registerEvent(this.app.vault.on("modify", (file) => {
