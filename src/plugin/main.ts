@@ -1,5 +1,6 @@
 import { Notice, Plugin, TFile, normalizePath, requestUrl } from "obsidian";
 import { VaultStore, LEGACY_DATA_ROOT, LEGACY_PATHS, VAULT_PATHS, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, isHiddenPath, asRecord, describeBackupCounts } from "./storage/vaultAdapter";
+import type { BackupCounts } from "./storage/vaultAdapter";
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
@@ -89,7 +90,7 @@ export default class QuranLifePlugin extends Plugin {
 
     this.addCommand({
       id: "create-backup",
-      name: "Create backup (export vault data to JSON)",
+      name: "Create backup (export vault data to a .zip file)",
       callback: () => {
         void (async () => {
           try {
@@ -298,31 +299,30 @@ export default class QuranLifePlugin extends Plugin {
    * browser context should also trigger a download so the user gets a native
    * save picker instead of a silent write somewhere.
    */
-  async createBackup(): Promise<{ path: string; fileName: string; text: string; counts: { splits: number; mindmaps: number; docs: number; progress: number } }> {
-    const backup = await this.vaultStore.exportBackup();
-    const text = JSON.stringify(backup, null, 2);
-    const stamp = new Date().toISOString().slice(0, 10);
-    const fileName = `quran-life-backup-${stamp}.json`;
-    const normalized = normalizePath(fileName);
-    const existing = this.app.vault.getAbstractFileByPath(normalized);
-    if (existing instanceof TFile) {
-      await this.app.vault.modify(existing, text);
-    } else {
-      await this.app.vault.create(normalized, text);
-    }
-    const counted = asRecord(backup.counts);
-    const counts = {
-      splits: Number(counted?.splits) || 0,
-      mindmaps: Number(counted?.mindmaps) || 0,
-      docs: Number(counted?.docs) || 0,
-      progress: Number(counted?.progress) || 0,
-    };
-    return { path: normalized, fileName, text, counts };
+  /**
+   * Manual backup: zip the actual data files. A copy is saved at the vault
+   * root (the mobile fallback); callers in a browser context should also
+   * trigger a download so the user gets a native save picker.
+   */
+  async createBackup(): Promise<{ path: string; fileName: string; blob: Blob; counts: BackupCounts }> {
+    const { blob, fileName, counts } = await this.vaultStore.exportBackupZip();
+    const path = await this.vaultStore.saveApkgFile(fileName, blob);
+    return { path, fileName, blob, counts };
   }
 
-  /** Manual restore: import a backup JSON object (own format or legacy). */
-  async restoreBackup(json: unknown): Promise<{ splits: number; mindmaps: number; docs: number }> {
-    return this.vaultStore.importBackup(json);
+  /**
+   * Manual restore from a picked file: `.zip` backups unzip back into place;
+   * `.json` keeps working for 1.0.11 backups and legacy formats.
+   */
+  async restoreBackupFile(fileName: string, data: ArrayBuffer): Promise<BackupCounts> {
+    if (/\.zip$/i.test(fileName.trim())) {
+      return this.vaultStore.importBackupZip(data);
+    }
+    const text = new TextDecoder().decode(data);
+    const json: unknown = JSON.parse(text);
+    const res = await this.vaultStore.importBackup(json);
+    const progress = Array.isArray(asRecord(json)?.progress) ? (asRecord(json)?.progress as unknown[]).length : 0;
+    return { splits: res.splits, mindmaps: res.mindmaps, docs: res.docs, progress };
   }
 
   private registerVaultWatchers(): void {

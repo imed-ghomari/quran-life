@@ -86,9 +86,8 @@ function errorText(e: unknown): string {
  * a silent write. No-op where downloads don't exist (Obsidian mobile) — the
  * vault copy saved alongside is the fallback there.
  */
-function downloadTextFile(fileName: string, text: string): void {
+function downloadBlobFile(fileName: string, blob: Blob): void {
   try {
-    const blob = new Blob([text], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -298,16 +297,16 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       const backupBtn = el.createEl("button", { text: "Backup now", cls: "mod-cta" });
       const restoreBtn = el.createEl("button", { text: "Restore backup" });
       const fileInput = el.createEl("input", { type: "file" });
-      fileInput.accept = "application/json,.json";
+      fileInput.accept = ".zip,.json,application/zip,application/json";
       fileInput.addClass("quran-life-hidden");
       fileInput.setCssStyles({ display: "none" });
       backupBtn.addEventListener("click", () => {
         void (async () => {
           backupBtn.disabled = true;
           try {
-            const { path, fileName, text, counts } = await this.plugin.createBackup();
+            const { path, fileName, blob, counts } = await this.plugin.createBackup();
             // Native save picker on desktop; the vault copy is the mobile fallback.
-            downloadTextFile(fileName, text);
+            downloadBlobFile(fileName, blob);
             if (counts.splits === 0 && counts.mindmaps === 0 && counts.docs === 0 && counts.progress === 0) {
               new Notice(`Backup is empty — no data found in ${this.plugin.vaultStore.root}. Saved anyway: ${path}`);
             } else {
@@ -327,14 +326,13 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         void (async () => {
           restoreBtn.disabled = true;
           try {
-            const text = await file.text();
-            const json: unknown = JSON.parse(text);
-            const res = await this.plugin.restoreBackup(json);
+            const buf = await file.arrayBuffer();
+            const counts = await this.plugin.restoreBackupFile(file.name, buf);
             this.dailyCache = null;
             this.ankiPrefsCache = null;
             this.cachesRequested = false;
             this.rerender();
-            new Notice(`Restored ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs`);
+            new Notice(`Restored ${describeBackupCounts(counts)}`);
           } catch (e) {
             new Notice(`Restore failed: ${errorText(e)}`);
           } finally {
@@ -349,14 +347,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     let updateMinutesDesc: () => void = () => {};
     let renderSurahList: () => void = () => {};
     let updateSurahCount: () => void = () => {};
-
-    /** Subheading inside the Daily portion group (groups can't nest, so a block draws the heading). */
-    const subheading = (name: string, desc?: string): SettingDefinition =>
-      block(name, (el) => {
-        const h = el.createEl("h6", { text: name });
-        h.setCssStyles({ margin: "10px 0 0", fontSize: "1em", fontWeight: "700" });
-        if (desc) el.createEl("p", { text: desc, cls: "setting-item-description" });
-      });
     let readingStyleEl: HTMLElement | null = null;
     let recitationSpeedEl: HTMLElement | null = null;
     const syncReadingStyleVisibility = (mode: DailyPortionMode): void => {
@@ -395,61 +385,59 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       });
     });
 
-    // Surah selection lives inside Daily portion (it scopes the portion).
-    const surahItems: SettingDefinition[] = [
-      block("Selection summary", (el) => {
-        const skippedDesc = el.createEl("p", { cls: "setting-item-description" });
-        updateSurahCount = () => {
-          const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
-          skippedDesc.setText(`${eligible.length}/${getSurahsByPart(daily.activePart).length} selected`);
-        };
-        refreshers.surahCount = updateSurahCount;
-        updateSurahCount();
-      }),
-      row("Filter", undefined, (setting) => {
-        setting
-          .addButton((btn) => btn.setButtonText("All").onClick(async () => { await saveDaily({ skippedSurahs: [] }); }))
-          .addButton((btn) => btn.setButtonText("None").onClick(async () => {
-            await saveDaily({ skippedSurahs: getSurahsByPart(daily.activePart).map(s => s.id) });
-          }));
-      }),
-      block("Surah selection", (el) => {
-        const listContainer = el.createDiv({ cls: "quran-life-daily-surah-list" });
-        renderSurahList = () => {
-          listContainer.empty();
-          const surahs = getSurahsByPart(daily.activePart);
-          for (const surah of surahs) {
-            const isSelected = !daily.skippedSurahs.includes(surah.id);
-            const surahRow = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
-            surahRow.toggleClass("is-selected", isSelected);
-            const cb = surahRow.createEl("input", { type: "checkbox" });
-            cb.checked = isSelected;
-            cb.addEventListener("change", () => {
-              void (async () => {
-                const set = new Set(daily.skippedSurahs);
-                if (cb.checked) set.delete(surah.id);
-                else set.add(surah.id);
-                await saveDaily({ skippedSurahs: Array.from(set) });
-              })();
-            });
-            const label = surahRow.createDiv({ cls: "quran-life-surah-main" });
-            label.addEventListener("click", () => cb.click());
-            label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
-            label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
-            if (isSelected) {
-              surahRow.createSpan({ cls: "quran-life-surah-check", text: "✓" });
-            }
+    // Surah multi-select as ONE item: the count lives in the description,
+    // All/None sit with the other controls, and the checkbox list hangs below
+    // inside the same setting row.
+    const surahsItem: SettingDefinition = row("Surahs", undefined, (setting) => {
+      updateSurahCount = () => {
+        const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
+        setting.setDesc(`${eligible.length}/${getSurahsByPart(daily.activePart).length} selected — uncheck surahs to exclude them from the portion`);
+      };
+      refreshers.surahCount = updateSurahCount;
+      updateSurahCount();
+      setting
+        .addButton((btn) => btn.setButtonText("All").onClick(async () => { await saveDaily({ skippedSurahs: [] }); }))
+        .addButton((btn) => btn.setButtonText("None").onClick(async () => {
+          await saveDaily({ skippedSurahs: getSurahsByPart(daily.activePart).map(s => s.id) });
+        }));
+      // Full-width list below the row's own controls.
+      setting.settingEl.setCssStyles({ flexWrap: "wrap" });
+      const listContainer = setting.settingEl.createDiv({ cls: "quran-life-daily-surah-list" });
+      listContainer.setCssStyles({ width: "100%", flexBasis: "100%" });
+      renderSurahList = () => {
+        listContainer.empty();
+        const surahs = getSurahsByPart(daily.activePart);
+        for (const surah of surahs) {
+          const isSelected = !daily.skippedSurahs.includes(surah.id);
+          const surahRow = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
+          surahRow.toggleClass("is-selected", isSelected);
+          const cb = surahRow.createEl("input", { type: "checkbox" });
+          cb.checked = isSelected;
+          cb.addEventListener("change", () => {
+            void (async () => {
+              const set = new Set(daily.skippedSurahs);
+              if (cb.checked) set.delete(surah.id);
+              else set.add(surah.id);
+              await saveDaily({ skippedSurahs: Array.from(set) });
+            })();
+          });
+          const label = surahRow.createDiv({ cls: "quran-life-surah-main" });
+          label.addEventListener("click", () => cb.click());
+          label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
+          label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
+          if (isSelected) {
+            surahRow.createSpan({ cls: "quran-life-surah-check", text: "✓" });
           }
-        };
-        refreshers.surahList = renderSurahList;
-        renderSurahList();
-      }),
-    ];
+        }
+      };
+      refreshers.surahList = renderSurahList;
+      renderSurahList();
+    });
 
-    // Progress reset lives inside Daily portion (it resets the portion progress).
-    const resetItems: SettingDefinition[] = [
-      row("Current part", undefined, (setting) => {
-        setting.addButton((btn) => btn.setButtonText("Reset").onClick(async () => {
+    // Progress reset as ONE item with both buttons.
+    const resetItem: SettingDefinition = row("Reset progress", "Clear listening progress for this part or for all parts.", (setting) => {
+      setting
+        .addButton((btn) => btn.setButtonText("Reset part").onClick(async () => {
           const confirmed = await confirmAction(this.app, `Reset part ${daily.activePart}?`, "Reset");
           if (!confirmed) return;
           try {
@@ -458,22 +446,21 @@ export class QuranLifeSettingTab extends PluginSettingTab {
             }
             new Notice(`Reset part ${daily.activePart}`);
           } catch (e) { new Notice(`Reset failed: ${errorText(e)}`); }
-        }));
-      }),
-      row("All parts", undefined, (setting) => {
-        setting.addButton((btn) => btn.setButtonText("Reset all").onClick(async () => {
-          btn.buttonEl.addClass("mod-warning");
-          const confirmed = await confirmAction(this.app, "Reset all progress?", "Reset all");
-          if (!confirmed) return;
-          for (let pid = 1; pid <= 8; pid++) {
-            for (const p of this.progressPathsForPart(pid)) {
-              await this.deleteVaultPath(p);
+        }))
+        .addButton((btn) => {
+          btn.setButtonText("Reset all").onClick(async () => {
+            const confirmed = await confirmAction(this.app, "Reset all progress?", "Reset all");
+            if (!confirmed) return;
+            for (let pid = 1; pid <= 8; pid++) {
+              for (const p of this.progressPathsForPart(pid)) {
+                await this.deleteVaultPath(p);
+              }
             }
-          }
-          new Notice("All reset");
-        }));
-      }),
-    ];
+            new Notice("All reset");
+          });
+          btn.buttonEl.addClass("mod-warning");
+        });
+    });
 
     const dailyGroup: SettingDefinitionItem = {
       type: "group",
@@ -534,10 +521,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
           });
           syncModeDependentRows(daily.dailyPortionMode);
         }),
-        subheading("Surahs", "Which surahs of this part are in scope for the daily portion."),
-        ...surahItems,
-        subheading("Reset", "Clear listening progress for this part or for all parts."),
-        ...resetItems,
+        surahsItem,
+        resetItem,
       ],
     };
 

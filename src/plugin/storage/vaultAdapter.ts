@@ -263,6 +263,171 @@ function knownVaultKeys(): string[] {
   return keys;
 }
 
+// Lazily loaded jszip (same pattern as apkgExport: dynamic import keeps startup fast).
+type JSZipModule = typeof import("jszip");
+let cachedJSZip: JSZipModule | null = null;
+async function getJSZip(): Promise<JSZipModule> {
+  if (cachedJSZip) return cachedJSZip;
+  const mod: unknown = await import("jszip");
+  const candidate: unknown =
+    (typeof mod === "object" || typeof mod === "function") &&
+    mod !== null &&
+    "default" in mod &&
+    (mod as { default?: unknown }).default
+      ? (mod as { default: unknown }).default
+      : mod;
+  if (typeof candidate !== "function") throw new Error("JSZip is unavailable");
+  cachedJSZip = candidate as JSZipModule;
+  return cachedJSZip;
+}
+
+/** File counts for backup/restore result notices. */
+export interface BackupCounts {
+  splits: number;
+  mindmaps: number;
+  docs: number;
+  progress: number;
+}
+
+function countBackupFiles(rels: string[]): BackupCounts {
+  const counts: BackupCounts = { splits: 0, mindmaps: 0, docs: 0, progress: 0 };
+  for (const rel of rels) {
+    if (rel.startsWith("splits/")) counts.splits++;
+    else if (rel.startsWith("mindmaps/")) counts.mindmaps++;
+    else if (rel.startsWith("docs/")) counts.docs++;
+    else if (rel.startsWith("daily/progress/")) counts.progress++;
+  }
+  return counts;
+}
+
+// Top-level data dirs that are re-downloadable caches — never backed up or restored.
+const BACKUP_EXCLUDED_TOP_DIRS: ReadonlySet<string> = new Set(["assets", "recitation-cache"]);
+
+function isExcludedBackupPath(rel: string): boolean {
+  const top = rel.split("/")[0] ?? "";
+  return BACKUP_EXCLUDED_TOP_DIRS.has(top);
+}
+
+/** Data-root-relative path, or null when it escapes the root. */
+function relativeBackupPath(root: string, abs: string): string | null {
+  const base = normalizePath(root);
+  const full = normalizePath(abs);
+  if (full === base) return null;
+  if (!full.startsWith(`${base}/`)) return null;
+  const rel = full.slice(base.length + 1);
+  if (!rel || rel.split("/").some((seg) => seg === "" || seg === "." || seg === "..")) return null;
+  return rel;
+}
+
+async function readBackupText(app: App, absPath: string): Promise<string | null> {
+  const normalized = normalizePath(absPath);
+  try {
+    if (isHiddenPath(app, normalized)) {
+      if (!(await app.vault.adapter.exists(normalized))) return null;
+      return await app.vault.adapter.read(normalized);
+    }
+    const file = app.vault.getAbstractFileByPath(normalized);
+    if (!(file instanceof TFile)) return null;
+    return await app.vault.read(file);
+  } catch {
+    return null;
+  }
+}
+
+async function listBackupDir(app: App, absDir: string): Promise<{ files: string[]; folders: string[] } | null> {
+  const normalized = normalizePath(absDir);
+  try {
+    if (isHiddenPath(app, normalized)) return await app.vault.adapter.list(normalized);
+    const dir = app.vault.getAbstractFileByPath(normalized);
+    if (dir instanceof TFolder) {
+      return {
+        files: dir.children.filter((c): c is TFile => c instanceof TFile).map((c) => c.path),
+        folders: dir.children.filter((c): c is TFolder => c instanceof TFolder).map((c) => c.path),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Collect every backup-worthy file under `root` into `out` (data-root-relative
+ * path → text). Recursive walk first; when `fillOnly` a path already present
+ * is left untouched so the live data root always wins over legacy.
+ */
+async function collectBackupFiles(app: App, root: string, out: Map<string, string>, fillOnly = false): Promise<void> {
+  const walk = async (relDir: string): Promise<void> => {
+    const absDir = relDir ? normalizePath(`${root}/${relDir}`) : normalizePath(root);
+    const listed = await listBackupDir(app, absDir);
+    if (!listed) return;
+    for (const f of listed.files ?? []) {
+      const rel = relativeBackupPath(root, f);
+      if (!rel || isExcludedBackupPath(rel)) continue;
+      if (fillOnly && out.has(rel)) continue;
+      const text = await readBackupText(app, f);
+      if (typeof text === "string") out.set(rel, text);
+    }
+    for (const d of listed.folders ?? []) {
+      const rel = relativeBackupPath(root, d);
+      if (!rel || isExcludedBackupPath(rel)) continue;
+      await walk(rel);
+    }
+  };
+  await walk("");
+}
+
+/**
+ * Direct reads of every known file, overlaid onto the walked files. Backup
+ * coverage therefore never depends on folder listing alone.
+ */
+async function overlayKnownFiles(app: App, root: string, out: Map<string, string>): Promise<void> {
+  const consider = async (rel: string, abs: string): Promise<void> => {
+    if (out.has(rel)) return;
+    const text = await readBackupText(app, abs);
+    if (typeof text === "string" && text.trim()) out.set(rel, text);
+  };
+  const jobs: Array<Promise<void>> = [];
+  jobs.push(consider("settings.json", VAULT_PATHS.settings(root)));
+  jobs.push(consider("anki-export.json", VAULT_PATHS.ankiExport(root)));
+  jobs.push(consider("deleted-mindmaps.json", VAULT_PATHS.deletedMindmaps(root)));
+  jobs.push(consider("deleted-mindmaps.json", LEGACY_PATHS.deletedMindmaps(root)));
+  jobs.push(consider("anki-export.json", LEGACY_PATHS.ankiExport(root)));
+  for (let sid = 1; sid <= 114; sid++) {
+    const rel = `splits/surah-${String(sid).padStart(3, "0")}.json`;
+    jobs.push(consider(rel, VAULT_PATHS.splitFile(root, sid)));
+  }
+  for (const key of knownVaultKeys()) {
+    jobs.push(consider(`mindmaps/${key}.json`, VAULT_PATHS.mindmapFile(root, key)));
+    jobs.push(consider(`docs/${key}.md`, VAULT_PATHS.docFile(root, key)));
+  }
+  for (let pid = 1; pid <= 8; pid++) {
+    jobs.push(consider(`daily/progress/part-${pid}.json`, normalizePath(`${VAULT_PATHS.listeningProgressDir(root)}/part-${pid}.json`)));
+  }
+  await Promise.all(jobs);
+}
+
+/** True for files that belong to a Quran Life backup (used to validate a zip). */
+function isBackupFile(rel: string): boolean {
+  return (
+    rel === "settings.json" ||
+    rel === "anki-export.json" ||
+    rel === "deleted-mindmaps.json" ||
+    rel.startsWith("splits/") ||
+    rel.startsWith("mindmaps/") ||
+    rel.startsWith("docs/") ||
+    rel.startsWith("daily/")
+  );
+}
+
+/** Zip entry name → safe data-root-relative path, or null when unsafe. */
+function sanitizeZipPath(name: string): string | null {
+  const cleaned = String(name).replace(/\\/g, "/").replace(/^\/+/, "");
+  const segs = cleaned.split("/").filter((s) => s.length > 0 && s !== ".");
+  if (segs.length === 0 || segs.some((s) => s === "..")) return null;
+  return segs.join("/");
+}
+
 /** Human-readable one-liner for backup/restore result notices. */
 export function describeBackupCounts(counts: { splits: number; mindmaps: number; docs: number; progress: number }): string {
   return `${counts.splits} splits, ${counts.mindmaps} mindmaps, ${counts.docs} docs, ${counts.progress} progress`;
@@ -650,6 +815,78 @@ export class VaultStore {
       return this.migrateFromLegacyJson(backup);
     }
     return { splits, mindmaps, docs };
+  }
+
+  /**
+   * Zip backup: snapshot the actual data files (not an assembled JSON) so a
+   * backup can never silently miss data that is on disk. Walks the data root
+   * recursively, then overlays direct reads of every known file so coverage
+   * does not depend on folder listing alone. Re-downloadable caches
+   * (`assets/`, `recitation-cache/`) are excluded — they come back on their own.
+   */
+  async exportBackupZip(): Promise<{ blob: Blob; fileName: string; counts: BackupCounts }> {
+    const files = new Map<string, string>();
+    await collectBackupFiles(this.app, this.dataRoot, files);
+    // Lower precedence: legacy root, if it still holds unmigrated files.
+    try {
+      if (normalizePath(LEGACY_DATA_ROOT) !== normalizePath(this.dataRoot)) {
+        await collectBackupFiles(this.app, LEGACY_DATA_ROOT, files, true);
+      }
+    } catch { /* legacy root unreadable — skip */ }
+    await overlayKnownFiles(this.app, this.dataRoot, files);
+
+    const ZipWriter = (await getJSZip()) as unknown as new () => {
+      file: (name: string, data: string) => void;
+      generateAsync: (opts: { type: "blob"; compression: string }) => Promise<Blob>;
+    };
+    const zip = new ZipWriter();
+    const sorted = [...files.keys()].sort();
+    for (const rel of sorted) {
+      const text = files.get(rel);
+      if (typeof text === "string") zip.file(rel, text);
+    }
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+    const stamp = new Date().toISOString().slice(0, 10);
+    return { blob, fileName: `quran-life-backup-${stamp}.zip`, counts: countBackupFiles(sorted) };
+  }
+
+  /**
+   * Restore a zip created by {@link exportBackupZip}: unzip and put every file
+   * back in its place under the data root. Paths are sanitized (no `..`, no
+   * absolute paths) and cache dirs are never restored.
+   */
+  async importBackupZip(data: ArrayBuffer | Uint8Array | Blob): Promise<BackupCounts> {
+    const ZipLoader = (await getJSZip()) as unknown as {
+      loadAsync: (input: ArrayBuffer | Uint8Array | Blob) => Promise<{
+        files: Record<string, { dir: boolean; name: string; async: (kind: "string") => Promise<string> }>;
+      }>;
+    };
+    const zip = await ZipLoader.loadAsync(data);
+    const entries = Object.values(zip.files).filter((f) => !f.dir);
+    if (entries.length === 0) throw new Error("Backup zip is empty");
+    const rels = entries
+      .map((e) => ({ entry: e, rel: sanitizeZipPath(e.name) }))
+      .filter((x): x is { entry: typeof entries[number]; rel: string } => x.rel !== null);
+    const looksLikeBackup = rels.some(({ rel }) => isBackupFile(rel));
+    if (!looksLikeBackup) throw new Error("This zip is not a Quran Life backup");
+    const written: string[] = [];
+    for (const { entry, rel } of rels) {
+      if (isExcludedBackupPath(rel)) continue;
+      const text = await entry.async("string");
+      const abs = normalizePath(`${this.dataRoot}/${rel}`);
+      const parent = abs.slice(0, abs.lastIndexOf("/"));
+      if (parent) await ensureFolder(this.app, parent);
+      if (isHiddenPath(this.app, abs)) {
+        await this.app.vault.adapter.write(abs, text);
+      } else {
+        const file = this.app.vault.getAbstractFileByPath(abs);
+        if (file instanceof TFile) await this.app.vault.modify(file, text);
+        else await this.app.vault.create(abs, text);
+      }
+      written.push(rel);
+    }
+    if (written.length === 0) throw new Error("Backup zip contained no restorable files");
+    return countBackupFiles(written);
   }
 
   // Migration helper: import legacy giant JSON (backup) into split files
