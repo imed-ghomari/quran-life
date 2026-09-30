@@ -7,6 +7,8 @@ sidebar_position: 3
 
 Mindmaps are the heart of the Quran Life strategy. They bridge the gap between abstract text and your brain's powerful spatial memory.
 
+> **Reading a pre-made mindmap?** Every map uses one shared set of symbols — check the [Mindmap Legend](../mindmaps/legend) first.
+
 ## Why Visual Maps Matter
 Your brain is naturally wired to remember **places and pictures** much better than lists of text. By using visual maps, we reduce the mental effort needed for recall. Instead of struggling to find the next verse in a vacuum, your brain "sees" where it sits on the map you created. This helps you:
 - **Create Visual Landmarks**: Tie each group of verses to a specific spot.

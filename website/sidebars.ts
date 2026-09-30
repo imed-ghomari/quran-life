@@ -6,7 +6,8 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
  * Docs sidebar mirrors the Next.js `_meta.json` order from
  * quran-anki-companion-obsidian-plugin:content/philosophy/_meta.json,
  * plus the two extra guides (settings, statistics) that live alongside them.
- * Mindmap reference docs (content/mindmaps/*) are intentionally excluded.
+ * The mindmap symbol legend (content/mindmaps/legend.mdx) is included as a
+ * Mindmaps reference: readers need it to understand the pre-made mindmaps.
  */
 const sidebars: SidebarsConfig = {
   docsSidebar: [
@@ -25,6 +26,12 @@ const sidebars: SidebarsConfig = {
         'philosophy/settings',
         'philosophy/statistics',
       ],
+    },
+    {
+      type: 'category',
+      label: 'Mindmaps',
+      link: {type: 'generated-index', title: 'Mindmaps', slug: '/mindmaps'},
+      items: ['mindmaps/legend'],
     },
   ],
 };
