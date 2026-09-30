@@ -271,7 +271,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [starterExisting, zipEntries]);
 
   const pickZipFile = useCallback(() => {
-    const input = document.createElement('input');
+    // Obsidian helper (not document.createElement): detached input for the picker.
+    const input = createEl('input');
     input.type = 'file';
     input.accept = '.zip,application/zip';
     input.onchange = () => {
@@ -338,9 +339,13 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       try {
         const now = new Date().toISOString();
         if (e.mindmap) {
-          const rec = e.mindmap as Record<string, unknown>;
-          const snap = (rec.snapshot ?? rec) as Record<string, unknown>;
-          if (!snap || typeof snap !== 'object' || !(snap as { store?: unknown }).store) {
+          const rec: Record<string, unknown> = e.mindmap;
+          const snap: unknown = rec.snapshot ?? rec;
+          if (typeof snap !== 'object' || snap === null || Array.isArray(snap)) {
+            throw new Error('bad snapshot');
+          }
+          const store: unknown = (snap as Record<string, unknown>).store;
+          if (typeof store !== 'object' || store === null) {
             throw new Error('bad snapshot');
           }
           const record: MindmapRecord = {
@@ -359,13 +364,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         if (e.kind === 'surah' && e.surahId && e.splits.length) {
           const anchors: AnkiAnchor[] = [];
           for (const a of e.splits) {
-            const sv = Number((a as { startVerse?: unknown }).startVerse);
-            const ev = Number((a as { endVerse?: unknown }).endVerse);
+            const sv = Number(a.startVerse);
+            const ev = Number(a.endVerse);
             if (!Number.isFinite(sv) || !Number.isFinite(ev) || sv < 1 || ev < sv) continue;
-            const id = typeof (a as { id?: unknown }).id === 'string' && ((a as { id: string }).id.trim())
-              ? (a as { id: string }).id : `anchor-${e.surahId}-${sv}-${ev}`;
-            const labelText = typeof (a as { label?: unknown }).label === 'string' && ((a as { label: string }).label.trim())
-              ? (a as { label: string }).label : `Verses ${sv}-${ev}`;
+            const id = typeof a.id === 'string' && a.id.trim() ? a.id : `anchor-${e.surahId}-${sv}-${ev}`;
+            const labelText = typeof a.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}`;
             anchors.push({ id, surahId: e.surahId, startVerse: sv, endVerse: ev, label: labelText });
           }
           if (anchors.length) {

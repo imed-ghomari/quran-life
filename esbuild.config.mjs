@@ -33,8 +33,6 @@ const context = await esbuild.context({
     "@lezer/lr",
     // builtins removed — no longer imported from 'builtin-modules'
 
-    "node:fs",
-    "node:crypto",
     "node:path",
     "node:os",
     "node:util",
@@ -50,6 +48,27 @@ const context = await esbuild.context({
   // `declare module '*.wasm'` wildcard while esbuild resolves + inlines it.
   alias: {
     "quranlife-sql-wasm.wasm": "./public/sql-wasm.wasm",
+    // sql.js references node:fs / node:crypto only inside
+    // ENVIRONMENT_IS_NODE-guarded branches that never run in Obsidian (the
+    // wasm binary is passed in-memory). Stubbing keeps the static Node
+    // requires out of the bundle without changing runtime behavior.
+    "node:fs": "./scripts/empty-shim.mjs",
+    "node:crypto": "./scripts/empty-shim.mjs",
+    // jszip pulls the setimmediate polyfill whose string-eval path
+    // (`new Function`) is statically flagged. jszip only uses the global to
+    // yield during (de)compression, so a setTimeout stand-in is equivalent.
+    setimmediate: "./scripts/setimmediate-shim.mjs",
+    // esbuild defaults to the browser platform, where jszip resolves to its
+    // prebuilt dist bundle (vendored pako + its own setImmediate shim with
+    // `new Function`). Point at the lib sources instead: same API, no eval,
+    // and our generateAsync path only needs the global setImmediate above
+    // (Node stream adapters are never reached; support.js handles that).
+    jszip: "./node_modules/jszip/lib/index.js",
+    // jszip's readable-stream dep (Node stream adapters + its own setImmediate
+    // shim with `new Function`) is only reached via generateNodeStream, which
+    // never runs here — generateAsync uses the browser path that treats a
+    // missing readable-stream as "no node streams" by design (see support.js).
+    "readable-stream": "./scripts/empty-shim.mjs",
   },
   // Obsidian Mobile's WebView can load React itself, but its bundled module
   // loader does not reliably preserve the lazy react/jsx-runtime bindings.

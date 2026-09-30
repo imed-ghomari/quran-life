@@ -365,7 +365,7 @@ export default function AudioPlayerLocal({
             try { audio.pause(); } catch { /* best-effort only; ignore */ }
             const currentSrcPath = audio.src ? audio.src.split('?')[0] : '';
             let nextSrcPath = '';
-            try { nextSrcPath = new URL(url, 'http://localhost').href.split('?')[0]; } catch { nextSrcPath = url; }
+            nextSrcPath = String(url).split('?')[0];
             if (currentSrcPath !== nextSrcPath) {
                 pendingTrackRef.current = null;
                 audio.src = url;
@@ -697,7 +697,7 @@ export default function AudioPlayerLocal({
                 proxiedRetryTriedRef.current = false;
                 let usedSeamlessSurahAdvance = false;
                 const currentSrcPath = audioRef.current.src.split('?')[0];
-                const newSrcPath = new URL(url, 'http://localhost').href.split('?')[0];
+                const newSrcPath = String(url).split('?')[0];
                 let desiredStartTime = startTime;
                 const pendingResume = pendingResumeRef.current;
                 if (pendingResume && (!pendingResume.reciterId || pendingResume.reciterId === selectedReciterId) && pendingResume.surahId === currentSurahId && pendingResume.ayahId === currentAyahId) {
@@ -1156,7 +1156,7 @@ export default function AudioPlayerLocal({
         onVerseChange(0);
         if (audioRef.current && info?.url) {
             const currentSrcPath = audioRef.current.src.split('?')[0];
-            const nextSrcPath = new URL(info.url, 'http://localhost').href.split('?')[0];
+            const nextSrcPath = String(info.url).split('?')[0];
             const targetTime = Number.isFinite(desiredStartTime) ? desiredStartTime : 0;
             preparePendingTrack({ targetTime, shouldAutoplay: isPlayingRef.current });
             if (currentSrcPath !== nextSrcPath) { audioRef.current.pause(); audioRef.current.src = info.url; audioRef.current.load(); }

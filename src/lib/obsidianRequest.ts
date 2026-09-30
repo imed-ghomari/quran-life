@@ -69,7 +69,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
     const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs);
     promise.then(
       (value) => { window.clearTimeout(timer); resolve(value); },
-      (error: unknown) => { window.clearTimeout(timer); reject(error); },
+      (error: unknown) => { window.clearTimeout(timer); reject(error instanceof Error ? error : new Error(String(error))); },
     );
   });
 }
@@ -87,9 +87,8 @@ async function responseToArrayBuffer(res: ObsidianRequestResponse): Promise<Arra
 /** `fetch` off the global object — the non-Obsidian fallback only. */
 function getWindowFetch(): ((input: string, init?: RequestInit) => Promise<Response>) | null {
   if (typeof window === 'undefined') return null;
-  const fn: unknown = (window as Window).fetch;
-  if (typeof fn !== 'function') return null;
-  return fn.bind(window) as (input: string, init?: RequestInit) => Promise<Response>;
+  if (typeof (window as Window).fetch !== 'function') return null;
+  return (window as Window).fetch.bind(window);
 }
 
 async function fetchTextOutsideObsidian(url: string, timeoutMs: number, cache?: RequestCache): Promise<string | null> {

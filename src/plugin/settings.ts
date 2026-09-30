@@ -1,5 +1,5 @@
 import { App, ButtonComponent, DropdownComponent, Notice, PluginSettingTab, Setting } from "obsidian";
-import type { SettingDefinition, SettingDefinitionItem, SettingGroup } from "obsidian";
+import type { SettingDefinition, SettingDefinitionItem } from "obsidian";
 import QuranLifePlugin from "./main";
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
 import type { PlaybackSpeed } from "@/lib/types";
@@ -171,9 +171,6 @@ function describeDailyTarget(
  * settings are indexed by Obsidian's settings search while the row contents stay
  * the exact imperative components this tab always used (sliders, dynamic
  * descriptions, the offline-audio library manager, …).
- *
- * `display()` is only the fallback for Obsidian < 1.13: it renders the very same
- * definitions imperatively, so both paths stay in sync by construction.
  */
 export class QuranLifeSettingTab extends PluginSettingTab {
   plugin: QuranLifePlugin;
@@ -192,16 +189,9 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     try { this.containerEl.addClass("quran-life-settings"); } catch { /* container not ready */ }
   }
 
-  /** Obsidian < 1.13 fallback (on 1.13+ the tab renders from the definitions). */
-  display(): void {
-    this.containerEl.empty();
-    this.containerEl.addClass("quran-life-settings");
-    this.renderDefinitionItems(this.containerEl, this.getSettingDefinitions());
-  }
-
   /**
-   * Declarative settings (Obsidian 1.13+): the same rows as `display()`, each
-   * with a name/description so they appear in settings search.
+   * Declarative settings: each row carries a name/description so it appears
+   * in settings search.
    */
   getSettingDefinitions(): SettingDefinitionItem[] {
     const myGen = ++this.displayGeneration;
@@ -234,18 +224,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
           setting.setName(name);
           if (desc) setting.setDesc(desc);
           build(setting);
-        },
-      });
-
-    /** A custom block: replaces the row chrome and draws its own content. */
-    const block = (name: string, build: (el: HTMLElement) => void): SettingDefinition =>
-      ({
-        name,
-        render: (setting: Setting) => {
-          setting.settingEl.empty();
-          setting.settingEl.removeClass("setting-item");
-          setting.settingEl.addClass("quran-life-block");
-          build(setting.settingEl);
         },
       });
 
@@ -305,7 +283,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       setting.addSlider((slider) => {
         slider.setLimits(5, 180, 5);
         slider.setValue(daily.dailyTargetMinutes);
-        slider.setDynamicTooltip();
         slider.onChange(async (v) => {
           daily.dailyTargetMinutes = clampDailyTargetMinutes(v);
           updateMinutesDesc();
@@ -946,9 +923,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
   private rerender(): void {
     const updateFn = (this as unknown as { update?: () => void }).update;
     if (typeof updateFn === "function") {
-      try { updateFn.call(this); return; } catch { /* tab not registered yet */ }
+      try { updateFn.call(this); } catch { /* tab not registered yet */ }
     }
-    try { this.display(); } catch { /* tab not open */ }
   }
 
   /**
@@ -977,34 +953,4 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     })();
   }
 
-  /**
-   * Imperative renderer for Obsidian < 1.13: renders the same definitions so the
-   * legacy tab and the declarative tab can never drift apart.
-   */
-  private renderDefinitionItems(container: HTMLElement, items: SettingDefinitionItem[]): void {
-    const groupStub = { listEl: container } as unknown as SettingGroup;
-    for (const item of items) {
-      if ("type" in item) {
-        if (item.type === "group" || item.type === "list") {
-          if (item.heading) new Setting(container).setName(item.heading).setHeading();
-          if (item.items?.length) this.renderDefinitionItems(container, item.items);
-        }
-        // Pages (and any future typed item) are only rendered by Obsidian 1.13+.
-        continue;
-      }
-      const setting = new Setting(container);
-      setting.setName(item.name);
-      if (typeof item.desc === "string") setting.setDesc(item.desc);
-      if ("render" in item && typeof item.render === "function") {
-        item.render(setting, groupStub);
-        continue;
-      }
-      if ("action" in item && typeof item.action === "function") {
-        setting.addButton((btn) => btn
-          .setButtonText(item.name)
-          .onClick(() => { item.action(setting.settingEl, 0); }));
-      }
-      // `control` definitions are rendered natively by Obsidian 1.13+; nothing to do here.
-    }
-  }
 }

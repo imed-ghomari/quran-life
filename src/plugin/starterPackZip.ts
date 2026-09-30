@@ -71,7 +71,7 @@ export async function parseStarterZip(
       if (mm && KEY_RE.test(mm[1])) {
         const rec: unknown = JSON.parse(await f.async("string"));
         const store = isRecord(rec) ? ((rec.snapshot ?? rec) as unknown) : null;
-        const hasStore = isRecord(store) && isRecord((store as Record<string, unknown>).store);
+        const hasStore = isRecord(store) && isRecord(store.store);
         if (isRecord(rec) && hasStore) get(mm[1]).mindmap = rec;
         else skipped++;
       } else if (sp) {
