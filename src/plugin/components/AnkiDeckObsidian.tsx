@@ -8,6 +8,7 @@ import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps, useVaultAnkiExportPrefs } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
+import type { App } from 'obsidian';
 import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
 import { Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
@@ -209,6 +210,22 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [localAnchors]);
 
   const showToast = useCallback((msg: string) => { setToast(msg); window.setTimeout(()=>setToast(null),3000); }, []);
+
+  const openPluginSettings = useCallback(() => {
+    try {
+      type ObsidianAppWithSettings = App & { setting?: { open: () => void; openTabById?: (id: string) => void } };
+      const app = (vaultStore?.app ?? (window as unknown as { app?: App }).app) as ObsidianAppWithSettings | undefined;
+      const settingsUI = app?.setting;
+      if (settingsUI?.open) {
+        settingsUI.open();
+        window.setTimeout(() => {
+          try { settingsUI.openTabById?.('quran-life'); } catch { /* best-effort only; ignore */ }
+        }, 150);
+      } else {
+        showToast('Open Settings → Quran Life');
+      }
+    } catch { showToast('Open Settings → Quran Life'); }
+  }, [vaultStore, showToast]);
 
   const mindmapOrder = useMemo(() => [...SURAHS.map(s => `surah-${s.id}`), 'meta-0', 'part-1', 'part-2', 'part-3', 'part-4', 'part-5', 'part-6', 'part-7'], []);
   const stepMindmap = useCallback((dir: 1 | -1) => {
@@ -511,9 +528,12 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             <Layers size={18} />
           </span>
           <h2 style={{ margin:0, fontSize:'1.35em', fontWeight:700, letterSpacing:'-0.01em' }}>Anki Deck</h2>
-          <span style={{ marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:999, background:'var(--background-modifier-border)', fontSize:'0.72em', fontWeight:600, color:'var(--text-muted)' }}>
-            Vault-synced
-          </span>
+          <button
+            onClick={openPluginSettings}
+            style={{ marginLeft:'auto', padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500 }}
+          >
+            Settings
+          </button>
         </div>
 
       </div>
@@ -543,7 +563,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       {/* Mindmap Selector & Actions — matching Daily tone */}
       <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:14 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-          <label style={{ fontSize:'0.78em', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.03em', textTransform:'uppercase' }}>Mindmap to edit</label>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
+              <PenTool size={12}/> MINDMAPS
+            </span>
+          </div>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
             <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
             <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }}>
@@ -594,9 +618,6 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                   {showAllVerses && vc>60 && <button onClick={()=>setShowAllVerses(false)} style={{ padding:'4px 8px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', fontSize:'0.8em', cursor:'pointer' }}>Show less</button>}
                 </div>
                 <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                  <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:8, border:'1px dashed var(--background-modifier-border)', color:'var(--text-faint)', fontSize:'0.78em' }}>
-                    <Check size={12}/> Saved automatically on every change
-                  </span>
                   <button onClick={()=>setShowPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-muted)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em', marginLeft:'auto' }}><Eye size={14}/>{showPreview ? 'Hide' : 'Preview'}</button>
                 </div>
               </div>
@@ -727,7 +748,6 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                     </tbody>
                   </table>
                 </div>
-                <div style={{ fontSize:'0.72em', color:'var(--text-faint)' }}>• = placeholder doc (“Not added yet”). Check = real notes. Groups = verse groups in the export (splits for that surah, or 1 when its mindmap has no saved splits yet).</div>
               </div>
             )}
           </div>

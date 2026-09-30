@@ -8,11 +8,6 @@ import { setObsidianApp } from "@/lib/obsidianApp";
 import "./sqlWasmBundle"; // inlines sql-wasm.wasm into main.js for offline Anki export
 export const VIEW_TYPE_MINDMAP = "quran-life-mindmap"; // deprecated alias, now merged into Anki Deck
 
-/** Human-readable message for a caught value of unknown type. */
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : typeof e === "string" ? e : "unknown error";
-}
-
 /**
  * Quran Life — Obsidian plugin
  * - No iframe: uses native ItemView leaves (DailyPortionView, AnkiDeckView, etc.)
@@ -79,13 +74,6 @@ export default class QuranLifePlugin extends Plugin {
 
     // Settings tab
     this.addSettingTab(new QuranLifeSettingTab(this.app, this));
-
-    // Migration command: legacy JSON → split files (one-time)
-    this.addCommand({
-      id: "migrate-legacy-backup",
-      name: "Migrate legacy backup (localStorage JSON) to vault files",
-      callback: () => { void this.promptLegacyMigration(); },
-    });
 
     // Status bar — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
     const statusEl = this.addStatusBarItem();
@@ -308,82 +296,4 @@ export default class QuranLifePlugin extends Plugin {
     await workspace.revealLeaf(leaf);
   }
 
-  async promptLegacyMigration(): Promise<void> {
-    // Try multiple candidate filenames at vault root and in plugin data folder.
-    // Supports: web backup (quran-life-backup-*.json), InstantDB export (quran-app-backup-*.json), restore file (quran-mindmaps-restore.json)
-    const dataRoot = this.dataRootPath();
-    const candidates = [
-      "quran-life-backup.json",
-      "quran-life-backup (test).json",
-      `${dataRoot}/legacy-backup.json`,
-      "quran-app-backup-2026-01-22.json",
-      "quran-mindmaps-restore.json",
-      "quran-life-anki-backup.json",
-      `${LEGACY_DATA_ROOT}/legacy-backup.json`,
-      `${LEGACY_DATA_ROOT}/quran-life-backup.json`,
-    ];
-    // 1) Direct candidates via vault API (visible files)
-    for (const path of candidates) {
-      const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
-      if (file instanceof TFile) {
-        const raw = await this.app.vault.read(file);
-        try {
-          const json: unknown = JSON.parse(raw);
-          const res = await this.vaultStore.migrateFromLegacyJson(json);
-          new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs from ${path}`);
-          return;
-        } catch (e) { new Notice(`Migration failed for ${path}: ${errorText(e)}`); return; }
-      }
-    }
-    // 2) Hidden plugin folder via adapter (for users who place the backup inside the plugin folder)
-    const hiddenCandidates = [
-      `${this.pluginFolder}/quran-life-backup.json`,
-      `${this.pluginFolder}/quran-life-backup (test).json`,
-      `${this.pluginFolder}/data/quran-life-backup.json`,
-      `${this.pluginFolder}/data/quran-life-backup (test).json`,
-      `${this.pluginFolder}/quran-app-backup-2026-01-22.json`,
-      `${this.pluginFolder}/quran-mindmaps-restore.json`,
-    ];
-    for (const path of hiddenCandidates) {
-      try {
-        if (await this.app.vault.adapter.exists(path)) {
-          const raw = await this.app.vault.adapter.read(path);
-          const json: unknown = JSON.parse(raw);
-          const res = await this.vaultStore.migrateFromLegacyJson(json);
-          new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs from ${path}`);
-          return;
-        }
-      } catch { /* candidate not readable */ }
-    }
-    // 3) Scan vault root for any *.json that looks like a backup (has mindmaps or splits)
-    try {
-      const rootFiles: string[] = [];
-      const listed = await this.app.vault.adapter.list("");
-      for (const f of listed.files) {
-        if (f.toLowerCase().endsWith(".json") && /quran|backup|mindmap/i.test(f)) rootFiles.push(f);
-      }
-      // try each candidate root file
-      for (const path of rootFiles) {
-        try {
-          const file = this.app.vault.getAbstractFileByPath(path);
-          let raw: string | null = null;
-          if (file instanceof TFile) raw = await this.app.vault.read(file);
-          else raw = await this.app.vault.adapter.read(path);
-          if (!raw) continue;
-          const json: unknown = JSON.parse(raw);
-          // heuristic: contains mindmaps or splits
-          const record = asRecord(json);
-          if (record && (record.mindmaps || record.splits || asRecord(record.anki)?.mindmaps || record.partMindmaps)) {
-            const res = await this.vaultStore.migrateFromLegacyJson(json);
-            if (res.mindmaps > 0 || res.splits > 0) {
-              new Notice(`Migrated ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs from ${path}`);
-              return;
-            }
-          }
-        } catch { /* not a usable backup */ }
-      }
-    } catch { /* vault root listing unavailable */ }
-
-    new Notice("No legacy backup found. Place your backup JSON (e.g., quran-life-backup.json, quran-app-backup-2026-01-22.json, or quran-mindmaps-restore.json) at vault root and retry. Also supports a copy inside the plugin folder.");
-  }
 }

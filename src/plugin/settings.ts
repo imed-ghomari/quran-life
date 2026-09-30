@@ -18,7 +18,7 @@ import {
   getOfflineAudioRoot,
 } from "./offlineAudio";
 import type { OfflineDownloadProgress, OfflinePartScan, OfflineReciterScan } from "./offlineAudio";
-import { LEGACY_DATA_ROOT, VAULT_PATHS, asRecord } from "./storage/vaultAdapter";
+import { LEGACY_DATA_ROOT, asRecord } from "./storage/vaultAdapter";
 import { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } from "@/lib/anki/ankiExportPrefs";
 import type { AnkiExportPrefs } from "@/lib/anki/ankiExportPrefs";
 import { confirmAction } from "./lib/confirm";
@@ -457,22 +457,10 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     };
 
     // ---------- Anki Export — part order + surah-within-part order ----------
-    let updateAnkiInfo: () => void = () => {};
     const ankiGroup: SettingDefinitionItem = {
       type: "group",
       heading: "Anki export",
       items: [
-        block("Anki export order", (el) => {
-          const ankiPrefsInfo = el.createEl("p", { cls: "setting-item-description quran-life-prefs-info" });
-          updateAnkiInfo = () => {
-            if (!this.ankiPrefsCache) {
-              ankiPrefsInfo.setText("Loading Anki preferences…");
-              return;
-            }
-            ankiPrefsInfo.setText(`partOrder=${ankiPrefs.partOrder} (${ankiPrefs.partOrder === 'asc' ? '1→7' : '7→1'}) • surahOrder=${ankiPrefs.surahOrder} (${ankiPrefs.surahOrder === 'asc' ? 'first→last' : 'last→first'}) • file: ${VAULT_PATHS.ankiExport(this.plugin.vaultStore.root)}`);
-          };
-          updateAnkiInfo();
-        }),
         row("Part order", "1→7 vs 7→1 — which Quran part appears first after Meta", (setting) => {
           setting.addDropdown((drop) => {
             drop.addOption("asc", "asc — Part 1 → Part 7");
@@ -482,7 +470,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
               ankiPrefs.partOrder = v === 'asc' ? 'asc' : 'desc';
               this.ankiPrefsCache = { ...ankiPrefs };
               await this.plugin.vaultStore.saveAnkiExportPrefs(ankiPrefs);
-              updateAnkiInfo();
               new Notice(`Anki export: Part order → ${ankiPrefs.partOrder}`);
             });
           });
@@ -497,7 +484,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
               ankiPrefs.surahOrder = v === 'asc' ? 'asc' : 'desc';
               this.ankiPrefsCache = { ...ankiPrefs };
               await this.plugin.vaultStore.saveAnkiExportPrefs(ankiPrefs);
-              updateAnkiInfo();
               new Notice(`Anki export: Surah within part → ${ankiPrefs.surahOrder}`);
             });
           });

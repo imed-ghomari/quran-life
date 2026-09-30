@@ -453,22 +453,9 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
             <BookOpen size={18} />
           </span>
           <h2 style={{ margin:0, fontSize:'1.35em', fontWeight:700, letterSpacing:'-0.01em' }}>Daily Portion</h2>
-          <span style={{ marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:999, background:'var(--background-modifier-border)', fontSize:'0.72em', fontWeight:600, color:'var(--text-muted)' }}>
-            {readOnlyMode ? <Book size={12}/> : <Headphones size={12}/>}
-            {readOnlyMode ? 'Reading' : 'Listening'} • {settings.dailyTargetMinutes} min/day
-          </span>
-        </div>
-        <div style={{ fontSize:'0.84em', color:'var(--text-muted)', lineHeight:1.4 }}>
-          {eligibleSurahs.length > 0 ? (
-            <span>{portionData.totalVerses} verses • ~{Math.round(portionData.snappedMinutes)} min • {portionData.derivedCompletionDays} days</span>
-          ) : (
-            <span>No surahs selected</span>
-          )}
-        </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:2 }}>
           <button
             onClick={openPluginSettings}
-            style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500 }}
+            style={{ marginLeft:'auto', padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500 }}
           >
             Settings
           </button>
