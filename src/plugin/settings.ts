@@ -18,7 +18,7 @@ import {
   getOfflineAudioRoot,
 } from "./offlineAudio";
 import type { OfflineDownloadProgress, OfflinePartScan, OfflineReciterScan } from "./offlineAudio";
-import { LEGACY_DATA_ROOT, VAULT_PATHS, asRecord } from "./storage/vaultAdapter";
+import { LEGACY_DATA_ROOT, VAULT_PATHS, asRecord, describeBackupCounts } from "./storage/vaultAdapter";
 import { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } from "@/lib/anki/ankiExportPrefs";
 import type { AnkiExportPrefs } from "@/lib/anki/ankiExportPrefs";
 import { confirmAction } from "./lib/confirm";
@@ -305,10 +305,14 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         void (async () => {
           backupBtn.disabled = true;
           try {
-            const { path, fileName, text } = await this.plugin.createBackup();
+            const { path, fileName, text, counts } = await this.plugin.createBackup();
             // Native save picker on desktop; the vault copy is the mobile fallback.
             downloadTextFile(fileName, text);
-            new Notice(`Backup downloaded + saved: ${path}`);
+            if (counts.splits === 0 && counts.mindmaps === 0 && counts.docs === 0 && counts.progress === 0) {
+              new Notice(`Backup is empty — no data found in ${this.plugin.vaultStore.root}. Saved anyway: ${path}`);
+            } else {
+              new Notice(`Backup downloaded + saved: ${path} (${describeBackupCounts(counts)})`);
+            }
           } catch (e) {
             new Notice(`Backup failed: ${errorText(e)}`);
           } finally {

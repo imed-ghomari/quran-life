@@ -255,6 +255,19 @@ export interface LegacyMigrationResult {
   docs: number;
 }
 
+/** Key space the app writes: surah mindmaps/docs, part mindmaps, the meta board. */
+function knownVaultKeys(): string[] {
+  const keys: string[] = ["meta-0"];
+  for (let s = 1; s <= 114; s++) keys.push(`surah-${s}`);
+  for (let p = 1; p <= 8; p++) keys.push(`part-${p}`);
+  return keys;
+}
+
+/** Human-readable one-liner for backup/restore result notices. */
+export function describeBackupCounts(counts: { splits: number; mindmaps: number; docs: number; progress: number }): string {
+  return `${counts.splits} splits, ${counts.mindmaps} mindmaps, ${counts.docs} docs, ${counts.progress} progress`;
+}
+
 export class VaultStore {
   constructor(readonly app: App, private dataRoot: string = getDefaultDataRoot(app)) {}
 
@@ -489,6 +502,11 @@ export class VaultStore {
    * Full vault backup — everything needed to restore on another device.
    * Saves are automatic (every change writes straight to the vault); this is
    * the manual snapshot used by Settings → Backup now.
+   *
+   * Listing-based reads are primary, but some environments fail to list hidden
+   * folders while direct reads keep working. When a listing comes back empty
+   * the known key space is probed directly (surah 1..114, part 1..8, meta-0)
+   * so a backup never silently misses data that is actually on disk.
    */
   async exportBackup(): Promise<Record<string, unknown>> {
     const [settings, mindmaps, splits, docs, ankiExportPrefs, deletedArr] = await Promise.all([
@@ -499,6 +517,41 @@ export class VaultStore {
       this.loadAnkiExportPrefs().catch(() => null),
       this.loadDeletedKeys().then(s => [...s]).catch(() => [] as string[]),
     ]);
+    // Fallbacks: direct probes, only when listing found nothing.
+    if (Object.keys(splits).length === 0) {
+      const probed = await Promise.all(
+        Array.from({ length: 114 }, (_, i) => i + 1).map(async (sid) => {
+          try {
+            const anchors = await this.loadSplitsForSurah(sid);
+            return (anchors.length ? [sid, anchors] : null) as [number, AnkiAnchor[]] | null;
+          } catch { return null; }
+        }),
+      );
+      for (const entry of probed) {
+        if (entry) (splits as Record<number, AnkiAnchor[]>)[entry[0]] = entry[1];
+      }
+    }
+    if (Object.keys(mindmaps).length === 0 || Object.keys(docs).length === 0) {
+      const keys = knownVaultKeys();
+      const needMindmaps = Object.keys(mindmaps).length === 0;
+      const needDocs = Object.keys(docs).length === 0;
+      await Promise.all(keys.map(async (key) => {
+        if (needMindmaps) {
+          try {
+            const data = await this.loadMindmap(key);
+            if (data) (mindmaps as Record<string, MindmapRecord>)[key] = data;
+          } catch { /* no mindmap for this key */ }
+        }
+        if (needDocs) {
+          try {
+            const content = await this.loadDoc(key);
+            if (typeof content === "string" && content.trim()) {
+              (docs as Record<string, string>)[key] = content;
+            }
+          } catch { /* no doc for this key */ }
+        }
+      }));
+    }
     const progress: unknown[] = [];
     for (let partId = 1; partId <= 8; partId++) {
       try {
@@ -506,9 +559,16 @@ export class VaultStore {
         if (entry) progress.push(entry);
       } catch { /* missing part — skip */ }
     }
+    const counts = {
+      splits: Object.keys(splits).length,
+      mindmaps: Object.keys(mindmaps).length,
+      docs: Object.keys(docs).length,
+      progress: progress.length,
+    };
     return {
       version: 1,
       exportedAt: new Date().toISOString(),
+      counts,
       settings,
       progress,
       splits,

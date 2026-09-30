@@ -1,5 +1,5 @@
 import { Notice, Plugin, TFile, normalizePath, requestUrl } from "obsidian";
-import { VaultStore, LEGACY_DATA_ROOT, LEGACY_PATHS, VAULT_PATHS, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, isHiddenPath, asRecord } from "./storage/vaultAdapter";
+import { VaultStore, LEGACY_DATA_ROOT, LEGACY_PATHS, VAULT_PATHS, DebouncedVaultWriter, ensureFolder, getDefaultDataRoot, isHiddenPath, asRecord, describeBackupCounts } from "./storage/vaultAdapter";
 import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "./settings";
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
@@ -93,8 +93,8 @@ export default class QuranLifePlugin extends Plugin {
       callback: () => {
         void (async () => {
           try {
-            const { path } = await this.createBackup();
-            new Notice(`Backup saved: ${path}`);
+            const { path, counts } = await this.createBackup();
+            new Notice(`Backup saved: ${path} (${describeBackupCounts(counts)})`);
           } catch (e) { new Notice(`Backup failed: ${errorText(e)}`); }
         })();
       },
@@ -298,7 +298,7 @@ export default class QuranLifePlugin extends Plugin {
    * browser context should also trigger a download so the user gets a native
    * save picker instead of a silent write somewhere.
    */
-  async createBackup(): Promise<{ path: string; fileName: string; text: string }> {
+  async createBackup(): Promise<{ path: string; fileName: string; text: string; counts: { splits: number; mindmaps: number; docs: number; progress: number } }> {
     const backup = await this.vaultStore.exportBackup();
     const text = JSON.stringify(backup, null, 2);
     const stamp = new Date().toISOString().slice(0, 10);
@@ -310,7 +310,14 @@ export default class QuranLifePlugin extends Plugin {
     } else {
       await this.app.vault.create(normalized, text);
     }
-    return { path: normalized, fileName, text };
+    const counted = asRecord(backup.counts);
+    const counts = {
+      splits: Number(counted?.splits) || 0,
+      mindmaps: Number(counted?.mindmaps) || 0,
+      docs: Number(counted?.docs) || 0,
+      progress: Number(counted?.progress) || 0,
+    };
+    return { path: normalized, fileName, text, counts };
   }
 
   /** Manual restore: import a backup JSON object (own format or legacy). */
