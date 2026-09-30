@@ -70,6 +70,7 @@ const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 // durations when word timings are unavailable (offline, metadata not fetched).
 const DEFAULT_WORDS_PER_SECOND = 2.6;
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
+const PLAYBACK_SPEED_EVENT = 'quran-life:playback-speed-changed';
 const RECITER_STORAGE_KEY = 'selected_reciter_id';
 const PLAYBACK_STATE_KEY = 'audio_playback_state_v1';
 
@@ -1170,7 +1171,24 @@ export default function AudioPlayerLocal({
         const nextIndex = (currentIndex + 1) % SPEED_OPTIONS.length;
         const newSpeed = SPEED_OPTIONS[nextIndex];
         setSpeed(newSpeed); if (audioRef.current) audioRef.current.playbackRate = newSpeed; writeStored(SPEED_STORAGE_KEY, newSpeed.toString());
+        try { window.dispatchEvent(new CustomEvent(PLAYBACK_SPEED_EVENT, { detail: { speed: newSpeed } })); } catch { /* no listeners */ }
     };
+
+    // Follow the default speed picked in Settings → Daily portion (same storage key,
+    // durations stay divided by speed exactly like the total/remaining readout).
+    useEffect(() => {
+        const handler = (e: Event) => {
+            try {
+                const next = Number((e as CustomEvent<{ speed?: unknown }>).detail?.speed);
+                if (SPEED_OPTIONS.includes(next as PlaybackSpeed) && next !== speedRef.current) {
+                    setSpeed(next as PlaybackSpeed);
+                    if (audioRef.current) audioRef.current.playbackRate = next;
+                }
+            } catch { /* malformed event — ignore */ }
+        };
+        window.addEventListener(PLAYBACK_SPEED_EVENT, handler);
+        return () => window.removeEventListener(PLAYBACK_SPEED_EVENT, handler);
+    }, []);
 
     const verseWordCounts = useMemo(
         () => verses.map(v => splitVerseHighlightWords(v?.text ?? '').length),

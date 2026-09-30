@@ -297,7 +297,7 @@ const RECITATION_SITE_BASES = ['https://quran-life.org'];
 /**
  * Resolve a bundled/public JSON (recitations, segments…) from whichever source
  * the current platform can actually reach:
- *   1. vault files (desktop bundle + Resilio-synced copies) — works offline,
+ *   1. vault files (desktop bundle + synced copies) — works offline,
  *   2. remote site via Obsidian `requestUrl` — the only CORS-free path on mobile,
  *   3. same-origin assets — web build only.
  * Previously the remote step ran only for Electron/desktop because

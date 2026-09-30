@@ -6,7 +6,7 @@
 > breaking changes and one-time data migrations between versions. Feel free to try it.
 > I'm working on the quran mindmaps. I'll add a way to import them directly to the plugin shortly. After that the plugin will be ready for use.
 
-Daily Qur'an review, mindmap memorization and Anki export, vault-synced via Resilio Sync.
+Daily Qur'an review, mindmap memorization and Anki export, autosaved to your vault.
 
 ## Installation
 
@@ -32,7 +32,7 @@ Daily Qur'an review, mindmap memorization and Anki export, vault-synced via Resi
 ### Mindmap memorization
 
 - Open a surah or part from the plugin's mindmap editor to create and edit visual memorization maps.
-- Mindmaps are stored as individual vault files, so Resilio Sync keeps them in sync across devices.
+- Mindmaps are stored as individual vault files, so vault sync keeps them in sync across devices.
 
 ### Anki export
 
@@ -57,7 +57,7 @@ renamed it):
 └── anki-export.json      # Anki export order preferences
 ```
 
-Point Resilio Sync (or any file sync) at that single folder to keep your data in sync
+Sync your vault with any file sync to keep your data in sync
 across devices. Offline recitation audio downloaded from the settings tab lives one
 level up, in `<configDir>/plugins/quran-life/offline-audio/` — syncing the whole
 `plugins/quran-life` folder covers both. The location is fixed — there is deliberately no setting to move it —

@@ -2,6 +2,7 @@
 import React from 'react';
 import { DEFAULT_DAILY_TARGET_MINUTES, clampDailyTargetMinutes } from '@/lib/dailyPortionUtils';
 import { ALL_QURAN_PART, QuranPart } from '@/lib/types';
+import type { PlaybackSpeed } from '@/lib/types';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import type { App, EventRef, TAbstractFile } from 'obsidian';
 
@@ -15,6 +16,7 @@ export interface LocalDailySettings {
   dailyTargetMinutes: number;
   dailyPortionMode: DailyPortionMode;
   dailyReadingStyle: DailyReadingStyle;
+  dailyPlaybackSpeed: PlaybackSpeed;
   skippedSurahs: number[];
   updatedAt?: string;
 }
@@ -38,11 +40,20 @@ export interface ListeningProgressEntryLocal {
   undo?: { lastVerseIndex?: number; nextStartVerseKey?: string; cycles?: number; updatedAt?: string } | null;
 }
 
+const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+
+function normalizePlaybackSpeed(v: unknown): PlaybackSpeed {
+  const n = Number(v);
+  if ((SPEED_OPTIONS as number[]).includes(n)) return n as PlaybackSpeed;
+  return 1;
+}
+
 const DEFAULT_SETTINGS: LocalDailySettings = {
   activePart: ALL_QURAN_PART,
   dailyTargetMinutes: DEFAULT_DAILY_TARGET_MINUTES,
   dailyPortionMode: 'audio',
   dailyReadingStyle: 'paragraph',
+  dailyPlaybackSpeed: 1,
   skippedSurahs: [],
 };
 
@@ -105,18 +116,20 @@ function parseSettings(raw: unknown): LocalDailySettings {
     : DEFAULT_SETTINGS.dailyTargetMinutes;
   const dailyPortionMode = rec.dailyPortionMode === 'reading' ? 'reading' : 'audio';
   const dailyReadingStyle = rec.dailyReadingStyle === 'line_by_line' ? 'line_by_line' : 'paragraph';
+  const dailyPlaybackSpeed = normalizePlaybackSpeed(rec.dailyPlaybackSpeed);
   const skippedSurahs = normalizeSkippedSurahs(rec.skippedSurahs);
   return {
     activePart,
     dailyTargetMinutes,
     dailyPortionMode,
     dailyReadingStyle,
+    dailyPlaybackSpeed,
     skippedSurahs,
     updatedAt: typeof rec.updatedAt === 'string' ? rec.updatedAt : undefined,
   };
 }
 
-// Hook that mirrors useLocalDailySettings but backed by VaultStore (Resilio-synced)
+// Hook that mirrors useLocalDailySettings but backed by VaultStore (vault-synced)
 export function useVaultDailySettings(vaultStore: VaultStore) {
   const [settings, setSettingsState] = useState<LocalDailySettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +178,7 @@ export function useVaultDailySettings(vaultStore: VaultStore) {
       const next: LocalDailySettings = { ...prev, ...patch };
       if (patch.skippedSurahs !== undefined) next.skippedSurahs = normalizeSkippedSurahs(patch.skippedSurahs);
       if (patch.dailyTargetMinutes !== undefined) next.dailyTargetMinutes = clampDailyTargetMinutes(Number(patch.dailyTargetMinutes));
+      if (patch.dailyPlaybackSpeed !== undefined) next.dailyPlaybackSpeed = normalizePlaybackSpeed(patch.dailyPlaybackSpeed);
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) next.activePart = prev.activePart;
       const payload = { ...next, updatedAt: new Date().toISOString() };
       void vaultStore.saveSettings(payload).then(() => {

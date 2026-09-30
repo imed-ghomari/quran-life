@@ -2,8 +2,9 @@ import { App, ButtonComponent, Notice, PluginSettingTab, Setting } from "obsidia
 import type { SettingDefinition, SettingDefinitionItem, SettingGroup } from "obsidian";
 import QuranLifePlugin from "./main";
 import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
+import type { PlaybackSpeed } from "@/lib/types";
 import { getSurahsByPart } from "@/lib/quranData";
-import { clampDailyTargetMinutes, DEFAULT_DAILY_TARGET_MINUTES, estimateEligibleCycleDays, getEligibleVerseCount } from "@/lib/dailyPortionUtils";
+import { clampDailyTargetMinutes, DEFAULT_DAILY_TARGET_MINUTES, estimateEligibleCycleDays, estimateSurahDurationMinutes, getEligibleVerseCount } from "@/lib/dailyPortionUtils";
 import { ALLOWED_RECITERS, getAudioPlayerReciters, Reciter } from "@/lib/audio";
 import { readStored, writeStored } from "@/lib/pluginStorage";
 import {
@@ -28,6 +29,35 @@ const PLAYER_RECITER_STORAGE_KEY = "selected_reciter_id";
 const DOWNLOAD_RECITER_STORAGE_KEY = "offline_download_reciter_id";
 const PLAYER_RECITER_EVENT = "quran-life:player-reciter-changed";
 
+// Playback speed shared with the audio player (see AudioPlayerLocal). The player
+// stores its speed in vault-scoped local storage and divides measured durations
+// by it (totalDurationSec = sum / speed). Settings mirrors that here so the
+// daily-target estimate follows the same speed.
+const SPEED_STORAGE_KEY = "audio_playback_speed";
+const PLAYBACK_SPEED_EVENT = "quran-life:playback-speed-changed";
+const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+const DEFAULT_PLAYBACK_SPEED: PlaybackSpeed = 1;
+
+function isValidPlaybackSpeed(v: unknown): v is PlaybackSpeed {
+  return typeof v === "number" && (SPEED_OPTIONS as number[]).includes(v);
+}
+
+function normalizePlaybackSpeed(v: unknown): PlaybackSpeed {
+  const n = Number(v);
+  if (isValidPlaybackSpeed(n)) return n;
+  // Existing users may already have a speed picked in the player.
+  try {
+    const stored = Number(readStored(SPEED_STORAGE_KEY));
+    if (isValidPlaybackSpeed(stored)) return stored;
+  } catch { /* storage unavailable — fall through to default */ }
+  return DEFAULT_PLAYBACK_SPEED;
+}
+
+function persistPlaybackSpeed(speed: PlaybackSpeed): void {
+  try { writeStored(SPEED_STORAGE_KEY, String(speed)); } catch { /* best-effort */ }
+  try { window.dispatchEvent(new CustomEvent(PLAYBACK_SPEED_EVENT, { detail: { speed } })); } catch { /* no listeners */ }
+}
+
 // One offline download at a time, tracked at module scope: the tab re-renders
 // whenever any related setting changes, and the re-rendered rows must still see the
 // running download (to show its state, block a second one and offer Cancel).
@@ -51,6 +81,26 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : typeof e === 'string' ? e : "unknown error";
 }
 
+/**
+ * Trigger a browser download so the user gets a native save picker instead of
+ * a silent write. No-op where downloads don't exist (Obsidian mobile) — the
+ * vault copy saved alongside is the fallback there.
+ */
+function downloadTextFile(fileName: string, text: string): void {
+  try {
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.setTimeout(() => {
+      try { URL.revokeObjectURL(url); a.remove(); } catch { /* already cleaned up */ }
+    }, 1000);
+  } catch { /* vault copy already saved — download is best-effort */ }
+}
+
 type DailyPortionMode = 'audio' | 'reading';
 type DailyReadingStyle = 'line_by_line' | 'paragraph';
 interface DailySettings {
@@ -58,6 +108,7 @@ interface DailySettings {
   dailyTargetMinutes: number;
   dailyPortionMode: DailyPortionMode;
   dailyReadingStyle: DailyReadingStyle;
+  dailyPlaybackSpeed: PlaybackSpeed;
   skippedSurahs: number[];
 }
 
@@ -66,6 +117,7 @@ const DEFAULT_DAILY: DailySettings = {
   dailyTargetMinutes: DEFAULT_DAILY_TARGET_MINUTES,
   dailyPortionMode: 'audio',
   dailyReadingStyle: 'paragraph',
+  dailyPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
   skippedSurahs: [],
 };
 
@@ -84,13 +136,51 @@ function normalizeSkipped(v: unknown): number[] {
 }
 function parseDaily(raw: unknown): DailySettings {
   const record = asRecord(raw);
-  if (!record) return { ...DEFAULT_DAILY };
+  if (!record) return { ...DEFAULT_DAILY, dailyPlaybackSpeed: normalizePlaybackSpeed(undefined) };
   return {
     activePart: isValidQuranPart(record.activePart) ? record.activePart : DEFAULT_DAILY.activePart,
     dailyTargetMinutes: Number.isFinite(Number(record.dailyTargetMinutes)) ? clampDailyTargetMinutes(Number(record.dailyTargetMinutes)) : DEFAULT_DAILY.dailyTargetMinutes,
     dailyPortionMode: record.dailyPortionMode === 'reading' ? 'reading' : 'audio',
-    dailyReadingStyle: record.dailyReadingStyle === 'line_by_line' ? 'line_by_line' : 'paragraph',    skippedSurahs: normalizeSkipped(record.skippedSurahs),
+    dailyReadingStyle: record.dailyReadingStyle === 'line_by_line' ? 'line_by_line' : 'paragraph',
+    dailyPlaybackSpeed: normalizePlaybackSpeed(record.dailyPlaybackSpeed),
+    skippedSurahs: normalizeSkipped(record.skippedSurahs),
   };
+}
+
+/**
+ * Daily-target estimate that follows the recitation speed exactly like the
+ * audio player does (totalDurationSec = sum / speed). Reading mode ignores speed.
+ */
+function describeDailyTarget(
+  activePart: QuranPart,
+  skippedSurahs: number[],
+  targetMinutes: number,
+  mode: DailyPortionMode,
+  speed: PlaybackSpeed,
+): string {
+  const eligible = getSurahsByPart(activePart).filter(s => !skippedSurahs.includes(s.id));
+  if (eligible.length === 0) {
+    return `${targetMinutes} min • no surahs selected`;
+  }
+  const totalVerses = getEligibleVerseCount(eligible);
+  const totalMinutesAt1x = eligible.reduce((total, surah) => (
+    total + estimateSurahDurationMinutes(surah.id, mode)
+  ), 0);
+  // Keep in sync with estimateEligibleCycleDays fallback (no timing metadata in settings).
+  const fallbackDays = estimateEligibleCycleDays(eligible, targetMinutes, mode);
+  let days: number;
+  if (mode === 'audio' && speed !== 1 && totalMinutesAt1x > 0) {
+    const effectiveTotal = totalMinutesAt1x / speed;
+    days = Math.max(1, Math.ceil(effectiveTotal / targetMinutes));
+  } else {
+    days = fallbackDays;
+  }
+  const versesPerDay = totalVerses && days ? Math.ceil(totalVerses / days) : 0;
+  const modeLabel = mode === 'audio' ? 'Listening' : 'Reading';
+  if (mode === 'audio') {
+    return `${targetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${modeLabel} @${speed}x`;
+  }
+  return `${targetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${modeLabel}`;
 }
 
 /**
@@ -138,10 +228,11 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     this.requestCaches(myGen);
 
     const offlineRoot = getOfflineAudioRoot(this.app);
-    const dataRoot = this.plugin.dataRootPath();
     const offlineReciters: Reciter[] = this.recitersCache ?? ALLOWED_RECITERS;
     const ankiPrefs: AnkiExportPrefs = this.ankiPrefsCache ?? { ...DEFAULT_ANKI_EXPORT_PREFS };
-    let daily: DailySettings = this.dailyCache ? { ...this.dailyCache } : { ...DEFAULT_DAILY };
+    let daily: DailySettings = this.dailyCache
+      ? { ...this.dailyCache, dailyPlaybackSpeed: normalizePlaybackSpeed(this.dailyCache.dailyPlaybackSpeed) }
+      : { ...DEFAULT_DAILY, dailyPlaybackSpeed: normalizePlaybackSpeed(undefined) };
 
     // Rows that change when the daily settings change; each row's render callback
     // registers the refresher that belongs to it (all optional).
@@ -182,10 +273,12 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       daily = { ...daily, ...patch };
       if (patch.skippedSurahs !== undefined) daily.skippedSurahs = normalizeSkipped(patch.skippedSurahs);
       if (patch.dailyTargetMinutes !== undefined) daily.dailyTargetMinutes = clampDailyTargetMinutes(Number(patch.dailyTargetMinutes));
+      if (patch.dailyPlaybackSpeed !== undefined) daily.dailyPlaybackSpeed = normalizePlaybackSpeed(patch.dailyPlaybackSpeed);
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) {
         daily.activePart = parseDaily(await this.plugin.vaultStore.loadSettings<unknown>(null)).activePart;
       }
       this.dailyCache = { ...daily };
+      if (patch.dailyPlaybackSpeed !== undefined) persistPlaybackSpeed(daily.dailyPlaybackSpeed);
       const payload = { ...daily, updatedAt: new Date().toISOString() };
       await this.plugin.vaultStore.saveSettings(payload);
       try { window.dispatchEvent(new CustomEvent('quran-life:daily-settings-changed')); } catch { /* no listeners */ }
@@ -195,58 +288,100 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       try { refreshers.offline?.(); } catch { /* offline section not rendered yet */ }
     };
 
-    // ---------- Storage & sync ----------
-    const storageGroup: SettingDefinitionItem = {
-      type: "group",
-      heading: "Storage & sync",
-      items: [
-        // Read-only on purpose: a fixed folder means every vault (and every
-        // device using it) syncs exactly one predictable directory.
-        row("Data folder", `Always the plugin's own data folder: ${dataRoot}`, () => {}),
-        row("Autobackup", "Keep on for instant saves.", (setting) => {
-          setting.addToggle((toggle) =>
-            toggle
-              .setValue(this.plugin.settings.autoSyncDebounceMs > 0)
-              .onChange(async (value) => {
-                this.plugin.settings.autoSyncDebounceMs = value ? 700 : 0;
-                await this.plugin.saveSettings();
-              })
-          );
-        }),
-        row("Migrate legacy backup", "Import legacy JSON backup.", (setting) => {
-          setting.addButton((btn) =>
-            btn.setButtonText("Migrate").onClick(() => { void this.plugin.promptLegacyMigration(); })
-          );
-        }),
-      ],
-    };
+    // ---------- Backup & restore (top-right, no section) ----------
+    // Saves are automatic — every change is written to the vault straight away.
+    // These two buttons are the only manual controls, so they sit at the top
+    // right of the tab instead of in their own section.
+    const backupActions: SettingDefinitionItem = block("Backup and restore", (el) => {
+      el.addClass("quran-life-backup-actions");
+      el.setCssStyles({ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "4px 0 8px" });
+      const backupBtn = el.createEl("button", { text: "Backup now", cls: "mod-cta" });
+      const restoreBtn = el.createEl("button", { text: "Restore backup" });
+      const fileInput = el.createEl("input", { type: "file" });
+      fileInput.accept = "application/json,.json";
+      fileInput.addClass("quran-life-hidden");
+      fileInput.setCssStyles({ display: "none" });
+      backupBtn.addEventListener("click", () => {
+        void (async () => {
+          backupBtn.disabled = true;
+          try {
+            const { path, fileName, text } = await this.plugin.createBackup();
+            // Native save picker on desktop; the vault copy is the mobile fallback.
+            downloadTextFile(fileName, text);
+            new Notice(`Backup downloaded + saved: ${path}`);
+          } catch (e) {
+            new Notice(`Backup failed: ${errorText(e)}`);
+          } finally {
+            backupBtn.disabled = false;
+          }
+        })();
+      });
+      restoreBtn.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        void (async () => {
+          restoreBtn.disabled = true;
+          try {
+            const text = await file.text();
+            const json: unknown = JSON.parse(text);
+            const res = await this.plugin.restoreBackup(json);
+            this.dailyCache = null;
+            this.ankiPrefsCache = null;
+            this.cachesRequested = false;
+            this.rerender();
+            new Notice(`Restored ${res.splits} splits, ${res.mindmaps} mindmaps, ${res.docs} docs`);
+          } catch (e) {
+            new Notice(`Restore failed: ${errorText(e)}`);
+          } finally {
+            restoreBtn.disabled = false;
+            fileInput.value = "";
+          }
+        })();
+      });
+    });
 
-    // ---------- Daily portion ----------
+    // ---------- Daily portion (part + target + mode + surahs + reset) ----------
     let updateMinutesDesc: () => void = () => {};
     let renderSurahList: () => void = () => {};
     let updateSurahCount: () => void = () => {};
+
+    /** Subheading inside the Daily portion group (groups can't nest, so a block draws the heading). */
+    const subheading = (name: string, desc?: string): SettingDefinition =>
+      block(name, (el) => {
+        const h = el.createEl("h6", { text: name });
+        h.setCssStyles({ margin: "10px 0 0", fontSize: "1em", fontWeight: "700" });
+        if (desc) el.createEl("p", { text: desc, cls: "setting-item-description" });
+      });
     let readingStyleEl: HTMLElement | null = null;
+    let recitationSpeedEl: HTMLElement | null = null;
     const syncReadingStyleVisibility = (mode: DailyPortionMode): void => {
       readingStyleEl?.toggleClass("quran-life-hidden", mode !== 'reading');
+    };
+    const syncRecitationSpeedVisibility = (mode: DailyPortionMode): void => {
+      recitationSpeedEl?.toggleClass("quran-life-hidden", mode !== 'audio');
+    };
+    const syncModeDependentRows = (mode: DailyPortionMode): void => {
+      syncReadingStyleVisibility(mode);
+      syncRecitationSpeedVisibility(mode);
     };
 
     const minutesRow: SettingDefinitionItem = row("Daily target", `${daily.dailyTargetMinutes} min`, (setting) => {
       updateMinutesDesc = () => {
-        const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
-        const totalVerses = getEligibleVerseCount(eligible);
-        const days = estimateEligibleCycleDays(eligible, daily.dailyTargetMinutes, daily.dailyPortionMode);
-        const versesPerDay = totalVerses && days ? Math.ceil(totalVerses / days) : 0;
-        if (eligible.length === 0) {
-          setting.setDesc(`${daily.dailyTargetMinutes} min • no surahs selected`);
-        } else {
-          setting.setDesc(`${daily.dailyTargetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${daily.dailyPortionMode === 'audio' ? 'Listening' : 'Reading'}`);
-        }
+        setting.setDesc(describeDailyTarget(
+          daily.activePart,
+          daily.skippedSurahs,
+          daily.dailyTargetMinutes,
+          daily.dailyPortionMode,
+          daily.dailyPlaybackSpeed,
+        ));
       };
       refreshers.minutesDesc = updateMinutesDesc;
       updateMinutesDesc();
       setting.addSlider((slider) => {
         slider.setLimits(5, 180, 5);
         slider.setValue(daily.dailyTargetMinutes);
+        slider.setDynamicTooltip();
         slider.onChange(async (v) => {
           daily.dailyTargetMinutes = clampDailyTargetMinutes(v);
           updateMinutesDesc();
@@ -255,6 +390,86 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         });
       });
     });
+
+    // Surah selection lives inside Daily portion (it scopes the portion).
+    const surahItems: SettingDefinition[] = [
+      block("Selection summary", (el) => {
+        const skippedDesc = el.createEl("p", { cls: "setting-item-description" });
+        updateSurahCount = () => {
+          const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
+          skippedDesc.setText(`${eligible.length}/${getSurahsByPart(daily.activePart).length} selected`);
+        };
+        refreshers.surahCount = updateSurahCount;
+        updateSurahCount();
+      }),
+      row("Filter", undefined, (setting) => {
+        setting
+          .addButton((btn) => btn.setButtonText("All").onClick(async () => { await saveDaily({ skippedSurahs: [] }); }))
+          .addButton((btn) => btn.setButtonText("None").onClick(async () => {
+            await saveDaily({ skippedSurahs: getSurahsByPart(daily.activePart).map(s => s.id) });
+          }));
+      }),
+      block("Surah selection", (el) => {
+        const listContainer = el.createDiv({ cls: "quran-life-daily-surah-list" });
+        renderSurahList = () => {
+          listContainer.empty();
+          const surahs = getSurahsByPart(daily.activePart);
+          for (const surah of surahs) {
+            const isSelected = !daily.skippedSurahs.includes(surah.id);
+            const surahRow = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
+            surahRow.toggleClass("is-selected", isSelected);
+            const cb = surahRow.createEl("input", { type: "checkbox" });
+            cb.checked = isSelected;
+            cb.addEventListener("change", () => {
+              void (async () => {
+                const set = new Set(daily.skippedSurahs);
+                if (cb.checked) set.delete(surah.id);
+                else set.add(surah.id);
+                await saveDaily({ skippedSurahs: Array.from(set) });
+              })();
+            });
+            const label = surahRow.createDiv({ cls: "quran-life-surah-main" });
+            label.addEventListener("click", () => cb.click());
+            label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
+            label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
+            if (isSelected) {
+              surahRow.createSpan({ cls: "quran-life-surah-check", text: "✓" });
+            }
+          }
+        };
+        refreshers.surahList = renderSurahList;
+        renderSurahList();
+      }),
+    ];
+
+    // Progress reset lives inside Daily portion (it resets the portion progress).
+    const resetItems: SettingDefinition[] = [
+      row("Current part", undefined, (setting) => {
+        setting.addButton((btn) => btn.setButtonText("Reset").onClick(async () => {
+          const confirmed = await confirmAction(this.app, `Reset part ${daily.activePart}?`, "Reset");
+          if (!confirmed) return;
+          try {
+            for (const p of this.progressPathsForPart(daily.activePart)) {
+              await this.deleteVaultPath(p);
+            }
+            new Notice(`Reset part ${daily.activePart}`);
+          } catch (e) { new Notice(`Reset failed: ${errorText(e)}`); }
+        }));
+      }),
+      row("All parts", undefined, (setting) => {
+        setting.addButton((btn) => btn.setButtonText("Reset all").onClick(async () => {
+          btn.buttonEl.addClass("mod-warning");
+          const confirmed = await confirmAction(this.app, "Reset all progress?", "Reset all");
+          if (!confirmed) return;
+          for (let pid = 1; pid <= 8; pid++) {
+            for (const p of this.progressPathsForPart(pid)) {
+              await this.deleteVaultPath(p);
+            }
+          }
+          new Notice("All reset");
+        }));
+      }),
+    ];
 
     const dailyGroup: SettingDefinitionItem = {
       type: "group",
@@ -274,6 +489,37 @@ export class QuranLifeSettingTab extends PluginSettingTab {
           });
         }),
         minutesRow,
+        row("Mode", "Listening follows the recitation speed below; Reading uses a fixed pace.", (setting) => {
+          setting.addDropdown((drop) => {
+            drop.addOption("audio", "Listening");
+            drop.addOption("reading", "Reading");
+            drop.setValue(daily.dailyPortionMode);
+            drop.onChange(async (v) => {
+              const mode: DailyPortionMode = v === 'reading' ? 'reading' : 'audio';
+              syncModeDependentRows(mode);
+              await saveDaily({ dailyPortionMode: mode });
+              updateMinutesDesc();
+            });
+          });
+          syncModeDependentRows(daily.dailyPortionMode);
+        }),
+        row("Recitation speed", "Default listening speed. The daily target estimate follows it like the player does (faster = more verses per day).", (setting) => {
+          recitationSpeedEl = setting.settingEl;
+          setting.addDropdown((drop) => {
+            for (const s of SPEED_OPTIONS) drop.addOption(String(s), `${s}x`);
+            drop.setValue(String(daily.dailyPlaybackSpeed));
+            drop.onChange(async (v) => {
+              const speed = normalizePlaybackSpeed(Number(v));
+              daily.dailyPlaybackSpeed = speed;
+              updateMinutesDesc();
+              await saveDaily({ dailyPlaybackSpeed: speed });
+              updateMinutesDesc();
+              // Keep the dropdown in sync when the stored player speed wins normalization.
+              try { drop.setValue(String(daily.dailyPlaybackSpeed)); } catch { /* already set */ }
+            });
+          });
+          syncModeDependentRows(daily.dailyPortionMode);
+        }),
         row("Reading style", undefined, (setting) => {
           readingStyleEl = setting.settingEl;
           setting.addDropdown((drop) => {
@@ -282,109 +528,12 @@ export class QuranLifeSettingTab extends PluginSettingTab {
             drop.setValue(daily.dailyReadingStyle);
             drop.onChange(async (v) => { await saveDaily({ dailyReadingStyle: v === 'line_by_line' ? 'line_by_line' : 'paragraph' }); });
           });
-          syncReadingStyleVisibility(daily.dailyPortionMode);
+          syncModeDependentRows(daily.dailyPortionMode);
         }),
-        row("Mode", undefined, (setting) => {
-          setting.addDropdown((drop) => {
-            drop.addOption("audio", "Listening");
-            drop.addOption("reading", "Reading");
-            drop.setValue(daily.dailyPortionMode);
-            drop.onChange(async (v) => {
-              const mode: DailyPortionMode = v === 'reading' ? 'reading' : 'audio';
-              syncReadingStyleVisibility(mode);
-              await saveDaily({ dailyPortionMode: mode });
-            });
-          });
-          syncReadingStyleVisibility(daily.dailyPortionMode);
-        }),
-      ],
-    };
-
-    // ---------- Surahs ----------
-    const surahsGroup: SettingDefinitionItem = {
-      type: "group",
-      heading: "Surahs",
-      items: [
-        block("Selection summary", (el) => {
-          const skippedDesc = el.createEl("p", { cls: "setting-item-description" });
-          updateSurahCount = () => {
-            const eligible = getSurahsByPart(daily.activePart).filter(s => !daily.skippedSurahs.includes(s.id));
-            skippedDesc.setText(`${eligible.length}/${getSurahsByPart(daily.activePart).length} selected`);
-          };
-          refreshers.surahCount = updateSurahCount;
-          updateSurahCount();
-        }),
-        row("Filter", undefined, (setting) => {
-          setting
-            .addButton((btn) => btn.setButtonText("All").onClick(async () => { await saveDaily({ skippedSurahs: [] }); }))
-            .addButton((btn) => btn.setButtonText("None").onClick(async () => {
-              await saveDaily({ skippedSurahs: getSurahsByPart(daily.activePart).map(s => s.id) });
-            }));
-        }),
-        block("Surah selection", (el) => {
-          const listContainer = el.createDiv({ cls: "quran-life-daily-surah-list" });
-          renderSurahList = () => {
-            listContainer.empty();
-            const surahs = getSurahsByPart(daily.activePart);
-            for (const surah of surahs) {
-              const isSelected = !daily.skippedSurahs.includes(surah.id);
-              const surahRow = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
-              surahRow.toggleClass("is-selected", isSelected);
-              const cb = surahRow.createEl("input", { type: "checkbox" });
-              cb.checked = isSelected;
-              cb.addEventListener("change", () => {
-                void (async () => {
-                  const set = new Set(daily.skippedSurahs);
-                  if (cb.checked) set.delete(surah.id);
-                  else set.add(surah.id);
-                  await saveDaily({ skippedSurahs: Array.from(set) });
-                })();
-              });
-              const label = surahRow.createDiv({ cls: "quran-life-surah-main" });
-              label.addEventListener("click", () => cb.click());
-              label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
-              label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
-              if (isSelected) {
-                surahRow.createSpan({ cls: "quran-life-surah-check", text: "✓" });
-              }
-            }
-          };
-          refreshers.surahList = renderSurahList;
-          renderSurahList();
-        }),
-      ],
-    };
-
-    // ---------- Reset ----------
-    const resetGroup: SettingDefinitionItem = {
-      type: "group",
-      heading: "Reset",
-      items: [
-        row("Current part", undefined, (setting) => {
-          setting.addButton((btn) => btn.setButtonText("Reset").onClick(async () => {
-            const confirmed = await confirmAction(this.app, `Reset part ${daily.activePart}?`, "Reset");
-            if (!confirmed) return;
-            try {
-              for (const p of this.progressPathsForPart(daily.activePart)) {
-                await this.deleteVaultPath(p);
-              }
-              new Notice(`Reset part ${daily.activePart}`);
-            } catch (e) { new Notice(`Reset failed: ${errorText(e)}`); }
-          }));
-        }),
-        row("All parts", undefined, (setting) => {
-          setting.addButton((btn) => btn.setButtonText("Reset all").onClick(async () => {
-            btn.buttonEl.addClass("mod-warning");
-            const confirmed = await confirmAction(this.app, "Reset all progress?", "Reset all");
-            if (!confirmed) return;
-            for (let pid = 1; pid <= 8; pid++) {
-              for (const p of this.progressPathsForPart(pid)) {
-                await this.deleteVaultPath(p);
-              }
-            }
-            new Notice("All reset");
-          }));
-        }),
+        subheading("Surahs", "Which surahs of this part are in scope for the daily portion."),
+        ...surahItems,
+        subheading("Reset", "Clear listening progress for this part or for all parts."),
+        ...resetItems,
       ],
     };
 
@@ -744,7 +893,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     const offlineItems: SettingDefinition[] = [
       block("Offline audio details", (el) => {
         const desc = el.createEl("p", { cls: "setting-item-description quran-life-desc-spaced quran-life-nowrap-safe" });
-        desc.setText("Downloaded audio plays without a connection. Files stay inside the plugin folder, so one synced folder (Resilio) covers every device — the player prefers a downloaded file and only streams as a fallback.");
+        desc.setText("Downloaded audio plays without a connection. Files stay inside the plugin folder, so your synced vault covers every device — the player prefers a downloaded file and only streams as a fallback.");
       }),
       row("Storage used", `Scanning ${offlineRoot}…`, (setting) => {
         storageSetting = setting;
@@ -842,7 +991,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       }),
       block("Offline audio notes", (el) => {
         const info = el.createDiv({ cls: "quran-life-offline-footer" });
-        info.setText(`Downloads are throttled (3 at a time, 250 ms apart) to stay under the host's rate limits. Files live in ${offlineRoot}/<reciter>/ — one synced folder covers every device.`);
+        info.setText(`Downloads are throttled (3 at a time, 250 ms apart) to stay under the host's rate limits. Files live in ${offlineRoot}/<reciter>/ — your synced vault covers every device.`);
       }),
     ];
 
@@ -852,7 +1001,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       items: offlineItems,
     };
 
-    return [storageGroup, dailyGroup, surahsGroup, resetGroup, ankiGroup, offlineGroup];
+    return [backupActions, ankiGroup, dailyGroup, offlineGroup];
   }
 
   /** Candidate locations of a part's progress file, from the current and legacy data roots. */

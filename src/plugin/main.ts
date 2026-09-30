@@ -16,8 +16,8 @@ function errorText(e: unknown): string {
 /**
  * Quran Life — Obsidian plugin
  * - No iframe: uses native ItemView leaves (DailyPortionView, AnkiDeckView, etc.)
- * - Storage: VaultStore (Resilio-synced files under QuranLife/) instead of localStorage/InstantDB
- * - Autobackup: vault files *are* the backup; Resilio Sync handles cross-device
+ * - Storage: VaultStore (vault files) instead of localStorage/InstantDB
+ * - Autosave: vault files *are* the backup; every change is written straight away
  */
 
 export default class QuranLifePlugin extends Plugin {
@@ -87,10 +87,23 @@ export default class QuranLifePlugin extends Plugin {
       callback: () => { void this.promptLegacyMigration(); },
     });
 
-    // Status bar for sync feedback (Resilio is external, show last write time) — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
+    this.addCommand({
+      id: "create-backup",
+      name: "Create backup (export vault data to JSON)",
+      callback: () => {
+        void (async () => {
+          try {
+            const { path } = await this.createBackup();
+            new Notice(`Backup saved: ${path}`);
+          } catch (e) { new Notice(`Backup failed: ${errorText(e)}`); }
+        })();
+      },
+    });
+
+    // Status bar — mobile has no status bar, guard to avoid crash on isDesktopOnly:false
     const statusEl = this.addStatusBarItem();
     statusEl.setText("Quran Life ✓");
-    statusEl.title = `Data folder: ${this.dataRootPath()} (Resilio Sync)`;
+    statusEl.title = "Quran Life: all changes save automatically";
   }
 
   onunload(): void {
@@ -128,7 +141,7 @@ export default class QuranLifePlugin extends Plugin {
           const legacyFiles = legacyList.files.length;
           const newFiles = newList.files.length;
           if (legacyFiles > 0 && newFiles <= 1) { // only settings.json
-            new Notice(`Migrating existing QuranLife data to new plugin folder for single-folder Resilio sync...`);
+            new Notice(`Migrating existing QuranLife data to the plugin folder...`);
             // Copy splits, mindmaps, docs via adapter
             const copyDir = async (src: string, dest: string): Promise<void> => {
               try {
@@ -149,7 +162,7 @@ export default class QuranLifePlugin extends Plugin {
               } catch { /* nothing to copy */ }
             };
             await copyDir(legacyRoot, root);
-            new Notice(`Migration complete: legacy ${legacyRoot} → ${root}. You can now sync only ${root} via Resilio.`);
+            new Notice(`Migration complete: legacy data moved to the plugin folder.`);
           }
         } catch { /* migration is best effort */ }
       }
@@ -279,8 +292,34 @@ export default class QuranLifePlugin extends Plugin {
     return !!this.app.vault.getAbstractFileByPath(normalized);
   }
 
+  /**
+   * Manual backup: snapshot all vault data. A copy is saved to a visible JSON
+   * file at the vault root (so mobile keeps one too); callers that run in a
+   * browser context should also trigger a download so the user gets a native
+   * save picker instead of a silent write somewhere.
+   */
+  async createBackup(): Promise<{ path: string; fileName: string; text: string }> {
+    const backup = await this.vaultStore.exportBackup();
+    const text = JSON.stringify(backup, null, 2);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const fileName = `quran-life-backup-${stamp}.json`;
+    const normalized = normalizePath(fileName);
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (existing instanceof TFile) {
+      await this.app.vault.modify(existing, text);
+    } else {
+      await this.app.vault.create(normalized, text);
+    }
+    return { path: normalized, fileName, text };
+  }
+
+  /** Manual restore: import a backup JSON object (own format or legacy). */
+  async restoreBackup(json: unknown): Promise<{ splits: number; mindmaps: number; docs: number }> {
+    return this.vaultStore.importBackup(json);
+  }
+
   private registerVaultWatchers(): void {
-    // React to external Resilio changes — vault 'modify' fires for both local and Resilio edits
+    // React to external sync changes — vault 'modify' fires for both local and synced edits
     this.registerEvent(this.app.vault.on("modify", (file) => {
       if (!(file instanceof TFile)) return;
       if (!file.path.startsWith(this.dataRootPath())) return;

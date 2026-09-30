@@ -116,7 +116,7 @@ export function useVaultMindmap(vaultStore: VaultStore, key: string) {
     await vaultStore.deleteMindmap(key);
   }, [vaultStore, key]);
 
-  // Subscribe to external Resilio changes: vault.on('modify') for this key
+  // Subscribe to external sync changes: vault.on('modify') for this key
   // For hidden plugin folder, vault.on won't fire, so also poll via adapter
   useEffect(() => {
     const { vault } = vaultStore.app;

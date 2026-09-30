@@ -1,7 +1,7 @@
 /**
  * VaultAdapter — Obsidian-native storage for Quran Life
- * Replaces localStorage + InstantDB with vault files synced via Resilio Sync.
- * Strategy: one file per entity (not one giant JSON) to avoid Resilio file-level conflicts.
+ * Replaces localStorage + InstantDB with vault files that sync with the vault.
+ * Strategy: one file per entity (not one giant JSON) to avoid file-level sync conflicts.
  *
  * Data folder: the plugin's own data folder (`<configDir>/plugins/quran-life/data`),
  * always — there is no user-facing data path setting, so every vault keeps one
@@ -17,7 +17,7 @@ import type { ListeningProgressEntry } from "@/lib/types";
 import { asArray, asNonEmptyString, asNumber, asRecord } from "@/lib/json";
 
 // Vault layout — every path lives under the data root, which is always the
-// plugin's data folder so only one folder ever needs Resilio Sync.
+// plugin's data folder so only one folder ever needs to sync.
 // This is hidden but accessible via adapter (vault API hides the config folder, the adapter can read it)
 // On mobile, hidden config paths use the adapter and may be sandboxed — guard gracefully, never throw
 
@@ -41,15 +41,15 @@ export const VAULT_PATHS = {
   // daily/progress/part-1.json, part-2.json...
   listeningProgressDir: (root: string) => normalizePath(`${root}/daily/progress`),
   // Splits: one per surah — 114 files @ ~200B each = ~23KB total, not 12MB
-  // Resilio: editing Surah 2 doesn't touch Surah 50's file → no conflict
+  // Editing Surah 2 doesn't touch Surah 50's file → no sync conflict
   splitsDir: (root: string) => normalizePath(`${root}/splits`),
   splitFile: (root: string, surahId: number) => normalizePath(`${root}/splits/surah-${String(surahId).padStart(3, "0")}.json`),
   // Mindmaps: one per surah/part — tldraw snapshots are 20-2000KB each, must be split
-  // Before: 70 mindmaps in one 15MB JSON > the browser storage quota + Resilio rewrites 15MB on every stroke
+  // Before: 70 mindmaps in one 15MB JSON > the browser storage quota + 15MB rewritten on every stroke
   // After: surah-002.json = ~180KB, only that file syncs on edit
   mindmapsDir: (root: string) => normalizePath(`${root}/mindmaps`),
   mindmapFile: (root: string, key: string) => normalizePath(`${root}/mindmaps/${key}.json`), // key = surah-2, part-1, meta-0
-  // Docs: one markdown per mindmap — user-editable in Obsidian, Resilio merges per-file
+  // Docs: one markdown per mindmap — user-editable in Obsidian, synced per-file
   docsDir: (root: string) => normalizePath(`${root}/docs`),
   docFile: (root: string, key: string) => normalizePath(`${root}/docs/${key}.md`),
   // Anki deleted keys (tombstones) — small set, single file at the data root
@@ -132,7 +132,7 @@ async function writeJsonAtomic(app: App, filePath: string, data: unknown): Promi
   }
   const file = app.vault.getAbstractFileByPath(normalized);
   if (file instanceof TFile) {
-    // Use process for atomicity: guarantees no overwrite of external (Resilio) change between read/write
+    // Use process for atomicity: guarantees no overwrite of an external sync change between read/write
     // See docs: Vault.process() guarantees file doesn't change between read and modify
     await app.vault.process(file, () => text);
   } else {
@@ -365,7 +365,7 @@ export class VaultStore {
       const file = this.app.vault.getAbstractFileByPath(path);
       if (file instanceof TFile) await this.app.fileManager.trashFile(file);
     }
-    // tombstone for Resilio: track deleted keys so a delete syncs cleanly
+    // Tombstone: track deleted keys so a delete syncs cleanly across devices
     const deleted = await this.loadDeletedKeys();
     deleted.add(key);
     await this.saveDeletedKeys(deleted);
@@ -458,6 +458,138 @@ export class VaultStore {
   async saveProgress(partId: number, data: unknown): Promise<void> {
     const path = normalizePath(`${VAULT_PATHS.listeningProgressDir(this.dataRoot)}/part-${partId}.json`);
     await writeJsonAtomic(this.app, path, data);
+  }
+
+  /** Every mindmap file on disk, keyed by basename (surah-2, part-1, meta-0, …). */
+  async loadAllMindmaps(): Promise<Record<string, MindmapRecord>> {
+    const out: Record<string, MindmapRecord> = {};
+    const dirPath = VAULT_PATHS.mindmapsDir(this.dataRoot);
+    let files: string[] = [];
+    try {
+      const listed = await this.app.vault.adapter.list(dirPath);
+      files = listed.files;
+    } catch { /* folder not created yet */ }
+    if (files.length === 0) {
+      const dir = this.app.vault.getAbstractFileByPath(dirPath);
+      if (dir instanceof TFolder) {
+        files = dir.children.filter((c): c is TFile => c instanceof TFile && c.extension === 'json').map(c => c.path);
+      }
+    }
+    for (const filePath of files) {
+      if (!filePath.endsWith('.json')) continue;
+      const base = (filePath.slice(filePath.lastIndexOf('/') + 1) || '').replace(/\.json$/, '');
+      if (!base) continue;
+      const data = await this.loadMindmap(base);
+      if (data) out[base] = data;
+    }
+    return out;
+  }
+
+  /**
+   * Full vault backup — everything needed to restore on another device.
+   * Saves are automatic (every change writes straight to the vault); this is
+   * the manual snapshot used by Settings → Backup now.
+   */
+  async exportBackup(): Promise<Record<string, unknown>> {
+    const [settings, mindmaps, splits, docs, ankiExportPrefs, deletedArr] = await Promise.all([
+      this.loadSettings<unknown>(null).catch(() => null),
+      this.loadAllMindmaps().catch(() => ({})),
+      this.loadAllSplits().catch(() => ({})),
+      this.loadAllDocs().catch(() => ({})),
+      this.loadAnkiExportPrefs().catch(() => null),
+      this.loadDeletedKeys().then(s => [...s]).catch(() => [] as string[]),
+    ]);
+    const progress: unknown[] = [];
+    for (let partId = 1; partId <= 8; partId++) {
+      try {
+        const entry = await this.loadProgress(partId);
+        if (entry) progress.push(entry);
+      } catch { /* missing part — skip */ }
+    }
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings,
+      progress,
+      splits,
+      mindmaps,
+      docs,
+      ankiExportPrefs,
+      deletedMindmaps: deletedArr,
+    };
+  }
+
+  /**
+   * Restore a backup created by {@link exportBackup} (or a legacy backup —
+   * falls back to {@link migrateFromLegacyJson} for splits/mindmaps/docs).
+   */
+  async importBackup(backup: unknown): Promise<LegacyMigrationResult> {
+    const root = asRecord(backup);
+    if (!root) throw new Error('Backup is empty or invalid JSON');
+    const isOwnBackup = root.version === 1 || root.exportedAt !== undefined
+      || (root.mindmaps !== undefined && root.docs !== undefined && root.splits !== undefined)
+      || root.settings !== undefined;
+    if (!isOwnBackup) {
+      return this.migrateFromLegacyJson(backup);
+    }
+    let splits = 0, mindmaps = 0, docs = 0;
+    // Settings (daily target, mode, speed, …)
+    if (root.settings !== undefined && root.settings !== null) {
+      try { await this.saveSettings(root.settings); } catch { /* keep current settings */ }
+    }
+    // Splits
+    const splitsRec = asRecord(root.splits);
+    if (splitsRec) {
+      for (const [k, v] of Object.entries(splitsRec)) {
+        const sid = Number(k);
+        if (Number.isFinite(sid) && Array.isArray(v) && v.length) {
+          try { await this.saveSplitsForSurah(sid, v as AnkiAnchor[]); splits++; } catch { /* skip */ }
+        }
+      }
+    }
+    // Mindmaps
+    const mindmapsRec = asRecord(root.mindmaps);
+    if (mindmapsRec) {
+      for (const [k, v] of Object.entries(mindmapsRec)) {
+        const rec = asRecord(v);
+        if (!rec) continue;
+        try { await this.saveMindmap(k, v as MindmapRecord); mindmaps++; } catch { /* skip */ }
+      }
+    }
+    // Docs
+    const docsRec = asRecord(root.docs);
+    if (docsRec) {
+      for (const [k, v] of Object.entries(docsRec)) {
+        if (typeof v === 'string' && v.trim()) {
+          try { await this.saveDoc(k, v); docs++; } catch { /* skip */ }
+        }
+      }
+    }
+    // Anki export prefs
+    if (root.ankiExportPrefs) {
+      try { await this.saveAnkiExportPrefs(root.ankiExportPrefs as import('@/lib/anki/ankiExportPrefs').AnkiExportPrefs); } catch { /* keep current */ }
+    }
+    // Deleted keys
+    if (Array.isArray(root.deletedMindmaps)) {
+      try { await this.saveDeletedKeys(new Set(root.deletedMindmaps.filter((k): k is string => typeof k === 'string'))); } catch { /* keep current */ }
+    }
+    // Progress
+    const prog = root.progress ?? (asRecord(root.daily) as Record<string, unknown> | null)?.progress;
+    if (Array.isArray(prog)) {
+      for (const rawEntry of prog) {
+        const entry = asRecord(rawEntry);
+        if (!entry) continue;
+        const pid = Number((entry as Record<string, unknown>).partId);
+        if (!Number.isFinite(pid)) continue;
+        try { await this.saveProgress(pid, entry); } catch { /* skip */ }
+      }
+    }
+    // Legacy extras inside our own backup (anchors nested in mindmaps, etc.)
+    // still go through the legacy importer without overwriting what we just wrote.
+    if (splits === 0 && mindmaps === 0) {
+      return this.migrateFromLegacyJson(backup);
+    }
+    return { splits, mindmaps, docs };
   }
 
   // Migration helper: import legacy giant JSON (backup) into split files
@@ -683,14 +815,14 @@ export class VaultStore {
   }
 }
 
-// Resilio Sync validation comment:
-// Splitting is correct because Resilio does file-level LWW, not merge. Giant JSON:
+// Sync validation comment:
+// Splitting is correct because sync does file-level last-writer-wins, not merge. Giant JSON:
 //  - 15MB mindmaps file rewritten on every tldraw stroke → 15MB delta sync, slow + quota issues
 //  - Concurrent edits on different surahs conflict (last writer wins, other surah lost)
 // Split files:
 //  - Only touched file syncs (<200KB), bandwidth efficient
 //  - Editing surah-2 and surah-50 concurrently on two devices → distinct files, no conflict
-//  - Deleted tombstones keep deletes stable across Resilio merges
-//  - Vault.process() prevents clobbering Resilio's background update
+//  - Deleted tombstones keep deletes stable across sync merges
+//  - Vault.process() prevents clobbering a background sync update
 
 export { asArray, asNonEmptyString, asNumber, asRecord } from "@/lib/json";
