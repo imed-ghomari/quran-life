@@ -337,12 +337,15 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       renderSurahList = () => {
         listContainer.empty();
         const surahs = getSurahsByPart(daily.activePart);
+        // Same card-row pattern as the mindmap importer checklist: checkbox +
+        // name + sub-info + right-hand status, whole row clickable.
         for (const surah of surahs) {
           const isSelected = !daily.skippedSurahs.includes(surah.id);
           const surahRow = listContainer.createDiv({ cls: "setting-item quran-life-surah-row" });
           surahRow.toggleClass("is-selected", isSelected);
           const cb = surahRow.createEl("input", { type: "checkbox" });
           cb.checked = isSelected;
+          cb.setAttribute("aria-label", `Include Surah ${surah.id} in the daily portion`);
           cb.addEventListener("change", () => {
             void (async () => {
               const set = new Set(daily.skippedSurahs);
@@ -351,13 +354,18 @@ export class QuranLifeSettingTab extends PluginSettingTab {
               await saveDaily({ skippedSurahs: Array.from(set) });
             })();
           });
-          const label = surahRow.createDiv({ cls: "quran-life-surah-main" });
-          label.addEventListener("click", () => cb.click());
-          label.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName}` });
-          label.createSpan({ cls: "quran-life-surah-sub", text: ` (${surah.name})` });
-          if (isSelected) {
-            surahRow.createSpan({ cls: "quran-life-surah-check", text: "✓" });
-          }
+          surahRow.addEventListener("click", (ev) => {
+            // The checkbox toggles itself; a click anywhere else on the row
+            // (same as the importer checklist) toggles it for the user.
+            if (ev.target === cb) return;
+            cb.click();
+          });
+          const main = surahRow.createDiv({ cls: "quran-life-surah-main" });
+          main.createSpan({ cls: "quran-life-surah-name", text: `${surah.id}. ${surah.arabicName} (${surah.name})` });
+          main.createSpan({ cls: "quran-life-surah-sub", text: `${surah.verseCount} verses` });
+          const status = surahRow.createSpan({ cls: "quran-life-surah-check" });
+          status.setText(isSelected ? "✓" : "○");
+          status.toggleClass("quran-life-check-off", !isSelected);
         }
       };
       refreshers.surahList = renderSurahList;

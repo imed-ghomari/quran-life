@@ -8,6 +8,10 @@ import type { MindmapSnapshot } from '@/lib/mindmapSnapshot';
 import type { Verse } from '@/lib/types';
 import { useVaultSplits, useVaultMindmap, useVaultDoc, useVaultMindmaps, useVaultAnkiExportPrefs } from '@/plugin/hooks/useVaultAnkiStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
+import { STARTER_PACK } from '@/plugin/starterPack.generated';
+import type { StarterPackEntry } from '@/plugin/starterPack.generated';
+import { parseStarterZip } from '@/plugin/starterPackZip';
+import type { MindmapRecord } from '@/lib/anki/types';
 import type { App } from 'obsidian';
 import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
 import { Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -52,10 +56,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Progress popup inspired by obsidian-importer/src/progress-ui.ts (cloned at ./obsidian-importer) — shows status, bar (via --importer-progress), stats and log
   const [exportProgress, setExportProgress] = useState<null | { status: string; current: number; total: number; logs: string[]; verseCards?: number; mindmapCards?: number; mindmapDone?: number; mindmapTotal?: number }>(null);
-  const { mindmap: currentMindmap, save: saveMindmap, remove: deleteMindmap } = useVaultMindmap(vaultStore, selectedMindmapKey);
-  const { mindmaps: allMindmaps } = useVaultMindmaps(vaultStore);
-  const { anchors: vaultAnchors, saveAnchors, isLoading: isSplitsLoading } = useVaultSplits(vaultStore, selectedSurah);
-  const { content: docContent, save: saveDoc } = useVaultDoc(vaultStore, selectedMindmapKey);
+  const { mindmap: currentMindmap, save: saveMindmap, remove: deleteMindmap, reload: mindmapReload } = useVaultMindmap(vaultStore, selectedMindmapKey);
+  const { mindmaps: allMindmaps, reload: allMindmapsReload } = useVaultMindmaps(vaultStore);
+  const { anchors: vaultAnchors, saveAnchors, isLoading: isSplitsLoading, reload: splitsReload } = useVaultSplits(vaultStore, selectedSurah);
+  const { content: docContent, save: saveDoc, reload: docReload } = useVaultDoc(vaultStore, selectedMindmapKey);
   const { prefs: ankiExportPrefs } = useVaultAnkiExportPrefs(vaultStore);
   const [localAnchors, setLocalAnchors] = useState<AnkiAnchor[]>([]);
   const [editingDocText, setEditingDocText] = useState('');
@@ -210,6 +214,187 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }, [localAnchors]);
 
   const showToast = useCallback((msg: string) => { setToast(msg); window.setTimeout(()=>setToast(null),3000); }, []);
+
+  // ---------- Starter-pack import (pre-made mindmaps + splits + docs) ----------
+  // Bundled at build time from starter-pack/ (empty → the import button hides).
+  const [showImport, setShowImport] = useState(false);
+  const [importChecked, setImportChecked] = useState<Record<string, boolean>>({});
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importProgress, setImportProgress] = useState<null | { status: string; current: number; total: number; logs: string[] }>(null);
+  const [importDone, setImportDone] = useState<null | { mindmaps: number; splits: number; docs: number }>(null);
+  // Entries from a picked .zip take over the checklist; otherwise the bundled pack.
+  const [zipEntries, setZipEntries] = useState<StarterPackEntry[] | null>(null);
+  const [zipName, setZipName] = useState<string | null>(null);
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [zipLoading, setZipLoading] = useState(false);
+  const activeEntries: StarterPackEntry[] = zipEntries ?? STARTER_PACK;
+
+  const starterLabel = useCallback((e: StarterPackEntry): string => {
+    if (e.kind === 'surah' && e.surahId) {
+      const s = getSurah(e.surahId);
+      return s ? `${s.id}. ${s.arabicName} (${s.name})` : `Surah ${e.surahId}`;
+    }
+    if (e.kind === 'part') return `Part ${e.key.split('-')[1]} mindmap`;
+    if (e.kind === 'meta') return 'Meta overview';
+    return e.key;
+  }, []);
+
+  const starterContents = useCallback((e: StarterPackEntry): string => {
+    const parts: string[] = [];
+    if (e.mindmap) parts.push('mindmap');
+    if (e.splits.length) parts.push(`${e.splits.length} splits`);
+    if (e.doc) parts.push('notes');
+    return parts.join(' + ') || 'empty';
+  }, []);
+
+  // True when this vault already has usable content for the key.
+  const starterExisting = useCallback((key: string): boolean => {
+    const norm = normalizeStoreKey(key);
+    if (allMindmaps[key]?.snapshot || allMindmaps[norm]?.snapshot) return true;
+    const m = key.match(/^surah-(\d+)$/);
+    if (m && (allSplitsForStats[Number(m[1])]?.length ?? 0) > 0) return true;
+    const doc = allDocsForStats[norm];
+    if (typeof doc === 'string' && doc.trim() && !doc.includes('_Not added yet._')) return true;
+    return false;
+  }, [allMindmaps, allSplitsForStats, allDocsForStats]);
+
+  const openStarterImport = useCallback(() => {
+    const source = zipEntries ?? STARTER_PACK;
+    const checked: Record<string, boolean> = {};
+    for (const e of source) checked[e.key] = !starterExisting(e.key);
+    setImportChecked(checked);
+    setImportOverwrite(false);
+    setImportProgress(null);
+    setImportDone(null);
+    setZipError(null);
+    setShowImport(true);
+  }, [starterExisting, zipEntries]);
+
+  const pickZipFile = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.zip,application/zip';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setZipLoading(true);
+      setZipError(null);
+      void (async () => {
+        try {
+          const buf = await file.arrayBuffer();
+          const { entries, skipped } = await parseStarterZip(buf);
+          if (!entries.length) {
+            setZipError(`No importable items in ${file.name}${skipped ? ` (${skipped} skipped)` : ''}`);
+            return;
+          }
+          setZipEntries(entries);
+          setZipName(file.name);
+          const checked: Record<string, boolean> = {};
+          for (const e of entries) checked[e.key] = !starterExisting(e.key);
+          setImportChecked(checked);
+          setImportOverwrite(false);
+          setImportProgress(null);
+          setImportDone(null);
+          if (skipped) showToast(`${entries.length} items loaded, ${skipped} skipped`);
+        } catch (err) {
+          setZipError(`Could not read ${file.name}: ${err instanceof Error ? err.message : 'invalid file'}`);
+        } finally {
+          setZipLoading(false);
+        }
+      })();
+    };
+    input.click();
+  }, [starterExisting, showToast]);
+
+  const clearZipFile = useCallback(() => {
+    setZipEntries(null);
+    setZipName(null);
+    setZipError(null);
+    const checked: Record<string, boolean> = {};
+    for (const e of STARTER_PACK) checked[e.key] = !starterExisting(e.key);
+    setImportChecked(checked);
+    setImportProgress(null);
+    setImportDone(null);
+  }, [starterExisting]);
+
+  const importTargets = useMemo(() => (
+    activeEntries.filter(e => importChecked[e.key] && (importOverwrite || !starterExisting(e.key)))
+  ), [activeEntries, importChecked, importOverwrite, starterExisting]);
+
+  const runStarterImport = useCallback(async () => {
+    const targets = activeEntries.filter(e => importChecked[e.key] && (importOverwrite || !starterExisting(e.key)));
+    if (!targets.length) return;
+    const pushLog = (line: string) => {
+      setImportProgress(prev => (prev ? { ...prev, logs: [...prev.logs.slice(-49), line] } : prev));
+    };
+    setImportProgress({ status: 'Importing…', current: 0, total: targets.length, logs: [] });
+    setImportDone(null);
+    let mindmaps = 0, splits = 0, docs = 0;
+    let deleted: Set<string> | null = null;
+    try { deleted = await vaultStore.loadDeletedKeys(); } catch { /* no tombstones */ }
+    for (let i = 0; i < targets.length; i++) {
+      const e = targets[i];
+      const label = starterLabel(e);
+      try {
+        const now = new Date().toISOString();
+        if (e.mindmap) {
+          const rec = e.mindmap as Record<string, unknown>;
+          const snap = (rec.snapshot ?? rec) as Record<string, unknown>;
+          if (!snap || typeof snap !== 'object' || !(snap as { store?: unknown }).store) {
+            throw new Error('bad snapshot');
+          }
+          const record: MindmapRecord = {
+            key: e.key,
+            kind: e.kind,
+            snapshot: snap as MindmapRecord['snapshot'],
+            isComplete: true,
+            updatedAt: now,
+            ...(e.surahId ? { surahId: e.surahId } : {}),
+            ...(e.kind === 'part' ? { partId: Number(e.key.split('-')[1]) } : {}),
+          };
+          await vaultStore.saveMindmap(e.key, record);
+          mindmaps++;
+          if (deleted?.has(e.key)) deleted.delete(e.key);
+        }
+        if (e.kind === 'surah' && e.surahId && e.splits.length) {
+          const anchors: AnkiAnchor[] = [];
+          for (const a of e.splits) {
+            const sv = Number((a as { startVerse?: unknown }).startVerse);
+            const ev = Number((a as { endVerse?: unknown }).endVerse);
+            if (!Number.isFinite(sv) || !Number.isFinite(ev) || sv < 1 || ev < sv) continue;
+            const id = typeof (a as { id?: unknown }).id === 'string' && ((a as { id: string }).id.trim())
+              ? (a as { id: string }).id : `anchor-${e.surahId}-${sv}-${ev}`;
+            const labelText = typeof (a as { label?: unknown }).label === 'string' && ((a as { label: string }).label.trim())
+              ? (a as { label: string }).label : `Verses ${sv}-${ev}`;
+            anchors.push({ id, surahId: e.surahId, startVerse: sv, endVerse: ev, label: labelText });
+          }
+          if (anchors.length) {
+            await vaultStore.saveSplitsForSurah(e.surahId, anchors);
+            splits++;
+          }
+        }
+        if (e.doc) {
+          await vaultStore.saveDoc(e.key, e.doc);
+          docs++;
+        }
+        pushLog(`✓ ${label}`);
+      } catch (err) {
+        pushLog(`✗ ${label}: ${err instanceof Error ? err.message : 'failed'}`);
+      }
+      setImportProgress(prev => (prev ? { ...prev, current: i + 1, status: i + 1 >= targets.length ? 'Finishing…' : 'Importing…' } : prev));
+      await new Promise(r => window.setTimeout(r, 0));
+    }
+    if (deleted) {
+      try { await vaultStore.saveDeletedKeys(deleted); } catch { /* best-effort */ }
+    }
+    setImportDone({ mindmaps, splits, docs });
+    setImportProgress(prev => (prev ? { ...prev, current: prev.total, status: 'Done' } : prev));
+    // Refresh every live view of the data (editor, stats, selected surah).
+    try { await allMindmapsReload(); } catch { /* best-effort */ }
+    try { await splitsReload(); } catch { /* best-effort */ }
+    try { await docReload(); } catch { /* best-effort */ }
+    try { await mindmapReload(); } catch { /* best-effort */ }
+  }, [activeEntries, importChecked, importOverwrite, starterExisting, starterLabel, vaultStore, allMindmapsReload, splitsReload, docReload, mindmapReload]);
 
   const openPluginSettings = useCallback(() => {
     try {
@@ -567,6 +752,9 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
             <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
               <PenTool size={12}/> MINDMAPS
             </span>
+            <button onClick={openStarterImport} style={{ marginLeft:'auto', padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500, display:'inline-flex', gap:6, alignItems:'center' }}>
+              <Download size={13}/> Import pre-made
+            </button>
           </div>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
             <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
@@ -807,6 +995,94 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                 <button onClick={()=>{ setExportProgress(null); setIsExporting(false); }} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor:'pointer', fontWeight:600 }}>Done</button>
               ) : (
                 <button disabled style={{ padding:'7px 14px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-muted)', fontSize:'0.85em' }}>Exporting… {exportProgress.current}%</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Starter-pack import — select phase, then importer-style progress */}
+      {showImport && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+          <div style={{ background:'var(--background-primary)', border:'1px solid var(--background-modifier-border)', borderRadius:12, width:'100%', maxWidth:520, maxHeight:'85vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.22)' }}>
+            <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--background-modifier-border)', display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)' }}><Download size={14} /></span>
+                <span style={{ fontWeight:700, fontSize:'1em' }}>Import pre-made mindmaps</span>
+                {importProgress
+                  ? <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-muted)', fontVariantNumeric:'tabular-nums' }}>{importProgress.current}/{importProgress.total}</span>
+                  : <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-muted)' }}>{importTargets.length} selected</span>}
+              </div>
+              {!importProgress && !importDone && (
+                <div className="setting-item-description" style={{ fontSize:'0.85em', color:'var(--text-muted)', fontWeight:500 }}>
+                  {zipEntries
+                    ? `${zipEntries.length} items from ${zipName ?? 'file'}. Pick what to bring into this vault — existing items are skipped unless replace is on.`
+                    : STARTER_PACK.length > 0
+                      ? 'Pick what to bring into this vault — existing items are skipped unless replace is on.'
+                      : 'No pre-made pack ships with this install. Load a starter-pack.zip file to pick what to bring into this vault.'}
+                </div>
+              )}
+              {!importProgress && !importDone && (
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                  <button onClick={pickZipFile} disabled={zipLoading} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor: zipLoading ? 'wait' : 'pointer', display:'inline-flex', gap:6, alignItems:'center' }}>
+                    <Download size={13}/> {zipLoading ? 'Reading…' : zipEntries ? 'Choose a different .zip' : 'Choose .zip file'}
+                  </button>
+                  {zipEntries && STARTER_PACK.length > 0 && (
+                    <button onClick={clearZipFile} style={{ padding:'5px 10px', borderRadius:8, border:'none', background:'transparent', color:'var(--text-muted)', fontSize:'0.8em', cursor:'pointer' }}>Back to included pack</button>
+                  )}
+                  {zipError && <span style={{ fontSize:'0.78em', color:'var(--text-error)' }}>{zipError}</span>}
+                </div>
+              )}
+              {(importProgress || importDone) && (
+                <div style={{ width:'100%', height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' }}>
+                  <div style={{ width: importProgress ? `${importProgress.total > 0 ? Math.round((importProgress.current / importProgress.total) * 100) : 0}%` : '100%', height:'100%', background:'var(--interactive-accent)', transition:'width 0.25s ease', borderRadius:999 }} />
+                </div>
+              )}
+            </div>
+            {!importProgress && !importDone && (
+              <>
+                <div style={{ display:'flex', gap:8, alignItems:'center', padding:'10px 16px 0', flexWrap:'wrap' }}>
+                  <button onClick={() => { const all: Record<string, boolean> = {}; for (const e of activeEntries) all[e.key] = true; setImportChecked(all); }} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>All</button>
+                  <button onClick={() => setImportChecked({})} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>None</button>
+                  <label style={{ display:'inline-flex', gap:6, alignItems:'center', fontSize:'0.8em', color:'var(--text-muted)', cursor:'pointer', marginLeft:'auto' }}>
+                    <input type="checkbox" checked={importOverwrite} onChange={e => setImportOverwrite(e.target.checked)} /> Replace existing
+                  </label>
+                </div>
+                <div style={{ flex:1, overflowY:'auto', padding:'10px 16px', display:'flex', flexDirection:'column', gap:6, minHeight:80 }}>
+                  {activeEntries.map(e => {
+                    const existing = starterExisting(e.key);
+                    const disabled = existing && !importOverwrite;
+                    return (
+                      <label key={e.key} style={{ display:'flex', gap:10, alignItems:'center', padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background: importChecked[e.key] && !disabled ? 'var(--background-secondary)' : 'var(--background-primary)', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+                        <input type="checkbox" checked={!!importChecked[e.key] && !disabled} disabled={disabled} onChange={() => setImportChecked(prev => ({ ...prev, [e.key]: !prev[e.key] }))} />
+                        <span style={{ flex:1, minWidth:0 }}>
+                          <span style={{ display:'block', fontSize:'0.88em', fontWeight:600, color:'var(--text-normal)' }}>{starterLabel(e)}</span>
+                          <span style={{ display:'block', fontSize:'0.74em', color:'var(--text-faint)' }}>{starterContents(e)}</span>
+                        </span>
+                        <span style={{ fontSize:'0.72em', fontWeight:700, color: existing ? 'var(--text-faint)' : 'var(--interactive-accent)' }}>{existing ? 'Have it' : 'New'}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {(importProgress || importDone) && (
+              <div style={{ flex:1, overflow:'auto', padding:'10px 16px', fontFamily:'var(--font-monospace)', fontSize:'0.75em', color:'var(--text-muted)', background:'var(--background-secondary)', minHeight:80, maxHeight:160 }}>
+                {(importProgress?.logs ?? []).map((l, i) => (
+                  <div key={i} style={{ padding:'2px 0', borderBottom: '1px solid var(--background-modifier-border)' }}>• {l}</div>
+                ))}
+                {importDone && <div style={{ marginTop:8, color:'var(--interactive-accent)', fontWeight:600 }}>✓ Done — {importDone.mindmaps} mindmaps, {importDone.splits} split sets, {importDone.docs} notes</div>}
+              </div>
+            )}
+            <div style={{ padding:'12px 16px', borderTop:'1px solid var(--background-modifier-border)', display:'flex', justifyContent:'flex-end', gap:8, background:'var(--background-primary)' }}>
+              {!importProgress && !importDone && (
+                <>
+                  <button onClick={() => setShowImport(false)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', cursor:'pointer' }}>Cancel</button>
+                  <button onClick={() => void runStarterImport()} disabled={importTargets.length === 0} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor: importTargets.length === 0 ? 'not-allowed' : 'pointer', fontWeight:600, opacity: importTargets.length === 0 ? 0.6 : 1 }}>Import ({importTargets.length})</button>
+                </>
+              )}
+              {(importProgress || importDone) && (
+                <button onClick={() => { if (importDone) setShowImport(false); }} disabled={!importDone} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor: importDone ? 'pointer' : 'not-allowed', fontWeight:600, opacity: importDone ? 1 : 0.6 }}>{importDone ? 'Done' : 'Importing…'}</button>
               )}
             </div>
           </div>

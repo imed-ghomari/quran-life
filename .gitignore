@@ -20,6 +20,7 @@ dist/
 .hot-reload
 /qpc-hafs-word-by-word.json
 /premade-anki-data.json
+/starter-pack.zip
 tsconfig.tsbuildinfo
 .obsidian/
 obsidian-importer/

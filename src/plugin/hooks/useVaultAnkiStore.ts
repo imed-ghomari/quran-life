@@ -8,7 +8,7 @@ import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { VAULT_PATHS } from '@/plugin/storage/vaultAdapter';
 import type { AnkiExportPrefs, SortDir } from '@/lib/anki/ankiExportPrefs';
 
-const { useCallback, useEffect, useState } = React;
+const { useCallback, useEffect, useRef, useState } = React;
 
 export type VaultMindmap = MindmapRecord;
 
@@ -26,36 +26,38 @@ export function useVaultSplits(vaultStore: VaultStore, surahId: number) {
   const [anchors, setAnchors] = useState<AnkiAnchor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Generation guard: a slow load for a previous surah must not overwrite the
+  // current one (same guarantee the old per-effect `cancelled` flag gave).
+  const loadGen = useRef(0);
+  const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     // Reset immediately so consumers never see the previous surah's anchors
     // while the new surah is loading (prevents stale sync + wrong-surah flash).
     setAnchors([]);
     setIsLoading(true);
-    void (async () => {
-      const raw = await vaultStore.loadSplitsForSurah(surahId);
-      if (cancelled) return;
-      const surah = getSurah(surahId);
-      const normalized = raw.map((a): AnkiAnchor | null => {
-        const sv = Number(a?.startVerse); const ev = Number(a?.endVerse);
-        if (!Number.isFinite(sv) || !Number.isFinite(ev)) return null;
-        if (sv <= 0 || ev < sv) return null;
-        if (surah && (ev > surah.verseCount || sv > surah.verseCount)) return null;
-        return {
-          id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${surahId}-${sv}-${ev}`,
-          surahId,
-          startVerse: sv,
-          endVerse: ev,
-          label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}`,
-        };
-      }).filter((a): a is AnkiAnchor => a !== null);
-      const sanitized = sanitizeAnchors(surahId, normalized);
-      const finalAnchors = sanitized.length ? sanitized : normalized;
-      setAnchors(finalAnchors);
-      setIsLoading(false);
-    })();
-    return () => { cancelled = true; };
+    const raw = await vaultStore.loadSplitsForSurah(surahId);
+    if (gen !== loadGen.current) return;
+    const surah = getSurah(surahId);
+    const normalized = raw.map((a): AnkiAnchor | null => {
+      const sv = Number(a?.startVerse); const ev = Number(a?.endVerse);
+      if (!Number.isFinite(sv) || !Number.isFinite(ev)) return null;
+      if (sv <= 0 || ev < sv) return null;
+      if (surah && (ev > surah.verseCount || sv > surah.verseCount)) return null;
+      return {
+        id: typeof a?.id === 'string' && a.id.trim() ? a.id : `anchor-${surahId}-${sv}-${ev}`,
+        surahId,
+        startVerse: sv,
+        endVerse: ev,
+        label: typeof a?.label === 'string' && a.label.trim() ? a.label : `Verses ${sv}-${ev}`,
+      };
+    }).filter((a): a is AnkiAnchor => a !== null);
+    const sanitized = sanitizeAnchors(surahId, normalized);
+    const finalAnchors = sanitized.length ? sanitized : normalized;
+    setAnchors(finalAnchors);
+    setIsLoading(false);
   }, [vaultStore, surahId]);
+
+  useEffect(() => { void load(); }, [load]);
 
   const saveAnchors = useCallback(async (next: AnkiAnchor[]) => {
     setAnchors(next);
@@ -78,7 +80,7 @@ export function useVaultSplits(vaultStore: VaultStore, surahId: number) {
     await saveAnchors(next.length ? next : []);
   }, [anchors, surahId, saveAnchors]);
 
-  return { anchors, saveAnchors, addBreak, removeBreak, isLoading };
+  return { anchors, saveAnchors, addBreak, removeBreak, isLoading, reload: load };
 }
 
 // Vault-backed mindmaps (replaces src/lib/anki/mindmapStore.ts)

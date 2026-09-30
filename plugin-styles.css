@@ -41,19 +41,19 @@ html.ql-no-overscroll-x {
 .quran-life-settings .quran-life-surah-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  padding: 8px 10px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--background-primary);
-  opacity: 0.65;
+  cursor: pointer;
 }
 .quran-life-settings .quran-life-surah-row.is-selected {
   background: var(--background-secondary);
-  opacity: 1;
 }
 .quran-life-settings .quran-life-surah-row input[type="checkbox"] {
   accent-color: var(--interactive-accent);
+  flex-shrink: 0;
 }
 .quran-life-settings .quran-life-surah-main {
   flex: 1;
@@ -61,17 +61,26 @@ html.ql-no-overscroll-x {
   cursor: pointer;
 }
 .quran-life-settings .quran-life-surah-name {
+  display: block;
   font-weight: 600;
-  font-size: 0.85em;
+  font-size: 0.88em;
+  color: var(--text-normal);
+  overflow-wrap: anywhere;
 }
 .quran-life-settings .quran-life-surah-sub {
-  font-size: 0.75em;
-  color: var(--text-muted);
-  margin-left: 4px;
+  display: block;
+  font-size: 0.74em;
+  color: var(--text-faint);
 }
 .quran-life-settings .quran-life-surah-check {
   color: var(--interactive-accent);
   font-weight: 700;
+  font-size: 0.85em;
+  flex-shrink: 0;
+}
+.quran-life-settings .quran-life-surah-check.quran-life-check-off {
+  color: var(--text-faint);
+  font-weight: 400;
 }
 
 /* Anki export section */
