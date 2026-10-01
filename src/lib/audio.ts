@@ -293,6 +293,11 @@ async function fetchViaObsidianRequestUrl(url: string, appOverride?: App | null)
 }
 
 const RECITATION_SITE_BASES = ['https://quran-life.org'];
+// Committed timing metadata lives under public/ (see .gitignore). Same
+// one-time-download pattern as the Quran corpus: fetched CORS-free via
+// requestUrl on first use, then the segments slice is cached in the vault
+// (recitation-cache) for offline word-by-word highlighting.
+const GITHUB_RAW_PUBLIC_BASE = 'https://raw.githubusercontent.com/imed-ghomari/quran-life/main/public';
 
 /**
  * Resolve a bundled/public JSON (recitations, segments…) from whichever source
@@ -362,6 +367,12 @@ export async function fetchJsonWithObsidianFallback(urlPath: string, appOverride
     // 3) remote — requestUrl bypasses CORS, which a same-origin fetch cannot do
     // from the Obsidian WebView (mobile included).
     if (app) {
+        // Committed files first: this is the copy that actually exists
+        // (player reciters' ayah maps + per-reciter surah.json).
+        if (!usesPublicOrigin) {
+            const viaRaw = await fetchViaObsidianRequestUrl(`${GITHUB_RAW_PUBLIC_BASE}${urlPath}`, app);
+            if (viaRaw) return viaRaw;
+        }
         const remoteTargets = usesPublicOrigin
             ? [urlPath]
             : RECITATION_SITE_BASES.map((base) => `${base.replace(/\/$/, '')}${urlPath}`);

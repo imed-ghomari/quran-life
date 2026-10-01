@@ -4,6 +4,7 @@ import React from 'react';
 import { PlaybackSpeed, Verse } from '@/lib/types';
 import { Reciter, getAudioPlayerReciters, loadRecitationData, getAudioInfoForVerse, resolveAudioUrl, resolveAudioUrlProxied, buildAyahAudioUrl } from '@/lib/audio';
 import { splitVerseHighlightWords } from '@/lib/quranData';
+import { DEFAULT_AUDIO_WORDS_PER_MINUTE } from '@/lib/dailyPortionUtils';
 import { getOfflineAudioUrlIfAvailable, peekOfflineAudioUrlIfCached } from '@/plugin/offlineAudio';
 import { readStored, writeStored, readStoredJson, writeStoredJson, removeStored } from '@/lib/pluginStorage';
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, Undo2 } from 'lucide-react';
@@ -63,12 +64,20 @@ interface AudioPlayerLocalProps {
      */
     onUndoComplete?: () => void;
     isUndoingComplete?: boolean;
+    /**
+     * Per-surah average seconds/word the Daily Portion sizer uses (built from
+     * reciter surah durations). The player's estimated verse durations fall
+     * back to this SAME pace when real timings are unavailable, so the
+     * elapsed/total/remaining readout matches the daily target instead of a
+     * second, divergent guess.
+     */
+    averageSecondsPerWordBySurah?: Record<number, number> | null;
 }
 
 const SPEED_OPTIONS: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
-// Fallback recitation pace (highlight words per second) used only to estimate
-// durations when word timings are unavailable (offline, metadata not fetched).
-const DEFAULT_WORDS_PER_SECOND = 2.6;
+// Kept for documentation: pre-1.0.19 estimated missing verse durations from a
+// fixed reciter pace. Estimates now reuse the Daily Portion sizer's own pace
+// (averageSecondsPerWordBySurah, else 55 wpm) so both agree with the target.
 const SPEED_STORAGE_KEY = 'audio_playback_speed';
 const PLAYBACK_SPEED_EVENT = 'quran-life:playback-speed-changed';
 const RECITER_STORAGE_KEY = 'selected_reciter_id';
@@ -128,6 +137,7 @@ export default function AudioPlayerLocal({
     obsidianApp,
     onUndoComplete,
     isUndoingComplete,
+    averageSecondsPerWordBySurah,
 }: AudioPlayerLocalProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -1242,21 +1252,35 @@ export default function AudioPlayerLocal({
                 return null;
             });
         }
-        // Offline playback often has no timings at all. Estimate the missing
-        // verses from the reciter's own measured pace (words/second) so elapsed /
-        // total / remaining time can still be shown instead of being hidden.
+        // Missing verses fall back to the SAME pace the Daily Portion sizer
+        // uses (per-surah average seconds/word, else 55 wpm), so the player's
+        // elapsed/total/remaining matches the daily target. When some verses
+        // carry real measured durations, the selected reciter's own pace fills
+        // the remaining gaps first.
         const measuredSecs = measured.reduce<number>((sum, d) => sum + (d ?? 0), 0);
         const measuredWords = measured.reduce<number>((sum, d, i) => sum + (d !== null ? (verseWordCounts[i] || 0) : 0), 0);
-        const wordsPerSecond = measuredSecs > 0 && measuredWords > 0
+        const reciterWordsPerSecond = measuredSecs > 0 && measuredWords > 0
             ? measuredWords / measuredSecs
-            : DEFAULT_WORDS_PER_SECOND;
-        const safeWps = wordsPerSecond > 0.5 && wordsPerSecond < 12 ? wordsPerSecond : DEFAULT_WORDS_PER_SECOND;
+            : null;
+        const safeReciterWps = reciterWordsPerSecond !== null && reciterWordsPerSecond > 0.5 && reciterWordsPerSecond < 12
+            ? reciterWordsPerSecond
+            : null;
+        const sizerFallbackSec = (verseIdx: number): number => {
+            const words = verseWordCounts[verseIdx] || 0;
+            const surahId = verses[verseIdx]?.surahId ?? -1;
+            const spw = Number(averageSecondsPerWordBySurah?.[surahId]);
+            const perWord = Number.isFinite(spw) && spw > 0 ? spw : 60 / DEFAULT_AUDIO_WORDS_PER_MINUTE;
+            return Math.max(1.2, words * perWord);
+        };
         return measured.map((d, i) => {
             if (d !== null && d > 0.2) return d;
-            const words = verseWordCounts[i] || 0;
-            return Math.max(1.2, words / safeWps);
+            if (safeReciterWps !== null) {
+                const words = verseWordCounts[i] || 0;
+                return Math.max(1.2, words / safeReciterWps);
+            }
+            return sizerFallbackSec(i);
         });
-    }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts, measuredAudioDurations]);
+    }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts, measuredAudioDurations, averageSecondsPerWordBySurah]);
 
     const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); if (!(sum > 0)) return null; const s = speed || 1; return sum / s; }, [verseDurationsSec, speed]);
     const elapsedTotalSec = useMemo(() => {

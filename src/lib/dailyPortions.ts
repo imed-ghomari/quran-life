@@ -19,6 +19,13 @@ interface DailyPortionOptions {
     nextStartVerseKey?: string;
     legacyStartIndex?: number;
     averageSecondsPerWordBySurah?: Record<number, number> | null;
+    /**
+     * Recitation speed for audio mode. The target is wall-clock minutes, so
+     * the portion is sized in 1x-minutes = target × speed — that way the
+     * player's total (1x durations ÷ speed) lands on the target instead of
+     * under it. Reading mode ignores speed. Defaults to 1 (unchanged).
+     */
+    playbackSpeed?: number;
 }
 
 const rubMetadata = rubMetadataRaw as RubData;
@@ -78,6 +85,13 @@ export function getDailyPortion(
     options: DailyPortionOptions,
 ): PortionResult {
     const targetMinutes = clampDailyTargetMinutes(options.dailyTargetMinutes);
+    const playbackSpeed = options.mode === 'audio'
+        && Number.isFinite(Number(options.playbackSpeed))
+        && Number(options.playbackSpeed) > 0
+        ? Number(options.playbackSpeed)
+        : 1;
+    // Wall-clock target: size the audio portion in 1x-minutes.
+    const sizedTargetMinutes = targetMinutes * playbackSpeed;
 
     if (allVersesInPart.length === 0) {
         return {
@@ -115,7 +129,7 @@ export function getDailyPortion(
     }
 
     const derivedCompletionDays = totalEstimatedMinutes > 0
-        ? Math.max(1, Math.ceil(totalEstimatedMinutes / targetMinutes))
+        ? Math.max(1, Math.ceil(totalEstimatedMinutes / sizedTargetMinutes))
         : 0;
 
     let remainingWords = 0;
@@ -127,8 +141,8 @@ export function getDailyPortion(
 
     let accumulatedWords = 0;
     let accumulatedMinutes = 0;
-    const snapMin = targetMinutes * 0.85;
-    const snapMax = targetMinutes * 1.15;
+    const snapMin = sizedTargetMinutes * 0.85;
+    const snapMax = sizedTargetMinutes * 1.15;
 
     const candidates: Array<{
         index: number;
@@ -148,7 +162,7 @@ export function getDailyPortion(
         accumulatedWords += wordCounts[i] || 0;
         accumulatedMinutes += minuteEstimates[i] || 0;
 
-        const diff = Math.abs(accumulatedMinutes - targetMinutes);
+        const diff = Math.abs(accumulatedMinutes - sizedTargetMinutes);
         if (diff < fallbackDiff) {
             fallbackDiff = diff;
             fallbackAyahIndex = i;
@@ -183,7 +197,7 @@ export function getDailyPortion(
     if (!bestCandidate) bestCandidate = candidates.find((candidate) => candidate.isRukuEnd);
     if (!bestCandidate && candidates.length > 0) {
         bestCandidate = candidates.reduce((best, current) => (
-            Math.abs(current.minutes - targetMinutes) < Math.abs(best.minutes - targetMinutes) ? current : best
+            Math.abs(current.minutes - sizedTargetMinutes) < Math.abs(best.minutes - sizedTargetMinutes) ? current : best
         ));
     }
 

@@ -152,6 +152,9 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       nextStartVerseKey: activeProgress?.nextStartVerseKey,
       legacyStartIndex: startIdx,
       averageSecondsPerWordBySurah,
+      // Wall-clock target: the sizer scales audio portions by speed so the
+      // player's total (1x durations ÷ speed) matches the daily target.
+      playbackSpeed: settings.dailyPortionMode === 'reading' ? 1 : (settings.dailyPlaybackSpeed || 1),
     });
     return {
       portion: portionResult.portion,
@@ -165,7 +168,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       snappedMinutes: portionResult.snappedMinutes,
       lastUpdateAt: activeProgress?.updatedAt,
     };
-  }, [allVerses, averageSecondsPerWordBySurah, settings.dailyTargetMinutes, settings.dailyPortionMode, eligibleSurahs, activeProgress]);
+  }, [allVerses, averageSecondsPerWordBySurah, settings.dailyTargetMinutes, settings.dailyPortionMode, settings.dailyPlaybackSpeed, eligibleSurahs, activeProgress]);
 
   // Initialize listeningComplete based on progress date.
   // Progress written by this build records `completedOnDay` explicitly, so
@@ -539,6 +542,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
                       obsidianApp={vaultStore?.app}
+                      averageSecondsPerWordBySurah={averageSecondsPerWordBySurah}
                       onUndoComplete={canUndoComplete ? () => void handleUndoComplete() : undefined}
                       isUndoingComplete={isCompleting}
                     />

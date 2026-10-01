@@ -25,3 +25,9 @@ tsconfig.tsbuildinfo
 .obsidian/
 obsidian-importer/
 recitations/
+# ...except the player reciters' timing metadata, which IS committed and
+# lazy-fetched once per reciter via GitHub raw, then cached in the vault
+# (word highlighting + true durations need these; inlining them would 5x
+# main.js). Keep in sync with the ayah-based getAudioPlayerReciters entries
+# plus one small surah.json per surah-based reciter.
+!public/recitations/
