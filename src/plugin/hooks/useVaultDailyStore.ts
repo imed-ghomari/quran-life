@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { DEFAULT_DAILY_TARGET_MINUTES, clampDailyTargetMinutes } from '@/lib/dailyPortionUtils';
-import { ALLOWED_RECITERS } from '@/lib/audio';
+import { getAudioPlayerReciterList } from '@/lib/audio';
 import { readStored } from '@/lib/pluginStorage';
 import { ALL_QURAN_PART, QuranPart } from '@/lib/types';
 import type { PlaybackSpeed } from '@/lib/types';
@@ -58,7 +58,7 @@ const DEFAULT_SETTINGS: LocalDailySettings = {
   dailyPortionMode: 'audio',
   dailyReadingStyle: 'paragraph',
   dailyPlaybackSpeed: 1,
-  dailyReciterId: ALLOWED_RECITERS[0]?.id ?? '',
+  dailyReciterId: getAudioPlayerReciterList()[0]?.id ?? '',
   skippedSurahs: [],
 };
 
@@ -117,12 +117,13 @@ function normalizeSkippedSurahs(value: unknown): number[] {
  * (`selected_reciter_id`) becomes the Daily Portion default on first read.
  */
 function normalizeDailyReciterId(value: unknown): string {
-  if (typeof value === 'string' && value && ALLOWED_RECITERS.some(r => r.id === value)) return value;
+  const playerReciters = getAudioPlayerReciterList();
+  if (typeof value === 'string' && value && playerReciters.some(r => r.id === value)) return value;
   try {
     const legacy = readStored('selected_reciter_id') ?? '';
-    if (legacy && ALLOWED_RECITERS.some(r => r.id === legacy)) return legacy;
+    if (legacy && playerReciters.some(r => r.id === legacy)) return legacy;
   } catch { /* storage unavailable */ }
-  return ALLOWED_RECITERS[0]?.id ?? '';
+  return playerReciters[0]?.id ?? '';
 }
 function parseSettings(raw: unknown): LocalDailySettings {
   const rec = asRecord(raw);

@@ -5,7 +5,7 @@ import { ACTIVE_PART_OPTIONS, ALL_QURAN_PART, QuranPart } from "@/lib/types";
 import type { PlaybackSpeed } from "@/lib/types";
 import { getSurahsByPart } from "@/lib/quranData";
 import { clampDailyTargetMinutes, DEFAULT_DAILY_TARGET_MINUTES, estimateEligibleCycleDays, estimateSurahDurationMinutes, getEligibleVerseCount } from "@/lib/dailyPortionUtils";
-import { ALLOWED_RECITERS, getAudioPlayerReciters, Reciter } from "@/lib/audio";
+import { ALLOWED_RECITERS, getAudioPlayerReciters, getAudioPlayerReciterList, Reciter } from "@/lib/audio";
 import { readStored, writeStored } from "@/lib/pluginStorage";
 import {
   getTotalOfflineStorageUsage,
@@ -100,7 +100,7 @@ const DEFAULT_DAILY: DailySettings = {
   dailyPortionMode: 'audio',
   dailyReadingStyle: 'paragraph',
   dailyPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
-  dailyReciterId: ALLOWED_RECITERS[0]?.id ?? '',
+  dailyReciterId: getAudioPlayerReciterList()[0]?.id ?? '',
   skippedSurahs: [],
 };
 
@@ -114,13 +114,14 @@ function isValidQuranPart(v: unknown): v is QuranPart {
  * "Use in player" button) into the Daily Portion default on first read.
  */
 function normalizeDailyReciterId(v: unknown): string {
+  const playerReciters = getAudioPlayerReciterList();
   const id = typeof v === 'string' ? v : '';
-  if (id && ALLOWED_RECITERS.some(r => r.id === id)) return id;
+  if (id && playerReciters.some(r => r.id === id)) return id;
   try {
     const legacy = readStored(PLAYER_RECITER_STORAGE_KEY) ?? '';
-    if (legacy && ALLOWED_RECITERS.some(r => r.id === legacy)) return legacy;
+    if (legacy && playerReciters.some(r => r.id === legacy)) return legacy;
   } catch { /* storage unavailable */ }
-  return DEFAULT_DAILY.dailyReciterId;
+  return playerReciters[0]?.id ?? '';
 }
 function normalizeSkipped(v: unknown): number[] {
   if (!Array.isArray(v)) return [];
@@ -421,7 +422,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         row("Default reciter", "The voice the Daily Portion player uses. Portion sizes are computed from this reciter's own pace.", (setting) => {
           defaultReciterEl = setting.settingEl;
           setting.addDropdown((drop) => {
-            for (const r of ALLOWED_RECITERS) drop.addOption(r.id, r.name);
+            for (const r of getAudioPlayerReciterList()) drop.addOption(r.id, r.name);
             drop.setValue(daily.dailyReciterId);
             drop.onChange(async (v) => {
               const id = normalizeDailyReciterId(v);

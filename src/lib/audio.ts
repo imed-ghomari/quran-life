@@ -278,6 +278,14 @@ export async function getReciters(): Promise<Reciter[]> {
 }
 
 export async function getAudioPlayerReciters(): Promise<Reciter[]> {
+    return getAudioPlayerReciterList();
+}
+
+/**
+ * Sync version of the player reciter list (same filter, no promise), for
+ * settings rows and defaults that must match the player's dropdown exactly.
+ */
+export function getAudioPlayerReciterList(): Reciter[] {
     if (AUDIO_PLAYER_RECITER_MODE === 'ayah-only') {
         return ALLOWED_RECITERS.filter((reciter) => reciter.type === 'ayah-based');
     }
