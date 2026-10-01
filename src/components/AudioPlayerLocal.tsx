@@ -180,6 +180,12 @@ export default function AudioPlayerLocal({
     const basmalaPrewarmRef = useRef<{ reciterId: string; url: string; startTime: number; endTime: number | null } | null>(null);
     // Mono clock for the word-highlight monotonic guard (detect seeks).
     const lastHighlightTimeRef = useRef(0);
+    // Real per-verse audio durations learned from the media element itself.
+    // Ayah-based reciters serve one file per verse, so `audio.duration` IS the
+    // verse duration — far more truthful than the words/second estimate when
+    // the timing metadata map is unavailable (offline / not yet fetched). Keyed
+    // by reciter + verse so switching reciters never mixes paces.
+    const [measuredAudioDurations, setMeasuredAudioDurations] = useState<Record<string, number>>({});
 
     const currentVerse = verses[currentVerseIndex];
     const currentSurahId = currentVerse?.surahId ?? null;
@@ -188,6 +194,11 @@ export default function AudioPlayerLocal({
     const selectedReciterId = selectedReciter?.id ?? '';
     const selectedReciterType = selectedReciter?.type ?? null;
     const selectedReciterPath = selectedReciter?.relativePath ?? '';
+    // Ayah-based reciters resolve per-ayah URLs from this pattern without the
+    // ~2MB metadata map. It must travel with every reconstructed Reciter below —
+    // dropping it silently disables ALL online playback (only vault-cached
+    // offline files keep playing, which is exactly the reported bug).
+    const selectedReciterAyahAudioBase = selectedReciter?.ayahAudioBase ?? undefined;
     const totalVerses = verses.length;
     const versesSurahIdsKey = useMemo(() => {
         const surahIds = Array.from(new Set(verses.map((verse) => verse.surahId)));
@@ -543,7 +554,7 @@ export default function AudioPlayerLocal({
         let isActive = true;
         const reciterId = selectedReciterId;
         const requestedSurahId = currentSurahId;
-        const reciterForLoad: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
+        const reciterForLoad: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath, ayahAudioBase: selectedReciterAyahAudioBase };
         const load = async () => {
             setIsLoadingReciter(true);
             const data = await loadRecitationData(reciterForLoad, requestedSurahId, obsidianApp);
@@ -555,13 +566,13 @@ export default function AudioPlayerLocal({
         };
         void load();
         return () => { isActive = false; };
-    }, [selectedReciterId, selectedReciterType, selectedReciterPath, currentSurahId, obsidianApp]);
+    }, [selectedReciterId, selectedReciterType, selectedReciterPath, selectedReciterAyahAudioBase, currentSurahId, obsidianApp]);
 
     useEffect(() => {
         if (!selectedReciterId || selectedReciterType !== 'surah-based' || !selectedReciterPath || verses.length === 0) return;
         const surahIds = versesSurahIdsKey.length > 0 ? versesSurahIdsKey.split(',').map(Number).filter(Number.isFinite) : [];
         if (surahIds.length === 0) return;
-        const reciterForLoad: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
+        const reciterForLoad: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath, ayahAudioBase: selectedReciterAyahAudioBase };
         let isActive = true;
         const loadAll = async () => {
             setIsLoadingReciter(true);
@@ -574,7 +585,7 @@ export default function AudioPlayerLocal({
         };
         void loadAll();
         return () => { isActive = false; };
-    }, [selectedReciterId, selectedReciterType, selectedReciterPath, versesSurahIdsKey, verses.length, obsidianApp]);
+    }, [selectedReciterId, selectedReciterType, selectedReciterPath, selectedReciterAyahAudioBase, versesSurahIdsKey, verses.length, obsidianApp]);
 
     useEffect(() => { if (currentVerseIndex < totalVerses - 1) setIsCompleted(false); }, [currentVerseIndex, totalVerses]);
     useEffect(() => { setIsCompleted(false); }, [verses]);
@@ -641,7 +652,7 @@ export default function AudioPlayerLocal({
         if (!currentVerseKey || currentSurahId === null || currentAyahId === null || !selectedReciterId || !selectedReciterType || !selectedReciterPath) return;
         let cancelled = false;
         void (async () => {
-            const reciterForPlayback: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
+            const reciterForPlayback: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath, ayahAudioBase: selectedReciterAyahAudioBase };
 
             // Always probe the vault first. This makes a downloaded track usable even
             // when the recitation metadata request is unavailable offline.
@@ -750,13 +761,17 @@ export default function AudioPlayerLocal({
                             : minWordIndex >= 1 ? -1 : 0;
                         const rawIndex = (segments[0]?.[0] ?? 0) + indexOffset;
                         initialIndex = rawIndex >= 0 && rawIndex < currentVerseWordCount ? rawIndex : 0;
-                    } else initialIndex = 0;
+                    }
+                    // No word timings: leave the highlight cleared (-1) instead of
+                    // guessing the first word. A fake highlight would then be
+                    // swept by the (also removed) time interpolation, moving on a
+                    // clock rather than with the reciter's voice.
                 }
                 if (initialIndex !== lastWordIndexRef.current) { onWordIndexChange?.(initialIndex); lastWordIndexRef.current = initialIndex; }
             }
         })();
         return () => { cancelled = true; };
-    }, [currentVerseKey, currentSurahId, currentAyahId, selectedReciterId, selectedReciterType, selectedReciterPath, currentRecitationData, isLoadingReciter, currentVerseWordCount, finalizePendingPlayback, onWordIndexChange, preparePendingTrack, setPendingTrackWithoutLoader, obsidianApp]);
+    }, [currentVerseKey, currentSurahId, currentAyahId, selectedReciterId, selectedReciterType, selectedReciterPath, selectedReciterAyahAudioBase, currentRecitationData, isLoadingReciter, currentVerseWordCount, finalizePendingPlayback, onWordIndexChange, preparePendingTrack, setPendingTrackWithoutLoader, obsidianApp]);
 
     useEffect(() => {
         if (!audioRef.current) return;
@@ -815,8 +830,8 @@ export default function AudioPlayerLocal({
         if (!verse) return null;
         const verseRecitationData = getRecitationDataForVerse(verse);
         if (!verseRecitationData) return null;
-        return getAudioInfoForVerse({ id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath }, verseRecitationData, verse.surahId, verse.ayahId);
-    }, [verses, selectedReciterId, selectedReciterType, selectedReciterPath, getRecitationDataForVerse]);
+        return getAudioInfoForVerse({ id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath, ayahAudioBase: selectedReciterAyahAudioBase }, verseRecitationData, verse.surahId, verse.ayahId);
+    }, [verses, selectedReciterId, selectedReciterType, selectedReciterPath, selectedReciterAyahAudioBase, getRecitationDataForVerse]);
 
     const currentVerseAudioUrl = useMemo(() => getAudioInfoForVerseIndex(currentVerseIndex)?.url ?? '', [currentVerseIndex, getAudioInfoForVerseIndex]);
     const nextVerseInfo = useMemo(() => getAudioInfoForVerseIndex(currentVerseIndex + 1), [currentVerseIndex, getAudioInfoForVerseIndex]);
@@ -841,7 +856,7 @@ export default function AudioPlayerLocal({
             let playableUrl = nextUrl;
             try {
                 if (nextVerse) {
-                    const reciterForPreload: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath };
+                    const reciterForPreload: Reciter = { id: selectedReciterId, name: '', type: selectedReciterType, relativePath: selectedReciterPath, ayahAudioBase: selectedReciterAyahAudioBase };
                     const offline = peekOfflineAudioUrlIfCached(reciterForPreload, nextVerse.surahId, nextVerse.ayahId)
                         ?? await getOfflineAudioUrlIfAvailable(reciterForPreload, nextVerse.surahId, nextVerse.ayahId, obsidianApp);
                     if (offline) playableUrl = offline;
@@ -854,7 +869,7 @@ export default function AudioPlayerLocal({
             preloadAudioRef.current = audio; preloadedTrackKeyRef.current = preloadKey;
         })();
         return () => { cancelled = true; };
-    }, [currentVerseAudioUrl, currentVerseIndex, nextVerseInfo?.url, selectedReciterId, selectedReciterType, selectedReciterPath, verses, obsidianApp]);
+    }, [currentVerseAudioUrl, currentVerseIndex, nextVerseInfo?.url, selectedReciterId, selectedReciterType, selectedReciterPath, selectedReciterAyahAudioBase, verses, obsidianApp]);
 
     useEffect(() => () => { if (preloadAudioRef.current) { preloadAudioRef.current.pause(); preloadAudioRef.current.removeAttribute('src'); preloadAudioRef.current.load(); preloadAudioRef.current = null; } }, []);
 
@@ -948,23 +963,14 @@ export default function AudioPlayerLocal({
                     if (lastSeenIdx !== null) nextIndex = resolveSegmentIndex(activeSegments[lastSeenIdx], lastSeenIdx);
                 }
             }
-            if (nextIndex === null && onWordIndexChange && currentVerseWordCount && currentVerseWordCount > 0) {
-                // No word timings for this verse. Only interpolate linearly when
-                // the audio duration actually represents THIS verse (ayah-based
-                // per-ayah files, or a known verse slice). For surah-based whole
-                // files without timings, linear interpolation across the entire
-                // surah would fake a uniform pace unrelated to the reciter — so
-                // leave the highlight off instead of misleading.
-                const canInterpolate = selectedReciterType === 'ayah-based' || verseEndTime !== null;
-                if (canInterpolate) {
-                    const duration = verseEndTime !== null ? Math.max(0.001, verseEndTime - verseStartTime) : (Number.isFinite(audioRef.current?.duration ?? NaN) ? (audioRef.current?.duration || 0) : 0);
-                    if (duration > 0) {
-                        const relative = Math.max(0, current - verseStartTime);
-                        const ratio = Math.min(1, Math.max(0, relative / duration));
-                        nextIndex = Math.min(currentVerseWordCount - 1, Math.floor(ratio * currentVerseWordCount));
-                    }
-                }
-            }
+            // No `else` here by design: without real word timings the highlight
+            // stays exactly where the reciter's segments put it (or cleared).
+            // Interpolating from elapsed time sweeps words on a clock that
+            // ignores the reciter's voice — pauses, tajwid stretches and
+            // verse-end silence all desync it — so it is never used as a
+            // substitute. Real segments arrive with the recitation metadata and
+            // are cached in the vault for offline reuse; until then the verse
+            // text simply stays un-highlighted.
             if (nextIndex !== null) {
                 // Monotonic guard: imported segment tables occasionally contain
                 // duplicate/out-of-order word entries that would make the
@@ -1002,7 +1008,20 @@ export default function AudioPlayerLocal({
         else { setIsPlaying(false); setIsCompleted(true); }
     }, [currentVerseIndex, totalVerses, verses, currentVerse, onVerseChange, isAudioPreparing, isAudioReady, playBasmalaThenAdvance, finishBasmalaViaMain]);
 
-    const handleLoadedMetadata = useCallback(() => { void finalizePendingPlayback(); }, [finalizePendingPlayback]);
+    const handleLoadedMetadata = useCallback(() => {
+        void finalizePendingPlayback();
+        // Learn the true verse duration for the portion timer. Only ayah-based
+        // files are per-verse (a surah-based file's duration is the whole surah
+        // and must never be mistaken for one verse's length).
+        try {
+            const audio = audioRef.current;
+            const duration = audio?.duration ?? NaN;
+            if (selectedReciterType === 'ayah-based' && selectedReciterId && currentVerseKey && Number.isFinite(duration) && duration > 0.2 && duration < 3600) {
+                const key = `${selectedReciterId}:${currentVerseKey}`;
+                setMeasuredAudioDurations(prev => (prev[key] === duration ? prev : { ...prev, [key]: duration }));
+            }
+        } catch { /* duration learning is best-effort; ignore */ }
+    }, [finalizePendingPlayback, selectedReciterType, selectedReciterId, currentVerseKey]);
     const handleCanPlay = useCallback(() => { if (!pendingTrackRef.current) { setIsAudioPreparing(false); setIsAudioReady(true); return; } void finalizePendingPlayback(); }, [finalizePendingPlayback]);
     const handlePlaying = useCallback(() => { setIsAudioPreparing(false); setIsAudioReady(true); if (audioRef.current) { lastStableTimeRef.current = audioRef.current.currentTime; stallCheckRef.current = { t: audioRef.current.currentTime, wall: Date.now() }; } }, []);
     const handleError = useCallback(() => {
@@ -1080,6 +1099,8 @@ export default function AudioPlayerLocal({
             audioRef.current?.pause(); seamlessSurahAdvanceKeyRef.current = ''; surahAdvanceGuardRef.current = { verseKey: '', until: 0 };
             setRecitationData(null); setRecitationDataMap({}); setActiveSegments(null); setVerseEndTime(null); setVerseStartTime(0); setElapsedTime(0); setIsAudioPreparing(true); setIsAudioReady(false); onWordIndexChange?.(-1); lastWordIndexRef.current = -1; pendingTrackRef.current = null; configuredTrackKeyRef.current = ''; setIsLoadingReciter(true);
             setSelectedReciter(reciter); writeStored(RECITER_STORAGE_KEY, id); setIsPlaying(false);
+            // Learned MP3 durations belong to the previous reciter's pace.
+            setMeasuredAudioDurations({});
         }
     };
 
@@ -1202,9 +1223,14 @@ export default function AudioPlayerLocal({
             const versesMap = recitationData?.verses || {};
             measured = verses.map(v => {
                 const key = `${v.surahId}:${v.ayahId}`; const info = asVerseEntry(versesMap[key]);
-                if (!info) return null;
-                if (typeof info.duration === 'number' && Number.isFinite(info.duration)) return info.duration;
-                if (Array.isArray(info.segments) && info.segments.length > 0) return (info.segments[info.segments.length - 1]?.[2] || 0) / 1000;
+                if (info) {
+                    if (typeof info.duration === 'number' && Number.isFinite(info.duration)) return info.duration;
+                    if (Array.isArray(info.segments) && info.segments.length > 0) return (info.segments[info.segments.length - 1]?.[2] || 0) / 1000;
+                }
+                // No timing metadata: prefer the real MP3 duration learned from
+                // the element itself over the word-rate guess below.
+                const learned = measuredAudioDurations[`${selectedReciter.id}:${v.surahId}:${v.ayahId}`];
+                if (typeof learned === 'number' && Number.isFinite(learned) && learned > 0.2) return learned;
                 return null;
             });
         } else {
@@ -1230,17 +1256,25 @@ export default function AudioPlayerLocal({
             const words = verseWordCounts[i] || 0;
             return Math.max(1.2, words / safeWps);
         });
-    }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts]);
+    }, [selectedReciter, verses, recitationData, recitationDataMap, verseWordCounts, measuredAudioDurations]);
 
     const totalDurationSec = useMemo(() => { if (!verseDurationsSec) return null; const sum = verseDurationsSec.reduce((sum, d) => sum + (d || 0), 0); if (!(sum > 0)) return null; const s = speed || 1; return sum / s; }, [verseDurationsSec, speed]);
     const elapsedTotalSec = useMemo(() => {
         if (!verseDurationsSec) return null;
         const prior = verseDurationsSec.slice(0, currentVerseIndex).reduce((sum, d) => sum + (d || 0), 0);
         const currentDuration = verseDurationsSec[currentVerseIndex] || 0;
-        const currentElapsed = Math.min(elapsedTime, currentDuration || elapsedTime);
+        // `elapsedTime` is the media-element clock: verse-relative for per-ayah
+        // files, but absolute within the whole surah file for surah-based
+        // reciters. Always measure the current verse from its own start, then
+        // clamp — using the raw clock directly either double-counts prior
+        // verses or pins the readout at a single verse's length.
+        const relative = elapsedTime - verseStartTime;
+        const currentElapsed = currentDuration > 0
+            ? Math.min(Math.max(0, relative), currentDuration)
+            : Math.max(0, relative);
         const s = speed || 1;
         return (prior + currentElapsed) / s;
-    }, [verseDurationsSec, currentVerseIndex, elapsedTime, speed]);
+    }, [verseDurationsSec, currentVerseIndex, elapsedTime, verseStartTime, speed]);
 
     const remainingTotalSec = totalDurationSec !== null && elapsedTotalSec !== null
         ? Math.max(0, totalDurationSec - elapsedTotalSec)
