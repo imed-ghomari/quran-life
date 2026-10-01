@@ -8,7 +8,7 @@ import { CheckCircle, BookOpen, Check, Headphones, Book, Undo2 } from 'lucide-re
 import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks/useVaultDailyStore';
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import type { App } from 'obsidian';
-import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
+import { useDailyPortionTiming, useReciterTiming } from '@/hooks/useDailyPortionTiming';
 import { readStored } from '@/lib/pluginStorage';
 import {
   DEFAULT_DAILY_TARGET_MINUTES,
@@ -57,9 +57,16 @@ function groupVersesBySurah(verses: Verse[]): DailyPortionSurahGroup[] {
 }
 
 export default function DailyPortionObsidian({ vaultStore }: { vaultStore: VaultStore }) {
-  const { settings, isLoading: settingsLoading } = useVaultDailySettings(vaultStore);
+  const { settings, saveSettings, isLoading: settingsLoading } = useVaultDailySettings(vaultStore);
   const { progress: listeningProgress, saveProgress, isLoading: progressLoading } = useVaultListeningProgress(vaultStore);
   const { averageSecondsPerWordBySurah } = useDailyPortionTiming();
+  // Portion sizing follows the Daily Portion default reciter's own pace, not
+  // a cross-reciter average. Falls back to the average map while loading.
+  const reciterSecondsPerWord = useReciterTiming(settings.dailyReciterId);
+  const sizingSecondsPerWord = reciterSecondsPerWord ?? averageSecondsPerWordBySurah;
+  const handlePlayerReciterChange = useCallback((id: string) => {
+    void saveSettings({ dailyReciterId: id });
+  }, [saveSettings]);
 
   const [allVerses, setAllVerses] = useState<Verse[]>([]);
   const [isVersesLoaded, setIsVersesLoaded] = useState(false);
@@ -184,7 +191,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       mode: settings.dailyPortionMode ?? 'audio',
       nextStartVerseKey: activeProgress?.nextStartVerseKey,
       legacyStartIndex: startIdx,
-      averageSecondsPerWordBySurah,
+      averageSecondsPerWordBySurah: sizingSecondsPerWord,
       // Wall-clock target: the sizer scales audio portions by the LIVE player
       // speed so the player's total (1x durations ÷ speed) matches the daily
       // target. E.g. 10 min at 2x sizes ~20 1x-minutes of verses.
@@ -202,7 +209,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       snappedMinutes: portionResult.snappedMinutes,
       lastUpdateAt: activeProgress?.updatedAt,
     };
-  }, [allVerses, averageSecondsPerWordBySurah, settings.dailyTargetMinutes, settings.dailyPortionMode, livePlaybackSpeed, eligibleSurahs, activeProgress]);
+  }, [allVerses, sizingSecondsPerWord, settings.dailyTargetMinutes, settings.dailyPortionMode, livePlaybackSpeed, eligibleSurahs, activeProgress]);
 
   // Initialize listeningComplete based on progress date.
   // Progress written by this build records `completedOnDay` explicitly, so
@@ -576,7 +583,9 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
                       onVerseChange={setCurrentVerseIndex}
                       onWordIndexChange={handleAudioWordIndexChange}
                       obsidianApp={vaultStore?.app}
-                      averageSecondsPerWordBySurah={averageSecondsPerWordBySurah}
+                      averageSecondsPerWordBySurah={sizingSecondsPerWord}
+                      defaultReciterId={settings.dailyReciterId}
+                      onReciterChange={handlePlayerReciterChange}
                       onUndoComplete={canUndoComplete ? () => void handleUndoComplete() : undefined}
                       isUndoingComplete={isCompleting}
                     />

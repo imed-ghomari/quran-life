@@ -23,11 +23,11 @@ import { normalizeAnkiExportPrefs, DEFAULT_ANKI_EXPORT_PREFS } from "@/lib/anki/
 import type { AnkiExportPrefs } from "@/lib/anki/ankiExportPrefs";
 import { confirmAction } from "./lib/confirm";
 
-// Keys shared with the player (see AudioPlayerLocal) so the settings tab can tell
-// the user which reciter playback actually uses, and switch it in one click.
+// Keys shared with the player (see AudioPlayerLocal). The player voice is the
+// Daily Portion default reciter; the legacy `selected_reciter_id` is read once
+// to migrate existing installs into that setting.
 const PLAYER_RECITER_STORAGE_KEY = "selected_reciter_id";
 const DOWNLOAD_RECITER_STORAGE_KEY = "offline_download_reciter_id";
-const PLAYER_RECITER_EVENT = "quran-life:player-reciter-changed";
 
 // Playback speed shared with the audio player (see AudioPlayerLocal). The player
 // stores its speed in vault-scoped local storage and divides measured durations
@@ -89,6 +89,8 @@ interface DailySettings {
   dailyPortionMode: DailyPortionMode;
   dailyReadingStyle: DailyReadingStyle;
   dailyPlaybackSpeed: PlaybackSpeed;
+  /** Player + portion-sizing reciter (single source of truth). */
+  dailyReciterId: string;
   skippedSurahs: number[];
 }
 
@@ -98,12 +100,27 @@ const DEFAULT_DAILY: DailySettings = {
   dailyPortionMode: 'audio',
   dailyReadingStyle: 'paragraph',
   dailyPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+  dailyReciterId: ALLOWED_RECITERS[0]?.id ?? '',
   skippedSurahs: [],
 };
 
 function isValidQuranPart(v: unknown): v is QuranPart {
   const n = Number(v);
   return Number.isInteger(n) && n >= 1 && n <= ALL_QURAN_PART;
+}
+/**
+ * Reciter ids are stable across installs. Migrates the legacy player choice
+ * (`selected_reciter_id`, previously set by the offline section's
+ * "Use in player" button) into the Daily Portion default on first read.
+ */
+function normalizeDailyReciterId(v: unknown): string {
+  const id = typeof v === 'string' ? v : '';
+  if (id && ALLOWED_RECITERS.some(r => r.id === id)) return id;
+  try {
+    const legacy = readStored(PLAYER_RECITER_STORAGE_KEY) ?? '';
+    if (legacy && ALLOWED_RECITERS.some(r => r.id === legacy)) return legacy;
+  } catch { /* storage unavailable */ }
+  return DEFAULT_DAILY.dailyReciterId;
 }
 function normalizeSkipped(v: unknown): number[] {
   if (!Array.isArray(v)) return [];
@@ -123,6 +140,7 @@ function parseDaily(raw: unknown): DailySettings {
     dailyPortionMode: record.dailyPortionMode === 'reading' ? 'reading' : 'audio',
     dailyReadingStyle: record.dailyReadingStyle === 'line_by_line' ? 'line_by_line' : 'paragraph',
     dailyPlaybackSpeed: normalizePlaybackSpeed(record.dailyPlaybackSpeed),
+    dailyReciterId: normalizeDailyReciterId(record.dailyReciterId),
     skippedSurahs: normalizeSkipped(record.skippedSurahs),
   };
 }
@@ -137,6 +155,7 @@ function describeDailyTarget(
   targetMinutes: number,
   mode: DailyPortionMode,
   speed: PlaybackSpeed,
+  reciterName?: string,
 ): string {
   const eligible = getSurahsByPart(activePart).filter(s => !skippedSurahs.includes(s.id));
   if (eligible.length === 0) {
@@ -158,7 +177,7 @@ function describeDailyTarget(
   const versesPerDay = totalVerses && days ? Math.ceil(totalVerses / days) : 0;
   const modeLabel = mode === 'audio' ? 'Listening' : 'Reading';
   if (mode === 'audio') {
-    return `${targetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${modeLabel} @${speed}x`;
+    return `${targetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${modeLabel} @${speed}x${reciterName ? ` • ${reciterName}` : ''}`;
   }
   return `${targetMinutes} min • ~${versesPerDay} verses/day • ~${days} days • ${totalVerses} verses in scope • ${modeLabel}`;
 }
@@ -232,6 +251,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       if (patch.skippedSurahs !== undefined) daily.skippedSurahs = normalizeSkipped(patch.skippedSurahs);
       if (patch.dailyTargetMinutes !== undefined) daily.dailyTargetMinutes = clampDailyTargetMinutes(Number(patch.dailyTargetMinutes));
       if (patch.dailyPlaybackSpeed !== undefined) daily.dailyPlaybackSpeed = normalizePlaybackSpeed(patch.dailyPlaybackSpeed);
+      if (patch.dailyReciterId !== undefined) daily.dailyReciterId = normalizeDailyReciterId(patch.dailyReciterId);
       if (patch.activePart !== undefined && !isValidQuranPart(patch.activePart)) {
         daily.activePart = parseDaily(await this.plugin.vaultStore.loadSettings<unknown>(null)).activePart;
       }
@@ -257,11 +277,13 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     let updateSurahCount: () => void = () => {};
     let readingStyleEl: HTMLElement | null = null;
     let recitationSpeedEl: HTMLElement | null = null;
+    let defaultReciterEl: HTMLElement | null = null;
     const syncReadingStyleVisibility = (mode: DailyPortionMode): void => {
       readingStyleEl?.toggleClass("quran-life-hidden", mode !== 'reading');
     };
     const syncRecitationSpeedVisibility = (mode: DailyPortionMode): void => {
       recitationSpeedEl?.toggleClass("quran-life-hidden", mode !== 'audio');
+      defaultReciterEl?.toggleClass("quran-life-hidden", mode !== 'audio');
     };
     const syncModeDependentRows = (mode: DailyPortionMode): void => {
       syncReadingStyleVisibility(mode);
@@ -276,6 +298,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
           daily.dailyTargetMinutes,
           daily.dailyPortionMode,
           daily.dailyPlaybackSpeed,
+          ALLOWED_RECITERS.find(r => r.id === daily.dailyReciterId)?.name,
         ));
       };
       refreshers.minutesDesc = updateMinutesDesc;
@@ -395,6 +418,22 @@ export class QuranLifeSettingTab extends PluginSettingTab {
           });
         }),
         minutesRow,
+        row("Default reciter", "The voice the Daily Portion player uses. Portion sizes are computed from this reciter's own pace.", (setting) => {
+          defaultReciterEl = setting.settingEl;
+          setting.addDropdown((drop) => {
+            for (const r of ALLOWED_RECITERS) drop.addOption(r.id, r.name);
+            drop.setValue(daily.dailyReciterId);
+            drop.onChange(async (v) => {
+              const id = normalizeDailyReciterId(v);
+              daily.dailyReciterId = id;
+              updateMinutesDesc();
+              await saveDaily({ dailyReciterId: id });
+              updateMinutesDesc();
+              try { drop.setValue(daily.dailyReciterId); } catch { /* already set */ }
+            });
+          });
+          syncModeDependentRows(daily.dailyPortionMode);
+        }),
         row("Mode", "Listening follows the recitation speed below; Reading uses a fixed pace.", (setting) => {
           setting.addDropdown((drop) => {
             drop.addOption("audio", "Listening");
@@ -504,12 +543,12 @@ export class QuranLifeSettingTab extends PluginSettingTab {
     };
 
     let offlineReciter: Reciter | null = offlineReciters[0] ?? null;
-    let playerReciterId = readStored(PLAYER_RECITER_STORAGE_KEY) ?? "";
     try {
-      // Prefer the reciter last used for downloads, then the one playback uses.
+      // Prefer the reciter last used for downloads, then the Daily Portion
+      // default (single source of truth for playback + sizing).
       const savedDownload = readStored(DOWNLOAD_RECITER_STORAGE_KEY) ?? "";
       const preferred = offlineReciters.find(r => r.id === savedDownload)
-        || offlineReciters.find(r => r.id === playerReciterId);
+        || offlineReciters.find(r => r.id === daily.dailyReciterId);
       if (preferred) offlineReciter = preferred;
     } catch { /* keep the first reciter */ }
 
@@ -804,7 +843,7 @@ export class QuranLifeSettingTab extends PluginSettingTab {
         setting.addButton((btn) => btn.setButtonText("Refresh").onClick(() => refreshStorageInfo()));
         scheduleOfflineInit();
       }),
-      row("Reciter", "The voice these downloads use.", (setting) => {
+      row("Reciter", "The voice these downloads use. The player voice is chosen under Daily portion → Default reciter.", (setting) => {
         setting.addDropdown((drop) => {
           reciterDropdown = drop;
           for (const r of offlineReciters) drop.addOption(r.id, r.name);
@@ -821,17 +860,6 @@ export class QuranLifeSettingTab extends PluginSettingTab {
             })();
           });
         });
-        setting.addButton((btn) => btn
-          .setButtonText("Use in player")
-          .setTooltip("Make the Daily Portion player use this reciter")
-          .onClick(() => {
-            const selected = offlineReciter;
-            if (!selected) return;
-            playerReciterId = selected.id;
-            writeStored(PLAYER_RECITER_STORAGE_KEY, selected.id);
-            window.dispatchEvent(new CustomEvent(PLAYER_RECITER_EVENT, { detail: { id: selected.id } }));
-            new Notice(`Player reciter set to ${selected.name}`);
-          }));
       }),
       row("Daily Portion part", "Checking…", (setting) => {
         // One-click shortcut when the part the Daily Portion plays isn't downloaded yet.

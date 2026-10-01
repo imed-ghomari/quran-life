@@ -65,6 +65,14 @@ interface AudioPlayerLocalProps {
     onUndoComplete?: () => void;
     isUndoingComplete?: boolean;
     /**
+     * The Daily Portion default reciter (single source of truth, chosen under
+     * Settings → Daily portion). When provided and valid it wins over the
+     * stored choice, and the player follows it when it changes. Pair with
+     * `onReciterChange` so dropdown picks flow back into the same setting.
+     */
+    defaultReciterId?: string;
+    onReciterChange?: (id: string) => void;
+    /**
      * Per-surah average seconds/word the Daily Portion sizer uses (built from
      * reciter surah durations). The player's estimated verse durations fall
      * back to this SAME pace when real timings are unavailable, so the
@@ -137,6 +145,8 @@ export default function AudioPlayerLocal({
     obsidianApp,
     onUndoComplete,
     isUndoingComplete,
+    defaultReciterId,
+    onReciterChange,
     averageSecondsPerWordBySurah,
 }: AudioPlayerLocalProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -519,11 +529,12 @@ export default function AudioPlayerLocal({
 
     useEffect(() => {
         if (reciters.length === 0) return;
+        const propId = defaultReciterId && reciters.some(r => r.id === defaultReciterId) ? defaultReciterId : undefined;
         const savedId = readStored(RECITER_STORAGE_KEY) || undefined;
-        const preferred = reciters.find(r => r.id === savedId) || reciters[0];
+        const preferred = reciters.find(r => r.id === (propId ?? savedId)) || reciters[0];
         if (!preferred) return;
         if (selectedReciterId !== preferred.id) setSelectedReciter(preferred);
-    }, [reciters, selectedReciterId]);
+    }, [reciters, selectedReciterId, defaultReciterId]);
 
     useEffect(() => {
         let stored: PlaybackSpeed | undefined;
@@ -1111,6 +1122,9 @@ export default function AudioPlayerLocal({
             setSelectedReciter(reciter); writeStored(RECITER_STORAGE_KEY, id); setIsPlaying(false);
             // Learned MP3 durations belong to the previous reciter's pace.
             setMeasuredAudioDurations({});
+            // Feed the pick back into the Daily Portion default so sizing and
+            // playback never diverge into two reciters.
+            onReciterChange?.(id);
         }
     };
 
