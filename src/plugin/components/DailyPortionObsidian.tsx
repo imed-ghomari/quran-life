@@ -9,6 +9,7 @@ import { useVaultDailySettings, useVaultListeningProgress } from '@/plugin/hooks
 import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import type { App } from 'obsidian';
 import { useDailyPortionTiming } from '@/hooks/useDailyPortionTiming';
+import { readStored } from '@/lib/pluginStorage';
 import {
   DEFAULT_DAILY_TARGET_MINUTES,
   getProgressStartIndexFromEligibleSurahs,
@@ -17,6 +18,22 @@ import {
 import AudioPlayerLocal from '@/components/AudioPlayerLocal';
 
 const { useState, useEffect, useRef, useMemo, useCallback, startTransition } = React;
+
+// Same key/event the player uses (see AudioPlayerLocal + settings.ts). The
+// speed saved in daily settings only changes from the Settings dropdown, so
+// sizing must follow this LIVE value — otherwise a speed picked in the player
+// never reaches the portion and the target stops matching the player total.
+const PLAYER_SPEED_STORAGE_KEY = 'audio_playback_speed';
+const PLAYER_SPEED_EVENT = 'quran-life:playback-speed-changed';
+const PLAYER_SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+
+function readLivePlaybackSpeed(): number {
+  try {
+    const n = Number(readStored(PLAYER_SPEED_STORAGE_KEY));
+    if (PLAYER_SPEED_OPTIONS.includes(n)) return n;
+  } catch { /* storage unavailable — fall back to 1x */ }
+  return 1;
+}
 
 type DailyPortionSurahGroup = {
   surahId: number;
@@ -56,6 +73,22 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
   const [listeningComplete, setListeningComplete] = useState(false);
   const [toast, setToast] = useState<{ id: string; msg: string } | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  // Live player speed (picked in the player or Settings). The portion is sized
+  // in 1x-minutes = target × speed, so this must track the actual playback
+  // speed — not just the settings snapshot, which only updates from the
+  // Settings dropdown.
+  const [livePlaybackSpeed, setLivePlaybackSpeed] = useState<number>(() => readLivePlaybackSpeed());
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const next = Number((e as CustomEvent<{ speed?: unknown }>).detail?.speed);
+        if (PLAYER_SPEED_OPTIONS.includes(next)) setLivePlaybackSpeed(next);
+      } catch { /* malformed event — ignore */ }
+    };
+    setLivePlaybackSpeed(readLivePlaybackSpeed());
+    window.addEventListener(PLAYER_SPEED_EVENT, handler);
+    return () => window.removeEventListener(PLAYER_SPEED_EVENT, handler);
+  }, []);
 
   const verseContainerRef = useRef<HTMLDivElement>(null);
   const wordElementRefs = useRef<Array<HTMLSpanElement | null>>([]);
@@ -152,9 +185,10 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       nextStartVerseKey: activeProgress?.nextStartVerseKey,
       legacyStartIndex: startIdx,
       averageSecondsPerWordBySurah,
-      // Wall-clock target: the sizer scales audio portions by speed so the
-      // player's total (1x durations ÷ speed) matches the daily target.
-      playbackSpeed: settings.dailyPortionMode === 'reading' ? 1 : (settings.dailyPlaybackSpeed || 1),
+      // Wall-clock target: the sizer scales audio portions by the LIVE player
+      // speed so the player's total (1x durations ÷ speed) matches the daily
+      // target. E.g. 10 min at 2x sizes ~20 1x-minutes of verses.
+      playbackSpeed: settings.dailyPortionMode === 'reading' ? 1 : livePlaybackSpeed,
     });
     return {
       portion: portionResult.portion,
@@ -168,7 +202,7 @@ export default function DailyPortionObsidian({ vaultStore }: { vaultStore: Vault
       snappedMinutes: portionResult.snappedMinutes,
       lastUpdateAt: activeProgress?.updatedAt,
     };
-  }, [allVerses, averageSecondsPerWordBySurah, settings.dailyTargetMinutes, settings.dailyPortionMode, settings.dailyPlaybackSpeed, eligibleSurahs, activeProgress]);
+  }, [allVerses, averageSecondsPerWordBySurah, settings.dailyTargetMinutes, settings.dailyPortionMode, livePlaybackSpeed, eligibleSurahs, activeProgress]);
 
   // Initialize listeningComplete based on progress date.
   // Progress written by this build records `completedOnDay` explicitly, so

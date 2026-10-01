@@ -594,8 +594,10 @@ export class QuranLifeSettingTab extends PluginSettingTab {
       const detail = progress
         ? `${pct}% • ${progress.completedFiles}/${progress.totalFiles} files • ${formatBytes(progress.downloadedBytes)}${progress.failedFiles ? ` • ${progress.failedFiles} failed` : ""}`
         : text;
+      // Single readout below the bar. The row description above keeps the
+      // library status — writing the same text into both rendered every update
+      // twice (above and below the progress bar).
       rowRefs.progressText.setText(detail);
-      rowRefs.descEl.setText(detail);
     };
 
     const updateLibraryHeader = () => {
