@@ -86,10 +86,6 @@ const config: Config = {
     // See: https://docusaurus.io/docs/search#using-algolia-docsearch
     navbar: {
       title: 'Quran Life',
-      logo: {
-        alt: 'Quran Life Logo',
-        src: 'img/favicon.ico',
-      },
       items: [
         {
           type: 'docSidebar',
