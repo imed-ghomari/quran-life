@@ -41,8 +41,7 @@ const config: Config = {
     locales: ['en'],
   },
 
-  presets: [
-    [
+  presets: [    [
       'classic',
       {
         docs: {
@@ -81,11 +80,19 @@ const config: Config = {
     colorMode: {
       respectPrefersColorScheme: true,
     },
+    // DocSearch (Algolia) — replace the placeholders with the values from
+    // the DocSearch confirmation email, then push to redeploy.
+    algolia: {
+      appId: 'YOUR_APP_ID',
+      apiKey: 'YOUR_SEARCH_API_KEY',
+      indexName: 'YOUR_INDEX_NAME',
+      contextualSearch: true,
+    },
     navbar: {
       title: 'Quran Life',
       logo: {
         alt: 'Quran Life Logo',
-        src: 'img/logo.svg',
+        src: 'img/favicon.ico',
       },
       items: [
         {
@@ -96,7 +103,7 @@ const config: Config = {
         },
         {to: '/blog', label: 'Blog', position: 'left'},
         {
-          href: 'https://github.com/imed-ghomari/quran-life/releases',
+          href: 'https://community.obsidian.md/plugins/quran-life',
           label: 'Install in Obsidian',
           position: 'right',
         },
@@ -106,46 +113,6 @@ const config: Config = {
           position: 'right',
         },
       ],
-    },
-    footer: {
-      style: 'dark',
-      links: [
-        {
-          title: 'Docs',
-          items: [
-            {
-              label: 'Introduction',
-              to: '/',
-            },
-            {
-              label: 'Getting Started',
-              to: '/philosophy/getting-started',
-            },
-            {
-              label: 'Anki Deck & Reviews',
-              to: '/philosophy/practice-hub',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'Blog',
-              to: '/blog',
-            },
-            {
-              label: 'GitHub',
-              href: 'https://github.com/imed-ghomari/quran-life',
-            },
-            {
-              label: 'Releases',
-              href: 'https://github.com/imed-ghomari/quran-life/releases',
-            },
-          ],
-        },
-      ],
-      copyright: `Copyright © ${new Date().getFullYear()} Quran Life. Built with Docusaurus. Docs live on the <code>website</code> branch so <code>main</code> stays clean for Obsidian review.`,
     },
     prism: {
       theme: prismThemes.github,
