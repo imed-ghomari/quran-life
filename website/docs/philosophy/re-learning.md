@@ -1,6 +1,6 @@
 ---
 title: Fixing Mistakes
-sidebar_position: 6
+sidebar_position: 7
 ---
 
 # Fixing Memory Gaps — 3-Strike Rule
@@ -29,7 +29,7 @@ When you are ready to work on your weak verses in Obsidian:
 3. Copy the list of verse numbers shown in the browser.
 4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections.
 
-Tip: in Quran Life the deck is called QuranLife, so you can search `deck:QuranLife is:suspended tag:leech` (or `deck:QuranLife tag:leech` to include difficult cards that aren't suspended).
+Tip: in Quran Life the deck is called `QuranLife::Review` by default, and `deck:QuranLife` searches cover it (along with any sub-decks). If you renamed the deck on export, use your name instead in all searches below.
 
 ### Step 3: Re-export & Unsuspend
 

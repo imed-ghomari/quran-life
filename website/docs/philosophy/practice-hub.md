@@ -17,12 +17,19 @@ This app does not have a review queue inside it. Your reviews happen in **Anki**
 
 For each Surah:
 
-1. **Mindmap:** Choose Create Mindmap or Edit Mindmap, draw your map, then Save. View shows or hides a preview under the selector (hidden by default).
+1. **Mindmap (required):** Choose Create Mindmap or Edit Mindmap, draw your map, then Save. Only Surahs with a mindmap are exported — splits without a mindmap are skipped. View shows or hides a preview under the selector (hidden by default).
 2. **Splits:** Choose Define Splits, add or remove verses per group, then Save Splits. For short Surahs of 10 verses or fewer you get one automatic group covering the whole Surah; your saved splits replace it.
 3. **Notes:** Write in the Notes for this mindmap box. It saves automatically and is added to your cards.
-4. **Export:** Choose Export Full Deck to Anki, then import the downloaded file into Anki. Re-importing the same deck updates your existing cards and keeps review progress for unchanged groups.
+4. **Deck name:** the default is `QuranLife::Review`. You can rename it, but all searches in these guides assume the default — adjust them if you rename it.
+5. **Export:** Choose Export to Anki and wait for "Done". On desktop the file downloads in your browser; on mobile a copy is saved inside your vault (`quran-life-deck.apkg`) because mobile browsers often block the download.
 
-A Surah is ready when its verses are split. A mindmap is optional but strongly recommended — it's your memory anchor.
+A Surah is ready when it has a mindmap **and** its verses are split.
+
+## Importing — See Detailed Walkthrough
+
+How to get the file into Anki (desktop and mobile), what to tick on the import screen, what happens on re-imports, and what to check afterwards — see:
+
+**→ [Getting Started — Export and Import](./getting-started#3-export-and-import-into-anki)**
 
 ## Reviewing — See Detailed Walkthrough
 

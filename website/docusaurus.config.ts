@@ -47,6 +47,9 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          // Docs-only site: no landing page — '/' renders the Introduction directly
+          // (intro.md carries `slug: /` in its front matter).
+          routeBasePath: '/',
           // Edit links point at the website branch, website/ subdir.
           editUrl: 'https://github.com/imed-ghomari/quran-life/tree/website/website/',
         },
@@ -112,15 +115,15 @@ const config: Config = {
           items: [
             {
               label: 'Introduction',
-              to: '/docs/intro',
+              to: '/',
             },
             {
               label: 'Getting Started',
-              to: '/docs/philosophy/getting-started',
+              to: '/philosophy/getting-started',
             },
             {
               label: 'Anki Deck & Reviews',
-              to: '/docs/philosophy/practice-hub',
+              to: '/philosophy/practice-hub',
             },
           ],
         },

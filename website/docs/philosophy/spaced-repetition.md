@@ -1,6 +1,6 @@
 ---
 title: How Reviews Work
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # How Reviews Work
@@ -34,7 +34,7 @@ The downloaded deck already comes with:
 - One review deck with stable cards, so re-importing later keeps your review progress on unchanged groups.
 - Smart scheduling switched on with a 90% retention target, and a 3-strike rule for difficult cards.
 
-After the first import, open Anki → Deck Options and check that smart scheduling is enabled. Then set the leech action to **Suspend Card** as described in [Fixing Mistakes](./re-learning), so difficult cards pause automatically until you fix the map.
+After the first import, open Anki → Deck Options and check that smart scheduling is enabled. Then set the leech action to **Suspend Card** as described in [Fixing Mistakes](./re-learning), so difficult cards pause automatically until you fix the map. New to importing? See [Getting Started — Export and Import](./getting-started#3-export-and-import-into-anki).
 
 ## Setting Surah Maturity in the Anki Browser
 

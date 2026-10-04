@@ -7,34 +7,51 @@ sidebar_position: 1
 
 Quran Life helps you memorize the Quran using visual maps and steady daily reading, with reviews in Anki.
 
-This app has **3 tabs** at the top — **Daily Portion** (passive), **Anki Deck** (active), **Documentation** (you are here). Reviews live in **Anki**; you control maturity, difficult cards and splits from Anki's browser.
+The plugin has **2 views** — **Daily Portion** (passive) and **Anki Deck** (active). Reviews live in **Anki**; you control maturity, difficult cards and splits from Anki's browser.
+
+## 0. Install the Plugin in Obsidian
+
+1. In Obsidian, open Settings → Community plugins → turn off Safe mode if needed → Browse → search **Quran Life** → Install → Enable. (If it isn't in the store yet, download the latest release from GitHub and copy `main.js`, `manifest.json` and `styles.css` into a `quran-life` folder inside your vault's plugins folder, then enable it.)
+2. Open the plugin from the left ribbon icon.
 
 ## 1. Daily Portion (Passive — no Anki yet)
 
 Open **Daily Portion** every day.
 
+- **First launch:** the app downloads the Quran text once (you'll see a progress bar). Leave it until it finishes — after that everything works offline.
 - **What you get:** a short set of verses for your current Part (see Active Part in settings). Listen or read to get familiar with sound and flow. The app keeps your daily minutes steady and tells you how many days it takes to finish the Part.
 - **Skip:** In Daily Portion Settings, uncheck Surahs you already know under Surahs in Portion. To skip a Surah for reviews, suspend it later in Anki instead — not here.
 - **When to move on:** After 2–3 cycles the verses feel familiar, you are ready to create a mindmap for that Surah. You can still memorize by rote, but always create a mindmap afterwards — it's your memory anchor.
 
 ## 2. Create Your Mindmap + Splits (Anki Deck tab)
 
-Open **Anki Deck**, choose a Surah from the dropdown.
+Open **Anki Deck**, choose a Surah from the dropdown. The first time, the app may download the Quran text once — wait for the progress to finish.
 
-- **Create your own map for now** (pre-made maps are **coming soon — not ready to download yet**): use the full drawing editor. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
+- **Draw the mindmap (required for export):** Choose Create Mindmap and draw with the built-in editor (select, pen, text, arrows and shapes; undo is your friend), then Save. Only Surahs **with** a mindmap are exported — splits you define on a Surah without a mindmap are silently skipped, so always start with the map. Pre-made maps are **coming soon — not ready to download yet**. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
 - **Split the Surah** into verse groups that match the map: use the inline Define Splits (plus / remove per verse, then Save Splits). For short Surahs of 10 verses or fewer you get one automatic group covering the whole Surah; your saved splits replace it.
 - **Preview:** View shows or hides the mindmap image under the selector (hidden by default to keep the tab fast) — it sits above the splits so you can see the map while you split.
 - **Notes:** Write in the Notes for this mindmap box. It saves automatically and is added to your cards. This is where you add the theme, story, or logic for similar verses.
+- **Deck name:** the export uses `QuranLife::Review` by default. You can rename it, but every search in these guides assumes the default name — if you rename it, replace `QuranLife` with your name in all searches.
 
-## 3. Export and Review in Anki
+## 3. Export and Import into Anki
 
-In **Anki Deck**, choose Export Full Deck to Anki, then import the downloaded file into Anki (desktop or mobile).
+In **Anki Deck**, choose Export to Anki and wait for the "Done" message.
+
+- **Where is the file?** On desktop Obsidian your browser downloads `quran-life-deck.apkg`. On mobile the download is often blocked — a copy is always saved inside your vault as well, so you can open or share it from there.
+- **Import on desktop:** double-click the `.apkg` file, or in Anki go to File → Import and pick it. Then press Import.
+- **Import on mobile:** open the `.apkg` file on your device (for example from the Files app) and choose Anki to open it.
+- **On the import screen:** Anki matches the file's cards with cards already in your collection. If you see options about updating existing notes or cards, leave them **enabled** — that is what applies your map and split edits instead of piling up duplicates. If you see anything about overwriting scheduling or progress, leave that **disabled**. The file carries no review history (every card arrives New on first import), so your existing progress is safe either way. Anki reports how many cards were added vs updated.
+- **After importing:** your deck appears with verse cards plus mindmap cards, all New on the first import. Re-importing later updates matching cards (new notes, new images) and keeps review dates; brand-new groups arrive as New cards. Outdated groups (splits you changed) are **not** removed automatically — delete those old cards yourself (see [How Reviews Work](./spaced-repetition)).
+- **Check your Anki version:** smart scheduling needs Anki 23.10 or newer (desktop or mobile). Update Anki first if your version is older.
+
+## 4. Review and Grade in Anki
 
 - **Card layout:** The front shows the previous verses for context plus the new verses hidden in small blurred chunks. Reveal unveils one chunk at a time. The back shows the full verses, any similar-verse references, and the verse range. Your mindmap notes live on dedicated mindmap cards.
-- **Grading:** After all chunks are revealed, press Show Answer, then Again (didn't remember), Good (remembered), or Bury (postpone). The Space key reveals the next chunk, then grades.
-- **Scheduling:** The export already sets up smart scheduling with a 90% retention target and a 3-strike rule for difficult cards. After import, check that smart scheduling is switched on in Deck Options, then set the leech action to Suspend Card as described in [Fixing Mistakes](./re-learning).
+- **Grading:** After all chunks are revealed, press Show Answer, then Again (didn't remember) or Good (remembered) — those two are all you need (Anki also offers Hard and Easy; ignore them). Bury postpones a card to another day. The Space key reveals the next chunk, then grades.
+- **Scheduling:** The export already sets up smart scheduling with a 90% retention target and a 3-strike rule for difficult cards. After import, open Deck Options, check that smart scheduling is switched on, then set the leech action to Suspend Card as described in [Fixing Mistakes](./re-learning).
+- **Syncing between devices:** sign into AnkiWeb in Anki's preferences and sync — your cards, progress and scheduling carry over to your phone.
 
-## 4. Staying on Track in Anki
+## 5. Staying on Track in Anki
 
 You manage maturity, difficult cards and splits in the Anki Browser:
 

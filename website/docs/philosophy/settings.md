@@ -1,6 +1,6 @@
 ---
 title: Settings & Daily Portion
-sidebar_position: 7
+sidebar_position: 8
 ---
 
 # Settings & Daily Portion — Where to Set What
@@ -24,16 +24,21 @@ For how to suspend and unsuspend, reschedule, reset, flag, and do bulk operation
 
 The same Browser searches from that guide apply here.
 
-## Mindmaps and Splits (Anki Deck tab)
+## Mindmaps, Splits and Export Order (Anki Deck tab + Obsidian Settings)
 
-Not in Settings. For creating and editing mindmaps, previewing, defining splits, and writing notes, see:
+Not in Daily Portion Settings. For creating and editing mindmaps, previewing, defining splits, and writing notes, see:
 
 **→ [Anki Deck & Reviews — Preparing](./practice-hub#preparing-in-the-anki-deck-tab)**
+
+Card order inside the exported deck (which Part and Surah comes first) is set in Obsidian Settings → Quran Life → Anki Export.
 
 ## What Anki Already Sets for You (First Import)
 
 The exported deck comes with smart scheduling switched on (90% retention target), a 3-strike rule for difficult cards, and interactive card layouts (blurred chunks, context verses that expand for similar verses). After the first import, just verify in Deck Options that smart scheduling is on, and set the leech action to Suspend Card as described in [Fixing Mistakes](./re-learning).
 
-## Backup (Includes Daily Portion)
+## Backup (Automatic — No Buttons Needed)
 
-Use the Export / Import buttons in the top bar next to the tabs — they back up everything (mindmaps, splits, notes, daily settings and progress, theme) into a single file you can restore later.
+There are no Export / Import buttons in the plugin — everything is saved automatically into the plugin's own data folder inside your vault, so it syncs wherever your vault syncs:
+
+- **Autobackup:** leave it on in Obsidian Settings → Quran Life → Storage & sync for instant saves as you work.
+- **Old backups:** if you have a legacy JSON backup file, use the Migrate button in the same section to import it.

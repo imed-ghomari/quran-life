@@ -1,6 +1,6 @@
 ---
 title: Tracking Progress
-sidebar_position: 8
+sidebar_position: 9
 ---
 
 # Tracking Your Progress — Two Places
@@ -9,12 +9,13 @@ Your progress is split in two: **daily reading** in the app, **reviews** in Anki
 
 ## Understanding Memory Strength (Anki Scheduling)
 
-Anki's smart scheduling sorts cards roughly like this:
+On your deck in Anki you always see three counters — these are Anki's own colors, same on desktop and mobile:
 
-- **New** (red): you recently pressed Again, or the card was reset — it needs learning from scratch.
-- **Learning** (orange/green): you remember it for roughly 2–4 weeks between reviews.
-- **Strong** (blue): you remember it for roughly 1–3 months.
-- **Mastered** (deep): you remember it for many months.
+- **New (blue):** cards you haven't learned yet. Pressing Forget also turns a card New again.
+- **Learning (red):** cards you're currently learning — including ones you recently pressed Again on.
+- **Review (green):** learned cards that are due for review now.
+
+How *strong* a memory is shows in the review interval: Anki calls a card **young** while its interval is under 21 days and **mature** once it reaches 21 days or more (Anki's default threshold). The longer the interval, the stronger the memory — days, then weeks, then months.
 
 Check Anki → Stats (click the deck, then Stats) for retention, upcoming due cards, and the calendar heatmap.
 
