@@ -21,7 +21,7 @@ Open **Daily Portion** every day.
 
 Open **Anki Deck**, choose a Surah from the dropdown.
 
-- **Use a pre-made map** if available (50,67–114 have one), or **Create** with the full `tldraw` editor. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
+- **Create your own map for now** (pre-made maps are **coming soon — not ready to download yet**): use the full `tldraw` editor. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
 - **Split the Surah** into verse groups that match the map: use the inline `Define Splits` ( `+` / `×` per verse, `Save Splits`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits immediately replace it.
 - **Preview:** `View` toggles the mindmap image *under* the selector (hidden by default to keep the tab fast) — it sits above splits so you can see the map while you split. For `part/meta` the same View shows the preview above the notes.
 - **Notes:** Write in the `Notes for this mindmap` textarea. It is saved on blur (or when you switch surah) `src/components/AnkiDeckTab.tsx:733` and exported as `MindmapDocs` field. This is where you add theme, story, or logic for similar verses.

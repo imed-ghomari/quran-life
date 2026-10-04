@@ -3,18 +3,51 @@ title: Fixing Mistakes
 sidebar_position: 6
 ---
 
-# Fixing Memory Gaps — 3-Strike / Leech (Manual)
+# Fixing Memory Gaps — 3-Strike / Leech
 
-Even with a perfect mindmap, some verse groups will be harder. On this branch there is **no automatic suspension** — you handle the `3-strike` (Anki `Leech`) manually and fix the *mindmap*, not just the verses.
+Even with a perfect mindmap, some verse groups will be harder. Anki can **automatically suspend** cards after 3× `Again` (Leech) so you can fix the *mindmap*, not just the verses. The recommended setup below uses auto-suspend.
 
-## How it Works Now (Anki-native)
+## User Guide: How to Auto-Suspend and Find Quran Error Cards
 
-1. **Deck Options already set by export** `src/lib/anki/apkgExport.ts:534`:
-   - `Leech threshold: 3` `Leech action: Tag Only` (not suspend). After 3× `Again` on the same card, Anki adds `tag:leech` (and `leech` in `Browse`).
+### Step 1: Set Up Automatic Suspension (Do this once)
+
+1. Open **Anki** and click the gear icon next to your **Quran Deck**.
+2. Select **Options**.
+3. Scroll down to the **Lapses** section:
+	- **Leech threshold:** Set to `3` lapses.
+	- **Leech action:** Set to `Suspend Card`.
+4. Click **Save**.
+
+> **How it works:** Whenever you hit "Again" 3 times on any verse, Anki will automatically suspend the card and tag it as `leech`.
+
+### Step 2: Find Your Error Cards for Mindmap Revision
+
+When you are ready to work on your weak verses in Obsidian:
+
+1. Open Anki and press **`B`** (or click **Browse** at the top).
+2. In the search bar at the top, paste this search: `deck:"YourQuranDeckName" is:suspended tag:leech`
+3. Copy the list of verse numbers shown in the browser.
+4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections.
+
+Tip: in Quran Life the deck is `QuranLife`, so you can search `deck:QuranLife is:suspended tag:leech` (or `deck:QuranLife tag:leech` to include non-suspended leeches).
+
+### Step 3: Re-export & Unsuspend
+
+1. Re-export your deck from the Obsidian plugin to update the cards in Anki.
+2. In the Anki Browser (`B`), search `deck:"YourQuranDeckName" tag:leech is:suspended`.
+3. Select all cards (`Ctrl + A` or `Cmd + A`), right-click, and select **Toggle Suspend** (`Ctrl + Shift + S` or `Cmd + Shift + S`) to put them back into rotation.
+4. _(Optional)_ Remove the `leech` tag if you want a clean slate.
+
+## How it Works (Anki-native details)
+
+1. **Deck Options — export default vs recommended** `src/lib/anki/apkgExport.ts:534`:
+   - Export sets `Leech threshold: 3` `Leech action: Tag Only` by default. After 3× `Again` on the same card, Anki adds `tag:leech`.
+   - Recommended (see User Guide above): change `Leech action` to `Suspend Card` in `Deck Options → Lapses`, so error cards are auto-suspended (`is:suspended tag:leech`) until you fix the map.
    - You can also manually `Flag Red` (`Flag:1`) when you *feel* stuck, even before 3.
 
-2. **Find leeches manually — no auto queue:**
-   - In Anki: `Browse` → Left sidebar `Tags → leech` or search `tag:leech` or `flag:1`.
+2. **Find leeches:**
+   - If using auto-suspend (recommended): `deck:QuranLife is:suspended tag:leech`.
+   - Otherwise: `Browse` → Left sidebar `Tags → leech` or search `tag:leech` or `flag:1`.
    - Filter further: `tag:leech tag:surah::67` or `deck:QuranLife tag:leech`.
    - Sort by `Card Created` or `Due` to see most urgent.
 
@@ -33,7 +66,8 @@ Blindly pressing `Again` on the same verse group builds a weak trace. Moving the
 
 ## Quick Filters to Use Weekly
 
-- `deck:QuranLife tag:leech` — your 3-strike list
+- `deck:QuranLife is:suspended tag:leech` — your auto-suspended 3-strike list (recommended)
+- `deck:QuranLife tag:leech` — all 3-strike cards (including non-suspended)
 - `deck:QuranLife flag:1` — your manual red flags (similarity errors)
 - `deck:QuranLife tag:mutashabihat is:due` — due similar verses to prioritize
 - `deck:QuranLife tag:surah::67` — all cards for a Surah you just edited
