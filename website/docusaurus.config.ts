@@ -80,14 +80,10 @@ const config: Config = {
     colorMode: {
       respectPrefersColorScheme: true,
     },
-    // DocSearch (Algolia) — replace the placeholders with the values from
-    // the DocSearch confirmation email, then push to redeploy.
-    algolia: {
-      appId: 'YOUR_APP_ID',
-      apiKey: 'YOUR_SEARCH_API_KEY',
-      indexName: 'YOUR_INDEX_NAME',
-      contextualSearch: true,
-    },
+    // Search (Algolia DocSearch) is intentionally OFF until DocSearch approves
+    // the site. To enable: add an `algolia` block here with the appId, apiKey
+    // and indexName from the confirmation email, then push to redeploy.
+    // See: https://docusaurus.io/docs/search#using-algolia-docsearch
     navbar: {
       title: 'Quran Life',
       logo: {
