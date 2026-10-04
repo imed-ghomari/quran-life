@@ -8,6 +8,10 @@
 
 Daily Qur'an review, mindmap memorization and Anki export, autosaved to your vault.
 
+> **Requires [Anki](https://apps.ankiweb.net/) (23.10 or newer, desktop or mobile).**
+> The plugin prepares your cards — daily reading, mindmaps, verse groups — and Anki
+> handles all reviews and scheduling.
+
 📖 **Documentation:** <https://imed-ghomari.github.io/quran-life/> — user guides and mindmap symbol legend.
 ✍️ **Blog:** <https://imed-ghomari.github.io/quran-life/blog> — essays on the memorization method behind the plugin.
 
@@ -18,11 +22,17 @@ Daily Qur'an review, mindmap memorization and Anki export, autosaved to your vau
 1. Open Obsidian **Settings → Community plugins** and enable community plugins if prompted.
 2. Search for **Quran Life** and click **Install**, then **Enable**.
 
-### Manual / BRAT
+### Manual install
 
 1. Download the latest release `.zip` from the [releases page](https://github.com/imed-ghomari/quran-life/releases).
-2. In Obsidian, open **Settings → Community plugins → Browse**, click the BRAT icon (or use **Open plugin folder**), and drop the extracted plugin folder into your vault's `.obsidian/plugins/quran-life` directory.
+2. Extract it into your vault's `.obsidian/plugins/quran-life` directory.
 3. Restart Obsidian and enable **Quran Life** in **Settings → Community plugins**.
+
+### Via BRAT
+
+1. Install the [BRAT](https://obsidian.md/plugins?id=brat) plugin and enable it.
+2. In BRAT settings, choose **Add Beta plugin** and paste this repository URL.
+3. Enable **Quran Life** in **Settings → Community plugins**.
 
 ## Usage
 
@@ -34,13 +44,13 @@ Daily Qur'an review, mindmap memorization and Anki export, autosaved to your vau
 
 ### Mindmap memorization
 
-- Open a surah or part from the plugin's mindmap editor to create and edit visual memorization maps.
-- Mindmaps are stored as individual vault files, so vault sync keeps them in sync across devices.
+- Open a surah or part from the plugin's mindmap editor to create and edit visual memorization maps. Only surahs **with** a mindmap are exported, so always start here.
+- Mindmaps are stored as individual files in the plugin's data folder, so any file sync keeps them in sync across devices.
 
 ### Anki export
 
 - From the plugin settings, configure the part order and surah-within-part order for the next export.
-- Press **Export** to generate an `.apkg` file you can import into Anki.
+- In the Anki Deck view, press **Export to Anki** to generate an `.apkg` file, then import it into Anki (double-click the file, or File → Import). Re-importing updates your cards without losing review progress — see the [import walkthrough](https://imed-ghomari.github.io/quran-life/philosophy/getting-started#3-export-and-import-into-anki).
 
 ## Storage
 
