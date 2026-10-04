@@ -7,41 +7,40 @@ sidebar_position: 1
 
 Quran Life helps you memorize the Quran using visual maps and steady daily reading, with reviews in Anki.
 
-This app now has **3 tabs** at the top — **Daily Portion** (passive), **Anki Deck** (active), **Documentation** (you are here). Reviews that were previously inside the app now live in **Anki**; you control maturity, leeches and splits via Anki's native Browser.
+This app has **3 tabs** at the top — **Daily Portion** (passive), **Anki Deck** (active), **Documentation** (you are here). Reviews live in **Anki**; you control maturity, difficult cards and splits from Anki's browser.
 
 ## 1. Daily Portion (Passive — no Anki yet)
 
 Open **Daily Portion** every day.
 
-- **What you get:** a short set of verses for your current Part (see `Active Part` in settings). Listen or read to get familiar with sound and flow. The app keeps your daily minutes steady (`Daily Target`) and tells you how many days to finish the Part.
-- **Skip:** In `Daily Portion → Settings → Surahs in Portion` uncheck surahs you already know. To skip for reviews, you will later *Suspend* them in Anki (`Browse → tag:surah::1 → Suspend`), not here.
+- **What you get:** a short set of verses for your current Part (see Active Part in settings). Listen or read to get familiar with sound and flow. The app keeps your daily minutes steady and tells you how many days it takes to finish the Part.
+- **Skip:** In Daily Portion Settings, uncheck Surahs you already know under Surahs in Portion. To skip a Surah for reviews, suspend it later in Anki instead — not here.
 - **When to move on:** After 2–3 cycles the verses feel familiar, you are ready to create a mindmap for that Surah. You can still memorize by rote, but always create a mindmap afterwards — it's your memory anchor.
 
 ## 2. Create Your Mindmap + Splits (Anki Deck tab)
 
 Open **Anki Deck**, choose a Surah from the dropdown.
 
-- **Create your own map for now** (pre-made maps are **coming soon — not ready to download yet**): use the full `tldraw` editor. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
-- **Split the Surah** into verse groups that match the map: use the inline `Define Splits` ( `+` / `×` per verse, `Save Splits`). For `≤10` verses you get 1 auto-group `1–N`; your saved splits immediately replace it.
-- **Preview:** `View` toggles the mindmap image *under* the selector (hidden by default to keep the tab fast) — it sits above splits so you can see the map while you split. For `part/meta` the same View shows the preview above the notes.
-- **Notes:** Write in the `Notes for this mindmap` textarea. It is saved on blur (or when you switch surah) `src/components/AnkiDeckTab.tsx:733` and exported as `MindmapDocs` field. This is where you add theme, story, or logic for similar verses.
+- **Create your own map for now** (pre-made maps are **coming soon — not ready to download yet**): use the full drawing editor. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
+- **Split the Surah** into verse groups that match the map: use the inline Define Splits (plus / remove per verse, then Save Splits). For short Surahs of 10 verses or fewer you get one automatic group covering the whole Surah; your saved splits replace it.
+- **Preview:** View shows or hides the mindmap image under the selector (hidden by default to keep the tab fast) — it sits above the splits so you can see the map while you split.
+- **Notes:** Write in the Notes for this mindmap box. It saves automatically and is added to your cards. This is where you add the theme, story, or logic for similar verses.
 
 ## 3. Export and Review in Anki
 
-In **Anki Deck** `Deck name` → `Export Full Deck to Anki` → import the `.apkg` into Anki (desktop or AnkiDroid/AnkiMobile).
+In **Anki Deck**, choose Export Full Deck to Anki, then import the downloaded file into Anki (desktop or mobile).
 
-- **Card layout:** Front shows `ContextFront` (2 prev verses, or `Surah — name` for `1:1` `src/lib/anki/apkgExport.ts:582`) + `VerseChunksFront` blurred (`src/lib/reviewVerseChunks.ts` splits by `ۘۙۚ` or max 10 words). `Reveal next` unblurs one chunk at a time. Back shows `VerseFullBack` (all revealed verses condensed inline, for grading), `RelatedGroups` (mutashabihat), and `AnchorLabel • Range — Surah`. Surah-level `MindmapDocs` live on the dedicated mindmap cards, not on verse backs.
-- **Grading:** After all chunks revealed, `Show Answer` → `Again` (Not Remembered), `Good` (Remembered), `Bury` (Postpone). Space reveals next, then grades.
-- **Scheduling:** The export already sets `Deck Options → FSRS Enabled, Desired Retention 0.90, Leech threshold 3 Tag Only` `src/lib/anki/apkgExport.ts:522`. After import, verify `Deck Options → FSRS` is on — no other setup.
+- **Card layout:** The front shows the previous verses for context plus the new verses hidden in small blurred chunks. Reveal unveils one chunk at a time. The back shows the full verses, any similar-verse references, and the verse range. Your mindmap notes live on dedicated mindmap cards.
+- **Grading:** After all chunks are revealed, press Show Answer, then Again (didn't remember), Good (remembered), or Bury (postpone). The Space key reveals the next chunk, then grades.
+- **Scheduling:** The export already sets up smart scheduling with a 90% retention target and a 3-strike rule for difficult cards. After import, check that smart scheduling is switched on in Deck Options, then set the leech action to Suspend Card as described in [Fixing Mistakes](./re-learning).
 
-## 4. Staying on Track — Manual Anki Workflow
+## 4. Staying on Track in Anki
 
-Unlike the old in-app `Practice` queue, you now manage maturity, leeches and splits **manually in Anki Browser** (`Browse`):
+You manage maturity, difficult cards and splits in the Anki Browser:
 
-- **Set maturity:** Select verse-group cards → Right-click → `Reschedule` → `Set Due Date` (e.g., `7` days for new, `30` for medium, `90` for strong) or `Reposition` to make them `New` again. Or use `Flag` / `Suspend` to hide. See [Settings](./settings).
-- **3-strike / Leech:** `Deck Options → Leech threshold 3 Tag Only` tags `leech` after 3× `Again`. In `Browse` search `tag:leech` or `flag:1` (if you used `Flag Red` for similarity errors) → open its mindmap in `Anki Deck` → mend the map (add detail, separate similar branches) → re-export. Do **not** just bury and retry — fix the map. See [Fixing Gaps](./re-learning).
-- **Mutashabihat:** `Browse → tag:mutashabihat` lists all groups with similar verses. Back field `RelatedGroups` shows `2:23 ~ 11:45` etc. When you confuse `2:23` with `11:45`, flag the card `Flag Red` and place them far apart on the mindmap. See [Similar Verses](./mutashabihat).
-- **Split changed? Delete old group:** If you change `1-5` to `1-3` + `4-5`, the old `ql-67-1-5` card is now obsolete (different `anchorId`). In `Browse` search `deck:QuranLife tag:surah::67` (change number), select the old `1-5` card → `Delete` (or `Suspend` if you want history), then re-import the new `.apkg` (Anki updates existing `ql-67-1-3` etc. and keeps due dates for unchanged groups). See [How Reviews Work](./spaced-repetition).
+- **Set maturity:** Select verse-group cards, right-click, then Reschedule and pick a due date (for example 7 days for new, 30 for medium, 90 for strong), or reset them to New. You can also use Flag or Suspend to hide cards. See [Settings](./settings).
+- **3-strike / difficult cards:** After 3 times pressing Again, Anki suspends the card and tags it for you. In the Browser search for your suspended tagged cards, open the mindmap in Anki Deck, improve the map (add detail, separate similar branches), then re-export. Do **not** just keep pressing Again — fix the map. See [Fixing Mistakes](./re-learning).
+- **Similar verses:** Search for cards tagged with similar verses. When you confuse two verses, flag the card red and place the two verses far apart on the mindmap. See [Similar Verses](./mutashabihat).
+- **Split changed? Delete the old group:** If you change your splits (for example from verses 1–5 into 1–3 plus 4–5), the old 1–5 card is now outdated. In the Browser search for that Surah's cards, delete the old group card (or suspend it if you want to keep history), then re-import. Anki updates matching cards and keeps review progress for unchanged groups. See [How Reviews Work](./spaced-repetition).
 
-Track daily reading in the app, review history and maturity in `Anki → Stats` / `Browse`. Next: [Mindmap Strategy](./mindmap-strategy) → [How Reviews Work](./spaced-repetition).
-
+Track daily reading in the app, and review history and maturity in Anki's Stats and Browser. Next: [Mindmap Strategy](./mindmap-strategy) → [How Reviews Work](./spaced-repetition).

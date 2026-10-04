@@ -3,9 +3,9 @@ title: Fixing Mistakes
 sidebar_position: 6
 ---
 
-# Fixing Memory Gaps — 3-Strike / Leech
+# Fixing Memory Gaps — 3-Strike Rule
 
-Even with a perfect mindmap, some verse groups will be harder. Anki can **automatically suspend** cards after 3× `Again` (Leech) so you can fix the *mindmap*, not just the verses. The recommended setup below uses auto-suspend.
+Even with a perfect mindmap, some verse groups will be harder. Anki can **automatically suspend** cards after 3 times pressing Again, so you can fix the *mindmap*, not just repeat the verses. The recommended setup below uses auto-suspend.
 
 ## User Guide: How to Auto-Suspend and Find Quran Error Cards
 
@@ -29,7 +29,7 @@ When you are ready to work on your weak verses in Obsidian:
 3. Copy the list of verse numbers shown in the browser.
 4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections.
 
-Tip: in Quran Life the deck is `QuranLife`, so you can search `deck:QuranLife is:suspended tag:leech` (or `deck:QuranLife tag:leech` to include non-suspended leeches).
+Tip: in Quran Life the deck is called QuranLife, so you can search `deck:QuranLife is:suspended tag:leech` (or `deck:QuranLife tag:leech` to include difficult cards that aren't suspended).
 
 ### Step 3: Re-export & Unsuspend
 
@@ -38,39 +38,37 @@ Tip: in Quran Life the deck is `QuranLife`, so you can search `deck:QuranLife is
 3. Select all cards (`Ctrl + A` or `Cmd + A`), right-click, and select **Toggle Suspend** (`Ctrl + Shift + S` or `Cmd + Shift + S`) to put them back into rotation.
 4. _(Optional)_ Remove the `leech` tag if you want a clean slate.
 
-## How it Works (Anki-native details)
+## More Detail — How Difficult Cards Work
 
-1. **Deck Options — export default vs recommended** `src/lib/anki/apkgExport.ts:534`:
-   - Export sets `Leech threshold: 3` `Leech action: Tag Only` by default. After 3× `Again` on the same card, Anki adds `tag:leech`.
-   - Recommended (see User Guide above): change `Leech action` to `Suspend Card` in `Deck Options → Lapses`, so error cards are auto-suspended (`is:suspended tag:leech`) until you fix the map.
-   - You can also manually `Flag Red` (`Flag:1`) when you *feel* stuck, even before 3.
+1. **Deck options — what the export sets vs what we recommend:**
+   - The export sets a 3-strike threshold by default, tagging difficult cards after 3 times pressing Again.
+   - Recommended (see the guide above): change the leech action to Suspend Card in Deck Options, so error cards pause automatically (`is:suspended`) until you fix the map.
+   - You can also flag a card red yourself whenever you *feel* stuck, even before reaching 3 strikes.
 
-2. **Find leeches:**
-   - If using auto-suspend (recommended): `deck:QuranLife is:suspended tag:leech`.
-   - Otherwise: `Browse` → Left sidebar `Tags → leech` or search `tag:leech` or `flag:1`.
-   - Filter further: `tag:leech tag:surah::67` or `deck:QuranLife tag:leech`.
-   - Sort by `Card Created` or `Due` to see most urgent.
+2. **Find difficult cards:**
+   - If using auto-suspend (recommended): search `deck:QuranLife is:suspended tag:leech`.
+   - Otherwise: open Browse and look under Tags for leech, or search `tag:leech` or your red flags.
+   - Narrow it down per Surah, for example difficult cards in one Surah, and sort by creation or due date to see the most urgent first.
 
-3. **Do NOT just `Again` again — mend the mindmap:**
-   - Open `Anki Deck` tab → select that Surah (e.g., `67. Al-Mulk`).
-   - `View` to see the map *above* splits, `Edit Mindmap` — ask: *Why did I confuse `15-24`?* Add a visual landmark, separate the branch, add a story for that chunk. Keep groups to 2–4 items per branch `src/lib/anki/cardBuilder.ts:105`.
-   - If the group is too long, `Define Splits` → `+` to split `15-24` into `15-18` + `19-24` → `Save Splits`.
+3. **Do NOT just press Again again — fix the mindmap:**
+   - Open the Anki Deck tab and pick that Surah.
+   - View the map, then edit it — ask: *why did I confuse these verses?* Add a visual landmark, separate the branch, add a small story for that chunk. Keep groups to 2–4 items per branch.
+   - If the group is too long, split it into two smaller groups in Define Splits and save.
 
 4. **Re-export the fix:**
-   - `Export Full Deck to Anki` → re-import `.apkg` into Anki. Because `note guid` is stable `ql-{surah}-{start}-{end}` `src/lib/anki/apkgExport.ts:199`, Anki **updates** the existing note (keeps `Due`/`Ivl` for unchanged groups) and adds the new split groups as `New` cards. The old `15-24` card (now obsolete) stays as `leech`; you can `Delete` it or `Suspend` it manually.
-   - For the `leech` card itself: after you fixed the map, in `Browse` select it → `Cards → Forget` (resets to `New`) or `Reschedule → 7 days` to give it a short interval, and remove `tag:leech` (`Right-click → Remove Tag`).
+   - Export the full deck and re-import it into Anki. Matching cards are updated (keeping your review dates) and new split groups arrive as New cards. An outdated group card stays as it was — you can delete it or suspend it yourself.
+   - For the difficult card itself: after fixing the map, select it in the Browser and choose Forget (starts over as New) or reschedule it a week ahead for a short interval, then remove the leech tag.
 
-## Why “Mend Map, Not Just Repeat”
+## Why “Fix the Map, Not Just Repeat”
 
-Blindly pressing `Again` on the same verse group builds a weak trace. Moving the similar verses far apart on the map and adding a logic bridge (thematic cause→effect) creates a distinct retrieval cue — the next recall uses the *map*, not rote sound.
+Pressing Again on the same verse group builds a weak trace. Moving similar verses far apart on the map and adding a logic bridge (thematic cause and effect) creates a distinct retrieval cue — next time you recall using the *map*, not rote sound.
 
-## Quick Filters to Use Weekly
+## Searches to Use Weekly
 
-- `deck:QuranLife is:suspended tag:leech` — your auto-suspended 3-strike list (recommended)
-- `deck:QuranLife tag:leech` — all 3-strike cards (including non-suspended)
+- `deck:QuranLife is:suspended tag:leech` — your auto-suspended difficult cards (recommended)
+- `deck:QuranLife tag:leech` — all difficult cards (including ones that aren't suspended)
 - `deck:QuranLife flag:1` — your manual red flags (similarity errors)
 - `deck:QuranLife tag:mutashabihat is:due` — due similar verses to prioritize
-- `deck:QuranLife tag:surah::67` — all cards for a Surah you just edited
+- `deck:QuranLife tag:surah::67` — all cards for one Surah you just edited
 
-Tip: After fixing 2–3 leeches in one Surah, do a 5-min “teach method” — explain the map `Big Picture → Concept → Big Picture` out loud before the next Anki session.
-
+Tip: After fixing 2–3 difficult cards in one Surah, do a 5-minute “teach back” — explain the map (big picture, then concept, then big picture again) out loud before the next Anki session.

@@ -5,35 +5,32 @@ sidebar_position: 8
 
 # Tracking Your Progress — Two Places
 
-Your progress is now split: **daily reading** in the app, **reviews** in `Anki`.
+Your progress is split in two: **daily reading** in the app, **reviews** in Anki.
 
-## Understanding Memory Strength (Anki FSRS)
+## Understanding Memory Strength (Anki Scheduling)
 
-Anki's `FSRS` maps to the old `New/Medium/Strong/Mastered`:
+Anki's smart scheduling sorts cards roughly like this:
 
-- **New** (red): `Again` recently or `Forget` — `Due` = `New #`, `Ivl` = `0`.
-- **Learning / Medium** (orange/green): `Ivl` `14–30` days — `prop:ivl>14 prop:ivl<30` in `Browse`.
-- **Strong** (blue): `Ivl` `30–90` days.
-- **Mastered** (deep): `Ivl` `>90` days, eventually months.
+- **New** (red): you recently pressed Again, or the card was reset — it needs learning from scratch.
+- **Learning** (orange/green): you remember it for roughly 2–4 weeks between reviews.
+- **Strong** (blue): you remember it for roughly 1–3 months.
+- **Mastered** (deep): you remember it for many months.
 
-Check `Anki → Stats` (click deck → `Stats`) for `Retention`, `Due`, `Retention` vs `Desired Retention 0.90`.
+Check Anki → Stats (click the deck, then Stats) for retention, upcoming due cards, and the calendar heatmap.
 
 ## What You Can Track
 
-- **Daily Portion (in-app):** `Anki Deck → Deck Statistics` `src/components/AnkiDeckTab.tsx:781` — see [Anki Deck & Reviews](./practice-hub) for the breakdown.
-- **Reviews (in Anki):** For `is:due`, `tag:leech` (3-strike), `tag:mutashabihat`, `flag:1`, and per-Surah filters, see:
-  - **[Fixing Mistakes](./re-learning)** for `leech`/`flag`
-  - **[Similar Verses](./mutashabihat)** for `mutashabihat` checks
-  - **[How Reviews Work](./spaced-repetition)** for `is:due`/`prop:ivl` and maturity
+- **Daily Portion (in the app):** Anki Deck → Deck Statistics shows your mindmap, verse-group, and notes counts — see [Anki Deck & Reviews](./practice-hub) for the breakdown.
+- **Reviews (in Anki):** use the Browser and Stats:
+  - **[Fixing Mistakes](./re-learning)** for difficult and flagged cards
+  - **[Similar Verses](./mutashabihat)** for similar-verse checks
+  - **[How Reviews Work](./spaced-repetition)** for due cards and maturity
 
-  In `Anki → Stats` you get `Retention`, `Due`, and `Calendar` heatmap (replaces old in-app heatmap).
+## Daily Reading Filters
 
-## Filters (Daily Portion)
-
-Your daily progress still respects `Active Part` and `Skipped Surahs` checked in `Daily Portion → Settings`. Changing `Active Part` does **not** affect Anki `Due`; Anki is global. Use `Suspend`/`Unsuspend` in `Browse` to hide/show Surahs for reviews.
+Your daily progress follows the Active Part and the Surahs you checked in Daily Portion Settings. Changing the Active Part does **not** affect Anki due dates — Anki covers everything. To hide or show Surahs for reviews, suspend or unsuspend them in the Browser.
 
 ## When to Reset
 
-- **Daily reading:** `Daily Portion → Settings → Reset This Part / Reset All`.
-- **Reviews:** `Browse → Select cards → Forget` (makes `New`) or `Reschedule` (sets new `Due`). Do this after you `Delete` obsolete `Range` cards when you changed splits (see [How Reviews Work](./spaced-repetition)).
-
+- **Daily reading:** Daily Portion → Settings → Reset This Part / Reset All.
+- **Reviews:** in the Browser, select cards and choose Forget (makes them New again) or Reschedule (sets a new due date). Do this after deleting an outdated group card when you changed splits (see [How Reviews Work](./spaced-repetition)).

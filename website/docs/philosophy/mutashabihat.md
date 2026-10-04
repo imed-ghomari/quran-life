@@ -3,37 +3,36 @@ title: Similar Verses
 sidebar_position: 5
 ---
 
-# Similar Verses (Mutashabihat) — Manual Check
+# Similar Verses (Mutashabihat)
 
-Similar verses (mutashabihat) are verses that look/sound almost identical — the #1 source of “I knew it but said the other one.”
+Similar verses (mutashabihat) are verses that look or sound almost identical — the number one source of "I knew it, but I said the other one."
 
-## How the App Marks Them (Export-time)
+## How the App Marks Them
 
-- For each verse in a group, `src/lib/anki/cardBuilder.ts:43` calls `getMutashabihatForAbsolute(abs)` `src/lib/mutashabihat.ts:172`. If any verse has a match, `relatedGroups: ["2:23 ~ 11:45", ...]` (cap 8) `src/lib/anki/cardBuilder.ts:68` and `tags.push('mutashabihat')` `src/lib/anki/cardBuilder.ts:73`.
-- `ContextFront` is baked with **5** verses before `startVerse` `src/lib/anki/cardBuilder.ts:60`, but the template shows **2** normally and **5** (`2` + `3 extra` `class="extra"` `src/lib/anki/apkgExport.ts:214`) only when `hasMutashabihat` and all chunks are revealed `src/lib/anki/apkgExport.ts:284`. That extra context is the disambiguator.
-- Back shows `RelatedGroups` field. Front neverauto-hints until you’ve revealed the group.
+- Verse groups that contain a look-alike verse are tagged automatically, so you can find them all in the Anki Browser.
+- The back of the card lists the similar references (for example 2:23 and 11:45) so you can compare them.
+- For similar-verse groups, extra context verses appear after you reveal everything — that wider window helps you verify exactly which verse you recalled. The front never gives hints before you've tried to recall.
 
-## How to Check — In Anki Browser (no Settings list)
+## How to Check — In the Anki Browser
 
-- **All with similarities:** `Browse → tag:mutashabihat` or search `tag:mutashabihat` → `≈ 30%` of your deck.
-- **Due + similar (priority):** `tag:mutashabihat is:due` or `tag:mutashabihat prop:due<7`
-- **By Surah:** `tag:mutashabihat tag:surah::2` — see which groups in `2. Al-Baqarah` are confusable.
-- **On the card:** Back field `RelatedGroups` lists `2:23 ~ 11:45` etc. Clicking it does not navigate — use `Browse` search `2:23` to open the other group.
+- **All groups with similarities:** open Browse and search `tag:mutashabihat`.
+- **Due similar verses first (priority):** search `tag:mutashabihat is:due`.
+- **One Surah:** search `tag:mutashabihat tag:surah::2` to see the confusable groups in that Surah.
+- **On the card:** the back lists the similar references. To open the other group, search for its verse number in the Browser.
 
-## How to Deal — Logic, Not Tricks
+## How to Deal With Them — Logic, Not Tricks
 
-1. **Reactive (when you fail):** You pressed `Again` because you said `11:45` instead of `2:23`. Immediately `Flag Red` (`Flag:1` or `Ctrl+1`) or `Add Tag → error::similar`. Do **not** just bury — flag so you can filter later `flag:1` or `tag:error::similar`.
+1. **When it happens (you got it wrong):** you pressed Again because you said the other verse. Immediately flag the card red (or add a similar-error tag). Do **not** just postpone it — flag it so you can find it later.
 
-2. **Fix the map (visual separation):**
-   - Open `Anki Deck → Surah 2` → `View` (now inline above notes) → `Edit Mindmap`.
-   - Place `2:23` and `11:45` on **different main branches**, far apart. Add a thematic cue: e.g., `2:23` is in “Challenge to produce a surah” (Makkan challenge), `11:45` is in “Nuh’s son” story — draw that distinction.
-   - `Save` → `Export Full Deck` → re-import. The `leech`/`flag` card keeps its `Due` until you `Forget`/`Reschedule`.
+2. **Fix the map (separate them visually):**
+   - Open Anki Deck, pick that Surah, and edit the mindmap.
+   - Place the two similar verses on **different main branches**, far apart. Add a thematic cue that distinguishes them — for example, one belongs to a story about a challenge, the other to the story of Nuh's son. Draw that difference.
+   - Save, export, and re-import. Your review progress on that card is kept until you reset it.
 
-3. **Proactive (weekly):** Pick one `tag:mutashabihat` Surah, explain its groups aloud using the map, and for each `RelatedGroups` entry, recite *both* verses and state the thematic difference.
+3. **Weekly habit (before it happens):** pick one Surah with similar verses, explain its groups out loud using the map, and for each similar reference, recite *both* verses and say the thematic difference out loud.
 
 ## Why This Matters
 
-Tricks (`first letter Alif before Ya`) fade. Thematic flow + spatial separation on the mindmap gives a **retrieval cue** that survives spaced repetition. The app’s `5`-verse context (`2` → `5` when `mutashabihat`) is your verification tool after recall, not a hint before.
+Letter tricks fade. Thematic flow plus spatial separation on the mindmap gives you a retrieval cue that survives spaced repetition. The extra context verses on the card are your verification tool *after* recall — not a hint *before*.
 
-**Filters to keep:** `tag:mutashabihat`, `tag:leech`, `flag:1`, `deck:QuranLife is:due`
-
+**Searches to keep:** `tag:mutashabihat`, `tag:leech`, red flags, `deck:QuranLife is:due`

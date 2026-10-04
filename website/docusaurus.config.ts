@@ -53,6 +53,8 @@ const config: Config = {
         blog: {
           showReadingTime: true,
           authorsMapPath: 'authors.yml',
+          blogSidebarCount: 'ALL',
+          blogSidebarTitle: 'All posts',
           feedOptions: {
             type: ['rss', 'atom'],
             xslt: true,
