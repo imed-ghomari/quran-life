@@ -8,7 +8,8 @@
 
 Daily Qur'an review, mindmap memorization and Anki export, autosaved to your vault.
 
-📖 **Full documentation:** <https://imed-ghomari.github.io/quran-life/> — user guides, mindmap symbol legend, and blog.
+📖 **Documentation:** <https://imed-ghomari.github.io/quran-life/> — user guides and mindmap symbol legend.
+✍️ **Blog:** <https://imed-ghomari.github.io/quran-life/blog> — essays on the memorization method behind the plugin.
 
 ## Installation
 
