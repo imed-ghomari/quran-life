@@ -20,16 +20,12 @@ Used together, they can support a halaqah without pretending to replace it.
 
 ## What Quran Life can already do for teachers and students
 
-Quran Life is not only a solo subscription. The app already includes teacher and student subscription paths, teacher seat counts, and a shared class-code flow for onboarding students.
-
-That matters because it allows a teacher to give students access through one system instead of pushing everyone into separate individual checkout decisions.
-
-More importantly, it gives the class a common method:
+Quran Life is an Obsidian plugin, so there are no accounts, seats, or class codes — a student just installs it and follows the same workflow. That matters because it lets a teacher give the whole class one common method instead of pushing everyone into separate setups:
 
 - daily portion for passive familiarity
 - surah mindmaps for structure
 - verse groups for review units
-- suspended work when a section keeps failing
+- suspended cards when a section keeps failing
 - mutashabihat handling when similarity problems become active
 
 Even when students differ in pace, the underlying logic can stay the same.
@@ -65,15 +61,15 @@ In other words, AI can help the teacher think faster and prepare faster.
 
 A practical teacher workflow might look like this:
 
-## 1. Onboard students with one structure
+## 1. Onboard students onto one structure
 
-Using the teacher plan, the teacher can cover student seats and share the class code so students join the same product workflow.
+Every student installs the same free plugin and follows the same workflow: daily portion, mindmaps, Anki reviews.
 
 That immediately solves one common problem: some students use one method, others use another, and the teacher has to translate constantly.
 
-## 2. Let students do their personal work inside Quran Life
+## 2. Let students do their personal work between lessons
 
-Each student uses the app to:
+Each student uses the plugin and Anki to:
 
 - complete the daily portion
 - build or refine mindmaps

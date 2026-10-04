@@ -24,10 +24,10 @@ Quran Life is strongest when it is used as a memory system, not just a streak tr
 
 For a strong memorizer, the app can do a few things that matter a lot:
 
-- It separates passive exposure, structural mapping, and active review instead of mixing them together.
+- It separates passive exposure (Daily Portion), structural mapping (mindmaps), and active review (Anki) instead of mixing them together.
 - It gives you surah mindmaps and verse-group logic so your review is attached to structure, not only to repetition.
-- It exposes pressure points through suspended verse groups, review errors, and mutashabihat work.
-- It helps you see load over time instead of only asking whether you reviewed today.
+- It exposes pressure points through suspended Anki cards, review errors, and mutashabihat work.
+- Anki's Stats help you see load over time instead of only asking whether you reviewed today.
 
 That matters because advanced students often do enough review to feel busy, but still do not know what kind of weakness is actually showing up.
 
@@ -49,10 +49,10 @@ Its best role is to help you reason about the patterns Quran Life is already sur
 
 For example, after a review session or a weekly check-in, you can give AI a short summary such as:
 
-- which surahs produced the most mistakes
+- which surahs produced the most mistakes (Anki Browser, sorted by leech tags and flags)
 - which verse groups became suspended
 - which mutashabihat cases are still unresolved
-- whether your future review load is climbing
+- whether your upcoming due counts in Anki are climbing
 - which transitions feel weak even when individual ayat feel familiar
 
 Then you can ask AI to do higher-level thinking with you:
@@ -71,7 +71,7 @@ One good workflow for a hafidh looks like this:
 
 ## 1. Use Quran Life during the week as usual
 
-Do your reviews, mindmap checks, daily portion if relevant, and mutashabihat work inside the app.
+Do your Anki reviews, mindmap fixes, daily portion, and mutashabihat work as usual.
 
 Do not ask AI to interfere with the live recall moment. The recall moment should stay honest.
 
@@ -79,10 +79,10 @@ Do not ask AI to interfere with the live recall moment. The recall moment should
 
 Look especially at:
 
-- the surahs with repeated errors
+- the surahs with repeated errors (leech tags and red flags in the Anki Browser)
 - any suspended verse groups
-- unresolved or ignored mutashabihat decisions
-- whether your forecasted review load is becoming unrealistic
+- unresolved similarity confusions
+- whether your upcoming Anki due counts are becoming unrealistic
 
 ## 3. Summarize the pattern outside the app
 

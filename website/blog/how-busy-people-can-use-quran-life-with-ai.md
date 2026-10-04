@@ -32,11 +32,11 @@ For a busy person, the app should remove ambiguity before it asks for discipline
 
 That is why several Quran Life behaviors matter more than they might seem:
 
-- The Today tab gives one place to start.
+- The Daily Portion tab gives one place to start.
 - Daily portion is calculated for you instead of being guessed emotionally each morning.
 - The portion is snapped to meaningful boundaries, so stopping points feel natural rather than arbitrary.
-- The review queue helps you work from due material instead of mental guilt.
-- The small status dot on Today helps you see whether the day's portion is actually finished.
+- Anki's due counts tell you what to review instead of mental guilt.
+- The portion progress bar shows whether today's reading is actually finished.
 
 This is powerful because busy people lose more time to switching and uncertainty than to the task itself.
 
@@ -65,10 +65,10 @@ Think of it this way:
 - Quran Life decides what the memorization system needs.
 - AI helps you fit that system into your actual life.
 
-That means Quran Life handles things like:
+That means the plugin handles things like:
 
 - daily portion
-- review timing
+- Anki review scheduling
 - mindmap and verse-group structure
 - identifying suspended work or similarity work
 
@@ -92,9 +92,9 @@ The goal here is not heroics. The goal is continuity. Daily portion works especi
 
 ## Later in the day
 
-Do a smaller review block from what is due, even if it is brief.
+Do a smaller Anki review block from what is due, even if it is brief.
 
-Because the review queue already exists, you do not need to spend your limited energy deciding what deserves attention first.
+Because the due counts already exist, you do not need to spend your limited energy deciding what deserves attention first.
 
 ## End of week
 

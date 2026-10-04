@@ -2,6 +2,8 @@
 title: "Types of mutashabihat: location and direction"
 description: "A practical way to classify mutashabihat based on where the similarity happens and how the relationship moves between surahs."
 date: 2026-04-02
+last_update:
+  date: 2026-10-04
 authors: quran-life
 tags: [feature-deep-dive, philosophy]
 slug: mutashabihat-types
@@ -13,7 +15,7 @@ One useful way to classify mutashabihat is by location.
 
 Some mutashabihat happen at the transition between verses. The confusion is not only in one phrase, but in the point where one ayah leads into another. Other mutashabihat happen inside the verse itself, where the confusion sits in the internal wording of the ayah.
 
-That difference matters during review. When the mutashabihat sits at the boundary between verses, Quran Life gives more context while reviewing so you do not get stuck only because you lost your place in the transition. The app is trying to help you identify the wording problem without letting verse-boundary confusion become a fake extra obstacle.
+That difference matters during review. When the mutashabihat sits at the boundary between verses, the card's extra context verses after full reveal help you stay oriented, so you do not get stuck only because you lost your place in the transition. The extra context is trying to help you identify the wording problem without letting verse-boundary confusion become a fake extra obstacle.
 
 Another useful classification is by direction.
 
@@ -22,4 +24,3 @@ Some mutashabihat are one-way. A verse in one surah strongly points your mind to
 That directional difference often depends on how you structured the surah mindmaps. If one surah has a much stronger or more explicit structure, it may mostly pull the other one in one direction. If both surahs are structured in a way that creates similar pressure, the mutashabihat starts behaving like a back-and-forth link.
 
 This is another reason mindmap quality matters. Mutashabihat are not only about shared wording. They are also about how clearly each verse lives inside its own structure.
-
