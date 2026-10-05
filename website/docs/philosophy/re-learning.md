@@ -27,7 +27,7 @@ When you are ready to work on your weak verses in Obsidian:
 1. Open Anki and press **`B`** (or click **Browse** at the top).
 2. In the search bar at the top, paste this search: `deck:"YourQuranDeckName" is:suspended tag:leech`
 3. Copy the list of verse numbers shown in the browser.
-4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections — or add a one-line rule/tafsir note for tiny haraka/letter errors (see section 4 below).
+4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections.
 
 Tip: in Quran Life the deck is called `QuranLife::Review` by default, and `deck:QuranLife` searches cover it (along with any sub-decks). If you renamed the deck on export, use your name instead in all searches below.
 
@@ -58,20 +58,18 @@ Tip: in Quran Life the deck is called `QuranLife::Review` by default, and `deck:
 
  4. **If the error is tiny (haraka / letter / ending) — rule first, then tafsir:**
     - How to tell: you recall the group and its order correctly, but the same vowel, letter, or word-form keeps failing (case ending, verb prefix, singular/plural, tense).
-    - Do **not** draw this on the map — the map stays coarse for clarity. Write a **one-line note** in Notes for this mindmap (Anki Deck tab) and re-export. Notes-only updates keep your review dates.
-    - **Step A — Arabic rule (cheapest, most general):** ask a teacher, grammar book, or AI: *what rule forces this form here?* (case, agreement, verb mood after a particle, morphology). If you didn't know the rule, save it as one line. One rule often fixes many verses, so always try this first — including as a native speaker. School Arabic and dialect are not Quranic `i'rab`.
-    - **Step B — tafsir / meaning (only if A doesn't fully explain):** if the rule allows both forms, or dialect pulls the other way, or the choice feels unorthodox, ask: *why did the Quran choose this form here?* (tense, number, synonym, fronting for emphasis, rhyme tied to the preceding story). Save it as a one-line meaning cue.
-    - **Step C — pure ear slip (neither adds clarity):** no note. Do a short listening/shadowing loop via Daily Portion plus teach-back aloud, then unsuspend.
-    - **Escalation rule:** once is a slip — grade Again honestly and let scheduling handle it. Same micro-error twice, or a leech suspension, means systematic — do A → B → C.
-    - Boundary: tajwid judgment and recitation correction stay with a teacher. AI is only for explaining the rule, explaining the meaning choice, and planning.
+    - Do **not** draw this on the map — the map stays coarse for clarity.
+    - **Step A — Arabic rule (cheapest, most general):** ask: *what rule forces this form here?* (case, agreement, verb mood after a particle, morphology). One rule often fixes many verses, so always try this first — including as a native speaker. School Arabic and dialect are not Quranic `i'rab`.
+    - **Step B — tafsir / meaning (only if A doesn't fully explain):** if the rule allows both forms, or dialect pulls the other way, or the choice feels unorthodox, ask: *why did the Quran choose this form here?* (tense, number, synonym, fronting for emphasis, rhyme tied to the preceding story).
+    - **Escalation rule:** once is a slip — grade Again honestly and let scheduling handle it. Same micro-error twice, or a leech suspension, means systematic — do A → B.
 
-4. **Re-export the fix:**
+ 5. **Re-export the fix:**
    - Export the full deck and re-import it into Anki. Matching cards are updated (keeping your review dates) and new split groups arrive as New cards. An outdated group card stays as it was — you can delete it or suspend it yourself.
    - For the difficult card itself: after fixing the map, select it in the Browser and choose Forget (starts over as New) or reschedule it a week ahead for a short interval, then remove the leech tag.
 
 ## Why “Fix the Map, Not Just Repeat”
 
-Pressing Again on the same verse group builds a weak trace. Moving similar verses far apart on the map and adding a logic bridge (thematic cause and effect) creates a distinct retrieval cue — next time you recall using the *map*, not rote sound. For tiny haraka/letter errors the same principle applies at a smaller scale: a one-line rule or meaning cue in Notes creates the cue that repetition alone cannot.
+Pressing Again on the same verse group builds a weak trace. Moving similar verses far apart on the map and adding a logic bridge (thematic cause and effect) creates a distinct retrieval cue — next time you recall using the *map*, not rote sound. For tiny haraka/letter errors the same principle applies at a smaller scale: understanding the rule or the meaning choice creates the retrieval cue that repetition alone cannot.
 
 ## Searches to Use Weekly
 
