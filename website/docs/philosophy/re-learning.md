@@ -27,7 +27,7 @@ When you are ready to work on your weak verses in Obsidian:
 1. Open Anki and press **`B`** (or click **Browse** at the top).
 2. In the search bar at the top, paste this search: `deck:"YourQuranDeckName" is:suspended tag:leech`
 3. Copy the list of verse numbers shown in the browser.
-4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections.
+4. Open **Obsidian**, locate those verses in your mindmaps, and update your visual connections — or add a one-line rule/tafsir note for tiny haraka/letter errors (see section 4 below).
 
 Tip: in Quran Life the deck is called `QuranLife::Review` by default, and `deck:QuranLife` searches cover it (along with any sub-decks). If you renamed the deck on export, use your name instead in all searches below.
 
@@ -50,10 +50,20 @@ Tip: in Quran Life the deck is called `QuranLife::Review` by default, and `deck:
    - Otherwise: open Browse and look under Tags for leech, or search `tag:leech` or your red flags.
    - Narrow it down per Surah, for example difficult cards in one Surah, and sort by creation or due date to see the most urgent first.
 
-3. **Do NOT just press Again again — fix the mindmap:**
-   - Open the Anki Deck tab and pick that Surah.
-   - View the map, then edit it — ask: *why did I confuse these verses?* Add a visual landmark, separate the branch, add a small story for that chunk. Keep groups to 2–4 items per branch.
-   - If the group is too long, split it into two smaller groups in Define Splits and save.
+ 3. **Do NOT just press Again again — fix the mindmap (macro / meso errors):**
+    - Open the Anki Deck tab and pick that Surah.
+    - View the map, then edit it — ask: *why did I confuse these verses?* Add a visual landmark, separate the branch, add a small story for that chunk. Keep groups to 2–4 items per branch.
+    - If the group is too long, split it into two smaller groups in Define Splits and save.
+    - This handles forgotten groups, weak transitions, and similar-verse confusion. It does **not** handle tiny errors (below).
+
+ 4. **If the error is tiny (haraka / letter / ending) — rule first, then tafsir:**
+    - How to tell: you recall the group and its order correctly, but the same vowel, letter, or word-form keeps failing (case ending, verb prefix, singular/plural, tense).
+    - Do **not** draw this on the map — the map stays coarse for clarity. Write a **one-line note** in Notes for this mindmap (Anki Deck tab) and re-export. Notes-only updates keep your review dates.
+    - **Step A — Arabic rule (cheapest, most general):** ask a teacher, grammar book, or AI: *what rule forces this form here?* (case, agreement, verb mood after a particle, morphology). If you didn't know the rule, save it as one line. One rule often fixes many verses, so always try this first — including as a native speaker. School Arabic and dialect are not Quranic `i'rab`.
+    - **Step B — tafsir / meaning (only if A doesn't fully explain):** if the rule allows both forms, or dialect pulls the other way, or the choice feels unorthodox, ask: *why did the Quran choose this form here?* (tense, number, synonym, fronting for emphasis, rhyme tied to the preceding story). Save it as a one-line meaning cue.
+    - **Step C — pure ear slip (neither adds clarity):** no note. Do a short listening/shadowing loop via Daily Portion plus teach-back aloud, then unsuspend.
+    - **Escalation rule:** once is a slip — grade Again honestly and let scheduling handle it. Same micro-error twice, or a leech suspension, means systematic — do A → B → C.
+    - Boundary: tajwid judgment and recitation correction stay with a teacher. AI is only for explaining the rule, explaining the meaning choice, and planning.
 
 4. **Re-export the fix:**
    - Export the full deck and re-import it into Anki. Matching cards are updated (keeping your review dates) and new split groups arrive as New cards. An outdated group card stays as it was — you can delete it or suspend it yourself.
@@ -61,7 +71,7 @@ Tip: in Quran Life the deck is called `QuranLife::Review` by default, and `deck:
 
 ## Why “Fix the Map, Not Just Repeat”
 
-Pressing Again on the same verse group builds a weak trace. Moving similar verses far apart on the map and adding a logic bridge (thematic cause and effect) creates a distinct retrieval cue — next time you recall using the *map*, not rote sound.
+Pressing Again on the same verse group builds a weak trace. Moving similar verses far apart on the map and adding a logic bridge (thematic cause and effect) creates a distinct retrieval cue — next time you recall using the *map*, not rote sound. For tiny haraka/letter errors the same principle applies at a smaller scale: a one-line rule or meaning cue in Notes creates the cue that repetition alone cannot.
 
 ## Searches to Use Weekly
 
