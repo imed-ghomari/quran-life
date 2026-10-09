@@ -1249,35 +1249,18 @@ function MindmapEditorContent({
             </div>
             <style>{`@keyframes mindmap-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
               .mindmap-header-close:hover { background: var(--background-secondary); }
-              /* Keep tldraw UI clear of Obsidian's own floating bars.
-                 The offsets are measured at runtime as the clearance between
-                 our content edge and the overlaying bar, so they already
-                 include any notch / home-indicator gap the bar leaves —
-                 hence max() with the OS safe-area instead of adding both
-                 (0 on tablets/desktop where no bar overlays, so no dead gap
-                 appears there; tldraw already adds the OS safe-area itself
-                 via --sab). */
-              [data-mindmap-swipe-guard] .tlui-toolbar {
-                padding-bottom: calc(var(--space-3) + max(env(safe-area-inset-bottom, 0px), var(--ql-obsidian-bottom-offset, 0px))) !important;
-              }
-              [data-mindmap-swipe-guard] .tlui-navigation-panel {
-                bottom: max(env(safe-area-inset-bottom, 0px), var(--ql-obsidian-bottom-offset, 0px)) !important;
-              }
-              body.is-mobile [data-mindmap-swipe-guard] .tlui-layout__top,
-              body.is-phone [data-mindmap-swipe-guard] .tlui-layout__top {
-                padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
-              }
-              body.is-mobile .mindmap-editor-header,
-              body.is-phone .mindmap-editor-header {
-                min-height: calc(50px + env(safe-area-inset-top, 0px)) !important;
-              }
-              /* Phone-only: Obsidian floats its view-header over our editor
-                 header. --ql-obsidian-top-offset is the measured clearance
-                 (0 on tablets/desktop where the header is in-flow), so no
-                 dead gap appears outside phones. */
-              body.is-phone [data-mindmap-swipe-guard] .mindmap-editor-header {
+              /* Phone-only (tablets/desktop untouched): lift the whole editor
+                 below the top bar and above Obsidian's mobile toolbar — the
+                 same approach as tldraw-in-obsidian
+                 (padding-bottom: var(--mobile-toolbar-height)). The flex
+                 canvas absorbs the padding, so tldraw's own toolbar, nav
+                 panel and our header clear the bars with no extra rules.
+                 Measured offsets ride along inside max() for configs where
+                 they detect something; otherwise they are 0. */
+              body.is-phone [data-mindmap-swipe-guard] {
+                box-sizing: border-box;
                 padding-top: max(env(safe-area-inset-top, 0px), var(--ql-obsidian-top-offset, 0px)) !important;
-                min-height: calc(50px + max(env(safe-area-inset-top, 0px), var(--ql-obsidian-top-offset, 0px))) !important;
+                padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--mobile-toolbar-height, 48px), var(--ql-obsidian-bottom-offset, 0px)) !important;
               }
             `}</style>
         </div>
