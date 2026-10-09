@@ -60,6 +60,10 @@
 - Use **one long command** to save time: `git add <files> && git commit -m "..." && git push origin main` (combine add/commit/push, don't run them as separate tool calls).
 - Never leave unpushed commits locally after a prompt is done.
 
+## Release Notes - User-Facing Voice
+- GitHub release notes are written for **users, not maintainers**: plain language about what changed on screen, no file paths, no line numbers, no code/config internals (no lint rules, no CSS vars, no API names).
+- End with the `**Full Changelog**: <compare-url>` line, matching the 1.0.20–1.0.23 style.
+
 ## User Preferences
 - Language: concise, factual, file_path:line_number references when referencing code.
 - Verify fixes via execution where possible, and rebuild plugin (`npm run build`) after logic changes.
