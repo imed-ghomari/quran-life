@@ -4,6 +4,7 @@ import { QuranLifeSettingTab, DEFAULT_SETTINGS, QuranLifePluginSettings } from "
 import { DailyPortionView, VIEW_TYPE_DAILY } from "./views/DailyPortionView";
 import { AnkiDeckView, VIEW_TYPE_ANKI } from "./views/AnkiDeckView";
 import { registerVaultRecitationCache } from "./recitationCache";
+import { migrateOfflineAudioToDataFolder } from "./offlineAudio";
 import { setObsidianApp } from "@/lib/obsidianApp";
 import "./sqlWasmBundle"; // inlines sql-wasm.wasm into main.js for offline Anki export
 export const VIEW_TYPE_MINDMAP = "quran-life-mindmap"; // deprecated alias, now merged into Anki Deck
@@ -43,6 +44,15 @@ export default class QuranLifePlugin extends Plugin {
     // like on desktop (requestUrl without CORS, vault adapter reads).
     setObsidianApp(this.app);
     registerVaultRecitationCache(this.app, dataRoot);
+    // One-time move of previously downloaded audio into the data folder
+    // (`data/offline-audio`). Same-device renames, idempotent — readers keep
+    // serving the old location until the move lands, so this never blocks enable.
+    try {
+      const { movedFiles } = await migrateOfflineAudioToDataFolder(this.app);
+      if (movedFiles > 0) new Notice(`Quran Life: moved ${movedFiles} offline audio files into the data folder.`);
+    } catch (e) {
+      console.warn("Quran Life: offline audio migration deferred (will retry on next load)", e);
+    }
 
     // Ensure data root exists on layout ready (expensive init deferred) — wrap to avoid mobile crash blocking enable
     this.app.workspace.onLayoutReady(() => {

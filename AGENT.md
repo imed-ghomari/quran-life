@@ -7,7 +7,7 @@
 - DO NOT run `next dev` / `next build`. Use only `npm run dev` / `npm run build` (esbuild).
 - After build, reload plugin in Obsidian: Command Palette → "Reload app without saving" or disable/enable plugin, or use Hot Reload plugin.
 - Vault data lives in the plugin's **own data folder** — `<configDir>/plugins/quran-life/data` (see `src/plugin/storage/vaultAdapter.ts`), synced via Resilio Sync. It is hidden from the vault API (use `app.vault.adapter`), resolved through `Vault#configDir` (never hardcode `.obsidian`), and **not configurable** — no data-path setting. `QuranLife/` at the vault root is read-only, kept solely for legacy migration.
-- The data folder holds only: `assets/` (Quran corpus), `splits/`, `mindmaps/`, `docs/`, `daily/`, `recitation-cache/`, `deleted-mindmaps.json`, `anki-export.json`. No `nodes/` (Anki owns review state) and no `meta/` — an empty leftover of either is pruned at load.
+- The data folder holds only: `assets/` (Quran corpus), `splits/`, `mindmaps/`, `docs/`, `daily/`, `recitation-cache/`, `offline-audio/` (downloaded recitation mp3s, moved from `plugins/quran-life/offline-audio` in 1.0.26 with an automatic rename migration + legacy read fallback in `offlineAudio.ts`), `deleted-mindmaps.json`, `anki-export.json`. No `nodes/` (Anki owns review state) and no `meta/` — an empty leftover of either is pruned at load.
 
 ## Anki Deck Tab - Completed Fixes
 - `src/components/AnkiDeckTab.tsx:323`: Deck name + Export button on same line via `flex gap-3 items-end` (input flex-1, button shrink-0 whitespace-nowrap).

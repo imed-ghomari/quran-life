@@ -6,14 +6,29 @@ import { getObsidianApp, getVaultConfigDir } from "@/lib/obsidianApp";
 import { requestArrayBuffer } from "@/lib/obsidianRequest";
 import { ensureFolder } from "./storage/vaultAdapter";
 
-// Offline audio is stored inside the plugin folder (not vault root) so only one
-// folder to sync. Works on mobile as well because we use the adapter directly for
-// hidden paths. The vault config dir is user-configurable, so the root is always
-// resolved through `Vault#configDir` at call time.
+// Offline audio lives inside the plugin data folder
+// (`<configDir>/plugins/quran-life/data/offline-audio`) alongside splits,
+// mindmaps, docs and the rest, so there is a single folder to sync and users
+// find everything in one place. Works on mobile as well because we use the
+// adapter directly for hidden paths. The vault config dir is
+// user-configurable, so the root is always resolved through
+// `Vault#configDir` at call time.
 export function getOfflineAudioRoot(appOverride?: App | null): string {
   // `Vault#configDir` is user-configurable. Without a registered app (web
   // build) the offline library does not exist at all, so a config-dir-less path
   // is used purely as a stable cache key.
+  const configDir = getVaultConfigDir(appOverride);
+  return configDir
+    ? normalizePath(`${configDir}/plugins/quran-life/data/offline-audio`)
+    : normalizePath("plugins/quran-life/data/offline-audio");
+}
+
+/**
+ * Pre-1.0.26 location (`<configDir>/plugins/quran-life/offline-audio`,
+ * beside `data/`). Only read for the one-time migration (and as a fallback
+ * while a stalled migration is pending); nothing writes here anymore.
+ */
+export function getLegacyOfflineAudioRoot(appOverride?: App | null): string {
   const configDir = getVaultConfigDir(appOverride);
   return configDir
     ? normalizePath(`${configDir}/plugins/quran-life/offline-audio`)
@@ -35,6 +50,7 @@ interface VaultFiles {
   remove(path: string): Promise<void>;
   rmdir?(path: string, recursive?: boolean): Promise<void>;
   list(path: string): Promise<{ files: string[]; folders: string[] }>;
+  rename?(oldPath: string, newPath: string): Promise<void>;
   getResourcePath(path: string): string;
   stat(path: string): Promise<{ size?: number; stat?: { size?: number } } | null>;
 }
@@ -186,6 +202,129 @@ async function listFilesRecursive(app: App, dir: string, out: string[] = []): Pr
   return out;
 }
 
+// ---------- data-folder migration (1.0.26) + legacy read fallback ----------
+
+/**
+ * New path if it exists, else its pre-1.0.26 counterpart under the legacy root
+ * if *that* exists, else null. Keeps previously downloaded audio visible (and
+ * playable) even if the one-time folder move below could not run.
+ */
+async function resolveExistingAudioPath(app: App, newPath: string): Promise<string | null> {
+  const normalized = normalizePath(newPath);
+  if (await adapterExists(app, normalized)) return normalized;
+  const newRoot = getOfflineAudioRoot(app);
+  const legacyRoot = getLegacyOfflineAudioRoot(app);
+  if (normalized === newRoot || normalized.startsWith(`${newRoot}/`)) {
+    const legacyPath = normalizePath(`${legacyRoot}${normalized.slice(newRoot.length)}`);
+    if (await adapterExists(app, legacyPath)) return legacyPath;
+  }
+  return null;
+}
+
+/** Legacy-root counterpart of a new-root path (null when `newPath` is outside the new root). */
+function legacyCounterpart(app: App, newPath: string): string | null {
+  const normalized = normalizePath(newPath);
+  const newRoot = getOfflineAudioRoot(app);
+  const legacyRoot = getLegacyOfflineAudioRoot(app);
+  if (normalized === newRoot || normalized.startsWith(`${newRoot}/`)) {
+    return normalizePath(`${legacyRoot}${normalized.slice(newRoot.length)}`);
+  }
+  return null;
+}
+
+/** List mp3s under both the current and the legacy root (deduped by path). */
+async function listAudioFilesBothRoots(app: App, reciterId: string | null): Promise<string[]> {
+  const roots = [getOfflineAudioRoot(app), getLegacyOfflineAudioRoot(app)];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const root of roots) {
+    const dir = reciterId ? normalizePath(`${root}/${reciterId}`) : root;
+    let listed: string[] = [];
+    try { listed = await listFilesRecursive(app, dir); } catch { /* root absent */ }
+    for (const f of listed) {
+      const normalized = normalizePath(f);
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      out.push(f);
+    }
+  }
+  return out;
+}
+
+/**
+ * One-time move of the offline library from the pre-1.0.26 location
+ * (`<plugin>/offline-audio`, beside `data/`) into `<plugin>/data/offline-audio`.
+ * Same-device renames, so even a full library moves in seconds. Idempotent:
+ * once the old folder is gone later runs are a single existence check, and a
+ * restart mid-move simply finishes the job.
+ */
+export async function migrateOfflineAudioToDataFolder(appOverride?: App | null): Promise<{ movedFiles: number; migrated: boolean }> {
+  const none = { movedFiles: 0, migrated: false };
+  const app = getApp(appOverride);
+  if (!app) return none;
+  // Documented cast: the only `unknown` -> typed boundary for the vault
+  // adapter in this helper; every adapter call below is typed.
+  const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
+  if (!adapter?.rename || !adapter?.list) return none;
+  try {
+    const from = getLegacyOfflineAudioRoot(app);
+    const to = getOfflineAudioRoot(app);
+    if (normalizePath(from) === normalizePath(to)) return none;
+    if (!(await adapterExists(app, from))) return none;
+    // Data root must exist before anything can land inside it.
+    const parent = to.slice(0, to.lastIndexOf("/")) || "/";
+    await ensureFolder(app, parent);
+    const toExists = await adapterExists(app, to);
+    let movedFiles = 0;
+    if (!toExists) {
+      // Fast path: nothing downloaded to the new location yet — move the
+      // whole folder in one rename.
+      const before = (await listFilesRecursive(app, from)).filter((f) => SUFFIX_RE.test(f));
+      await adapter.rename(from, to);
+      movedFiles = before.length;
+    } else {
+      // Both locations hold files (e.g. manual copies): move per reciter dir,
+      // falling back to per-file moves inside reciters present on both sides.
+      const oldEntries = await adapter.list(from);
+      for (const folder of oldEntries.folders || []) {
+        const reciterId = folder.slice(folder.lastIndexOf("/") + 1) || folder;
+        if (!reciterId) continue;
+        const destDir = normalizePath(`${to}/${reciterId}`);
+        if (!(await adapterExists(app, destDir))) {
+          const before = (await listFilesRecursive(app, folder)).filter((f) => SUFFIX_RE.test(f));
+          await adapter.rename(folder, destDir);
+          movedFiles += before.length;
+          continue;
+        }
+        const newFiles = new Set((await listFilesRecursive(app, destDir)).map((f) => normalizePath(f)));
+        const oldFiles = await listFilesRecursive(app, folder);
+        for (const f of oldFiles) {
+          if (!SUFFIX_RE.test(f)) continue;
+          const rel = normalizePath(f).slice(normalizePath(folder).length);
+          if (newFiles.has(normalizePath(`${destDir}${rel}`))) continue;
+          const destFile = normalizePath(`${destDir}${rel}`);
+          await ensureFolder(app, destFile.slice(0, destFile.lastIndexOf("/")) || "/");
+          await adapter.rename(f, destFile);
+          movedFiles += 1;
+        }
+      }
+      // Remove the old root once it holds nothing (never recursive: anything
+      // unrecognised stays put rather than being deleted).
+      try {
+        const left = await adapter.list(from);
+        if (left.files.length === 0 && left.folders.length === 0 && adapter.rmdir) {
+          await adapter.rmdir(from, false);
+        }
+      } catch { /* best-effort only; ignore */ }
+    }
+    return { movedFiles, migrated: movedFiles > 0 };
+  } catch {
+    // Rename unavailable/sandboxed: files stay at the legacy root, where the
+    // read fallback above keeps serving them until a later run succeeds.
+    return none;
+  }
+}
+
 // ---------- offline status ----------
 
 // ---------- library scan (one directory pass for the whole reciter) ----------
@@ -230,8 +369,7 @@ export async function scanOfflineAudioForReciter(
   const app = getApp(appOverride);
   if (!app) return empty;
 
-  const reciterDir = normalizePath(`${getOfflineAudioRoot(app)}/${reciter.id}`);
-  const listed = (await listFilesRecursive(app, reciterDir)).filter((f) => SUFFIX_RE.test(f));
+  const listed = (await listAudioFilesBothRoots(app, reciter.id)).filter((f) => SUFFIX_RE.test(f));
 
   // Index what actually exists on disk, keeping the path so sizes can be summed later.
   const surahFiles = new Map<number, string>();
@@ -416,20 +554,19 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
   let totalBytes = 0;
   for (const sh of surahs) {
     if (reciter.type === "surah-based") {
-      const p = getOfflineSurahAudioPath(reciter.id, sh.id, app);
-      if (await adapterExists(app, p)) {
+      const real = await resolveExistingAudioPath(app, getOfflineSurahAudioPath(reciter.id, sh.id, app));
+      if (real) {
         existingFiles++;
-        const sz = await adapterStatSize(app, p);
+        const sz = await adapterStatSize(app, real);
         if (sz) totalBytes += sz;
       }
     } else {
       for (let ay = 1; ay <= sh.verseCount; ay++) {
-        const p1 = getOfflineAyahAudioPath(reciter.id, sh.id, ay, app);
-        const p2 = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay, app);
-        const exists = (await adapterExists(app, p1)) || (await adapterExists(app, p2));
-        if (exists) {
+        const real = (await resolveExistingAudioPath(app, getOfflineAyahAudioPath(reciter.id, sh.id, ay, app)))
+          ?? (await resolveExistingAudioPath(app, getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay, app)));
+        if (real) {
           existingFiles++;
-          const sz = (await adapterStatSize(app, p1)) ?? (await adapterStatSize(app, p2));
+          const sz = await adapterStatSize(app, real);
           if (sz) totalBytes += sz;
         }
       }
@@ -439,20 +576,20 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
   // Count it so "Complete" is only reported when transitions can play offline.
   try {
     if (reciter.type === "surah-based") {
-      const p = getOfflineSurahAudioPath(reciter.id, 1, app);
+      const real = await resolveExistingAudioPath(app, getOfflineSurahAudioPath(reciter.id, 1, app));
       totalFiles += 1;
-      if (await adapterExists(app, p)) {
+      if (real) {
         existingFiles++;
-        const sz = await adapterStatSize(app, p);
+        const sz = await adapterStatSize(app, real);
         if (sz) totalBytes += sz;
       }
     } else {
-      const p1 = getOfflineAyahAudioPath(reciter.id, 1, 1, app);
-      const p2 = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app);
+      const real = (await resolveExistingAudioPath(app, getOfflineAyahAudioPath(reciter.id, 1, 1, app)))
+        ?? (await resolveExistingAudioPath(app, getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app)));
       totalFiles += 1;
-      if ((await adapterExists(app, p1)) || (await adapterExists(app, p2))) {
+      if (real) {
         existingFiles++;
-        const sz = (await adapterStatSize(app, p1)) ?? (await adapterStatSize(app, p2));
+        const sz = await adapterStatSize(app, real);
         if (sz) totalBytes += sz;
       }
     }
@@ -476,7 +613,7 @@ export async function getOfflinePartStatus(reciter: Reciter, partId: QuranPart, 
 export async function getTotalOfflineStorageUsage(appOverride?: App | null): Promise<{ totalBytes: number; fileCount: number; byReciter: Record<string, { bytes: number; files: number }> }> {
   const app = getApp(appOverride);
   if (!app) return { totalBytes: 0, fileCount: 0, byReciter: {} };
-  const files = await listFilesRecursive(app, getOfflineAudioRoot(app));
+  const files = await listAudioFilesBothRoots(app, null);
   // Filter only mp3
   const mp3s = files.filter(f => f.toLowerCase().endsWith(".mp3"));
   let totalBytes = 0;
@@ -487,7 +624,7 @@ export async function getTotalOfflineStorageUsage(appOverride?: App | null): Pro
     totalBytes += b;
     // reciterId is segment after offline-audio/
     const parts = f.split("/");
-    // path layout: <configDir>/plugins/quran-life/offline-audio/<reciterId>/...
+    // path layout: <configDir>/plugins/quran-life/data/offline-audio/<reciterId>/...
     const idx = parts.indexOf("offline-audio");
     const reciterId = idx >= 0 && parts[idx + 1] ? parts[idx + 1] : "unknown";
     if (!byReciter[reciterId]) byReciter[reciterId] = { bytes: 0, files: 0 };
@@ -560,7 +697,7 @@ export async function downloadPartAudio(
     // Build tasks: one per surah
     for (const sh of surahs) {
       const offlinePath = getOfflineSurahAudioPath(reciter.id, sh.id, app);
-      if (skipExisting && (await adapterExists(app, offlinePath))) continue;
+      if (skipExisting && (await resolveExistingAudioPath(app, offlinePath))) continue;
       // Need remote URL via recitation data (local JSON, no extra network)
       const remoteUrl = await getSurahAudioUrlForReciter(reciter, sh.id, app);
       if (!remoteUrl) continue;
@@ -586,7 +723,7 @@ export async function downloadPartAudio(
       for (let ay = 1; ay <= sh.verseCount; ay++) {
         const offlinePath = getOfflineAyahAudioPath(reciter.id, sh.id, ay, app);
         const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, sh.id, ay, app);
-        if (skipExisting && ((await adapterExists(app, offlinePath)) || (await adapterExists(app, legacyPath)))) continue;
+        if (skipExisting && ((await resolveExistingAudioPath(app, offlinePath)) || (await resolveExistingAudioPath(app, legacyPath)))) continue;
         const key = `${sh.id}:${ay}`;
         const mapAudioUrl: unknown = asRecord(ayahMap?.[key])?.audio_url;
         const remoteUrl = (typeof mapAudioUrl === 'string' && mapAudioUrl ? mapAudioUrl : null) ?? buildAyahAudioUrl(reciter, sh.id, ay);
@@ -602,7 +739,7 @@ export async function downloadPartAudio(
   try {
     if (reciter.type === "surah-based") {
       const basmalaPath = getOfflineSurahAudioPath(reciter.id, 1, app);
-      const alreadyHave = skipExisting && (await adapterExists(app, basmalaPath));
+      const alreadyHave = skipExisting && (await resolveExistingAudioPath(app, basmalaPath));
       const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
       if (!alreadyHave && !alreadyQueued) {
         const basmalaUrl = await getSurahAudioUrlForReciter(reciter, 1, app);
@@ -611,7 +748,7 @@ export async function downloadPartAudio(
     } else {
       const basmalaPath = getOfflineAyahAudioPath(reciter.id, 1, 1, app);
       const legacyPath = getOfflineAyahAudioPathLegacy(reciter.id, 1, 1, app);
-      const alreadyHave = skipExisting && ((await adapterExists(app, basmalaPath)) || (await adapterExists(app, legacyPath)));
+      const alreadyHave = skipExisting && ((await resolveExistingAudioPath(app, basmalaPath)) || (await resolveExistingAudioPath(app, legacyPath)));
       const alreadyQueued = tasks.some(t => t.offlinePath === basmalaPath);
       if (!alreadyHave && !alreadyQueued) {
         // Resolve 1:1 from the map when available, else from the URL pattern.
@@ -724,22 +861,34 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
   // Need to know reciter type – infer by checking both path patterns
   // We try both surah and ayah paths; whichever exists we delete.
   for (const sh of surahs) {
-    // Try surah path first
-    const surahPath = getOfflineSurahAudioPath(reciterId, sh.id, app);
-    if (await adapterExists(app, surahPath)) {
-      const sz = await adapterStatSize(app, surahPath);
-      await adapterRemoveNoTrash(app, surahPath);
-      revokeOfflineBlobCacheForPath(surahPath);
-      invalidateOfflineFileSize(surahPath);
-      deletedFiles++;
-      if (sz) freedBytes += sz;
-      continue; // surah-based reciter will have surah file, no need to check ayah
+    // Try surah path first (both roots — a stalled migration may have left
+    // files at the legacy location).
+    const surahCandidates = [getOfflineSurahAudioPath(reciterId, sh.id, app)];
+    const surahLegacy = legacyCounterpart(app, surahCandidates[0]);
+    if (surahLegacy) surahCandidates.push(surahLegacy);
+    let foundSurah = false;
+    for (const surahPath of surahCandidates) {
+      if (await adapterExists(app, surahPath)) {
+        const sz = await adapterStatSize(app, surahPath);
+        await adapterRemoveNoTrash(app, surahPath);
+        revokeOfflineBlobCacheForPath(surahPath);
+        invalidateOfflineFileSize(surahPath);
+        deletedFiles++;
+        if (sz) freedBytes += sz;
+        foundSurah = true;
+      }
     }
+    if (foundSurah) continue; // surah-based reciter will have surah file, no need to check ayah
     // Try ayah paths
     for (let ay = 1; ay <= sh.verseCount; ay++) {
       const p1 = getOfflineAyahAudioPath(reciterId, sh.id, ay, app);
       const p2 = getOfflineAyahAudioPathLegacy(reciterId, sh.id, ay, app);
+      const candidates = [p1, p2];
       for (const p of [p1, p2]) {
+        const legacy = legacyCounterpart(app, p);
+        if (legacy) candidates.push(legacy);
+      }
+      for (const p of candidates) {
         if (await adapterExists(app, p)) {
           const sz = await adapterStatSize(app, p);
           await adapterRemoveNoTrash(app, p);
@@ -751,16 +900,18 @@ export async function deletePartAudio(reciterId: string, partId: QuranPart, appO
       }
     }
   }
-  // Also try to clean empty reciter folder if no files left
+  // Also try to clean empty reciter folders (both roots) if no files left
   try {
     const reciterDir = normalizePath(`${getOfflineAudioRoot(app)}/${reciterId}`);
-    const remaining = await listFilesRecursive(app, reciterDir);
-    if (remaining.length === 0) {
-      // remove empty dir via adapter
-      // Documented cast: the only `unknown` -> typed boundary for the vault
-      // adapter in this scope; every adapter call below is typed.
-      const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
-      if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, false); } catch { /* best-effort only; ignore */ }
+    const legacyDir = normalizePath(`${getLegacyOfflineAudioRoot(app)}/${reciterId}`);
+    // Documented cast: the only `unknown` -> typed boundary for the vault
+    // adapter in this scope; every adapter call below is typed.
+    const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
+    for (const dir of [reciterDir, legacyDir]) {
+      try {
+        const remaining = await listFilesRecursive(app, dir);
+        if (remaining.length === 0 && adapter?.rmdir) await adapter.rmdir(dir, false);
+      } catch { /* best-effort only; ignore */ }
     }
   } catch { /* best-effort only; ignore */ }
 
@@ -771,7 +922,7 @@ export async function deleteAllOfflineAudioForReciter(reciterId: string, appOver
   const app = getApp(appOverride);
   if (!app) throw new Error("Obsidian app not available");
   const reciterDir = normalizePath(`${getOfflineAudioRoot(app)}/${reciterId}`);
-  const files = await listFilesRecursive(app, reciterDir);
+  const files = await listAudioFilesBothRoots(app, reciterId);
   let deletedFiles = 0;
   let freedBytes = 0;
   for (const f of files) {
@@ -783,12 +934,16 @@ export async function deleteAllOfflineAudioForReciter(reciterId: string, appOver
     deletedFiles++;
     if (sz) freedBytes += sz;
   }
-  // try rmdir
+  // try rmdir (both roots — the legacy one may still hold a stalled folder)
   try {
     // Documented cast: the only `unknown` -> typed boundary for the vault
     // adapter in this scope; every adapter call below is typed.
     const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
-    if (adapter?.rmdir) try { await adapter.rmdir(reciterDir, true); } catch { /* best-effort only; ignore */ }
+    if (adapter?.rmdir) {
+      try { await adapter.rmdir(reciterDir, true); } catch { /* best-effort only; ignore */ }
+      const legacyDir = normalizePath(`${getLegacyOfflineAudioRoot(app)}/${reciterId}`);
+      try { await adapter.rmdir(legacyDir, true); } catch { /* best-effort only; ignore */ }
+    }
   } catch { /* best-effort only; ignore */ }
   return { deletedFiles, freedBytes };
 }
@@ -868,15 +1023,16 @@ export async function getOfflineAudioUrlForSurah(reciterId: string, surahId: num
   const app = getApp(appOverride);
   if (!app) return null;
   const p = getOfflineSurahAudioPath(reciterId, surahId, app);
-  if (!(await adapterExists(app, p))) return null;
+  const real = await resolveExistingAudioPath(app, p);
+  if (!real) return null;
   // Prefer blob URL for reliable playback on mobile (hidden .obsidian paths may not be served via getResourcePath on Capacitor)
-  const blobUrl = await getOfflineBlobUrl(app, p);
+  const blobUrl = await getOfflineBlobUrl(app, real);
   if (blobUrl) return blobUrl;
   // Documented cast: the only `unknown` -> typed boundary for the vault
   // adapter in this scope; every adapter call below is typed.
   const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
   if (adapter?.getResourcePath) {
-    try { return adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
+    try { return adapter.getResourcePath(real); } catch { /* best-effort only; ignore */ }
   }
   return null;
 }
@@ -887,14 +1043,15 @@ export async function getOfflineAudioUrlForAyah(reciterId: string, surahId: numb
   const p1 = getOfflineAyahAudioPath(reciterId, surahId, ayahId, app);
   const p2 = getOfflineAyahAudioPathLegacy(reciterId, surahId, ayahId, app);
   for (const p of [p1, p2]) {
-    if (await adapterExists(app, p)) {
-      const blobUrl = await getOfflineBlobUrl(app, p);
+    const real = await resolveExistingAudioPath(app, p);
+    if (real) {
+      const blobUrl = await getOfflineBlobUrl(app, real);
       if (blobUrl) return blobUrl;
       // Documented cast: the only `unknown` -> typed boundary for the vault
       // adapter in this scope; every adapter call below is typed.
       const adapter = app?.vault?.adapter as unknown as VaultFiles | undefined;
       if (adapter?.getResourcePath) {
-        try { return adapter.getResourcePath(p); } catch { /* best-effort only; ignore */ }
+        try { return adapter.getResourcePath(real); } catch { /* best-effort only; ignore */ }
       }
     }
   }

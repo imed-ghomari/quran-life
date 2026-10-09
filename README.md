@@ -72,15 +72,20 @@ renamed it):
 ├── docs/                 # the markdown note belonging to each mindmap
 ├── daily/                # daily portion settings + per-part listening progress
 ├── recitation-cache/     # word-timing slices for offline playback
+├── offline-audio/        # downloaded recitation audio, one folder per reciter
 ├── deleted-mindmaps.json # delete tombstones (stable deletes across syncs)
 └── anki-export.json      # Anki export order preferences
 ```
 
 Sync your vault with any file sync to keep your data in sync
-across devices. Offline recitation audio downloaded from the settings tab lives one
-level up, in `<configDir>/plugins/quran-life/offline-audio/` — syncing the whole
-`plugins/quran-life` folder covers both. The location is fixed — there is deliberately no setting to move it —
+across devices. Offline recitation audio downloaded from the settings tab lives
+inside the same data folder, in `data/offline-audio/` — syncing the whole
+`plugins/quran-life` folder covers everything. The location is fixed — there is deliberately no setting to move it —
 so every vault and every device syncs exactly one predictable directory.
+
+Older installs downloaded audio to `<configDir>/plugins/quran-life/offline-audio/`
+(next to `data/`); the plugin moves it into `data/offline-audio/` automatically
+on update — no action needed, and previously downloaded files keep working.
 
 Two notes:
 

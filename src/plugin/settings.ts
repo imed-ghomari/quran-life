@@ -269,8 +269,8 @@ export class QuranLifeSettingTab extends PluginSettingTab {
 
     // Saves are automatic — every change is written to the vault straight away,
     // so there are no manual backup controls. To move to another vault, copy
-    // the whole `plugins/quran-life` folder (data, settings files and
-    // `offline-audio`) into the new vault's config folder.
+    // the whole `plugins/quran-life` folder into the new vault's config folder
+    // (everything, including offline audio, lives under `data/`).
 
     // ---------- Daily portion (part + target + mode + surahs + reset) ----------
     let updateMinutesDesc: () => void = () => {};
