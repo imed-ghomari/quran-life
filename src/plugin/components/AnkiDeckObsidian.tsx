@@ -444,7 +444,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         kind,
         surahId: kind === 'surah' && sid ? sid : null,
         mindmap,
-        splits: (splits as unknown as Array<Record<string, unknown>>) ?? [],
+        splits,
         doc: typeof doc === 'string' ? doc : null,
       });
     }
@@ -532,7 +532,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     } catch { showToast('Open Settings → Quran Life'); }
   }, [vaultStore, showToast]);
 
-  const mindmapOrder = useMemo(() => [...SURAHS.map(s => `surah-${s.id}`), 'meta-0', 'part-1', 'part-2', 'part-3', 'part-4', 'part-5', 'part-6', 'part-7'], []);
+  const mindmapOrder = useMemo(() => [...SURAHS.filter(s => s.id !== 1).map(s => `surah-${s.id}`), 'meta-0', 'part-1', 'part-2', 'part-3', 'part-4', 'part-5', 'part-6', 'part-7'], []);
   const stepMindmap = useCallback((dir: 1 | -1) => {
     setSelectedMindmapKey(prev => {
       const i = mindmapOrder.indexOf(prev);
@@ -825,7 +825,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
   }
 
   return (
-    <div className="quran-life-anki" style={{ position:'relative', padding:'16px', maxWidth:720, margin:'0 auto', width:'100%', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
+    <div className="quran-life-anki" style={{ position:'relative', padding:'16px', paddingBottom:'calc(16px + 96px + env(safe-area-inset-bottom, 0px))', maxWidth:720, margin:'0 auto', width:'100%', display:'flex', flexDirection:'column', gap:16, color:'var(--text-normal)' }}>
       {/* Header */}
       <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:12, borderBottom:'1px solid var(--background-modifier-border)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -884,7 +884,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
             <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
             <select value={selectedMindmapKey} onChange={e=>setSelectedMindmapKey(e.target.value)} className="dropdown" style={{ flex:1, minWidth:0, padding:'10px 12px', minHeight:'40px', lineHeight:'1.4', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.9em' }}>
-              <optgroup label="Surahs">{SURAHS.map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
+              <optgroup label="Surahs">{SURAHS.filter(s => s.id !== 1).map(s=> <option key={`surah-${s.id}`} value={`surah-${s.id}`}>{s.id}. {s.arabicName} ({s.name})</option>)}</optgroup>
               <optgroup label="Parts & Meta"><option value="meta-0">Meta • Overview</option><option value="part-1">Part 1 • 1-5</option><option value="part-2">Part 2 • 6-9</option><option value="part-3">Part 3 • 10-24</option><option value="part-4">Part 4 • 25-33</option><option value="part-5">Part 5 • 34-49</option><option value="part-6">Part 6 • 50-66</option><option value="part-7">Part 7 • 67-114</option></optgroup>
             </select>
             <button onClick={()=>stepMindmap(1)} title="Next mindmap" aria-label="Next mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronRight size={16}/></button>
@@ -907,7 +907,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         {!isPartOrMeta && surah && (
           <div style={{ display:'flex', flexDirection:'column', gap:8, paddingTop:12, borderTop:'1px solid var(--background-modifier-border)' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
+              <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
                 <Split size={12}/> SPLITS
               </span>
               <span style={{ fontSize:'0.78em', color:'var(--text-muted)' }}>for {surah.arabicName} ({vc} verses)</span>
@@ -952,7 +952,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
           <div style={{ display:'flex', flexDirection:'column', gap:6, paddingTop:12, borderTop:'1px solid var(--background-modifier-border)' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'var(--background-modifier-border)', color:'var(--text-muted)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em' }}>
+              <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
                 <FileText size={12}/> NOTES
               </span>
             </div>
@@ -982,8 +982,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         const docsTotal = Object.keys(allDocsForStats).filter(k => typeof allDocsForStats[k] === 'string' && allDocsForStats[k].trim().length > 0).length;
         return (
           <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span style={{ display:'inline-flex', gap:6, alignItems:'center', fontSize:'0.95em', fontWeight:700 }}><BarChart3 size={16} style={{ color:'var(--interactive-accent)' }} /> Deck Statistics</span>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+              <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
+                <BarChart3 size={12}/> DECK STATISTICS
+              </span>
               <button onClick={()=>setShowStatsDetails(v=>!v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>{showStatsDetails ? 'Hide details' : 'Show details'}</button>
             </div>
             <div className="ql-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8 }}>
@@ -1144,7 +1146,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
                     ? `${zipEntries.length} items from ${zipName ?? 'file'}. Pick what to bring into this vault — existing items are skipped unless replace is on.`
                     : STARTER_PACK.length > 0
                       ? 'Pick what to bring into this vault — existing items are skipped unless replace is on.'
-                      : 'No pre-made pack ships with this install. Load a starter-pack.zip file to pick what to bring into this vault.'}
+                      : 'No pre-made pack ships with this install. Download the official starter-pack.zip, or use a .zip exported from another user\u2019s vault, then choose the file below to pick what to bring into this vault.'}
                 </div>
               )}
               {!importProgress && !importDone && (
@@ -1288,6 +1290,9 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
       )}
 
+      {/* Bottom safe-area spacer for Obsidian mobile toolbar (mirrors Daily Portion) */}
+      <div style={{ height:'calc(24px + env(safe-area-inset-bottom, 0px))', flexShrink:0 }} aria-hidden />
+
       {toast && <div style={{ position:'fixed', bottom:'calc(14px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50, maxWidth:'calc(100vw - 32px)' }}>{toast}</div>}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         /* Splits editor + preview layout. Mobile-first: the preview sits BELOW the
@@ -1311,7 +1316,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         @media (max-width: 700px) {
           /* Overlap safety only on phones/tablets; desktop layout is untouched. */
           .quran-life-anki, .quran-life-anki * { box-sizing: border-box; }
-          .quran-life-anki { width: 100%; padding: 10px !important; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
+          .quran-life-anki { width: 100%; padding: 10px !important; padding-bottom: calc(10px + 96px + env(safe-area-inset-bottom, 0px)) !important; gap: 12px !important; }
           .quran-life-anki input, .quran-life-anki select, .quran-life-anki textarea, .quran-life-anki button { max-width: 100%; }
           .quran-life-anki .ql-card { padding: 12px !important; border-radius: 10px !important; gap: 10px !important; }
           .quran-life-anki .ql-export-row { flex-wrap: wrap; }

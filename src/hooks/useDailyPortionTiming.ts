@@ -138,9 +138,12 @@ function verseDurationSec(entry: unknown): number | null {
     if (Number.isFinite(d) && d > 0) return d;
     const segs = rec.segments;
     if (Array.isArray(segs) && segs.length > 0) {
-        const last = segs[segs.length - 1];
-        const end = Array.isArray(last) ? Number(last[2]) : NaN;
-        if (Number.isFinite(end) && end > 0) return end / 1000;
+        const last: unknown = segs[segs.length - 1];
+        if (Array.isArray(last)) {
+            const third: unknown = last[2];
+            const end = Number(third);
+            if (Number.isFinite(end) && end > 0) return end / 1000;
+        }
     }
     return null;
 }

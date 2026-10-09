@@ -24,10 +24,14 @@ export class AnkiDeckView extends ItemView {
     const container = this.contentEl;
     container.empty();
     container.addClass("quran-life-anki");
-    // No unused strip between the Obsidian tab bar and our content (esp. mindmap top bar)
-    container.setCssStyles({ height: "100%", overflow: "auto", position: "relative", display: "flex", flexDirection: "column", padding: "0", margin: "0", gap: "0" });
+    // Mirror DailyPortionView: keep Obsidian's default view-content padding so
+    // the floating mobile view-header never covers our top. (Zeroing padding
+    // here is what let the top bar slide over the Anki list.) The mindmap
+    // editor still goes edge-to-edge via its own
+    // `.view-content.quran-life-anki { padding: 0 !important; … }` override.
+    container.setCssStyles({ height: "100%", overflow: "auto" });
     const mountEl = container.createDiv({ cls: "quran-life-react-root" });
-    mountEl.setCssStyles({ height: "100%", minHeight: "100%", position: "relative", display: "flex", flexDirection: "column", flex: "1", padding: "0", margin: "0", gap: "0" });
+    mountEl.setCssStyles({ height: "100%" });
     this.root = createRoot(mountEl);
     this.root.render(
       React.createElement(ThemeProvider, null,
