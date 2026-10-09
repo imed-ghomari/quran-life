@@ -11,10 +11,11 @@ import type { VaultStore } from '@/plugin/storage/vaultAdapter';
 import { STARTER_PACK } from '@/plugin/starterPack.generated';
 import type { StarterPackEntry } from '@/plugin/starterPack.generated';
 import { parseStarterZip } from '@/plugin/starterPackZip';
+import { buildShareZipBlob, defaultShareFileName } from '@/plugin/starterPackExport';
 import type { MindmapRecord } from '@/lib/anki/types';
 import type { App } from 'obsidian';
 import { buildAnchorsFromBreaks, ensureDefaultSplits } from '@/lib/anki/splitStore';
-import { Eye, Layers, PenTool, Split, Download, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Layers, PenTool, Split, Download, Upload, Trash2, Check, X, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import MindmapEditor from '@/plugin/components/MindmapEditorObsidian';
 import MindmapViewer from '@/plugin/components/MindmapViewerObsidian';
 
@@ -399,6 +400,122 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
     try { await mindmapReload(); } catch { /* best-effort */ }
   }, [activeEntries, importChecked, importOverwrite, starterExisting, starterLabel, vaultStore, allMindmapsReload, splitsReload, docReload, mindmapReload]);
 
+  // ---------- Share export (own mindmaps + splits + docs → supported .zip) ----------
+  // Mirrors the import checklist so sharing feels symmetric. Builds a
+  // starter-pack-compatible zip (mindmaps/ splits/ docs/) that the Import
+  // picker accepts with no extra tooling.
+  const [showExport, setShowExport] = useState(false);
+  const [exportChecked, setExportChecked] = useState<Record<string, boolean>>({});
+  const [shareProgress, setShareProgress] = useState<null | { status: string; current: number; total: number; logs: string[] }>(null);
+  const [shareDone, setShareDone] = useState<null | { items: number; fileName: string; savedPath: string }>(null);
+  const [isExportingZip, setIsExportingZip] = useState(false);
+  const [shareFileName, setShareFileName] = useState(() => defaultShareFileName());
+
+  const shareEntries: StarterPackEntry[] = useMemo(() => {
+    const keys = new Set<string>();
+    for (const k of Object.keys(allMindmaps || {})) {
+      if (allMindmaps[k]?.snapshot) keys.add(k);
+    }
+    for (const [sidRaw, arr] of Object.entries(allSplitsForStats || {})) {
+      const sid = Number(sidRaw);
+      if (Number.isFinite(sid) && Array.isArray(arr) && arr.length) keys.add(`surah-${sid}`);
+    }
+    for (const [k, v] of Object.entries(allDocsForStats || {})) {
+      if (typeof v === 'string' && v.trim() && !v.includes('_Not added yet._')) keys.add(normalizeStoreKey(k));
+    }
+    const out: StarterPackEntry[] = [];
+    for (const key of keys) {
+      const norm = normalizeStoreKey(key);
+      const mm = allMindmaps[key] ?? allMindmaps[norm];
+      const surahMatch = norm.match(/^surah-(\d+)$/);
+      const sid = surahMatch ? Number(surahMatch[1]) : null;
+      const splits = sid ? (allSplitsForStats[sid] ?? []) : [];
+      const doc = allDocsForStats[norm] ?? allDocsForStats[key] ?? null;
+      const mindmap = mm?.snapshot ? (mm as unknown as Record<string, unknown>) : null;
+      // Keep the stored MindmapRecord shape — it carries snapshot.store,
+      // which is exactly what the import validator accepts.
+      if (!mindmap && !splits.length && !(typeof doc === 'string' && doc.trim())) continue;
+      const kind = key.startsWith('part-') || norm.startsWith('part-') ? 'part' as const
+        : key.startsWith('meta-') || norm.startsWith('meta-') ? 'meta' as const
+        : key.startsWith('cluster-') || norm.startsWith('cluster-') ? 'cluster' as const
+        : 'surah' as const;
+      out.push({
+        key: norm,
+        kind,
+        surahId: kind === 'surah' && sid ? sid : null,
+        mindmap,
+        splits: (splits as unknown as Array<Record<string, unknown>>) ?? [],
+        doc: typeof doc === 'string' ? doc : null,
+      });
+    }
+    return out.sort((a, b) => {
+      const rank = (e: StarterPackEntry): number =>
+        e.kind === 'surah' ? (e.surahId ?? 999) : e.kind === 'meta' ? 1000 : 2000 + Number(e.key.split('-')[1] || 0);
+      return rank(a) - rank(b) || (a.key < b.key ? -1 : 1);
+    });
+  }, [allMindmaps, allSplitsForStats, allDocsForStats]);
+
+  const exportTargets = useMemo(() => (
+    shareEntries.filter(e => exportChecked[e.key])
+  ), [shareEntries, exportChecked]);
+
+  const openShareExport = useCallback(() => {
+    const checked: Record<string, boolean> = {};
+    for (const e of shareEntries) checked[e.key] = true;
+    setExportChecked(checked);
+    setShareProgress(null);
+    setShareDone(null);
+    setShareFileName(defaultShareFileName());
+    setShowExport(true);
+  }, [shareEntries]);
+
+  const runShareExport = useCallback(async () => {
+    const targets = shareEntries.filter(e => exportChecked[e.key]);
+    if (!targets.length || isExportingZip) return;
+    setIsExportingZip(true);
+    setShareProgress({ status: 'Preparing…', current: 0, total: targets.length, logs: [] });
+    setShareDone(null);
+    const pushLog = (line: string) => {
+      setShareProgress(prev => (prev ? { ...prev, logs: [...prev.logs.slice(-49), line] } : prev));
+    };
+    try {
+      setShareProgress(prev => (prev ? { ...prev, status: 'Building zip…', current: 1 } : prev));
+      // Allow the modal to repaint before the (potentially large) zip build.
+      await new Promise(r => window.setTimeout(r, 0));
+      const blob = await buildShareZipBlob(targets);
+      const safeName = (shareFileName.trim() || defaultShareFileName()).replace(/[\\/]/g, '-');
+      const fileName = safeName.endsWith('.zip') ? safeName : `${safeName}.zip`;
+      pushLog(`✓ Packed ${targets.length} items (${(blob.size / 1024).toFixed(1)} KB)`);
+      setShareProgress(prev => (prev ? { ...prev, status: 'Saving…', current: targets.length } : prev));
+      let savedPath = fileName;
+      try {
+        savedPath = await vaultStore.saveApkgFile(fileName, blob);
+        pushLog(`Saved to vault: ${savedPath}`);
+      } catch (e) {
+        pushLog(`Vault save skipped: ${String((e as Error)?.message || e)}`);
+      }
+      try {
+        const url = URL.createObjectURL(blob);
+        const a = document.body.createEl('a', { href: url });
+        a.download = fileName;
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        pushLog('Download started — share this .zip with other users');
+      } catch (e) {
+        pushLog(`Download blocked (open the vault copy instead): ${String((e as Error)?.message || e)}`);
+      }
+      setShareDone({ items: targets.length, fileName, savedPath });
+      setShareProgress(prev => (prev ? { ...prev, current: prev.total, status: 'Done' } : prev));
+      showToast(`Exported ${targets.length} items to ${fileName}`);
+    } catch (err) {
+      pushLog(`✗ Export failed: ${err instanceof Error ? err.message : 'failed'}`);
+      setShareProgress(prev => (prev ? { ...prev, status: 'Failed — see log' } : prev));
+    } finally {
+      setIsExportingZip(false);
+    }
+  }, [shareEntries, exportChecked, isExportingZip, shareFileName, vaultStore, showToast]);
+
   const openPluginSettings = useCallback(() => {
     try {
       type ObsidianAppWithSettings = App & { setting?: { open: () => void; openTabById?: (id: string) => void } };
@@ -726,11 +843,11 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
       </div>
 
-      {/* Export Card — matching Daily Portion accent */}
+      {/* Anki Card — matching Daily Portion accent */}
       <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:12 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
-            <Download size={12} /> EXPORT
+            <Download size={12} /> ANKI
           </span>
           <span style={{ fontSize:'0.78em', color:'var(--text-faint)' }}>Generate .apkg for Anki</span>
         </div>
@@ -751,13 +868,18 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
       {/* Mindmap Selector & Actions — matching Daily tone */}
       <div className="ql-card" style={{ ...cardBase, borderLeft:'3px solid var(--interactive-accent)', display:'flex', flexDirection:'column', gap:14 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
             <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 8px', borderRadius:6, background:'color-mix(in srgb, var(--interactive-accent) 14%, transparent)', color:'var(--interactive-accent)', fontSize:'0.72em', fontWeight:700, letterSpacing:'0.02em', border:'1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent)' }}>
               <PenTool size={12}/> MINDMAPS
             </span>
-            <button onClick={openStarterImport} style={{ marginLeft:'auto', padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500, display:'inline-flex', gap:6, alignItems:'center' }}>
-              <Download size={13}/> Import pre-made
-            </button>
+            <div className="ql-share-actions" style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+              <button onClick={openStarterImport} style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500, display:'inline-flex', gap:6, alignItems:'center' }}>
+                <Download size={13}/> Import
+              </button>
+              <button onClick={openShareExport} style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--background-modifier-border)', background:'var(--background-primary)', color:'var(--text-normal)', cursor:'pointer', fontSize:'0.8em', fontWeight:500, display:'inline-flex', gap:6, alignItems:'center' }}>
+                <Upload size={13}/> Export
+              </button>
+            </div>
           </div>
           <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
             <button onClick={()=>stepMindmap(-1)} title="Previous mindmap" aria-label="Previous mindmap" style={{ padding:'0 10px', minHeight:'40px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><ChevronLeft size={16}/></button>
@@ -1004,14 +1126,14 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
       )}
 
-      {/* Starter-pack import — select phase, then importer-style progress */}
+      {/* Mindmap import — select phase, then importer-style progress */}
       {showImport && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
           <div style={{ background:'var(--background-primary)', border:'1px solid var(--background-modifier-border)', borderRadius:12, width:'100%', maxWidth:520, maxHeight:'85vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.22)' }}>
             <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--background-modifier-border)', display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)' }}><Download size={14} /></span>
-                <span style={{ fontWeight:700, fontSize:'1em' }}>Import pre-made mindmaps</span>
+                <span style={{ fontWeight:700, fontSize:'1em' }}>Import mindmaps</span>
                 {importProgress
                   ? <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-muted)', fontVariantNumeric:'tabular-nums' }}>{importProgress.current}/{importProgress.total}</span>
                   : <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-muted)' }}>{importTargets.length} selected</span>}
@@ -1092,6 +1214,80 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         </div>
       )}
 
+      {/* Mindmap export — select phase, then importer-style progress */}
+      {showExport && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+          <div style={{ background:'var(--background-primary)', border:'1px solid var(--background-modifier-border)', borderRadius:12, width:'100%', maxWidth:520, maxHeight:'85vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.22)' }}>
+            <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--background-modifier-border)', display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)' }}><Upload size={14} /></span>
+                <span style={{ fontWeight:700, fontSize:'1em' }}>Export mindmaps</span>
+                {shareProgress
+                  ? <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-muted)', fontVariantNumeric:'tabular-nums' }}>{shareProgress.current}/{shareProgress.total}</span>
+                  : <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-muted)' }}>{exportTargets.length} selected</span>}
+              </div>
+              {!shareProgress && !shareDone && (
+                <div className="setting-item-description" style={{ fontSize:'0.85em', color:'var(--text-muted)', fontWeight:500 }}>
+                  {shareEntries.length
+                    ? 'Pick what to share — a supported .zip is built that other users can bring in with Import.'
+                    : 'Nothing to share yet — create a mindmap first.'}
+                </div>
+              )}
+              {!shareProgress && !shareDone && shareEntries.length > 0 && (
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                  <span style={{ fontSize:'0.8em', color:'var(--text-muted)' }}>File name</span>
+                  <input value={shareFileName} onChange={e=>setShareFileName(e.target.value)} placeholder="quran-life-share.zip" style={{ flex:1, minWidth:0, padding:'6px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.85em' }} />
+                </div>
+              )}
+              {(shareProgress || shareDone) && (
+                <div style={{ width:'100%', height:8, background:'var(--background-secondary)', borderRadius:999, overflow:'hidden', boxShadow:'inset 0 0 0 1px var(--background-modifier-border)' }}>
+                  <div style={{ width: shareProgress ? `${shareProgress.total > 0 ? Math.round((shareProgress.current / shareProgress.total) * 100) : 0}%` : '100%', height:'100%', background:'var(--interactive-accent)', transition:'width 0.25s ease', borderRadius:999 }} />
+                </div>
+              )}
+            </div>
+            {!shareProgress && !shareDone && shareEntries.length > 0 && (
+              <>
+                <div style={{ display:'flex', gap:8, alignItems:'center', padding:'10px 16px 0', flexWrap:'wrap' }}>
+                  <button onClick={() => { const all: Record<string, boolean> = {}; for (const e of shareEntries) all[e.key] = true; setExportChecked(all); }} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>All</button>
+                  <button onClick={() => setExportChecked({})} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', fontSize:'0.8em', cursor:'pointer' }}>None</button>
+                  <span style={{ marginLeft:'auto', fontSize:'0.75em', color:'var(--text-faint)' }}>mindmap + splits + notes travel together</span>
+                </div>
+                <div style={{ flex:1, overflowY:'auto', padding:'10px 16px', display:'flex', flexDirection:'column', gap:6, minHeight:80 }}>
+                  {shareEntries.map(e => (
+                    <label key={e.key} style={{ display:'flex', gap:10, alignItems:'center', padding:'8px 10px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background: exportChecked[e.key] ? 'var(--background-secondary)' : 'var(--background-primary)', cursor:'pointer' }}>
+                      <input type="checkbox" checked={!!exportChecked[e.key]} onChange={() => setExportChecked(prev => ({ ...prev, [e.key]: !prev[e.key] }))} />
+                      <span style={{ flex:1, minWidth:0 }}>
+                        <span style={{ display:'block', fontSize:'0.88em', fontWeight:600, color:'var(--text-normal)' }}>{starterLabel(e)}</span>
+                        <span style={{ display:'block', fontSize:'0.74em', color:'var(--text-faint)' }}>{starterContents(e)}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+            {(shareProgress || shareDone) && (
+              <div style={{ flex:1, overflow:'auto', padding:'10px 16px', fontFamily:'var(--font-monospace)', fontSize:'0.75em', color:'var(--text-muted)', background:'var(--background-secondary)', minHeight:80, maxHeight:160 }}>
+                {(shareProgress?.logs ?? []).map((l, i) => (
+                  <div key={i} style={{ padding:'2px 0', borderBottom: '1px solid var(--background-modifier-border)' }}>• {l}</div>
+                ))}
+                {shareDone && <div style={{ marginTop:8, color:'var(--interactive-accent)', fontWeight:600 }}>✓ Done — {shareDone.items} items in {shareDone.fileName} (also saved to vault: {shareDone.savedPath})</div>}
+              </div>
+            )}
+            <div style={{ padding:'12px 16px', borderTop:'1px solid var(--background-modifier-border)', display:'flex', justifyContent:'flex-end', gap:8, background:'var(--background-primary)' }}>
+              {!shareProgress && !shareDone && (
+                <>
+                  <button onClick={() => setShowExport(false)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', cursor:'pointer' }}>Cancel</button>
+                  <button onClick={() => void runShareExport()} disabled={exportTargets.length === 0 || isExportingZip} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor: exportTargets.length === 0 || isExportingZip ? 'not-allowed' : 'pointer', fontWeight:600, opacity: exportTargets.length === 0 || isExportingZip ? 0.6 : 1 }}>Export ({exportTargets.length})</button>
+                </>
+              )}
+              {(shareProgress || shareDone) && (
+                <button onClick={() => { if (shareDone) setShowExport(false); }} disabled={!shareDone} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', cursor: shareDone ? 'pointer' : 'not-allowed', fontWeight:600, opacity: shareDone ? 1 : 0.6 }}>{shareDone ? 'Done' : 'Exporting…'}</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && <div style={{ position:'fixed', bottom:'calc(14px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50, maxWidth:'calc(100vw - 32px)' }}>{toast}</div>}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         /* Splits editor + preview layout. Mobile-first: the preview sits BELOW the
@@ -1120,6 +1316,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           .quran-life-anki .ql-card { padding: 12px !important; border-radius: 10px !important; gap: 10px !important; }
           .quran-life-anki .ql-export-row { flex-wrap: wrap; }
           .quran-life-anki .ql-export-row > button { flex: 1 1 100% !important; justify-content: center; white-space: nowrap; }
+          .quran-life-anki .ql-share-actions { width: 100% !important; margin-left: 0 !important; }
+          .quran-life-anki .ql-share-actions > button { flex: 1 1 0 !important; justify-content: center; white-space: nowrap; min-height: 36px; }
           .quran-life-anki .ql-stats-grid { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)) !important; }
           .quran-life-anki .ql-table-wrap { max-height: 240px !important; }
           .quran-life-anki .ql-table-wrap table { min-width: 420px; }

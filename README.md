@@ -52,6 +52,12 @@ Daily Qur'an review, mindmap memorization and Anki export, autosaved to your vau
 - From the plugin settings, configure the part order and surah-within-part order for the next export.
 - In the Anki Deck view, press **Export to Anki** to generate an `.apkg` file, then import it into Anki (double-click the file, or File → Import). Re-importing updates your cards without losing review progress — see the [import walkthrough](https://imed-ghomari.github.io/quran-life/philosophy/getting-started#3-export-and-import-into-anki).
 
+### Mindmap import / export (sharing)
+
+- In the Anki Deck view, the MINDMAPS card has **Import** and **Export** buttons.
+- **Import:** choose a `.zip` file, tick what to bring in, then **Import**. Items you already have are skipped unless **Replace existing** is on. You can import several zips gradually — for example one per Quran part.
+- **Export:** tick your mindmaps, verse groups and notes, then **Export**. A supported `.zip` downloads (a copy is also saved in your vault) — send it to other users and they can bring it in with **Import**.
+
 ## Storage
 
 Everything the plugin stores lives in **one** folder — the plugin's own data folder
