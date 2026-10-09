@@ -127,76 +127,148 @@ export function observeTldrawWatermarkTitles(root: HTMLElement): () => void {
  * Bottom-bar offset handling — Obsidian phones float their own bottom bar
  * over the WebView, which used to sit on top of tldraw's toolbar. But
  * tablets (and desktop) have no such bar, so a hardcoded lift leaves a dead
- * gap there. Instead we *measure* whether an Obsidian-owned bar actually
- * overlays the bottom of the viewport and expose its height as
+ * gap there. Instead we *measure* the clearance between our content edge and
+ * any Obsidian-owned bar actually overlaying it, and expose it as
  * `--ql-obsidian-bottom-offset` on the mindmap container (0 when absent).
  *
  * Detection is geometric (no hardcoded Obsidian class names to go stale):
- * whatever is hit-testable at the viewport's bottom-center pixel that is NOT
- * part of our container and looks like a wide bottom-anchored chrome bar
- * counts. Ancestors are walked up so `pointer-events: none` wrappers or
- * small inner buttons still resolve to their bar.
+ * points just inside our own container edge are hit-tested; whatever is NOT
+ * part of our container and looks like a wide, short chrome strip counts.
+ * Probing inside our container (rather than at the viewport edge) is what
+ * makes this robust: floating bars sit inset from the viewport edge
+ * (notch / home-indicator insets, floating margins), and an in-flow bar
+ * (desktop status bar, tablet headers) can never contain a probe point
+ * inside our content, so it can never match.
  */
 export const OBSIDIAN_BOTTOM_OFFSET_VAR = '--ql-obsidian-bottom-offset';
+export const OBSIDIAN_TOP_OFFSET_VAR = '--ql-obsidian-top-offset';
 
-function isBottomBarRect(rect: DOMRect, vw: number, vh: number, contentBottom: number): boolean {
+/** A hit-test ancestor counts as overlay chrome: wide, short strip. */
+function isOverlayChrome(rect: DOMRect, vw: number, vh: number): boolean {
 	if (!rect || rect.height <= 0) return false;
-	// Must be anchored at the very bottom…
-	if (rect.bottom < vh - 2) return false;
-	// …a full-width chrome strip, not a small floating button…
+	// A full-width chrome strip, not a small floating button…
 	if (rect.width < vw * 0.5) return false;
 	// …and not some giant overlay.
 	if (rect.height > vh * 0.4) return false;
-	// …and it must actually cover content (a floating overlay). An in-flow
-	// bar below the content (desktop status bar) must not count, or we would
-	// add a dead gap on desktop/tablet.
-	if (!(rect.top < contentBottom - 2)) return false;
 	return true;
 }
 
 /**
- * Measure the height of an Obsidian-owned bottom bar overlaying the viewport,
- * or 0 when there is none (tablet / desktop / hidden bar).
+ * Cross-window element check. Prefers Obsidian's own `Node.instanceOf`
+ * (patched onto the DOM prototype at startup, works across WebView windows);
+ * outside Obsidian (web build, unit tests) where the patch is absent, walks
+ * the prototype chain instead of a bare `instanceof` for the same reason.
+ * Never throws — measurement must degrade to 0, not crash.
  */
-export function measureObsidianBottomOffset(container: HTMLElement): number {
+function isChromeElement(el: unknown): el is HTMLElement {
+	if (typeof el !== 'object' || el === null) return false;
+	try {
+		const patched = el as { instanceOf?: (type: unknown) => boolean };
+		if (typeof patched.instanceOf === 'function') {
+			return patched.instanceOf(HTMLElement) === true;
+		}
+	} catch {
+		/* fall through to the prototype walk */
+	}
+	try {
+		let proto: unknown = Object.getPrototypeOf(el);
+		while (proto) {
+			if (proto === HTMLElement.prototype) return true;
+			proto = Object.getPrototypeOf(proto);
+		}
+	} catch {
+		/* not an element */
+	}
+	return false;
+}
+
+/** Best clearance found at point (x, y): the outermost matching ancestor wins
+ * (an inner title row under-reports the bar's true extent). */
+function probeChromeGap(
+	container: HTMLElement,
+	x: number,
+	y: number,
+	vw: number,
+	vh: number,
+	edge: 'top' | 'bottom',
+	edgeStart: number,
+): number {
+	let stack: Element[];
+	try {
+		stack = document.elementsFromPoint(Math.round(x), Math.round(y));
+	} catch {
+		return 0;
+	}
+	if (!stack || !stack.length) return 0;
+	let best = 0;
+	for (const el of stack) {
+		if (!isChromeElement(el)) continue;
+		if (el === document.documentElement || el === document.body) continue;
+		// Our own UI (header, canvas, toasts, …) never counts.
+		if (container.contains(el)) continue;
+		// Walk up: the hit element may be a small button inside the bar.
+		let node: HTMLElement | null = el;
+		let depth = 0;
+		while (node && node !== document.body && depth < 5) {
+			let rect: DOMRect | null = null;
+			try {
+				rect = node.getBoundingClientRect();
+			} catch {
+				break;
+			}
+			if (rect && isOverlayChrome(rect, vw, vh)) {
+				const gap = edge === 'top' ? rect.bottom - edgeStart : edgeStart - rect.top;
+				if (gap > best) best = gap;
+			}
+			node = node.parentElement;
+			depth += 1;
+		}
+	}
+	return best;
+}
+
+/**
+ * Clearance (px) between the container's `edge` and the nearest overlaying
+ * Obsidian-owned bar covering it, or 0 when there is none. For the top edge
+ * that is `barBottom - contentTop`, for the bottom `contentBottom - barTop`,
+ * so the value already includes any notch / home-indicator gap the floating
+ * bar leaves — consumers take `max(osSafeArea, this)` instead of adding both.
+ */
+function measureChromeGap(container: HTMLElement, edge: 'top' | 'bottom'): number {
 	try {
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		if (!vw || !vh || !container.isConnected) return 0;
-		const contentBottom = container.getBoundingClientRect().bottom;
-		let stack: Element[];
-		try {
-			stack = document.elementsFromPoint(Math.round(vw / 2), vh - 2);
-		} catch {
-			return 0;
-		}
-		if (!stack || !stack.length) return 0;
-		for (const el of stack) {
-			if (!(el instanceof HTMLElement)) continue;
-			if (el === document.documentElement || el === document.body) continue;
-			// Our own UI (canvas, toasts, …) never counts.
-			if (container.contains(el)) continue;
-			// Walk up: the hit element may be a small button inside the bar.
-			let node: HTMLElement | null = el;
-			let depth = 0;
-			while (node && node !== document.body && depth < 5) {
-				let rect: DOMRect | null = null;
-				try {
-					rect = node.getBoundingClientRect();
-				} catch {
-					break;
-				}
-				if (rect && isBottomBarRect(rect, vw, vh, contentBottom)) {
-					return Math.round(Math.min(rect.height, vh * 0.4));
-				}
-				node = node.parentElement;
-				depth += 1;
+		const box = container.getBoundingClientRect();
+		if (box.width <= 0 || box.height <= 0) return 0;
+		const edgeStart = edge === 'top' ? box.top : box.bottom;
+		const xs = [vw * 0.25, vw * 0.5, vw * 0.75];
+		// Depths just inside the container edge: a single edge pixel misses
+		// whenever the bar starts a little further in.
+		const depths = [2, 22, 42, 62, 82];
+		let best = 0;
+		for (const d of depths) {
+			const y = edge === 'top' ? edgeStart + d : edgeStart - d;
+			if (y < 0 || y > vh) continue;
+			for (const x of xs) {
+				const gap = probeChromeGap(container, x, y, vw, vh, edge, edgeStart);
+				if (gap > best) best = gap;
 			}
 		}
+		return Math.round(Math.max(0, Math.min(best, vh * 0.4)));
 	} catch {
 		/* noop */
 	}
 	return 0;
+}
+
+/**
+ * Measure the clearance between our content bottom and an Obsidian-owned
+ * bottom bar overlaying it, or 0 when there is none (tablet / desktop /
+ * hidden bar).
+ */
+export function measureObsidianBottomOffset(container: HTMLElement): number {
+	return measureChromeGap(container, 'bottom');
 }
 
 /**
@@ -211,71 +283,18 @@ export function observeObsidianBottomBar(container: HTMLElement): () => void {
 /**
  * Top-chrome counterpart of the bottom-bar handling above: on phones Obsidian
  * floats its view-header over the top of the view, which used to sit on top
- * of the mindmap editor's own header. The measured height is exposed as
+ * of the mindmap editor's own header. The measured clearance is exposed as
  * `--ql-obsidian-top-offset` on the editor container (0 when no overlaying
  * bar exists, e.g. tablets/desktop where the header is in-flow above the
  * content). Consumed phone-only in CSS so other form factors are untouched.
  */
-export const OBSIDIAN_TOP_OFFSET_VAR = '--ql-obsidian-top-offset';
-
-function isTopBarRect(rect: DOMRect, vw: number, vh: number, contentTop: number): boolean {
-	if (!rect || rect.height <= 0) return false;
-	// Must be anchored at the very top…
-	if (rect.top > 2) return false;
-	// …a full-width chrome strip, not a small floating button…
-	if (rect.width < vw * 0.5) return false;
-	// …and not some giant overlay.
-	if (rect.height > vh * 0.4) return false;
-	// …and it must actually cover content (a floating overlay). An in-flow
-	// bar above the content (desktop/tab headers) must not count, or we
-	// would add a dead gap on desktop/tablet.
-	if (!(rect.bottom > contentTop + 2)) return false;
-	return true;
-}
 
 /**
- * Measure the height of an Obsidian-owned top bar overlaying the content,
- * or 0 when there is none (tablet / desktop / hidden bar).
+ * Measure the clearance between our content top and an Obsidian-owned top
+ * bar overlaying it, or 0 when there is none (tablet / desktop / hidden bar).
  */
 export function measureObsidianTopOffset(container: HTMLElement): number {
-	try {
-		const vw = window.innerWidth;
-		const vh = window.innerHeight;
-		if (!vw || !vh || !container.isConnected) return 0;
-		const contentTop = container.getBoundingClientRect().top;
-		let stack: Element[];
-		try {
-			stack = document.elementsFromPoint(Math.round(vw / 2), 2);
-		} catch {
-			return 0;
-		}
-		if (!stack || !stack.length) return 0;
-		for (const el of stack) {
-			if (!(el instanceof HTMLElement)) continue;
-			if (el === document.documentElement || el === document.body) continue;
-			// Our own UI (header, canvas, toasts, …) never counts.
-			if (container.contains(el)) continue;
-			// Walk up: the hit element may be a small button inside the bar.
-			let node: HTMLElement | null = el;
-			let depth = 0;
-			while (node && node !== document.body && depth < 5) {
-				let rect: DOMRect | null = null;
-				try {
-					rect = node.getBoundingClientRect();
-				} catch {
-					break;
-				}
-				if (rect && isTopBarRect(rect, vw, vh, contentTop)) {
-					return Math.round(Math.min(rect.height, vh * 0.4));
-				}
-				node = node.parentElement;
-				depth += 1;
-			}
-		}
-	} catch {
-		/* noop */
-	}
-	return 0;
+	return measureChromeGap(container, 'top');
 }
 
 /**
