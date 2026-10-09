@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkwebsite=self.webpackChunkwebsite||[]).push([["3474"],{5078(e){e.exports=JSON.parse('{"tags":[{"label":"feature-deep-dive","permalink":"/quran-life/blog/tags/feature-deep-dive","count":16},{"label":"philosophy","permalink":"/quran-life/blog/tags/philosophy","count":25},{"label":"product","permalink":"/quran-life/blog/tags/product","count":4}]}')}}]);

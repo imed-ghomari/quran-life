@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?><?xml-stylesheet type="text/xsl" href="rss.xsl"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>Quran Life Blog</title>
+        <link>https://imed-ghomari.github.io/quran-life/blog</link>
+        <description>Quran Life Blog</description>
+        <lastBuildDate>Thu, 02 Apr 2026 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <language>en</language>
+        <item>
+            <title><![CDATA[Types of mutashabihat: location and direction]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-types</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-types</guid>
+            <pubDate>Thu, 02 Apr 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A practical way to classify mutashabihat based on where the similarity happens and how the relationship moves between surahs.]]></description>
+            <content:encoded><![CDATA[<p>One useful way to classify mutashabihat is by location.</p>
+<p>Some mutashabihat happen at the transition between verses. The confusion is not only in one phrase, but in the point where one ayah leads into another. Other mutashabihat happen inside the verse itself, where the confusion sits in the internal wording of the ayah.</p>
+<p>That difference matters during review. When the mutashabihat sits at the boundary between verses, the card's extra context verses after full reveal help you stay oriented, so you do not get stuck only because you lost your place in the transition. The extra context is trying to help you identify the wording problem without letting verse-boundary confusion become a fake extra obstacle.</p>
+<p>Another useful classification is by direction.</p>
+<p>Some mutashabihat are one-way. A verse in one surah strongly points your mind toward another surah, but not necessarily back in the same strength. Others are two-way, where both surahs can pull you back and forth into each other.</p>
+<p>That directional difference often depends on how you structured the surah mindmaps. If one surah has a much stronger or more explicit structure, it may mostly pull the other one in one direction. If both surahs are structured in a way that creates similar pressure, the mutashabihat starts behaving like a back-and-forth link.</p>
+<p>This is another reason mindmap quality matters. Mutashabihat are not only about shared wording. They are also about how clearly each verse lives inside its own structure.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[How surah mindmaps and verse groups work together, and what happens when you edit the verse groups]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/relationship-between-surah-mindmap-and-verse-groups</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/relationship-between-surah-mindmap-and-verse-groups</guid>
+            <pubDate>Thu, 02 Apr 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why Quran Life treats verse groups as the practical breakdown of a surah mindmap, and what happens to your Anki progress when those groups change.]]></description>
+            <content:encoded><![CDATA[<p>In Quran Life, the surah mindmap and the verse groups are closely connected. The mindmap gives the structure of the surah, and the verse groups turn that structure into pieces you can actually review in Anki.</p>
+<p>So when you choose where the surah should be split, you are also deciding how that surah will be carried in review.</p>
+<p>That is why re-importing treats those edits carefully. When you export again and re-import into Anki, matching groups are updated in place and keep their review progress, while genuinely new groups arrive as New cards.</p>
+<p>When you edit only the mindmap, nothing resets — your notes and images update but all dates stay. When you change the splits themselves, the old group card becomes outdated: delete it in the Anki Browser, since re-importing never removes cards by itself.</p>
+<p>So the practical idea is simple: the surah mindmap gives the route, the verse groups break that route into reviewable pieces, and re-importing preserves what is still valid while you manually clear what no longer matches.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[How the pre-made mindmaps are built]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/building-the-pre-made-mindmaps</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/building-the-pre-made-mindmaps</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[What makes a pre-made mindmap useful for memorization instead of just visually interesting.]]></description>
+            <content:encoded><![CDATA[<p>Pre-made mindmaps should not feel like arbitrary diagramming. They need to reflect real thematic movement, strong transitions, and distinctions that actually help recall.</p>
+<p>In practice, that means we do not build them from one source file and call it done. We compare five source files, look at how each one structures the surah, and ask which structure feels the most intuitive while still remaining faithful to the text and its meaning.</p>
+<p>Sometimes one source is clearly the strongest. Sometimes two or more structures each get something important right, so we merge them. And sometimes the existing structures are still not intuitive enough for memorization, so we try building another structure ourselves and test whether it fits naturally with one of the existing readings or with the majority of them.</p>
+<p>That is why building a pre-made mindmap is both a correctness exercise and a usability exercise. The point is not to replace the student's thought. The point is to give the student a serious starting skeleton that can later be edited, simplified, or expanded based on personal memory.</p>]]></content:encoded>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[How to balance correctness and intuitiveness when creating or editing mindmaps]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/correctness-vs-intuitiveness-in-mindmaps</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/correctness-vs-intuitiveness-in-mindmaps</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why a mindmap should be faithful to the surah without becoming so rigid that it stops helping memory.]]></description>
+            <content:encoded><![CDATA[<p>A good mindmap should be faithful to the surah, but also usable by the human memory that needs to carry it.</p>
+<p>If you chase correctness in a purely academic way, the map can become too dense or too literal to function as a memory aid. If you chase intuition without discipline, the map can become personally satisfying but structurally misleading.</p>
+<p>Part of the beauty of the Quran is that different people, with different styles of thinking, naturally notice different patterns in it. That is not a flaw in mindmapping. It is part of why personal mapping can work so well. The goal is not to erase that difference. The goal is to let the student benefit from personal intuitiveness without violating the actual flow, wording, and meaning of the surah.</p>
+<p>So the balance is this: keep the text honest, keep the meaning honest, and then allow yourself to choose the branch structure, labels, and grouping style that makes the surah easier for you to carry. A map is not a tafsir replacement and it is not random art. It is a memory structure that should still respect the shape of the surah.</p>]]></content:encoded>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[Create your own mindmap or use pre-built mindmaps?]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/create-your-own-mindmap-or-use-pre-built</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/create-your-own-mindmap-or-use-pre-built</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[How to decide between speed and personalization when working with Quran Life mindmaps.]]></description>
+            <content:encoded><![CDATA[<p>Right now there is only one option: build your own — the pre-built collection is still being prepared and not ready to download. That turns out to be a good thing for memory, because building your own map usually gives deeper ownership than starting from someone else's.</p>
+<p>When the pre-built maps do arrive, the choice will not only be between using one as-is and rebuilding everything from zero. There will be a very useful middle ground: import or start from the pre-built map, then edit it until it feels like yours.</p>
+<p>That middle ground is often the strongest option. You save time because you are not starting from a blank canvas, but you still gain ownership because you are adjusting the branches, labels, and transitions according to how you actually understand the surah.</p>
+<p>So the better question is not "pre-built or custom?" It is "how much structure do I already have, and how much of it do I still need to personalize?" The important thing is not which option looks more advanced. The important thing is whether the map becomes real in your memory.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[What daily load statistics are trying to show you]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/daily-load-statistics</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/daily-load-statistics</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why daily load is about sustainability, not just how many items happen to be due right now.]]></description>
+            <content:encoded><![CDATA[<p>Daily load is not just about how much is due today. It is about how heavy your system feels before it becomes unmanageable.</p>
+<p>Since reviews live in Anki, load statistics live there too: Anki's Stats show your retention, upcoming due counts, and review history. In the plugin, the Daily Portion tab shows how many days your current part will take at your daily minutes target. Together they answer whether your current pattern is building a sustainable rhythm or quietly stacking too much pressure into future days.</p>
+<p>The practical value is simple: it helps you judge how much new work you can safely add. If Anki's upcoming due counts are already heavy, that is a sign to be conservative with new exports or new memorization. If the load is stable, you can add more with more confidence.</p>
+<p>This matters because hifdh often breaks down gradually, not dramatically. Turning "I feel behind" into visible numbers — due counts in Anki, completion days in Daily Portion — lets you act before the system becomes too heavy.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[How Quran Life calculates your daily portion]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/daily-portion-calculation</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/daily-portion-calculation</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A short explanation of how Quran Life turns your active part and daily time target into a sustainable daily portion.]]></description>
+            <content:encoded><![CDATA[<p>Quran Life does not treat daily portion as a random reading target. It first decides which surahs are still eligible for passive exposure, then it uses your chosen daily time target to size the portion and snaps that target to a meaningful stopping point.</p>
+<p>Eligibility comes first. The app looks at your active part and removes any surah you explicitly unchecked in Surahs in Portion. Daily portion is for familiarization through reading or listening — it is deliberately separate from Anki reviews, which have their own scheduling and are never affected by these checkboxes.</p>
+<p>That choice is reversible. Re-check a surah and it rejoins the daily cycle; uncheck it and it leaves daily reading (to hide it from reviews instead, suspend its cards in Anki).</p>
+<p>Once the eligible surahs are selected, Quran Life starts from your active part and your daily minutes target, estimates how much content fits that time in your current mode, and then snaps that target to a meaningful stopping point. The cycle length is derived afterward from the remaining eligible material, not forced in advance.</p>
+<p>That snapping matters. The app prefers to stop at a surah ending when possible. If that does not fit, it looks for a rub boundary. If that does not fit either, it looks for a ruku boundary. If none of those fall within the target window, it falls back to the nearest ayah boundary.</p>
+<p>So the daily portion is based on ruku and other structural logic, not only raw word count. The goal is not just to keep you busy today. The goal is to keep your current territory moving in chunks that feel finishable and repeatable.</p>
+<p>This matters because many students either choose too little and drift, or choose too much and quietly stop being consistent. A good daily portion is not the largest amount you can survive for one day. It is the amount you can repeat long enough for the sound and flow of the surah to become familiar.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+        </item>
+        <item>
+            <title><![CDATA[How many daily portion cycles do you need before using rote memorization shortcuts?]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/daily-portion-cycles-vs-rote-memorization</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/daily-portion-cycles-vs-rote-memorization</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why daily portion cycles and rote memorization should not be treated as opposites.]]></description>
+            <content:encoded><![CDATA[<p>Quran Life treats daily portion cycles as the phase where the sound and broad flow of the surah settle into memory.</p>
+<p>For many people, something like 2 to 3 cycles is a reasonable point before selective rote shortcuts start becoming useful. But that number is not a law. It depends heavily on the person and on how much prior contact they already had with the surah.</p>
+<p>If the surah already feels half-known, rote reinforcement can come earlier. If the surah still feels foreign, even 2 or 3 cycles may not be enough yet. The practical question is not whether rote repetition is allowed. It is when it stops being a shortcut and starts becoming a crutch.</p>
+<p>If the cycles have already made the surah familiar, a small amount of rote reinforcement can be efficient. If there is still no structure or familiarity, rote repetition often creates shallow recall.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[Daily portion listening vs reading]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/daily-portion-listening-vs-reading</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/daily-portion-listening-vs-reading</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[How to think about the two daily portion modes in Quran Life and when each one is more useful.]]></description>
+            <content:encoded><![CDATA[<p>Listening and reading are not identical daily portion modes. They train slightly different kinds of familiarity.</p>
+<p>Listening helps the sound, rhythm, and broad flow settle in more naturally. Reading can make sequence and visual phrasing feel more concrete. But this should not be turned into a theory of fixed learning styles. People mostly have preferences, not sealed-off learning categories.</p>
+<p>In many cases, the more senses you engage, the better. Listening with focus while reading can be stronger than either one alone. Reading aloud can also be stronger than silent reading because you are involving voice, sight, and hearing together.</p>
+<p>So the practical question is not "what type of learner am I?" The practical question is "what combination helps this surah settle into me more deeply and more consistently right now?"</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[Launching Quran Life for the first time]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/first-launch</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/first-launch</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A first-launch draft that frames Quran Life honestly and explains what the product is trying to solve.]]></description>
+            <content:encoded><![CDATA[<p>The first launch is not the moment a product becomes perfect. It is the moment the real conversation begins.</p>
+<p>Quran Life launched at a stage where not all planned part mindmaps were ready yet. In particular, the six other parts still needed their mindmaps. That was known. The launch was still intentional, because waiting for total coverage would have delayed the more important test: does the method actually convince real users once they try it?</p>
+<p>That was the main early challenge. Quran Life is not entering a crowded category with many similar tools proving the same method. We are basically alone in this space, which means the first job is not only shipping features. It is persuading people that this memorization technique is effective in the first place.</p>
+<p>For that reason, the first-launch message has to be honest. It should explain what is already strong, what is still incomplete, and why the product was launched anyway. Honest launches build more trust than inflated ones.</p>]]></content:encoded>
+            <category>product</category>
+        </item>
+        <item>
+            <title><![CDATA[Should you review every day? What the history of reviews actually teaches]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/history-of-reviews-and-should-you-review-every-day</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/history-of-reviews-and-should-you-review-every-day</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A more honest look at consistency, missed days, and what review history is really useful for.]]></description>
+            <content:encoded><![CDATA[<p>The slogan answer is easy: review every day. The real answer is more nuanced.</p>
+<p>Daily review is usually ideal, but not every missed day means failure, and not every daily streak means the system is healthy. What matters more is the pattern your review history reveals over time.</p>
+<p>Since reviews happen in Anki, that history lives in Anki's Stats: retention, intervals, due counts, and the calendar heatmap. It turns a vague feeling into a pattern. Are you reviewing consistently but grading too generously? Are you skipping, then overloading? Are you only touching easy material? Daily Portion keeps its own simpler record — whether you finished today's reading.</p>
+<p>Those questions matter more than the slogan alone.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[How to use Quran parts in Quran Life]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/how-to-use-quran-parts</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/how-to-use-quran-parts</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A practical deep dive into why Quran Life uses parts as focus territory and how that shapes your daily portion, progression, and review scope.]]></description>
+            <content:encoded><![CDATA[<p>Quran parts in Quran Life are not just labels. They define your current territory.</p>
+<p>When you choose an active part, the app uses that decision to focus your daily portion and its statistics. Reviews, on the other hand, are global in Anki — changing the active part never hides, suspends, or reschedules your Anki cards. If you want a Surah out of reviews while you work elsewhere, suspend it in the Anki Browser.</p>
+<p>That split keeps the system simpler in practice: Daily Portion is your scoped daily territory, Anki is the full review memory.</p>
+<p>The normal progression is usually to begin with a part you already learned, so you can stabilize your workflow on familiar ground. After that, you move gradually into parts you have not yet learned, one territory at a time, until eventually the whole Quran is learned and you can switch to the all-Quran mode.</p>
+<p>So a part is not just an organizational label. It is the answer to a practical question: what section of Quran am I actively trying to keep moving right now, without drowning the rest of the system?</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+        </item>
+        <item>
+            <title><![CDATA[Inside the mindmap editor: how the mapping tools actually work]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/inside-the-mindmap-editor</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/inside-the-mindmap-editor</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A practical tour of the tldraw-based mindmap editor in Quran Life and the specific tools and safeguards it gives you while mapping.]]></description>
+            <content:encoded><![CDATA[<p>Quran Life's mindmap editor is built on top of tldraw, so it behaves like a real canvas rather than a text field pretending to be visual.</p>
+<p>The editor starts from a lasso-style selection workflow, which fits mindmapping better than forcing you into ordinary box-selection first. Freehand drawing is still the preferred method because it usually gives the most natural map, but the editor also accounts for people who do not think or draw well that way. That is why it gives you arrows, text, and normal selection tools too.</p>
+<p>So the important thing to understand about the editor is not only that it exists. It is that Quran Life treats it as an actual working environment for mapping, not as a decorative attachment on the side.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[Should you study mutashabihat proactively or only after confusion appears?]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-proactive-vs-retroactive-study</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-proactive-vs-retroactive-study</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A practical way to think about timing similar-verse study without either overloading or delaying too much.]]></description>
+            <content:encoded><![CDATA[<p>There are two instincts with mutashabihat. One is to study everything early so you are never surprised. The other is to wait until confusion appears and then fix only what became a real problem.</p>
+<p>Both have truth in them, but neither should be used blindly. There is no automatic timing engine making this decision for you — you set the timing yourself.</p>
+<p>Study similarities before they become chaos, but do not flood yourself with distinctions that have no active context yet. A practical split: when a confusion actually happens during review, flag the card red immediately (reactive). Once a week, pick one tagged Surah and deliberately compare its similar verses on the mindmap (proactive).</p>
+<p>The best moment is usually just before a verse becomes vulnerable, not long before and not long after.</p>]]></content:encoded>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[Ignored, resolved, and custom mutashabihat: what to track in your own review]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-resolution-states</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-resolution-states</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why similar verses deserve different treatment depending on whether they confuse you, and how to track the ones only you notice.]]></description>
+            <content:encoded><![CDATA[<p>Not every mutashabihat issue deserves the same treatment.</p>
+<p>Sometimes a similarity is not a real problem for you, even if it looks similar on paper. In that case, ignoring it is the honest choice. You are not saying the verses are unrelated. You are saying this is not an active confusion point in your memorization — so don't flag it, and don't clutter your map for it.</p>
+<p>Other times it is a real problem, and then the goal is not just to label it but to resolve it. That means flagging the card, separating the two verses far apart on the mindmap, and adding the thematic distinction — until the confusion stops recurring. A resolved similarity is one you unflag and remove from your weekly check because it no longer fails.</p>
+<p>And then there is one more important category: the similarities only you notice. Different users feel different pulls between verses. One person's mind may keep jumping between two places that another person would never confuse. When that happens to you, flag it and note the pair in your mindmap notes — your personal confusion points deserve the same treatment as the well-known ones.</p>
+<p>So it's really about three attitudes together: some similarities should be ignored, some should be worked until resolved, and some need to be added by you because your own mind is showing a connection no list captured.</p>]]></content:encoded>
+            <category>feature-deep-dive</category>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[Why mutashabihat should surface when the verse is relevant, not all at once]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-unlocking</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/mutashabihat-unlocking</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why similar-verse study works better when it appears at the right moment instead of flooding the student too early.]]></description>
+            <content:encoded><![CDATA[<p>If similar verses are shown too early, they become noise. If they are shown too late, confusion has already hardened.</p>
+<p>So don't try to study every similar-verse pair from day one. A similarity becomes worth your time when it has actually surfaced in your review — you confused the verses, or a card failed — and at least one side of the comparison is learned well enough to make the distinction meaningful.</p>
+<p>That is why similar-verse work feels tied to the Surah you are currently reviewing, not to a giant master list. In practice: review failures and red flags surface the relevant pairs, the card's extra context verses let you verify them, and the mindmap separation resolves them. Distinctions appear when they can reduce confusion, not as overhead you study in advance.</p>]]></content:encoded>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[The plan for Quran Life: goals, user milestones, and what comes next]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/plan-for-quran-life</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/plan-for-quran-life</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A draft roadmap article about what Quran Life is trying to become and how to think about progress.]]></description>
+            <content:encoded><![CDATA[<p>Quran Life is not being built as a generic productivity app with Islamic branding. It is trying to become a serious memorization system — and it took its current shape deliberately: an Obsidian plugin for mapping and daily reading, with Anki doing what Anki is best at, scheduling reviews.</p>
+<p>For now, the most important milestone is not a flashy new feature. It is trust in the method: does mindmap-first memorization with spaced review actually convince real users once they try it?</p>
+<p>If it does, the next priorities are very clear: keep the plugin stable and low-bug, finish the pre-made mindmap collection, and keep improving the documentation until users can really understand the ins and outs of the method and the workflow.</p>
+<p>So the roadmap is less about a long feature wishlist and more about one question: can Quran Life stay focused on the core memorization method while the tooling around it keeps getting more reliable?</p>]]></content:encoded>
+            <category>product</category>
+        </item>
+        <item>
+            <title><![CDATA[Quran Life vs other Quran memorization apps]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/quran-life-vs-other-quran-memorization-apps</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/quran-life-vs-other-quran-memorization-apps</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[What makes Quran Life different from most memorization apps, and why its focus is more structural than checklist-based.]]></description>
+            <content:encoded><![CDATA[<p>Many Quran memorization apps help you repeat. Quran Life is trying to help you structure, diagnose, and retain.</p>
+<p>That difference matters. Repetition is necessary, but by itself it does not explain why one surah feels stable while another keeps collapsing. Quran Life is built around visual mapping, review timing, mutashabihat handling, and error-aware maintenance.</p>
+<p>So the comparison is not really "more features" versus "fewer features." It is a different theory of memorization.</p>
+<p>Most apps optimize for tracking activity. Quran Life tries to optimize for building a memory system.</p>]]></content:encoded>
+            <category>philosophy</category>
+            <category>product</category>
+        </item>
+        <item>
+            <title><![CDATA[Quran Life vs traditional rote memorization]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/quran-life-vs-traditional-rote-memorization</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/quran-life-vs-traditional-rote-memorization</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why Quran Life does not reject repetition, but refuses to treat repetition as the whole method.]]></description>
+            <content:encoded><![CDATA[<p>Quran Life is not anti-repetition. It is against relying on repetition alone when structure and distinction are missing.</p>
+<p>Traditional rote memorization can push verses into short-term familiarity very quickly. But when the structure of the surah, the transitions, and the mutashabihat are weak, that familiarity can stay fragile.</p>
+<p>Quran Life treats repetition as one tool inside a larger system. The map gives place. The review schedule gives timing. The mutashabihat work gives distinction.</p>
+<p>So the real contrast is not repetition versus no repetition. It is repetition alone versus repetition supported by structure.</p>]]></content:encoded>
+            <category>philosophy</category>
+        </item>
+        <item>
+            <title><![CDATA[How part mindmaps and surah mindmaps should work together]]></title>
+            <link>https://imed-ghomari.github.io/quran-life/blog/relationship-between-part-and-surah-mindmaps</link>
+            <guid>https://imed-ghomari.github.io/quran-life/blog/relationship-between-part-and-surah-mindmaps</guid>
+            <pubDate>Tue, 31 Mar 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Why Quran Life treats part and surah mindmaps as complementary layers instead of competing ones.]]></description>
+            <content:encoded><![CDATA[<p>Part mindmaps and surah mindmaps do not compete. They operate at different scales.</p>
+<p>A surah map gives local structure. A part map gives large-scale orientation across a wider territory. And above those, Quran Life also uses the meta mindmap layer, which helps you keep track of the broadest structural picture beyond one ordinary part map.</p>
+<p>So the relationship is not either-or. It is zoom level. Surah mindmaps help you navigate inside the surah. Part mindmaps help you see how several surahs or sections belong together. The meta mindmap helps you think about the larger frame in which the parts themselves sit.</p>
+<p>This matters because students often lose stability not only inside one surah, but also at the boundaries between surahs, parts, and broader structures. Each layer supports the one below it.</p>]]></content:encoded>
+            <category>philosophy</category>
+        </item>
+    </channel>
+</rss>
