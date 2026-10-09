@@ -87,13 +87,6 @@ Older installs downloaded audio to `<configDir>/plugins/quran-life/offline-audio
 (next to `data/`); the plugin moves it into `data/offline-audio/` automatically
 on update — no action needed, and previously downloaded files keep working.
 
-Two notes:
-
-- `QuranLife/` at the vault root is only read for the one-time migration from older
-  builds; the plugin never writes there anymore, so you can move or delete it after a
-  release that no longer needs it.
-- Review scheduling lives in Anki, not in the plugin, so no review/`nodes` files are kept.
-
 ## Development
 
 ```bash
