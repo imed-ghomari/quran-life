@@ -27,15 +27,15 @@ Open **Daily Portion** every day.
 
 Open **Anki Deck**, choose a Surah from the dropdown. The first time, the app may download the Quran text once — wait for the progress to finish.
 
-- **Draw the mindmap (required for export):** Choose Create Mindmap and draw with the built-in editor (select, pen, text, arrows and shapes; undo is your friend), then Save. Only Surahs **with** a mindmap are exported — splits you define on a Surah without a mindmap are silently skipped, so always start with the map. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
+- **Draw the mindmap (required for export):** Choose Create Mindmap and draw with the built-in editor (select, pen, text, arrows and shapes; undo is your friend), then Save. Only Surahs **with** a mindmap are exported — splits you define on a Surah without a mindmap are silently skipped, so always start with the map. The official pre-made maps are still being prepared — you don't have to wait for them. Keep groups to 2–4 items per branch (see [Mindmap Strategy](./mindmap-strategy)).
 - **Split the Surah** into verse groups that match the map: use the inline Define Splits (plus / remove per verse, then Save Splits). For short Surahs of 10 verses or fewer you get one automatic group covering the whole Surah; your saved splits replace it.
 - **Preview:** View shows or hides the mindmap image under the selector (hidden by default to keep the tab fast) — it sits above the splits so you can see the map while you split.
 - **Notes:** Write in the Notes for this mindmap box. It saves automatically and is added to your cards. This is where you add the theme, story, or logic for similar verses.
 - **Deck name:** the export uses `QuranLife::Review` by default. You can rename it, but every search in these guides assumes the default name — if you rename it, replace `QuranLife` with your name in all searches.
 
-## 2b. Share Mindmaps (Import / Export)
+## 2b. Share Mindmaps (Import / Export, optional)
 
-In **Anki Deck**, the MINDMAPS card has **Import** and **Export** buttons. Use them to share mindmaps, verse groups and notes with other users as a `.zip` file.
+If you want to exchange maps with other users, in **Anki Deck** the MINDMAPS card has **Import** and **Export** buttons. Sharing is optional — you don't have to create or share your own maps while the official collection is being prepared.
 
 - **Import someone's `.zip`:** press **Import**, then **Choose .zip file** and pick the file. Tick what to bring in and press **Import**. Items you already have show as **Have it** and are skipped unless you tick **Replace existing**. You can import several files gradually — for example one per Quran part.
 - **Export your own `.zip`:** press **Export**, tick the mindmaps you want to share (mindmap + verse groups + notes travel together), check the file name, then press **Export**. Your browser downloads the `.zip` and a copy is also saved in your vault, so you can find it again on mobile where downloads are often blocked. Send that file to other users — they bring it in with **Import**.
