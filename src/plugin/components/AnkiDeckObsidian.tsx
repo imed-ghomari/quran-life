@@ -895,7 +895,7 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {currentMindmap?.snapshot ? <button onClick={()=>setShowMindmapPreview(v=>!v)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--background-modifier-border)', background:'var(--background-secondary)', color:'var(--text-normal)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Eye size={14}/>{showMindmapPreview?'Hide preview':'View'}</button> : null}
           {currentMindmap?.snapshot ? <button onClick={()=>setShowDeleteConfirm(true)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--text-error)', color:'var(--text-error)', background:'var(--background-secondary)', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:'0.85em' }}><Trash2 size={14}/>Delete</button> : null}
-          <button onClick={openMindmapEditor} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em', marginLeft:'auto' }}><PenTool size={14}/>{currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</button>
+          <button onClick={openMindmapEditor} style={{ padding:'7px 14px', borderRadius:8, background:'var(--interactive-accent)', color:'var(--text-on-accent)', border:'none', display:'inline-flex', gap:6, alignItems:'center', cursor:'pointer', fontWeight:600, fontSize:'0.85em', marginLeft:'auto' }}><PenTool size={14}/><span className="ql-edit-label-long">{currentMindmap?.snapshot ? 'Edit Mindmap' : 'Create Mindmap'}</span><span className="ql-edit-label-short">{currentMindmap?.snapshot ? 'Edit' : 'Create'}</span></button>
         </div>
 
         {currentMindmap?.snapshot && showMindmapPreview && !showMindmapEditor && (
@@ -1295,6 +1295,10 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
 
       {toast && <div style={{ position:'fixed', bottom:'calc(14px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', background:'var(--background-secondary)', border:'1px solid var(--background-modifier-border)', padding:'8px 14px', borderRadius:10, fontSize:'0.86em', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, zIndex:50, maxWidth:'calc(100vw - 32px)' }}>{toast}</div>}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        /* Short vs long Edit/Create labels: phones get the one-word label so
+           the button fits on the same row as View + Delete. Desktop keeps
+           the explicit two-word label. */
+        .quran-life-anki .ql-edit-label-short { display: none; }
         /* Splits editor + preview layout. Mobile-first: the preview sits BELOW the
            verse grid on phones (stacked, full width) and NEXT TO it on desktop.
            Both columns are pure CSS so the two directions cannot get swapped by
@@ -1323,6 +1327,8 @@ export default function AnkiDeckObsidian({ vaultStore }: { vaultStore: VaultStor
           .quran-life-anki .ql-export-row > button { flex: 1 1 100% !important; justify-content: center; white-space: nowrap; }
           .quran-life-anki .ql-share-actions { width: 100% !important; margin-left: 0 !important; }
           .quran-life-anki .ql-share-actions > button { flex: 1 1 0 !important; justify-content: center; white-space: nowrap; min-height: 36px; }
+          .quran-life-anki .ql-edit-label-long { display: none; }
+          .quran-life-anki .ql-edit-label-short { display: inline; }
           .quran-life-anki .ql-stats-grid { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)) !important; }
           .quran-life-anki .ql-table-wrap { max-height: 240px !important; }
           .quran-life-anki .ql-table-wrap table { min-width: 420px; }

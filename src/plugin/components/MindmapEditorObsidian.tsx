@@ -45,6 +45,7 @@ import {
 import {
     attachMindmapSwipeGuard,
     observeObsidianBottomBar,
+    observeObsidianTopBar,
     observeTldrawWatermarkTitles,
 } from '@/plugin/lib/mindmapObsidianGuards';
 import type { Editor, TLContent, TLRecord, TLShape, TLStore, TLStoreEventInfo, TLStoreSnapshot, TLUiOverrides } from 'tldraw';
@@ -589,12 +590,15 @@ function MindmapEditorContent({
     }, []);
 
     useEffect(() => {
-        // Measure Obsidian's own bottom bar (phones) and lift tldraw's
-        // toolbar only by that amount. Tablets have no such bar, so the
-        // offset stays 0 there and no dead gap appears.
+        // Measure Obsidian's own top + bottom bars (phones) and lift our
+        // header / tldraw's toolbar only by those amounts. Tablets have no
+        // such overlay bars, so the offsets stay 0 there and no dead gap
+        // appears.
         const container = containerRef.current;
         if (!container) return;
-        return observeObsidianBottomBar(container);
+        const stopBottom = observeObsidianBottomBar(container);
+        const stopTop = observeObsidianTopBar(container);
+        return () => { stopBottom(); stopTop(); };
     }, []);
 
     useEffect(() => {
@@ -1263,6 +1267,14 @@ function MindmapEditorContent({
               body.is-mobile .mindmap-editor-header,
               body.is-phone .mindmap-editor-header {
                 min-height: calc(50px + env(safe-area-inset-top, 0px)) !important;
+              }
+              /* Phone-only: Obsidian floats its view-header over our editor
+                 header. --ql-obsidian-top-offset is measured at runtime and is
+                 0 on tablets/desktop (in-flow header there), so no dead gap
+                 appears outside phones. */
+              body.is-phone [data-mindmap-swipe-guard] .mindmap-editor-header {
+                padding-top: calc(env(safe-area-inset-top, 0px) + var(--ql-obsidian-top-offset, 0px)) !important;
+                min-height: calc(50px + env(safe-area-inset-top, 0px) + var(--ql-obsidian-top-offset, 0px)) !important;
               }
             `}</style>
         </div>

@@ -139,7 +139,7 @@ export function observeTldrawWatermarkTitles(root: HTMLElement): () => void {
  */
 export const OBSIDIAN_BOTTOM_OFFSET_VAR = '--ql-obsidian-bottom-offset';
 
-function isBottomBarRect(rect: DOMRect, vw: number, vh: number): boolean {
+function isBottomBarRect(rect: DOMRect, vw: number, vh: number, contentBottom: number): boolean {
 	if (!rect || rect.height <= 0) return false;
 	// Must be anchored at the very bottom…
 	if (rect.bottom < vh - 2) return false;
@@ -147,6 +147,10 @@ function isBottomBarRect(rect: DOMRect, vw: number, vh: number): boolean {
 	if (rect.width < vw * 0.5) return false;
 	// …and not some giant overlay.
 	if (rect.height > vh * 0.4) return false;
+	// …and it must actually cover content (a floating overlay). An in-flow
+	// bar below the content (desktop status bar) must not count, or we would
+	// add a dead gap on desktop/tablet.
+	if (!(rect.top < contentBottom - 2)) return false;
 	return true;
 }
 
@@ -159,6 +163,7 @@ export function measureObsidianBottomOffset(container: HTMLElement): number {
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		if (!vw || !vh || !container.isConnected) return 0;
+		const contentBottom = container.getBoundingClientRect().bottom;
 		let stack: Element[];
 		try {
 			stack = document.elementsFromPoint(Math.round(vw / 2), vh - 2);
@@ -167,7 +172,7 @@ export function measureObsidianBottomOffset(container: HTMLElement): number {
 		}
 		if (!stack || !stack.length) return 0;
 		for (const el of stack) {
-			if (!el.instanceOf(HTMLElement)) continue;
+			if (!(el instanceof HTMLElement)) continue;
 			if (el === document.documentElement || el === document.body) continue;
 			// Our own UI (canvas, toasts, …) never counts.
 			if (container.contains(el)) continue;
@@ -181,7 +186,7 @@ export function measureObsidianBottomOffset(container: HTMLElement): number {
 				} catch {
 					break;
 				}
-				if (rect && isBottomBarRect(rect, vw, vh)) {
+				if (rect && isBottomBarRect(rect, vw, vh, contentBottom)) {
 					return Math.round(Math.min(rect.height, vh * 0.4));
 				}
 				node = node.parentElement;
@@ -200,11 +205,104 @@ export function measureObsidianBottomOffset(container: HTMLElement): number {
  * Obsidian can show or hide its chrome at any time). Returns a cleanup fn.
  */
 export function observeObsidianBottomBar(container: HTMLElement): () => void {
+	return observeChromeOffset(container, OBSIDIAN_BOTTOM_OFFSET_VAR, measureObsidianBottomOffset, 'ql-has-obsidian-bottom-bar');
+}
+
+/**
+ * Top-chrome counterpart of the bottom-bar handling above: on phones Obsidian
+ * floats its view-header over the top of the view, which used to sit on top
+ * of the mindmap editor's own header. The measured height is exposed as
+ * `--ql-obsidian-top-offset` on the editor container (0 when no overlaying
+ * bar exists, e.g. tablets/desktop where the header is in-flow above the
+ * content). Consumed phone-only in CSS so other form factors are untouched.
+ */
+export const OBSIDIAN_TOP_OFFSET_VAR = '--ql-obsidian-top-offset';
+
+function isTopBarRect(rect: DOMRect, vw: number, vh: number, contentTop: number): boolean {
+	if (!rect || rect.height <= 0) return false;
+	// Must be anchored at the very top…
+	if (rect.top > 2) return false;
+	// …a full-width chrome strip, not a small floating button…
+	if (rect.width < vw * 0.5) return false;
+	// …and not some giant overlay.
+	if (rect.height > vh * 0.4) return false;
+	// …and it must actually cover content (a floating overlay). An in-flow
+	// bar above the content (desktop/tab headers) must not count, or we
+	// would add a dead gap on desktop/tablet.
+	if (!(rect.bottom > contentTop + 2)) return false;
+	return true;
+}
+
+/**
+ * Measure the height of an Obsidian-owned top bar overlaying the content,
+ * or 0 when there is none (tablet / desktop / hidden bar).
+ */
+export function measureObsidianTopOffset(container: HTMLElement): number {
+	try {
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		if (!vw || !vh || !container.isConnected) return 0;
+		const contentTop = container.getBoundingClientRect().top;
+		let stack: Element[];
+		try {
+			stack = document.elementsFromPoint(Math.round(vw / 2), 2);
+		} catch {
+			return 0;
+		}
+		if (!stack || !stack.length) return 0;
+		for (const el of stack) {
+			if (!(el instanceof HTMLElement)) continue;
+			if (el === document.documentElement || el === document.body) continue;
+			// Our own UI (header, canvas, toasts, …) never counts.
+			if (container.contains(el)) continue;
+			// Walk up: the hit element may be a small button inside the bar.
+			let node: HTMLElement | null = el;
+			let depth = 0;
+			while (node && node !== document.body && depth < 5) {
+				let rect: DOMRect | null = null;
+				try {
+					rect = node.getBoundingClientRect();
+				} catch {
+					break;
+				}
+				if (rect && isTopBarRect(rect, vw, vh, contentTop)) {
+					return Math.round(Math.min(rect.height, vh * 0.4));
+				}
+				node = node.parentElement;
+				depth += 1;
+			}
+		}
+	} catch {
+		/* noop */
+	}
+	return 0;
+}
+
+/**
+ * Keep `--ql-obsidian-top-offset` on `container` in sync with the actual
+ * Obsidian top bar. Returns a cleanup fn.
+ */
+export function observeObsidianTopBar(container: HTMLElement): () => void {
+	return observeChromeOffset(container, OBSIDIAN_TOP_OFFSET_VAR, measureObsidianTopOffset);
+}
+
+/**
+ * Shared offset observer: measures via `measure`, publishes as `cssVar`
+ * (re-checked on resize/orientation/DOM changes, since Obsidian can show or
+ * hide its chrome at any time). When `toggleClass` is given it is toggled on
+ * `container` while the offset is non-zero. Returns a cleanup fn.
+ */
+function observeChromeOffset(
+	container: HTMLElement,
+	cssVar: string,
+	measure: (container: HTMLElement) => number,
+	toggleClass?: string,
+): () => void {
 	const apply = () => {
 		try {
-			const height = measureObsidianBottomOffset(container);
-			container.style.setProperty(OBSIDIAN_BOTTOM_OFFSET_VAR, `${height}px`);
-			container.classList.toggle('ql-has-obsidian-bottom-bar', height > 0);
+			const height = measure(container);
+			container.style.setProperty(cssVar, `${height}px`);
+			if (toggleClass) container.classList.toggle(toggleClass, height > 0);
 		} catch {
 			/* noop */
 		}
