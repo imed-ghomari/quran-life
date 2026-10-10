@@ -21,7 +21,7 @@
     "ts-fsrs": "^5.2.3"
   },
   "devDependencies": {
-    "@types/node": "^20.14.12",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/sql.js": "^1.4.11",
