@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkwebsite=self.webpackChunkwebsite||[]).push([["3125"],{510(e){e.exports=JSON.parse('{"authors":[{"name":"Quran Life","title":"Quran memorization companion","url":"https://github.com/imed-ghomari/quran-life","imageURL":"https://github.com/imed-ghomari.png","key":"quran-life","page":null,"count":29}]}')}}]);

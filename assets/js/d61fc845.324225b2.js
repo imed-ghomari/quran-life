@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkwebsite=self.webpackChunkwebsite||[]).push([["3117"],{6335(e){e.exports=JSON.parse('{"metadata":{"permalink":"/quran-life/blog/page/2","page":2,"postsPerPage":10,"totalPages":3,"totalCount":29,"previousPage":"/quran-life/blog","nextPage":"/quran-life/blog/page/3","blogDescription":"Blog","blogTitle":"Blog"}}')}}]);
