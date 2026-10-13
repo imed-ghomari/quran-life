@@ -35,10 +35,3 @@ Card order inside the exported deck (which Part and Surah comes first) is set in
 ## What Anki Already Sets for You (First Import)
 
 The exported deck comes with smart scheduling switched on (90% retention target), a 3-strike rule for difficult cards, and interactive card layouts (blurred chunks, context verses that expand for similar verses). After the first import, just verify in Deck Options that smart scheduling is on, and set the leech action to Suspend Card as described in [Fixing Mistakes](./re-learning).
-
-## Backup (Automatic — No Buttons Needed)
-
-There are no Export / Import buttons in the plugin — everything is saved automatically into the plugin's own data folder inside your vault, so it syncs wherever your vault syncs:
-
-- **Autobackup:** leave it on in Obsidian Settings → Quran Life → Storage & sync for instant saves as you work.
-- **Old backups:** if you have a legacy JSON backup file, use the Migrate button in the same section to import it.
